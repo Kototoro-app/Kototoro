@@ -66,13 +66,18 @@ class SearchV2Helper @AssistedInject constructor(
 				e.printStackTraceDebug()
 			}.getOrDefault(emptySet())
 			
-			val queryTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+			val queryExcludeTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] == '-' }
+			val matchedExcludeTags = queryExcludeTagsStr.mapNotNull { tagQ -> 
+				val newTagQ = tagQ.substring(1)
+				tags.find { x -> x.title.equals(newTagQ, ignoreCase = true) }
+			}.toSet()
+			val queryTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] != '-'}
 			val matchedTags = queryTagsStr.mapNotNull { tagQ -> 
 				tags.find { x -> x.title.equals(tagQ, ignoreCase = true) }
 			}.toSet()
 			
-			if (matchedTags.isNotEmpty()) {
-				ContentListFilter(tags = matchedTags)
+			if (matchedTags.isNotEmpty() || matchedExcludeTags.isNotEmpty()) {
+				ContentListFilter(tags = matchedTags, tagsExclude = matchedExcludeTags)
 			} else {
 				null
 			}
@@ -109,8 +114,9 @@ class SearchV2Helper @AssistedInject constructor(
 			}
 
 			SearchKind.TAG -> sortByDescending { m ->
-				val queryTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-				m.tags.count { tag -> queryTagsStr.any { q -> tag.title.equals(q, ignoreCase = true) } }
+				val queryExcludeTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] == "-"}
+				val queryTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] != '-'}
+				m.tags.count { tag -> queryTagsStr.any { q -> tag.title.equals(q, ignoreCase = true) } } - m.tags.count { tag -> queryExcludeTagsStr.any { q -> tag.title.equals(q.substring(1), ignoreCase = true) } }
 			}
 		}
 	}
