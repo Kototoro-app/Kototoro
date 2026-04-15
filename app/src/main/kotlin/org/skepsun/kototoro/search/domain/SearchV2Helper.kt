@@ -114,7 +114,7 @@ class SearchV2Helper @AssistedInject constructor(
 			}
 
 			SearchKind.TAG -> sortByDescending { m ->
-				val queryExcludeTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] == "-"}
+				val queryExcludeTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] == '-'}
 				val queryTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] != '-'}
 				m.tags.count { tag -> queryTagsStr.any { q -> tag.title.equals(q, ignoreCase = true) } } - m.tags.count { tag -> queryExcludeTagsStr.any { q -> tag.title.equals(q.substring(1), ignoreCase = true) } }
 			}
