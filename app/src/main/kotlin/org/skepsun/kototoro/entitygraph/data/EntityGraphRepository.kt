@@ -40,14 +40,17 @@ class EntityGraphRepository @Inject constructor(
 	): Entity = withContext(Dispatchers.Default) {
 		db.withTransaction {
 			val now = System.currentTimeMillis()
-			val work = resolveOrCreateEntity(
-				type = EntityType.WORK,
-				primaryName = workDto.primaryName,
-				aliases = workDto.aliases,
-				source = source,
-				externalId = workDto.externalId,
-				now = now,
-			)
+		val work = resolveOrCreateEntity(
+			type = EntityType.WORK,
+			primaryName = workDto.primaryName,
+			aliases = workDto.aliases,
+			coverUrl = workDto.coverUrl,
+			description = workDto.description,
+			source = source,
+			externalId = workDto.externalId,
+			externalLinks = workDto.externalLinks,
+			now = now,
+		)
 
 			workDto.characters.take(MAX_CHILD_CHARACTERS).forEach { character ->
 				val characterEntity = resolveOrCreateCharacter(
@@ -213,25 +216,58 @@ class EntityGraphRepository @Inject constructor(
 		type: EntityType,
 		primaryName: String,
 		aliases: List<String>,
+		coverUrl: String? = null,
+		description: String? = null,
 		source: String?,
 		externalId: String?,
+		externalLinks: Map<String, String> = emptyMap(),
 		now: Long,
 	): Entity {
 		val dao = db.getEntityGraphDao()
-		if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
-			val existingBinding = dao.findBinding(source, externalId)
-			if (existingBinding != null) {
-				dao.findEntity(existingBinding.entityId)?.let { record ->
-					val merged = mergeEntityRecord(
-						record = record,
-						primaryName = primaryName,
-						aliases = aliases,
-						now = now,
+		
+		val searchLinks = buildMap {
+			if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
+				put(source, externalId)
+			}
+			putAll(externalLinks)
+		}
+
+		var existingEntityId: Long? = null
+		for ((s, eId) in searchLinks) {
+			val binding = dao.findBinding(s, eId)
+			if (binding != null) {
+				existingEntityId = binding.entityId
+				break
+			}
+		}
+
+		if (existingEntityId != null) {
+			dao.findEntity(existingEntityId)?.let { record ->
+				val merged = mergeEntityRecord(
+					record = record,
+					primaryName = primaryName,
+					aliases = aliases,
+					coverUrl = coverUrl,
+					description = description,
+					now = now,
+				)
+				dao.updateEntity(merged)
+				dao.touchEntity(merged.id, now)
+				
+				searchLinks.forEach { (s, eId) ->
+					val isPrimary = (s == source && eId == externalId)
+					dao.upsertBinding(
+						EntityBindingRecord(
+							entityId = merged.id,
+							source = s,
+							externalId = eId,
+							confidence = 1.0f,
+							isPrimary = isPrimary,
+						)
 					)
-					dao.updateEntity(merged)
-					dao.touchEntity(merged.id, now)
-					return dao.findEntity(merged.id)?.toModel() ?: merged.toModel()
 				}
+				
+				return dao.findEntity(merged.id)?.toModel() ?: merged.toModel()
 			}
 		}
 
@@ -248,6 +284,8 @@ class EntityGraphRepository @Inject constructor(
 						record = candidate.entity.toRecord(),
 						primaryName = primaryName,
 						aliases = aliases,
+						coverUrl = coverUrl,
+						description = description,
 						now = now,
 					)
 					dao.updateEntity(merged)
@@ -264,6 +302,20 @@ class EntityGraphRepository @Inject constructor(
 							),
 						)
 					}
+					// Auto-bind also needs to propagate newly discovered external links that didn't exist before!
+					searchLinks.forEach { (s, eId) ->
+						if (s != source || eId != externalId) {
+							dao.upsertBinding(
+								EntityBindingRecord(
+									entityId = candidate.entity.id,
+									source = s,
+									externalId = eId,
+									confidence = 1.0f,
+									isPrimary = false,
+								)
+							)
+						}
+					}
 					return dao.findEntity(candidate.entity.id)?.toModel() ?: candidate.entity
 				}
 
@@ -272,8 +324,11 @@ class EntityGraphRepository @Inject constructor(
 						type = type,
 						primaryName = primaryName,
 						aliases = aliases,
+						coverUrl = coverUrl,
+						description = description,
 						source = source,
 						externalId = externalId,
+						externalLinks = searchLinks,
 						confidence = 1f,
 						now = now,
 					)
@@ -295,8 +350,11 @@ class EntityGraphRepository @Inject constructor(
 			type = type,
 			primaryName = primaryName,
 			aliases = aliases,
+			coverUrl = coverUrl,
+			description = description,
 			source = source,
 			externalId = externalId,
+			externalLinks = searchLinks,
 			confidence = 1f,
 			now = now,
 		)
@@ -306,8 +364,11 @@ class EntityGraphRepository @Inject constructor(
 		type: EntityType,
 		primaryName: String,
 		aliases: List<String>,
+		coverUrl: String? = null,
+		description: String? = null,
 		source: String?,
 		externalId: String?,
+		externalLinks: Map<String, String> = emptyMap(),
 		confidence: Float,
 		now: Long,
 	): Entity {
@@ -317,19 +378,22 @@ class EntityGraphRepository @Inject constructor(
 				type = type.name,
 				primaryName = primaryName.trim(),
 				aliases = encodeStringList(mergeAliases(primaryName, aliases).drop(1)),
+				coverUrl = coverUrl,
+				description = description,
 				createdAt = now,
 				lastAccessed = now,
 				accessCount = 1,
 			),
 		)
-		if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
+		externalLinks.forEach { (s, eId) ->
+			val isPrimary = (s == source && eId == externalId)
 			dao.upsertBinding(
 				EntityBindingRecord(
 					entityId = id,
-					source = source,
-					externalId = externalId,
+					source = s,
+					externalId = eId,
 					confidence = confidence,
-					isPrimary = true,
+					isPrimary = isPrimary,
 				),
 			)
 		}
@@ -394,6 +458,8 @@ class EntityGraphRepository @Inject constructor(
 		record: EntityRecord,
 		primaryName: String,
 		aliases: List<String>,
+		coverUrl: String? = null,
+		description: String? = null,
 		now: Long,
 	): EntityRecord {
 		val mergedNames = mergeAliases(
@@ -403,6 +469,8 @@ class EntityGraphRepository @Inject constructor(
 		return record.copy(
 			primaryName = mergedNames.first(),
 			aliases = encodeStringList(mergedNames.drop(1)),
+			coverUrl = coverUrl ?: record.coverUrl,
+			description = description ?: record.description,
 			lastAccessed = now,
 		)
 	}
@@ -412,6 +480,8 @@ class EntityGraphRepository @Inject constructor(
 		type = type.name,
 		primaryName = primaryName,
 		aliases = encodeStringList(aliases),
+		coverUrl = coverUrl,
+		description = description,
 		createdAt = createdAt,
 		lastAccessed = lastAccessed,
 		accessCount = accessCount,

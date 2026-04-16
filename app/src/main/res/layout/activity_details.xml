@@ -384,6 +384,126 @@
 					app:constraint_referenced_ids="recyclerView_related,textView_related_title,button_related_more"
 					tools:visibility="visible" />
 
+				<androidx.constraintlayout.widget.Barrier
+					android:id="@+id/barrier_related_bottom"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					app:barrierDirection="bottom"
+					app:constraint_referenced_ids="recyclerView_related" />
+
+				<!-- Official Sites -->
+				<TextView
+					android:id="@+id/textView_official_sites_title"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="@dimen/margin_small"
+					android:layout_marginTop="@dimen/margin_normal"
+					android:layout_weight="1"
+					android:gravity="center_vertical|start"
+					android:padding="@dimen/grid_spacing"
+					android:singleLine="true"
+					android:text="@string/watch_officially"
+					android:textAppearance="?textAppearanceTitleSmall"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/barrier_related_bottom" />
+
+				<org.skepsun.kototoro.core.ui.widgets.ChipsView
+					android:id="@+id/chips_official_sites"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="@dimen/margin_normal"
+					android:layout_marginEnd="@dimen/margin_normal"
+					android:paddingBottom="@dimen/margin_small"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/textView_official_sites_title" />
+
+				<androidx.constraintlayout.widget.Group
+					android:id="@+id/group_official_sites"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:visibility="gone"
+					app:constraint_referenced_ids="textView_official_sites_title,chips_official_sites"
+					tools:visibility="visible" />
+					
+				<!-- Characters -->
+				<TextView
+					android:id="@+id/textView_characters_title"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="@dimen/margin_small"
+					android:layout_marginTop="@dimen/margin_normal"
+					android:layout_weight="1"
+					android:gravity="center_vertical|start"
+					android:padding="@dimen/grid_spacing"
+					android:singleLine="true"
+					android:text="@string/entity_graph_section_characters"
+					android:textAppearance="?textAppearanceTitleSmall"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/chips_official_sites" />
+
+				<androidx.recyclerview.widget.RecyclerView
+					android:id="@+id/recyclerView_characters"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginBottom="6dp"
+					android:clipToPadding="false"
+					android:nestedScrollingEnabled="false"
+					android:orientation="horizontal"
+					android:paddingStart="12dp"
+					android:paddingEnd="12dp"
+					app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/textView_characters_title" />
+
+				<androidx.constraintlayout.widget.Group
+					android:id="@+id/group_characters"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:visibility="gone"
+					app:constraint_referenced_ids="recyclerView_characters,textView_characters_title"
+					tools:visibility="visible" />
+					
+				<!-- Creators -->
+				<TextView
+					android:id="@+id/textView_creators_title"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginStart="@dimen/margin_small"
+					android:layout_marginTop="@dimen/margin_normal"
+					android:layout_weight="1"
+					android:gravity="center_vertical|start"
+					android:padding="@dimen/grid_spacing"
+					android:singleLine="true"
+					android:text="@string/entity_graph_section_creators"
+					android:textAppearance="?textAppearanceTitleSmall"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/recyclerView_characters" />
+
+				<androidx.recyclerview.widget.RecyclerView
+					android:id="@+id/recyclerView_creators"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_marginBottom="6dp"
+					android:clipToPadding="false"
+					android:nestedScrollingEnabled="false"
+					android:orientation="horizontal"
+					android:paddingStart="12dp"
+					android:paddingEnd="12dp"
+					app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+					app:layout_constraintEnd_toEndOf="parent"
+					app:layout_constraintStart_toStartOf="parent"
+					app:layout_constraintTop_toBottomOf="@id/textView_creators_title" />
+
+				<androidx.constraintlayout.widget.Group
+					android:id="@+id/group_creators"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:visibility="gone"
+					app:constraint_referenced_ids="recyclerView_creators,textView_creators_title"
+					tools:visibility="visible" />
+
 			</androidx.constraintlayout.widget.ConstraintLayout>
 
 		</androidx.core.widget.NestedScrollView>

@@ -473,9 +473,16 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 	override suspend fun getContentInfo(id: Long): ScrobblerContentInfo {
 		val apiPayload = getSubjectDetailsFromApi(id)
 		val htmlPayload = runCatching { getSubjectDetailsFromHtml(id) }.getOrNull()
+		val primaryName = apiPayload.name.ifBlank { htmlPayload?.name ?: "Unknown" }
+		// Collect all title variants for cross-language entity normalization
+		val altTitles = buildList {
+			addAll(apiPayload.altNames)
+			htmlPayload?.altNames?.let(::addAll)
+		}.filter { it.isNotBlank() && it != primaryName }.distinct()
 		return ScrobblerContentInfo(
 			id = id,
-			name = apiPayload.name.ifBlank { htmlPayload?.name ?: "Unknown" },
+			name = primaryName,
+			altTitles = altTitles,
 			cover = apiPayload.cover.ifBlank { htmlPayload?.cover.orEmpty() },
 			url = "https://bangumi.tv/subject/$id",
 			descriptionHtml = apiPayload.summary.ifBlank { htmlPayload?.summary.orEmpty() },
@@ -498,8 +505,16 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			.get()
 		val json = okHttp.newCall(request.build()).await().parseJson()
 		val platformType = json.optString("platform").takeIf { it.isNotBlank() }
+		val nameCn = json.getStringOrNull("name_cn").orEmpty()
+		val nameOriginal = json.getStringOrNull("name").orEmpty()
+		val primaryName = nameCn.ifBlank { nameOriginal }
+		val altNames = listOfNotNull(
+			nameOriginal.takeIf { it.isNotBlank() && it != primaryName },
+			nameCn.takeIf { it.isNotBlank() && it != primaryName },
+		)
 		return BangumiApiSubjectPayload(
-			name = json.getStringOrNull("name_cn").orEmpty().ifBlank { json.getStringOrNull("name").orEmpty() },
+			name = primaryName,
+			altNames = altNames,
 			cover = json.optJSONObject("images")?.getStringOrNull("large")
 				?: json.optJSONObject("images")?.getStringOrNull("common")
 				?: json.optJSONObject("images")?.getStringOrNull("medium")
@@ -637,8 +652,15 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			}
 		}
 
+		// Also collect the untranslated native name as an alternate title
+		val altNames = listOfNotNull(
+			nameNative.takeIf { it.isNotBlank() && it != finalName },
+			nameCn.takeIf { it.isNotBlank() && it != finalName && it != nameNative },
+		)
+
 		return BangumiHtmlSubjectPayload(
 			name = finalName.ifBlank { "Unknown" },
+			altNames = altNames,
 			cover = cover,
 			summary = summary,
 			tags = tagList,
@@ -831,6 +853,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 
 	private data class BangumiApiSubjectPayload(
 		val name: String,
+		val altNames: List<String> = emptyList(),
 		val cover: String,
 		val summary: String,
 		val tags: List<String>,
@@ -839,6 +862,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 
 	private data class BangumiHtmlSubjectPayload(
 		val name: String,
+		val altNames: List<String> = emptyList(),
 		val cover: String,
 		val summary: String,
 		val tags: List<String>,

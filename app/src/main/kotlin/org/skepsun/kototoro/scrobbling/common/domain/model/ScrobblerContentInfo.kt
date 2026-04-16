@@ -3,11 +3,13 @@ package org.skepsun.kototoro.scrobbling.common.domain.model
 class ScrobblerContentInfo(
 	val id: Long,
 	val name: String,
+	val altTitles: List<String> = emptyList(),
 	val cover: String,
 	val url: String,
 	val descriptionHtml: String,
 	val tags: List<String> = emptyList(),
 	val authors: List<String> = emptyList(),
+	val externalLinks: Map<String, String> = emptyMap(),
 	val infoboxProperties: List<Pair<String, String>> = emptyList(),
 	val episodes: List<EpisodeInfo> = emptyList(),
 	val relatedWorks: List<RelatedWork> = emptyList(),

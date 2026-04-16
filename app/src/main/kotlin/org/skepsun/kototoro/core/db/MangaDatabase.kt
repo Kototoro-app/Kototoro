@@ -96,7 +96,7 @@ import org.skepsun.kototoro.tracker.data.TracksDao
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 37
+const val DATABASE_VERSION = 38
 
 @Database(
 	entities = [
@@ -196,6 +196,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
 	Migration34To35(),
 	org.skepsun.kototoro.core.db.migrations.Migration35To36(),
 	org.skepsun.kototoro.core.db.migrations.Migration36To37(),
+	org.skepsun.kototoro.core.db.migrations.Migration37To38(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

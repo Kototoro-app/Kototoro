@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
+import org.skepsun.kototoro.discover.bangumidata.worker.BangumiDataSyncWorker
 import org.skepsun.kototoro.suggestions.ui.SuggestionsWorker
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import javax.inject.Inject
@@ -15,6 +16,7 @@ class WorkScheduleManager @Inject constructor(
 	private val settings: AppSettings,
 	private val suggestionScheduler: SuggestionsWorker.Scheduler,
 	private val trackerScheduler: TrackWorker.Scheduler,
+	private val bangumiDataScheduler: BangumiDataSyncWorker.Scheduler,
 ) : SharedPreferences.OnSharedPreferenceChangeListener {
 
 	override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
@@ -41,6 +43,7 @@ class WorkScheduleManager @Inject constructor(
 		processLifecycleScope.launch(Dispatchers.Default) {
 			updateWorkerImpl(trackerScheduler, settings.isTrackerEnabled, true) // always force due to adaptive interval
 			updateWorkerImpl(suggestionScheduler, settings.isSuggestionsEnabled, false)
+			updateWorkerImpl(bangumiDataScheduler, true, true)
 		}
 	}
 

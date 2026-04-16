@@ -20,6 +20,8 @@ data class EntityRecord(
 	@ColumnInfo(name = "type") val type: String,
 	@ColumnInfo(name = "primary_name") val primaryName: String,
 	@ColumnInfo(name = "aliases") val aliases: String?,
+	@ColumnInfo(name = "cover_url") val coverUrl: String? = null,
+	@ColumnInfo(name = "description") val description: String? = null,
 	@ColumnInfo(name = "created_at") val createdAt: Long,
 	@ColumnInfo(name = "last_accessed") val lastAccessed: Long,
 	@ColumnInfo(name = "access_count") val accessCount: Int,
@@ -45,7 +47,7 @@ data class EntityBindingRecord(
 	indices = [
 		Index(name = "idx_relation_from", value = ["from_entity_id"]),
 		Index(name = "idx_relation_to", value = ["to_entity_id"]),
-		Index(value = ["from_entity_id", "to_entity_id", "type"], unique = true),
+		Index(name = "idx_relation_unique", value = ["from_entity_id", "to_entity_id", "type"], unique = true),
 	],
 )
 data class RelationRecord(

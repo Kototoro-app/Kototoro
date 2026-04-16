@@ -38,6 +38,9 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.constraintlayout.widget.Guideline
+import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
+import android.util.TypedValue
+import androidx.recyclerview.widget.RecyclerView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -108,6 +111,9 @@ import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.scrobbling.ScrobblingItemDecoration
 import org.skepsun.kototoro.details.ui.scrobbling.ScrollingInfoAdapter
+import org.skepsun.kototoro.entitygraph.ui.details.EntityDetailsViewModel
+import org.skepsun.kototoro.entitygraph.ui.details.EntityDetailsScreenState
+import org.skepsun.kototoro.discover.bangumidata.domain.OfficialSiteDetails
 import org.skepsun.kototoro.download.ui.worker.DownloadStartedObserver
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.adapter.ListItemType
@@ -152,6 +158,7 @@ class DetailsActivity :
 	lateinit var jsonSourceManager: JsonSourceManager
 
 	private val viewModel: DetailsViewModel by viewModels()
+	private val entityViewModel: EntityDetailsViewModel by viewModels()
 	private lateinit var menuProvider: DetailsMenuProvider
 	private lateinit var infoBinding: LayoutDetailsTableBinding
 	private var isFoldUnfolded = false
@@ -272,6 +279,7 @@ class DetailsActivity :
 		}
 		viewModel.isLoading.observe(this, ::onLoadingStateChanged)
 		viewModel.scrobblingInfo.observe(this, ::onScrobblingInfoChanged)
+		entityViewModel.screenState.observe(this, ::onEntityStateChanged)
 		viewModel.trackingMatchSuggestion.observe(this) { suggestion ->
 			renderTrackingMatchSuggestion(suggestion)
 		}
@@ -545,6 +553,78 @@ class DetailsActivity :
 			adapter.items = sortedScrobblings
 			viewBinding.recyclerViewScrobbling.adapter = adapter
 			viewBinding.recyclerViewScrobbling.addItemDecoration(ScrobblingItemDecoration())
+		}
+
+		// Sync top tracking identity into EntityDetailsViewModel to pull the Graph
+		sortedScrobblings.firstOrNull()?.let { info ->
+			entityViewModel.loadTrackingContext(info.scrobbler.id, info.targetId)
+		}
+	}
+
+	private fun onEntityStateChanged(state: EntityDetailsScreenState) {
+		val hasSites = state.officialSites.isNotEmpty()
+		viewBinding.groupOfficialSites?.isVisible = hasSites
+		if (hasSites) {
+			viewBinding.chipsOfficialSites?.removeAllViews()
+			state.officialSites.forEach { site ->
+				val chip = Chip(this).apply {
+					text = site.title
+					setOnClickListener {
+						router.openExternalBrowser(site.url)
+					}
+				}
+				viewBinding.chipsOfficialSites?.addView(chip)
+			}
+		}
+
+		// Group relations by Title Res
+		val characters = state.relationSections.find { it.titleRes == R.string.entity_graph_section_characters }?.items ?: emptyList()
+		val creators = state.relationSections.find { it.titleRes == R.string.entity_graph_section_creators }?.items ?: emptyList()
+
+		viewBinding.groupCharacters?.isVisible = characters.isNotEmpty()
+		if (characters.isNotEmpty()) {
+			viewBinding.recyclerViewCharacters?.adapter = NativeRelationAdapter(characters)
+		}
+
+		viewBinding.groupCreators?.isVisible = creators.isNotEmpty()
+		if (creators.isNotEmpty()) {
+			viewBinding.recyclerViewCreators?.adapter = NativeRelationAdapter(creators)
+		}
+	}
+
+	private inner class NativeRelationAdapter(private val items: List<EntityRelationItem>) : RecyclerView.Adapter<NativeRelationAdapter.VH>() {
+		inner class VH(val textView: TextView) : RecyclerView.ViewHolder(textView) {
+			init {
+				textView.isClickable = true
+				textView.isFocusable = true
+				val outValue = TypedValue()
+				theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
+				textView.setBackgroundResource(outValue.resourceId)
+				textView.setLines(1)
+				textView.ellipsize = android.text.TextUtils.TruncateAt.END
+				textView.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleSmall)
+				val padH = resources.getDimensionPixelSize(R.dimen.margin_normal)
+				val padV = resources.getDimensionPixelSize(R.dimen.grid_spacing)
+				textView.setPadding(padH, padV, padH, padV)
+				textView.setOnClickListener {
+					val item = items[bindingAdapterPosition]
+					router.openEntityDetails(item.entityId)
+				}
+			}
+		}
+
+		override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+			val tv = TextView(parent.context).apply {
+				layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
+					it.marginEnd = resources.getDimensionPixelSize(R.dimen.margin_small)
+				}
+			}
+			return VH(tv)
+		}
+
+		override fun getItemCount() = items.size
+		override fun onBindViewHolder(holder: VH, position: Int) {
+			holder.textView.text = items[position].name
 		}
 	}
 

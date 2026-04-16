@@ -209,6 +209,7 @@ class AniListRepository @Inject constructor(
 			"""
 			Media(id: $id) {
 				id
+				idMal
 				title {
 					userPreferred
 					native
@@ -521,14 +522,29 @@ class AniListRepository @Inject constructor(
 		val cover = coverImage?.getStringOrNull("extraLarge")
 			?: coverImage?.getStringOrNull("large").orEmpty()
 
+		val titleObj = json.getJSONObject("title")
+		val primaryName = titleObj.getString("userPreferred")
+		val altTitles = listOfNotNull(
+			titleObj.getStringOrNull("native"),
+			titleObj.getStringOrNull("english"),
+		).filter { it.isNotBlank() && it != primaryName }
+
+		val externalLinks = buildMap {
+			json.optLong("idMal", 0L).takeIf { it > 0L }?.let {
+				put("myanimelist", it.toString())
+			}
+		}
+
 		return ScrobblerContentInfo(
 			id = json.getLong("id"),
-			name = json.getJSONObject("title").getString("userPreferred"),
+			name = primaryName,
+			altTitles = altTitles,
 			cover = cover,
 			url = json.getString("siteUrl"),
 			descriptionHtml = json.optString("description", ""),
 			tags = genres,
 			authors = authors,
+			externalLinks = externalLinks,
 			infoboxProperties = infobox,
 			relatedWorks = relatedWorks,
 			recommendations = recommendations,

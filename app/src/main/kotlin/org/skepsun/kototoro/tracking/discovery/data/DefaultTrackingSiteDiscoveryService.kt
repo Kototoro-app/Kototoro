@@ -464,6 +464,8 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
 			service = service,
 			remoteId = id,
 			title = name,
+			altTitles = altTitles,
+			externalLinks = externalLinks,
 			coverUrl = cover,
 			description = descriptionHtml,
 			tags = tags,

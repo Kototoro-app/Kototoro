@@ -12,6 +12,8 @@ data class Entity(
 	val type: EntityType,
 	val primaryName: String,
 	val aliases: List<String>,
+	val coverUrl: String? = null,
+	val description: String? = null,
 	val createdAt: Long,
 	val lastAccessed: Long,
 	val accessCount: Int,
@@ -46,6 +48,9 @@ data class TrackingWorkDto(
 	val externalId: String,
 	val primaryName: String,
 	val aliases: List<String> = emptyList(),
+	val coverUrl: String? = null,
+	val description: String? = null,
+	val externalLinks: Map<String, String> = emptyMap(),
 	val characters: List<TrackingCharacterDto> = emptyList(),
 	val staff: List<TrackingStaffDto> = emptyList(),
 )

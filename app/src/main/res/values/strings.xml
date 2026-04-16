@@ -2070,6 +2070,7 @@
     <string name="entity_graph_section_created_works">Created Works</string>
     <string name="entity_graph_section_voiced_characters">Voiced Characters</string>
     <string name="entity_graph_section_related_entities">Related Entities</string>
+    <string name="recommended">Recommended</string>
     <string name="you_may_like">You May Also Like</string>
     <string name="reverse_order">Reverse Order</string>
     <string name="sort_by_ranking">Ranking</string>
@@ -2224,4 +2225,5 @@
     <string name="clear_translation">Clear translation</string>
     <string name="details_show_original">Show original</string>
     <string name="details_show_translation">Show translation</string>
+    <string name="watch_officially">Watch</string>
 </resources>

@@ -7,6 +7,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.discover.bangumidata.data.BangumiDataRepository
+import org.skepsun.kototoro.discover.bangumidata.domain.OfficialSiteDetails
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.entitygraph.domain.EntityGraphSourceAdapter
@@ -27,13 +29,14 @@ class EntityDetailsViewModel @Inject constructor(
     private val entityGraphRepository: EntityGraphRepository,
     private val sourceAdapter: EntityGraphSourceAdapter,
     private val trackingDiscoveryService: TrackingSiteDiscoveryService,
+    private val bangumiDataRepository: BangumiDataRepository,
 ) : BaseViewModel() {
 
-    private val initialEntityId = savedStateHandle.get<Long>(AppRouter.KEY_ENTITY_ID)?.takeIf { it > 0L }
-    private val trackingService = savedStateHandle.get<Int>(AppRouter.KEY_ID)
+    private var entityIdSearch = savedStateHandle.get<Long>(AppRouter.KEY_ENTITY_ID)?.takeIf { it > 0L }
+    private var trackingService = savedStateHandle.get<Int>(AppRouter.KEY_ID)
         ?.let { serviceId -> ScrobblerService.entries.firstOrNull { it.id == serviceId } }
-    private val trackingRemoteId = savedStateHandle.get<Long>(AppRouter.KEY_REMOTE_ID)?.takeIf { it > 0L }
-    private val trackingUrlHint = savedStateHandle.get<String>(AppRouter.KEY_URL)
+    private var trackingRemoteId = savedStateHandle.get<Long>(AppRouter.KEY_REMOTE_ID)?.takeIf { it > 0L }
+    private var trackingUrlHint = savedStateHandle.get<String>(AppRouter.KEY_URL)
 
     val screenState = MutableStateFlow(EntityDetailsScreenState())
     val error = MutableStateFlow<Throwable?>(null)
@@ -57,14 +60,34 @@ class EntityDetailsViewModel @Inject constructor(
         }
     }
 
+    fun loadTrackingContext(serviceId: Int, remoteId: Long, urlHint: String? = null) {
+        val newService = ScrobblerService.entries.firstOrNull { it.id == serviceId }
+        if (trackingService == newService && trackingRemoteId == remoteId) return
+        trackingService = newService
+        trackingRemoteId = remoteId
+        trackingUrlHint = urlHint
+        cachedTrackingDetails = null
+        refresh()
+    }
+
+    fun loadEntityId(entityId: Long) {
+        if (entityIdSearch == entityId) return
+        entityIdSearch = entityId
+        cachedTrackingDetails = null
+        refresh()
+    }
+
+    private var cachedTrackingDetails: TrackingSiteItemDetails? = null
+
     private suspend fun resolveEntityId(): Long {
-        initialEntityId?.let { return it }
+        entityIdSearch?.let { return it }
         val service = trackingService ?: error("Missing entity or tracking service argument")
         val remoteId = trackingRemoteId ?: error("Missing tracking remote id argument")
         entityGraphRepository.findEntityByBinding(service.toBindingSourceKey(), remoteId.toString())?.let {
             return it.id
         }
         val details = trackingDiscoveryService.getDetails(service, remoteId, trackingUrlHint)
+        cachedTrackingDetails = details
         return entityGraphRepository.ingestWorkFromTracking(
             source = service.toBindingSourceKey(),
             workDto = details.toTrackingWorkDto(),
@@ -89,13 +112,34 @@ class EntityDetailsViewModel @Inject constructor(
         } else {
             emptyList()
         }
+        // Fetch tracking details for rich metadata rendering
+        val trackingDetails = cachedTrackingDetails ?: fetchTrackingDetails(bindings)
+        cachedTrackingDetails = trackingDetails
+
+        val bangumiId = bindings.firstOrNull { it.source == "bangumi" }?.externalId
+            ?: trackingDetails?.externalLinks?.get("bangumi")
+        val officialSites = if (bangumiId != null) {
+            bangumiDataRepository.getOfficialSites(bangumiId)
+        } else {
+            emptyList()
+        }
+
         return EntityDetailsScreenState(
             entity = entity,
             bindings = bindings,
             relationSections = buildRelationSections(entity, relations, relatedEntities),
             sourceResults = sourceResults,
             trackingReference = explicitTrackingReference() ?: bindings.firstTrackingReference(),
+            trackingDetails = trackingDetails,
+            officialSites = officialSites,
         )
+    }
+
+    private suspend fun fetchTrackingDetails(bindings: List<EntityBinding>): TrackingSiteItemDetails? {
+        val ref = explicitTrackingReference() ?: bindings.firstTrackingReference() ?: return null
+        return runCatching {
+            trackingDiscoveryService.getDetails(ref.service, ref.remoteId, ref.url)
+        }.getOrNull()
     }
 
     private fun buildRelationSections(
@@ -226,6 +270,8 @@ data class EntityDetailsScreenState(
     val relationSections: List<EntityRelationSection> = emptyList(),
     val sourceResults: List<SourceResult> = emptyList(),
     val trackingReference: TrackingReference? = null,
+    val trackingDetails: TrackingSiteItemDetails? = null,
+    val officialSites: List<OfficialSiteDetails> = emptyList(),
 )
 
 data class EntityRelationSection(
@@ -246,13 +292,18 @@ data class TrackingReference(
 )
 
 private fun TrackingSiteItemDetails.toTrackingWorkDto(): TrackingWorkDto {
-    val aliases = listOfNotNull(altTitle)
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
+    // Merge all available title variants for cross-language entity normalization
+    val aliases = buildList {
+        altTitle?.trim()?.takeIf { it.isNotEmpty() }?.let(::add)
+        addAll(altTitles)
+    }.filter { it.isNotBlank() && it != title }.distinct()
     return TrackingWorkDto(
         externalId = remoteId.toString(),
         primaryName = title,
         aliases = aliases,
+        coverUrl = coverUrl,
+        description = description,
+        externalLinks = externalLinks,
         staff = authors.map { name ->
             TrackingStaffDto(
                 primaryName = name,
