@@ -63,33 +63,27 @@ class ContentDirectoriesViewModel @Inject constructor(
             val downloadDir = storageManager.getDefaultWriteableDir()
             val applicationDirs = storageManager.getApplicationStorageDirs()
             val customDirs = settings.userSpecifiedContentDirectories - applicationDirs
-            items.value = buildList(applicationDirs.size + customDirs.size) {
-                applicationDirs.mapTo(this) { dir ->
-                    dir.toDirectoryModel(
-                        isDefault = dir == downloadDir,
-                        isAppPrivate = true,
-                    )
-                }
-                customDirs.mapTo(this) { dir ->
-                    dir.toDirectoryModel(
-                        isDefault = dir == downloadDir,
-                        isAppPrivate = false,
-                    )
-                }
-            }
+            items.value = (
+                applicationDirs.map { dir -> dir.toDirectoryModelSafe(downloadDir, true) } +
+                customDirs.map { dir -> dir.toDirectoryModelSafe(downloadDir, false) }
+            ).filterNotNull()
         }
     }
 
-    private suspend fun File.toDirectoryModel(
-        isDefault: Boolean,
+    private suspend fun File.toDirectoryModelSafe(
+        downloadDir: File?,
         isAppPrivate: Boolean,
-    ) = DirectoryConfigModel(
-        title = storageManager.getDirectoryDisplayName(this, isFullPath = false),
-        path = this,
-        isDefault = isDefault,
-        isAccessible = isReadable() && isWriteable(),
-        isAppPrivate = isAppPrivate,
-        size = computeSize(),
-        available = StatFs(this.absolutePath).availableBytes,
-    )
+    ): DirectoryConfigModel? = try {
+        DirectoryConfigModel(
+            title = storageManager.getDirectoryDisplayName(this, isFullPath = false),
+            path = this,
+            isDefault = this == downloadDir,
+            isAccessible = isReadable() && isWriteable(),
+            isAppPrivate = isAppPrivate,
+            size = computeSize(),
+            available = StatFs(absolutePath).availableBytes,
+        )
+    } catch (_: Exception) {
+        null
+    }
 }

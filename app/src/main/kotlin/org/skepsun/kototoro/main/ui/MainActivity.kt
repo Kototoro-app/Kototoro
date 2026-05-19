@@ -57,7 +57,8 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : BaseActivity<ActivityMainBinding>() {
     override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
-        val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars()
+        val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+            androidx.core.view.WindowInsetsCompat.Type.displayCutout()
         return insets.consume(v, typeMask, start = false)
     }
 

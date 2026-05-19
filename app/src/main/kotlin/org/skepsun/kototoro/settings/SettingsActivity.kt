@@ -762,6 +762,11 @@ class SettingsActivity :
 		if (supportFragmentManager.isStateSaved) {
 			return
 		}
+		if (isMasterDetails && destination == SettingsDestination.Root) {
+			composeNavigationStack.clear()
+			closeComposeDestination(restorePreviousFragment = false)
+			return
+		}
 		val currentComposeDestination = composeDestination
 		if (
 			pushCurrentToStack &&
@@ -1511,7 +1516,7 @@ class SettingsActivity :
 				shouldRestoreFragment = false,
 				pushCurrentToStack = false,
 			)
-		} else {
+		} else if (!isMasterDetails) {
 			dispatchNavigateUp()
 		}
 	}

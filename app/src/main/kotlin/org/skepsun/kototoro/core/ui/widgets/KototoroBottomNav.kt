@@ -129,7 +129,11 @@ fun KototoroBottomNav(
         val itemWidth = if (isLabelsVisible) 80 else 68
         (activeItems.size * itemWidth + 28).dp.coerceIn(220.dp, 520.dp)
     }
-    val railWidth = if (isFloating) 96.dp else 84.dp
+    val railWidth = if (isFloating) {
+        (navFloatingHeight + 4).dp.coerceIn(60.dp, 160.dp)
+    } else {
+        navHeight.dp.coerceIn(60.dp, 160.dp)
+    }
 
     val navContainerStyle = if (isFloating) {
         GlassDefaults.prominentStyle().copy(
@@ -177,13 +181,30 @@ fun KototoroBottomNav(
                             }
                         },
                         icon = {
-                            PremiumNavigationIcon(
-                                itemId = item.id,
-                                isSelected = isSelected,
-                                clickPulse = clickPulses[item.id] ?: 0,
-                                badge = badge,
-                                contentDescription = stringResource(item.title),
-                            )
+                            val indicatorShape = RoundedCornerShape(16.dp)
+                            Box(
+                                modifier = Modifier
+                                    .then(
+                                        if (isSelected) {
+                                            Modifier
+                                                .background(
+                                                    MaterialTheme.colorScheme.secondaryContainer,
+                                                    indicatorShape,
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                            ) {
+                                PremiumNavigationIcon(
+                                    itemId = item.id,
+                                    isSelected = isSelected,
+                                    clickPulse = clickPulses[item.id] ?: 0,
+                                    badge = badge,
+                                    contentDescription = stringResource(item.title),
+                                )
+                            }
                         },
                         label = if (isLabelsVisible) {
                             { Text(stringResource(item.title)) }
@@ -192,7 +213,7 @@ fun KototoroBottomNav(
                         },
                         alwaysShowLabel = isLabelsVisible,
                         colors = NavigationRailItemDefaults.colors(
-                            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                            indicatorColor = Color.Transparent,
                             selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             selectedTextColor = MaterialTheme.colorScheme.onSurface,
                             unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,

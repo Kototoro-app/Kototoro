@@ -103,7 +103,8 @@
 		<activity
 			android:name="org.skepsun.kototoro.main.ui.MainActivity"
 			android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode"
-			android:exported="true">
+			android:exported="true"
+			android:windowLayoutInDisplayCutoutMode="shortEdges">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 				<category android:name="android.intent.category.LAUNCHER" />
