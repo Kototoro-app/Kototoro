@@ -11,6 +11,13 @@ interface TrackingSiteDiscoveryService {
 
 	suspend fun search(catalog: TrackingSiteCatalog): List<TrackingSiteItem>
 
+	suspend fun searchEntities(
+		service: ScrobblerService,
+		entityType: EntityType,
+		query: String,
+		page: Int = 0,
+	): List<TrackingEntitySearchResult>
+
 	suspend fun getDetails(service: ScrobblerService, remoteId: Long, urlHint: String? = null): TrackingSiteItemDetails
 
 	suspend fun getEntityDetails(

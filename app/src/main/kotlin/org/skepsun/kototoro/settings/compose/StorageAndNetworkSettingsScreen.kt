@@ -49,6 +49,8 @@ fun StorageAndNetworkSettingsScreen(
     imageProxy: @Composable () -> Unit,
     githubMirror: @Composable () -> Unit,
     huggingFaceMirror: @Composable () -> Unit,
+    bangumiMirror: @Composable () -> Unit,
+    bangumiMirrorCustomBase: @Composable () -> Unit,
     sslBypass: @Composable () -> Unit,
     offlineCheck: @Composable () -> Unit,
     adBlock: @Composable () -> Unit,
@@ -108,6 +110,9 @@ fun StorageAndNetworkSettingsScreen(
                     githubMirror()
                     SettingsSectionDivider()
                     huggingFaceMirror()
+                    SettingsSectionDivider()
+                    bangumiMirror()
+                    bangumiMirrorCustomBase()
                     SettingsSectionDivider()
                     sslBypass()
                     SettingsSectionDivider()

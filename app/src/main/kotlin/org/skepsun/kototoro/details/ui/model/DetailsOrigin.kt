@@ -25,6 +25,17 @@ sealed interface DetailsOrigin : Parcelable {
     ) : DetailsOrigin
 
     @Parcelize
+    data class TrackingEntity(
+        val serviceId: String,
+        val entityTypeName: String,
+        val remoteId: Long,
+        val name: String,
+        val altName: String? = null,
+        val coverUrl: String? = null,
+        val url: String? = null,
+    ) : DetailsOrigin
+
+    @Parcelize
     data class TrackingItem(
         val serviceId: String,
         val remoteId: Long,

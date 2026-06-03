@@ -25,9 +25,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val ENTITY_SCAN_LIMIT = 120
-private const val MAX_CHILD_CHARACTERS = 10
-private const val MAX_CHILD_STAFF = 10
-private const val MAX_VOICE_ACTORS = 10
 private const val RELATION_WEIGHT_DEFAULT = 1f
 private const val STALE_ENTITY_DAYS = 30L
 private const val STALE_ENTITY_ACCESS_THRESHOLD = 2
@@ -57,7 +54,7 @@ class EntityGraphRepository @Inject constructor(
 				now = now,
 			)
 
-			workDto.characters.take(MAX_CHILD_CHARACTERS).forEach { character ->
+			workDto.characters.forEach { character ->
 				val characterEntity = resolveOrCreateCharacter(
 					source = source,
 					workEntity = work,
@@ -70,7 +67,7 @@ class EntityGraphRepository @Inject constructor(
 					type = RelationType.HAS_CHARACTER,
 					now = now,
 				)
-				character.voiceActors.take(MAX_VOICE_ACTORS).forEach { actor ->
+				character.voiceActors.forEach { actor ->
 					val actorEntity = resolveOrCreatePerson(
 						source = source,
 						person = actor,
@@ -85,7 +82,7 @@ class EntityGraphRepository @Inject constructor(
 				}
 			}
 
-			workDto.staff.take(MAX_CHILD_STAFF).forEach { staff ->
+			workDto.staff.forEach { staff ->
 				val personEntity = resolveOrCreateStaff(
 					source = source,
 					staff = staff,

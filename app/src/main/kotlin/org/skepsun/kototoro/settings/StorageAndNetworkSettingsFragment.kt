@@ -118,6 +118,10 @@ fun StorageAndNetworkSettingsRoute(
     val imagesProxy = settings.observeAsState(AppSettings.KEY_IMAGES_PROXY) { imagesProxy }.value
     val gitHubMirror = settings.observeAsState(AppSettings.KEY_GITHUB_MIRROR) { gitHubMirror }.value
     val huggingFaceMirror = settings.observeAsState(AppSettings.KEY_HUGGINGFACE_MIRROR) { huggingFaceMirror }.value
+    val bangumiMirror = settings.observeAsState(AppSettings.KEY_BANGUMI_MIRROR) { bangumiMirror }.value
+    val bangumiMirrorCustomBase = settings.observeAsState(AppSettings.KEY_BANGUMI_MIRROR_CUSTOM_BASE) {
+        bangumiMirrorCustomBase.orEmpty()
+    }.value
     val sslBypass = settings.observeAsState(AppSettings.KEY_SSL_BYPASS) { isSSLBypassEnabled }.value
     val offlineDisabled = settings.observeAsState(AppSettings.KEY_OFFLINE_DISABLED) { isOfflineCheckDisabled }.value
     val adBlock = settings.observeAsState(AppSettings.KEY_ADBLOCK) { isAdBlockEnabled }.value
@@ -186,6 +190,11 @@ fun StorageAndNetworkSettingsRoute(
     val huggingFaceMirrorOptions = listOf(
         SettingsChoiceOption(AppSettings.HuggingFaceMirror.NATIVE, "Direct Native (Default)"),
         SettingsChoiceOption(AppSettings.HuggingFaceMirror.HF_MIRROR, "hf-mirror.com"),
+    )
+    val bangumiMirrorOptions = listOf(
+        SettingsChoiceOption(AppSettings.BangumiMirror.BANGUMI_ONE, "bangumi.one (Default)"),
+        SettingsChoiceOption(AppSettings.BangumiMirror.NATIVE, "Official"),
+        SettingsChoiceOption(AppSettings.BangumiMirror.CUSTOM, "Custom"),
     )
 
     StorageAndNetworkSettingsScreen(
@@ -391,6 +400,27 @@ fun StorageAndNetworkSettingsRoute(
                 summary = context.getString(R.string.pref_huggingface_mirror_summary),
                 onValueChange = { settings.huggingFaceMirror = it },
             )
+        },
+        bangumiMirror = {
+            SettingsChoicePreference(
+                title = context.getString(R.string.pref_bangumi_mirror),
+                value = bangumiMirror,
+                options = bangumiMirrorOptions,
+                summary = context.getString(R.string.pref_bangumi_mirror_summary),
+                onValueChange = { settings.bangumiMirror = it },
+            )
+        },
+        bangumiMirrorCustomBase = {
+            if (bangumiMirror == AppSettings.BangumiMirror.CUSTOM) {
+                SettingsSectionDivider()
+                SettingsTextInputPreference(
+                    title = context.getString(R.string.pref_bangumi_mirror_custom_base),
+                    value = bangumiMirrorCustomBase,
+                    summary = context.getString(R.string.pref_bangumi_mirror_custom_base_summary),
+                    placeholder = "https://bangumi.one",
+                    onValueChange = { settings.bangumiMirrorCustomBase = it },
+                )
+            }
         },
         sslBypass = {
             SettingsSwitchPreference(

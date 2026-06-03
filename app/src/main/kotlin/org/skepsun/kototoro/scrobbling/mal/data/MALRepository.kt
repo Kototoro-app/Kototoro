@@ -359,6 +359,43 @@ class MALRepository @Inject constructor(
 		}
 	}
 
+	suspend fun searchEntities(
+		entityType: EntityType,
+		query: String,
+		limit: Int = 10,
+	): List<ScrobblerContent> {
+		val categoryType = when (entityType) {
+			EntityType.PERSON -> "person"
+			EntityType.CHARACTER -> "character"
+			else -> return emptyList()
+		}
+		val url = "$BASE_WEB_URL/search/prefix.json".toHttpUrl().newBuilder()
+			.addQueryParameter("type", categoryType)
+			.addQueryParameter("keyword", query)
+			.build()
+		val request = Request.Builder()
+			.url(url)
+			.get()
+			.build()
+		val categories = okHttp.newCall(request).await().parseJson().optJSONArray("categories") ?: return emptyList()
+		for (i in 0 until categories.length()) {
+			val category = categories.optJSONObject(i) ?: continue
+			if (category.optString("type") != categoryType) {
+				continue
+			}
+			return category.optJSONArray("items")?.mapJSONNotNull { item ->
+				ScrobblerContent(
+					id = item.getLong("id"),
+					name = item.getStringOrNull("name") ?: return@mapJSONNotNull null,
+					altName = item.optJSONObject("payload")?.getStringOrNull("alternative_name")?.takeIf { it.isNotBlank() },
+					cover = item.getStringOrNull("image_url"),
+					url = item.getStringOrNull("url") ?: "$BASE_WEB_URL/$categoryType/${item.getLong("id")}",
+				)
+			}.orEmpty().take(limit)
+		}
+		return emptyList()
+	}
+
 	private suspend fun buildContentInfo(json: JSONObject, mediaType: String): ScrobblerContentInfo {
 		val baseInfo = ScrobblerContentInfo(json, mediaType)
 		val supplemental = fetchSupplementalContent(baseInfo.url)
@@ -1258,6 +1295,20 @@ class MALRepository @Inject constructor(
 				node.getStringOrNull("last_name")?.takeIf { it.isNotBlank() },
 			).joinToString(" ").ifBlank { null }
 		}.orEmpty()
+		val staff = json.optJSONArray("authors")?.mapJSONNotNull { edge ->
+			val node = edge.optJSONObject("node") ?: return@mapJSONNotNull null
+			val name = listOfNotNull(
+				node.getStringOrNull("first_name")?.takeIf { it.isNotBlank() },
+				node.getStringOrNull("last_name")?.takeIf { it.isNotBlank() },
+			).joinToString(" ").ifBlank { return@mapJSONNotNull null }
+			val id = node.optLong("id", 0L).takeIf { it > 0L }
+			ScrobblerContentInfo.PersonInfo(
+				id = id,
+				name = name,
+				url = id?.let { "$BASE_WEB_URL/people/$it" },
+				role = "Author",
+			)
+		}.orEmpty()
 		val totalCount = if (mediaType == ANIME_ENDPOINT) {
 			json.optInt("num_episodes")
 		} else {
@@ -1312,6 +1363,7 @@ class MALRepository @Inject constructor(
 			},
 			tags = tags,
 			authors = authors,
+			staff = staff,
 			totalEpisodes = totalCount,
 			infoboxProperties = infobox,
 			episodes = syntheticEpisodes(
@@ -1336,6 +1388,7 @@ class MALRepository @Inject constructor(
 			rank = rank,
 			tags = tags,
 			authors = authors,
+			staff = staff,
 			totalEpisodes = totalEpisodes,
 			infoboxProperties = infoboxProperties,
 			episodes = episodes,

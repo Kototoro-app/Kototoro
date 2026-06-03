@@ -64,6 +64,7 @@ data class TrackingStaffDto(
 	val externalId: String? = null,
 	val primaryName: String,
 	val aliases: List<String> = emptyList(),
+	val role: String? = null,
 )
 
 data class TrackingPersonDto(

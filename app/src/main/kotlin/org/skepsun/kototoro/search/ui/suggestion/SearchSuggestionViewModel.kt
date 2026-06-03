@@ -28,6 +28,7 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.mapToSet
@@ -39,6 +40,11 @@ import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.matches
 import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
+import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.tracking.discovery.domain.PreferredTrackingSiteProvider
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
 import javax.inject.Inject
 
 private const val DEBOUNCE_TIMEOUT = 300L
@@ -49,6 +55,8 @@ private const val MAX_AUTHORS_ITEMS = 2
 private const val MAX_TAGS_ITEMS = 8
 private const val MAX_SOURCES_ITEMS = 6
 private const val MAX_SOURCES_TIPS_ITEMS = 2
+private const val MAX_TRACKING_WORK_ITEMS = 3
+private const val MAX_TRACKING_ENTITY_ITEMS = 6
 
 @HiltViewModel
 class SearchSuggestionViewModel @Inject constructor(
@@ -58,6 +66,8 @@ class SearchSuggestionViewModel @Inject constructor(
 	private val sourcePresetsRepository: SourcePresetsRepository,
 	private val sourceTypeIdentifier: SourceTypeIdentifier,
 	private val globalFavoritesState: GlobalFavoritesState,
+	private val trackingSiteDiscoveryService: TrackingSiteDiscoveryService,
+	private val preferredTrackingSiteProvider: PreferredTrackingSiteProvider,
 ) : BaseViewModel() {
 
 	private val query = MutableStateFlow("")
@@ -94,16 +104,27 @@ class SearchSuggestionViewModel @Inject constructor(
 	)
 
 	private val suggestionParams = combine(
-		query.debounce(DEBOUNCE_TIMEOUT),
-		enabledSourcesSnapshot,
-		settings.observeAsFlow(AppSettings.KEY_SEARCH_SUGGESTION_TYPES) { searchSuggestionTypes },
+		combine(
+			query.debounce(DEBOUNCE_TIMEOUT),
+			enabledSourcesSnapshot,
+			settings.observeAsFlow(AppSettings.KEY_SEARCH_SUGGESTION_TYPES) { searchSuggestionTypes },
+			preferredTrackingSiteProvider.preferredSite,
+		) { searchQuery, enabledSources, types, preferredTrackingSite ->
+			SuggestionParamsPartial(
+				searchQuery = searchQuery,
+				enabledSources = enabledSources,
+				types = types,
+				preferredTrackingSite = preferredTrackingSite,
+			)
+		},
 		sourceTypes,
 		contentKinds,
-	) { searchQuery, enabledSources, types, activeSourceTypes, activeContentKinds ->
+	) { partial, activeSourceTypes, activeContentKinds ->
 		SuggestionParams(
-			searchQuery = searchQuery,
-			enabledSources = enabledSources,
-			types = types,
+			searchQuery = partial.searchQuery,
+			enabledSources = partial.enabledSources,
+			types = partial.types,
+			preferredTrackingSite = partial.preferredTrackingSite,
 			activeSourceTypes = activeSourceTypes,
 			activeContentKinds = activeContentKinds,
 		)
@@ -117,7 +138,12 @@ class SearchSuggestionViewModel @Inject constructor(
 			contentKinds = params.activeContentKinds,
 			identifier = sourceTypeIdentifier,
 		)
-		buildSearchSuggestion(params.searchQuery, filteredSources, params.types)
+		buildSearchSuggestion(
+			searchQuery = params.searchQuery,
+			enabledSources = filteredSources,
+			types = params.types,
+			preferredTrackingSite = params.preferredTrackingSite,
+		)
 	}.distinctUntilChanged()
 		.withErrorHandling()
 		.flowOn(Dispatchers.Default)
@@ -175,6 +201,7 @@ class SearchSuggestionViewModel @Inject constructor(
 		searchQuery: String,
 		enabledSources: EnabledSourcesSnapshot,
 		types: Set<SearchSuggestionType>,
+		preferredTrackingSite: ScrobblerService,
 	): List<SearchSuggestionItem> = coroutineScope {
 		listOfNotNull(
 			if (SearchSuggestionType.GENRES in types) {
@@ -214,7 +241,88 @@ class SearchSuggestionViewModel @Inject constructor(
 			} else {
 				null
 			},
+			async { getTrackingEntities(searchQuery, preferredTrackingSite) },
 		).flatMap { it.await() }
+	}
+
+	private suspend fun getTrackingEntities(
+		searchQuery: String,
+		service: ScrobblerService,
+	): List<SearchSuggestionItem> {
+		val trimmedQuery = searchQuery.trim()
+		if (trimmedQuery.isEmpty()) {
+			return emptyList()
+		}
+		return runCatchingCancellable {
+			coroutineScope {
+				val worksDeferred = async {
+					runCatchingCancellable {
+						trackingSiteDiscoveryService.search(
+							TrackingSiteCatalog(
+								service = service,
+								query = trimmedQuery,
+							),
+						).asSequence()
+							.take(MAX_TRACKING_WORK_ITEMS)
+							.map { item ->
+								TrackingEntity(
+									service = item.service,
+									entityType = EntityType.WORK,
+									remoteId = item.remoteId,
+									name = item.title,
+									altName = item.altTitle ?: item.subtitle,
+									coverUrl = item.coverUrl,
+									url = item.url,
+								)
+							}
+							.toList()
+					}.getOrElse { emptyList() }
+				}
+				val personsDeferred = async {
+					runCatchingCancellable {
+						trackingSiteDiscoveryService.searchEntities(
+							service = service,
+							entityType = EntityType.PERSON,
+							query = trimmedQuery,
+						).take(MAX_TRACKING_ENTITY_ITEMS / 2)
+					}.getOrElse { emptyList() }
+				}
+				val charactersDeferred = async {
+					runCatchingCancellable {
+						trackingSiteDiscoveryService.searchEntities(
+							service = service,
+							entityType = EntityType.CHARACTER,
+							query = trimmedQuery,
+						).take(MAX_TRACKING_ENTITY_ITEMS / 2)
+					}.getOrElse { emptyList() }
+				}
+				val entities = (personsDeferred.await() + charactersDeferred.await())
+					.asSequence()
+					.distinctBy { "${it.entityType.name}:${it.remoteId}" }
+					.take(MAX_TRACKING_ENTITY_ITEMS)
+					.map { item ->
+						TrackingEntity(
+							service = item.service,
+							entityType = item.entityType,
+							remoteId = item.remoteId,
+							name = item.name,
+							altName = item.altName,
+							coverUrl = item.coverUrl,
+							url = item.url,
+						)
+					}
+					.toList()
+				val items = worksDeferred.await() + entities
+				if (items.isEmpty()) {
+					emptyList()
+				} else {
+					listOf(SearchSuggestionItem.TrackingEntityList(service, items))
+				}
+			}
+		}.getOrElse { e ->
+			e.printStackTraceDebug()
+			emptyList()
+		}
 	}
 
 	private suspend fun getAuthors(searchQuery: String): List<SearchSuggestionItem> = runCatchingCancellable {
@@ -308,8 +416,16 @@ private data class SuggestionParams(
 	val searchQuery: String,
 	val enabledSources: EnabledSourcesSnapshot,
 	val types: Set<SearchSuggestionType>,
+	val preferredTrackingSite: ScrobblerService,
 	val activeSourceTypes: Set<SourceType>,
 	val activeContentKinds: Set<SearchContentKind>,
+)
+
+private data class SuggestionParamsPartial(
+	val searchQuery: String,
+	val enabledSources: EnabledSourcesSnapshot,
+	val types: Set<SearchSuggestionType>,
+	val preferredTrackingSite: ScrobblerService,
 )
 
 private fun EnabledSourcesSnapshot.filterByTypes(

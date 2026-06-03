@@ -50,6 +50,7 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentPage
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentListFilter
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -239,6 +240,31 @@ class AppRouter private constructor(
                     entityId = entityId,
                     serviceId = service?.id?.toString(),
                     remoteId = remoteId,
+                    url = url,
+                ),
+            ),
+        )
+    }
+
+    fun openTrackingEntityDetails(
+        service: ScrobblerService,
+        entityType: EntityType,
+        remoteId: Long,
+        name: String,
+        altName: String? = null,
+        coverUrl: String? = null,
+        url: String? = null,
+    ) {
+        startActivity(
+            detailsIntent(
+                contextOrNull() ?: return,
+                DetailsOrigin.TrackingEntity(
+                    serviceId = service.id.toString(),
+                    entityTypeName = entityType.name,
+                    remoteId = remoteId,
+                    name = name,
+                    altName = altName,
+                    coverUrl = coverUrl,
                     url = url,
                 ),
             ),

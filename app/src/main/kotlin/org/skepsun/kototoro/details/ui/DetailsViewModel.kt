@@ -114,6 +114,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.stats.data.StatsRepository
 import org.skepsun.kototoro.video.data.VideoDownloadIndex
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingEntitySearchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
@@ -152,6 +153,15 @@ private const val TRACKING_SUGGESTION_RESULT_LIMIT = 3
 private const val SOURCE_SEARCH_TIMEOUT_MS = 12_000L
 private const val READING_SEARCH_MAX_PARALLELISM = 4
 private const val READING_SEARCH_LOG_TAG = "ReadingSourceSearch"
+private const val ENTITY_TRACKING_SEARCH_RESULT_LIMIT = 3
+private val ENTITY_TRACKING_SEARCH_SERVICES = listOf(
+	ScrobblerService.ANILIST,
+	ScrobblerService.BANGUMI,
+	ScrobblerService.KITSU,
+	ScrobblerService.MAL,
+	ScrobblerService.MANGAUPDATES,
+	ScrobblerService.SHIKIMORI,
+)
 private val CHARACTER_VOICE_ACTOR_REGEX = Regex(
 	"""^\s*(.+?)\s*\((?:cv|cast|voice actor|voice|配音|声优)\s*[:：]?\s*(.+?)\)\s*$""",
 	RegexOption.IGNORE_CASE,
@@ -1113,12 +1123,28 @@ class DetailsViewModel @Inject constructor(
 		val staffByName = LinkedHashMap<String, TrackingStaffDto>()
 		val charactersByName = LinkedHashMap<String, TrackingCharacterDto>()
 
-		fun addStaff(raw: String) {
+		fun addStaff(
+			raw: String,
+			externalId: String? = null,
+			role: String? = null,
+		) {
 			val normalized = normalizeContributorName(raw)
 			if (normalized.isBlank()) {
 				return
 			}
-			staffByName.putIfAbsent(normalized, TrackingStaffDto(primaryName = normalized))
+			val existing = staffByName[normalized]
+			staffByName[normalized] = if (existing == null) {
+				TrackingStaffDto(
+					externalId = externalId,
+					primaryName = normalized,
+					role = role,
+				)
+			} else {
+				existing.copy(
+					externalId = existing.externalId ?: externalId,
+					role = existing.role ?: role,
+				)
+			}
 		}
 
 		fun addCharacter(character: TrackingCharacterDto) {
@@ -1151,6 +1177,13 @@ class DetailsViewModel @Inject constructor(
 						}
 					},
 				),
+			)
+		}
+		details.staff.forEach { person ->
+			addStaff(
+				raw = person.name,
+				externalId = person.id?.toString(),
+				role = person.role,
 			)
 		}
 		details.authors.forEach { author ->
@@ -1304,6 +1337,41 @@ class DetailsViewModel @Inject constructor(
 				
 				submitEntityRelationSections(buildEntityRelationSections(graphGraphId))
 
+			}
+		} else if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity) {
+			entityChapterSourceInfo.value = null
+			launchJob(Dispatchers.IO) {
+				val service = ScrobblerService.entries.firstOrNull {
+					it.id == activeExternalOrigin.serviceId.toIntOrNull()
+				} ?: return@launchJob
+				val entityType = runCatching {
+					EntityType.valueOf(activeExternalOrigin.entityTypeName)
+				}.getOrNull() ?: return@launchJob
+				val cached = trackingSiteCacheRepository.readEntityDetails(
+					service = service,
+					entityType = entityType,
+					remoteId = activeExternalOrigin.remoteId,
+				)
+				if (mangaDetails.value == null) {
+					baseLoadedDetails = ContentDetails(
+						cached?.let(::trackingDetailsToSyntheticContent)
+							?: trackingEntityOriginToSyntheticContent(activeExternalOrigin, service),
+					)
+					syncDisplayedState()
+				}
+				val remoteDetails = runCatching {
+					trackingSiteDiscoveryService.getEntityDetails(
+						service = service,
+						entityType = entityType,
+						remoteId = activeExternalOrigin.remoteId,
+						urlHint = activeExternalOrigin.url,
+					)
+				}.getOrNull()
+				if (remoteDetails != null) {
+					cacheEntityTrackingDetails(entityType, remoteDetails)
+					baseLoadedDetails = ContentDetails(trackingDetailsToSyntheticContent(remoteDetails))
+					syncDisplayedState()
+				}
 			}
 		} else if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem) {
 			entityChapterSourceInfo.value = null
@@ -1479,7 +1547,75 @@ class DetailsViewModel @Inject constructor(
 				return remote
 			}
 		}
+		resolveEntityTrackingDetailsByName(entity)?.let { return it }
 		return null
+	}
+
+	private suspend fun resolveEntityTrackingDetailsByName(
+		entity: Entity,
+	): org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails? {
+		if (entity.type != EntityType.PERSON && entity.type != EntityType.CHARACTER) {
+			return null
+		}
+		val queries = mergeEntitySearchNames(entity).take(3)
+		if (queries.isEmpty()) {
+			return null
+		}
+		for (service in ENTITY_TRACKING_SEARCH_SERVICES) {
+			if (!supportsEntityTrackingDetails(service, entity.type)) {
+				continue
+			}
+			for (query in queries) {
+				val match = runCatching {
+					trackingSiteDiscoveryService.searchEntities(
+						service = service,
+						entityType = entity.type,
+						query = query,
+					)
+				}.getOrDefault(emptyList())
+					.asSequence()
+					.take(ENTITY_TRACKING_SEARCH_RESULT_LIMIT)
+					.firstOrNull { it.matchesEntityName(entity) }
+					?: continue
+				val remote = runCatching {
+					trackingSiteDiscoveryService.getEntityDetails(
+						service = match.service,
+						entityType = entity.type,
+						remoteId = match.remoteId,
+						urlHint = match.url,
+					)
+				}.getOrNull() ?: continue
+				cacheEntityTrackingDetails(entity.type, remote)
+				db.getEntityGraphDao().upsertBinding(
+					EntityBindingRecord(
+						entityId = entity.id,
+						source = match.service.id.toString(),
+						externalId = match.remoteId.toString(),
+						confidence = 0.92f,
+						isPrimary = false,
+					),
+				)
+				return remote
+			}
+		}
+		return null
+	}
+
+	private fun mergeEntitySearchNames(entity: Entity): List<String> {
+		return (listOf(entity.primaryName) + entity.aliases)
+			.map { it.trim() }
+			.filter { it.isNotEmpty() }
+			.distinctBy { it.lowercase() }
+	}
+
+	private fun TrackingEntitySearchResult.matchesEntityName(entity: Entity): Boolean {
+		val expectedNames = mergeEntitySearchNames(entity)
+		val candidateNames = listOfNotNull(name, altName)
+			.map { it.trim() }
+			.filter { it.isNotEmpty() }
+		return expectedNames.any { expected ->
+			candidateNames.any { candidate -> candidate.equals(expected, ignoreCase = true) }
+		}
 	}
 
 	private fun supportsEntityTrackingDetails(
@@ -2476,6 +2612,11 @@ class DetailsViewModel @Inject constructor(
 				val related = relatedEntities[relatedId] ?: return@mapNotNull null
 				val trackingCharacterPresentation = resolveTrackingCharacterPresentation(related, trackingDetails)
 					?: resolveTrackingCharacterPresentationFromRelatedWorks(related)
+				val trackingStaffRole = if (relationType == RelationType.CREATED_BY) {
+					resolveTrackingStaffRole(related, trackingDetails)
+				} else {
+					null
+				}
 				EntityRelationItem(
 					stableKey = "entity:${related.id}",
 					entityId = related.id,
@@ -2484,7 +2625,7 @@ class DetailsViewModel @Inject constructor(
 					coverUrl = resolveEntityCoverUrl(related.id)
 						?: trackingCharacterPresentation?.coverUrl
 						?: resolveTrackingRelatedCoverUrl(related, trackingDetails),
-					subtitle = trackingCharacterPresentation?.role,
+					subtitle = trackingCharacterPresentation?.role ?: trackingStaffRole,
 					supportingText = trackingCharacterPresentation?.supportingText,
 					detailLines = trackingCharacterPresentation?.detailLines.orEmpty(),
 					trackingService = trackingDetails?.service,
@@ -2844,6 +2985,49 @@ class DetailsViewModel @Inject constructor(
 			)
 		}
 		return null
+	}
+
+	private fun resolveTrackingStaffRole(
+		entity: Entity,
+		details: TrackingSiteItemDetails?,
+	): String? {
+		if (details == null || entity.type != EntityType.PERSON && entity.type != EntityType.ORGANIZATION) {
+			return null
+		}
+		val candidateNames = (listOf(entity.primaryName) + entity.aliases)
+			.map { it.trim() }
+			.filter { it.isNotEmpty() }
+		details.staff.firstOrNull { staff ->
+			candidateNames.any { it.equals(staff.name, ignoreCase = true) }
+		}?.role?.takeIf { it.isNotBlank() }?.let { return it }
+		return trackingStaffCredits(details).firstNotNullOfOrNull { raw ->
+			val name = normalizeContributorName(raw)
+			if (candidateNames.none { it.equals(name, ignoreCase = true) }) {
+				null
+			} else {
+				extractTrackingCreditRole(raw)
+			}
+		}
+	}
+
+	private fun trackingStaffCredits(details: TrackingSiteItemDetails): List<String> {
+		return buildList {
+			addAll(details.authors)
+			details.infoboxProperties.forEach { (key, value) ->
+				if (key.isAuthorProperty()) {
+					addAll(splitTrackingNames(value))
+				}
+			}
+		}
+	}
+
+	private fun extractTrackingCreditRole(raw: String): String? {
+		val trimmed = raw.trim()
+		val asciiRole = Regex("""\(([^()]*)\)\s*$""").find(trimmed)?.groupValues?.getOrNull(1)
+		val fullWidthRole = Regex("""（([^（）]*)）\s*$""").find(trimmed)?.groupValues?.getOrNull(1)
+		return (asciiRole ?: fullWidthRole)
+			?.trim()
+			?.takeIf { it.isNotBlank() }
 	}
 
 	private suspend fun resolveEntityCoverUrl(entityId: Long): String? {
@@ -4309,6 +4493,31 @@ class DetailsViewModel @Inject constructor(
 				translatedDescription = cachedTranslatedDescription.value,
 				isShowingTranslation = isShowingTranslation.value,
 			),
+		)
+	}
+
+	private fun trackingEntityOriginToSyntheticContent(
+		origin: org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity,
+		service: ScrobblerService,
+	): Content {
+		val source = syntheticSource("TRACKING_${service.name}_${origin.entityTypeName}", ContentType.MANGA)
+		val normalizedCoverUrl = origin.coverUrl.normalizedImageUrl()
+		return Content(
+			id = origin.remoteId,
+			title = origin.name,
+			altTitles = setOfNotNull(origin.altName?.takeIf { it.isNotBlank() }),
+			url = origin.url.orEmpty(),
+			publicUrl = origin.url.orEmpty(),
+			rating = 0f,
+			contentRating = null,
+			coverUrl = normalizedCoverUrl,
+			largeCoverUrl = normalizedCoverUrl,
+			tags = emptySet(),
+			state = null,
+			authors = emptySet(),
+			description = null,
+			chapters = null,
+			source = source,
 		)
 	}
 

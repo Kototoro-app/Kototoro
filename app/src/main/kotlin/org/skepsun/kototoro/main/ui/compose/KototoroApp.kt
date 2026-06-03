@@ -80,6 +80,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
+import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
 import org.skepsun.kototoro.search.ui.compose.SearchNavigation
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.compose.SearchRoute
@@ -207,6 +208,7 @@ fun KototoroApp(
     onSearchOverlayContentKindsChange: (Set<SearchContentKind>) -> Unit = {},
     onSearchOverlayDismiss: () -> Unit = {},
     onContentSuggestionClick: (Content) -> Unit = {},
+    onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit = {},
     onTagSuggestionClick: (ContentTag) -> Unit = {},
     onSourceSuggestionClick: (ContentSource) -> Unit = {},
     onAuthorSuggestionClick: (String) -> Unit = {},
@@ -1083,6 +1085,10 @@ fun KototoroApp(
                         onContentKindsChange = onSearchOverlayContentKindsChange,
                         onContentSuggestionClick = {
                             onContentSuggestionClick(it)
+                            isSearchOverlayVisible = false
+                        },
+                        onTrackingEntitySuggestionClick = {
+                            onTrackingEntitySuggestionClick(it)
                             isSearchOverlayVisible = false
                         },
                         onTagSuggestionClick = {

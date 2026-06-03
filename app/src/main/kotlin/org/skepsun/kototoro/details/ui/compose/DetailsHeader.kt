@@ -909,6 +909,8 @@ private fun UnifiedTrackingRow(
                 GlassDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
+                    shape = RoundedCornerShape(28.dp),
+                    style = GlassDefaults.subtleStyle(),
                 ) {
                     supportedStatuses.forEach { candidate ->
                         DropdownMenuItem(
@@ -1355,6 +1357,8 @@ private fun SourceOptionCard(
                     GlassDropdownMenu(
                         expanded = statusMenuExpanded,
                         onDismissRequest = { statusMenuExpanded = false },
+                        shape = RoundedCornerShape(28.dp),
+                        style = GlassDefaults.subtleStyle(),
                     ) {
                         supportedStatusesForService(linkedTrackingItem.service).forEach { status ->
                             DropdownMenuItem(

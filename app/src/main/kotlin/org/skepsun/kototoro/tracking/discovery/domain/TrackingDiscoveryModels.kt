@@ -78,7 +78,17 @@ data class TrackingSiteItem(
 	val score: Float? = null,
 	val scoreMax: Float? = null,
 	val url: String? = null,
-		val totalEpisodes: Int? = null,
+	val totalEpisodes: Int? = null,
+)
+
+data class TrackingEntitySearchResult(
+	val service: ScrobblerService,
+	val entityType: org.skepsun.kototoro.entitygraph.domain.EntityType,
+	val remoteId: Long,
+	val name: String,
+	val altName: String? = null,
+	val coverUrl: String? = null,
+	val url: String? = null,
 )
 
 @Deprecated(
@@ -99,6 +109,7 @@ data class TrackingSiteItemDetails(
 	val rank: Int? = null,
 	val tags: List<String> = emptyList(),
 	val authors: List<String> = emptyList(),
+	val staff: List<PersonInfo> = emptyList(),
 	val year: Int? = null,
 	val totalEpisodes: Int? = null,
 	val url: String? = null,
@@ -132,6 +143,7 @@ data class TrackingSiteItemDetails(
 		val name: String,
 		val avatarUrl: String? = null,
 		val url: String? = null,
+		val role: String? = null,
 	)
 
 	data class CommentThread(

@@ -90,6 +90,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.util.ext.mangaExtra
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -99,6 +100,7 @@ import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
+import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
 
 private const val SearchOverlayAnimationDurationMillis = 260
 private val SearchOverlayCollapsedHeight = 56.dp
@@ -130,6 +132,7 @@ fun KototoroSearchOverlay(
     onSourceTypesChange: (Set<SourceType>) -> Unit,
     onContentKindsChange: (Set<SearchContentKind>) -> Unit,
     onContentSuggestionClick: (Content) -> Unit,
+    onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit,
     onTagSuggestionClick: (ContentTag) -> Unit,
     onSourceSuggestionClick: (ContentSource) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
@@ -435,6 +438,7 @@ fun KototoroSearchOverlay(
                     submitSearch(author)
                 },
                 onContentSuggestionClick = onContentSuggestionClick,
+                onTrackingEntitySuggestionClick = onTrackingEntitySuggestionClick,
                 onTagSuggestionClick = { tag ->
                     onQueryChanged(tag.title)
                     onTagSuggestionClick(tag)
@@ -543,6 +547,7 @@ private fun SuggestionList(
     onHintClick: (String) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
     onContentSuggestionClick: (Content) -> Unit,
+    onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit,
     onTagSuggestionClick: (ContentTag) -> Unit,
     onSourceSuggestionClick: (ContentSource) -> Unit,
     onDeleteQuery: (String) -> Unit,
@@ -562,6 +567,7 @@ private fun SuggestionList(
                     is SearchSuggestionItem.SourceTip -> "srctip_${item.source.name}"
                     is SearchSuggestionItem.Tags -> "tags"
                     is SearchSuggestionItem.ContentList -> "content"
+                    is SearchSuggestionItem.TrackingEntityList -> "tracking_${item.service.name}"
                     is SearchSuggestionItem.Text -> "text_${item.textResId}"
                 }
             },
@@ -574,6 +580,7 @@ private fun SuggestionList(
                     is SearchSuggestionItem.SourceTip -> "source_tip"
                     is SearchSuggestionItem.Tags -> "tags"
                     is SearchSuggestionItem.ContentList -> "content_list"
+                    is SearchSuggestionItem.TrackingEntityList -> "tracking_entity_list"
                     is SearchSuggestionItem.Text -> "text"
                 }
             },
@@ -680,6 +687,27 @@ private fun SuggestionList(
                     }
                 }
 
+                is SearchSuggestionItem.TrackingEntityList -> {
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            items = item.items,
+                            key = { entity -> "${entity.entityType.name}_${entity.remoteId}" },
+                            contentType = { "tracking_entity_card" },
+                        ) { entity ->
+                            TrackingEntitySuggestionCard(
+                                entity = entity,
+                                onClick = { onTrackingEntitySuggestionClick(entity) },
+                            )
+                        }
+                    }
+                }
+
                 is SearchSuggestionItem.Text -> {
                     if (item.textResId != 0) {
                         ListItem(
@@ -740,6 +768,87 @@ private fun SourceSuggestionRow(
             )
         }
     }
+}
+
+@Composable
+private fun TrackingEntitySuggestionCard(
+    entity: TrackingEntity,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val imageRequest = remember(entity.service, entity.entityType, entity.remoteId, entity.coverUrl) {
+        ImageRequest.Builder(context)
+            .data(entity.coverUrl)
+            .crossfade(true)
+            .build()
+    }
+    val serviceTitle = stringResource(entity.service.titleResId)
+    val typeTitle = stringResource(entity.entityType.titleResId())
+    Surface(
+        modifier = Modifier
+            .width(132.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(if (entity.entityType == EntityType.WORK) 0.7f else 1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                if (entity.coverUrl.isNullOrBlank()) {
+                    Icon(
+                        painter = painterResource(entity.entityType.iconResId()),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(
+                text = entity.name,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "$serviceTitle · $typeTitle",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun EntityType.titleResId(): Int = when (this) {
+    EntityType.WORK -> R.string.entity_graph_type_work
+    EntityType.CHARACTER -> R.string.entity_graph_type_character
+    EntityType.PERSON -> R.string.entity_graph_type_person
+    EntityType.ORGANIZATION -> R.string.entity_graph_type_organization
+}
+
+private fun EntityType.iconResId(): Int = when (this) {
+    EntityType.WORK -> R.drawable.ic_content_manga
+    EntityType.CHARACTER -> R.drawable.ic_user
+    EntityType.PERSON -> R.drawable.ic_user
+    EntityType.ORGANIZATION -> R.drawable.ic_select_group
 }
 
 @Composable

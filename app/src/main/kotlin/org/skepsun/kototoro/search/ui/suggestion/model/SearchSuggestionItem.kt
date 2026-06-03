@@ -3,10 +3,12 @@ package org.skepsun.kototoro.search.ui.suggestion.model
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
 sealed interface SearchSuggestionItem : ListModel {
 
@@ -16,6 +18,20 @@ sealed interface SearchSuggestionItem : ListModel {
 
 		override fun areItemsTheSame(other: ListModel): Boolean {
 			return other is ContentList
+		}
+	}
+
+	data class TrackingEntityList(
+		val service: ScrobblerService,
+		val items: List<TrackingEntity>,
+	) : SearchSuggestionItem {
+
+		override fun areItemsTheSame(other: ListModel): Boolean {
+			return other is TrackingEntityList && service == other.service
+		}
+
+		override fun getChangePayload(previousState: ListModel): Any {
+			return ListModelDiffCallback.PAYLOAD_NESTED_LIST_CHANGED
 		}
 	}
 
@@ -106,3 +122,13 @@ sealed interface SearchSuggestionItem : ListModel {
 			&& error?.message == other.error?.message
 	}
 }
+
+data class TrackingEntity(
+	val service: ScrobblerService,
+	val entityType: EntityType,
+	val remoteId: Long,
+	val name: String,
+	val altName: String? = null,
+	val coverUrl: String? = null,
+	val url: String? = null,
+)

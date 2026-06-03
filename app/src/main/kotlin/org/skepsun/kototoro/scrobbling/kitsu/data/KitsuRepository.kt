@@ -374,6 +374,38 @@ class KitsuRepository(
 		}
 	}
 
+	suspend fun searchEntities(
+		entityType: EntityType,
+		query: String,
+		page: Int,
+		limit: Int = 10,
+	): List<ScrobblerContent> {
+		if (entityType != EntityType.CHARACTER) {
+			return emptyList()
+		}
+		val offset = page.coerceAtLeast(0) * limit
+		val request = Request.Builder()
+			.get()
+			.url("$BASE_WEB_URL/api/edge/characters?filter[name]=${query.urlEncoded()}&page[limit]=$limit&page[offset]=$offset")
+		val data = okHttp.newCall(request.build()).await().parseJson().ensureSuccess().optJSONArray("data")
+			?: return emptyList()
+		return data.mapJSON { item ->
+			val id = item.optString("id").toLongOrNull() ?: 0L
+			val attrs = item.optJSONObject("attributes")
+			val name = item.displayEntityName()
+			val slug = attrs?.getStringOrNull("slug")
+			ScrobblerContent(
+				id = id,
+				name = name,
+				altName = attrs?.optJSONObject("names")?.getStringOrNull("ja_jp")?.takeIf {
+					!it.equals(name, ignoreCase = true)
+				},
+				cover = attrs?.optJSONObject("image")?.bestKitsuImage(),
+				url = "$BASE_WEB_URL/characters/${slug ?: id}",
+			)
+		}.filter { it.id > 0L }
+	}
+
 	private suspend fun parseContentInfoResponse(data: JSONObject, mediaType: String): ScrobblerContentInfo {
 
 		val mainData = data.getJSONObject("data")

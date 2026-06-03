@@ -38,6 +38,7 @@ import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.databinding.ActivityMainBinding
 import org.skepsun.kototoro.details.service.ContentPrefetchService
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -239,6 +240,27 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 isResumeEnabled = isResumeEnabledState,
                 onResumeClick = viewModel::openLastReader,
                 onContentSuggestionClick = router::openDetails,
+                onTrackingEntitySuggestionClick = { entity ->
+                    when (entity.entityType) {
+                        EntityType.WORK -> router.openTrackingSiteDetails(
+                            service = entity.service,
+                            remoteId = entity.remoteId,
+                            url = entity.url,
+                        )
+                        EntityType.PERSON,
+                        EntityType.CHARACTER,
+                        EntityType.ORGANIZATION,
+                        -> router.openTrackingEntityDetails(
+                            service = entity.service,
+                            entityType = entity.entityType,
+                            remoteId = entity.remoteId,
+                            name = entity.name,
+                            altName = entity.altName,
+                            coverUrl = entity.coverUrl,
+                            url = entity.url,
+                        )
+                    }
+                },
                 onTagSuggestionClick = { tag ->
                     submitSearch(tag.title, SearchKind.TAG)
                 },

@@ -13,6 +13,7 @@ class ScrobblerContentInfo(
 	val rank: Int? = null,
 	val tags: List<String> = emptyList(),
 	val authors: List<String> = emptyList(),
+	val staff: List<PersonInfo> = emptyList(),
 	val totalEpisodes: Int? = null,
 	val infoboxProperties: List<Pair<String, String>> = emptyList(),
 	val episodes: List<EpisodeInfo> = emptyList(),
@@ -45,6 +46,7 @@ class ScrobblerContentInfo(
 		val name: String,
 		val avatarUrl: String? = null,
 		val url: String? = null,
+		val role: String? = null,
 	)
 
 	data class CommentThread(

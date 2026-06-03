@@ -19,6 +19,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCapabilities
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCategory
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingEntitySearchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteSortOption
@@ -624,6 +625,38 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
 		}
 	}
 
+	override suspend fun searchEntities(
+		service: ScrobblerService,
+		entityType: EntityType,
+		query: String,
+		page: Int,
+	): List<TrackingEntitySearchResult> {
+		val trimmedQuery = query.trim()
+		if (trimmedQuery.isEmpty()) {
+			return emptyList()
+		}
+		val results = when (service) {
+			ScrobblerService.ANILIST -> aniListRepository.searchEntities(entityType, trimmedQuery, page + 1)
+			ScrobblerService.BANGUMI -> bangumiRepository.searchEntities(entityType, trimmedQuery, page)
+			ScrobblerService.KITSU -> kitsuRepository.searchEntities(entityType, trimmedQuery, page)
+			ScrobblerService.MAL -> malRepository.searchEntities(entityType, trimmedQuery)
+			ScrobblerService.MANGAUPDATES -> mangaUpdatesRepository.searchEntities(entityType, trimmedQuery, page)
+			ScrobblerService.SHIKIMORI -> shikimoriRepository.searchEntities(entityType, trimmedQuery, page)
+			else -> emptyList()
+		}
+		return results.map { item ->
+			TrackingEntitySearchResult(
+				service = service,
+				entityType = entityType,
+				remoteId = item.id,
+				name = item.name,
+				altName = item.altName,
+				coverUrl = item.cover,
+				url = item.url,
+			)
+		}
+	}
+
 	private companion object {
 		private val VIDEO_CONTENT_TYPES = setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO)
 	}
@@ -986,6 +1019,15 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
 			rank = rank,
 			tags = tags,
 			authors = authors,
+			staff = staff.map { person ->
+				TrackingSiteItemDetails.PersonInfo(
+					id = person.id,
+					name = person.name,
+					avatarUrl = person.avatarUrl,
+					url = person.url,
+					role = person.role,
+				)
+			},
 			totalEpisodes = totalEpisodes,
 			url = url,
 			infoboxProperties = infoboxProperties,
@@ -1009,6 +1051,7 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
 							name = actor.name,
 							avatarUrl = actor.avatarUrl,
 							url = actor.url,
+							role = actor.role,
 						)
 					},
 				)

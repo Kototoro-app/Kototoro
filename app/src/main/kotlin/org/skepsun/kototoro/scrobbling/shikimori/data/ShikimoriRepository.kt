@@ -230,6 +230,38 @@ class ShikimoriRepository @Inject constructor(
 		}
 	}
 
+	suspend fun searchEntities(
+		entityType: EntityType,
+		query: String,
+		page: Int,
+		limit: Int = 10,
+	): List<ScrobblerContent> {
+		val endpoint = when (entityType) {
+			EntityType.PERSON -> "people"
+			EntityType.CHARACTER -> "characters"
+			else -> return emptyList()
+		}
+		val url = BASE_URL.toHttpUrl().newBuilder()
+			.addPathSegment("api")
+			.addPathSegment(endpoint)
+			.addQueryParameter("page", (page.coerceAtLeast(0) + 1).toString())
+			.addQueryParameter("limit", limit.toString())
+			.addQueryParameter("search", query)
+			.build()
+		val request = Request.Builder().url(url).get().build()
+		return okHttp.newCall(request).await().parseJsonArray().mapJSON { json ->
+			val name = json.getStringOrNull("name") ?: json.getStringOrNull("russian") ?: "Unknown"
+			val image = json.optJSONObject("image")
+			ScrobblerContent(
+				id = json.getLong("id"),
+				name = name,
+				altName = json.getStringOrNull("russian")?.takeIf { !it.equals(name, ignoreCase = true) },
+				cover = (image?.getStringOrNull("original") ?: image?.getStringOrNull("preview"))?.toAbsoluteUrl(DOMAIN),
+				url = json.getString("url").toAbsoluteUrl(DOMAIN),
+			)
+		}.take(limit)
+	}
+
 	/**
 	 * Sync all manga rates from Shikimori to local database.
 	 * Uses Shikimori API: GET /api/v2/user_rates?user_id={id}&target_type=Content

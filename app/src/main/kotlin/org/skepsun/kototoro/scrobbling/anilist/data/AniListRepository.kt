@@ -255,6 +255,53 @@ class AniListRepository @Inject constructor(
 		}
 	}
 
+	suspend fun searchEntities(
+		entityType: EntityType,
+		query: String,
+		page: Int,
+		perPage: Int = 10,
+	): List<ScrobblerContent> {
+		val field = when (entityType) {
+			EntityType.PERSON -> "staff"
+			EntityType.CHARACTER -> "characters"
+			else -> return emptyList()
+		}
+		val response = doRequest(
+			REQUEST_QUERY,
+			"""
+			Page(page: $page, perPage: $perPage) {
+				$field(search: ${JSONObject.quote(query)}) {
+					id
+					name {
+						full
+						native
+						userPreferred
+					}
+					image {
+						large
+						medium
+					}
+					siteUrl
+				}
+			}
+			""",
+		)
+		val data = response.getJSONObject("data").getJSONObject("Page").getJSONArray(field)
+		return data.mapJSON { json ->
+			val name = json.optJSONObject("name")
+			val primaryName = name?.getStringOrNull("userPreferred")
+				?: name?.getStringOrNull("full")
+				?: "Unknown"
+			ScrobblerContent(
+				id = json.getLong("id"),
+				name = primaryName,
+				altName = name?.getStringOrNull("native")?.takeIf { !it.equals(primaryName, ignoreCase = true) },
+				cover = json.optJSONObject("image")?.optAniListCoverUrl(),
+				url = json.getStringOrNull("siteUrl").orEmpty(),
+			)
+		}
+	}
+
 	private suspend fun getMediaDetails(id: Long): ScrobblerContentInfo {
 		val response = doRequest(
 			REQUEST_QUERY,
@@ -298,11 +345,18 @@ class AniListRepository @Inject constructor(
 					name
 					rank
 				}
-				staff(perPage: 10) {
+				staff(perPage: 25) {
 					nodes {
+						id
 						name {
 							full
+							userPreferred
 						}
+						image {
+							large
+							medium
+						}
+						siteUrl
 					}
 					edges {
 						role
@@ -887,15 +941,27 @@ class AniListRepository @Inject constructor(
 
 		// Staff
 		val authors = mutableListOf<String>()
+		val staff = mutableListOf<ScrobblerContentInfo.PersonInfo>()
 		json.optJSONObject("staff")?.let { staffObj ->
 			val nodes = staffObj.optJSONArray("nodes")
 			val edges = staffObj.optJSONArray("edges")
 			if (nodes != null && edges != null) {
 				for (i in 0 until minOf(nodes.length(), edges.length())) {
-					val name = nodes.optJSONObject(i)?.optJSONObject("name")?.optString("full")
+					val node = nodes.optJSONObject(i) ?: continue
+					val name = node.optJSONObject("name")?.getStringOrNull("userPreferred")
+						?: node.optJSONObject("name")?.getStringOrNull("full")
 					val role = edges.optJSONObject(i)?.optString("role")
 					if (!name.isNullOrBlank()) {
 						authors.add(if (!role.isNullOrBlank()) "$name ($role)" else name)
+						staff.add(
+							ScrobblerContentInfo.PersonInfo(
+								id = node.optLong("id", 0L).takeIf { it > 0L },
+								name = name,
+								avatarUrl = node.optJSONObject("image")?.optAniListCoverUrl()?.takeIf { it.isNotBlank() },
+								url = node.getStringOrNull("siteUrl"),
+								role = role?.takeIf { it.isNotBlank() },
+							),
+						)
 					}
 				}
 			}
@@ -1049,6 +1115,7 @@ class AniListRepository @Inject constructor(
 			contentType = contentType,
 			tags = genres,
 			authors = authors,
+			staff = staff.distinctBy { it.id ?: it.name },
 			totalEpisodes = totalEpisodes,
 			infoboxProperties = infobox,
 			episodes = episodes,

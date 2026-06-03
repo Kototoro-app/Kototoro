@@ -241,6 +241,39 @@ class MangaUpdatesRepository(
 		}
 	}
 
+	suspend fun searchEntities(
+		entityType: EntityType,
+		query: String,
+		page: Int,
+		limit: Int = 10,
+	): List<ScrobblerContent> {
+		if (entityType != EntityType.PERSON) {
+			return emptyList()
+		}
+		val payload = JSONObject().apply {
+			put("search", query)
+			put("page", page.coerceAtLeast(0) + 1)
+			put("perpage", limit)
+		}
+		val request = Request.Builder()
+			.post(payload.toString().toRequestBody(CONTENT_TYPE))
+			.url("$BASE_API_URL/authors/search")
+		val response = okHttp.newCall(request.build()).await().parseJson()
+		val results = response.optJSONArray("results") ?: return emptyList()
+		val mapped = ArrayList<ScrobblerContent>(minOf(results.length(), limit))
+		for (i in 0 until minOf(results.length(), limit)) {
+			val record = results.optJSONObject(i)?.optJSONObject("record") ?: continue
+			mapped += ScrobblerContent(
+				id = record.getLong("id"),
+				name = record.getString("name"),
+				altName = null,
+				cover = null,
+				url = record.getStringOrNull("url") ?: "$BASE_WEB_URL/author/${record.getLong("id")}",
+			)
+		}
+		return mapped
+	}
+
 	suspend fun getRankings(
 		orderby: String,
 		page: Int,
@@ -503,12 +536,23 @@ class MangaUpdatesRepository(
 		}
 
 		val authors = mutableListOf<String>()
+		val staff = mutableListOf<ScrobblerContentInfo.PersonInfo>()
 		response.optJSONArray("authors")?.let { arr ->
 			for (i in 0 until arr.length()) {
 				val authorObj = arr.optJSONObject(i) ?: continue
 				val name = authorObj.optString("name").takeIf { it.isNotBlank() } ?: continue
 				val type = authorObj.optString("type").takeIf { it.isNotBlank() }
 				authors.add(if (type != null) "$name ($type)" else name)
+				val id = authorObj.optLong("author_id", 0L).takeIf { it > 0L }
+					?: authorObj.optLong("id", 0L).takeIf { it > 0L }
+				staff.add(
+					ScrobblerContentInfo.PersonInfo(
+						id = id,
+						name = name,
+						url = authorObj.getStringOrNull("url"),
+						role = type,
+					),
+				)
 			}
 		}
 
@@ -565,6 +609,7 @@ class MangaUpdatesRepository(
 			descriptionHtml = response.optString("description", "").replace("\n", "<br>"),
 			tags = genres + categories,
 			authors = authors,
+			staff = staff.distinctBy { it.id ?: it.name },
 			infoboxProperties = infoboxProperties,
 			commentThreads = supplemental.commentThreads,
 			reviews = supplemental.reviews,

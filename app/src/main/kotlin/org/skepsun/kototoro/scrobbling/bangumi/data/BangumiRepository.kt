@@ -13,6 +13,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.ensureSuccess
 import org.skepsun.kototoro.core.util.ext.parseJsonOrNull
 import org.skepsun.kototoro.parsers.util.await
@@ -43,13 +44,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
 import java.io.IOException
+import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 private const val REDIRECT_URI = "kototoro://bangumi-auth"
-private const val BASE_URL = "https://bangumi.tv/"
-private const val API_URL = "https://api.bgm.tv/"
+private const val OFFICIAL_WEB_URL = "https://bangumi.tv/"
+private const val OFFICIAL_API_URL = "https://api.bgm.tv/"
+private const val BANGUMI_ONE_WEB_URL = "https://bangumi.one/"
+private const val BANGUMI_ONE_API_URL = "https://api.bangumi.one/"
 
 @Singleton
 class BangumiRepository @Inject constructor(
@@ -57,14 +61,34 @@ class BangumiRepository @Inject constructor(
 	@ScrobblerType(ScrobblerService.BANGUMI) private val okHttp: OkHttpClient,
 	@ScrobblerType(ScrobblerService.BANGUMI) private val storage: ScrobblerStorage,
 	private val db: MangaDatabase,
+	private val settings: AppSettings,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
 	private val clientId = context.getString(R.string.bangumi_clientId)
 	private val clientSecret = context.getString(R.string.bangumi_clientSecret)
 	private val browserFiltersCache = ConcurrentHashMap<String, BangumiBrowserFilters>()
 
+	private val publicEndpoints: BangumiEndpointUrls
+		get() = when (settings.bangumiMirror) {
+			AppSettings.BangumiMirror.BANGUMI_ONE -> BangumiEndpointUrls(
+				webBaseUrl = BANGUMI_ONE_WEB_URL,
+				apiBaseUrl = BANGUMI_ONE_API_URL,
+			)
+			AppSettings.BangumiMirror.NATIVE -> BangumiEndpointUrls(
+				webBaseUrl = OFFICIAL_WEB_URL,
+				apiBaseUrl = OFFICIAL_API_URL,
+			)
+			AppSettings.BangumiMirror.CUSTOM -> {
+				val webBaseUrl = normalizeBangumiBaseUrl(settings.bangumiMirrorCustomBase, BANGUMI_ONE_WEB_URL)
+				BangumiEndpointUrls(
+					webBaseUrl = webBaseUrl,
+					apiBaseUrl = inferBangumiApiBaseUrl(webBaseUrl),
+				)
+			}
+		}
+
 	override val oauthUrl: String
-		get() = "${BASE_URL}oauth/authorize?client_id=$clientId&" +
+		get() = "${OFFICIAL_WEB_URL}oauth/authorize?client_id=$clientId&" +
 			"redirect_uri=${REDIRECT_URI}&response_type=code"
 
 	override val isAuthorized: Boolean
@@ -84,7 +108,7 @@ class BangumiRepository @Inject constructor(
 		}
 		val request = Request.Builder()
 			.post(body.build())
-			.url("${BASE_URL}oauth/access_token")
+			.url("${OFFICIAL_WEB_URL}oauth/access_token")
 		val response = okHttp.newCall(request.build()).await().parseJson()
 		storage.accessToken = response.getString("access_token")
 		storage.refreshToken = response.getString("refresh_token")
@@ -96,7 +120,7 @@ class BangumiRepository @Inject constructor(
 
 	override suspend fun loadUserProfile(): ScrobblerUserProfile {
 		val request = Request.Builder()
-			.url("${API_URL}v0/me")
+			.url(officialApiUrl("v0/me"))
 			.get()
 		val jo = okHttp.newCall(request.build()).await().parseJson()
 		val user = ScrobblerUser(
@@ -142,7 +166,7 @@ class BangumiRepository @Inject constructor(
 
 	private suspend fun loadCollectionTotal(username: String, subjectType: Int): Int? {
 		val request = Request.Builder()
-			.url("${API_URL}v0/users/$username/collections?subject_type=$subjectType&limit=1")
+			.url(officialApiUrl("v0/users/$username/collections?subject_type=$subjectType&limit=1"))
 			.get()
 		val response = okHttp.newCall(request.build()).await().parseJsonOrNull() ?: return null
 		return response.optInt("total").takeIf { it >= 0 }
@@ -157,7 +181,7 @@ class BangumiRepository @Inject constructor(
 		}.toString().toRequestBody("application/json".toMediaType())
 
 		val request = Request.Builder()
-			.url("${API_URL}v0/search/subjects?limit=10&offset=$offset")
+			.url(bangumiApiUrl("v0/search/subjects?limit=10&offset=$offset"))
 			.post(requestBody)
 
 		val response = okHttp.newCall(request.build()).await().parseJson()
@@ -168,7 +192,7 @@ class BangumiRepository @Inject constructor(
 				name = json.getString("name_cn").ifBlank { json.getString("name") },
 				altName = json.getString("name"),
 				cover = json.getJSONObject("images").getString("medium"),
-				url = "https://bangumi.tv/subject/${json.getLong("id")}",
+				url = bangumiWebUrl("subject/${json.getLong("id")}"),
 				mediaType = json.optString("platform").takeIf { it.isNotBlank() },
 					totalEpisodes = json.optInt("eps", -1).takeIf { it > 0 },
 			)
@@ -185,7 +209,7 @@ class BangumiRepository @Inject constructor(
 		val tagPath = buildBrowserTagPath(listFilter)
 		val sortStr = sortOrder.toBangumiSortKey()
 		val url = buildString {
-			append("https://bangumi.tv/")
+			append(bangumiWebUrl())
 			append(typePath)
 			if (tagPath.isNotBlank()) {
 				append("/")
@@ -222,7 +246,7 @@ class BangumiRepository @Inject constructor(
 				name = name,
 				altName = altName,
 				cover = if (cleanCover.startsWith("//")) "https:$cleanCover" else cleanCover,
-				url = "https://bangumi.tv/subject/$id",
+				url = bangumiWebUrl("subject/$id"),
 				mediaType = platformBadge,
 				isBestMatch = false
 			)
@@ -255,7 +279,7 @@ class BangumiRepository @Inject constructor(
 
 	suspend fun getDailyCalendar(): Map<Int, List<ScrobblerContent>> {
 		val request = Request.Builder()
-			.url("https://bangumi.tv/")
+			.url(bangumiWebUrl())
 			.get()
 			.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 			.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -298,7 +322,7 @@ class BangumiRepository @Inject constructor(
 					name = name,
 					altName = altName,
 					cover = if (cleanCover.startsWith("//")) "https:$cleanCover" else cleanCover,
-					url = "https://bangumi.tv/subject/$id",
+					url = bangumiWebUrl("subject/$id"),
 					isBestMatch = false
 				)
 			}.filter { it.id > 0L }.distinctBy { it.id }
@@ -310,7 +334,7 @@ class BangumiRepository @Inject constructor(
 
 private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters {
 		val request = Request.Builder()
-			.url("https://bangumi.tv/${getBrowserPath(category)}")
+			.url(bangumiWebUrl(getBrowserPath(category)))
 			.get()
 			.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 			.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -499,7 +523,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		val reqBody = body.toString().toByteArray(Charsets.UTF_8)
 			.toRequestBody("application/json".toMediaType())
 		val request = Request.Builder()
-			.url("${API_URL}v0/users/-/collections/$subjectId")
+			.url(officialApiUrl("v0/users/-/collections/$subjectId"))
 			.header("Accept", "application/json")
 			.header("Content-Type", "application/json")
 			.post(reqBody)
@@ -520,7 +544,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			id = id,
 			name = apiPayload.name.ifBlank { htmlPayload?.name ?: "Unknown" },
 			cover = apiPayload.cover.ifBlank { htmlPayload?.cover.orEmpty() },
-			url = "https://bangumi.tv/subject/$id",
+			url = bangumiWebUrl("subject/$id"),
 			descriptionHtml = apiPayload.summary.ifBlank { htmlPayload?.summary.orEmpty() },
 			contentType = apiPayload.contentType ?: resolveBangumiContentType(
 				subjectType = apiPayload.subjectType,
@@ -531,6 +555,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			rank = apiPayload.rank,
 			tags = if (apiPayload.tags.isNotEmpty()) apiPayload.tags else htmlPayload?.tags.orEmpty(),
 			authors = htmlPayload?.authors.orEmpty(),
+			staff = htmlPayload?.staff.orEmpty(),
 			infoboxProperties = mergedInfobox,
 			episodes = htmlPayload?.episodes.orEmpty(),
 			characters = htmlPayload?.characters.orEmpty(),
@@ -554,9 +579,50 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		}
 	}
 
+	suspend fun searchEntities(
+		entityType: EntityType,
+		query: String,
+		page: Int,
+		limit: Int = 10,
+	): List<ScrobblerContent> {
+		val endpoint = when (entityType) {
+			EntityType.PERSON -> "persons"
+			EntityType.CHARACTER -> "characters"
+			else -> return emptyList()
+		}
+		val body = JSONObject()
+			.put("keyword", query)
+			.put("limit", limit)
+			.put("offset", page.coerceAtLeast(0) * limit)
+			.toString()
+			.toRequestBody("application/json".toMediaType())
+		val request = Request.Builder()
+			.url(bangumiApiUrl("v0/search/$endpoint"))
+			.post(body)
+			.build()
+		val data = okHttp.newCall(request).await().parseJson()
+			.optJSONArray("data")
+			?: return emptyList()
+		return data.mapJSON { json ->
+			val name = json.getStringOrNull("name") ?: "Unknown"
+			ScrobblerContent(
+				id = json.getLong("id"),
+				name = name,
+				altName = json.optJSONArray("infobox").toBangumiInfoboxProperties()
+					.flatMap { (_, value) -> splitBangumiNames(value) }
+					.firstOrNull { !it.equals(name, ignoreCase = true) },
+				cover = json.optJSONObject("images")?.getStringOrNull("large")
+					?: json.getStringOrNull("img")
+					?: json.optJSONObject("images")?.getStringOrNull("medium"),
+				url = bangumiWebUrl("person/${json.getLong("id")}").takeIf { entityType == EntityType.PERSON }
+					?: bangumiWebUrl("character/${json.getLong("id")}"),
+			)
+		}
+	}
+
 	private suspend fun getSubjectDetailsFromApi(id: Long): BangumiApiSubjectPayload {
 		val request = Request.Builder()
-			.url("${API_URL}v0/subjects/$id")
+			.url(bangumiApiUrl("v0/subjects/$id"))
 			.get()
 		val json = okHttp.newCall(request.build()).await().parseJson()
 		val platformType = json.optString("platform").takeIf { it.isNotBlank() }
@@ -590,12 +656,12 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 	}
 
 	private suspend fun getPersonInfo(id: Long): ScrobblerContentInfo {
-		val doc = loadBangumiDocument("https://bangumi.tv/person/$id")
+		val doc = loadBangumiDocument(bangumiWebUrl("person/$id"))
 		val voiceWorksDoc = runCatching {
-			loadBangumiDocument("https://bangumi.tv/person/$id/works/voice")
+			loadBangumiDocument(bangumiWebUrl("person/$id/works/voice"))
 		}.getOrNull()
 		val worksDoc = runCatching {
-			loadBangumiDocument("https://bangumi.tv/person/$id/works")
+			loadBangumiDocument(bangumiWebUrl("person/$id/works"))
 		}.getOrNull()
 
 		val title = doc.selectFirst("#headerSubject .nameSingle a, #headerSubject h1 a, h1.nameSingle a")
@@ -649,7 +715,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			id = id,
 			name = title.ifBlank { altTitle ?: "Unknown" },
 			cover = avatarUrl,
-			url = "https://bangumi.tv/person/$id",
+			url = bangumiWebUrl("person/$id"),
 			descriptionHtml = summary,
 			contentType = null,
 			authors = (authoredWorks + aliases).distinct(),
@@ -658,12 +724,12 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			actions = listOfNotNull(
 				ScrobblerContentInfo.ExternalAction(
 					title = "角色作品",
-					url = "https://bangumi.tv/person/$id/works/voice",
+					url = bangumiWebUrl("person/$id/works/voice"),
 				),
 				worksDoc?.let {
 					ScrobblerContentInfo.ExternalAction(
 						title = "参与作品",
-						url = "https://bangumi.tv/person/$id/works",
+						url = bangumiWebUrl("person/$id/works"),
 					)
 				},
 			),
@@ -671,7 +737,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 	}
 
 	private suspend fun getCharacterInfo(id: Long): ScrobblerContentInfo {
-		val doc = loadBangumiDocument("https://bangumi.tv/character/$id")
+		val doc = loadBangumiDocument(bangumiWebUrl("character/$id"))
 		val title = doc.selectFirst("#headerSubject .nameSingle a, #headerSubject h1 a, h1.nameSingle a")
 			?.text()
 			?.trim()
@@ -692,7 +758,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			id = id,
 			name = title.ifBlank { altTitle ?: "Unknown" },
 			cover = cover,
-			url = "https://bangumi.tv/character/$id",
+			url = bangumiWebUrl("character/$id"),
 			descriptionHtml = summary,
 			contentType = null,
 			authors = voiceActors.map { it.name },
@@ -716,14 +782,14 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			actions = listOf(
 				ScrobblerContentInfo.ExternalAction(
 					title = "角色主页",
-					url = "https://bangumi.tv/character/$id",
+					url = bangumiWebUrl("character/$id"),
 				),
 			),
 		)
 	}
 
 	private suspend fun getSubjectDetailsFromHtml(id: Long): BangumiHtmlSubjectPayload {
-		val doc = loadBangumiDocument("https://bangumi.tv/subject/$id")
+		val doc = loadBangumiDocument(bangumiWebUrl("subject/$id"))
 
 		val nameNative = doc.selectFirst("#headerSubject .nameSingle > a")?.text().orEmpty()
 		val nameCn = doc.selectFirst("#headerSubject .nameSingle > a")?.attr("title").orEmpty()
@@ -753,7 +819,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 				episodes.add(ScrobblerContentInfo.EpisodeInfo(
 					number = epNumber,
 					title = epTitle,
-					url = if (epUrl.startsWith("/")) "https://bangumi.tv$epUrl" else epUrl,
+					url = if (epUrl.startsWith("/")) bangumiWebUrl(epUrl) else epUrl,
 				))
 			}
 		}
@@ -778,7 +844,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 					title = title,
 					coverUrl = relCover,
 					relationship = relationship.ifBlank { null },
-					url = "https://bangumi.tv/subject/$relId",
+					url = bangumiWebUrl("subject/$relId"),
 				))
 			}
 		}
@@ -803,7 +869,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 					id = recId,
 					title = displayTitle,
 					coverUrl = recCover,
-					url = "https://bangumi.tv/subject/$recId",
+					url = bangumiWebUrl("subject/$recId"),
 				))
 			}
 		}
@@ -824,6 +890,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 
 		// Characters/voice actors
 		val characters = parseBangumiCharacters(doc)
+		val staff = parseBangumiStaff(doc)
 		val authorsList = characters.map { character ->
 			val voiceActors = character.voiceActors.joinToString(" / ") { it.name }
 			if (voiceActors.isBlank()) {
@@ -841,6 +908,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			summary = summary,
 			tags = tagList,
 			authors = authorsList,
+			staff = staff,
 			infoboxProperties = infoboxProperties,
 			episodes = episodes,
 			characters = characters,
@@ -852,11 +920,11 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			actions = listOf(
 				ScrobblerContentInfo.ExternalAction(
 					title = "长评",
-					url = "https://bangumi.tv/subject/$id/reviews",
+					url = bangumiWebUrl("subject/$id/reviews"),
 				),
 				ScrobblerContentInfo.ExternalAction(
 					title = "更多吐槽",
-					url = "https://bangumi.tv/subject/$id/comments",
+					url = bangumiWebUrl("subject/$id/comments"),
 				),
 			),
 		)
@@ -871,7 +939,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 				?: return@mapNotNull null
 			val url = titleLink.absUrl("href").ifBlank {
 				titleLink.attr("href").takeIf { it.isNotBlank() }?.let { href ->
-					if (href.startsWith("/")) "$BASE_URL${href.removePrefix("/")}" else href
+					if (href.startsWith("/")) bangumiWebUrl(href) else href
 				}.orEmpty()
 			}
 			val id = url.substringAfter("/character/").substringBefore('/').toLongOrNull() ?: return@mapNotNull null
@@ -885,7 +953,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			val voiceActors = item.select(".badge_actor a[href*=/person/]").mapNotNull { actorLink ->
 				val actorUrl = actorLink.absUrl("href").ifBlank {
 					actorLink.attr("href").takeIf { it.isNotBlank() }?.let { href ->
-						if (href.startsWith("/")) "$BASE_URL${href.removePrefix("/")}" else href
+						if (href.startsWith("/")) bangumiWebUrl(href) else href
 					}.orEmpty()
 				}
 				val actorId = actorUrl.substringAfter("/person/").substringBefore('/').toLongOrNull()
@@ -940,7 +1008,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 						coverUrl = coverUrl,
 						relationship = relationship,
 						url = subjectLink.absUrl("href").ifBlank {
-							if (subjectHref.startsWith("/")) "$BASE_URL${subjectHref.removePrefix("/")}" else subjectHref
+							if (subjectHref.startsWith("/")) bangumiWebUrl(subjectHref) else subjectHref
 						},
 					),
 					characterName = characterName?.takeIf { it.isNotBlank() },
@@ -971,7 +1039,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 				name = name,
 				avatarUrl = avatarUrl,
 				url = actorLink.absUrl("href").ifBlank {
-					if (href.startsWith("/")) "$BASE_URL${href.removePrefix("/")}" else href
+					if (href.startsWith("/")) bangumiWebUrl(href) else href
 				},
 			)
 		}
@@ -999,7 +1067,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 				title = title,
 				coverUrl = "",
 				url = link.absUrl("href").ifBlank {
-					if (href.startsWith("/")) "$BASE_URL${href.removePrefix("/")}" else href
+					if (href.startsWith("/")) bangumiWebUrl(href) else href
 				},
 			)
 		}.distinctBy { it.id }
@@ -1023,7 +1091,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			val postedAt = item.select("small.grey").getOrNull(1)?.text()?.removePrefix("@")?.trim()?.takeIf { it.isNotBlank() }
 			val userUrl = userLink.absUrl("href").ifBlank {
 				userLink.attr("href").takeIf { it.isNotBlank() }?.let { href ->
-					if (href.startsWith("/")) "$BASE_URL${href.removePrefix("/")}" else href
+					if (href.startsWith("/")) bangumiWebUrl(href) else href
 				}.orEmpty()
 			}
 			ScrobblerContentInfo.CommentThread(
@@ -1049,7 +1117,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		return reviewsSection.select("#entry_list > .item").mapIndexedNotNull { index, item ->
 			val reviewLink = item.selectFirst(".entry h2.title a[href*=/blog/]") ?: return@mapIndexedNotNull null
 			val href = reviewLink.attr("href").trim()
-			val url = if (href.startsWith("/")) "$BASE_URL${href.removePrefix("/")}" else href
+			val url = if (href.startsWith("/")) bangumiWebUrl(href) else href
 			val title = reviewLink.text().trim()
 			val authorLink = item.selectFirst(".tools .time a[href*=/user/]") ?: return@mapIndexedNotNull null
 			val authorName = authorLink.text().trim()
@@ -1060,7 +1128,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			val reviewId = href.substringAfter("/blog/").substringBefore('/').ifBlank { "review_$index" }
 			val authorUrl = authorLink.absUrl("href").ifBlank {
 				authorLink.attr("href").takeIf { it.isNotBlank() }?.let { authorHref ->
-					if (authorHref.startsWith("/")) "$BASE_URL${authorHref.removePrefix("/")}" else authorHref
+					if (authorHref.startsWith("/")) bangumiWebUrl(authorHref) else authorHref
 				}.orEmpty()
 			}
 			val avatarUrl = item.selectFirst("p.cover img.avatarCover")?.attr("src")
@@ -1144,7 +1212,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 						title = title,
 						coverUrl = coverUrl,
 						relationship = subtitle,
-						url = "https://bangumi.tv/subject/$relId",
+						url = bangumiWebUrl("subject/$relId"),
 					),
 				)
 			}
@@ -1172,6 +1240,47 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		return infoboxProperties
 	}
 
+	private fun parseBangumiStaff(
+		doc: org.jsoup.nodes.Document,
+	): List<ScrobblerContentInfo.PersonInfo> {
+		return doc.select("#infobox > li").flatMap { li ->
+			val role = li.selectFirst("span.tip")
+				?.text()
+				?.trimEnd(':')
+				?.trim()
+				?.takeIf { it.isBangumiStaffRole() }
+				?: return@flatMap emptyList()
+			li.select("a[href*=/person/]").mapNotNull { link ->
+				val href = link.attr("href").trim()
+				val id = href.substringAfter("/person/").substringBefore('/').toLongOrNull()
+				val name = link.text().trim().takeIf { it.isNotBlank() } ?: return@mapNotNull null
+				ScrobblerContentInfo.PersonInfo(
+					id = id,
+					name = name,
+					url = link.absUrl("href").ifBlank {
+						if (href.startsWith("/")) bangumiWebUrl(href) else href
+					},
+					role = role,
+				)
+			}
+		}.distinctBy { it.id ?: it.name }
+	}
+
+	private fun String.isBangumiStaffRole(): Boolean {
+		return contains("作者") ||
+			contains("原作") ||
+			contains("作画") ||
+			contains("脚本") ||
+			contains("编剧") ||
+			contains("监督") ||
+			contains("导演") ||
+			contains("制作") ||
+			contains("动画制作") ||
+			contains("音乐") ||
+			contains("人物设定") ||
+			contains("角色设计")
+	}
+
 	private fun splitBangumiNames(raw: String): List<String> {
 		return raw.split('/', '／', ',', '，', ';', '；', '\n')
 			.map { it.trim() }
@@ -1186,6 +1295,40 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 			.build()
 		return Jsoup.parse(okHttp.newCall(request).await().body?.string().orEmpty())
+	}
+
+	private fun bangumiWebUrl(path: String = ""): String {
+		return publicEndpoints.webBaseUrl.appendBangumiPath(path)
+	}
+
+	private fun bangumiApiUrl(path: String): String {
+		return publicEndpoints.apiBaseUrl.appendBangumiPath(path)
+	}
+
+	private fun officialApiUrl(path: String): String {
+		return OFFICIAL_API_URL.appendBangumiPath(path)
+	}
+
+	private fun String.appendBangumiPath(path: String): String {
+		return trimEnd('/') + "/" + path.trimStart('/')
+	}
+
+	private fun normalizeBangumiBaseUrl(raw: String?, fallback: String): String {
+		val value = raw?.trim().orEmpty().ifBlank { fallback }
+		val withScheme = if (value.startsWith("http://") || value.startsWith("https://")) {
+			value
+		} else {
+			"https://$value"
+		}
+		return withScheme.trimEnd('/') + "/"
+	}
+
+	private fun inferBangumiApiBaseUrl(webBaseUrl: String): String {
+		val uri = runCatching { URI(webBaseUrl) }.getOrNull() ?: return OFFICIAL_API_URL
+		val scheme = uri.scheme?.takeIf { it.isNotBlank() } ?: "https"
+		val host = uri.host?.takeIf { it.isNotBlank() } ?: return OFFICIAL_API_URL
+		val apiHost = if (host.startsWith("api.")) host else "api.$host"
+		return "$scheme://$apiHost/"
 	}
 
 	private fun String.normalizeBangumiImageUrl(): String {
@@ -1245,7 +1388,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			val limit = 50
 			while (true) {
 				val request = Request.Builder()
-					.url("${API_URL}v0/users/${user.id}/collections?subject_type=$subjectType&limit=$limit&offset=$offset")
+					.url(officialApiUrl("v0/users/${user.id}/collections?subject_type=$subjectType&limit=$limit&offset=$offset"))
 					.cacheControl(CacheControl.FORCE_NETWORK)
 					.get()
 				val response = okHttp.newCall(request.build()).await().parseJson()
@@ -1285,7 +1428,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 									?: it.getStringOrNull("common")
 									?: it.getStringOrNull("medium")
 							},
-							remoteUrl = "$BASE_URL/subject/$subjectId",
+							remoteUrl = bangumiWebUrl("subject/$subjectId"),
 						),
 					)
 				}
@@ -1311,7 +1454,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 
 	private suspend fun findExistingCollection(subjectId: Long): JSONObject? = runCatching {
 		val request = Request.Builder()
-			.url("${API_URL}v0/users/-/collections/$subjectId")
+			.url(officialApiUrl("v0/users/-/collections/$subjectId"))
 			.get()
 		okHttp.newCall(request.build()).await().parseJson()
 	}.getOrNull()
@@ -1450,6 +1593,11 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		val segment: String,
 	)
 
+	private data class BangumiEndpointUrls(
+		val webBaseUrl: String,
+		val apiBaseUrl: String,
+	)
+
 	private data class BangumiApiSubjectPayload(
 		val name: String,
 		val cover: String,
@@ -1469,6 +1617,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		val summary: String,
 		val tags: List<String>,
 		val authors: List<String>,
+		val staff: List<ScrobblerContentInfo.PersonInfo>,
 		val infoboxProperties: List<Pair<String, String>>,
 		val episodes: List<ScrobblerContentInfo.EpisodeInfo>,
 		val characters: List<ScrobblerContentInfo.CharacterInfo>,

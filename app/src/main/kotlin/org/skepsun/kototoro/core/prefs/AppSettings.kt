@@ -363,6 +363,25 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = HuggingFaceMirror.fromValue(prefs.getString(KEY_HUGGINGFACE_MIRROR, HuggingFaceMirror.NATIVE.value))
 		set(value) = prefs.edit { putString(KEY_HUGGINGFACE_MIRROR, value.value) }
 
+	enum class BangumiMirror(val value: String) {
+		BANGUMI_ONE("bangumi_one"),
+		NATIVE("native"),
+		CUSTOM("custom");
+
+		companion object {
+			fun fromValue(value: String?): BangumiMirror =
+				entries.find { it.value == value } ?: BANGUMI_ONE
+		}
+	}
+
+	var bangumiMirror: BangumiMirror
+		get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.BANGUMI_ONE.value))
+		set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR, value.value) }
+
+	var bangumiMirrorCustomBase: String?
+		get() = prefs.getString(KEY_BANGUMI_MIRROR_CUSTOM_BASE, null)
+		set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR_CUSTOM_BASE, value?.trim()?.takeIf { it.isNotBlank() }) }
+
 	var extensionLanguages: Set<String>
 		get() = prefs.getStringSet(KEY_EXTENSION_LANGUAGES, null) ?: emptySet()
 		set(value) = prefs.edit { putStringSet(KEY_EXTENSION_LANGUAGES, value) }
@@ -2094,6 +2113,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_GITHUB_MIRROR = "github_mirror"
 		const val KEY_SHOW_EXTRA_INFO_ON_CARDS = "show_extra_info_on_cards"
 		const val KEY_HUGGINGFACE_MIRROR = "huggingface_mirror"
+		const val KEY_BANGUMI_MIRROR = "bangumi_mirror"
+		const val KEY_BANGUMI_MIRROR_CUSTOM_BASE = "bangumi_mirror_custom_base"
 		const val KEY_LNREADER_REPOS = "lnreader_repository_urls"
 		const val KEY_SOURCES_GRID = "sources_grid"
 		const val KEY_SHOW_SOURCE_ON_CARDS = "show_source_on_cards"

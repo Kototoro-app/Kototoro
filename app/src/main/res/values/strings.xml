@@ -2528,6 +2528,10 @@
     <string name="reader_translation_task_bench_roi_res_3">Current sample shows ROI-first is active, but stability is insufficient to replace page-first.</string>
     <string name="pref_huggingface_mirror">HuggingFace Mirror</string>
     <string name="pref_huggingface_mirror_summary">Select a proxy mirror to accelerate HuggingFace downloads.</string>
+    <string name="pref_bangumi_mirror">Bangumi Mirror</string>
+    <string name="pref_bangumi_mirror_summary">Use a mirror for public Bangumi search, browsing, and details. OAuth authorization still uses the official site.</string>
+    <string name="pref_bangumi_mirror_custom_base">Custom Bangumi mirror base URL</string>
+    <string name="pref_bangumi_mirror_custom_base_summary">Enter the web base URL, for example https://bangumi.one. The API host is inferred as api.&lt;host&gt;.</string>
     <string-array name="pref_huggingface_mirror_entries">
         <item>Direct Native (Default)</item>
         <item>hf-mirror.com</item>
