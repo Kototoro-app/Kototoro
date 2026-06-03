@@ -53,6 +53,7 @@ fun GlassDropdownMenu(
                 .wrapContentWidth(),
             shape = shape,
             style = style,
+            dialogSurface = true,
         ) {
             Column(
                 modifier = Modifier

@@ -166,8 +166,8 @@ fun GlassSurface(
         dialogSurface = dialogSurface,
     )
     val surfaceColor = when {
+        dialogSurface -> glassColors.containerColor
         useRuntimeHaze && !dialogSurface -> Color.Transparent
-        useRuntimeHaze && dialogSurface && usesOfficialHazeMaterial -> Color.Transparent
         !useRuntimeHaze && usesOfficialHazeMaterial -> hazeStyle.backgroundColor.takeOrElse { glassColors.containerColor }
         else -> glassColors.containerColor
     }
@@ -458,7 +458,7 @@ fun rememberGlassHazeBackgroundColor(
     val colorScheme = MaterialTheme.colorScheme
     val isDarkTheme = colorScheme.background.luminance() < 0.5f
     return remember(glassPrefs.materialPreset, glassColors, hazeStyle, dialogSurface, isDarkTheme, colorScheme) {
-        if (dialogSurface && !glassPrefs.materialPreset.usesOfficialHazeMaterial()) {
+        if (dialogSurface) {
             return@remember Color.Transparent
         }
         when (glassPrefs.materialPreset) {

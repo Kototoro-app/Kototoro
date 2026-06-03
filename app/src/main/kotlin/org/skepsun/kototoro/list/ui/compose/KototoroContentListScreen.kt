@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -74,8 +75,8 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 
 private const val LoadMoreVisibleThreshold = 4
-private val QuickFilterChipHeight = 34.dp
-private val QuickFilterChipIconSize = 16.dp
+private val QuickFilterChipHeight = 36.dp
+private val QuickFilterChipIconSize = 18.dp
 
 private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,
@@ -567,40 +568,51 @@ fun QuickFilterSection(
             contentType = { "filter_chip" },
         ) { chip ->
             val option = chip.data as? ListFilterOption
+            val contentColor = if (chip.isChecked) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
             GlassSurface(
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
                 style = GlassDefaults.subtleStyle(),
             ) {
-                Row(
-                    modifier = Modifier
-                        .then(
-                            if (option != null) {
-                                Modifier.clickable { onQuickFilterOptionClick(option) }
+                CompositionLocalProvider(LocalContentColor provides contentColor) {
+                    Row(
+                        modifier = Modifier
+                            .then(
+                                if (option != null) {
+                                    Modifier.clickable { onQuickFilterOptionClick(option) }
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .height(QuickFilterChipHeight)
+                            .background(
+                                color = if (chip.isChecked) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
+                                } else {
+                                    Color.Transparent
+                                },
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                            )
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        chipIcon(chip)?.invoke()
+                        Text(
+                            text = buildChipLabel(context, chip, entryPoint),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = contentColor,
+                            fontWeight = if (chip.isChecked) {
+                                androidx.compose.ui.text.font.FontWeight.SemiBold
                             } else {
-                                Modifier
+                                androidx.compose.ui.text.font.FontWeight.Normal
                             },
+                            maxLines = 1,
                         )
-                        .height(QuickFilterChipHeight)
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    chipIcon(chip)?.invoke()
-                    Text(
-                        text = buildChipLabel(context, chip, entryPoint),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (chip.isChecked) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontWeight = if (chip.isChecked) {
-                            androidx.compose.ui.text.font.FontWeight.SemiBold
-                        } else {
-                            androidx.compose.ui.text.font.FontWeight.Normal
-                        },
-                        maxLines = 1,
-                    )
+                    }
                 }
             }
         }

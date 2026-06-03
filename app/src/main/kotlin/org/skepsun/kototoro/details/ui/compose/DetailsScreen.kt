@@ -5,7 +5,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -96,7 +95,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
@@ -104,7 +102,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -153,12 +150,9 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
-import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
-import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -195,14 +189,12 @@ import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
-import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsDialog
+import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeDefaults as HazeBlurDefaults
 import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -1315,12 +1307,10 @@ fun DetailsScreen(
                 LaunchedEffect(content.id) {
                     statsViewModel.initialize(content)
                 }
-                ContentStatsDialog(
+                DetailsStatsSheet(
                     viewModel = statsViewModel,
                     onDismissRequest = { showStatsDialog = false },
-                    onOpenDetails = {
-                        showStatsDialog = false
-                    },
+                    onOpenDetails = { showStatsDialog = false },
                 )
             }
 
@@ -1465,27 +1455,106 @@ fun DetailsScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun DetailsPlainBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = null,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(modifier),
+            content = content,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailsGlassBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        shape = RoundedCornerShape(0.dp),
+        dragHandle = null,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+    ) {
+        GlassSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(modifier),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            style = GlassDefaults.prominentStyle(),
+            dialogSurface = true,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                content = content,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailsStatsSheet(
+    viewModel: ContentStatsViewModel,
+    onDismissRequest: () -> Unit,
+    onOpenDetails: () -> Unit,
+) {
+    DetailsGlassBottomSheet(
+        onDismissRequest = onDismissRequest,
+    ) {
+        ContentStatsSheetContent(
+            viewModel = viewModel,
+            onOpenDetails = onOpenDetails,
+            modifier = Modifier,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun TrackingRelationItemSheet(
     item: EntityRelationItem,
     onDismissRequest: () -> Unit,
     onOpenExternal: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    ModalBottomSheet(
+    val listState = rememberLazyListState()
+    DetailsPlainBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        modifier = Modifier.fillMaxHeight(0.92f),
     ) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
+            item {
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.Top,
@@ -1558,44 +1627,51 @@ private fun TrackingRelationItemSheet(
                     }
                 }
             }
+            }
 
             item.subtitle?.takeIf { it.isNotBlank() }?.let { role ->
-                TrackingRelationMetaBlock(
-                    label = stringResource(R.string.details_character_role_label),
-                    value = role,
-                )
+                item {
+                    TrackingRelationMetaBlock(
+                        label = stringResource(R.string.details_character_role_label),
+                        value = role,
+                    )
+                }
             }
 
             item.detailLines
                 .takeIf { it.isNotEmpty() }
                 ?.joinToString(separator = "\n")
                 ?.let { voiceActors ->
-                    TrackingRelationMetaBlock(
-                        label = stringResource(R.string.details_character_voice_actors_label),
-                        value = voiceActors,
-                    )
+                    item {
+                        TrackingRelationMetaBlock(
+                            label = stringResource(R.string.details_character_voice_actors_label),
+                            value = voiceActors,
+                        )
+                    }
                 }
 
             item.url?.takeIf { it.isNotBlank() }?.let { url ->
-                Button(
-                    onClick = { onOpenExternal(url) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                    ),
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                item {
+                    Button(
+                        onClick = { onOpenExternal(url) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
                     ) {
-                        Icon(
-                            painter = rememberSafePainter(R.drawable.ic_open_external),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(text = stringResource(R.string.details_open_character_site))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painter = rememberSafePainter(R.drawable.ic_open_external),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(text = stringResource(R.string.details_open_character_site))
+                        }
                     }
                 }
             }
@@ -1608,10 +1684,12 @@ private fun TrackingRelationMetaBlock(
     label: String,
     value: String,
 ) {
-    GlassSurface(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        style = GlassDefaults.subtleStyle(),
         shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -1641,21 +1719,21 @@ private fun TrackingReviewsSheet(
     onDismissRequest: () -> Unit,
     onOpenExternal: (String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    ModalBottomSheet(
+    val listState = rememberLazyListState()
+    DetailsGlassBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        modifier = Modifier.fillMaxHeight(0.92f),
     ) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
+            item {
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -1671,21 +1749,24 @@ private fun TrackingReviewsSheet(
                     }
                 }
             }
+            }
             if (reviews.isEmpty()) {
-                GlassSurface(
-                    modifier = Modifier.fillMaxWidth(),
-                    style = GlassDefaults.subtleStyle(),
-                    shape = RoundedCornerShape(24.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.details_no_reviews),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
-                    )
+                item {
+                    GlassSurface(
+                        modifier = Modifier.fillMaxWidth(),
+                        style = GlassDefaults.subtleStyle(),
+                        shape = RoundedCornerShape(24.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.details_no_reviews),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                        )
+                    }
                 }
             } else {
-                reviews.forEach { review ->
+                items(reviews, key = { review -> review.url }) { review ->
                     GlassSurface(
                         modifier = Modifier.fillMaxWidth(),
                         style = GlassDefaults.subtleStyle(),
@@ -1762,21 +1843,21 @@ private fun TrackingCommentsSheet(
     onDismissRequest: () -> Unit,
     onOpenExternal: (String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    ModalBottomSheet(
+    val listState = rememberLazyListState()
+    DetailsGlassBottomSheet(
         onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        modifier = Modifier.fillMaxHeight(0.92f),
     ) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
+            item {
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -1792,21 +1873,24 @@ private fun TrackingCommentsSheet(
                     }
                 }
             }
+            }
             if (threads.isEmpty()) {
-                GlassSurface(
-                    modifier = Modifier.fillMaxWidth(),
-                    style = GlassDefaults.subtleStyle(),
-                    shape = RoundedCornerShape(24.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.details_no_comments),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
-                    )
+                item {
+                    GlassSurface(
+                        modifier = Modifier.fillMaxWidth(),
+                        style = GlassDefaults.subtleStyle(),
+                        shape = RoundedCornerShape(24.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.details_no_comments),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                        )
+                    }
                 }
             } else {
-                threads.forEach { thread ->
+                items(threads, key = { thread -> "${thread.userName}:${thread.postedAt}:${thread.content.hashCode()}" }) { thread ->
                     GlassSurface(
                         modifier = Modifier.fillMaxWidth(),
                         style = GlassDefaults.subtleStyle(),
@@ -2196,68 +2280,7 @@ private fun DetailsPaneContent(
         label = "detailsPaneActionsExpansion",
     )
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    val colorScheme = MaterialTheme.colorScheme
-    val isCollapsedPane = showCollapsedHandle && detailsPaneState.anchor == CompactDetailsPaneAnchor.Collapsed
-    val isDarkTheme = colorScheme.background.luminance() < 0.5f
     val useCompactPaneSurfaceTint = showCollapsedHandle
-    val useFlatFullPane = showCollapsedHandle && isSheetFullyExpanded
-    val paneShadowElevation = if (useCompactPaneSurfaceTint || !showCollapsedHandle) 0.dp else 2.dp
-    val paneBorderColor = colorScheme.outlineVariant.copy(
-        alpha = if (useCompactPaneSurfaceTint) {
-            if (isDarkTheme) 0.10f else 0.08f
-        } else if (isDarkTheme) {
-            0.12f
-        } else {
-            0.08f
-        },
-    )
-    val paneTopBaseColor = if (isDarkTheme) {
-        colorScheme.surfaceContainerHigh
-    } else {
-        colorScheme.surface
-    }
-    val paneBottomBaseColor = if (isDarkTheme) {
-        colorScheme.surfaceContainer
-    } else {
-        colorScheme.surfaceContainerLow
-    }
-    val paneTopAlpha = when {
-        !showCollapsedHandle -> if (isDarkTheme) 0.74f else 0.18f
-        useCompactPaneSurfaceTint && isCollapsedPane -> if (isDarkTheme) 0.92f else 0.90f
-        useCompactPaneSurfaceTint && isSheetFullyExpanded -> if (isDarkTheme) 0.88f else 0.84f
-        useCompactPaneSurfaceTint -> if (isDarkTheme) 0.84f else 0.80f
-        isCollapsedPane -> if (isDarkTheme) 0.82f else 0.20f
-        isSheetFullyExpanded -> if (isDarkTheme) {
-            lerpFloat(0.68f, 0.74f, paneOpacityProgress)
-        } else {
-            lerpFloat(0.12f, 0.18f, paneOpacityProgress)
-        }
-        else -> if (isDarkTheme) {
-            lerpFloat(0.56f, 0.68f, paneOpacityProgress)
-        } else {
-            lerpFloat(0.08f, 0.16f, paneOpacityProgress)
-        }
-    }
-    val paneOverlayAlphaScale = if (showCollapsedHandle) 0.34f else 0.42f
-    val paneTopGradientColor = paneTopBaseColor.copy(alpha = paneTopAlpha * paneOverlayAlphaScale)
-    val paneMiddleGradientColor = paneTopBaseColor.copy(
-        alpha = paneTopAlpha * if (useCompactPaneSurfaceTint) {
-            if (isDarkTheme) 0.97f else 0.95f
-        } else if (isDarkTheme) {
-            0.92f
-        } else {
-            0.82f
-        } * paneOverlayAlphaScale,
-    )
-    val paneBottomGradientColor = paneBottomBaseColor.copy(
-        alpha = paneTopAlpha * if (useCompactPaneSurfaceTint) {
-            if (isDarkTheme) 0.94f else 0.90f
-        } else if (isDarkTheme) {
-            0.80f
-        } else {
-            0.58f
-        } * paneOverlayAlphaScale,
-    )
     val paneShape = if (showCollapsedHandle && isSheetFullyExpanded && paneOpacityProgress >= 0.96f) {
         RoundedCornerShape(0.dp)
     } else {
@@ -2268,60 +2291,21 @@ private fun DetailsPaneContent(
     } else {
         GlassDefaults.regularStyle()
     }
-    val glassPrefs = rememberGlassPrefsOrFallback()
-    val paneGlassColors = rememberGlassSurfaceColors(style = paneGlassStyle, glassPrefs = glassPrefs)
-    val hazeState = LocalHazeState.current
-    val usePaneRuntimeHaze = glassPrefs.isGlassEffectEnabled && supportsRuntimeHaze()
-    val immersiveStrength = (glassPrefs.immersiveStrengthPercent.coerceIn(0, 100)) / 100f
-    val paneHazeBackgroundColor = if (isDarkTheme) {
-        colorScheme.surfaceContainerHigh.copy(alpha = lerpFloat(0.84f, 0.92f, immersiveStrength))
-    } else {
-        colorScheme.surfaceContainerHigh.copy(alpha = lerpFloat(0.86f, 0.94f, immersiveStrength))
-    }
-    val paneHazeStyle = HazeBlurDefaults.style(
-        Color.Transparent,
-        HazeBlurDefaults.tint(paneGlassColors.baseTintColor),
-        paneGlassColors.blurRadius,
-        paneGlassColors.noiseFactor,
-    )
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        Surface(
+        GlassSurface(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (usePaneRuntimeHaze) {
-                        Modifier
-                            .clip(paneShape)
-                            .hazeChild(hazeState, paneHazeStyle) {
-                                backgroundColor = paneHazeBackgroundColor
-                                blurredEdgeTreatment = BlurredEdgeTreatment(paneShape)
-                                clipToAreasBounds = true
-                                expandLayerBounds = true
-                                forceInvalidateOnPreDraw = true
-                            }
-                    } else {
-                        Modifier
-                    },
-                )
                 .then(modifier),
             shape = paneShape,
-            color = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 0.dp,
-            shadowElevation = paneShadowElevation,
-            border = if (paneBorderColor.alpha > 0f) {
-                BorderStroke(width = 1.dp, color = paneBorderColor)
-            } else {
-                null
-            },
+            style = paneGlassStyle,
+            dialogSurface = true,
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(paneMiddleGradientColor),
             ) {
                 Column(
                     modifier = Modifier
@@ -2557,7 +2541,6 @@ private fun DetailsPaneActionsRow(
                         } else {
                             ReadDock(
                                 modifier = Modifier.weight(0.64f),
-                                sheetExpansionProgress = paneOpacityProgress,
                                 readLabel = resolveReadActionLabel(
                                     contentType = contentType,
                                     historyInfo = historyInfo,
@@ -2610,7 +2593,6 @@ private fun DetailsPaneActionsRow(
                     else -> {
                         ReadDock(
                             modifier = Modifier.weight(1f),
-                            sheetExpansionProgress = paneOpacityProgress,
                             readLabel = resolveReadActionLabel(
                                 contentType = contentType,
                                 historyInfo = historyInfo,
@@ -2999,7 +2981,6 @@ private data class BrowserTarget(
 @Composable
 private fun ReadDock(
     modifier: Modifier = Modifier,
-    sheetExpansionProgress: Float,
     readLabel: String,
     branches: List<ContentBranch>,
     historyInfo: HistoryInfo,
@@ -3020,7 +3001,6 @@ private fun ReadDock(
 
     val shapeRadiusPercent by androidx.compose.animation.core.animateIntAsState(targetValue = if (expanded) 50 else 0)
     val optionGap by androidx.compose.animation.core.animateDpAsState(targetValue = if (expanded) 8.dp else 2.dp)
-    val dockShape = RoundedCornerShape(22.dp)
     val readButtonShape = androidx.compose.foundation.shape.RoundedCornerShape(
         topStartPercent = 50,
         bottomStartPercent = 50,
@@ -3034,27 +3014,48 @@ private fun ReadDock(
         bottomStartPercent = shapeRadiusPercent,
     )
 
-    GlassSurface(
-        modifier = modifier.height(50.dp),
-        style = GlassDefaults.prominentStyle().copy(
-            containerAlpha = lerpFloat(0.78f, 0.86f, sheetExpansionProgress),
-            borderAlpha = 0.22f,
-            shadowElevation = 0.dp,
-        ),
-        shape = dockShape,
+    Row(
+        modifier = modifier
+            .height(50.dp)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(optionGap),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(optionGap),
-            verticalAlignment = Alignment.CenterVertically,
+                .weight(1f)
+                .fillMaxHeight(),
+            shape = readButtonShape,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.96f),
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(readButtonShape)
+                    .clickable(enabled = isEnabled, onClick = onReadClick)
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = readLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .width(50.dp)
+                .fillMaxHeight(),
         ) {
             Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                shape = readButtonShape,
+                modifier = Modifier.fillMaxSize(),
+                shape = trailingButtonShape,
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.96f),
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 tonalElevation = 0.dp,
@@ -3063,110 +3064,79 @@ private fun ReadDock(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(readButtonShape)
-                        .clickable(enabled = isEnabled, onClick = onReadClick)
-                        .padding(horizontal = 14.dp),
+                        .clip(trailingButtonShape)
+                        .clickable(enabled = hasMenuActions, onClick = { expanded = true }),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = readLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (hasBranchOptions) {
+                            stringResource(R.string.system_default)
+                        } else {
+                            stringResource(R.string.options)
+                        },
                     )
                 }
             }
-
-            Box(
-                modifier = Modifier
-                    .width(50.dp)
-                    .fillMaxHeight(),
+            GlassDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = trailingButtonShape,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.96f),
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(trailingButtonShape)
-                            .clickable(enabled = hasMenuActions, onClick = { expanded = true }),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (hasBranchOptions) {
-                                stringResource(R.string.system_default)
-                            } else {
-                                stringResource(R.string.options)
-                            },
-                        )
-                    }
+                if (canOpenIncognito) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.incognito_mode)) },
+                        onClick = {
+                            expanded = false
+                            onIncognitoClick()
+                        },
+                    )
                 }
-                GlassDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                    offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
-                ) {
-                    if (canOpenIncognito) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.incognito_mode)) },
-                            onClick = {
-                                expanded = false
-                                onIncognitoClick()
-                            },
-                        )
-                    }
-                    if (canForgetHistory) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.remove_from_history)) },
-                            onClick = {
-                                expanded = false
-                                onForgetClick()
-                            },
-                        )
-                    }
-                    if (isDownloadAvailable) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.download)) },
-                            onClick = {
-                                expanded = false
-                                onDownloadClick()
-                            },
-                        )
-                    }
-                    if (hasQuickActions && hasBranchOptions) {
-                        HorizontalDivider()
-                    }
-                    branches.forEach { branch ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = buildString {
-                                        append(branch.name ?: stringResource(R.string.system_default))
-                                        append(" / ")
-                                        append(branch.count)
-                                    },
+                if (canForgetHistory) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.remove_from_history)) },
+                        onClick = {
+                            expanded = false
+                            onForgetClick()
+                        },
+                    )
+                }
+                if (isDownloadAvailable) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.download)) },
+                        onClick = {
+                            expanded = false
+                            onDownloadClick()
+                        },
+                    )
+                }
+                if (hasQuickActions && hasBranchOptions) {
+                    HorizontalDivider()
+                }
+                branches.forEach { branch ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = buildString {
+                                    append(branch.name ?: stringResource(R.string.system_default))
+                                    append(" / ")
+                                    append(branch.count)
+                                },
+                            )
+                        },
+                        leadingIcon = {
+                            if (branch.isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
                                 )
-                            },
-                            leadingIcon = {
-                                if (branch.isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                    )
-                                }
-                            },
-                            onClick = {
-                                expanded = false
-                                onBranchSelected(branch.name)
-                            },
-                        )
-                    }
+                            }
+                        },
+                        onClick = {
+                            expanded = false
+                            onBranchSelected(branch.name)
+                        },
+                    )
                 }
             }
         }
@@ -3237,15 +3207,16 @@ private fun ReadingRecordSheet(
             onDismissRequest()
         },
         sheetState = sheetState,
+        sheetGesturesEnabled = false,
         containerColor = Color.Transparent,
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(0.dp),
         dragHandle = null,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
         GlassSurface(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .fillMaxWidth(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             style = GlassDefaults.prominentStyle(),
             dialogSurface = true,
@@ -3984,16 +3955,11 @@ fun DetailsChromeButton(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    GlassSurface(
+    IconButton(
+        onClick = onClick,
         modifier = modifier.padding(horizontal = 2.dp),
-        shape = RoundedCornerShape(28.dp),
-        style = GlassDefaults.subtleStyle(),
     ) {
-        IconButton(
-            onClick = onClick,
-        ) {
-            content()
-        }
+        content()
     }
 }
 
