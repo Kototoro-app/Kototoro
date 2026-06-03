@@ -146,9 +146,7 @@ import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
-import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -649,12 +647,6 @@ fun DetailsScreen(
 
     val detailsHazeState = remember { HazeState() }
     val useBackgroundHaze = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
-    val heroTransitionInProgress = LocalHeroTransitionInProgress.current
-    LaunchedEffect(heroTransitionInProgress, content?.title, mangaDetails?.id) {
-        logHeroTransition(
-            "details lightweight=$heroTransitionInProgress title=${content?.title ?: "unknown"} detailsId=${mangaDetails?.id}",
-        )
-    }
 
     CompositionLocalProvider(LocalHazeState provides detailsHazeState) {
         Box(
@@ -670,7 +662,7 @@ fun DetailsScreen(
                         .matchParentSize()
                         .background(MaterialTheme.colorScheme.surface),
                 )
-                if (panoramaPrefs.isEnabled && !heroTransitionInProgress) {
+                if (panoramaPrefs.isEnabled) {
                     val panoramaCoverUrl = mangaDetails?.coverUrl?.takeIf { it.isNotBlank() }
                         ?: content?.largeCoverUrl?.takeIf { it.isNotBlank() }
                         ?: content?.coverUrl?.takeIf { it.isNotBlank() }
@@ -892,7 +884,7 @@ fun DetailsScreen(
                                     contentPadding = paddingValues,
                                     headerTopSpacing = if (panoramaPrefs.isEnabled) panoramaExtraHeightDp else 0.dp,
                                     bottomSpacerHeight = 40.dp,
-                                    preferLightweightFirstFrame = heroTransitionInProgress,
+                                    preferLightweightFirstFrame = false,
                                     mangaDetails = mangaDetails,
                                     favouriteCategories = favouriteCategories,
                                     historyInfo = historyInfo,
@@ -1065,7 +1057,7 @@ fun DetailsScreen(
                                 contentPadding = paddingValues,
                                 headerTopSpacing = detailsHeaderTopSpacing,
                                 bottomSpacerHeight = compactPaneCollapsedHeight + 28.dp,
-                                preferLightweightFirstFrame = heroTransitionInProgress,
+                                preferLightweightFirstFrame = false,
                                 mangaDetails = mangaDetails,
                                 favouriteCategories = favouriteCategories,
                                 historyInfo = historyInfo,

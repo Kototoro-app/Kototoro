@@ -1,10 +1,13 @@
 package org.skepsun.kototoro.details.ui
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Job
@@ -13,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -147,6 +151,7 @@ private const val TRACKING_SUGGESTION_GAP_THRESHOLD = 0.03f
 private const val TRACKING_SUGGESTION_RESULT_LIMIT = 3
 private const val SOURCE_SEARCH_TIMEOUT_MS = 12_000L
 private const val READING_SEARCH_MAX_PARALLELISM = 4
+private const val READING_SEARCH_LOG_TAG = "ReadingSourceSearch"
 private val CHARACTER_VOICE_ACTOR_REGEX = Regex(
 	"""^\s*(.+?)\s*\((?:cv|cast|voice actor|voice|配音|声优)\s*[:：]?\s*(.+?)\)\s*$""",
 	RegexOption.IGNORE_CASE,
@@ -221,6 +226,7 @@ data class MetadataSearchSectionUiState(
 data class ReadingSearchSectionUiState(
 	val source: ContentSourceInfo,
 	val items: List<Content> = emptyList(),
+	val isPending: Boolean = false,
 	val isLoading: Boolean = false,
 	val errorMessage: String? = null,
 )
@@ -459,6 +465,8 @@ class DetailsViewModel @Inject constructor(
 	}
 	private var loadingJob: Job = Job()
 	private var translateAvailabilityJob: Job? = null
+	private var readingSearchJob: Job? = null
+	private var readingSearchGeneration: Int = 0
 	private var currentLoadIntentOverride: ContentIntent? = initialLoadIntentOverride
 	private var translationCacheSourceLang: String? = null
 	private var translationCacheTargetLang: String? = null
@@ -3404,14 +3412,31 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private fun org.skepsun.kototoro.core.parser.ContentRepository.resolveReadingSearchSortOrder(): SortOrder {
-		return if (SortOrder.RELEVANCE in sortOrders) {
-			SortOrder.RELEVANCE
-		} else {
-			defaultSortOrder
+		return when {
+			SortOrder.RELEVANCE in sortOrders -> SortOrder.RELEVANCE
+			SortOrder.POPULARITY in sortOrders -> SortOrder.POPULARITY
+			SortOrder.ALPHABETICAL in sortOrders -> SortOrder.ALPHABETICAL
+			else -> defaultSortOrder
+		}
+	}
+
+	private fun replaceReadingSearchSection(
+		sourceIndex: Int,
+		section: ReadingSearchSectionUiState,
+	) {
+		readingSearchSections.update { sections ->
+			if (sourceIndex !in sections.indices) {
+				return@update sections
+			}
+			sections.toMutableList().also { updated ->
+				updated[sourceIndex] = section
+			}
 		}
 	}
 
 	fun searchReadingBindings() {
+		readingSearchJob?.cancel()
+		val generation = ++readingSearchGeneration
 		val scopeFilter = readingSearchScopeFilters.value
 		val sources = readingSearchSources.value.filter { sourceInfo ->
 			val source = sourceInfo.mangaSource
@@ -3425,67 +3450,127 @@ class DetailsViewModel @Inject constructor(
 			readingSearchLoading.value = false
 			readingSearchHasSearched.value = true
 			readingSearchState.value = LocalSearchState.Loaded(emptyList())
+			Log.d(READING_SEARCH_LOG_TAG, "skip search: no sources after scope filter")
 			return
 		}
 		val query = readingSearchQuery.value.trim().ifBlank { currentDetailsTitle() }
 		val currentContent = (baseLoadedDetails?.toContent() ?: mangaDetails.value?.toContent() ?: originContent ?: intent.manga)
 			?.takeUnless { it.source.name.startsWith("TRACKING_") }
-		launchJob(Dispatchers.IO) {
+		readingSearchJob = launchJob(Dispatchers.IO) {
+			val searchStartedAt = SystemClock.elapsedRealtime()
+			Log.d(
+				READING_SEARCH_LOG_TAG,
+				"start query=${query.take(80)} sources=${sources.size} parallelism=$READING_SEARCH_MAX_PARALLELISM " +
+					"timeoutMs=$SOURCE_SEARCH_TIMEOUT_MS hideEmpty=${scopeFilter.hideEmpty}",
+			)
 			readingSearchLoading.value = true
 			readingSearchHasSearched.value = false
 			readingSearchState.value = LocalSearchState.Loading
 			readingSearchSections.value = sources.map { sourceInfo ->
-				ReadingSearchSectionUiState(source = sourceInfo, isLoading = true)
+				ReadingSearchSectionUiState(source = sourceInfo, isPending = true)
 			}
 			val semaphore = Semaphore(READING_SEARCH_MAX_PARALLELISM)
 			supervisorScope {
 				sources.mapIndexed { sourceIndex, sourceInfo ->
 					async {
 						semaphore.withPermit {
-							val section = runCatchingCancellable {
-								withTimeout(SOURCE_SEARCH_TIMEOUT_MS) {
+							if (generation != readingSearchGeneration) {
+								return@withPermit
+							}
+							val section = try {
+								val items = withTimeout(SOURCE_SEARCH_TIMEOUT_MS) {
+									val sourceStartedAt = SystemClock.elapsedRealtime()
 									val repository = mangaRepositoryFactory.create(sourceInfo.mangaSource)
+									replaceReadingSearchSection(
+										sourceIndex,
+										ReadingSearchSectionUiState(source = sourceInfo, isLoading = true),
+									)
+									Log.d(
+										READING_SEARCH_LOG_TAG,
+										"source start index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+											"repo=${repository.javaClass.simpleName}",
+									)
 									if (!repository.filterCapabilities.isSearchSupported) {
+										Log.d(
+											READING_SEARCH_LOG_TAG,
+											"source unsupported index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+												"elapsedMs=${SystemClock.elapsedRealtime() - sourceStartedAt}",
+										)
 										return@withTimeout emptyList()
 									}
-									repository.getList(
+									val listStartedAt = SystemClock.elapsedRealtime()
+									val list = repository.getList(
 										offset = 0,
 										order = repository.resolveReadingSearchSortOrder(),
 										filter = ContentListFilter(query = query),
-									).take(20).map { content ->
+									).take(20)
+									Log.d(
+										READING_SEARCH_LOG_TAG,
+										"source list index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+											"count=${list.size} elapsedMs=${SystemClock.elapsedRealtime() - listStartedAt}",
+									)
+									val detailsStartedAt = SystemClock.elapsedRealtime()
+									val detailed = list.map { content ->
 										runCatchingCancellable {
 											repository.getDetails(content)
 										}.getOrDefault(content)
 									}
-								}
-							}.fold(
-								onSuccess = { items ->
-									ReadingSearchSectionUiState(
-										source = sourceInfo,
-										items = items.withCurrentReadingSourceResult(currentContent, sourceInfo, query),
-										isLoading = false,
+									Log.d(
+										READING_SEARCH_LOG_TAG,
+										"source details index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+											"count=${detailed.size} elapsedMs=${SystemClock.elapsedRealtime() - detailsStartedAt} " +
+											"totalMs=${SystemClock.elapsedRealtime() - sourceStartedAt}",
 									)
-								},
-								onFailure = { throwable ->
-									ReadingSearchSectionUiState(
-										source = sourceInfo,
-										isLoading = false,
-										errorMessage = throwable.localizedMessage ?: throwable.javaClass.simpleName,
-									)
-								},
-							)
-							readingSearchSections.update { sections ->
-								sections.mapIndexed { index, existing ->
-									if (index == sourceIndex) {
-										section
-									} else {
-										existing
-									}
+									detailed
 								}
+								Log.d(
+									READING_SEARCH_LOG_TAG,
+									"source success index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+										"items=${items.size}",
+								)
+								ReadingSearchSectionUiState(
+									source = sourceInfo,
+									items = items.withCurrentReadingSourceResult(currentContent, sourceInfo, query),
+									isLoading = false,
+								)
+							} catch (throwable: TimeoutCancellationException) {
+								Log.w(
+									READING_SEARCH_LOG_TAG,
+									"source failed index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+										"timeout=true error=${throwable.javaClass.name}:${throwable.message}",
+									throwable,
+								)
+								ReadingSearchSectionUiState(
+									source = sourceInfo,
+									isLoading = false,
+									errorMessage = throwable.localizedMessage ?: throwable.javaClass.simpleName,
+								)
+							} catch (throwable: Throwable) {
+								if (throwable is CancellationException) {
+									throw throwable
+								}
+								Log.w(
+									READING_SEARCH_LOG_TAG,
+									"source failed index=$sourceIndex source=${sourceInfo.mangaSource.name} " +
+										"timeout=false error=${throwable.javaClass.name}:${throwable.message}",
+									throwable,
+								)
+								ReadingSearchSectionUiState(
+									source = sourceInfo,
+									isLoading = false,
+									errorMessage = throwable.localizedMessage ?: throwable.javaClass.simpleName,
+								)
 							}
+							if (generation != readingSearchGeneration) {
+								return@withPermit
+							}
+							replaceReadingSearchSection(sourceIndex, section)
 						}
 					}
 				}.awaitAll()
+			}
+			if (generation != readingSearchGeneration) {
+				return@launchJob
 			}
 			readingSearchLoading.value = false
 			readingSearchHasSearched.value = true
@@ -3496,6 +3581,11 @@ class DetailsViewModel @Inject constructor(
 			}
 			readingSearchSections.value = finalSections
 			readingSearchState.value = LocalSearchState.Loaded(finalSections.flatMap { it.items })
+			Log.d(
+				READING_SEARCH_LOG_TAG,
+				"finish sources=${sources.size} visibleSections=${finalSections.size} " +
+					"items=${finalSections.sumOf { it.items.size }} elapsedMs=${SystemClock.elapsedRealtime() - searchStartedAt}",
+			)
 		}
 	}
 

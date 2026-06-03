@@ -75,7 +75,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hasRoute
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeSource
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
@@ -95,7 +95,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalHeroReturnTransitionInProgress
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.heroTransitionTimestampMs
-import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
@@ -420,8 +419,20 @@ fun KototoroApp(
     val currentDestinationRoute = currentDestination?.route
     val isSearchRoute = currentDestination?.hasRoute<SearchRoute>() == true
     val isDetailsRoute = currentDestination?.hasRoute<DetailsRoute>() == true
-    val shouldShowChrome = !isSearchRoute
+    val shouldShowChrome = !isSearchRoute && !isDetailsRoute
     val currentTopBarOwnerKey = routeOwnerKeyForDestination(currentDestination)
+    var lastChromeTopBarOwnerKey by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(currentTopBarOwnerKey) {
+        if (currentTopBarOwnerKey != null) {
+            lastChromeTopBarOwnerKey = currentTopBarOwnerKey
+        }
+    }
+    val chromeTopBarOwnerKey = currentTopBarOwnerKey ?: if (isDetailsRoute && isDetailsChromeTransitionPending) {
+        lastChromeTopBarOwnerKey
+    } else {
+        null
+    }
+    val shouldReserveChromeInsets = shouldShowChrome || (isDetailsRoute && isDetailsChromeTransitionPending)
     val isChromeOffsetFromCurrentDestination = offsetDestinationRoute == currentDestinationRoute
     val effectiveTopBarOffset = if (isChromeOffsetFromCurrentDestination) topBarOffset else 0f
     val effectiveBottomNavOffset = if (isChromeOffsetFromCurrentDestination) bottomNavOffset else 0f
@@ -442,11 +453,6 @@ fun KototoroApp(
             return@LaunchedEffect
         }
         when {
-            !shouldShowChrome -> {
-                isChromeVisible = false
-                lastResolvedWasDetailsRoute = false
-                isDetailsChromeTransitionPending = false
-            }
             isDetailsRoute -> {
                 lastResolvedWasDetailsRoute = true
                 if (!isDetailsChromeTransitionPending) {
@@ -456,6 +462,15 @@ fun KototoroApp(
                 isChromeVisible = true
                 delay(220)
                 isChromeVisible = false
+                isDetailsChromeTransitionPending = false
+            }
+            isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails -> {
+                isChromeVisible = false
+                lastResolvedWasDetailsRoute = false
+            }
+            !shouldShowChrome -> {
+                isChromeVisible = false
+                lastResolvedWasDetailsRoute = false
                 isDetailsChromeTransitionPending = false
             }
             lastResolvedWasDetailsRoute -> {
@@ -489,21 +504,14 @@ fun KototoroApp(
         }
         value = isDetailsChromeTransitionPending || isDetailsRoute
         val elapsed = heroTransitionTimestampMs() - lastHeroTransitionStartedAtMs
-        if (elapsed < 420L) {
+        if (elapsed < 320L) {
             value = true
-            delay(420L - elapsed)
+            delay(320L - elapsed)
         }
         value = false
     }
     val heroReturnTransitionInProgress =
         heroTransitionInProgress && heroTransitionPhase == HeroTransitionPhase.ReturningFromDetails
-    LaunchedEffect(heroTransitionInProgress, isDetailsRoute, lastHeroTransitionStartedAtMs) {
-        if (lastHeroTransitionStartedAtMs == 0L) return@LaunchedEffect
-        val elapsed = heroTransitionTimestampMs() - lastHeroTransitionStartedAtMs
-        logHeroTransition(
-            "window active=$heroTransitionInProgress isDetailsRoute=$isDetailsRoute elapsed=${elapsed}ms",
-        )
-    }
     LaunchedEffect(heroTransitionInProgress) {
         if (!heroTransitionInProgress && heroTransitionPhase != HeroTransitionPhase.Idle) {
             heroTransitionPhase = HeroTransitionPhase.Idle
@@ -517,7 +525,7 @@ fun KototoroApp(
     val showBrowseSourceSettingsEntry = currentDestination?.let {
         it.hasRoute<ExploreRoute>() || it.hasRoute<DiscoverRoute>()
     } == true
-    val resolvedTopBarOverrideState = currentTopBarOwnerKey
+    val resolvedTopBarOverrideState = chromeTopBarOwnerKey
         ?.let(routeTopBarOverrideStates::get)
         ?: globalTopBarOverrideState
     val layeredTopBarOverrideState = when (resolvedTopBarOverrideState) {
@@ -537,10 +545,15 @@ fun KototoroApp(
         resolvedTopBarOverrideState
     }
     val shouldKeepFavoriteTabsVisible = !isNavBarPinned &&
-        currentDestination?.hasRoute<FavoritesRoute>() == true &&
+        chromeTopBarOwnerKey == "favorites" &&
+        !isDetailsChromeTransitionPending &&
         topTabsOverrideState != null &&
         scrollAlpha < 0.98f
-    val effectiveChromeAlphaTarget = if (shouldKeepFavoriteTabsVisible) {
+    val isEnteringDetailsTransition =
+        isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
+    val effectiveChromeAlphaTarget = if (isEnteringDetailsTransition) {
+        0f
+    } else if (shouldKeepFavoriteTabsVisible) {
         1f
     } else {
         scrollAlpha
@@ -550,11 +563,12 @@ fun KototoroApp(
     } else {
         effectiveTopBarOffset
     }
-    val chromeAlpha by animateFloatAsState(
+    val animatedChromeAlpha by animateFloatAsState(
         targetValue = effectiveChromeAlphaTarget,
         animationSpec = tween(durationMillis = 120),
         label = "chrome_alpha",
     )
+    val chromeAlpha = if (isEnteringDetailsTransition) 0f else animatedChromeAlpha
     val isHomeRoute = currentDestination?.hasRoute<HomeRoute>() == true
     val supportsDisplayModeMenu = currentDestination?.let {
         it.hasRoute<ExploreRoute>() ||
@@ -606,13 +620,13 @@ fun KototoroApp(
         topFilterRailHeightPx > 0 -> topFilterRailHeightPx
         else -> with(density) { 34.dp.roundToPx() }
     }
-    val visibleTopFilterInsetPx = if (shouldShowChrome && topFilterRailOverrideState != null) {
+    val visibleTopFilterInsetPx = if (shouldReserveChromeInsets && topFilterRailOverrideState != null) {
         val gapPx = with(density) { 8.dp.roundToPx() }
         reservedTopFilterRailHeightPx + gapPx
     } else {
         0
     }
-    val contentTopInsetPx = if (shouldShowChrome) {
+    val contentTopInsetPx = if (shouldReserveChromeInsets) {
         (reservedTopBarHeightPx + effectiveTopBarOffset).toInt()
             .coerceIn(maxCollapsePx, reservedTopBarHeightPx) + visibleTopFilterInsetPx
     } else {
@@ -625,7 +639,7 @@ fun KototoroApp(
         if (isNavBarPinned && !isFloating) 12.dp.roundToPx() else 0
     }
     val visibleBottomNavInsetPx = (bottomNavHeightPx - effectiveBottomNavOffset).coerceAtLeast(0f).toInt() + extraPinnedBottomInsetPx
-    val contentBottomInsetPx = if (!shouldShowChrome || isLandscapeNavigation) {
+    val contentBottomInsetPx = if (!shouldReserveChromeInsets || isLandscapeNavigation) {
         0
     } else {
         maxOf(visibleBottomNavInsetPx, navigationBarHeightPx)
@@ -660,6 +674,7 @@ fun KototoroApp(
 
     KototoroTheme(cornerRadius = cornerRadius) {
         val hazeState = remember { HazeState() }
+        val transitionHazeState = remember { HazeState() }
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
         val useRuntimeHaze = remember { supportsRuntimeHaze() }
@@ -671,19 +686,14 @@ fun KototoroApp(
             Box(modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                .then(if (useRuntimeHaze) Modifier.hazeSource(transitionHazeState) else Modifier)
                 .nestedScroll(nestedScrollConnection)
-                .then(
-                    if (!isDetailsRoute) {
-                        Modifier.padding(start = displayCutoutStartDp, end = displayCutoutEndDp)
-                    } else {
-                        Modifier
-                    },
-                )) {
+                .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
                 SharedTransitionLayout {
                     CompositionLocalProvider(
-                        LocalHeroTransitionInProgress provides heroTransitionInProgress,
-                        LocalHeroReturnTransitionInProgress provides heroReturnTransitionInProgress,
-                        LocalHeroTransitionPhase provides heroTransitionPhase,
+                        LocalHeroTransitionInProgress provides false,
+                        LocalHeroReturnTransitionInProgress provides false,
+                        LocalHeroTransitionPhase provides HeroTransitionPhase.Idle,
                         LocalSharedTransitionScope provides if (isSharedElementTransitionsEnabled) {
                             this@SharedTransitionLayout
                         } else {
@@ -702,17 +712,11 @@ fun KototoroApp(
                                 isDetailsChromeTransitionPending = true
                                 heroTransitionPhase = HeroTransitionPhase.EnteringDetails
                                 lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                logHeroTransition(
-                                    "navigate_to_details started route=${currentDestination?.route ?: "unknown"}",
-                                )
                             },
                             onDetailsReturnTransitionRequested = {
                                 isDetailsChromeTransitionPending = true
                                 heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
                                 lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                logHeroTransition(
-                                    "navigate_from_details started route=${currentDestination?.route ?: "unknown"}",
-                                )
                             },
                             onExploreSourceSelectionTopBarChanged = { overrideState ->
                                 when (overrideState) {
@@ -720,12 +724,18 @@ fun KototoroApp(
                                         val ownerRoute = overrideState.ownerRoute
                                         val state = overrideState.state
                                         if (state == null) {
-                                            routeTopBarOverrideStates.remove(ownerRoute)
-                                        } else {
+                                            if (ownerRoute in routeTopBarOverrideStates) {
+                                                routeTopBarOverrideStates.remove(ownerRoute)
+                                            }
+                                        } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
                                             routeTopBarOverrideStates[ownerRoute] = state
                                         }
                                     }
-                                    else -> globalTopBarOverrideState = overrideState
+                                    else -> {
+                                        if (globalTopBarOverrideState !== overrideState) {
+                                            globalTopBarOverrideState = overrideState
+                                        }
+                                    }
                                 }
                             },
                             onContextualMenuActionsChanged = { contextualMenuActions = it },
@@ -744,7 +754,7 @@ fun KototoroApp(
                             },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (useRuntimeHaze) Modifier.haze(hazeState) else Modifier)
+                                .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier)
                         )
                     }
                 }
@@ -804,7 +814,7 @@ fun KototoroApp(
                     )
                 }
 
-                if (isChromeVisible || chromeAlpha > 0f) {
+                if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
                     if (effectiveTopBarOverrideState != null && effectiveTopBarOverrideState !is CompactTabsTopBarOverrideState) {
                         when (val overrideState = effectiveTopBarOverrideState) {
                             is ExploreSourceSelectionTopBarState -> {
@@ -867,7 +877,6 @@ fun KototoroApp(
                                 )
                             }
 
-                            null,
                             is CompactTabsTopBarOverrideState -> Unit
                             is FavoritesTopBarOverrideState -> Unit
                             is LayeredTopBarOverrideState -> Unit

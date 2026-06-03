@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.favourites.ui.list
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -14,13 +13,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -43,32 +42,36 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.parsers.model.Content
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.model.isNsfw
-import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
-import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
-import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
+import javax.inject.Inject
 
-private const val PAGE_SIZE = 16
+private const val ALL_FAVORITES_INITIAL_PAGE_SIZE = 96
+private const val FAVORITES_INITIAL_PAGE_SIZE = 64
+private const val FAVORITES_PAGE_SIZE = 64
 
-@HiltViewModel(assistedFactory = FavouritesListViewModel.Factory::class)
-class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
-	@dagger.assisted.Assisted val categoryId: Long,
+private data class FavoritesListInputs(
+	val mode: ListMode,
+	val groupTab: BrowseGroupTab,
+	val sourceTags: Set<SourceTag>,
+	val categoryIds: Set<Long>,
+	val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+)
+
+@HiltViewModel
+class FavouritesListViewModel @Inject constructor(
 	private val repository: FavouritesRepository,
 	private val mangaListMapper: ContentListMapper,
 	private val markAsReadUseCase: MarkAsReadUseCase,
-	quickFilterFactory: FavoritesListQuickFilter.Factory,
+	private val quickFilterFactory: FavoritesListQuickFilter.Factory,
 	private val sourceGroupManager: SourceGroupManager,
-	private val entityGraphRepository: EntityGraphRepository,
 	settings: AppSettings,
 	mangaDataRepository: ContentDataRepository,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
@@ -76,17 +79,20 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 ) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), QuickFilterListener {
 
-	@dagger.assisted.AssistedFactory
-	interface Factory {
-		fun create(categoryId: Long): FavouritesListViewModel
-	}
-
-	private val quickFilter = quickFilterFactory.create(categoryId)
+	private val selectedFavoriteCategoryId = MutableStateFlow(NO_ID)
+	val categoryId: Long
+		get() = selectedFavoriteCategoryId.value
+	private val activeQuickFilter = selectedFavoriteCategoryId
+		.mapLatest(quickFilterFactory::create)
+		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, quickFilterFactory.create(NO_ID))
 	private val refreshTrigger = MutableStateFlow(Any())
-	private val limit = MutableStateFlow(if (categoryId == NO_ID) Int.MAX_VALUE else PAGE_SIZE)
+	private val pageSize = FAVORITES_PAGE_SIZE
+	private val limit = MutableStateFlow(initialLimitFor(NO_ID))
 	private val isPaginationReady = AtomicBoolean(false)
 	@Volatile
-	private var groupedFavoriteIds: Map<Long, Set<Long>> = emptyMap()
+	private var lastObservedFavoriteCount = 0
+	private val _hasMoreItems = MutableStateFlow(true)
+	override val hasMoreItems: StateFlow<Boolean> = _hasMoreItems
 
 	override val isFilterBarVisible = MutableStateFlow(false)
 
@@ -108,46 +114,80 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 	override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 
-	val topQuickFilter = quickFilter.appliedOptions
-		.combineWithSettings()
-		.mapLatest { filters -> quickFilter.filterItem(filters) }
+	val topQuickFilter = combine(
+		activeQuickFilter,
+		globalFavoritesState.appliedFilter.combineWithSettings(),
+	) { quickFilter, filters ->
+		quickFilter to filters
+	}.mapLatest { (quickFilter, filters) ->
+		quickFilter.filterItem(filters)
+	}
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null as QuickFilter?)
 
-	val sortOrder: StateFlow<ListSortOrder?> = if (categoryId == NO_ID) {
-		settings.observeAsFlow(AppSettings.KEY_FAVORITES_ORDER) {
-			allFavoritesSortOrder
-		}
-	} else {
-		repository.observeCategory(categoryId)
-			.withErrorHandling()
-			.map { it?.order }
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
+	val sortOrder: StateFlow<ListSortOrder?> = selectedFavoriteCategoryId
+		.flatMapLatest { categoryId ->
+			if (categoryId == NO_ID) {
+				settings.observeAsFlow(AppSettings.KEY_FAVORITES_ORDER) {
+					allFavoritesSortOrder
+				}
+			} else {
+				repository.observeCategory(categoryId)
+					.withErrorHandling()
+					.map { it?.order }
+			}
+		}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-	override val content = combine(
-		observeFavorites(),
-		quickFilter.appliedOptions,
-		observeListModeWithTriggers(),
-		refreshTrigger,
+	private val inputTriggers = merge(
+		mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
+		refreshTrigger.map { Unit },
+	)
+
+	private data class FavoritesFilterInputs(
+		val groupTab: BrowseGroupTab,
+		val sourceTags: Set<SourceTag>,
+		val categoryIds: Set<Long>,
+	)
+
+	private val filterInputs = combine(
 		currentGroupTab,
 		currentSourceTags,
 		selectedCategoryIds,
-		mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
+	) { groupTab, sourceTags, categoryIds ->
+		FavoritesFilterInputs(
+			groupTab = groupTab,
+			sourceTags = sourceTags,
+			categoryIds = categoryIds,
+		)
+	}
+
+	private val displayInputs = combine(
+		observeListModeWithTriggers(),
+		filterInputs,
 		settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
 			.flatMapLatest { id ->
 				if (id == -1L) flowOf(null)
 				else sourcePresetsRepository.observe(id)
-			}
-	) { values: Array<Any?> ->
-		val list = values[0] as List<org.skepsun.kototoro.parsers.model.Content>
-		val filters = values[1] as Set<ListFilterOption>
-		val mode = values[2] as ListMode
-		// val refreshTrigger = values[3]
-		val groupTab = values[4] as BrowseGroupTab
-		val sourceTags = values[5] as Set<SourceTag>
-		val categoryIds = values[6] as Set<Long>
-		val preset = values[8] as? org.skepsun.kototoro.explore.data.SourcePreset
-		mapList(list, filters, mode, groupTab, sourceTags, categoryIds, preset)
-	}.onEach {
+			},
+		inputTriggers,
+	) { mode, filterInputs, preset, _ ->
+		FavoritesListInputs(
+			mode = mode,
+			groupTab = filterInputs.groupTab,
+			sourceTags = filterInputs.sourceTags,
+			categoryIds = filterInputs.categoryIds,
+			preset = preset,
+		)
+	}
+
+	override val content = combine(
+		observeFavorites(),
+		activeQuickFilter,
+		globalFavoritesState.appliedFilter,
+		displayInputs,
+	) { list, quickFilter, filters, inputs ->
+		mapList(list, quickFilter, filters, inputs.mode, inputs.groupTab, inputs.sourceTags, inputs.categoryIds, inputs.preset)
+	}.onEach { models ->
+		_hasMoreItems.value = lastObservedFavoriteCount >= limit.value
 		isPaginationReady.set(true)
 	}.distinctUntilChanged().catch {
 		emit(listOf(it.toErrorState(canRetry = false)))
@@ -160,11 +200,21 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 	override fun onRetry() = Unit
 
 	override fun setFilterOption(option: ListFilterOption, isApplied: Boolean) =
-		quickFilter.setFilterOption(option, isApplied)
+		activeQuickFilter.value.setFilterOption(option, isApplied)
 
-	override fun toggleFilterOption(option: ListFilterOption) = quickFilter.toggleFilterOption(option)
+	override fun toggleFilterOption(option: ListFilterOption) = activeQuickFilter.value.toggleFilterOption(option)
 
-	override fun clearFilter() = quickFilter.clearFilter()
+	override fun clearFilter() = activeQuickFilter.value.clearFilter()
+
+	fun setCategoryId(categoryId: Long) {
+		if (selectedFavoriteCategoryId.value == categoryId) {
+			return
+		}
+		selectedFavoriteCategoryId.value = categoryId
+		limit.value = initialLimitFor(categoryId)
+		isPaginationReady.set(false)
+		_hasMoreItems.value = true
+	}
 
 	fun markAsRead(items: Set<Content>) {
 		launchLoadingJob(Dispatchers.Default) {
@@ -178,52 +228,57 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 			return
 		}
 		launchJob(Dispatchers.Default) {
-			val mangaIds = ids.expandGroupedIds()
 			val handle = if (categoryId == NO_ID) {
-				repository.removeFromFavourites(mangaIds)
+				repository.removeFromFavourites(ids)
 			} else {
-				repository.removeFromCategory(categoryId, mangaIds)
+				repository.removeFromCategory(categoryId, ids)
 			}
 			onActionDone.call(ReversibleAction(R.string.removed_from_favourites, handle))
 		}
 	}
 
 	suspend fun isPinned(ids: Set<Long>): Boolean {
-		return repository.isPinned(ids.expandGroupedIds())
+		return repository.isPinned(ids)
 	}
 
 	fun setPinned(ids: Set<Long>, isPinned: Boolean) {
 		launchJob(Dispatchers.Default) {
-			repository.setPinned(ids.expandGroupedIds(), isPinned)
+			repository.setPinned(ids, isPinned)
 			onRefresh()
 		}
 	}
 
 	fun togglePinned(ids: Set<Long>) {
 		launchJob(Dispatchers.Default) {
-			val currentlyPinned = repository.isPinned(ids.expandGroupedIds())
-			repository.setPinned(ids.expandGroupedIds(), !currentlyPinned)
+			val currentlyPinned = repository.isPinned(ids)
+			repository.setPinned(ids, !currentlyPinned)
 			onRefresh()
 		}
 	}
 
 	fun setSortOrder(order: ListSortOrder) {
-		if (categoryId == NO_ID) {
+		val selectedCategoryId = categoryId
+		if (selectedCategoryId == NO_ID) {
 			return
 		}
 		launchJob {
-			repository.setCategoryOrder(categoryId, order)
+			repository.setCategoryOrder(selectedCategoryId, order)
 		}
 	}
 
 	fun requestMoreItems() {
-		if (isPaginationReady.compareAndSet(true, false)) {
-			limit.value += PAGE_SIZE
+		if (!_hasMoreItems.value) {
+			return
+		}
+		val didRequest = isPaginationReady.compareAndSet(true, false)
+		if (didRequest) {
+			limit.value += pageSize
 		}
 	}
 
 	private suspend fun mapList(
 		list: List<Content>,
+		quickFilter: FavoritesListQuickFilter,
 		filters: Set<ListFilterOption>,
 		mode: ListMode,
 		groupTab: BrowseGroupTab,
@@ -231,6 +286,7 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 		categoryIds: Set<Long>,
 		preset: org.skepsun.kototoro.explore.data.SourcePreset?,
 	): List<ListModel> {
+		lastObservedFavoriteCount = list.size
 		val filteredList = list.filter { manga ->
 			val source = manga.source
 			if (preset != null && source.name !in preset.sources) {
@@ -262,7 +318,6 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 		val visibleItems = if (hideAdult) filteredList.filterNot { it.isNsfw() } else filteredList
 
 		if (visibleItems.isEmpty()) {
-			groupedFavoriteIds = emptyMap()
 			val models = mutableListOf<ListModel>()
 			quickFilter.filterItem(filters)?.let(models::add)
 			if (hideAdult && adultItems.isNotEmpty()) {
@@ -285,100 +340,35 @@ class FavouritesListViewModel @dagger.assisted.AssistedInject constructor(
 			return models
 		}
 
-		val groupedItems = visibleItems.aggregateByEntity()
-		groupedFavoriteIds = groupedItems.associate { it.uiId to it.mangaIds }
-
-		val result = ArrayList<ListModel>(groupedItems.size + 1)
+		val pinnedIds = repository.getPinnedIds(visibleItems.map { it.id })
+		val result = ArrayList<ListModel>(visibleItems.size + 1)
 		quickFilter.filterItem(filters)?.let(result::add)
-		for (group in groupedItems) {
-			val model = mangaListMapper.toListModel(
-				manga = group.representative,
-				mode = mode,
-				flags = ContentListMapper.NO_FAVORITE,
-			)
-			result += model.toGroupedListModel(
-				group = group,
-				isPinned = repository.isPinned(group.mangaIds),
-			)
-		}
+		mangaListMapper.toListModelList(
+			destination = result,
+			manga = visibleItems,
+			mode = mode,
+			flags = ContentListMapper.NO_FAVORITE,
+			pinnedIds = pinnedIds,
+		)
 		return result
 	}
 
-	private suspend fun List<Content>.aggregateByEntity(): List<FavouriteGroup> {
-		if (isEmpty()) {
-			return emptyList()
-		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByLocalMangaIds(map { it.id })
-		val grouped = LinkedHashMap<Long, MutableList<Content>>(size)
-		for (item in this) {
-			val key = entityIdsByMangaId[item.id]?.toUiGroupId() ?: item.id
-			grouped.getOrPut(key) { ArrayList(1) }.add(item)
-		}
-		return grouped.map { (uiId, items) ->
-			FavouriteGroup(
-				uiId = uiId,
-				representative = items.first(),
-				mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id },
-				sourceCount = items.map { it.source.name }.distinct().size,
-			)
-		}
-	}
-
-	private fun Set<Long>.expandGroupedIds(): Set<Long> {
-		return flatMapTo(LinkedHashSet()) { id ->
-			groupedFavoriteIds[id].orEmpty().ifEmpty { setOf(id) }
-		}
-	}
-
-	private suspend fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(
-		group: FavouriteGroup,
-		isPinned: Boolean,
-	): ListModel {
-		val groupSuffix = group.groupSuffix()
-		return when (this) {
-			is ContentCompactListModel -> copy(
-				id = group.uiId,
-				subtitle = listOfNotNull(subtitle?.takeIf { it.isNotBlank() }, groupSuffix).joinToString(" · "),
-				isPinned = isPinned,
-			)
-			is ContentDetailedListModel -> copy(
-				id = group.uiId,
-				subtitle = listOfNotNull(subtitle.takeIf { !it.isNullOrBlank() }, groupSuffix).joinToString(" · "),
-				isPinned = isPinned,
-			)
-			is ContentGridModel -> copy(
-				id = group.uiId,
-				isPinned = isPinned,
-			)
-		}
-	}
-
-	private fun FavouriteGroup.groupSuffix(): String? {
-		return sourceCount.takeIf { it > 1 }?.let { "$it 个来源" }
-	}
-
-	private fun Long.toUiGroupId(): Long = -this
-
-	private data class FavouriteGroup(
-		val uiId: Long,
-		val representative: Content,
-		val mangaIds: Set<Long>,
-		val sourceCount: Int,
-	)
-
-	private fun observeFavorites() = if (categoryId == NO_ID) {
-		combine(
-			sortOrder.filterNotNull(),
-			quickFilter.appliedOptions.combineWithSettings(),
-			limit,
-		) { order, filters, limit ->
-			isPaginationReady.set(false)
+	private fun observeFavorites() = combine(
+		selectedFavoriteCategoryId,
+		sortOrder.filterNotNull(),
+		globalFavoritesState.appliedFilter.combineWithSettings(),
+		limit,
+	) { categoryId, order, filters, limit ->
+		isPaginationReady.set(false)
+		if (categoryId == NO_ID) {
 			repository.observeAll(order, filters, limit)
-		}.flattenLatest()
-	} else {
-		combine(quickFilter.appliedOptions.combineWithSettings(), limit) { filters, limit ->
-			repository.observeAll(categoryId, filters, limit)
-		}.flattenLatest()
+		} else {
+			repository.observeAll(categoryId, order, filters, limit)
+		}
+	}.flattenLatest()
+
+	private fun initialLimitFor(categoryId: Long): Int {
+		return if (categoryId == NO_ID) ALL_FAVORITES_INITIAL_PAGE_SIZE else FAVORITES_INITIAL_PAGE_SIZE
 	}
 
 	private fun getEmptyState(hasFilters: Boolean) = if (hasFilters) {

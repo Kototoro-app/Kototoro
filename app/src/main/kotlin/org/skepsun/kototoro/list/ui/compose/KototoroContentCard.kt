@@ -152,6 +152,7 @@ fun KototoroContentCard(
     isSelected: Boolean = false,
     selectionModeActive: Boolean = false,
     sharedTransitionEnabled: Boolean = true,
+    sharedElementInstanceKey: String? = null,
     cardStyle: CompactPosterCardStyle? = null,
     uiPrefs: ContentCardUiPrefs? = null,
     onClick: (Rect?) -> Unit,
@@ -164,6 +165,7 @@ fun KototoroContentCard(
                 item = model,
                 isSelected = isSelected,
                 sharedTransitionEnabled = sharedTransitionEnabled,
+                sharedElementInstanceKey = sharedElementInstanceKey,
                 uiPrefs = uiPrefs,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -174,6 +176,7 @@ fun KototoroContentCard(
                 item = model,
                 isSelected = isSelected,
                 sharedTransitionEnabled = sharedTransitionEnabled,
+                sharedElementInstanceKey = sharedElementInstanceKey,
                 uiPrefs = uiPrefs,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -186,6 +189,7 @@ fun KototoroContentCard(
                 item = model,
                 isSelected = isSelected,
                 sharedTransitionEnabled = sharedTransitionEnabled,
+                sharedElementInstanceKey = sharedElementInstanceKey,
                 cardStyle = cardStyle,
                 uiPrefs = uiPrefs,
                 onClick = onClick,
@@ -204,6 +208,7 @@ fun KototoroContentCardGrid(
     showSourceInfo: Boolean = false, // Ignored in favor of new badge settings
     gridScale: Float = 1f,
     sharedTransitionEnabled: Boolean = true,
+    sharedElementInstanceKey: String? = null,
     cardStyle: CompactPosterCardStyle? = null,
     uiPrefs: ContentCardUiPrefs? = null,
     onClick: (Rect?) -> Unit,
@@ -234,8 +239,8 @@ fun KototoroContentCardGrid(
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedKey = remember(manga.source.name, item.coverUrl) {
-        contentCoverSharedKey(manga.source.name, item.coverUrl.orEmpty())
+    val sharedKey = remember(manga.source.name, item.coverUrl, sharedElementInstanceKey) {
+        contentCoverSharedKey(manga.source.name, item.coverUrl.orEmpty(), sharedElementInstanceKey)
     }
     
     val cardShape = MaterialTheme.shapes.medium
@@ -495,6 +500,7 @@ fun KototoroContentCardList(
     item: org.skepsun.kototoro.list.ui.model.ContentCompactListModel,
     isSelected: Boolean = false,
     sharedTransitionEnabled: Boolean = true,
+    sharedElementInstanceKey: String? = null,
     uiPrefs: ContentCardUiPrefs? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
@@ -518,8 +524,8 @@ fun KototoroContentCardList(
     val badgeMetrics = remember { contentCardBadgeMetricsFor(48.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedKey = remember(item.manga.source.name, item.coverUrl) {
-        contentCoverSharedKey(item.manga.source.name, item.coverUrl.orEmpty())
+    val sharedKey = remember(item.manga.source.name, item.coverUrl, sharedElementInstanceKey) {
+        contentCoverSharedKey(item.manga.source.name, item.coverUrl.orEmpty(), sharedElementInstanceKey)
     }
     val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
         buildSet {
@@ -817,6 +823,7 @@ fun KototoroContentCardDetailedList(
     item: org.skepsun.kototoro.list.ui.model.ContentDetailedListModel,
     isSelected: Boolean = false,
     sharedTransitionEnabled: Boolean = true,
+    sharedElementInstanceKey: String? = null,
     uiPrefs: ContentCardUiPrefs? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
@@ -845,8 +852,8 @@ fun KototoroContentCardDetailedList(
     val badgeMetrics = remember { contentCardBadgeMetricsFor(80.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedKey = remember(item.manga.source.name, item.coverUrl) {
-        contentCoverSharedKey(item.manga.source.name, item.coverUrl.orEmpty())
+    val sharedKey = remember(item.manga.source.name, item.coverUrl, sharedElementInstanceKey) {
+        contentCoverSharedKey(item.manga.source.name, item.coverUrl.orEmpty(), sharedElementInstanceKey)
     }
     val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
         buildSet {

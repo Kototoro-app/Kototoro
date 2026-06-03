@@ -75,6 +75,10 @@ class FavouritesRepository @Inject constructor(
 		return db.getFavouritesDao().observeAll(ListSortOrder.NEWEST, emptySet(), Int.MAX_VALUE)
 	}
 
+	fun observeCategoryCountEntries(): Flow<List<org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry>> {
+		return db.getFavouritesDao().observeCategoryCountEntries()
+	}
+
 	suspend fun getContent(categoryId: Long): List<Content> {
 		val entities = db.getFavouritesDao().findAll(categoryId)
 		return entities.toContentList()
@@ -281,6 +285,11 @@ class FavouritesRepository @Inject constructor(
 	suspend fun isPinned(mangaIds: Collection<Long>): Boolean {
 		if (mangaIds.isEmpty()) return false
 		return db.getFavouritesDao().isPinned(mangaIds.toList()) ?: false
+	}
+
+	suspend fun getPinnedIds(mangaIds: Collection<Long>): Set<Long> {
+		if (mangaIds.isEmpty()) return emptySet()
+		return db.getFavouritesDao().findPinnedIds(mangaIds.toList()).toSet()
 	}
 
 	suspend fun removeFromFavourites(ids: Collection<Long>): ReversibleHandle {

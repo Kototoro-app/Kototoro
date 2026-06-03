@@ -1,10 +1,9 @@
 package org.skepsun.kototoro.favourites.ui.compose
 
-import android.util.Log
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
@@ -25,8 +24,7 @@ import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 
-private const val FavoritesAutofilterLogTag = "FavoritesAutofilter"
-private const val MainRouteFlickerLogTag = "MainRouteFlicker"
+private const val FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD = 48
 
 @Composable
 fun KototoroFavoritesListScreen(
@@ -49,10 +47,9 @@ fun KototoroFavoritesListScreen(
             )
         }.getOrNull()
     }
-    val viewModel = hiltViewModel<FavouritesListViewModel, FavouritesListViewModel.Factory>(
-        key = categoryId.toString()
-    ) { factory ->
-        factory.create(categoryId)
+    val viewModel = hiltViewModel<FavouritesListViewModel>()
+    LaunchedEffect(categoryId) {
+        viewModel.setCategoryId(categoryId)
     }
     val topQuickFilter = viewModel.topQuickFilter.collectAsStateWithLifecycle().value
     val filterRailOverride = remember(topQuickFilter, context, viewModel, entryPoint) {
@@ -83,61 +80,43 @@ fun KototoroFavoritesListScreen(
         }
     }
 
-    LaunchedEffect(categoryId, isActivePage, topQuickFilter, filterRailOverride) {
-        Log.d(
-            FavoritesAutofilterLogTag,
-            "list category=$categoryId active=$isActivePage quickItems=${topQuickFilter?.items?.size ?: -1} " +
-                "railItems=${filterRailOverride?.items?.size ?: -1}",
+    LaunchedEffect(isActivePage, filterRailOverride) {
+        if (isActivePage) onFilterRailOverrideChanged(filterRailOverride)
+    }
+
+    key(categoryId) {
+        AppContentListRoute(
+            viewModel = viewModel,
+            contentPadding = contentPadding,
+            appRouter = appRouter,
+            showRemoveOption = true,
+            preferredSelectionInlineActions = listOf(
+                SelectionAction.PIN,
+                SelectionAction.REMOVE,
+                SelectionAction.SAVE,
+            ),
+            removeSelectionActionIconRes = R.drawable.ic_heart_outline,
+            removeSelectionActionTitleRes = R.string.remove_from_favourites,
+            onTopBarOverrideChanged = onTopBarOverrideChanged,
+            onFilterRailOverrideChanged = {},
+            emitFilterRailOverride = false,
+            sharedTransitionEnabled = sharedTransitionEnabled,
+            sharedElementInstanceKey = "main_favorites_$categoryId",
+            registerFilterCallback = false, // Parent FavoritesHostScreen manages the centralized callback
+            pullRefreshEnabled = false,
+            onLoadMore = { viewModel.requestMoreItems() },
+            loadMoreVisibleThreshold = FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD,
+            onNavigateToDetails = onNavigateToDetails,
+            onRemoveSelection = { ids ->
+                viewModel.removeFromFavourites(ids)
+            },
+            onPinSelection = { ids ->
+                viewModel.togglePinned(ids)
+            },
+            onMarkAsCompletedSelection = { items ->
+                viewModel.markAsRead(items.map { it.manga }.toSet())
+            },
+            showQuickFilterInline = true,
         )
     }
-
-    LaunchedEffect(categoryId, isActivePage, contentPadding) {
-        Log.d(
-            MainRouteFlickerLogTag,
-            "favorites list category=$categoryId active=$isActivePage " +
-                "paddingTop=${contentPadding.calculateTopPadding()} " +
-                "paddingBottom=${contentPadding.calculateBottomPadding()}",
-        )
-    }
-
-    SideEffect {
-        if (isActivePage) {
-            Log.d(
-                FavoritesAutofilterLogTag,
-                "list emit category=$categoryId railItems=${filterRailOverride?.items?.size ?: -1}",
-            )
-            onFilterRailOverrideChanged(filterRailOverride)
-        }
-    }
-
-    AppContentListRoute(
-        viewModel = viewModel,
-        contentPadding = contentPadding,
-        appRouter = appRouter,
-        showRemoveOption = true,
-        preferredSelectionInlineActions = listOf(
-            SelectionAction.PIN,
-            SelectionAction.REMOVE,
-            SelectionAction.SAVE,
-        ),
-        removeSelectionActionIconRes = R.drawable.ic_heart_outline,
-        removeSelectionActionTitleRes = R.string.remove_from_favourites,
-        onTopBarOverrideChanged = onTopBarOverrideChanged,
-        onFilterRailOverrideChanged = {},
-        sharedTransitionEnabled = sharedTransitionEnabled,
-        registerFilterCallback = false, // Parent FavoritesHostScreen manages the centralized callback
-        pullRefreshEnabled = false,
-        onLoadMore = { viewModel.requestMoreItems() },
-        onNavigateToDetails = onNavigateToDetails,
-        onRemoveSelection = { ids ->
-            viewModel.removeFromFavourites(ids)
-        },
-        onPinSelection = { ids ->
-            viewModel.togglePinned(ids)
-        },
-        onMarkAsCompletedSelection = { items ->
-            viewModel.markAsRead(items.map { it.manga }.toSet())
-        },
-        showQuickFilterInline = true,
-    )
 }

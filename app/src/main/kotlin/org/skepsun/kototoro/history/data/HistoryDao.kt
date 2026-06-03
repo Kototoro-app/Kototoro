@@ -108,6 +108,9 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT percent FROM history WHERE manga_id = :id AND deleted_at = 0")
 	abstract suspend fun findProgress(id: Long): Float?
 
+	@Query("SELECT manga_id, percent, chapters FROM history WHERE manga_id IN (:mangaIds) AND deleted_at = 0")
+	abstract suspend fun findProgress(mangaIds: List<Long>): List<HistoryProgressEntry>
+
 	fun dump(): Flow<HistoryWithContent> = flow {
 		val window = 10
 		var offset = 0

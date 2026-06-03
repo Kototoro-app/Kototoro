@@ -71,20 +71,29 @@ class ContentListMapper @Inject constructor(
 		manga: Collection<Content>,
 		mode: ListMode,
 		@Flags flags: Int = DEFAULTS,
+		pinnedIds: Set<Long>? = null,
 	) {
 		val options = getOptions(flags)
+		val mangaIds = manga.map { it.id }
 		val manualOverrides = dataRepository.getOverrides()
-		val metadataSelectionCache = HashMap<Long, ContentDataRepository.MetadataSourceSelection?>()
+		val metadataSelections = dataRepository.getMetadataSourceSelections(mangaIds)
+		val counters = getCounters(mangaIds)
+		val progress = getProgress(mangaIds, options)
 		val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
 		manga.mapTo(destination) {
+			val metadataSelection = metadataSelections[it.id]
 			toListModelImpl(
 				manga = it,
 				mode = mode,
 				options = options,
+				pinnedIds = pinnedIds,
+				counters = counters,
+				progress = progress,
+				metadataTrackingService = getMetadataTrackingService(metadataSelection),
 				override = resolveDisplayOverride(
 					manga = it,
 					manualOverride = manualOverrides[it.id],
-					metadataSelectionCache = metadataSelectionCache,
+					metadataSelection = metadataSelection,
 					trackingDetailsCache = trackingDetailsCache,
 				),
 			)
@@ -95,24 +104,30 @@ class ContentListMapper @Inject constructor(
 		manga: Content,
 		mode: ListMode,
 		@Flags flags: Int = DEFAULTS,
-	): ContentListModel = toListModelImpl(
-		manga = manga,
-		mode = mode,
-		options = getOptions(flags),
-		override = resolveDisplayOverride(
+	): ContentListModel {
+		val metadataSelection = dataRepository.getMetadataSourceSelection(manga.id)
+		return toListModelImpl(
 			manga = manga,
-			manualOverride = dataRepository.getOverride(manga.id),
-			metadataSelectionCache = HashMap(1),
-			trackingDetailsCache = HashMap(1),
-		),
-	)
+			mode = mode,
+			options = getOptions(flags),
+			counters = null,
+			progress = null,
+			metadataTrackingService = getMetadataTrackingService(metadataSelection),
+			override = resolveDisplayOverride(
+				manga = manga,
+				manualOverride = dataRepository.getOverride(manga.id),
+				metadataSelection = metadataSelection,
+				trackingDetailsCache = HashMap(1),
+			),
+		)
+	}
 
 	suspend fun toFeedItem(logItem: TrackingLogItem) = FeedItem(
 		id = logItem.id,
 		override = resolveDisplayOverride(
 			manga = logItem.manga,
 			manualOverride = dataRepository.getOverride(logItem.manga.id),
-			metadataSelectionCache = HashMap(1),
+			metadataSelection = dataRepository.getMetadataSourceSelection(logItem.manga.id),
 			trackingDetailsCache = HashMap(1),
 		),
 		count = logItem.chapters.size,
@@ -131,69 +146,114 @@ class ContentListMapper @Inject constructor(
 	private suspend fun toCompactListModel(
 		manga: Content,
 		@Options options: Int,
+		pinnedIds: Set<Long>?,
+		counters: Map<Long, Int>?,
+		metadataTrackingService: ScrobblerService?,
 		override: ContentOverride?,
 	) = ContentCompactListModel(
 		manga = manga,
 		override = override,
 		subtitle = manga.tags.joinToString(", ") { it.title }.ifBlank { null },
-		counter = getCounter(manga.id, options),
-		isPinned = isPinned(manga.id, options),
+		counter = getCounter(manga.id, options, counters),
+		isPinned = isPinned(manga.id, options, pinnedIds),
+		metadataTrackingService = metadataTrackingService,
 	)
 
 	private suspend fun toDetailedListModel(
 		manga: Content,
 		@Options options: Int,
+		pinnedIds: Set<Long>?,
+		counters: Map<Long, Int>?,
+		progress: Map<Long, ReadingProgress>?,
+		metadataTrackingService: ScrobblerService?,
 		override: ContentOverride?,
 	) = ContentDetailedListModel(
 		subtitle = manga.altTitles.firstOrNull(),
 		manga = manga,
 		override = override,
-		counter = getCounter(manga.id, options),
-		progress = getProgress(manga.id, options),
+		counter = getCounter(manga.id, options, counters),
+		progress = getProgress(manga.id, options, progress),
 		isFavorite = isFavorite(manga.id, options),
 		isSaved = isSaved(manga.id, options),
 		tags = mapTags(manga.tags),
-		isPinned = isPinned(manga.id, options),
+		isPinned = isPinned(manga.id, options, pinnedIds),
+		metadataTrackingService = metadataTrackingService,
 	)
 
 	private suspend fun toGridModel(
 		manga: Content,
 		@Options options: Int,
+		pinnedIds: Set<Long>?,
+		counters: Map<Long, Int>?,
+		progress: Map<Long, ReadingProgress>?,
+		metadataTrackingService: ScrobblerService?,
 		override: ContentOverride?
 	) = ContentGridModel(
 		manga = manga,
 		override = override,
 		subtitle = manga.altTitles.firstOrNull(),
-		counter = getCounter(manga.id, options),
-		progress = getProgress(manga.id, options),
+		counter = getCounter(manga.id, options, counters),
+		progress = getProgress(manga.id, options, progress),
 		isFavorite = isFavorite(manga.id, options),
 		isSaved = isSaved(manga.id, options),
-		isPinned = isPinned(manga.id, options),
-		metadataTrackingService = getMetadataTrackingService(manga.id),
+		isPinned = isPinned(manga.id, options, pinnedIds),
+		metadataTrackingService = metadataTrackingService,
 	)
 
 	private suspend fun toListModelImpl(
 		manga: Content,
 		mode: ListMode,
 		@Options options: Int,
+		pinnedIds: Set<Long>? = null,
+		counters: Map<Long, Int>? = null,
+		progress: Map<Long, ReadingProgress>? = null,
+		metadataTrackingService: ScrobblerService? = null,
 		override: ContentOverride?,
 	): ContentListModel = when (mode) {
-		ListMode.LIST -> toCompactListModel(manga, options, override)
-		ListMode.DETAILED_LIST -> toDetailedListModel(manga, options, override)
-		ListMode.GRID -> toGridModel(manga, options, override)
+		ListMode.LIST -> toCompactListModel(manga, options, pinnedIds, counters, metadataTrackingService, override)
+		ListMode.DETAILED_LIST -> toDetailedListModel(
+			manga,
+			options,
+			pinnedIds,
+			counters,
+			progress,
+			metadataTrackingService,
+			override,
+		)
+		ListMode.GRID -> toGridModel(manga, options, pinnedIds, counters, progress, metadataTrackingService, override)
 	}
 
-	private suspend fun getCounter(mangaId: Long, @Options options: Int): Int {
+	private suspend fun getCounters(mangaIds: Collection<Long>): Map<Long, Int>? {
 		return if (settings.isTrackerEnabled) {
-			trackingRepository.getNewChaptersCount(mangaId)
+			trackingRepository.getNewChaptersCounts(mangaIds)
+		} else {
+			null
+		}
+	}
+
+	private suspend fun getCounter(mangaId: Long, @Options options: Int, counters: Map<Long, Int>?): Int {
+		return if (settings.isTrackerEnabled) {
+			counters?.get(mangaId) ?: trackingRepository.getNewChaptersCount(mangaId)
 		} else {
 			0
 		}
 	}
 
-	private suspend fun getProgress(mangaId: Long, @Options options: Int): ReadingProgress? {
+	private suspend fun getProgress(mangaIds: Collection<Long>, @Options options: Int): Map<Long, ReadingProgress>? {
 		return if (options.isBadgeEnabled(PROGRESS)) {
-			historyRepository.getProgress(mangaId, settings.progressIndicatorMode)
+			historyRepository.getProgress(mangaIds, settings.progressIndicatorMode)
+		} else {
+			null
+		}
+	}
+
+	private suspend fun getProgress(
+		mangaId: Long,
+		@Options options: Int,
+		progress: Map<Long, ReadingProgress>?,
+	): ReadingProgress? {
+		return if (options.isBadgeEnabled(PROGRESS)) {
+			progress?.get(mangaId) ?: historyRepository.getProgress(mangaId, settings.progressIndicatorMode)
 		} else {
 			null
 		}
@@ -203,17 +263,18 @@ class ContentListMapper @Inject constructor(
 		return options.isBadgeEnabled(FAVORITE) && favouritesRepository.isFavorite(mangaId)
 	}
 
-	private suspend fun isPinned(mangaId: Long, @Options options: Int): Boolean {
-		return favouritesRepository.isPinned(listOf(mangaId))
+	private suspend fun isPinned(mangaId: Long, @Options options: Int, pinnedIds: Set<Long>?): Boolean {
+		return pinnedIds?.contains(mangaId) ?: favouritesRepository.isPinned(listOf(mangaId))
 	}
 
 	private suspend fun isSaved(mangaId: Long, @Options options: Int): Boolean {
 		return options.isBadgeEnabled(SAVED) && mangaId in localContentIndex
 	}
 
-	private suspend fun getMetadataTrackingService(mangaId: Long): ScrobblerService? {
-		val selection = dataRepository.getMetadataSourceSelection(mangaId)
-			as? ContentDataRepository.MetadataSourceSelection.Tracking
+	private fun getMetadataTrackingService(
+		selection: ContentDataRepository.MetadataSourceSelection?,
+	): ScrobblerService? {
+		selection as? ContentDataRepository.MetadataSourceSelection.Tracking
 			?: return null
 		return ScrobblerService.entries.firstOrNull { it.id == selection.serviceId }
 	}
@@ -221,13 +282,10 @@ class ContentListMapper @Inject constructor(
 	private suspend fun resolveDisplayOverride(
 		manga: Content,
 		manualOverride: ContentOverride?,
-		metadataSelectionCache: MutableMap<Long, ContentDataRepository.MetadataSourceSelection?>,
+		metadataSelection: ContentDataRepository.MetadataSourceSelection?,
 		trackingDetailsCache: MutableMap<Pair<Int, Long>, TrackingSiteItemDetails?>,
 	): ContentOverride? {
-		val selection = metadataSelectionCache.getOrPut(manga.id) {
-			dataRepository.getMetadataSourceSelection(manga.id)
-		}
-		val trackingOverride = (selection as? ContentDataRepository.MetadataSourceSelection.Tracking)
+		val trackingOverride = (metadataSelection as? ContentDataRepository.MetadataSourceSelection.Tracking)
 			?.let { trackingSelection ->
 				val service = ScrobblerService.entries.firstOrNull { it.id == trackingSelection.serviceId }
 					?: return@let null

@@ -22,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,7 +47,6 @@ import org.skepsun.kototoro.R
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
-import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
@@ -94,12 +92,7 @@ fun DetailsCoverFrame(
             ownerKey = ownerKey,
             url = coverUrl,
         ) ?: return@remember null
-        imageLoader.memoryCache?.get(MemoryCache.Key(cacheKey))?.image?.also {
-            logHeroTransition("details_cover cache_hit key=$cacheKey")
-        } ?: run {
-            logHeroTransition("details_cover cache_miss key=$cacheKey")
-            null
-        }
+        imageLoader.memoryCache?.get(MemoryCache.Key(cacheKey))?.image
     }
     val snapshotPlaceholder = remember(sharedElementKey) {
         sharedElementKey?.let(HeroCoverSnapshotStore::get)
@@ -118,37 +111,11 @@ fun DetailsCoverFrame(
         heroTransitionInProgress &&
         heroTransitionPhase == HeroTransitionPhase.ReturningFromDetails
     val shouldHideResolvedCoverDuringTransition = shouldFreezeCoverDuringReturn
-    val shouldShowStableForeground = cachedPainter != null && (
+    val shouldShowStableForeground = sharedPlaceholder != null && (
         shouldFreezeCoverDuringEnter ||
             shouldFreezeCoverDuringReturn ||
             !hasResolvedCover
         )
-
-    remember(sharedElementKey, enableSharedElement, cachedPlaceholder, snapshotPlaceholder) {
-        if (sharedElementKey != null && !enableSharedElement) {
-            logHeroTransition("details_cover shared_element_disabled reason=no_cached_cover key=$sharedElementKey")
-        } else if (sharedElementKey != null && cachedPlaceholder == null && snapshotPlaceholder != null) {
-            logHeroTransition("details_cover snapshot_fallback_hit key=$sharedElementKey")
-        }
-    }
-    LaunchedEffect(
-        sharedElementKey,
-        shouldHideResolvedCoverDuringTransition,
-        shouldFreezeCoverDuringEnter,
-        shouldFreezeCoverDuringReturn,
-        shouldShowStableForeground,
-        heroTransitionPhase,
-    ) {
-        if (sharedElementKey != null) {
-            logHeroTransition(
-                "details_cover inline_visible=${!shouldHideResolvedCoverDuringTransition} " +
-                    "freeze_enter=$shouldFreezeCoverDuringEnter " +
-                    "freeze_return=$shouldFreezeCoverDuringReturn " +
-                    "stable_foreground=$shouldShowStableForeground " +
-                    "phase=$heroTransitionPhase key=$sharedElementKey",
-            )
-        }
-    }
 
     Box(
         modifier = modifier
@@ -212,7 +179,7 @@ fun DetailsCoverFrame(
                         .fillMaxWidth()
                         .aspectRatio(13f / 18f)
                         .then(
-                            if (enableSharedElement) {
+                            if (enableSharedElement && !shouldShowStableForeground) {
                                 with(sharedTransitionScope) {
                                     Modifier.sharedElement(
                                         rememberSharedContentState(key = sharedElementKey),
@@ -233,17 +200,14 @@ fun DetailsCoverFrame(
                     fallback = cachedPainter,
                     onLoading = { state ->
                         hasResolvedCover = false
-                        logHeroTransition("details_cover loading model=${coverModel?.hashCode()}")
                         onState?.invoke(state)
                     },
                     onSuccess = { state ->
                         hasResolvedCover = true
-                        logHeroTransition("details_cover success model=${coverModel?.hashCode()}")
                         onState?.invoke(state)
                     },
                     onError = { state ->
                         hasResolvedCover = false
-                        logHeroTransition("details_cover error model=${coverModel?.hashCode()}")
                         onState?.invoke(state)
                     },
                 )

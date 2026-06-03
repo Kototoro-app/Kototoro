@@ -40,6 +40,8 @@ abstract class ContentListViewModel(
 ) : BaseViewModel() {
 
 	abstract val content: StateFlow<List<ListModel>>
+	open val hasMoreItems: StateFlow<Boolean> = flowOf(true)
+		.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 	open val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 	val onActionDone = MutableEventFlow<ReversibleAction>()

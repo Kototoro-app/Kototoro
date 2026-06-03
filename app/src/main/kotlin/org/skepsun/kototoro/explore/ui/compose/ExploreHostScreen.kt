@@ -669,6 +669,12 @@ fun KototoroExploreHostRoute(
     }
 
     LaunchedEffect(listState, query, popularItems.size) {
+        Log.d(
+            ExploreHeroScrollLogTag,
+            "loadMoreEffect start queryBlank=${query.isBlank()} popular=${popularItems.size} " +
+                "showcase=${showcaseRows.size} sources=${sources.size} hero=$shouldShowBrowseHero " +
+                "total=${listState.layoutInfo.totalItemsCount} loading=$isDiscoverLoading",
+        )
         if (query.isNotBlank() || popularItems.isEmpty()) {
             return@LaunchedEffect
         }
@@ -936,7 +942,17 @@ private suspend fun LazyListState.maybeTriggerBrowseLoadMore(
     snapshotFlow { layoutInfo.visibleItemsInfo.lastOrNull()?.index }
         .distinctUntilChanged()
         .collect { lastVisibleIndex: Int? ->
-            if (lastVisibleIndex != null && !isLoading() && lastVisibleIndex >= itemCount - BrowseLoadMoreBuffer) {
+            val loading = isLoading()
+            Log.d(
+                ExploreHeroScrollLogTag,
+                "loadMoreCheck last=$lastVisibleIndex itemCount=$itemCount " +
+                    "threshold=${itemCount - BrowseLoadMoreBuffer} total=${layoutInfo.totalItemsCount} loading=$loading",
+            )
+            if (lastVisibleIndex != null && !loading && lastVisibleIndex >= itemCount - BrowseLoadMoreBuffer) {
+                Log.d(
+                    ExploreHeroScrollLogTag,
+                    "loadMoreTrigger last=$lastVisibleIndex itemCount=$itemCount total=${layoutInfo.totalItemsCount}",
+                )
                 onLoadMore()
             }
         }

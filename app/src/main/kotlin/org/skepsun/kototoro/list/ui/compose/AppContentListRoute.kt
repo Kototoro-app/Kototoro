@@ -78,6 +78,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     showRemoveOption: Boolean = false,
     sharedTransitionEnabled: Boolean = true,
+    sharedElementInstanceKey: String? = null,
     isContentTypeFilterVisible: Boolean = true,
     isSourceTagFilterVisible: Boolean = true,
     registerFilterCallback: Boolean = true,
@@ -90,8 +91,10 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     removeSelectionActionTitleRes: Int? = null,
     onEmptyActionClick: (() -> Unit)? = null,
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
+    emitFilterRailOverride: Boolean = true,
     pullRefreshEnabled: Boolean = true,
     onLoadMore: () -> Unit = {},
+    loadMoreVisibleThreshold: Int = 4,
     onNavigateToDetails: ((org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
     onAddMenuProvider: ((androidx.activity.ComponentActivity, VM, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
@@ -101,6 +104,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
+    val hasMoreItems by viewModel.hasMoreItems.collectAsStateWithLifecycle()
 
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     var pendingFixIds by remember { mutableStateOf<Set<Long>?>(null) }
@@ -169,8 +173,8 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         composeSelectionIds = emptySet()
     }
 
-    SideEffect {
-        if (composeSelectionIds.isNotEmpty()) {
+    if (composeSelectionIds.isNotEmpty()) {
+        SideEffect {
             val supportedActions = buildSet {
                 add(SelectionAction.SELECT_ALL)
                 add(SelectionAction.PIN)
@@ -251,19 +255,23 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                     },
                 ),
             )
-        } else {
+        }
+    } else {
+        LaunchedEffect(Unit) {
             onTopBarOverrideChanged(null)
         }
     }
 
-    SideEffect {
-        onFilterRailOverrideChanged(
-            if (composeSelectionIds.isEmpty()) {
-                quickFilterRailOverride
-            } else {
-                null
-            },
-        )
+    if (emitFilterRailOverride) {
+        SideEffect {
+            onFilterRailOverrideChanged(
+                if (composeSelectionIds.isEmpty()) {
+                    quickFilterRailOverride
+                } else {
+                    null
+                },
+            )
+        }
     }
 
     pendingFixIds?.let { ids ->
@@ -315,7 +323,9 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     DisposableEffect(Unit) {
         onDispose {
             onTopBarOverrideChanged(null)
-            onFilterRailOverrideChanged(null)
+            if (emitFilterRailOverride) {
+                onFilterRailOverrideChanged(null)
+            }
         }
     }
 
@@ -431,8 +441,11 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         pullRefreshEnabled = pullRefreshEnabled,
         showRemoveOption = showRemoveOption,
         sharedTransitionEnabled = sharedTransitionEnabled,
+        sharedElementInstanceKey = sharedElementInstanceKey,
         onRefresh = { viewModel.onRefresh() },
         onLoadMore = onLoadMore,
+        hasMoreItems = hasMoreItems,
+        loadMoreVisibleThreshold = loadMoreVisibleThreshold,
         gridScale = gridScale,
         selectedItemsIds = composeSelectionIds,
         onPrepareItemTransition = { item, coverBounds ->
@@ -442,7 +455,11 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                 composeSelectionIds = if (item.id in composeSelectionIds) composeSelectionIds - item.id else composeSelectionIds + item.id
             } else {
                 val content = item.toContentWithOverride()
-                val sharedElementKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
+                val sharedElementKey = contentCoverSharedKey(
+                    item.source.name,
+                    item.coverUrl.orEmpty(),
+                    sharedElementInstanceKey,
+                )
                 if (onNavigateToDetails != null) {
                     onNavigateToDetails(content, sharedElementKey)
                 } else {

@@ -127,11 +127,11 @@ class FavouritesContainerViewModel @Inject constructor(
 		if (groupTab == BrowseGroupTab.All && sourceTags.isEmpty()) {
 			flowOf(ActiveCategoryCountsState.NotFiltered)
 		} else {
-			favouritesRepository.observeAllRawFavorites()
-				.map { favorites ->
+			favouritesRepository.observeCategoryCountEntries()
+				.map { entries ->
 					ActiveCategoryCountsState.Filtered(
 						buildActiveCategoryCounts(
-							favorites = favorites,
+							entries = entries,
 							groupTab = groupTab,
 							sourceTags = sourceTags,
 						),
@@ -190,27 +190,24 @@ class FavouritesContainerViewModel @Inject constructor(
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
 
 	private fun buildActiveCategoryCounts(
-		favorites: List<org.skepsun.kototoro.favourites.data.FavouriteContent>,
+		entries: List<org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry>,
 		groupTab: BrowseGroupTab,
 		sourceTags: Set<SourceTag>,
 	): Map<Long, Int> {
 		val categoryCounts = mutableMapOf<Long, Int>()
-		for (fav in favorites) {
-			val sourceName = fav.manga.source
-			val isNsfw = fav.manga.isNsfw
-			val contentGroup = sourceGroupManager.getContentGroupByName(sourceName, isNsfw)
-			val originGroup = sourceGroupManager.getOriginGroupByName(sourceName)
+		val allContentIds = HashSet<Long>(entries.size)
+		for (entry in entries) {
+			val contentGroup = sourceGroupManager.getContentGroupByName(entry.source, entry.isNsfw)
+			val originGroup = sourceGroupManager.getOriginGroupByName(entry.source)
 			val groupMatches = groupTab.matchesContentGroup(contentGroup)
 			val originMatches = sourceTags.isEmpty() || sourceTags.any { it.matches(contentGroup, originGroup) }
 			if (!groupMatches || !originMatches) {
 				continue
 			}
-			for (cat in fav.categories) {
-				val catId = cat.categoryId.toLong()
-				categoryCounts[catId] = (categoryCounts[catId] ?: 0) + 1
-			}
-			categoryCounts[NO_ID] = (categoryCounts[NO_ID] ?: 0) + 1
+			categoryCounts[entry.categoryId] = (categoryCounts[entry.categoryId] ?: 0) + 1
+			allContentIds += entry.mangaId
 		}
+		categoryCounts[NO_ID] = allContentIds.size
 		return categoryCounts
 	}
 

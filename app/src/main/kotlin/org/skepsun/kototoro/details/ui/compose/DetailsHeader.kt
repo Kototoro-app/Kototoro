@@ -112,7 +112,6 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.ContentSourceInfo
-import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
@@ -209,7 +208,6 @@ fun DetailsHeader(
     onManageTrackingSuggestion: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
 ) {
     val context = LocalContext.current
-    val heroTransitionInProgress = LocalHeroTransitionInProgress.current
     val content = mangaDetails?.toContent()
     val originalTitle = content?.title.orEmpty()
     val displayTitle = translatedTitle ?: originalTitle
@@ -261,12 +259,7 @@ fun DetailsHeader(
     val onDeviceSizeLabel by produceState<String?>(
         initialValue = null,
         key1 = localContent?.file?.absolutePath,
-        key2 = heroTransitionInProgress,
     ) {
-        if (heroTransitionInProgress) {
-            value = null
-            return@produceState
-        }
         val file = localContent?.file
         value = if (file != null && file.exists()) {
             Formatter.formatFileSize(context, file.computeSize())
@@ -324,9 +317,7 @@ fun DetailsHeader(
         }
     }
     val isNsfw = content?.isNsfw() == true
-    val infoItems = if (heroTransitionInProgress) {
-        emptyList()
-    } else buildList {
+    val infoItems = buildList {
         content?.let {
             add(
                 DetailsInfoItem(
@@ -442,7 +433,7 @@ fun DetailsHeader(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (!heroTransitionInProgress && supplementalActions.isNotEmpty()) {
+                if (supplementalActions.isNotEmpty()) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -519,8 +510,7 @@ fun DetailsHeader(
             }
         }
 
-        val showInfoCard = !heroTransitionInProgress &&
-            (metadataSourceOptions.isNotEmpty() || readingSourceOptions.isNotEmpty() || infoItems.isNotEmpty())
+        val showInfoCard = metadataSourceOptions.isNotEmpty() || readingSourceOptions.isNotEmpty() || infoItems.isNotEmpty()
         if (showInfoCard) {
             GlassSurface(
                 modifier = Modifier
@@ -643,55 +633,51 @@ fun DetailsHeader(
             }
         }
 
-        if (!heroTransitionInProgress) {
-            visibleTrackingSuggestion?.let { suggestion ->
+        visibleTrackingSuggestion?.let { suggestion ->
             TrackingSuggestionCard(
                 match = suggestion,
                 onBindClick = { onBindTrackingSuggestion(suggestion) },
                 onOpenClick = { onOpenTrackingSuggestion(suggestion) },
                 onIgnoreClick = { onIgnoreTrackingSuggestion(suggestion) },
             )
-            }
         }
 
-        if (!heroTransitionInProgress) {
-            Column(
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Text(
+                    text = stringResource(R.string.description),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (canExpandDescription) {
                     Text(
-                        text = stringResource(R.string.description),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (canExpandDescription) {
-                        Text(
-                            text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded }
-                        )
-                    }
-                }
-                SelectionContainer {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
+                        text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded }
                     )
                 }
             }
+            SelectionContainer {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
+                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
-        if (!heroTransitionInProgress && !content?.tags.isNullOrEmpty()) {
+        if (!content?.tags.isNullOrEmpty()) {
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 24.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     FlowRow(
@@ -1648,7 +1634,7 @@ fun ReadingSourceSheet(
             visibleSections
         } else {
             visibleSections.filter { section ->
-                section.items.isNotEmpty() || section.isLoading
+                !section.isPending && (section.items.isNotEmpty() || section.isLoading)
             }
         }
     }
@@ -1656,14 +1642,14 @@ fun ReadingSourceSheet(
         if (scopeFilterUiState.hideEmpty || isInitialSearchState) {
             emptyList()
         } else {
-            visibleSections.filter { !it.isLoading && it.errorMessage == null && it.items.isEmpty() }
+            visibleSections.filter { !it.isPending && !it.isLoading && it.errorMessage == null && it.items.isEmpty() }
         }
     }
     val errorSections = remember(visibleSections, isInitialSearchState, scopeFilterUiState.hideEmpty) {
         if (scopeFilterUiState.hideEmpty || isInitialSearchState) {
             emptyList()
         } else {
-            visibleSections.filter { !it.isLoading && it.errorMessage != null && it.items.isEmpty() }
+            visibleSections.filter { !it.isPending && !it.isLoading && it.errorMessage != null && it.items.isEmpty() }
         }
     }
     var showEmptySources by rememberSaveable(emptySections.map { it.source.mangaSource.name }) {
@@ -1760,15 +1746,29 @@ fun ReadingSourceSheet(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.CenterStart,
                         ) {
-                            Text(
-                                text = if (hasSearched) {
-                                    stringResource(R.string.details_source_search_no_visible_results)
-                                } else {
-                                    stringResource(R.string.nothing_found)
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            if (isLoading) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Text(
+                                        text = stringResource(R.string.search),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = if (hasSearched) {
+                                        stringResource(R.string.details_source_search_no_visible_results)
+                                    } else {
+                                        stringResource(R.string.nothing_found)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                     else -> {

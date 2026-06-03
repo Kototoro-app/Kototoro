@@ -87,21 +87,22 @@ private data class ContentListScreenPrefs(
 private fun LoadMoreOnNearEndEffect(
     state: LazyGridState,
     enabled: Boolean,
+    visibleThreshold: Int,
     onLoadMore: () -> Unit,
 ) {
-    val loadMoreItemCount by remember(state) {
+    val loadMoreItemCount by remember(state, enabled, visibleThreshold) {
         derivedStateOf {
             val layoutInfo = state.layoutInfo
             val totalItemsCount = layoutInfo.totalItemsCount
             val lastVisibleIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
-            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - LoadMoreVisibleThreshold) {
+            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - visibleThreshold) {
                 totalItemsCount
             } else {
                 -1
             }
         }
     }
-    var lastRequestedItemCount by remember { mutableIntStateOf(-1) }
+    var lastRequestedItemCount by remember(enabled) { mutableIntStateOf(-1) }
     LaunchedEffect(loadMoreItemCount) {
         if (loadMoreItemCount > 0 && loadMoreItemCount != lastRequestedItemCount) {
             lastRequestedItemCount = loadMoreItemCount
@@ -114,21 +115,22 @@ private fun LoadMoreOnNearEndEffect(
 private fun LoadMoreOnNearEndEffect(
     state: LazyListState,
     enabled: Boolean,
+    visibleThreshold: Int,
     onLoadMore: () -> Unit,
 ) {
-    val loadMoreItemCount by remember(state) {
+    val loadMoreItemCount by remember(state, enabled, visibleThreshold) {
         derivedStateOf {
             val layoutInfo = state.layoutInfo
             val totalItemsCount = layoutInfo.totalItemsCount
             val lastVisibleIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
-            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - LoadMoreVisibleThreshold) {
+            if (enabled && totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - visibleThreshold) {
                 totalItemsCount
             } else {
                 -1
             }
         }
     }
-    var lastRequestedItemCount by remember { mutableIntStateOf(-1) }
+    var lastRequestedItemCount by remember(enabled) { mutableIntStateOf(-1) }
     LaunchedEffect(loadMoreItemCount) {
         if (loadMoreItemCount > 0 && loadMoreItemCount != lastRequestedItemCount) {
             lastRequestedItemCount = loadMoreItemCount
@@ -146,8 +148,11 @@ fun KototoroContentListScreen(
     pullRefreshEnabled: Boolean = true,
     showRemoveOption: Boolean = false,
     sharedTransitionEnabled: Boolean = true,
+    sharedElementInstanceKey: String? = null,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
+    hasMoreItems: Boolean = true,
+    loadMoreVisibleThreshold: Int = LoadMoreVisibleThreshold,
     gridScale: Float,
     selectedItemsIds: Set<Long>,
     onPrepareItemTransition: (ContentListModel, Rect?) -> Unit = { _, _ -> },
@@ -167,8 +172,8 @@ fun KototoroContentListScreen(
     listState: LazyListState? = null,
     detailedListState: LazyListState? = null,
 ) {
-    val canLoadMore = remember(items) {
-        items.any { it is ContentListModel }
+    val canLoadMore = remember(items, hasMoreItems) {
+        hasMoreItems && items.any { it is ContentListModel }
     }
     val context = LocalContext.current
     val settings = androidx.compose.runtime.remember(context.applicationContext) { AppSettings(context.applicationContext) }
@@ -229,6 +234,7 @@ fun KototoroContentListScreen(
                         LoadMoreOnNearEndEffect(
                             state = actualGridState,
                             enabled = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
                             onLoadMore = onLoadMore,
                         )
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -285,6 +291,7 @@ fun KototoroContentListScreen(
                                                 },
                                                 onLongClick = { onItemLongClick(listModel) },
                                                 sharedTransitionEnabled = sharedTransitionEnabled,
+                                                sharedElementInstanceKey = sharedElementInstanceKey,
                                                 showSourceInfo = showSourceOnCards,
                                                 gridScale = gridScale,
                                                 uiPrefs = cardUiPrefs,
@@ -312,6 +319,7 @@ fun KototoroContentListScreen(
                         LoadMoreOnNearEndEffect(
                             state = actualListState,
                             enabled = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
                             onLoadMore = onLoadMore,
                         )
                         val scrollIntensity = if (isVerticalCardListAnimationEnabled) {
@@ -349,6 +357,7 @@ fun KototoroContentListScreen(
                                             item = listModel,
                                             isSelected = listModel.id in selectedItemsIds,
                                             sharedTransitionEnabled = sharedTransitionEnabled,
+                                            sharedElementInstanceKey = sharedElementInstanceKey,
                                             uiPrefs = cardUiPrefs,
                                             onClick = { coverBounds ->
                                                 onPrepareItemTransition(listModel, coverBounds)
@@ -379,6 +388,7 @@ fun KototoroContentListScreen(
                         LoadMoreOnNearEndEffect(
                             state = actualListState,
                             enabled = canLoadMore,
+                            visibleThreshold = loadMoreVisibleThreshold,
                             onLoadMore = onLoadMore,
                         )
                         val scrollIntensity = if (isVerticalCardListAnimationEnabled) {
@@ -416,6 +426,7 @@ fun KototoroContentListScreen(
                                             item = listModel,
                                             isSelected = listModel.id in selectedItemsIds,
                                             sharedTransitionEnabled = sharedTransitionEnabled,
+                                            sharedElementInstanceKey = sharedElementInstanceKey,
                                             uiPrefs = cardUiPrefs,
                                             onClick = { coverBounds ->
                                                 onPrepareItemTransition(listModel, coverBounds)

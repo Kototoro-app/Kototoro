@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.remotelist.ui
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,6 +51,7 @@ import org.skepsun.kototoro.parsers.util.sizeOrZero
 import javax.inject.Inject
 
 private const val FILTER_MIN_INTERVAL = 250L
+private const val RemoteListPaginationLogTag = "RemoteListPagination"
 
 @HiltViewModel
 open class RemoteListViewModel @Inject constructor(
@@ -122,6 +124,10 @@ open class RemoteListViewModel @Inject constructor(
 		filterCoordinator.observe()
 			.debounce(FILTER_MIN_INTERVAL)
 			.onEach { filterState ->
+				Log.d(
+					RemoteListPaginationLogTag,
+					"filterChanged source=${source.name} cancelActive=${loadingJob?.isActive == true}",
+				)
 				loadingJob?.cancelAndJoin()
 				mangaList.value = null
 				lastLoadedPageIndex = -1
@@ -137,24 +143,46 @@ open class RemoteListViewModel @Inject constructor(
 	}
 
 	override fun onRefresh() {
+		Log.d(
+			RemoteListPaginationLogTag,
+			"refresh source=${source.name} current=${mangaList.value.sizeOrZero()} hasNext=${hasNextPage.value}",
+		)
 		loadingJob?.cancel()
 		lastLoadedPageIndex = -1
 		loadList(filterCoordinator.snapshot(), append = false)
 	}
 
 	override fun onRetry() {
+		Log.d(
+			RemoteListPaginationLogTag,
+			"retry source=${source.name} append=${!mangaList.value.isNullOrEmpty()} " +
+				"current=${mangaList.value.sizeOrZero()} hasNext=${hasNextPage.value} error=${listError.value != null}",
+		)
 		loadList(filterCoordinator.snapshot(), append = !mangaList.value.isNullOrEmpty())
 	}
 
 	fun loadNextPage() {
-		if (hasNextPage.value && listError.value == null) {
+		val hasNext = hasNextPage.value
+		val error = listError.value
+		Log.d(
+			RemoteListPaginationLogTag,
+			"loadNextPage source=${source.name} hasNext=$hasNext error=${error?.javaClass?.simpleName} " +
+				"current=${mangaList.value.sizeOrZero()} loadingActive=${loadingJob?.isActive == true}",
+		)
+		if (hasNext && error == null) {
 			loadList(filterCoordinator.snapshot(), append = true)
 		}
 	}
 
 	protected fun loadList(filterState: FilterCoordinator.Snapshot, append: Boolean): Job {
 		loadingJob?.let {
-			if (it.isActive) return it
+			if (it.isActive) {
+				Log.d(
+					RemoteListPaginationLogTag,
+					"loadList skipActive source=${source.name} append=$append current=${mangaList.value.sizeOrZero()}",
+				)
+				return it
+			}
 		}
 		return launchLoadingJob(Dispatchers.Default) {
 			try {
@@ -164,18 +192,28 @@ open class RemoteListViewModel @Inject constructor(
 					ContentRepository.ListPagingMode.PAGE_INDEX -> {
 						val pageIndex = if (append) lastLoadedPageIndex + 1 else 0
 						lastRequestedPageIndex = pageIndex
-						pageIndex
+							pageIndex
+						}
 					}
-				}
-				val list = repository.getList(
-					offset = offsetOrPageIndex,
-					order = filterState.sortOrder,
-					filter = filterState.listFilter,
-				)
-				val prevList = mangaList.value.orEmpty()
-				if (!append) {
-					mangaList.value = list.distinctById()
-					if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX && list.isNotEmpty()) {
+					Log.d(
+						RemoteListPaginationLogTag,
+						"loadList start source=${source.name} append=$append mode=${repository.listPagingMode} " +
+							"offsetOrPage=$offsetOrPageIndex current=${mangaList.value.sizeOrZero()} " +
+							"lastLoadedPage=$lastLoadedPageIndex",
+					)
+					val list = repository.getList(
+						offset = offsetOrPageIndex,
+						order = filterState.sortOrder,
+						filter = filterState.listFilter,
+					)
+					val prevList = mangaList.value.orEmpty()
+					Log.d(
+						RemoteListPaginationLogTag,
+						"loadList result source=${source.name} append=$append fetched=${list.size} prev=${prevList.size}",
+					)
+					if (!append) {
+						mangaList.value = list.distinctById()
+						if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX && list.isNotEmpty()) {
 						lastLoadedPageIndex = 0
 					}
 				} else if (list.isNotEmpty()) {
@@ -184,19 +222,29 @@ open class RemoteListViewModel @Inject constructor(
 						lastLoadedPageIndex = lastRequestedPageIndex
 					}
 				}
-				hasNextPage.value = when (repository.listPagingMode) {
-					ContentRepository.ListPagingMode.OFFSET -> if (append) {
-						prevList != mangaList.value
+					hasNextPage.value = when (repository.listPagingMode) {
+						ContentRepository.ListPagingMode.OFFSET -> if (append) {
+							prevList != mangaList.value
 					} else {
 						list.size > prevList.size || hasNextPage.value
 					}
-					ContentRepository.ListPagingMode.PAGE_INDEX -> list.isNotEmpty()
-				}
-			} catch (e: CancellationException) {
-				throw e
-			} catch (e: Throwable) {
-				e.printStackTraceDebug()
-				listError.value = e
+						ContentRepository.ListPagingMode.PAGE_INDEX -> list.isNotEmpty()
+					}
+					Log.d(
+						RemoteListPaginationLogTag,
+						"loadList applied source=${source.name} append=$append total=${mangaList.value.sizeOrZero()} " +
+							"hasNext=${hasNextPage.value} lastLoadedPage=$lastLoadedPageIndex",
+					)
+				} catch (e: CancellationException) {
+					throw e
+				} catch (e: Throwable) {
+					Log.d(
+						RemoteListPaginationLogTag,
+						"loadList error source=${source.name} append=$append current=${mangaList.value.sizeOrZero()} " +
+							"error=${e.javaClass.simpleName}: ${e.message}",
+					)
+					e.printStackTraceDebug()
+					listError.value = e
 				if (!mangaList.value.isNullOrEmpty()) {
 					errorEvent.call(e)
 				}

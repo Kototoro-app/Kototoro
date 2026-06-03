@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.animateFloatAsState
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyRow
@@ -486,8 +485,6 @@ fun CompactTopBarTabsRail(
     }
 }
 
-private const val CompactTabsLogTag = "CompactTabsRail"
-
 @Composable
 private fun InlineCompactTopBarTabsRail(
     state: CompactTabsTopBarOverrideState,
@@ -502,12 +499,6 @@ private fun InlineCompactTopBarTabsRail(
     EnsureItemFullyVisible(listState = listState, targetIndex = selectedIndex)
     val isScrollInProgress = listState.isScrollInProgress
     LaunchedEffect(isScrollInProgress) {
-        Log.d(
-            CompactTabsLogTag,
-            "scrollProgress=$isScrollInProgress selected=${state.selectedItemId} index=$selectedIndex " +
-                "visible=${listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index}.." +
-                "${listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index}",
-        )
         if (isScrollInProgress) {
             onExpandedChange(true)
         } else {
@@ -528,11 +519,6 @@ private fun InlineCompactTopBarTabsRail(
     LaunchedEffect(state.selectedItemId, selectedIndex) {
         val previous = previousSelectedItemId
         previousSelectedItemId = state.selectedItemId
-        Log.d(
-            CompactTabsLogTag,
-            "selectedEffect previous=$previous selected=${state.selectedItemId} index=$selectedIndex " +
-                "items=${state.items.size}",
-        )
         if (previous == null || previous == state.selectedItemId) {
             return@LaunchedEffect
         }
@@ -540,7 +526,6 @@ private fun InlineCompactTopBarTabsRail(
             return@LaunchedEffect
         }
         onExpandedChange(true)
-        Log.d(CompactTabsLogTag, "autoExpandAndScroll targetIndex=$selectedIndex selected=${state.selectedItemId}")
         listState.animateScrollToItem(index = selectedIndex, scrollOffset = -with(density) { 24.dp.roundToPx() })
         delay(1600)
         if (!listState.isScrollInProgress) {

@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.main.ui.compose
 
-import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -140,7 +139,7 @@ private const val TOP_BAR_OWNER_FEED = "feed"
 private const val TOP_BAR_OWNER_LOCAL = "local"
 private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
-private const val MainRouteFlickerLogTag = "MainRouteFlicker"
+private const val DetailsRouteTransitionDurationMillis = 320
 
 private fun NavDestination.isMainRoute(): Boolean =
     hasRoute<HomeRoute>() ||
@@ -487,25 +486,6 @@ fun AppNavGraph(
                     .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
                     .filter { it.id in selectedItemsIds }
             }
-            LaunchedEffect(
-                contentPadding,
-                items.size,
-                historyFilterRailState?.items?.size,
-                selectedItemsIds.size,
-                isResumeEnabled,
-                bottomBarOffsetPx,
-                bottomBarHeightPx,
-            ) {
-                Log.d(
-                    MainRouteFlickerLogTag,
-                    "nav history state items=${items.size} railItems=${historyFilterRailState?.items?.size ?: -1} " +
-                        "selected=${selectedItemsIds.size} resume=$isResumeEnabled " +
-                        "paddingTop=${contentPadding.calculateTopPadding()} " +
-                        "paddingBottom=${contentPadding.calculateBottomPadding()} " +
-                        "bottomOffset=$bottomBarOffsetPx bottomHeight=$bottomBarHeightPx",
-                )
-            }
-
             DisposableEffect(onContextualMenuActionsChanged) {
                 onContextualMenuActionsChanged(
                     listOf(
@@ -814,14 +794,6 @@ fun AppNavGraph(
             }
 
             CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                LaunchedEffect(contentPadding, selectedGroupTab, selectedSourceTags) {
-                    Log.d(
-                        MainRouteFlickerLogTag,
-                        "nav favorites state group=$selectedGroupTab sourceTags=${selectedSourceTags.size} " +
-                            "paddingTop=${contentPadding.calculateTopPadding()} " +
-                            "paddingBottom=${contentPadding.calculateBottomPadding()}",
-                    )
-                }
                 KototoroFavoritesHostRoute(
                     appRouter = appRouter,
                     contentPadding = contentPadding,
@@ -1088,6 +1060,7 @@ fun AppNavGraph(
                         )
                     },
                     showRemoveOption = true,
+                    sharedElementInstanceKey = "main_local",
                     isContentTypeFilterVisible = true,
                     onNavigateToDetails = navigateToDetailsWithContent,
                     isSourceTagFilterVisible = false,
@@ -1144,6 +1117,7 @@ fun AppNavGraph(
                     appRouter = appRouter,
                     onTopBarOverrideChanged = { suggestionsContextualTopBarOverride = it },
                     showRemoveOption = false,
+                    sharedElementInstanceKey = "main_suggestions",
                     isContentTypeFilterVisible = true,
                     isSourceTagFilterVisible = true,
                     onNavigateToDetails = navigateToDetailsWithContent,
@@ -1263,6 +1237,7 @@ fun AppNavGraph(
                     appRouter = appRouter,
                     onTopBarOverrideChanged = { updatedContextualTopBarOverride = it },
                     showRemoveOption = true,
+                    sharedElementInstanceKey = "main_updated",
                     isContentTypeFilterVisible = true,
                     isSourceTagFilterVisible = true,
                     onRemoveSelection = { ids -> viewModel.remove(ids) },
@@ -1339,26 +1314,26 @@ fun AppNavGraph(
             enterTransition = {
                 slideIntoContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(320, easing = LinearEasing),
+                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
                 ) + fadeIn(tween(220, easing = LinearEasing))
             },
             exitTransition = {
                 slideOutOfContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(320, easing = LinearEasing),
-                )
+                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
+                ) + fadeOut(tween(180, easing = LinearEasing))
             },
             popEnterTransition = {
                 slideIntoContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(320, easing = LinearEasing),
+                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
                 ) + fadeIn(tween(180, easing = LinearEasing))
             },
             popExitTransition = {
                 slideOutOfContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(320, easing = LinearEasing),
-                )
+                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
+                ) + fadeOut(tween(160, easing = LinearEasing))
             },
         ) {
             val detailsViewModel = hiltViewModel<DetailsViewModel>()
@@ -1396,7 +1371,6 @@ fun AppNavGraph(
                     }
                 }
                 BackHandler {
-                    onDetailsReturnTransitionRequested()
                     navController.popBackStack()
                 }
                 DetailsScreen(
@@ -1407,7 +1381,6 @@ fun AppNavGraph(
                     appRouter = appRouter,
                     pageSaveHelper = effectivePageSaveHelper,
                     onBackClick = {
-                        onDetailsReturnTransitionRequested()
                         navController.popBackStack()
                     },
                     sharedElementKey = sharedKey,
@@ -1420,10 +1393,7 @@ fun AppNavGraph(
                             coroutineScope = detailsCoroutineScope,
                             snackbarHost = rootView,
                             overrideEditLauncher = overrideEditLauncher,
-                            onFinish = {
-                                onDetailsReturnTransitionRequested()
-                                navController.popBackStack()
-                            },
+                            onFinish = { navController.popBackStack() },
                         )
                     },
                 )

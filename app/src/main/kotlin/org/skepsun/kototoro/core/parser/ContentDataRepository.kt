@@ -96,19 +96,17 @@ class ContentDataRepository @Inject constructor(
 
 	suspend fun getMetadataSourceSelection(mangaId: Long): MetadataSourceSelection? {
 		val entity = db.getPreferencesDao().find(mangaId) ?: return null
-		return when (entity.metadataSourceKind) {
-			null -> null
-			"base" -> MetadataSourceSelection.Base
-			"tracking" -> {
-				val serviceId = entity.metadataSourceService ?: return null
-				val remoteId = entity.metadataSourceRemoteId ?: return null
-				MetadataSourceSelection.Tracking(
-					serviceId = serviceId,
-					remoteId = remoteId,
-				)
-			}
-			else -> null
+		return entity.getMetadataSourceSelectionOrNull()
+	}
+
+	suspend fun getMetadataSourceSelections(mangaIds: Collection<Long>): LongObjectMap<MetadataSourceSelection> {
+		if (mangaIds.isEmpty()) return MutableLongObjectMap(0)
+		val entities = db.getPreferencesDao().getMetadataSourceSelections(mangaIds.toList())
+		val map = MutableLongObjectMap<MetadataSourceSelection>(entities.size)
+		for (entity in entities) {
+			map[entity.mangaId] = entity.getMetadataSourceSelectionOrNull() ?: continue
 		}
+		return map
 	}
 
 	suspend fun getIgnoredTrackingSuggestion(mangaId: Long): IgnoredTrackingSuggestion? {
@@ -346,6 +344,22 @@ class ContentDataRepository @Inject constructor(
 				title = titleOverride?.nullIfEmpty(),
 				contentRating = ContentRating(contentRatingOverride),
 			)
+		}
+	}
+
+	private fun MangaPrefsEntity.getMetadataSourceSelectionOrNull(): MetadataSourceSelection? {
+		return when (metadataSourceKind) {
+			null -> null
+			"base" -> MetadataSourceSelection.Base
+			"tracking" -> {
+				val serviceId = metadataSourceService ?: return null
+				val remoteId = metadataSourceRemoteId ?: return null
+				MetadataSourceSelection.Tracking(
+					serviceId = serviceId,
+					remoteId = remoteId,
+				)
+			}
+			else -> null
 		}
 	}
 
