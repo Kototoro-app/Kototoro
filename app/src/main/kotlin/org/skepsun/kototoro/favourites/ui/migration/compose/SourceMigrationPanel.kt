@@ -41,9 +41,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +70,10 @@ import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationStatus
 import org.skepsun.kototoro.favourites.ui.migration.SourceMigrationViewModel
 import org.skepsun.kototoro.parsers.model.ContentSource
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 @Composable
 fun SourceMigrationPanel(
@@ -430,14 +437,43 @@ private fun SourceSelectorDialog(
     onSelect: (ContentSource) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    var debouncedQuery by rememberSaveable { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    val filtered = remember(query, sources) {
-        if (query.isBlank()) sources
-        else sources.filter {
-            it.name.contains(query, ignoreCase = true) ||
-                it.getTitle(context).contains(query, ignoreCase = true)
+    LaunchedEffect(query) {
+        delay(180)
+        debouncedQuery = query
+    }
+
+    val sourceEntries = remember(sources, context) {
+        sources.map { source ->
+            val displayTitle = source.getTitle(context)
+            SourceSearchEntry(
+                source = source,
+                displayTitle = displayTitle,
+                normalizedName = source.name.lowercase(Locale.ROOT),
+                normalizedTitle = displayTitle.lowercase(Locale.ROOT),
+            )
+        }
+    }
+    val normalizedQuery = remember(debouncedQuery) {
+        debouncedQuery.trim().lowercase(Locale.ROOT)
+    }
+    val filtered by produceState(
+        initialValue = sourceEntries,
+        normalizedQuery,
+        sourceEntries,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            if (normalizedQuery.isBlank()) {
+                sourceEntries
+            } else {
+                sourceEntries.filter { entry ->
+                    entry.normalizedName.contains(normalizedQuery) ||
+                        entry.normalizedTitle.contains(normalizedQuery)
+                }
+            }
         }
     }
 
@@ -481,14 +517,17 @@ private fun SourceSelectorDialog(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    items(filtered.size) { index ->
-                        val source = filtered[index]
+                    items(
+                        items = filtered,
+                        key = { it.source.name },
+                        contentType = { "source_option" },
+                    ) { entry ->
                         androidx.compose.material3.TextButton(
-                            onClick = { onSelect(source) },
+                            onClick = { onSelect(entry.source) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                text = source.getTitle(context),
+                                text = entry.displayTitle,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -508,6 +547,13 @@ private fun SourceSelectorDialog(
         }
     }
 }
+
+private data class SourceSearchEntry(
+    val source: ContentSource,
+    val displayTitle: String,
+    val normalizedName: String,
+    val normalizedTitle: String,
+)
 
 private fun contentTypeLabel(tab: BrowseGroupTab): String = when (tab) {
     BrowseGroupTab.Content -> "Manga"
