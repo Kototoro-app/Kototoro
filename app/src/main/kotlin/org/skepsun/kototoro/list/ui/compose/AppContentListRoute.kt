@@ -99,6 +99,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onAddMenuProvider: ((androidx.activity.ComponentActivity, VM, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
     showQuickFilterInline: Boolean = true,
+    enableItemAnimations: Boolean = true,
 ) {
     val items by viewModel.content.collectAsStateWithLifecycle()
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
@@ -506,6 +507,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         showInlineSelectionTopBar = false,
         listHeader = listHeader,
         showQuickFilterInline = showQuickFilterInline,
+        enableItemAnimations = enableItemAnimations,
         gridState = gridState,
         listState = listState,
         detailedListState = detailedListState,

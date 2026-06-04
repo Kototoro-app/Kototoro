@@ -119,6 +119,7 @@ fun KototoroFavoritesListScreen(
                 viewModel.markAsRead(items.map { it.manga }.toSet())
             },
             showQuickFilterInline = true,
+            enableItemAnimations = false,
         )
     }
 }

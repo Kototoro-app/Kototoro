@@ -32,9 +32,9 @@ import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
 import org.skepsun.kototoro.favourites.ui.migration.compose.SourceMigrationPanel
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
-import org.skepsun.kototoro.main.ui.compose.FavoritesTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
+import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.parsers.model.Content
 import kotlinx.coroutines.launch
@@ -53,6 +53,15 @@ fun KototoroFavoritesHostRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val showMigrationPanel by viewModel.showMigrationPanel.collectAsStateWithLifecycle()
+    var lastLoadedUiState by remember {
+        mutableStateOf<FavouritesContainerViewModel.FavoritesHostUiState?>(null)
+    }
+    LaunchedEffect(uiState) {
+        if (!uiState.isLoading) {
+            lastLoadedUiState = uiState
+        }
+    }
+    val displayedUiState = lastLoadedUiState?.takeIf { uiState.isLoading } ?: uiState
 
     val mainActivity = LocalContext.current as? MainActivity
     val globalState = viewModel.globalFavoritesState
@@ -88,8 +97,8 @@ fun KototoroFavoritesHostRoute(
         mainActivity?.refreshFilters()
     }
 
-    val displayCategories = remember(uiState.categories, initialCategoryId, initialCategoryTitle) {
-        val categories = uiState.categories
+    val displayCategories = remember(displayedUiState.categories, initialCategoryId, initialCategoryTitle) {
+        val categories = displayedUiState.categories
         if (initialCategoryId == NO_ID || categories.any { it.id == initialCategoryId }) {
             categories
         } else {
@@ -188,8 +197,8 @@ fun KototoroFavoritesHostRoute(
         )
     }
     val effectiveChildTopBarOverrideState = childTopBarOverrideState.takeIf {
-        !uiState.isLoading &&
-            !uiState.isEmpty &&
+        !displayedUiState.isLoading &&
+            !displayedUiState.isEmpty &&
             childTopBarOverrideGeneration == activeChildOverrideGeneration &&
             (it as? org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState) != null
     }
@@ -198,28 +207,29 @@ fun KototoroFavoritesHostRoute(
         compactTabsState,
         effectiveChildTopBarOverrideState,
     ) {
-        FavoritesTopBarOverrideState(
+        LayeredTopBarOverrideState(
             tabsState = compactTabsState,
             contextualOverrideState = effectiveChildTopBarOverrideState,
+            keepTabsExpandedWhenCollapsed = true,
         )
     }
 
-    LaunchedEffect(uiState.isLoading, favoritesTopBarOverrideState) {
-        if (uiState.isLoading) return@LaunchedEffect
+    LaunchedEffect(displayedUiState.isLoading, favoritesTopBarOverrideState) {
+        if (displayedUiState.isLoading) return@LaunchedEffect
         onTopBarOverrideChanged(favoritesTopBarOverrideState)
     }
 
     val hazeState = remember { HazeState() }
     val useBackgroundHaze = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    if (uiState.isLoading) {
+    if (displayedUiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
         return
     }
 
-    if (uiState.isEmpty) {
+    if (displayedUiState.isEmpty) {
         Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(painterResource(R.drawable.ic_empty_favourites), null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -239,7 +249,6 @@ fun KototoroFavoritesHostRoute(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(if (useBackgroundHaze) Modifier.hazeSource(hazeState) else Modifier),
-                beyondViewportPageCount = 1,
                 userScrollEnabled = displayCategories.size > 1,
                 key = { page -> displayCategories.getOrNull(page)?.id ?: page },
             ) { page ->
@@ -249,7 +258,7 @@ fun KototoroFavoritesHostRoute(
                     appRouter = appRouter,
                     contentPadding = innerPadding,
                     onNavigateToDetails = onNavigateToDetails,
-                    sharedTransitionEnabled = true,
+                    sharedTransitionEnabled = pagerState.currentPage == page,
                     isActivePage = pagerState.currentPage == page,
                     onTopBarOverrideChanged = { overrideState ->
                         if (pagerState.currentPage == page) {

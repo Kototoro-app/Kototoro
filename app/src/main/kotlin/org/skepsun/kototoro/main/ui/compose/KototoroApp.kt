@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -87,7 +88,11 @@ import org.skepsun.kototoro.search.ui.compose.SearchRoute
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.mutableLongStateOf
 import org.skepsun.kototoro.core.ui.compose.LocalRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
@@ -101,7 +106,6 @@ import kotlinx.coroutines.delay
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarFilterRail
-import org.skepsun.kototoro.main.ui.compose.FavoritesTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.RouteScopedTopBarOverrideState
 
@@ -148,6 +152,31 @@ private fun lerpFloat(
     fraction: Float,
 ): Float = start + (endInclusive - start) * fraction.coerceIn(0f, 1f)
 
+private suspend fun restoreChromeAfterDetailsDelay(
+    setChromeVisible: (Boolean) -> Unit,
+    clearChromeTransitionFlags: () -> Unit,
+) {
+    setChromeVisible(false)
+    delay(MainNavigationMotion.ChromeEnterExitDelayMillis)
+    setChromeVisible(true)
+    clearChromeTransitionFlags()
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+private fun Modifier.renderChromeInSharedTransitionOverlay(
+    sharedTransitionScope: SharedTransitionScope?,
+    zIndexInOverlay: Float,
+    renderInOverlay: () -> Boolean,
+): Modifier {
+    val scope = sharedTransitionScope ?: return this
+    return with(scope) {
+        this@renderChromeInSharedTransitionOverlay.renderInSharedTransitionScopeOverlay(
+            zIndexInOverlay = zIndexInOverlay,
+            renderInOverlay = renderInOverlay,
+        )
+    }
+}
+
 @Composable
 private fun BoxScope.ImmersiveEdgeGradient(
     height: androidx.compose.ui.unit.Dp,
@@ -182,7 +211,7 @@ private fun BoxScope.ImmersiveEdgeGradient(
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun KototoroApp(
     appSettings: AppSettings,
@@ -318,16 +347,14 @@ fun KototoroApp(
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavHeightPx by remember { mutableIntStateOf(0) }
-    var topFilterRailHeightPx by remember { mutableIntStateOf(0) }
-    var topBarOffset by remember { mutableFloatStateOf(0f) }
     var bottomNavOffset by remember { mutableFloatStateOf(0f) }
-    var topFilterRailOffset by remember { mutableFloatStateOf(0f) }
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
     var isSearchOverlayVisible by rememberSaveable { mutableStateOf(false) }
     var isSearchOverlayMounted by rememberSaveable { mutableStateOf(false) }
     var searchOverlayInitialQuery by rememberSaveable { mutableStateOf("") }
     var isSearchOverlayQueryCommitted by rememberSaveable { mutableStateOf(false) }
     var isDetailsChromeTransitionPending by rememberSaveable { mutableStateOf(false) }
+    var keepTabsExpandedByScrollDirection by rememberSaveable { mutableStateOf(false) }
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
     var globalTopBarOverrideState by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var contextualMenuActions by remember { mutableStateOf<List<KototoroTopBarMenuAction>>(emptyList()) }
@@ -340,11 +367,21 @@ fun KototoroApp(
     val navigationBarHeightPx = with(density) {
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().roundToPx()
     }
+    var materialTopBarScrollEnabled by remember { mutableStateOf(true) }
+    val topAppBarState = rememberTopAppBarState()
+    val topAppBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
+        state = topAppBarState,
+        canScroll = {
+            materialTopBarScrollEnabled &&
+            !isSearchOverlayMounted &&
+                !isLandscapeRailInteracting &&
+                !isNavBarPinned
+        },
+    )
     val nestedScrollConnection = remember(
         isNavBarPinned,
         isLandscapeNavigation,
         isLandscapeRailInteracting,
-        topBarHeightPx,
         bottomNavHeightPx,
         isSearchOverlayMounted,
     ) {
@@ -355,14 +392,13 @@ fun KototoroApp(
                 }
                 val dy = available.y
                 if (!isNavBarPinned && dy != 0f) {
-                    topBarOffset = (topBarOffset + dy).coerceIn(-topBarHeightPx.toFloat(), 0f)
+                    keepTabsExpandedByScrollDirection = dy > 0f
                     bottomNavOffset = if (isLandscapeNavigation) {
                         0f
                     } else {
                         (bottomNavOffset - dy).coerceIn(0f, bottomNavHeightPx.toFloat())
                     }
                 } else if (isNavBarPinned) {
-                    topBarOffset = 0f
                     bottomNavOffset = 0f
                 }
                 return androidx.compose.ui.geometry.Offset.Zero
@@ -372,9 +408,9 @@ fun KototoroApp(
 
     LaunchedEffect(isSearchOverlayMounted) {
         if (isSearchOverlayMounted) {
-            topBarOffset = 0f
+            topAppBarState.heightOffset = 0f
             bottomNavOffset = 0f
-            topFilterRailOffset = 0f
+            keepTabsExpandedByScrollDirection = false
         }
     }
 
@@ -382,6 +418,10 @@ fun KototoroApp(
         if (isLandscapeNavigation) {
             bottomNavOffset = 0f
         }
+    }
+
+    LaunchedEffect(topBarHeightPx) {
+        topAppBarState.heightOffsetLimit = -topBarHeightPx.toFloat()
     }
 
     val navController = rememberNavController()
@@ -435,58 +475,54 @@ fun KototoroApp(
         null
     }
     val shouldReserveChromeInsets = shouldShowChrome || (isDetailsRoute && isDetailsChromeTransitionPending)
-    val isChromeOffsetFromCurrentDestination = offsetDestinationRoute == currentDestinationRoute
-    val effectiveTopBarOffset = if (isChromeOffsetFromCurrentDestination) topBarOffset else 0f
-    val effectiveBottomNavOffset = if (isChromeOffsetFromCurrentDestination) bottomNavOffset else 0f
-    LaunchedEffect(currentDestinationRoute, currentTopBarOwnerKey) {
-        if (currentDestinationRoute != null && !isDetailsRoute && !isSearchRoute) {
-            topBarOffset = 0f
-            bottomNavOffset = 0f
-            topFilterRailOffset = 0f
-            offsetDestinationRoute = currentDestinationRoute
-        }
-    }
     var isChromeVisible by rememberSaveable { mutableStateOf(shouldShowChrome && !isDetailsRoute) }
-    var lastResolvedWasDetailsRoute by rememberSaveable { mutableStateOf(isDetailsRoute) }
+    var pendingChromeRestoreFromDetails by rememberSaveable { mutableStateOf(isDetailsRoute) }
     var lastHeroTransitionStartedAtMs by remember { mutableLongStateOf(0L) }
     var heroTransitionPhase by rememberSaveable { mutableStateOf(HeroTransitionPhase.Idle) }
+    val shouldHideChromeForEnteringDetails =
+        isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
+    val shouldDelayChromeRestoreFromDetails =
+        pendingChromeRestoreFromDetails && shouldShowChrome && !isDetailsRoute
     LaunchedEffect(currentDestination, shouldShowChrome, isDetailsRoute, isDetailsChromeTransitionPending) {
         if (currentDestination == null) {
             return@LaunchedEffect
         }
+        fun clearChromeTransitionFlags(clearPendingRestore: Boolean = true) {
+            if (clearPendingRestore) {
+                pendingChromeRestoreFromDetails = false
+            }
+            isDetailsChromeTransitionPending = false
+        }
         when {
             isDetailsRoute -> {
-                lastResolvedWasDetailsRoute = true
+                pendingChromeRestoreFromDetails = true
                 if (!isDetailsChromeTransitionPending) {
                     isChromeVisible = false
                     return@LaunchedEffect
                 }
                 isChromeVisible = true
-                delay(220)
+                delay(MainNavigationMotion.ChromeEnterExitDelayMillis)
                 isChromeVisible = false
                 isDetailsChromeTransitionPending = false
             }
-            isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails -> {
+            shouldHideChromeForEnteringDetails -> {
                 isChromeVisible = false
-                lastResolvedWasDetailsRoute = false
+                pendingChromeRestoreFromDetails = false
             }
             !shouldShowChrome -> {
                 isChromeVisible = false
-                lastResolvedWasDetailsRoute = false
-                isDetailsChromeTransitionPending = false
+                clearChromeTransitionFlags()
             }
-            lastResolvedWasDetailsRoute -> {
+            shouldDelayChromeRestoreFromDetails -> {
                 // Wait until the details pop animation settles before restoring the main chrome.
-                isChromeVisible = false
-                delay(220)
-                isChromeVisible = true
-                lastResolvedWasDetailsRoute = false
-                isDetailsChromeTransitionPending = false
+                restoreChromeAfterDetailsDelay(
+                    setChromeVisible = { isChromeVisible = it },
+                    clearChromeTransitionFlags = ::clearChromeTransitionFlags,
+                )
             }
             else -> {
                 isChromeVisible = true
-                lastResolvedWasDetailsRoute = false
-                isDetailsChromeTransitionPending = false
+                clearChromeTransitionFlags()
             }
         }
     }
@@ -506,9 +542,9 @@ fun KototoroApp(
         }
         value = isDetailsChromeTransitionPending || isDetailsRoute
         val elapsed = heroTransitionTimestampMs() - lastHeroTransitionStartedAtMs
-        if (elapsed < 320L) {
+        if (elapsed < MainNavigationMotion.HeroProtectionMillis) {
             value = true
-            delay(320L - elapsed)
+            delay(MainNavigationMotion.HeroProtectionMillis - elapsed)
         }
         value = false
     }
@@ -519,26 +555,13 @@ fun KototoroApp(
             heroTransitionPhase = HeroTransitionPhase.Idle
         }
     }
-    val scrollAlpha = if (!isChromeVisible) 0f else {
-        val maxCollapse = topBarHeightPx.toFloat()
-        if (maxCollapse <= 0f) 1f
-        else (1f + effectiveTopBarOffset / maxCollapse).coerceIn(0f, 1f)
-    }
     val showBrowseSourceSettingsEntry = currentDestination?.let {
         it.hasRoute<ExploreRoute>() || it.hasRoute<DiscoverRoute>()
     } == true
     val resolvedTopBarOverrideState = chromeTopBarOwnerKey
         ?.let(routeTopBarOverrideStates::get)
         ?: globalTopBarOverrideState
-    val layeredTopBarOverrideState = when (resolvedTopBarOverrideState) {
-        is LayeredTopBarOverrideState -> resolvedTopBarOverrideState
-        is FavoritesTopBarOverrideState -> LayeredTopBarOverrideState(
-            tabsState = resolvedTopBarOverrideState.tabsState,
-            filterRailState = resolvedTopBarOverrideState.filterRailState,
-            contextualOverrideState = resolvedTopBarOverrideState.contextualOverrideState,
-        )
-        else -> null
-    }
+    val layeredTopBarOverrideState = resolvedTopBarOverrideState as? LayeredTopBarOverrideState
     val topTabsOverrideState = layeredTopBarOverrideState?.tabsState ?: (resolvedTopBarOverrideState as? CompactTabsTopBarOverrideState)
     val topFilterRailOverrideState = layeredTopBarOverrideState?.filterRailState
     val effectiveTopBarOverrideState = if (layeredTopBarOverrideState != null) {
@@ -546,31 +569,59 @@ fun KototoroApp(
     } else {
         resolvedTopBarOverrideState
     }
-    val shouldKeepFavoriteTabsVisible = !isNavBarPinned &&
-        chromeTopBarOwnerKey == "favorites" &&
+    val hasSelectionTopChrome =
+        effectiveTopBarOverrideState is ExploreSourceSelectionTopBarState ||
+            effectiveTopBarOverrideState is ContentSelectionTopBarOverrideState
+    val shouldUseMaterialTopBarScroll = shouldShowChrome && !hasSelectionTopChrome
+    val isChromeOffsetFromCurrentDestination = offsetDestinationRoute == currentDestinationRoute
+    val effectiveTopBarOffset = if (isChromeOffsetFromCurrentDestination && shouldUseMaterialTopBarScroll) {
+        topAppBarState.heightOffset
+    } else {
+        0f
+    }
+    val effectiveBottomNavOffset = if (isChromeOffsetFromCurrentDestination) bottomNavOffset else 0f
+    LaunchedEffect(shouldUseMaterialTopBarScroll) {
+        materialTopBarScrollEnabled = shouldUseMaterialTopBarScroll
+        if (!shouldUseMaterialTopBarScroll) {
+            topAppBarState.heightOffset = 0f
+        }
+    }
+    LaunchedEffect(currentDestinationRoute, currentTopBarOwnerKey) {
+        if (currentDestinationRoute != null && !isDetailsRoute && !isSearchRoute) {
+            topAppBarState.heightOffset = 0f
+            bottomNavOffset = 0f
+            keepTabsExpandedByScrollDirection = false
+            offsetDestinationRoute = currentDestinationRoute
+        }
+    }
+    val scrollAlpha = if (!isChromeVisible) 0f else {
+        val maxCollapse = topBarHeightPx.toFloat()
+        if (maxCollapse <= 0f) 1f
+        else (1f + effectiveTopBarOffset / maxCollapse).coerceIn(0f, 1f)
+    }
+    val shouldKeepTabsExpandedWhenCollapsed = layeredTopBarOverrideState?.keepTabsExpandedWhenCollapsed == true
+    val shouldKeepTabsVisible = !isNavBarPinned &&
+        shouldKeepTabsExpandedWhenCollapsed &&
         !isDetailsChromeTransitionPending &&
         topTabsOverrideState != null &&
+        keepTabsExpandedByScrollDirection &&
         scrollAlpha < 0.98f
-    val isEnteringDetailsTransition =
-        isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
-    val effectiveChromeAlphaTarget = if (isEnteringDetailsTransition) {
-        0f
-    } else if (shouldKeepFavoriteTabsVisible) {
+    val effectiveChromeAlphaTarget = if (shouldKeepTabsVisible) {
         1f
     } else {
         scrollAlpha
     }
-    val effectiveCompactTabsTopBarOffset = if (shouldKeepFavoriteTabsVisible) {
+    val effectiveCompactTabsTopBarOffset = if (shouldKeepTabsVisible) {
         0f
     } else {
         effectiveTopBarOffset
     }
     val animatedChromeAlpha by animateFloatAsState(
         targetValue = effectiveChromeAlphaTarget,
-        animationSpec = tween(durationMillis = 120),
+        animationSpec = tween(durationMillis = MainNavigationMotion.ChromeAlphaMillis),
         label = "chrome_alpha",
     )
-    val chromeAlpha = if (isEnteringDetailsTransition) 0f else animatedChromeAlpha
+    val chromeAlpha = animatedChromeAlpha
     val isHomeRoute = currentDestination?.hasRoute<HomeRoute>() == true
     val supportsDisplayModeMenu = currentDestination?.let {
         it.hasRoute<ExploreRoute>() ||
@@ -618,19 +669,9 @@ fun KototoroApp(
         statusBarHeightPx + with(density) { 44.dp.roundToPx() },
     )
     val maxCollapsePx = (reservedTopBarHeightPx - statusBarHeightPx).coerceAtLeast(0)
-    val reservedTopFilterRailHeightPx = when {
-        topFilterRailHeightPx > 0 -> topFilterRailHeightPx
-        else -> with(density) { 34.dp.roundToPx() }
-    }
-    val visibleTopFilterInsetPx = if (shouldReserveChromeInsets && topFilterRailOverrideState != null) {
-        val gapPx = with(density) { 8.dp.roundToPx() }
-        reservedTopFilterRailHeightPx + gapPx
-    } else {
-        0
-    }
     val contentTopInsetPx = if (shouldReserveChromeInsets) {
         (reservedTopBarHeightPx + effectiveTopBarOffset).toInt()
-            .coerceIn(maxCollapsePx, reservedTopBarHeightPx) + visibleTopFilterInsetPx
+            .coerceIn(maxCollapsePx, reservedTopBarHeightPx)
     } else {
         0
     }
@@ -654,13 +695,6 @@ fun KototoroApp(
         }
     }
 
-    LaunchedEffect(topFilterRailOverrideState) {
-        if (topFilterRailOverrideState == null) {
-            topFilterRailOffset = 0f
-            topFilterRailHeightPx = 0
-        }
-    }
-
     LaunchedEffect(contentTopInsetPx, contentBottomInsetPx) {
         onContentInsetsChanged(contentTopInsetPx, contentBottomInsetPx)
     }
@@ -672,6 +706,7 @@ fun KototoroApp(
             )
         }
     }
+    var chromeSharedTransitionScope by remember { mutableStateOf<SharedTransitionScope?>(null) }
 
 
     KototoroTheme(cornerRadius = cornerRadius) {
@@ -689,9 +724,17 @@ fun KototoroApp(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .then(if (useRuntimeHaze) Modifier.hazeSource(transitionHazeState) else Modifier)
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .nestedScroll(nestedScrollConnection)
                 .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
                 SharedTransitionLayout {
+                    SideEffect {
+                        chromeSharedTransitionScope = if (isSharedElementTransitionsEnabled) {
+                            this@SharedTransitionLayout
+                        } else {
+                            null
+                        }
+                    }
                     CompositionLocalProvider(
                         LocalHeroTransitionInProgress provides false,
                         LocalHeroReturnTransitionInProgress provides false,
@@ -770,7 +813,6 @@ fun KototoroApp(
                     (
                         statusBarHeightPx +
                             (topBarHeightPx * 0.72f).toInt() +
-                            if (shouldShowChrome && topFilterRailOverrideState != null) topFilterRailHeightPx else 0 +
                             topImmersiveOverflowPx
                         )
                         .coerceAtLeast(statusBarHeightPx + topImmersiveOverflowPx)
@@ -817,227 +859,117 @@ fun KototoroApp(
                 }
 
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
-                    if (effectiveTopBarOverrideState != null && effectiveTopBarOverrideState !is CompactTabsTopBarOverrideState) {
-                        when (val overrideState = effectiveTopBarOverrideState) {
-                            is ExploreSourceSelectionTopBarState -> {
-                                ExploreSelectionTopBar(
-                                    selectedCount = overrideState.selectedCount,
-                                    isSingleSelection = overrideState.isSingleSelection,
-                                    canPin = overrideState.canPin,
-                                    canUnpin = overrideState.canUnpin,
-                                    canDisable = overrideState.canDisable,
-                                    canDelete = overrideState.canDelete,
-                                    onClearSelection = overrideState.onClearSelection,
-                                    onSettings = overrideState.onSettings,
-                                    onDisable = overrideState.onDisable,
-                                    onDelete = overrideState.onDelete,
-                                    onShortcut = overrideState.onShortcut,
-                                    onPin = overrideState.onPin,
-                                    onUnpin = overrideState.onUnpin,
-                                    modifier = Modifier
-                                        .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
-                                        .then(if (isLandscapeNavigation) Modifier.fillMaxWidth() else Modifier)
-                                        .padding(start = visibleStartInsetDp)
-                                        .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
-                                        .graphicsLayer { alpha = chromeAlpha }
-                                        .onGloballyPositioned { coords ->
-                                            val newHeight = coords.size.height
-                                            if (topBarHeightPx != newHeight) {
-                                                topBarHeightPx = newHeight
-                                                onTopBarHeightChanged(newHeight)
-                                            }
-                                        },
-                                )
+                    MainTopChrome(
+                        effectiveTopBarOverrideState = effectiveTopBarOverrideState,
+                        isLandscapeNavigation = isLandscapeNavigation,
+                        chromeSharedTransitionScope = chromeSharedTransitionScope,
+                        heroTransitionInProgress = heroTransitionInProgress,
+                        isDetailsChromeTransitionPending = isDetailsChromeTransitionPending,
+                        visibleStartInsetDp = visibleStartInsetDp,
+                        effectiveTopBarOffset = effectiveTopBarOffset,
+                        chromeAlpha = chromeAlpha,
+                        onTopBarHeightMeasured = { newHeight ->
+                            if (topBarHeightPx != newHeight) {
+                                topBarHeightPx = newHeight
+                                onTopBarHeightChanged(newHeight)
                             }
-
-                            is ContentSelectionTopBarOverrideState -> {
-                                org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar(
-                                    selectedCount = overrideState.selectedCount,
-                                    isAllNonLocal = overrideState.isAllNonLocal,
-                                    isSingleSelection = overrideState.isSingleSelection,
-                                    showRemoveOption = overrideState.showRemoveOption,
-                                    supportedActions = overrideState.supportedActions,
-                                    allPinned = overrideState.allPinned,
-                                    preferredInlineActions = overrideState.preferredInlineActions,
-                                    removeActionIconRes = overrideState.removeActionIconRes,
-                                    removeActionTitleRes = overrideState.removeActionTitleRes,
-                                    onClearSelection = overrideState.onClearSelection,
-                                    onActionClick = overrideState.onActionClick,
-                                    modifier = Modifier
-                                        .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
-                                        .then(if (isLandscapeNavigation) Modifier.fillMaxWidth() else Modifier)
-                                        .padding(start = visibleStartInsetDp)
-                                        .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
-                                        .graphicsLayer { alpha = chromeAlpha }
-                                        .onGloballyPositioned { coords ->
-                                            val newHeight = coords.size.height
-                                            if (topBarHeightPx != newHeight) {
-                                                topBarHeightPx = newHeight
-                                                onTopBarHeightChanged(newHeight)
-                                            }
-                                        },
-                                )
+                        },
+                        query = query,
+                        onSearchClick = {
+                            searchOverlayInitialQuery = query
+                            isSearchOverlayQueryCommitted = false
+                            isSearchOverlayMounted = true
+                            isSearchOverlayVisible = true
+                        },
+                        onOpenListOptions = onOpenListOptions,
+                        onSettingsClick = onSettingsClick,
+                        onSourceSettingsClick = onSourceSettingsClick,
+                        onManageSourcesClick = onManageSourcesClick,
+                        onTrackingAccountsClick = onTrackingAccountsClick,
+                        isAppUpdateAvailable = isAppUpdateAvailable,
+                        onAppUpdateClick = onAppUpdateClick,
+                        isIncognitoModeEnabled = isIncognitoModeEnabled,
+                        onIncognitoToggle = onIncognitoToggle,
+                        isLanguagePresetFilterVisible = effectiveLanguagePresetFilterVisible,
+                        languagePresetEntries = languagePresetEntries,
+                        activeLanguagePresetId = activeSourcePresetId,
+                        onLanguagePresetSelected = onLanguagePresetSelected,
+                        onManageLanguagePresets = onManageLanguagePresets,
+                        topTabsOverrideState = topTabsOverrideState,
+                        topFilterRailOverrideState = topFilterRailOverrideState,
+                        selectedContentType = selectedContentType,
+                        enabledContentTypes = enabledContentTypes,
+                        isContentTypeFilterVisible = effectiveContentTypeFilterVisible,
+                        onContentTypeSelected = onContentTypeSelected,
+                        selectedSourceTags = selectedSourceTags,
+                        sourceTagEntries = sourceTagEntries,
+                        enabledSourceTags = enabledSourceTags,
+                        isSourceTagFilterVisible = effectiveSourceTagFilterVisible,
+                        onSourceTagFilterClick = onSourceTagFilterClick,
+                        onSourceTagSelected = onSourceTagSelected,
+                        supportsDisplayModeMenu = supportsDisplayModeMenu,
+                        currentListMode = when {
+                            showBrowseSourceSettingsEntry -> browseListMode
+                            isHomeRoute -> appSettings.homeListMode
+                            else -> listMode
+                        },
+                        onListModeSelected = {
+                            if (showBrowseSourceSettingsEntry) {
+                                appSettings.browseListMode = it
+                            } else if (isHomeRoute) {
+                                appSettings.homeListMode = it
+                            } else {
+                                appSettings.listMode = it
                             }
+                        },
+                        supportsGridSizeSlider = supportsGridSizeSlider,
+                        gridSize = gridSize,
+                        onGridSizeChange = { appSettings.gridSize = it },
+                        isBrowseTrackingRecommendationsEnabled = if (showBrowseSourceSettingsEntry) {
+                            isBrowseTrackingRecommendationsEnabled
+                        } else {
+                            null
+                        },
+                        onBrowseTrackingRecommendationsChange = if (showBrowseSourceSettingsEntry) {
+                            { appSettings.isBrowseTrackingRecommendationsEnabled = it }
+                        } else {
+                            null
+                        },
+                        isBrowseMoreTrackingRecommendationsEnabled = if (showBrowseSourceSettingsEntry) {
+                            isBrowseMoreTrackingRecommendationsEnabled
+                        } else {
+                            null
+                        },
+                        onBrowseMoreTrackingRecommendationsChange = if (showBrowseSourceSettingsEntry) {
+                            { appSettings.isBrowseMoreTrackingRecommendationsEnabled = it }
+                        } else {
+                            null
+                        },
+                        showSourceSettingsEntry = showBrowseSourceSettingsEntry,
+                        contextualMenuActions = contextualMenuActions,
+                        forceCompactTabsExpanded = shouldKeepTabsVisible,
+                        effectiveCompactTabsTopBarOffset = effectiveCompactTabsTopBarOffset,
+                    )
 
-                            is CompactTabsTopBarOverrideState -> Unit
-                            is FavoritesTopBarOverrideState -> Unit
-                            is LayeredTopBarOverrideState -> Unit
-                        }
-                    } else {
-                        KototoroTopBar(
-                            query = query,
-                            onSearchClick = {
-                                searchOverlayInitialQuery = query
-                                isSearchOverlayQueryCommitted = false
-                                isSearchOverlayMounted = true
-                                isSearchOverlayVisible = true
-                            },
-                            onOpenListOptions = onOpenListOptions,
-                            onSettingsClick = onSettingsClick,
-                            onSourceSettingsClick = onSourceSettingsClick,
-                            onManageSourcesClick = onManageSourcesClick,
-                            onTrackingAccountsClick = onTrackingAccountsClick,
-                            isAppUpdateAvailable = isAppUpdateAvailable,
-                            onAppUpdateClick = onAppUpdateClick,
-                            isIncognitoModeEnabled = isIncognitoModeEnabled,
-                            onIncognitoToggle = onIncognitoToggle,
-                            isLanguagePresetFilterVisible = effectiveLanguagePresetFilterVisible,
-                            languagePresetEntries = languagePresetEntries,
-                            activeLanguagePresetId = activeSourcePresetId,
-                            onLanguagePresetSelected = onLanguagePresetSelected,
-                            onManageLanguagePresets = onManageLanguagePresets,
-                            compactTabsState = topTabsOverrideState,
-                            selectedContentType = selectedContentType,
-                            enabledContentTypes = enabledContentTypes,
-                            isContentTypeFilterVisible = effectiveContentTypeFilterVisible,
-                            onContentTypeSelected = onContentTypeSelected,
-                            selectedSourceTags = selectedSourceTags,
-                            sourceTagEntries = sourceTagEntries,
-                            enabledSourceTags = enabledSourceTags,
-                            isSourceTagFilterVisible = effectiveSourceTagFilterVisible,
-                            onSourceTagFilterClick = onSourceTagFilterClick,
-                            onSourceTagSelected = onSourceTagSelected,
-                            supportsDisplayModeMenu = supportsDisplayModeMenu,
-                            currentListMode = when {
-                                showBrowseSourceSettingsEntry -> browseListMode
-                                isHomeRoute -> appSettings.homeListMode
-                                else -> listMode
-                            },
-                            onListModeSelected = {
-                                if (showBrowseSourceSettingsEntry) {
-                                    appSettings.browseListMode = it
-                                } else if (isHomeRoute) {
-                                    appSettings.homeListMode = it
-                                } else {
-                                    appSettings.listMode = it
-                                }
-                            },
-                            supportsGridSizeSlider = supportsGridSizeSlider,
-                            gridSize = gridSize,
-                            onGridSizeChange = { appSettings.gridSize = it },
-                            isBrowseTrackingRecommendationsEnabled = if (showBrowseSourceSettingsEntry) {
-                                isBrowseTrackingRecommendationsEnabled
-                            } else {
-                                null
-                            },
-                            onBrowseTrackingRecommendationsChange = if (showBrowseSourceSettingsEntry) {
-                                { appSettings.isBrowseTrackingRecommendationsEnabled = it }
-                            } else {
-                                null
-                            },
-                            isBrowseMoreTrackingRecommendationsEnabled = if (showBrowseSourceSettingsEntry) {
-                                isBrowseMoreTrackingRecommendationsEnabled
-                            } else {
-                                null
-                            },
-                            onBrowseMoreTrackingRecommendationsChange = if (showBrowseSourceSettingsEntry) {
-                                { appSettings.isBrowseMoreTrackingRecommendationsEnabled = it }
-                            } else {
-                                null
-                            },
-                            showSourceSettingsEntry = showBrowseSourceSettingsEntry,
-                            contextualMenuActions = contextualMenuActions,
-                            forceCompactTabsExpanded = shouldKeepFavoriteTabsVisible,
-                            modifier = Modifier
-                                .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
-                                .then(if (isLandscapeNavigation) Modifier.fillMaxWidth() else Modifier)
-                                .padding(start = visibleStartInsetDp)
-                                .offset { androidx.compose.ui.unit.IntOffset(0, effectiveCompactTabsTopBarOffset.toInt()) }
-                                .graphicsLayer { alpha = chromeAlpha }
-                                .onGloballyPositioned { coords ->
-                                    val newHeight = coords.size.height
-                                    if (topBarHeightPx != newHeight) {
-                                        topBarHeightPx = newHeight
-                                        onTopBarHeightChanged(newHeight)
-                                    }
-                                },
-                        )
-
-                        topFilterRailOverrideState?.let { filterState ->
-                            CompactTopBarFilterRail(
-                                state = filterState,
-                                modifier = Modifier
-                                    .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .padding(start = visibleStartInsetDp)
-                                    .padding(horizontal = 12.dp)
-                                    .offset {
-                                        androidx.compose.ui.unit.IntOffset(
-                                            0,
-                                            effectiveTopBarOffset.toInt() + topBarHeightPx + with(density) { 8.dp.roundToPx() },
-                                        )
-                                    }
-                                    .graphicsLayer { alpha = chromeAlpha }
-                                    .onGloballyPositioned { coords ->
-                                        val newHeight = coords.size.height
-                                        if (topFilterRailHeightPx != newHeight) {
-                                            topFilterRailHeightPx = newHeight
-                                        }
-                                    },
-                            )
-                        }
-                    }
-
-                    Box(
-                                modifier = Modifier
-                                    .align(if (isLandscapeNavigation) Alignment.CenterStart else Alignment.BottomCenter)
-                                    .then(
-                                        if (isLandscapeNavigation) {
-                                            Modifier.pointerInteropFilter { event ->
-                                                when (event.actionMasked) {
-                                                    MotionEvent.ACTION_DOWN -> isLandscapeRailInteracting = true
-                                                    MotionEvent.ACTION_UP,
-                                                    MotionEvent.ACTION_CANCEL -> isLandscapeRailInteracting = false
-                                                }
-                                                false
-                                            }
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
-                                    .offset {
-                                        if (isLandscapeNavigation) {
-                                    androidx.compose.ui.unit.IntOffset((-effectiveBottomNavOffset).toInt(), 0)
-                                        } else {
-                                    androidx.compose.ui.unit.IntOffset(0, effectiveBottomNavOffset.toInt())
-                                        }
-                                    }
-                            .onGloballyPositioned { coords ->
-                                val newHeight = if (isLandscapeNavigation) coords.size.width else coords.size.height
-                                if (bottomNavHeightPx != newHeight) {
-                                    bottomNavHeightPx = newHeight
-                                    onBottomNavHeightChanged(newHeight)
-                                }
-                            },
-                    ) {
-                        KototoroBottomNav(
-                            state = navStateFlow,
-                            onItemSelected = ::navigateFromBottomNav,
-                            onItemReselected = ::navigateFromBottomNav,
-                            showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
-                            onContinueReadingClick = onResumeClick,
-                        )
-                    }
+                    MainBottomChrome(
+                        isLandscapeNavigation = isLandscapeNavigation,
+                        chromeSharedTransitionScope = chromeSharedTransitionScope,
+                        heroTransitionInProgress = heroTransitionInProgress,
+                        isDetailsChromeTransitionPending = isDetailsChromeTransitionPending,
+                        effectiveBottomNavOffset = effectiveBottomNavOffset,
+                        onLandscapeRailInteractingChange = { isLandscapeRailInteracting = it },
+                        onBottomNavHeightMeasured = { newHeight ->
+                            if (bottomNavHeightPx != newHeight) {
+                                bottomNavHeightPx = newHeight
+                                onBottomNavHeightChanged(newHeight)
+                            }
+                        },
+                        navStateFlow = navStateFlow,
+                        onItemSelected = ::navigateFromBottomNav,
+                        onItemReselected = ::navigateFromBottomNav,
+                        isResumeEnabled = isResumeEnabled,
+                        onResumeClick = onResumeClick,
+                    )
                 }
 
                 if (isSearchOverlayMounted) {
@@ -1162,6 +1094,240 @@ fun KototoroApp(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun BoxScope.MainTopChrome(
+    effectiveTopBarOverrideState: TopBarOverrideState?,
+    isLandscapeNavigation: Boolean,
+    chromeSharedTransitionScope: SharedTransitionScope?,
+    heroTransitionInProgress: Boolean,
+    isDetailsChromeTransitionPending: Boolean,
+    visibleStartInsetDp: androidx.compose.ui.unit.Dp,
+    effectiveTopBarOffset: Float,
+    chromeAlpha: Float,
+    onTopBarHeightMeasured: (Int) -> Unit,
+    query: String,
+    onSearchClick: () -> Unit,
+    onOpenListOptions: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onSourceSettingsClick: () -> Unit,
+    onManageSourcesClick: () -> Unit,
+    onTrackingAccountsClick: () -> Unit,
+    isAppUpdateAvailable: Boolean,
+    onAppUpdateClick: () -> Unit,
+    isIncognitoModeEnabled: Boolean,
+    onIncognitoToggle: () -> Unit,
+    isLanguagePresetFilterVisible: Boolean,
+    languagePresetEntries: List<SourcePreset>,
+    activeLanguagePresetId: Long,
+    onLanguagePresetSelected: (Long) -> Unit,
+    onManageLanguagePresets: () -> Unit,
+    topTabsOverrideState: CompactTabsTopBarOverrideState?,
+    topFilterRailOverrideState: CompactFilterRailOverrideState?,
+    selectedContentType: ContentType?,
+    enabledContentTypes: Set<ContentType>,
+    isContentTypeFilterVisible: Boolean,
+    onContentTypeSelected: (ContentType?) -> Unit,
+    selectedSourceTags: Set<SourceTag>,
+    sourceTagEntries: List<SourceTag>,
+    enabledSourceTags: Set<SourceTag>,
+    isSourceTagFilterVisible: Boolean,
+    onSourceTagFilterClick: (android.view.View?) -> Boolean,
+    onSourceTagSelected: (SourceTag?) -> Unit,
+    supportsDisplayModeMenu: Boolean,
+    currentListMode: ListMode,
+    onListModeSelected: (ListMode) -> Unit,
+    supportsGridSizeSlider: Boolean,
+    gridSize: Int,
+    onGridSizeChange: (Int) -> Unit,
+    isBrowseTrackingRecommendationsEnabled: Boolean?,
+    onBrowseTrackingRecommendationsChange: ((Boolean) -> Unit)?,
+    isBrowseMoreTrackingRecommendationsEnabled: Boolean?,
+    onBrowseMoreTrackingRecommendationsChange: ((Boolean) -> Unit)?,
+    showSourceSettingsEntry: Boolean,
+    contextualMenuActions: List<KototoroTopBarMenuAction>,
+    forceCompactTabsExpanded: Boolean,
+    effectiveCompactTabsTopBarOffset: Float,
+) {
+    val topChromeModifier = Modifier
+        .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
+        .then(if (isLandscapeNavigation) Modifier.fillMaxWidth() else Modifier)
+        .renderChromeInSharedTransitionOverlay(
+            sharedTransitionScope = chromeSharedTransitionScope,
+            zIndexInOverlay = 2f,
+            renderInOverlay = {
+                heroTransitionInProgress || isDetailsChromeTransitionPending
+            },
+        )
+        .padding(start = visibleStartInsetDp)
+        .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
+        .graphicsLayer { alpha = chromeAlpha }
+        .onGloballyPositioned { coords -> onTopBarHeightMeasured(coords.size.height) }
+
+    if (effectiveTopBarOverrideState != null && effectiveTopBarOverrideState !is CompactTabsTopBarOverrideState) {
+        MainSelectionTopChrome(
+            effectiveTopBarOverrideState = effectiveTopBarOverrideState,
+            modifier = topChromeModifier,
+        )
+    } else {
+        KototoroTopBar(
+            query = query,
+            onSearchClick = onSearchClick,
+            onOpenListOptions = onOpenListOptions,
+            onSettingsClick = onSettingsClick,
+            onSourceSettingsClick = onSourceSettingsClick,
+            onManageSourcesClick = onManageSourcesClick,
+            onTrackingAccountsClick = onTrackingAccountsClick,
+            isAppUpdateAvailable = isAppUpdateAvailable,
+            onAppUpdateClick = onAppUpdateClick,
+            isIncognitoModeEnabled = isIncognitoModeEnabled,
+            onIncognitoToggle = onIncognitoToggle,
+            isLanguagePresetFilterVisible = isLanguagePresetFilterVisible,
+            languagePresetEntries = languagePresetEntries,
+            activeLanguagePresetId = activeLanguagePresetId,
+            onLanguagePresetSelected = onLanguagePresetSelected,
+            onManageLanguagePresets = onManageLanguagePresets,
+            compactTabsState = topTabsOverrideState,
+            filterRailState = topFilterRailOverrideState,
+            selectedContentType = selectedContentType,
+            enabledContentTypes = enabledContentTypes,
+            isContentTypeFilterVisible = isContentTypeFilterVisible,
+            onContentTypeSelected = onContentTypeSelected,
+            selectedSourceTags = selectedSourceTags,
+            sourceTagEntries = sourceTagEntries,
+            enabledSourceTags = enabledSourceTags,
+            isSourceTagFilterVisible = isSourceTagFilterVisible,
+            onSourceTagFilterClick = onSourceTagFilterClick,
+            onSourceTagSelected = onSourceTagSelected,
+            supportsDisplayModeMenu = supportsDisplayModeMenu,
+            currentListMode = currentListMode,
+            onListModeSelected = onListModeSelected,
+            supportsGridSizeSlider = supportsGridSizeSlider,
+            gridSize = gridSize,
+            onGridSizeChange = onGridSizeChange,
+            isBrowseTrackingRecommendationsEnabled = isBrowseTrackingRecommendationsEnabled,
+            onBrowseTrackingRecommendationsChange = onBrowseTrackingRecommendationsChange,
+            isBrowseMoreTrackingRecommendationsEnabled = isBrowseMoreTrackingRecommendationsEnabled,
+            onBrowseMoreTrackingRecommendationsChange = onBrowseMoreTrackingRecommendationsChange,
+            showSourceSettingsEntry = showSourceSettingsEntry,
+            contextualMenuActions = contextualMenuActions,
+            forceCompactTabsExpanded = forceCompactTabsExpanded,
+            modifier = topChromeModifier.offset {
+                androidx.compose.ui.unit.IntOffset(0, (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt())
+            },
+        )
+    }
+}
+
+@Composable
+private fun MainSelectionTopChrome(
+    effectiveTopBarOverrideState: TopBarOverrideState,
+    modifier: Modifier = Modifier,
+) {
+    when (effectiveTopBarOverrideState) {
+        is ExploreSourceSelectionTopBarState -> {
+            ExploreSelectionTopBar(
+                selectedCount = effectiveTopBarOverrideState.selectedCount,
+                isSingleSelection = effectiveTopBarOverrideState.isSingleSelection,
+                canPin = effectiveTopBarOverrideState.canPin,
+                canUnpin = effectiveTopBarOverrideState.canUnpin,
+                canDisable = effectiveTopBarOverrideState.canDisable,
+                canDelete = effectiveTopBarOverrideState.canDelete,
+                onClearSelection = effectiveTopBarOverrideState.onClearSelection,
+                onSettings = effectiveTopBarOverrideState.onSettings,
+                onDisable = effectiveTopBarOverrideState.onDisable,
+                onDelete = effectiveTopBarOverrideState.onDelete,
+                onShortcut = effectiveTopBarOverrideState.onShortcut,
+                onPin = effectiveTopBarOverrideState.onPin,
+                onUnpin = effectiveTopBarOverrideState.onUnpin,
+                modifier = modifier,
+            )
+        }
+
+        is ContentSelectionTopBarOverrideState -> {
+            org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar(
+                selectedCount = effectiveTopBarOverrideState.selectedCount,
+                isAllNonLocal = effectiveTopBarOverrideState.isAllNonLocal,
+                isSingleSelection = effectiveTopBarOverrideState.isSingleSelection,
+                showRemoveOption = effectiveTopBarOverrideState.showRemoveOption,
+                supportedActions = effectiveTopBarOverrideState.supportedActions,
+                allPinned = effectiveTopBarOverrideState.allPinned,
+                preferredInlineActions = effectiveTopBarOverrideState.preferredInlineActions,
+                removeActionIconRes = effectiveTopBarOverrideState.removeActionIconRes,
+                removeActionTitleRes = effectiveTopBarOverrideState.removeActionTitleRes,
+                onClearSelection = effectiveTopBarOverrideState.onClearSelection,
+                onActionClick = effectiveTopBarOverrideState.onActionClick,
+                modifier = modifier,
+            )
+        }
+
+        is CompactTabsTopBarOverrideState -> Unit
+        is LayeredTopBarOverrideState -> Unit
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun BoxScope.MainBottomChrome(
+    isLandscapeNavigation: Boolean,
+    chromeSharedTransitionScope: SharedTransitionScope?,
+    heroTransitionInProgress: Boolean,
+    isDetailsChromeTransitionPending: Boolean,
+    effectiveBottomNavOffset: Float,
+    onLandscapeRailInteractingChange: (Boolean) -> Unit,
+    onBottomNavHeightMeasured: (Int) -> Unit,
+    navStateFlow: StateFlow<BottomNavState>,
+    onItemSelected: (Int) -> Unit,
+    onItemReselected: (Int) -> Unit,
+    isResumeEnabled: Boolean,
+    onResumeClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .align(if (isLandscapeNavigation) Alignment.CenterStart else Alignment.BottomCenter)
+            .renderChromeInSharedTransitionOverlay(
+                sharedTransitionScope = chromeSharedTransitionScope,
+                zIndexInOverlay = 1f,
+                renderInOverlay = {
+                    heroTransitionInProgress || isDetailsChromeTransitionPending
+                },
+            )
+            .then(
+                if (isLandscapeNavigation) {
+                    Modifier.pointerInteropFilter { event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> onLandscapeRailInteractingChange(true)
+                            MotionEvent.ACTION_UP,
+                            MotionEvent.ACTION_CANCEL -> onLandscapeRailInteractingChange(false)
+                        }
+                        false
+                    }
+                } else {
+                    Modifier
+                }
+            )
+            .offset {
+                if (isLandscapeNavigation) {
+                    androidx.compose.ui.unit.IntOffset((-effectiveBottomNavOffset).toInt(), 0)
+                } else {
+                    androidx.compose.ui.unit.IntOffset(0, effectiveBottomNavOffset.toInt())
+                }
+            }
+            .onGloballyPositioned { coords ->
+                val newHeight = if (isLandscapeNavigation) coords.size.width else coords.size.height
+                onBottomNavHeightMeasured(newHeight)
+            },
+    ) {
+        KototoroBottomNav(
+            state = navStateFlow,
+            onItemSelected = onItemSelected,
+            onItemReselected = onItemReselected,
+            showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
+            onContinueReadingClick = onResumeClick,
+        )
     }
 }
 

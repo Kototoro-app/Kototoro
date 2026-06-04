@@ -3,10 +3,12 @@ package org.skepsun.kototoro.main.ui.compose
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -51,7 +53,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -100,28 +101,9 @@ private fun NavDestination.mainRouteOrder(): Int = when {
     else -> Int.MAX_VALUE
 }
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteDirection():
-    AnimatedContentTransitionScope.SlideDirection {
-    val initialOrder = initialState.destination.mainRouteOrder()
-    val targetOrder = targetState.destination.mainRouteOrder()
-    return if (targetOrder >= initialOrder) {
-        AnimatedContentTransitionScope.SlideDirection.Left
-    } else {
-        AnimatedContentTransitionScope.SlideDirection.Right
-    }
-}
-
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition {
     if (!isMainRouteTransition()) return EnterTransition.None
-    val direction = mainRouteDirection()
-    val initialOffset: (Int) -> Int = { distance ->
-        val signed = (distance * 0.16f).toInt()
-        if (direction == AnimatedContentTransitionScope.SlideDirection.Left) signed else -signed
-    }
-    return slideInHorizontally(
-        animationSpec = tween(durationMillis = 280, easing = LinearEasing),
-        initialOffsetX = initialOffset,
-    ) + fadeIn(
+    return fadeIn(
         animationSpec = tween(durationMillis = 220, easing = LinearEasing),
         initialAlpha = 0.82f,
     )
@@ -133,6 +115,21 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeOut()
         animationSpec = tween(durationMillis = 180, easing = LinearEasing),
         targetAlpha = 0.88f,
     )
+}
+
+@Composable
+private fun MainRouteScene(
+    landscapeStartPadding: androidx.compose.ui.unit.Dp,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(start = landscapeStartPadding),
+    ) {
+        content()
+    }
 }
 
 private fun buildFavoriteCategoryTabsState(
@@ -183,8 +180,6 @@ private const val TOP_BAR_OWNER_FEED = "feed"
 private const val TOP_BAR_OWNER_LOCAL = "local"
 private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
-private const val DetailsRouteTransitionDurationMillis = 320
-
 private fun NavDestination.isMainRoute(): Boolean =
     hasRoute<HomeRoute>() ||
         hasRoute<DiscoverRoute>() ||
@@ -249,7 +244,7 @@ fun AppNavGraph(
         popExitTransition = { mainRouteFadeOut() },
     ) {
         composable<HomeRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<HomeViewModel>()
             val state by viewModel.summaryState.collectAsStateWithLifecycle()
             val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
@@ -430,7 +425,7 @@ fun AppNavGraph(
             }
         }
         composable<DiscoverRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
             val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
             val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
@@ -477,7 +472,7 @@ fun AppNavGraph(
             }
         }
         composable<HistoryRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.history.ui.HistoryListViewModel>()
             val context = LocalContext.current
             val entryPoint = remember(context.applicationContext) {
@@ -706,7 +701,7 @@ fun AppNavGraph(
             }
         }
         composable<FavoritesRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>()
             val selectedGroupTab by viewModel.globalFavoritesState.selectedGroupTab.collectAsStateWithLifecycle()
             val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
@@ -854,7 +849,7 @@ fun AppNavGraph(
             }
         }
         composable<ExploreRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
             val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
             val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
@@ -901,7 +896,7 @@ fun AppNavGraph(
             }
         }
         composable<FeedRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>()
             val context = LocalContext.current
             val items by viewModel.content.collectAsStateWithLifecycle()
@@ -1044,7 +1039,7 @@ fun AppNavGraph(
             }
         }
         composable<LocalRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
             val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
             val availableTags by viewModel.filterAvailableTags.collectAsStateWithLifecycle(initialValue = emptySet())
@@ -1131,7 +1126,7 @@ fun AppNavGraph(
             }
         }
         composable<SuggestionsRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>()
             var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
             var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
@@ -1198,7 +1193,7 @@ fun AppNavGraph(
             }
         }
         composable<BookmarksRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel>()
             val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
             val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
@@ -1240,7 +1235,7 @@ fun AppNavGraph(
             }
         }
         composable<UpdatedRoute> {
-            Box(modifier = Modifier.padding(start = landscapeStartPadding)) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>()
             val items by viewModel.content.collectAsStateWithLifecycle()
             val updatedCategoryTabsState = remember(items, activity) {
@@ -1358,26 +1353,26 @@ fun AppNavGraph(
             enterTransition = {
                 slideIntoContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
-                ) + fadeIn(tween(220, easing = LinearEasing))
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing))
             },
             exitTransition = {
                 slideOutOfContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
-                ) + fadeOut(tween(180, easing = LinearEasing))
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
             },
             popEnterTransition = {
                 slideIntoContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
-                ) + fadeIn(tween(180, easing = LinearEasing))
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing))
             },
             popExitTransition = {
                 slideOutOfContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(DetailsRouteTransitionDurationMillis, easing = LinearEasing),
-                ) + fadeOut(tween(160, easing = LinearEasing))
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
             },
         ) {
             val detailsViewModel = hiltViewModel<DetailsViewModel>()

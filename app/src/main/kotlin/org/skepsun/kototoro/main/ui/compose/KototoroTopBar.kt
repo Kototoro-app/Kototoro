@@ -107,6 +107,7 @@ fun KototoroTopBar(
     onLanguagePresetSelected: (Long) -> Unit = {},
     onManageLanguagePresets: () -> Unit = {},
     compactTabsState: CompactTabsTopBarOverrideState? = null,
+    filterRailState: CompactFilterRailOverrideState? = null,
     selectedContentType: ContentType? = null,
     enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
     isContentTypeFilterVisible: Boolean = true,
@@ -162,7 +163,7 @@ fun KototoroTopBar(
         }
     }
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = statusBarPadding.calculateTopPadding())
@@ -393,6 +394,14 @@ fun KototoroTopBar(
                     }
                 }
             }
+        }
+        filterRailState?.let { state ->
+            CompactTopBarFilterRail(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            )
         }
         if (showDisplayOptionsSheet && (supportsDisplayModeMenu || supportsGridSizeSlider || onBrowseTrackingRecommendationsChange != null)) {
             org.skepsun.kototoro.list.ui.compose.DisplayOptionsSheet(

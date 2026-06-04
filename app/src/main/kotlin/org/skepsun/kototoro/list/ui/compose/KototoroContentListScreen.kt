@@ -166,6 +166,7 @@ fun KototoroContentListScreen(
     onRetry: () -> Unit = {},
     showInlineSelectionTopBar: Boolean = true,
     showQuickFilterInline: Boolean = true,
+    enableItemAnimations: Boolean = true,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     listHeader: (@Composable () -> Unit)? = null,
@@ -200,7 +201,8 @@ fun KototoroContentListScreen(
         )
     }.value
     val showSourceOnCards = screenPrefs.showSourceOnCards
-    val isVerticalCardListAnimationEnabled = screenPrefs.isVerticalCardListAnimationEnabled
+    val isVerticalCardListAnimationEnabled =
+        enableItemAnimations && screenPrefs.isVerticalCardListAnimationEnabled
     val cardUiPrefs = screenPrefs.cardUiPrefs
 
     val topBarInset = contentPadding.calculateTopPadding()

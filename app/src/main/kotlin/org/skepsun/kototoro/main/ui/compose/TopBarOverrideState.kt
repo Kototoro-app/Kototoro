@@ -46,16 +46,11 @@ fun List<CompactFilterRailItem>.selectedFirst(): List<CompactFilterRailItem> {
     }
 }
 
-data class FavoritesTopBarOverrideState(
-    val tabsState: CompactTabsTopBarOverrideState,
-    val filterRailState: CompactFilterRailOverrideState? = null,
-    val contextualOverrideState: TopBarOverrideState? = null,
-) : TopBarOverrideState
-
 data class LayeredTopBarOverrideState(
     val tabsState: CompactTabsTopBarOverrideState? = null,
     val filterRailState: CompactFilterRailOverrideState? = null,
     val contextualOverrideState: TopBarOverrideState? = null,
+    val keepTabsExpandedWhenCollapsed: Boolean = false,
 ) : TopBarOverrideState
 
 data class RouteScopedTopBarOverrideState(
