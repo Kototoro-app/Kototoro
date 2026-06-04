@@ -4,23 +4,48 @@ import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.haze
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -34,10 +59,10 @@ import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
+import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.parsers.model.Content
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,36 +74,32 @@ fun KototoroFavoritesHostRoute(
     onNavigateToDetails: ((Content, String?) -> Unit)? = null,
     registerFilterCallback: Boolean = true,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
-    viewModel: FavouritesContainerViewModel = hiltViewModel()
+    viewModel: FavouritesContainerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val showMigrationPanel by viewModel.showMigrationPanel.collectAsStateWithLifecycle()
-    var lastLoadedUiState by remember {
-        mutableStateOf<FavouritesContainerViewModel.FavoritesHostUiState?>(null)
-    }
-    LaunchedEffect(uiState) {
-        if (!uiState.isLoading) {
-            lastLoadedUiState = uiState
-        }
-    }
-    val displayedUiState = lastLoadedUiState?.takeIf { uiState.isLoading } ?: uiState
-
     val mainActivity = LocalContext.current as? MainActivity
     val globalState = viewModel.globalFavoritesState
     val selectedGroupTab by globalState.selectedGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
 
     DisposableEffect(mainActivity, globalState, selectedGroupTab, selectedSourceTags, registerFilterCallback) {
-        if (!registerFilterCallback) { onDispose { } }
-        else {
+        if (!registerFilterCallback) {
+            onDispose { }
+        } else {
             val callback = object : SearchBarFilterViewController.Callback {
                 override fun isSourceTagFilterVisible() = true
+
                 override fun getSourceTagEntries() = SourceTag.quickFilterEntries
+
                 override fun getSelectedContentType() = selectedGroupTab
+
                 override fun onContentTypeSelected(tab: BrowseGroupTab) {
                     globalState.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
                 }
+
                 override fun getSelectedSourceTags() = selectedSourceTags
+
                 override fun onSourceTagSelected(tag: SourceTag?) {
                     when {
                         tag == null -> globalState.clearSourceTags()
@@ -93,34 +114,43 @@ fun KototoroFavoritesHostRoute(
     }
 
     SideEffect {
-        if (!registerFilterCallback) return@SideEffect
-        mainActivity?.refreshFilters()
+        if (registerFilterCallback) {
+            mainActivity?.refreshFilters()
+        }
     }
 
-    val displayCategories = remember(displayedUiState.categories, initialCategoryId, initialCategoryTitle) {
-        val categories = displayedUiState.categories
+    val displayCategories = remember(uiState.categories, initialCategoryId, initialCategoryTitle) {
+        val categories = buildList {
+            add(FavouriteTabModel(id = NO_ID, title = null))
+            uiState.categories.filterTo(this) { it.id != NO_ID }
+        }
         if (initialCategoryId == NO_ID || categories.any { it.id == initialCategoryId }) {
             categories
         } else {
             categories + FavouriteTabModel(id = initialCategoryId, title = initialCategoryTitle)
         }
     }
-    var selectedCategoryId by rememberSaveable(initialCategoryId) { mutableLongStateOf(initialCategoryId) }
+    val initialPage = remember(displayCategories, initialCategoryId) {
+        displayCategories.indexOfFirst { it.id == initialCategoryId }.takeIf { it >= 0 } ?: 0
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { displayCategories.size },
+    )
+    val coroutineScope = rememberCoroutineScope()
     var initialSelectionApplied by rememberSaveable(initialCategoryId) { mutableStateOf(false) }
     var childTopBarOverrideState by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var childTopBarOverrideGeneration by remember { mutableIntStateOf(-1) }
     var activeChildOverrideGeneration by remember { mutableIntStateOf(0) }
     var lastActiveCategoryId by remember { mutableStateOf<Long?>(null) }
     val allFavouritesLabel = stringResource(R.string.all_favourites)
-    val activeCategoryId = selectedCategoryId.takeIf { selectedId ->
-        displayCategories.any { it.id == selectedId }
-    } ?: displayCategories.firstOrNull()?.id ?: NO_ID
-    val pagerState = rememberPagerState(pageCount = { displayCategories.size.coerceAtLeast(1) })
-    val coroutineScope = rememberCoroutineScope()
+    val activePage = pagerState.settledPage.coerceIn(0, (displayCategories.size - 1).coerceAtLeast(0))
+    val selectedTabsPage = pagerState.targetPage.coerceIn(0, (displayCategories.size - 1).coerceAtLeast(0))
+    val activeCategoryId = displayCategories.getOrNull(activePage)?.id
 
     val innerPadding = PaddingValues(
-        start = contentPadding.calculateStartPadding(androidx.compose.ui.platform.LocalLayoutDirection.current),
-        end = contentPadding.calculateEndPadding(androidx.compose.ui.platform.LocalLayoutDirection.current),
+        start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
+        end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         top = contentPadding.calculateTopPadding(),
         bottom = contentPadding.calculateBottomPadding(),
     )
@@ -129,14 +159,11 @@ fun KototoroFavoritesHostRoute(
         if (initialSelectionApplied || displayCategories.isEmpty()) {
             return@LaunchedEffect
         }
-        selectedCategoryId = displayCategories.firstOrNull { it.id == initialCategoryId }?.id ?: NO_ID
-        initialSelectionApplied = true
-    }
-
-    LaunchedEffect(displayCategories, activeCategoryId) {
-        if (displayCategories.isNotEmpty() && displayCategories.none { it.id == selectedCategoryId }) {
-            selectedCategoryId = activeCategoryId
+        val targetPage = displayCategories.indexOfFirst { it.id == initialCategoryId }.takeIf { it >= 0 } ?: 0
+        if (pagerState.currentPage != targetPage) {
+            pagerState.scrollToPage(targetPage)
         }
+        initialSelectionApplied = true
     }
 
     LaunchedEffect(activeCategoryId) {
@@ -148,36 +175,11 @@ fun KototoroFavoritesHostRoute(
         if (previousActiveCategoryId == null) {
             return@LaunchedEffect
         }
-        val nextGeneration = activeChildOverrideGeneration + 1
-        activeChildOverrideGeneration = nextGeneration
+        activeChildOverrideGeneration += 1
         childTopBarOverrideState = null
     }
 
-    LaunchedEffect(displayCategories, activeCategoryId) {
-        val targetPage = displayCategories.indexOfFirst { it.id == activeCategoryId }
-            .takeIf { it >= 0 }
-            ?: return@LaunchedEffect
-        if (targetPage == pagerState.currentPage || targetPage >= pagerState.pageCount) {
-            return@LaunchedEffect
-        }
-        if (pagerState.currentPage == 0 && !pagerState.isScrollInProgress && lastActiveCategoryId == null) {
-            pagerState.scrollToPage(targetPage)
-        } else {
-            pagerState.animateScrollToPage(targetPage)
-        }
-    }
-
-    LaunchedEffect(pagerState, displayCategories) {
-        snapshotFlow { pagerState.currentPage }
-            .collect { page ->
-                val categoryId = displayCategories.getOrNull(page)?.id ?: return@collect
-                if (selectedCategoryId != categoryId) {
-                    selectedCategoryId = categoryId
-                }
-            }
-    }
-
-    val compactTabsState = remember(displayCategories, activeCategoryId) {
+    val compactTabsState = remember(displayCategories, selectedTabsPage, allFavouritesLabel) {
         CompactTabsTopBarOverrideState(
             items = displayCategories.map {
                 CompactTopBarTabItem(
@@ -185,22 +187,21 @@ fun KototoroFavoritesHostRoute(
                     title = if (it.id == NO_ID) allFavouritesLabel else (it.title ?: ""),
                 )
             },
-            selectedItemId = activeCategoryId,
+            selectedItemId = displayCategories.getOrNull(selectedTabsPage)?.id ?: NO_ID,
             onItemSelected = { categoryId ->
                 val targetPage = displayCategories.indexOfFirst { it.id == categoryId }
                 if (targetPage >= 0) {
-                    coroutineScope.launch {
-                        pagerState.animateScrollToPage(targetPage)
-                    }
+                    coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
                 }
             },
         )
     }
+
     val effectiveChildTopBarOverrideState = childTopBarOverrideState.takeIf {
-        !displayedUiState.isLoading &&
-            !displayedUiState.isEmpty &&
+        !uiState.isLoading &&
+            !uiState.isEmpty &&
             childTopBarOverrideGeneration == activeChildOverrideGeneration &&
-            (it as? org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState) != null
+            it is ContentSelectionTopBarOverrideState
     }
 
     val favoritesTopBarOverrideState = remember(
@@ -214,29 +215,48 @@ fun KototoroFavoritesHostRoute(
         )
     }
 
-    LaunchedEffect(displayedUiState.isLoading, favoritesTopBarOverrideState) {
-        if (displayedUiState.isLoading) return@LaunchedEffect
-        onTopBarOverrideChanged(favoritesTopBarOverrideState)
+    LaunchedEffect(uiState.isLoading, favoritesTopBarOverrideState) {
+        if (!uiState.isLoading) {
+            onTopBarOverrideChanged(favoritesTopBarOverrideState)
+        }
     }
 
     val hazeState = remember { HazeState() }
     val useBackgroundHaze = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    if (displayedUiState.isLoading) {
+    if (uiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
         return
     }
 
-    if (displayedUiState.isEmpty) {
-        Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
+    if (uiState.isEmpty) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+            contentAlignment = Alignment.Center,
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(painterResource(R.drawable.ic_empty_favourites), null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    painter = painterResource(R.drawable.ic_empty_favourites),
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(16.dp))
-                Text(stringResource(R.string.text_empty_holder_primary), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                Text(
+                    text = stringResource(R.string.text_empty_holder_primary),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.you_have_not_favourites_yet), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = stringResource(R.string.you_have_not_favourites_yet),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         return
@@ -244,30 +264,34 @@ fun KototoroFavoritesHostRoute(
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (useBackgroundHaze) Modifier.hazeSource(hazeState) else Modifier),
-                userScrollEnabled = displayCategories.size > 1,
-                key = { page -> displayCategories.getOrNull(page)?.id ?: page },
-            ) { page ->
-                val category = displayCategories.getOrNull(page) ?: return@HorizontalPager
-                KototoroFavoritesListScreen(
-                    categoryId = category.id,
-                    appRouter = appRouter,
-                    contentPadding = innerPadding,
-                    onNavigateToDetails = onNavigateToDetails,
-                    sharedTransitionEnabled = pagerState.currentPage == page,
-                    isActivePage = pagerState.currentPage == page,
-                    onTopBarOverrideChanged = { overrideState ->
-                        if (pagerState.currentPage == page) {
-                            childTopBarOverrideState = overrideState
-                            childTopBarOverrideGeneration = activeChildOverrideGeneration
-                        }
-                    },
-                    onFilterRailOverrideChanged = {},
-                )
+                    .then(if (useBackgroundHaze) Modifier.haze(hazeState) else Modifier),
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    key = { page -> displayCategories.getOrNull(page)?.id ?: page.toLong() },
+                ) { page ->
+                    val category = displayCategories.getOrNull(page) ?: return@HorizontalPager
+                    val enabled = page == activePage
+                    KototoroFavoritesListScreen(
+                        categoryId = category.id,
+                        appRouter = appRouter,
+                        contentPadding = innerPadding,
+                        onNavigateToDetails = onNavigateToDetails,
+                        sharedTransitionEnabled = enabled,
+                        isActivePage = enabled,
+                        onTopBarOverrideChanged = { overrideState ->
+                            if (enabled && category.id == activeCategoryId) {
+                                childTopBarOverrideState = overrideState
+                                childTopBarOverrideGeneration = activeChildOverrideGeneration
+                            }
+                        },
+                        onFilterRailOverrideChanged = {},
+                    )
+                }
             }
 
             AnimatedVisibility(

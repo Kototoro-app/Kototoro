@@ -152,23 +152,49 @@ fun DetailsCoverFrame(
                     ),
             )
             if (coverModel == null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(13f / 18f)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                            shape = MaterialTheme.shapes.medium,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = rememberSafePainter(R.drawable.ic_placeholder),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(32.dp),
+                if (sharedPlaceholder != null) {
+                    androidx.compose.foundation.Image(
+                        painter = cachedPainter,
+                        contentDescription = contentDescription,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(13f / 18f)
+                            .then(
+                                if (enableSharedElement) {
+                                    with(sharedTransitionScope) {
+                                        Modifier.sharedElement(
+                                            rememberSharedContentState(key = sharedElementKey),
+                                            animatedVisibilityScope = animatedVisibilityScope,
+                                        )
+                                    }
+                                } else Modifier
+                            )
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                                shape = MaterialTheme.shapes.medium,
+                            ),
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(13f / 18f)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                                shape = MaterialTheme.shapes.medium,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_placeholder),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp),
+                        )
+                    }
                 }
             } else {
                 AsyncImage(

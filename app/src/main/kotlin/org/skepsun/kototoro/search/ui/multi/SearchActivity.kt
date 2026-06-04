@@ -31,7 +31,7 @@ class SearchActivity : BaseActivity<ActivitySearchComposeBinding>() {
 				SearchResultsRoute(
 					viewModel = viewModel,
 					onBackClick = ::finishAfterTransition,
-					onOpenContent = { content ->
+					onOpenContent = { content, _ ->
 						router.openDetails(content)
 					},
 					onPickContent = { content ->

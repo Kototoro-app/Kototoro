@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,9 +84,6 @@ import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.explore.data.SourcePreset
-import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -106,6 +104,10 @@ private const val SearchOverlayAnimationDurationMillis = 260
 private val SearchOverlayCollapsedHeight = 56.dp
 private val SearchOverlayCollapsedHorizontalPadding = 10.dp
 private val SearchOverlayCollapsedCornerRadius = 24.dp
+private val SearchSuggestionCardWidth = 108.dp
+private val SearchSuggestionCardCornerRadius = 8.dp
+private val SearchSuggestionCardInnerCornerRadius = 6.dp
+private val SearchSuggestionChipHeight = 28.dp
 
 @Composable
 fun KototoroSearchOverlay(
@@ -647,6 +649,11 @@ private fun SuggestionList(
                             AssistChip(
                                 onClick = { tag?.let(onTagSuggestionClick) },
                                 label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
+                                modifier = Modifier.height(SearchSuggestionChipHeight),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
                             )
                         }
                     }
@@ -786,9 +793,9 @@ private fun TrackingEntitySuggestionCard(
     val typeTitle = stringResource(entity.entityType.titleResId())
     Surface(
         modifier = Modifier
-            .width(132.dp)
+            .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(SearchSuggestionCardCornerRadius),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -800,7 +807,7 @@ private fun TrackingEntitySuggestionCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(if (entity.entityType == EntityType.WORK) 0.7f else 1f)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(SearchSuggestionCardInnerCornerRadius))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
@@ -865,16 +872,12 @@ private fun ContentSuggestionCard(
             .apply { mangaExtra(content) }
             .build()
     }
-    val gridScale = remember(context.applicationContext) {
-        AppSettings(context.applicationContext)
-    }.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize / 100f }.value
-    val posterStyle = compactPosterCardStyle(gridScale)
 
     Surface(
         modifier = Modifier
-            .width(posterStyle.itemWidth)
+            .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(posterStyle.cornerRadius),
+        shape = RoundedCornerShape(SearchSuggestionCardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
             width = 1.dp,
@@ -887,7 +890,7 @@ private fun ContentSuggestionCard(
                 contentDescription = content.title,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(posterStyle.posterHeight)
+                    .aspectRatio(0.7f)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = ContentScale.Crop,
             )

@@ -37,6 +37,7 @@ import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.image.rememberPanoramaRequestSize
 import org.skepsun.kototoro.core.ui.image.panoramaBlur
@@ -84,6 +85,7 @@ fun AnimatedPanoramaBackdrop(
     prefs: PanoramaBackdropPrefs,
     model: Any?,
     placeholderMemoryCacheKey: String? = null,
+    snapshotKey: String? = null,
     contentAlpha: Float,
     contentAlphaProvider: (() -> Float)? = null,
     backgroundColor: Color,
@@ -192,14 +194,16 @@ fun AnimatedPanoramaBackdrop(
                 .build()
         }
     }
-    val placeholderImage = remember(imageLoader, backgroundRequest, placeholderMemoryCacheKey) {
+    val placeholderImage = remember(imageLoader, backgroundRequest, placeholderMemoryCacheKey, snapshotKey) {
         val memoryCache = imageLoader.memoryCache
         val primaryPlaceholder = backgroundRequest.memoryCacheKey?.let { key ->
             memoryCache?.get(MemoryCache.Key(key))?.image
         }
-        primaryPlaceholder ?: placeholderMemoryCacheKey?.let { key ->
-            memoryCache?.get(MemoryCache.Key(key))?.image
-        }
+        primaryPlaceholder
+            ?: placeholderMemoryCacheKey?.let { key ->
+                memoryCache?.get(MemoryCache.Key(key))?.image
+            }
+            ?: snapshotKey?.let(HeroCoverSnapshotStore::get)
     }
     var lastResolvedImage by remember { mutableStateOf<Image?>(null) }
     val stablePlaceholderImage = placeholderImage ?: lastResolvedImage
@@ -235,19 +239,21 @@ fun AnimatedPanoramaBackdrop(
         )
     }
 
-    AsyncImage(
-        model = backgroundRequest,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = backgroundModifier,
-        onSuccess = { state ->
-            lastResolvedImage = state.result.image
-            hasResolvedBackground = true
-        },
-        onError = {
-            hasResolvedBackground = true
-        },
-    )
+    if (model != null) {
+        AsyncImage(
+            model = backgroundRequest,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = backgroundModifier,
+            onSuccess = { state ->
+                lastResolvedImage = state.result.image
+                hasResolvedBackground = true
+            },
+            onError = {
+                hasResolvedBackground = true
+            },
+        )
+    }
     Box(
         modifier = modifier
             .fillMaxSize()

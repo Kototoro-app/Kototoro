@@ -661,7 +661,7 @@ fun DetailsScreen(
                     val panoramaCoverUrl = mangaDetails?.coverUrl?.takeIf { it.isNotBlank() }
                         ?: content?.largeCoverUrl?.takeIf { it.isNotBlank() }
                         ?: content?.coverUrl?.takeIf { it.isNotBlank() }
-                    if (panoramaCoverUrl != null) {
+                    if (panoramaCoverUrl != null || sharedElementKey != null) {
                         val panoramaPlaceholderCacheKey = remember(content?.source?.name, content?.url, content?.coverUrl) {
                             sharedCoverMemoryCacheKey(
                                 sourceName = content?.source?.name,
@@ -686,6 +686,7 @@ fun DetailsScreen(
                             prefs = panoramaPrefs,
                             model = request,
                             placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
+                            snapshotKey = sharedElementKey,
                             contentAlpha = 0.6f,
                             contentAlphaProvider = {
                                 0.6f * (1f - compactCollapseProgressProvider())

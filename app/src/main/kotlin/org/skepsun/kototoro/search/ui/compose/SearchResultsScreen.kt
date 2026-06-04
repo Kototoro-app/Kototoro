@@ -55,6 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -70,8 +71,9 @@ import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
+import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
-import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -105,9 +107,20 @@ private data class SearchPreparedItems(
     val supplementaryItems: List<ListModel>,
 )
 
+private val SearchFixedCardWidth = 108.dp
+private val SearchFixedCardHeight = SearchFixedCardWidth / 0.7f
+private val SearchFixedCardCornerRadius = 8.dp
+
+private fun fixedSearchPosterCardStyle(): CompactPosterCardStyle {
+    return CompactPosterCardStyle(
+        itemWidth = SearchFixedCardWidth,
+        posterHeight = SearchFixedCardHeight,
+        cornerRadius = SearchFixedCardCornerRadius,
+    )
+}
+
 @Immutable
 private data class SearchResultsScreenPrefs(
-    val gridScale: Float,
     val cardUiPrefs: ContentCardUiPrefs,
 )
 
@@ -128,12 +141,11 @@ private fun prepareSearchItems(items: List<ListModel>): SearchPreparedItems {
 }
 
 @Composable
-private fun rememberSearchGridSpanCount(gridScale: Float): Int {
+private fun rememberSearchGridSpanCount(cardWidth: Dp): Int {
     val configuration = LocalConfiguration.current
-    val posterStyle = remember(gridScale) { compactPosterCardStyle(gridScale) }
-    return remember(configuration.screenWidthDp, posterStyle.itemWidth) {
+    return remember(configuration.screenWidthDp, cardWidth) {
         val availableWidth = configuration.screenWidthDp.dp - 32.dp
-        (availableWidth / (posterStyle.itemWidth + 12.dp))
+        (availableWidth / (cardWidth + 12.dp))
             .toInt()
             .coerceAtLeast(2)
     }
@@ -144,7 +156,7 @@ private fun rememberSearchGridSpanCount(gridScale: Float): Int {
 fun SearchResultsRoute(
     viewModel: SearchViewModel,
     onBackClick: () -> Unit,
-    onOpenContent: (Content) -> Unit,
+    onOpenContent: (Content, String?) -> Unit,
     onPickContent: (Content) -> Unit,
     onOpenSourceResults: (SearchResultsListModel) -> Unit,
     onManageLanguagePresets: () -> Unit,
@@ -168,14 +180,12 @@ fun SearchResultsRoute(
     val context = LocalContext.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs by settings.observeAsState(
-        AppSettings.KEY_GRID_SIZE,
         AppSettings.KEY_BADGES_TOP_LEFT,
         AppSettings.KEY_BADGES_TOP_RIGHT,
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
     ) {
         SearchResultsScreenPrefs(
-            gridScale = gridSize / 100f,
             cardUiPrefs = ContentCardUiPrefs(
                 badgesTopLeft = badgesTopLeft,
                 badgesTopRight = badgesTopRight,
@@ -184,9 +194,9 @@ fun SearchResultsRoute(
             ),
         )
     }
-    val gridScale = screenPrefs.gridScale
     val cardUiPrefs = screenPrefs.cardUiPrefs
-    val gridSpanCount = rememberSearchGridSpanCount(gridScale)
+    val posterStyle = remember { fixedSearchPosterCardStyle() }
+    val gridSpanCount = rememberSearchGridSpanCount(posterStyle.itemWidth)
 
     var query by rememberSaveable { mutableStateOf(viewModel.query) }
     var advancedTitle by rememberSaveable { mutableStateOf(viewModel.advancedQuery?.title.orEmpty()) }
@@ -319,7 +329,7 @@ fun SearchResultsRoute(
                 SearchResultsSection(
                     section = section,
                     gridSpanCount = gridSpanCount,
-                    gridScale = gridScale,
+                    posterStyle = posterStyle,
                     cardUiPrefs = cardUiPrefs,
                     selectedItemsIds = selectedItemsIds,
                     selectionEnabled = selectedItemsIds.isNotEmpty() && !isPickMode,
@@ -330,7 +340,10 @@ fun SearchResultsRoute(
                         } else if (isPickMode) {
                             onPickContent(item.toContentWithOverride())
                         } else {
-                            onOpenContent(item.toContentWithOverride())
+                            onOpenContent(
+                                item.toContentWithOverride(),
+                                contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty()),
+                            )
                         }
                     },
                     onItemLongClick = { item ->
@@ -535,7 +548,7 @@ private fun SearchResultsTopBar(
 private fun SearchResultsSection(
     section: SearchResultsListModel,
     gridSpanCount: Int,
-    gridScale: Float,
+    posterStyle: CompactPosterCardStyle,
     cardUiPrefs: org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs,
     selectedItemsIds: Set<Long>,
     selectionEnabled: Boolean,
@@ -544,13 +557,6 @@ private fun SearchResultsSection(
     onItemLongClick: (ContentListModel) -> Unit,
 ) {
     val context = LocalContext.current
-    val posterStyle = remember(gridScale) {
-        val baseStyle = compactPosterCardStyle(gridScale)
-        baseStyle.copy(
-            itemWidth = (baseStyle.itemWidth.value * 1.16f).dp,
-            posterHeight = (baseStyle.posterHeight.value * 0.94f).dp,
-        )
-    }
     val rowState = rememberLazyListState()
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
 
@@ -610,7 +616,7 @@ private fun SearchResultsSection(
                                 model = item,
                                 isSelected = item.id in selectedItemsIds,
                                 selectionModeActive = selectionEnabled,
-                                sharedTransitionEnabled = false,
+                                sharedTransitionEnabled = true,
                                 cardStyle = posterStyle,
                                 uiPrefs = cardUiPrefs,
                                 onClick = { onItemClick(item) },

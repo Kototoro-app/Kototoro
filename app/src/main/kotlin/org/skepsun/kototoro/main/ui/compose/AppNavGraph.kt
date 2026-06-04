@@ -102,19 +102,11 @@ private fun NavDestination.mainRouteOrder(): Int = when {
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition {
-    if (!isMainRouteTransition()) return EnterTransition.None
-    return fadeIn(
-        animationSpec = tween(durationMillis = 220, easing = LinearEasing),
-        initialAlpha = 0.82f,
-    )
+    return EnterTransition.None
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeOut(): ExitTransition {
-    if (!isMainRouteTransition()) return ExitTransition.None
-    return fadeOut(
-        animationSpec = tween(durationMillis = 180, easing = LinearEasing),
-        targetAlpha = 0.88f,
-    )
+    return ExitTransition.None
 }
 
 @Composable
@@ -1310,8 +1302,8 @@ fun AppNavGraph(
             SearchResultsRoute(
                 viewModel = viewModel,
                 onBackClick = { navController.navigateUp() },
-                onOpenContent = { content ->
-                    navigateToDetailsWithContent(content, null)
+                onOpenContent = { content, sharedElementKey ->
+                    navigateToDetailsWithContent(content, sharedElementKey)
                 },
                 onPickContent = { },
                 onOpenSourceResults = { item ->
