@@ -655,18 +655,36 @@ class AppRouter private constructor(
         startActivity(intent)
     }
 
-    fun openSettings() = startActivity(SettingsActivity::class.java)
+    fun openSettings() {
+        val hostActivity = activity
+        startActivity(
+            Intent(contextOrNull() ?: return, SettingsActivity::class.java),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
+    }
 
     fun openTranslationSettings() {
-        startActivity(translationSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            translationSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openReaderSettings() {
-        startActivity(readerSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            readerSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openSyncSettings() {
-        startActivity(syncSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            syncSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openPeriodicBackupSettings() {
@@ -674,11 +692,19 @@ class AppRouter private constructor(
     }
 
     fun openProxySettings() {
-        startActivity(proxySettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            proxySettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openDownloadsSetting() {
-        startActivity(downloadsSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            downloadsSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openSourceSettings(source: ContentSource) {
@@ -686,19 +712,35 @@ class AppRouter private constructor(
     }
 
     fun openSuggestionsSettings() {
-        startActivity(suggestionsSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            suggestionsSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openTrackingAccountsSettings() {
-        startActivity(trackingAccountsSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            trackingAccountsSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openSourcesSettings() {
-        startActivity(sourcesSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            sourcesSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openDiscordSettings() {
-        startActivity(discordSettingsIntent(contextOrNull() ?: return))
+        val hostActivity = activity
+        startActivity(
+            discordSettingsIntent(contextOrNull() ?: return),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
     }
 
     fun openReaderTapGridSettings() = startActivity(ReaderTapGridConfigActivity::class.java)

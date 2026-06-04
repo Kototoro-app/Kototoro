@@ -33,6 +33,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -55,7 +58,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -76,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
@@ -122,6 +125,7 @@ import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
@@ -1237,6 +1241,7 @@ private fun SourceOptionCard(
     var statusMenuExpanded by remember(displayModel.linkedTrackingItem?.service, displayModel.linkedTrackingItem?.remoteId) {
         mutableStateOf(false)
     }
+    val optionCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = modifier
             .width(112.dp)
@@ -1245,10 +1250,10 @@ private fun SourceOptionCard(
         color = if (displayModel.isSelected)
             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
         else
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            optionCardColors.containerColor,
         border = if (displayModel.isSelected)
             BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-        else null,
+        else optionCardColors.border,
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1945,34 +1950,73 @@ private fun SourceSearchField(
     onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier
-                .height(48.dp),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            placeholder = {
-                Text(
-                    text = stringResource(R.string.search),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Filled.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-            },
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-            ),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                onSearch = { onSearch() },
-            ),
+    var isFocused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(22.dp)
+    val searchFieldColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    val containerColor = if (isFocused) {
+        searchFieldColors.containerColor
+    } else {
+        searchFieldColors.containerColor.copy(
+            alpha = (searchFieldColors.containerColor.alpha * 0.92f).coerceAtLeast(0.12f),
         )
+    }
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+        Surface(
+            modifier = modifier.height(44.dp),
+            shape = shape,
+            color = containerColor,
+            border = searchFieldColors.border,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onFocusChanged { isFocused = it.isFocused },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = MaterialTheme.typography.bodyMedium.fontSize,
+                ),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = { onSearch() },
+                ),
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(start = 12.dp, end = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            if (value.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.search),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -1982,6 +2026,7 @@ private fun DetailsSourceOverlayDialog(
     content: @Composable (panelDragModifier: Modifier) -> Unit,
 ) {
     var panelOffsetY by remember { mutableFloatStateOf(0f) }
+    val panelColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
     val density = androidx.compose.ui.platform.LocalDensity.current
     val dismissThresholdPx = remember(density) {
         with(density) { 96.dp.toPx() }
@@ -2019,7 +2064,7 @@ private fun DetailsSourceOverlayDialog(
                 ),
             contentAlignment = Alignment.BottomCenter,
         ) {
-            GlassSurface(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.92f)
@@ -2028,13 +2073,12 @@ private fun DetailsSourceOverlayDialog(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {},
-                    ),
-                style = GlassDefaults.prominentStyle().copy(
-                    containerAlpha = 0.84f,
-                    borderAlpha = 0.20f,
-                    shadowElevation = 0.dp,
                 ),
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = panelColors.containerColor,
+                border = panelColors.border,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(
@@ -2047,8 +2091,14 @@ private fun DetailsSourceOverlayDialog(
                             .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                             .align(Alignment.CenterHorizontally),
                     )
-                    Box(modifier = Modifier.weight(1f)) {
-                        content(panelDragModifier)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            content(panelDragModifier)
+                        }
                     }
                 }
             }
@@ -2142,59 +2192,71 @@ private fun ReadingSearchSection(
     onMigrateClick: (Content) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    val sectionColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    Surface(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = sectionColors.containerColor,
+        border = sectionColors.border,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
-        Text(
-            text = rememberResolvedSourceTitle(section.source.mangaSource),
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        section.errorMessage?.let { errorMessage ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Text(
-                text = errorMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                text = rememberResolvedSourceTitle(section.source.mangaSource),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
             )
-        }
-        when {
-            section.items.isNotEmpty() -> {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 2.dp),
-            ) {
-                itemsIndexed(
-                    items = section.items,
-                    key = { index, item -> "${item.id}:${item.source.name}:$index" },
-                ) { _, item ->
-                    ReadingSearchResultCard(
-                        item = item,
-                        onClick = { onItemClick(item) },
-                        onMigrateClick = { onMigrateClick(item) },
-                    )
+            section.errorMessage?.let { errorMessage ->
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            when {
+                section.items.isNotEmpty() -> {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 2.dp),
+                    ) {
+                        itemsIndexed(
+                            items = section.items,
+                            key = { index, item -> "${item.id}:${item.source.name}:$index" },
+                        ) { _, item ->
+                            ReadingSearchResultCard(
+                                item = item,
+                                onClick = { onItemClick(item) },
+                                onMigrateClick = { onMigrateClick(item) },
+                            )
+                        }
+                    }
                 }
-            }
-            }
-            section.isLoading -> {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                section.isLoading -> {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = stringResource(R.string.search),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                hasSearched && section.errorMessage == null -> {
                     Text(
-                        text = stringResource(R.string.search),
+                        text = stringResource(R.string.nothing_found),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-            hasSearched && section.errorMessage == null -> {
-                Text(
-                    text = stringResource(R.string.nothing_found),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -2309,10 +2371,14 @@ private fun TrackingSearchResultCard(
     onBindClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    GlassSurface(
+    val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    Surface(
         modifier = modifier.width(108.dp),
-        style = GlassDefaults.subtleStyle(),
         shape = RoundedCornerShape(18.dp),
+        color = resultCardColors.containerColor,
+        border = resultCardColors.border,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -2434,6 +2500,7 @@ private fun ReadingSearchResultRow(
 ) {
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
+    val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val coverUrl = item.coverUrl?.takeIf { it.isNotBlank() }
     val coverRequest = remember(item.id, coverUrl, item.source) {
         coverUrl?.let {
@@ -2519,6 +2586,7 @@ private fun ReadingSearchResultCard(
 ) {
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
+    val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val coverUrl = item.coverUrl?.takeIf { it.isNotBlank() }
     val coverRequest = remember(item.id, coverUrl, item.source) {
         coverUrl?.let {
@@ -2528,10 +2596,13 @@ private fun ReadingSearchResultCard(
                 .build()
         }
     }
-    GlassSurface(
+    Surface(
         modifier = modifier.width(108.dp),
-        style = GlassDefaults.subtleStyle(),
         shape = RoundedCornerShape(18.dp),
+        color = resultCardColors.containerColor,
+        border = resultCardColors.border,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier

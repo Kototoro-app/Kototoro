@@ -8,11 +8,15 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
@@ -23,11 +27,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import coil3.Image
+import coil3.asDrawable
 import coil3.compose.AsyncImage
+import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import dagger.hilt.android.EntryPointAccessors
+import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.image.rememberPanoramaRequestSize
 import org.skepsun.kototoro.core.ui.image.panoramaBlur
 import org.skepsun.kototoro.core.ui.compose.panoramaAnimationDurations
@@ -73,6 +83,7 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
 fun AnimatedPanoramaBackdrop(
     prefs: PanoramaBackdropPrefs,
     model: Any?,
+    placeholderMemoryCacheKey: String? = null,
     contentAlpha: Float,
     contentAlphaProvider: (() -> Float)? = null,
     backgroundColor: Color,
@@ -136,6 +147,12 @@ fun AnimatedPanoramaBackdrop(
     val context = LocalContext.current
     val useRealtimeBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && prefs.blurPercent > 0
     val realtimeBlurRadius = ((prefs.blurPercent.coerceIn(0, 100) / 100f) * 18f).dp
+    val imageLoader = remember(context.applicationContext) {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            BaseApp.BaseAppEntryPoint::class.java,
+        ).imageLoader()
+    }
     val panoramaRequestSize = rememberPanoramaRequestSize(
         minWidthPx = 1280,
         minHeightPx = 1280,
@@ -175,31 +192,61 @@ fun AnimatedPanoramaBackdrop(
                 .build()
         }
     }
+    val placeholderImage = remember(imageLoader, backgroundRequest, placeholderMemoryCacheKey) {
+        val memoryCache = imageLoader.memoryCache
+        val primaryPlaceholder = backgroundRequest.memoryCacheKey?.let { key ->
+            memoryCache?.get(MemoryCache.Key(key))?.image
+        }
+        primaryPlaceholder ?: placeholderMemoryCacheKey?.let { key ->
+            memoryCache?.get(MemoryCache.Key(key))?.image
+        }
+    }
+    var lastResolvedImage by remember { mutableStateOf<Image?>(null) }
+    val stablePlaceholderImage = placeholderImage ?: lastResolvedImage
+    val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
+    var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
+    val backgroundModifier = modifier
+        .fillMaxSize()
+        .then(
+            if (useRealtimeBlur) {
+                Modifier.blur(
+                    radius = realtimeBlurRadius,
+                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                )
+            } else {
+                Modifier
+            },
+        )
+        .graphicsLayer {
+            val backgroundScale = backgroundScaleState?.value ?: 1f
+            scaleX = backgroundScale
+            scaleY = backgroundScale
+            translationX = backgroundTranslationXState?.value ?: 0f
+            translationY = backgroundTranslationYState?.value ?: 0f
+            alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
+        }
+
+    if (!hasResolvedBackground && stablePlaceholderImage != null) {
+        Image(
+            painter = placeholderPainter,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = backgroundModifier,
+        )
+    }
 
     AsyncImage(
         model = backgroundRequest,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = modifier
-            .fillMaxSize()
-            .then(
-                if (useRealtimeBlur) {
-                    Modifier.blur(
-                        radius = realtimeBlurRadius,
-                        edgeTreatment = BlurredEdgeTreatment.Unbounded,
-                    )
-                } else {
-                    Modifier
-                },
-            )
-            .graphicsLayer {
-                val backgroundScale = backgroundScaleState?.value ?: 1f
-                scaleX = backgroundScale
-                scaleY = backgroundScale
-                translationX = backgroundTranslationXState?.value ?: 0f
-                translationY = backgroundTranslationYState?.value ?: 0f
-                alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
-            }
+        modifier = backgroundModifier,
+        onSuccess = { state ->
+            lastResolvedImage = state.result.image
+            hasResolvedBackground = true
+        },
+        onError = {
+            hasResolvedBackground = true
+        },
     )
     Box(
         modifier = modifier

@@ -145,6 +145,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
+import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -153,6 +154,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
+import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -299,7 +301,8 @@ fun DetailsScreen(
     val rootView = LocalView.current
     val panoramaPrefs = rememberPanoramaBackdropPrefs(settings)
     val downloadDialogViewModel: DownloadDialogViewModel = hiltViewModel()
-    val content = mangaDetails?.toContent()
+    val initialContent = remember { PendingDetailsNavigation.lastContent() }
+    val content = mangaDetails?.toContent() ?: initialContent
     val contentType = resolvedMetadataContentType
     val selectedMetadataOption = metadataSourceOptions.firstOrNull { it.isSelected }
         ?: metadataSourceOptions.firstOrNull()
@@ -659,22 +662,30 @@ fun DetailsScreen(
                         ?: content?.largeCoverUrl?.takeIf { it.isNotBlank() }
                         ?: content?.coverUrl?.takeIf { it.isNotBlank() }
                     if (panoramaCoverUrl != null) {
+                        val panoramaPlaceholderCacheKey = remember(content?.source?.name, content?.url, content?.coverUrl) {
+                            sharedCoverMemoryCacheKey(
+                                sourceName = content?.source?.name,
+                                ownerKey = content?.url,
+                                url = content?.coverUrl?.takeIf { it.isNotBlank() },
+                            )
+                        }
                         val request = remember(content?.source?.name, content?.url, panoramaCoverUrl) {
-                            val cacheKey = sharedCoverMemoryCacheKey(
+                            val panoramaCacheKey = sharedCoverMemoryCacheKey(
                                 sourceName = content?.source?.name,
                                 ownerKey = content?.url,
                                 url = panoramaCoverUrl,
-                            )?.let { "${it}#panorama" }
+                            )
                             ImageRequest.Builder(context)
                                 .data(panoramaCoverUrl)
-                                .memoryCacheKey(cacheKey)
-                                .diskCacheKey(cacheKey)
+                                .memoryCacheKey(panoramaCacheKey)
+                                .diskCacheKey(panoramaCacheKey)
                                 .apply { content?.let { mangaExtra(it) } }
                                 .build()
                         }
                         AnimatedPanoramaBackdrop(
                             prefs = panoramaPrefs,
                             model = request,
+                            placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
                             contentAlpha = 0.6f,
                             contentAlphaProvider = {
                                 0.6f * (1f - compactCollapseProgressProvider())
@@ -1482,11 +1493,12 @@ private fun DetailsPlainBottomSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailsGlassBottomSheet(
+private fun DetailsTranslucentBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val sheetColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -1499,13 +1511,15 @@ private fun DetailsGlassBottomSheet(
         dragHandle = null,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
-        GlassSurface(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(modifier),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            style = GlassDefaults.prominentStyle(),
-            dialogSurface = true,
+            color = sheetColors.containerColor,
+            border = sheetColors.border,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -1521,7 +1535,7 @@ private fun DetailsStatsSheet(
     onDismissRequest: () -> Unit,
     onOpenDetails: () -> Unit,
 ) {
-    DetailsGlassBottomSheet(
+    DetailsTranslucentBottomSheet(
         onDismissRequest = onDismissRequest,
     ) {
         ContentStatsSheetContent(
@@ -1541,7 +1555,7 @@ private fun TrackingRelationItemSheet(
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    DetailsPlainBottomSheet(
+    DetailsTranslucentBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.fillMaxHeight(0.92f),
     ) {
@@ -1684,10 +1698,12 @@ private fun TrackingRelationMetaBlock(
     label: String,
     value: String,
 ) {
+    val blockColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+        color = blockColors.containerColor,
+        border = blockColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -1720,7 +1736,8 @@ private fun TrackingReviewsSheet(
     onOpenExternal: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    DetailsGlassBottomSheet(
+    val reviewCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    DetailsTranslucentBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.fillMaxHeight(0.92f),
     ) {
@@ -1752,10 +1769,13 @@ private fun TrackingReviewsSheet(
             }
             if (reviews.isEmpty()) {
                 item {
-                    GlassSurface(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        style = GlassDefaults.subtleStyle(),
                         shape = RoundedCornerShape(24.dp),
+                        color = reviewCardColors.containerColor,
+                        border = reviewCardColors.border,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
                     ) {
                         Text(
                             text = stringResource(R.string.details_no_reviews),
@@ -1767,10 +1787,13 @@ private fun TrackingReviewsSheet(
                 }
             } else {
                 items(reviews, key = { review -> review.url }) { review ->
-                    GlassSurface(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        style = GlassDefaults.subtleStyle(),
                         shape = RoundedCornerShape(24.dp),
+                        color = reviewCardColors.containerColor,
+                        border = reviewCardColors.border,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
                     ) {
                         Column(
                             modifier = Modifier
@@ -1844,7 +1867,8 @@ private fun TrackingCommentsSheet(
     onOpenExternal: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    DetailsGlassBottomSheet(
+    val commentCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    DetailsTranslucentBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.fillMaxHeight(0.92f),
     ) {
@@ -1876,10 +1900,13 @@ private fun TrackingCommentsSheet(
             }
             if (threads.isEmpty()) {
                 item {
-                    GlassSurface(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        style = GlassDefaults.subtleStyle(),
                         shape = RoundedCornerShape(24.dp),
+                        color = commentCardColors.containerColor,
+                        border = commentCardColors.border,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
                     ) {
                         Text(
                             text = stringResource(R.string.details_no_comments),
@@ -1891,10 +1918,13 @@ private fun TrackingCommentsSheet(
                 }
             } else {
                 items(threads, key = { thread -> "${thread.userName}:${thread.postedAt}:${thread.content.hashCode()}" }) { thread ->
-                    GlassSurface(
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        style = GlassDefaults.subtleStyle(),
                         shape = RoundedCornerShape(24.dp),
+                        color = commentCardColors.containerColor,
+                        border = commentCardColors.border,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
                     ) {
                         Column(
                             modifier = Modifier
@@ -3157,6 +3187,7 @@ private fun ReadingRecordSheet(
     onJumpPointClick: (ReadingJumpPointEntity) -> Unit,
 ) {
     val sessions = snapshot.sessions
+    val sheetColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
     val lastReadAt = snapshot.summary.lastReadAt ?: sessions.maxOfOrNull { it.endAt }
     val totalDuration = snapshot.summary.totalDuration.takeIf { it > 0L }
         ?: sessions.sumOf { (it.endAt - it.startAt).coerceAtLeast(0L) }
@@ -3214,12 +3245,14 @@ private fun ReadingRecordSheet(
         dragHandle = null,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
-        GlassSurface(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth(),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            style = GlassDefaults.prominentStyle(),
-            dialogSurface = true,
+            color = sheetColors.containerColor,
+            border = sheetColors.border,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
         ) {
             LazyColumn(
                 state = listState,
@@ -3292,10 +3325,14 @@ private fun ReadingRecordSummaryCard(
     readingDays: Int,
     lastReadAt: Long?,
     progress: Float,
-) {
-    GlassSurface(
+    ) {
+    val summaryCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    Surface(
         shape = RoundedCornerShape(22.dp),
-        style = GlassDefaults.subtleStyle(),
+        color = summaryCardColors.containerColor,
+        border = summaryCardColors.border,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -3373,9 +3410,13 @@ private fun ChapterStatisticsSummary(
     chapters: List<ReadingChapterAggregateEntity>,
     chapterTitle: (Long) -> String,
 ) {
-    GlassSurface(
+    val summaryCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    Surface(
         shape = RoundedCornerShape(22.dp),
-        style = GlassDefaults.subtleStyle(),
+        color = summaryCardColors.containerColor,
+        border = summaryCardColors.border,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier

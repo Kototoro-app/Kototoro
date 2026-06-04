@@ -96,6 +96,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
+import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -536,7 +537,11 @@ private fun HomeHeroCard(
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfade = sharedTransitionScope == null || animatedVisibilityScope == null
     val imageRequest = remember(content.coverUrl, content.id, content.source.name, shouldCrossfade) {
-        val cacheKey = stableHomeImageCacheKey("home-hero-cover", content.source.name, content.id, content.coverUrl)
+        val cacheKey = sharedCoverMemoryCacheKey(
+            sourceName = content.source.name,
+            ownerKey = content.url,
+            url = content.coverUrl,
+        )
         ImageRequest.Builder(context)
             .data(content.coverUrl)
             .memoryCacheKey(cacheKey)
@@ -950,7 +955,11 @@ private fun HomeListRailRowItem(
     val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
     var coverBounds by remember(content.id, item.sectionKey) { mutableStateOf<Rect?>(null) }
     val imageRequest = remember(content.coverUrl, content.id, content.source.name, shouldCrossfadeCover) {
-        val cacheKey = stableHomeImageCacheKey("home-list-rail-cover", content.source.name, content.id, content.coverUrl)
+        val cacheKey = sharedCoverMemoryCacheKey(
+            sourceName = content.source.name,
+            ownerKey = content.url,
+            url = content.coverUrl,
+        )
         ImageRequest.Builder(context)
             .data(content.coverUrl)
             .memoryCacheKey(cacheKey)
@@ -1079,7 +1088,11 @@ private fun HomeCoverRowItem(
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
     val imageRequest = remember(content.coverUrl, content.id, content.source.name, shouldCrossfadeCover) {
-        val cacheKey = stableHomeImageCacheKey("home-row-cover", content.source.name, content.id, content.coverUrl)
+        val cacheKey = sharedCoverMemoryCacheKey(
+            sourceName = content.source.name,
+            ownerKey = content.url,
+            url = content.coverUrl,
+        )
         ImageRequest.Builder(context)
             .data(content.coverUrl)
             .memoryCacheKey(cacheKey)
@@ -1158,21 +1171,6 @@ private fun HomeCoverRowItem(
             )
         }
     }
-}
-
-private fun stableHomeImageCacheKey(
-    prefix: String,
-    sourceName: String,
-    contentId: Long,
-    url: String?,
-): String = buildString {
-    append(prefix)
-    append('#')
-    append(sourceName)
-    append('#')
-    append(contentId)
-    append('#')
-    append(url.orEmpty())
 }
 
 private fun itemNewChaptersText(label: String, count: Int): String = "$label $count"

@@ -47,7 +47,9 @@ fun KototoroFavoritesListScreen(
             )
         }.getOrNull()
     }
-    val viewModel = hiltViewModel<FavouritesListViewModel>()
+    val viewModel = hiltViewModel<FavouritesListViewModel>(
+        key = "favorites_list_$categoryId",
+    )
     LaunchedEffect(categoryId) {
         viewModel.setCategoryId(categoryId)
     }

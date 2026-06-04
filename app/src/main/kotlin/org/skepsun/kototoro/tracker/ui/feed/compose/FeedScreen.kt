@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.tracker.ui.feed.compose
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,7 +29,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.positionChangedIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -44,6 +51,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +74,7 @@ fun FeedScreen(
 		LazyListState()
 	}
 	val context = LocalContext.current
+	val density = LocalDensity.current
 	val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
 	val carouselPrefs by settings.observeAsState(
 		AppSettings.KEY_GRID_SIZE,
@@ -92,11 +101,50 @@ fun FeedScreen(
 			onLoadMore()
 		}
 	}
+	val swipeThresholdPx = with(density) { 72.dp.toPx() }
 
 	KototoroPullToRefreshBox(
 		isRefreshing = isRefreshing,
 		onRefresh = onRefresh,
-		modifier = modifier.fillMaxSize(),
+		modifier = modifier
+			.fillMaxSize()
+			.pointerInput(categories, selectedCategoryId) {
+				if (categories.size <= 1) {
+					return@pointerInput
+				}
+				awaitEachGesture {
+					awaitFirstDown(requireUnconsumed = false)
+					var totalX = 0f
+					var totalY = 0f
+					var pointerStillDown = true
+					while (pointerStillDown) {
+						val event = awaitPointerEvent()
+						val change = event.changes.firstOrNull() ?: break
+						if (change.positionChangedIgnoreConsumed()) {
+							val delta = change.positionChange()
+							totalX += delta.x
+							totalY += delta.y
+						}
+						pointerStillDown = event.changes.any {
+							!it.changedToUpIgnoreConsumed() && it.pressed
+						}
+					}
+					if (abs(totalX) < swipeThresholdPx || abs(totalX) <= abs(totalY) * 1.35f) {
+						return@awaitEachGesture
+					}
+					val currentIndex = categories.indexOfFirst { it.id == selectedCategoryId }
+					if (currentIndex == -1) {
+						return@awaitEachGesture
+					}
+					val targetIndex = when {
+						totalX < 0f -> (currentIndex + 1).coerceAtMost(categories.lastIndex)
+						else -> (currentIndex - 1).coerceAtLeast(0)
+					}
+					if (targetIndex != currentIndex) {
+						onCategorySelected(categories[targetIndex].id)
+					}
+				}
+			},
 		indicatorTopInset = contentPadding,
 	) {
 		LazyColumn(

@@ -75,6 +75,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
+import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_READ
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.NONE
@@ -1063,8 +1064,15 @@ private fun buildContentCoverRequest(
     allowCrossfade: Boolean = true,
 ): ImageRequest {
     val normalizedUrl = coverUrl?.let(::normalizeCoverUrl)
+    val cacheKey = sharedCoverMemoryCacheKey(
+        sourceName = manga.source.name,
+        ownerKey = manga.url,
+        url = normalizedUrl,
+    )
     return ImageRequest.Builder(context)
         .data(normalizedUrl)
+        .memoryCacheKey(cacheKey)
+        .diskCacheKey(cacheKey)
         .mangaExtra(manga)
         .crossfade(allowCrossfade)
         .build()

@@ -51,6 +51,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -85,11 +86,54 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.isMainRouteTransit
     return initialState.destination.isMainRoute() && targetState.destination.isMainRoute()
 }
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition =
-    EnterTransition.None
+private fun NavDestination.mainRouteOrder(): Int = when {
+    hasRoute<HomeRoute>() -> 0
+    hasRoute<HistoryRoute>() -> 1
+    hasRoute<FavoritesRoute>() -> 2
+    hasRoute<ExploreRoute>() -> 3
+    hasRoute<DiscoverRoute>() -> 4
+    hasRoute<FeedRoute>() -> 5
+    hasRoute<LocalRoute>() -> 6
+    hasRoute<SuggestionsRoute>() -> 7
+    hasRoute<BookmarksRoute>() -> 8
+    hasRoute<UpdatedRoute>() -> 9
+    else -> Int.MAX_VALUE
+}
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeOut(): ExitTransition =
-    ExitTransition.None
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteDirection():
+    AnimatedContentTransitionScope.SlideDirection {
+    val initialOrder = initialState.destination.mainRouteOrder()
+    val targetOrder = targetState.destination.mainRouteOrder()
+    return if (targetOrder >= initialOrder) {
+        AnimatedContentTransitionScope.SlideDirection.Left
+    } else {
+        AnimatedContentTransitionScope.SlideDirection.Right
+    }
+}
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition {
+    if (!isMainRouteTransition()) return EnterTransition.None
+    val direction = mainRouteDirection()
+    val initialOffset: (Int) -> Int = { distance ->
+        val signed = (distance * 0.16f).toInt()
+        if (direction == AnimatedContentTransitionScope.SlideDirection.Left) signed else -signed
+    }
+    return slideInHorizontally(
+        animationSpec = tween(durationMillis = 280, easing = LinearEasing),
+        initialOffsetX = initialOffset,
+    ) + fadeIn(
+        animationSpec = tween(durationMillis = 220, easing = LinearEasing),
+        initialAlpha = 0.82f,
+    )
+}
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeOut(): ExitTransition {
+    if (!isMainRouteTransition()) return ExitTransition.None
+    return fadeOut(
+        animationSpec = tween(durationMillis = 180, easing = LinearEasing),
+        targetAlpha = 0.88f,
+    )
+}
 
 private fun buildFavoriteCategoryTabsState(
     items: List<ListModel>,
