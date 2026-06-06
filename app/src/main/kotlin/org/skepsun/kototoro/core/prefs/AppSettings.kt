@@ -804,11 +804,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 
 	var hazeOpacityPercent: Int
-		get() = prefs.getSafeInt(KEY_HAZE_OPACITY, 82).coerceIn(0, 100)
+		get() = prefs.getSafeInt(
+			KEY_HAZE_OPACITY,
+			GlassMaterialPreset.HAZE_THICK.defaultOpacityPercent,
+		).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_HAZE_OPACITY, value.coerceIn(0, 100)) }
 
 	var glassMaterialPreset: GlassMaterialPreset
-		get() = prefs.getString(KEY_GLASS_MATERIAL_PRESET, null)
+		get() = prefs.getString(KEY_GLASS_MATERIAL_PRESET, GlassMaterialPreset.HAZE_THICK.name)
 			?.let { raw ->
 				GlassMaterialPreset.entries.firstOrNull { preset -> preset.name == raw }
 			}
@@ -824,21 +827,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var glassBlurStrengthPercent: Int
 		get() = prefs.getSafeInt(
 			KEY_GLASS_BLUR_STRENGTH,
-			GlassMaterialPreset.KOTOTORO.defaultBlurStrengthPercent,
+			GlassMaterialPreset.HAZE_THICK.defaultBlurStrengthPercent,
 		).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_GLASS_BLUR_STRENGTH, value.coerceIn(0, 100)) }
 
 	var glassNoiseStrengthPercent: Int
 		get() = prefs.getSafeInt(
 			KEY_GLASS_NOISE_STRENGTH,
-			GlassMaterialPreset.KOTOTORO.defaultNoiseStrengthPercent,
+			GlassMaterialPreset.HAZE_THICK.defaultNoiseStrengthPercent,
 		).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_GLASS_NOISE_STRENGTH, value.coerceIn(0, 100)) }
 
 	var glassImmersiveStrengthPercent: Int
 		get() = prefs.getSafeInt(
 			KEY_GLASS_IMMERSIVE_STRENGTH,
-			GlassMaterialPreset.KOTOTORO.defaultImmersiveStrengthPercent,
+			GlassMaterialPreset.HAZE_THICK.defaultImmersiveStrengthPercent,
 		).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_GLASS_IMMERSIVE_STRENGTH, value.coerceIn(0, 100)) }
 
