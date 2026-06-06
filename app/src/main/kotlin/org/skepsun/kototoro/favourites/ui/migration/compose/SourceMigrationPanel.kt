@@ -26,6 +26,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -309,8 +313,8 @@ fun SourceMigrationPanel(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (showHeader) {
                 item {
@@ -343,7 +347,10 @@ fun SourceMigrationPanel(
 
             if (uiState.isExecuting || uiState.migrationProgress?.isFinished == true) {
                 item {
-                    MigrationProgressSection(uiState)
+                    MigrationProgressSection(
+                        uiState = uiState,
+                        selectedStage = selectedStage,
+                    )
                 }
             }
 
@@ -356,7 +363,9 @@ fun SourceMigrationPanel(
                     workbenchDefaults = workbenchDefaults,
                     onViewStateChange = { workbenchViewState = it },
                     onToggleGroup = viewModel::toggleMergeGroup,
+                    onToggleReadingScopeGroup = viewModel::toggleReadingScopeGroup,
                     onSetGroupsSelected = viewModel::setMergeGroupsSelected,
+                    onSetReadingScopeGroupsSelected = viewModel::setReadingScopeGroupsSelected,
                     onToggleItem = viewModel::toggleMergeItem,
                     onToggleTrackingPreview = viewModel::toggleTrackingPreview,
                     onToggleReadingPreview = viewModel::toggleReadingPreview,
@@ -456,8 +465,8 @@ private fun DatasetBridgeCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1020,8 +1029,8 @@ private fun StageConfigCard(
                     uiState.migrationProgress?.let { progress ->
                         ExecutionProgressSection(
                             progress = progress,
-                            activeLabel = stringResource(R.string.source_migration_start),
-                            finishedLabel = stringResource(R.string.source_migration_start),
+                            activeLabel = stringResource(R.string.entity_organize_reading_preview_active),
+                            finishedLabel = stringResource(R.string.entity_organize_reading_preview_finished),
                         )
                     }
                     if (!uiState.hasManualSelection) {
@@ -1066,7 +1075,7 @@ private fun StageConfigCard(
                         when (selectedStage) {
                             EntityOrganizeStage.MERGE -> R.string.entity_organize_merge_execute
                             EntityOrganizeStage.TRACKING -> R.string.entity_organize_tracking_execute
-                            EntityOrganizeStage.READING -> R.string.source_migration_start
+                            EntityOrganizeStage.READING -> R.string.entity_organize_reading_execute
                         },
                     ),
                     enabled = when (selectedStage) {
@@ -1137,7 +1146,9 @@ private fun EntityWorkbenchSection(
     workbenchDefaults: EntityOrganizeWorkbenchDefaults,
     onViewStateChange: (EntityOrganizeWorkbenchViewState) -> Unit,
     onToggleGroup: (String) -> Unit,
+    onToggleReadingScopeGroup: (String) -> Unit,
     onSetGroupsSelected: (Set<String>, Boolean) -> Unit,
+    onSetReadingScopeGroupsSelected: (Set<String>, Boolean) -> Unit,
     onToggleItem: (String, Long) -> Unit,
     onToggleTrackingPreview: (String) -> Unit,
     onToggleReadingPreview: (Long) -> Unit,
@@ -1242,8 +1253,8 @@ private fun EntityWorkbenchSection(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = stringResource(R.string.entity_organize_workbench_title),
@@ -1256,6 +1267,7 @@ private fun EntityWorkbenchSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
                 WorkbenchSelectionSummaryCard(
+                    selectedStage = selectedStage,
                     summary = workbenchSummary,
                     statusFilter = viewState.statusFilter,
                     onStatusFilterChange = { onViewStateChange(viewState.copy(statusFilter = it)) },
@@ -1263,14 +1275,30 @@ private fun EntityWorkbenchSection(
                     onSortModeChange = { onViewStateChange(viewState.copy(sortMode = it)) },
                     stageFilters = viewState.stageFilters,
                     onStageFiltersChange = { onViewStateChange(viewState.copy(stageFilters = it)) },
-                    onRestoreRecommendedView = {
-                        onViewStateChange(
-                            EntityOrganizeWorkbenchViewState(
-                                statusFilter = workbenchDefaults.statusFilter,
-                                sortMode = workbenchDefaults.sortMode,
-                                pageSize = viewState.pageSize,
-                            ),
-                        )
+                    showSelectedOnly = viewState.showSelectedOnly,
+                    onToggleSelectedOnly = {
+                        onViewStateChange(viewState.copy(showSelectedOnly = !viewState.showSelectedOnly))
+                    },
+                    onSelectAllRows = {
+                        val allGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
+                        val allReadingScopeGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
+                        when (selectedStage) {
+                            EntityOrganizeStage.MERGE -> onSetGroupsSelected(allGroupIds, true)
+                            EntityOrganizeStage.TRACKING -> onSelectRecommendedTracking(allGroupIds)
+                            EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(allReadingScopeGroupIds, true)
+                        }
+                    },
+                    onClearAllRows = {
+                        val allGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
+                        val allReadingIds = filteredRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
+                        when (selectedStage) {
+                            EntityOrganizeStage.MERGE -> onSetGroupsSelected(allGroupIds, false)
+                            EntityOrganizeStage.TRACKING -> onClearTrackingSelections(allGroupIds)
+                            EntityOrganizeStage.READING -> {
+                                onSetReadingScopeGroupsSelected(allGroupIds, false)
+                                onClearReadingPreviews(allReadingIds)
+                            }
+                        }
                     },
                     hasVisibleRows = pagedRows.items.isNotEmpty(),
                 )
@@ -1287,6 +1315,7 @@ private fun EntityWorkbenchSection(
                 pageSize = viewState.pageSize,
                 onPageSizeChange = { onViewStateChange(viewState.copy(pageSize = it)) },
                 onPageChange = { onViewStateChange(viewState.copy(currentPage = it)) },
+                showSelectionToggle = false,
                 emptyContent = {
                     Text(
                         text = stringResource(R.string.entity_organize_merge_candidates_empty),
@@ -1294,23 +1323,27 @@ private fun EntityWorkbenchSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
+                tableToolbar = { visibleRows ->
+                    val visibleGroupIds = visibleRows.mapTo(LinkedHashSet()) { it.group.id }
+                    val visibleReadingIds = visibleRows
+                        .flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
+                    WorkbenchTableToolbar(
+                        selectedStage = selectedStage,
+                        onSelectVisibleGroups = { onSetGroupsSelected(visibleGroupIds, true) },
+                        onClearVisibleMergeSelections = { onSetGroupsSelected(visibleGroupIds, false) },
+                        onSelectVisibleReadingScope = { onSetReadingScopeGroupsSelected(visibleGroupIds, true) },
+                        onClearVisibleReadingScope = { onSetReadingScopeGroupsSelected(visibleGroupIds, false) },
+                        onSelectRecommendedTracking = { onSelectRecommendedTracking(visibleGroupIds) },
+                        onClearLowConfidenceTracking = { onClearLowConfidenceTracking(visibleGroupIds) },
+                        onClearTrackingSelections = { onClearTrackingSelections(visibleGroupIds) },
+                        onAcceptReadingPreviews = { onAcceptReadingPreviews(visibleReadingIds) },
+                        onClearReadingPreviews = { onClearReadingPreviews(visibleReadingIds) },
+                        hasVisibleMerge = visibleRows.any { it.isMergeCandidate },
+                        hasVisibleTracking = visibleRows.any { it.trackingCandidates.isNotEmpty() },
+                        hasVisibleReading = visibleRows.any { it.readingCandidates.isNotEmpty() },
+                    )
+                },
             ) { visibleRows ->
-                val visibleGroupIds = visibleRows.mapTo(LinkedHashSet()) { it.group.id }
-                val visibleReadingIds = visibleRows
-                    .flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
-                WorkbenchBatchToolbar(
-                    selectedStage = selectedStage,
-                    onSelectVisibleGroups = { onSetGroupsSelected(visibleGroupIds, true) },
-                    onClearVisibleMergeSelections = { onSetGroupsSelected(visibleGroupIds, false) },
-                    onSelectRecommendedTracking = { onSelectRecommendedTracking(visibleGroupIds) },
-                    onClearLowConfidenceTracking = { onClearLowConfidenceTracking(visibleGroupIds) },
-                    onClearTrackingSelections = { onClearTrackingSelections(visibleGroupIds) },
-                    onAcceptReadingPreviews = { onAcceptReadingPreviews(visibleReadingIds) },
-                    onClearReadingPreviews = { onClearReadingPreviews(visibleReadingIds) },
-                    hasVisibleMerge = visibleRows.any { it.isMergeCandidate },
-                    hasVisibleTracking = visibleRows.any { it.trackingCandidates.isNotEmpty() },
-                    hasVisibleReading = visibleRows.any { it.readingCandidates.isNotEmpty() },
-                )
                 EntityWorkbenchHeader()
                 visibleRows.forEach { row ->
                     EntityWorkbenchRowCard(
@@ -1318,6 +1351,7 @@ private fun EntityWorkbenchSection(
                         row = row,
                         uiState = uiState,
                         onToggleGroup = onToggleGroup,
+                        onToggleReadingScopeGroup = onToggleReadingScopeGroup,
                         onToggleItem = onToggleItem,
                         onToggleTrackingPreview = onToggleTrackingPreview,
                         onToggleReadingPreview = onToggleReadingPreview,
@@ -1443,6 +1477,7 @@ internal fun sortWorkbenchRows(
 
 @Composable
 private fun WorkbenchSelectionSummaryCard(
+    selectedStage: EntityOrganizeStage,
     summary: WorkbenchSelectionSummary,
     statusFilter: WorkbenchStatusFilter,
     onStatusFilterChange: (WorkbenchStatusFilter) -> Unit,
@@ -1450,7 +1485,10 @@ private fun WorkbenchSelectionSummaryCard(
     onSortModeChange: (WorkbenchSortMode) -> Unit,
     stageFilters: WorkbenchStageFilters,
     onStageFiltersChange: (WorkbenchStageFilters) -> Unit,
-    onRestoreRecommendedView: () -> Unit,
+    showSelectedOnly: Boolean,
+    onToggleSelectedOnly: () -> Unit,
+    onSelectAllRows: () -> Unit,
+    onClearAllRows: () -> Unit,
     hasVisibleRows: Boolean,
 ) {
     Surface(
@@ -1460,8 +1498,8 @@ private fun WorkbenchSelectionSummaryCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1482,97 +1520,21 @@ private fun WorkbenchSelectionSummaryCard(
                     value = "${summary.visibleRows}/${summary.totalRows}",
                     modifier = Modifier.weight(1f),
                 )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(
-                        R.string.entity_organize_workbench_selection_summary,
-                        summary.selectedGroups,
-                        summary.selectedTracking,
-                        summary.selectedReading,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                WorkbenchMetricChip(
+                    label = stringResource(R.string.entity_organize_workbench_metric_selected_groups),
+                    value = summary.selectedGroups.toString(),
                     modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                 )
-            }
-            FilterDropdown(
-                label = stringResource(R.string.entity_organize_workbench_status_filter),
-                summary = stringResource(
-                    when (statusFilter) {
-                        WorkbenchStatusFilter.ALL -> R.string.entity_organize_workbench_filter_all
-                        WorkbenchStatusFilter.ACTION_REQUIRED -> R.string.entity_organize_workbench_filter_action_required
-                        WorkbenchStatusFilter.SELECTED -> R.string.entity_organize_workbench_filter_selected
-                        WorkbenchStatusFilter.UNSELECTED -> R.string.entity_organize_workbench_filter_unselected
-                    },
-                ),
-                enabled = true,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                WorkbenchStatusFilter.entries.forEach { filter ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    when (filter) {
-                                        WorkbenchStatusFilter.ALL -> R.string.entity_organize_workbench_filter_all
-                                        WorkbenchStatusFilter.ACTION_REQUIRED -> R.string.entity_organize_workbench_filter_action_required
-                                        WorkbenchStatusFilter.SELECTED -> R.string.entity_organize_workbench_filter_selected
-                                        WorkbenchStatusFilter.UNSELECTED -> R.string.entity_organize_workbench_filter_unselected
-                                    },
-                                ),
-                            )
-                        },
-                        onClick = { onStatusFilterChange(filter) },
-                        trailingIcon = if (filter == statusFilter) {
-                            { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
-                        } else {
-                            null
-                        },
-                    )
-                }
-            }
-            FilterDropdown(
-                label = stringResource(R.string.entity_organize_workbench_sort_label),
-                summary = stringResource(
-                    when (sortMode) {
-                        WorkbenchSortMode.ACTION_FIRST -> R.string.entity_organize_workbench_sort_action_first
-                        WorkbenchSortMode.MATCH_SCORE -> R.string.entity_organize_workbench_sort_match_score
-                        WorkbenchSortMode.PROJECTIONS -> R.string.entity_organize_workbench_sort_projections
-                        WorkbenchSortMode.TITLE -> R.string.entity_organize_workbench_sort_title
-                    },
-                ),
-                enabled = true,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                WorkbenchSortMode.entries.forEach { mode ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    when (mode) {
-                                        WorkbenchSortMode.ACTION_FIRST -> R.string.entity_organize_workbench_sort_action_first
-                                        WorkbenchSortMode.MATCH_SCORE -> R.string.entity_organize_workbench_sort_match_score
-                                        WorkbenchSortMode.PROJECTIONS -> R.string.entity_organize_workbench_sort_projections
-                                        WorkbenchSortMode.TITLE -> R.string.entity_organize_workbench_sort_title
-                                    },
-                                ),
-                            )
-                        },
-                        onClick = { onSortModeChange(mode) },
-                        trailingIcon = if (mode == sortMode) {
-                            { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
-                        } else {
-                            null
-                        },
-                    )
-                }
+                WorkbenchMetricChip(
+                    label = stringResource(R.string.entity_organize_tracking_title),
+                    value = summary.selectedTracking.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                WorkbenchMetricChip(
+                    label = stringResource(R.string.entity_organize_reading_title),
+                    value = summary.selectedReading.toString(),
+                    modifier = Modifier.weight(1f),
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1580,35 +1542,117 @@ private fun WorkbenchSelectionSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FilterDropdown(
-                    label = stringResource(R.string.entity_organize_merge_title),
-                    summary = when {
-                        stageFilters.merge.isEmpty() -> stringResource(R.string.entity_organize_workbench_stage_filter_all)
-                        stageFilters.merge.size == 1 -> stringResource(stageStateLabelRes(stageFilters.merge.first()))
-                        else -> stringResource(R.string.entity_organize_workbench_stage_filter_multi, stageFilters.merge.size)
-                    },
+                    label = stringResource(R.string.entity_organize_workbench_status_filter),
+                    summary = stringResource(
+                        when (statusFilter) {
+                            WorkbenchStatusFilter.ALL -> R.string.entity_organize_workbench_filter_all
+                            WorkbenchStatusFilter.ACTION_REQUIRED -> R.string.entity_organize_workbench_filter_action_required
+                            WorkbenchStatusFilter.SELECTED -> R.string.entity_organize_workbench_filter_selected
+                            WorkbenchStatusFilter.UNSELECTED -> R.string.entity_organize_workbench_filter_unselected
+                        },
+                    ),
                     enabled = true,
                     modifier = Modifier.weight(1f),
                 ) {
-                    WorkbenchStageState.entries.forEach { state ->
-                        val checked = state in stageFilters.merge
+                    WorkbenchStatusFilter.entries.forEach { filter ->
                         DropdownMenuItem(
                             text = {
-                                Text(stringResource(stageStateLabelRes(state)))
+                                Text(
+                                    stringResource(
+                                        when (filter) {
+                                            WorkbenchStatusFilter.ALL -> R.string.entity_organize_workbench_filter_all
+                                            WorkbenchStatusFilter.ACTION_REQUIRED -> R.string.entity_organize_workbench_filter_action_required
+                                            WorkbenchStatusFilter.SELECTED -> R.string.entity_organize_workbench_filter_selected
+                                            WorkbenchStatusFilter.UNSELECTED -> R.string.entity_organize_workbench_filter_unselected
+                                        },
+                                    ),
+                                )
                             },
-                            onClick = {
-                                val next = if (checked) stageFilters.merge - state else stageFilters.merge + state
-                                onStageFiltersChange(stageFilters.copy(merge = next))
-                            },
-                            trailingIcon = if (checked) {
+                            onClick = { onStatusFilterChange(filter) },
+                            trailingIcon = if (filter == statusFilter) {
                                 { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
                             } else {
                                 null
                             },
                         )
                     }
+                }
+                FilterDropdown(
+                    label = stringResource(R.string.entity_organize_workbench_sort_label),
+                    summary = stringResource(
+                        when (sortMode) {
+                            WorkbenchSortMode.ACTION_FIRST -> R.string.entity_organize_workbench_sort_action_first
+                            WorkbenchSortMode.MATCH_SCORE -> R.string.entity_organize_workbench_sort_match_score
+                            WorkbenchSortMode.PROJECTIONS -> R.string.entity_organize_workbench_sort_projections
+                            WorkbenchSortMode.TITLE -> R.string.entity_organize_workbench_sort_title
+                        },
+                    ),
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    WorkbenchSortMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        when (mode) {
+                                            WorkbenchSortMode.ACTION_FIRST -> R.string.entity_organize_workbench_sort_action_first
+                                            WorkbenchSortMode.MATCH_SCORE -> R.string.entity_organize_workbench_sort_match_score
+                                            WorkbenchSortMode.PROJECTIONS -> R.string.entity_organize_workbench_sort_projections
+                                            WorkbenchSortMode.TITLE -> R.string.entity_organize_workbench_sort_title
+                                        },
+                                    ),
+                                )
+                            },
+                            onClick = { onSortModeChange(mode) },
+                            trailingIcon = if (mode == sortMode) {
+                                { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                }
+                FilterDropdown(
+                    label = stringResource(R.string.advanced),
+                    summary = workbenchAdvancedFilterSummary(stageFilters),
+                    enabled = true,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    StageFilterSection(
+                        title = stringResource(R.string.entity_organize_merge_title),
+                        selected = stageFilters.merge,
+                        onSelectedChange = { merge ->
+                            onStageFiltersChange(stageFilters.copy(merge = merge))
+                        },
+                    )
+                    HorizontalDivider()
+                    StageFilterSection(
+                        title = stringResource(R.string.entity_organize_tracking_title),
+                        selected = stageFilters.tracking,
+                        onSelectedChange = { tracking ->
+                            onStageFiltersChange(stageFilters.copy(tracking = tracking))
+                        },
+                    )
+                    HorizontalDivider()
+                    StageFilterSection(
+                        title = stringResource(R.string.entity_organize_reading_title),
+                        selected = stageFilters.reading,
+                        onSelectedChange = { reading ->
+                            onStageFiltersChange(stageFilters.copy(reading = reading))
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.entity_organize_workbench_stage_filter_clear)) },
-                        onClick = { onStageFiltersChange(stageFilters.copy(merge = emptySet())) },
+                        onClick = {
+                            onStageFiltersChange(
+                                WorkbenchStageFilters(
+                                    merge = emptySet(),
+                                    tracking = emptySet(),
+                                    reading = emptySet(),
+                                ),
+                            )
+                        },
                     )
                 }
             }
@@ -1617,40 +1661,50 @@ private fun WorkbenchSelectionSummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StageFilterDropdown(
-                    label = stringResource(R.string.entity_organize_tracking_title),
-                    selected = stageFilters.tracking,
-                    onSelectedChange = { tracking ->
-                        onStageFiltersChange(stageFilters.copy(tracking = tracking))
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                StageFilterDropdown(
-                    label = stringResource(R.string.entity_organize_reading_title),
-                    selected = stageFilters.reading,
-                    onSelectedChange = { reading ->
-                        onStageFiltersChange(stageFilters.copy(reading = reading))
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
                 OutlinedButton(
-                    onClick = onRestoreRecommendedView,
+                    onClick = onSelectAllRows,
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 44.dp),
                 ) {
-                    ButtonLabel(stringResource(R.string.entity_organize_workbench_restore_recommended_view))
+                    ButtonLabel(stringResource(R.string.entity_organize_workbench_select_all))
+                }
+                OutlinedButton(
+                    onClick = onClearAllRows,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp),
+                ) {
+                    ButtonLabel(
+                        stringResource(
+                            when (selectedStage) {
+                                EntityOrganizeStage.MERGE -> R.string.entity_organize_workbench_clear_all
+                                EntityOrganizeStage.TRACKING -> R.string.entity_organize_workbench_clear_all
+                                EntityOrganizeStage.READING -> R.string.entity_organize_workbench_clear_all
+                            },
+                        ),
+                    )
+                }
+                OutlinedButton(
+                    onClick = onToggleSelectedOnly,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp),
+                ) {
+                    ButtonLabel(
+                        stringResource(
+                            if (showSelectedOnly) {
+                                R.string.entity_organize_show_all
+                            } else {
+                                R.string.entity_organize_show_selected_only
+                            },
+                        ),
+                    )
                 }
             }
             if (!hasVisibleRows) {
                 Text(
-                    text = stringResource(R.string.entity_organize_merge_candidates_empty),
+                    text = stringResource(R.string.entity_organize_filtered_empty),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1791,10 +1845,94 @@ private fun StageFilterDropdown(
 }
 
 @Composable
-private fun WorkbenchBatchToolbar(
+private fun StageFilterSection(
+    title: String,
+    selected: Set<WorkbenchStageState>,
+    onSelectedChange: (Set<WorkbenchStageState>) -> Unit,
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            WorkbenchStageState.entries.forEach { state ->
+                val checked = state in selected
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .clickable {
+                            val next = if (checked) selected - state else selected + state
+                            onSelectedChange(next)
+                        },
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (checked) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    },
+                    border = BorderStroke(
+                        1.dp,
+                        if (checked) {
+                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)
+                        },
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (checked) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
+                        Text(
+                            text = stringResource(stageStateLabelRes(state)),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (checked) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun workbenchAdvancedFilterSummary(stageFilters: WorkbenchStageFilters): String {
+    val totalSelected = stageFilters.merge.size + stageFilters.tracking.size + stageFilters.reading.size
+    return when {
+        totalSelected == 0 -> stringResource(R.string.entity_organize_workbench_stage_filter_all)
+        totalSelected == 1 -> stringResource(R.string.entity_organize_workbench_stage_filter_multi, totalSelected)
+        else -> stringResource(R.string.entity_organize_workbench_stage_filter_multi, totalSelected)
+    }
+}
+
+@Composable
+private fun WorkbenchTableToolbar(
     selectedStage: EntityOrganizeStage,
     onSelectVisibleGroups: () -> Unit,
     onClearVisibleMergeSelections: () -> Unit,
+    onSelectVisibleReadingScope: () -> Unit,
+    onClearVisibleReadingScope: () -> Unit,
     onSelectRecommendedTracking: () -> Unit,
     onClearLowConfidenceTracking: () -> Unit,
     onClearTrackingSelections: () -> Unit,
@@ -1810,6 +1948,9 @@ private fun WorkbenchBatchToolbar(
     val secondaryEnabled: Boolean
     val primaryAction: () -> Unit
     val secondaryAction: () -> Unit
+    val tertiaryLabel: String?
+    val tertiaryEnabled: Boolean
+    val tertiaryAction: (() -> Unit)?
 
     when (selectedStage) {
         EntityOrganizeStage.MERGE -> {
@@ -1819,6 +1960,9 @@ private fun WorkbenchBatchToolbar(
             secondaryEnabled = hasVisibleMerge
             primaryAction = onSelectVisibleGroups
             secondaryAction = onClearVisibleMergeSelections
+            tertiaryLabel = null
+            tertiaryEnabled = false
+            tertiaryAction = null
         }
 
         EntityOrganizeStage.TRACKING -> {
@@ -1828,15 +1972,25 @@ private fun WorkbenchBatchToolbar(
             secondaryEnabled = hasVisibleTracking
             primaryAction = onSelectRecommendedTracking
             secondaryAction = onClearLowConfidenceTracking
+            tertiaryLabel = stringResource(R.string.entity_organize_workbench_clear_visible)
+            tertiaryEnabled = hasVisibleTracking
+            tertiaryAction = onClearTrackingSelections
         }
 
         EntityOrganizeStage.READING -> {
-            primaryLabel = stringResource(R.string.entity_organize_workbench_accept_reading)
+            primaryLabel = stringResource(R.string.entity_organize_workbench_select_visible)
             secondaryLabel = stringResource(R.string.entity_organize_workbench_clear_visible)
-            primaryEnabled = hasVisibleReading
-            secondaryEnabled = hasVisibleReading
-            primaryAction = onAcceptReadingPreviews
-            secondaryAction = onClearReadingPreviews
+            primaryEnabled = true
+            secondaryEnabled = true
+            primaryAction = onSelectVisibleReadingScope
+            secondaryAction = onClearVisibleReadingScope
+            tertiaryLabel = if (hasVisibleReading) {
+                stringResource(R.string.entity_organize_workbench_accept_reading)
+            } else {
+                stringResource(R.string.entity_organize_workbench_clear_reading)
+            }
+            tertiaryEnabled = true
+            tertiaryAction = if (hasVisibleReading) onAcceptReadingPreviews else onClearReadingPreviews
         }
     }
 
@@ -1862,6 +2016,17 @@ private fun WorkbenchBatchToolbar(
             enabled = secondaryEnabled,
         ) {
             ButtonLabel(secondaryLabel)
+        }
+        if (tertiaryLabel != null && tertiaryAction != null) {
+            OutlinedButton(
+                onClick = tertiaryAction,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp),
+                enabled = tertiaryEnabled,
+            ) {
+                ButtonLabel(tertiaryLabel)
+            }
         }
     }
 }
@@ -1949,7 +2114,7 @@ private fun EntityWorkbenchHeader() {
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .width(IntrinsicSize.Max)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1982,6 +2147,7 @@ private fun EntityWorkbenchRowCard(
     row: EntityWorkbenchRow,
     uiState: MigrationUiState,
     onToggleGroup: (String) -> Unit,
+    onToggleReadingScopeGroup: (String) -> Unit,
     onToggleItem: (String, Long) -> Unit,
     onToggleTrackingPreview: (String) -> Unit,
     onToggleReadingPreview: (Long) -> Unit,
@@ -2000,12 +2166,12 @@ private fun EntityWorkbenchRowCard(
     val rowChecked = when (selectedStage) {
         EntityOrganizeStage.MERGE -> mergeSelected
         EntityOrganizeStage.TRACKING -> selectedTrackingId != null
-        EntityOrganizeStage.READING -> row.hasReadingSelected(uiState)
+        EntityOrganizeStage.READING -> row.group.items.firstOrNull()?.mangaId in uiState.selectedContentIds
     }
     val rowEnabled = when (selectedStage) {
         EntityOrganizeStage.MERGE -> row.isMergeCandidate
         EntityOrganizeStage.TRACKING -> row.trackingCandidates.isNotEmpty()
-        EntityOrganizeStage.READING -> row.readingCandidates.isNotEmpty()
+        EntityOrganizeStage.READING -> true
     }
     val onToggleRowSelection = {
         when (selectedStage) {
@@ -2017,7 +2183,7 @@ private fun EntityWorkbenchRowCard(
                 }
             }
             EntityOrganizeStage.READING -> {
-                row.readingCandidates.firstOrNull()?.mangaId?.let(onToggleReadingPreview)
+                onToggleReadingScopeGroup(row.group.id)
             }
         }
     }
@@ -2032,8 +2198,8 @@ private fun EntityWorkbenchRowCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -2046,7 +2212,7 @@ private fun EntityWorkbenchRowCard(
                 Column(modifier = Modifier.width(widths.entity)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Checkbox(
                             checked = rowChecked,
@@ -2100,7 +2266,7 @@ private fun EntityWorkbenchRowCard(
                 WorkbenchDivider(fillHeight = true)
                 Column(
                     modifier = Modifier.width(widths.members),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     visibleMembers.forEach { item ->
                         val itemChecked = item.mangaId in uiState.selectedMergeItemsByGroup[row.group.id].orEmpty()
@@ -2109,7 +2275,7 @@ private fun EntityWorkbenchRowCard(
                                 .fillMaxWidth()
                                 .clickable { onToggleItem(row.group.id, item.mangaId) },
                             verticalAlignment = Alignment.Top,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
                             Checkbox(
                                 checked = itemChecked,
@@ -2159,7 +2325,7 @@ private fun EntityWorkbenchRowCard(
                 WorkbenchDivider(fillHeight = true)
                 Column(
                     modifier = Modifier.width(widths.tracking),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     if (row.trackingCandidates.isEmpty()) {
                         Text(
@@ -2200,7 +2366,7 @@ private fun EntityWorkbenchRowCard(
                 WorkbenchDivider(fillHeight = true)
                 Column(
                     modifier = Modifier.width(widths.reading),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     if (row.readingCandidates.isEmpty()) {
                         Text(
@@ -2287,8 +2453,8 @@ private fun CompactSelectCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 7.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Checkbox(
@@ -2299,7 +2465,7 @@ private fun CompactSelectCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     prefix?.let {
@@ -2386,10 +2552,10 @@ private fun WorkbenchDivider(
 }
 
 private fun workbenchColumnWidths(): WorkbenchColumnWidths = WorkbenchColumnWidths(
-    entity = 156.dp,
-    members = 228.dp,
-    tracking = 144.dp,
-    reading = 156.dp,
+    entity = 148.dp,
+    members = 198.dp,
+    tracking = 132.dp,
+    reading = 144.dp,
 )
 
 @Composable
@@ -2479,8 +2645,8 @@ private fun MergeCandidateSection(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = stringResource(R.string.entity_organize_merge_candidates_title),
@@ -2627,8 +2793,8 @@ private fun TrackingBindingSection(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = stringResource(R.string.entity_organize_tracking_priority_title),
@@ -2983,7 +3149,7 @@ private fun TrackingServiceSelectorDialog(
             shadowElevation = 16.dp,
             color = MaterialTheme.colorScheme.surface,
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -3296,6 +3462,8 @@ private fun <T> EntityBrowseSection(
     extraToggleLabel: String? = null,
     onExtraToggle: (() -> Unit)? = null,
     emptyContent: @Composable (() -> Unit)? = null,
+    showSelectionToggle: Boolean = true,
+    tableToolbar: @Composable ((List<T>) -> Unit)? = null,
     content: @Composable (List<T>) -> Unit,
 ) {
     SectionFilterBar(
@@ -3305,10 +3473,7 @@ private fun <T> EntityBrowseSection(
         onToggleSelectedOnly = onToggleSelectedOnly,
         extraToggleLabel = extraToggleLabel,
         onExtraToggle = onExtraToggle,
-    )
-    SectionCountText(
-        visibleCount = visibleCount,
-        totalCount = totalCount,
+        showSelectionToggle = showSelectionToggle,
     )
     if (totalCount == 0) {
         emptyContent?.invoke()
@@ -3323,12 +3488,15 @@ private fun <T> EntityBrowseSection(
         return
     }
     PagedBrowseToolbar(
+        visibleCount = visibleCount,
+        totalCount = totalCount,
         page = pagedItems.page,
         pageCount = pagedItems.pageCount,
         pageSize = pageSize,
         onPageSizeChange = onPageSizeChange,
         onPageChange = onPageChange,
     )
+    tableToolbar?.invoke(pagedItems.items)
     content(pagedItems.items)
 }
 
@@ -3340,41 +3508,45 @@ private fun SectionFilterBar(
     onToggleSelectedOnly: () -> Unit,
     extraToggleLabel: String? = null,
     onExtraToggle: (() -> Unit)? = null,
+    showSelectionToggle: Boolean = true,
 ) {
+    val hasActionRow = showSelectionToggle || (extraToggleLabel != null && onExtraToggle != null)
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedTextField(
+        SearchPillTextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text(stringResource(R.string.entity_organize_filter_placeholder)) },
+            placeholder = stringResource(R.string.entity_organize_filter_placeholder),
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(
-                onClick = onToggleSelectedOnly,
-                modifier = Modifier.weight(1f),
+        if (hasActionRow) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    stringResource(
-                        if (showSelectedOnly) {
-                            R.string.entity_organize_show_all
-                        } else {
-                            R.string.entity_organize_show_selected_only
-                        },
-                    ),
-                )
-            }
-            if (extraToggleLabel != null && onExtraToggle != null) {
-                OutlinedButton(
-                    onClick = onExtraToggle,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(extraToggleLabel)
+                if (showSelectionToggle) {
+                    OutlinedButton(
+                        onClick = onToggleSelectedOnly,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (showSelectedOnly) {
+                                    R.string.entity_organize_show_all
+                                } else {
+                                    R.string.entity_organize_show_selected_only
+                                },
+                            ),
+                        )
+                    }
+                }
+                if (extraToggleLabel != null && onExtraToggle != null) {
+                    OutlinedButton(
+                        onClick = onExtraToggle,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(extraToggleLabel)
+                    }
                 }
             }
         }
@@ -3382,7 +3554,88 @@ private fun SectionFilterBar(
 }
 
 @Composable
+private fun SearchPillTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
+        tonalElevation = 2.dp,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.padding(8.dp).size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (value.isBlank()) {
+                            Text(
+                                text = placeholder,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (value.isNotEmpty()) {
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onValueChange("") },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.padding(8.dp).size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
 private fun PagedBrowseToolbar(
+    visibleCount: Int,
+    totalCount: Int,
     page: Int,
     pageCount: Int,
     pageSize: Int,
@@ -3390,89 +3643,89 @@ private fun PagedBrowseToolbar(
     onPageChange: (Int) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
     ) {
-        OutlinedButton(
-            onClick = { onPageChange(page - 1) },
-            enabled = page > 0,
-            modifier = Modifier.weight(0.24f),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(stringResource(R.string.entity_organize_page_previous))
-        }
-        Surface(
-            modifier = Modifier.weight(0.52f),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.entity_organize_page_indicator, page + 1, pageCount),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Box {
-                    OutlinedButton(
-                        onClick = { expanded = true },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.entity_organize_page_size_value, pageSize),
-                            style = MaterialTheme.typography.labelMedium,
+            Text(
+                text = stringResource(R.string.entity_organize_visible_count, visibleCount, totalCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_page_size_value, pageSize),
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.ArrowDropDown, null, Modifier.size(16.dp))
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    ENTITY_ORGANIZE_PAGE_SIZES.forEach { size ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.entity_organize_page_size_value, size)) },
+                            onClick = {
+                                onPageSizeChange(size)
+                                expanded = false
+                            },
+                            trailingIcon = if (size == pageSize) {
+                                { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
+                            } else {
+                                null
+                            },
                         )
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Default.ArrowDropDown, null, Modifier.size(16.dp))
                     }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { onPageChange(page - 1) },
+                        enabled = page > 0,
+                        modifier = Modifier.size(32.dp),
                     ) {
-                        ENTITY_ORGANIZE_PAGE_SIZES.forEach { size ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.entity_organize_page_size_value, size)) },
-                                onClick = {
-                                    onPageSizeChange(size)
-                                    expanded = false
-                                },
-                                trailingIcon = if (size == pageSize) {
-                                    { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
-                                } else {
-                                    null
-                                },
-                            )
-                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(16.dp))
+                    }
+                    Text(
+                        text = stringResource(R.string.entity_organize_page_indicator, page + 1, pageCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                    IconButton(
+                        onClick = { onPageChange(page + 1) },
+                        enabled = page + 1 < pageCount,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(16.dp))
                     }
                 }
             }
         }
-        OutlinedButton(
-            onClick = { onPageChange(page + 1) },
-            enabled = page + 1 < pageCount,
-            modifier = Modifier.weight(0.24f),
-        ) {
-            Text(stringResource(R.string.entity_organize_page_next))
-        }
     }
-}
-
-@Composable
-private fun SectionCountText(
-    visibleCount: Int,
-    totalCount: Int,
-) {
-    Text(
-        text = stringResource(R.string.entity_organize_visible_count, visibleCount, totalCount),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
 
 @Composable
@@ -3583,27 +3836,13 @@ private fun FilterDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
-        OutlinedButton(
+        CompactDropdownButton(
             onClick = { if (enabled) expanded = true },
-            modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
-        ) {
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Icon(Icons.Default.ArrowDropDown, null, Modifier.size(18.dp))
-        }
+            modifier = Modifier.fillMaxWidth(),
+            label = label,
+            value = summary,
+        )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
@@ -3624,22 +3863,13 @@ private fun ConcurrencyDropdown(
     var expanded by remember { mutableStateOf(false) }
     val options = listOf(1, 2, 3, 5, 8, 10)
     Box(modifier = modifier) {
-        OutlinedButton(
+        CompactDropdownButton(
             onClick = { if (enabled) expanded = true },
-            modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
-        ) {
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                Text(
-                    text = stringResource(R.string.source_migration_concurrency_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-                Text(text = "$value", style = MaterialTheme.typography.bodySmall)
-            }
-            Icon(Icons.Default.ArrowDropDown, null, Modifier.size(18.dp))
-        }
+            modifier = Modifier.fillMaxWidth(),
+            label = stringResource(R.string.source_migration_concurrency_label),
+            value = value.toString(),
+        )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
@@ -3653,6 +3883,79 @@ private fun ConcurrencyDropdown(
                         { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
                     } else {
                         null
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactDropdownButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = if (enabled) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.14f)
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = if (enabled) 0.82f else 0.52f),
+            ) {
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.padding(6.dp).size(16.dp),
+                    tint = if (enabled) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     },
                 )
             }
@@ -3780,12 +4083,10 @@ private fun SourceSearchDialog(
 
                 Spacer(Modifier.height(8.dp))
 
-                OutlinedTextField(
+                SearchPillTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text(stringResource(R.string.search_sources)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+                    placeholder = stringResource(R.string.search_sources),
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -3892,7 +4193,7 @@ private fun stageSpec(stage: EntityOrganizeStage): EntityOrganizeStageSpec = whe
 private fun stageShortLabel(stage: EntityOrganizeStage): String = when (stage) {
     EntityOrganizeStage.MERGE -> "实体"
     EntityOrganizeStage.TRACKING -> "追踪"
-    EntityOrganizeStage.READING -> "Reading"
+    EntityOrganizeStage.READING -> "投影"
 }
 
 private fun contentTypeLabel(tab: BrowseGroupTab): String = when (tab) {
@@ -3903,7 +4204,10 @@ private fun contentTypeLabel(tab: BrowseGroupTab): String = when (tab) {
 }
 
 @Composable
-private fun MigrationProgressSection(uiState: MigrationUiState) {
+private fun MigrationProgressSection(
+    uiState: MigrationUiState,
+    selectedStage: EntityOrganizeStage,
+) {
     val progress = uiState.migrationProgress ?: return
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -3911,8 +4215,20 @@ private fun MigrationProgressSection(uiState: MigrationUiState) {
         Spacer(Modifier.height(8.dp))
         ExecutionProgressSection(
             progress = progress,
-            activeLabel = stringResource(R.string.source_migration_start),
-            finishedLabel = stringResource(R.string.source_migration_start),
+            activeLabel = stringResource(
+                if (selectedStage == EntityOrganizeStage.READING) {
+                    R.string.entity_organize_reading_preview_active
+                } else {
+                    R.string.source_migration_start
+                },
+            ),
+            finishedLabel = stringResource(
+                if (selectedStage == EntityOrganizeStage.READING) {
+                    R.string.entity_organize_reading_preview_finished
+                } else {
+                    R.string.source_migration_start
+                },
+            ),
         )
     }
 }

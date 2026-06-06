@@ -2677,10 +2677,13 @@ SHA-256 指纹:
     <string name="entity_organize_workbench_metric_action_required">待处理</string>
     <string name="entity_organize_workbench_metric_selected_rows">已选行</string>
     <string name="entity_organize_workbench_metric_visible_rows">当前页范围</string>
+    <string name="entity_organize_workbench_metric_selected_groups">已选实体组</string>
     <string name="entity_organize_workbench_selection_summary">已选实体 %1$d 组 · 追踪 %2$d 项 · 阅读 %3$d 项</string>
     <string name="entity_organize_workbench_restore_recommended_view">恢复推荐视图</string>
     <string name="entity_organize_workbench_select_visible">选择当前页实体</string>
     <string name="entity_organize_workbench_clear_visible">清空当前页采纳</string>
+    <string name="entity_organize_workbench_select_all">全选全部</string>
+    <string name="entity_organize_workbench_clear_all">清空全部</string>
     <string name="entity_organize_workbench_stage_page_title">%1$s当前页</string>
     <string name="entity_organize_workbench_stage_page_subtitle">当前页可见 %1$d 个实体，其中 %2$d 个存在当前阶段候选，%3$d 个已经完成当前阶段采纳。</string>
     <string name="entity_organize_workbench_stage_page_metric_pending">待采纳</string>
@@ -2768,6 +2771,9 @@ SHA-256 指纹:
     <string name="entity_organize_reading_subtitle">在固定的阅读/播放目标源范围内，按优先级搜索同名作品，命中后作为该实体的新投影加入并直接启用。</string>
     <string name="entity_organize_reading_targets_title">目标源优先级</string>
     <string name="entity_organize_reading_preview">生成可用投影预览</string>
+    <string name="entity_organize_reading_preview_active">生成投影预览</string>
+    <string name="entity_organize_reading_preview_finished">投影预览已完成</string>
+    <string name="entity_organize_reading_execute">执行投影补全</string>
     <string name="entity_organize_reading_preview_title">可用投影命中预览</string>
     <string name="entity_organize_reading_preview_subtitle">执行时只会处理这里已勾选的对象，并在当前目标源优先级范围内把命中作品挂入对应实体。</string>
     <string name="entity_organize_execute_title">执行</string>

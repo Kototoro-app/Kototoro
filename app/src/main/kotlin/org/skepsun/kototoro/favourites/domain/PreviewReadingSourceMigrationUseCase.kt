@@ -4,6 +4,8 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.model.ContentSource as SourceRef
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.favourites.data.FavouriteContent
+import org.skepsun.kototoro.favourites.domain.MigrationItem
+import org.skepsun.kototoro.favourites.domain.MigrationProgress
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
@@ -39,6 +41,7 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
     suspend fun preview(
         favourites: List<FavouriteContent>,
         targetSources: List<ContentSource>,
+        onProgress: ((MigrationProgress) -> Unit)? = null,
     ): ReadingSourcePreviewResult {
         if (targetSources.isEmpty()) {
             return ReadingSourcePreviewResult(
@@ -49,10 +52,39 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
         val searchHelpers = targetSources.associateWith { searchHelperFactory.create(it) }
         val previews = mutableListOf<ReadingSourcePreview>()
         var skipped = 0
+        var completed = 0
+        val total = favourites.size
         favourites.forEach { favourite ->
+            onProgress?.invoke(
+                MigrationProgress(
+                    total = total,
+                    completed = completed,
+                    failed = 0,
+                    notFound = skipped,
+                    currentItem = MigrationItem(
+                        mangaId = favourite.manga.id,
+                        title = favourite.manga.title,
+                    ),
+                    items = emptyList(),
+                ),
+            )
             val match = findBestMatch(favourite, targetSources, searchHelpers)
             if (match == null) {
                 skipped++
+                onProgress?.invoke(
+                    MigrationProgress(
+                        total = total,
+                        completed = completed,
+                        failed = 0,
+                        notFound = skipped,
+                        currentItem = MigrationItem(
+                            mangaId = favourite.manga.id,
+                            title = favourite.manga.title,
+                        ),
+                        items = emptyList(),
+                        isFinished = completed + skipped >= total,
+                    ),
+                )
                 return@forEach
             }
             contentDataRepository.storeContent(match.content, replaceExisting = true)
@@ -63,6 +95,21 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
                 targetContentId = match.content.id,
                 matchedTitle = match.content.title,
                 action = match.action,
+            )
+            completed++
+            onProgress?.invoke(
+                MigrationProgress(
+                    total = total,
+                    completed = completed,
+                    failed = 0,
+                    notFound = skipped,
+                    currentItem = MigrationItem(
+                        mangaId = favourite.manga.id,
+                        title = favourite.manga.title,
+                    ),
+                    items = emptyList(),
+                    isFinished = completed + skipped >= total,
+                ),
             )
         }
         return ReadingSourcePreviewResult(

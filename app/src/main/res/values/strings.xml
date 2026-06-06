@@ -1113,10 +1113,13 @@
     <string name="entity_organize_workbench_metric_action_required">Needs action</string>
     <string name="entity_organize_workbench_metric_selected_rows">Selected rows</string>
     <string name="entity_organize_workbench_metric_visible_rows">Visible scope</string>
+    <string name="entity_organize_workbench_metric_selected_groups">Selected groups</string>
     <string name="entity_organize_workbench_selection_summary">%1$d entity groups · %2$d tracking picks · %3$d reading picks selected</string>
     <string name="entity_organize_workbench_restore_recommended_view">Restore recommended view</string>
     <string name="entity_organize_workbench_select_visible">Select visible entities</string>
     <string name="entity_organize_workbench_clear_visible">Clear visible picks</string>
+    <string name="entity_organize_workbench_select_all">Select all</string>
+    <string name="entity_organize_workbench_clear_all">Clear all</string>
     <string name="entity_organize_workbench_stage_page_title">%1$s page scope</string>
     <string name="entity_organize_workbench_stage_page_subtitle">Current page: %1$d entities visible, %2$d actionable candidates, %3$d already accepted rows.</string>
     <string name="entity_organize_workbench_stage_page_metric_pending">Pending</string>
@@ -1198,6 +1201,9 @@
     <string name="entity_organize_reading_subtitle">Within a fixed reading/playback source scope, search by priority and attach the first usable hit as an enabled projection of the entity.</string>
     <string name="entity_organize_reading_targets_title">Target source priority</string>
     <string name="entity_organize_reading_preview">Preview usable projections</string>
+    <string name="entity_organize_reading_preview_active">Building projection preview</string>
+    <string name="entity_organize_reading_preview_finished">Projection preview completed</string>
+    <string name="entity_organize_reading_execute">Execute projection completion</string>
     <string name="entity_organize_reading_preview_title">Usable projection preview</string>
     <string name="entity_organize_reading_preview_subtitle">Execution only processes checked items here, then attaches the matched work to the entity within the current target-source priority scope.</string>
     <string name="entity_organize_execute_title">Execute</string>

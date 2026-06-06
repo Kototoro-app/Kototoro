@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getStableIdentityKey
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.TrackingMetadataSourceStrategy
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -237,6 +238,7 @@ class SourceMigrationViewModel @Inject constructor(
     private val bindTrackingToEntitiesUseCase: BindTrackingToEntitiesUseCase,
     private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
     private val entityGraphRepository: EntityGraphRepository,
+    private val contentDataRepository: ContentDataRepository,
     private val animeOfflineRepository: AnimeOfflineRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     private val trackingSiteDiscoveryService: TrackingSiteDiscoveryService,
@@ -316,8 +318,18 @@ class SourceMigrationViewModel @Inject constructor(
     }
 
     fun selectFromSource(source: ContentSource?) {
+        val scopedIds = if (source == null) {
+            emptySet()
+        } else {
+            _uiState.value.mergeCandidateGroups
+                .asSequence()
+                .filter { group -> group.items.firstOrNull()?.sourceName == source.name }
+                .mapNotNull { group -> group.items.firstOrNull()?.mangaId }
+                .toSet()
+        }
         _uiState.value = _uiState.value.copy(
             selectedFromSource = source,
+            selectedContentIds = scopedIds,
             trackingProgress = null,
             trackingPreviews = emptyList(),
             selectedTrackingPreviewIds = emptySet(),
@@ -1081,6 +1093,14 @@ class SourceMigrationViewModel @Inject constructor(
         _uiState.value = state.copy(
             isExecuting = true,
             isFinished = false,
+            migrationProgress = MigrationProgress(
+                total = state.selectedContentIds.size.takeIf { it > 0 } ?: loadPreviewScopeEstimate(state),
+                completed = 0,
+                failed = 0,
+                notFound = 0,
+                currentItem = null,
+                items = emptyList(),
+            ),
             readingSourcePreviews = emptyList(),
             acceptedReadingPreviewIds = emptySet(),
             stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
@@ -1088,10 +1108,27 @@ class SourceMigrationViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val favourites = loadScopedFavouriteContents()
-                val result = previewReadingSourceMigrationUseCase.preview(favourites, targetSources)
+                _uiState.value = _uiState.value.copy(
+                    migrationProgress = MigrationProgress(
+                        total = favourites.size,
+                        completed = 0,
+                        failed = 0,
+                        notFound = 0,
+                        currentItem = null,
+                        items = emptyList(),
+                    ),
+                )
+                val result = previewReadingSourceMigrationUseCase.preview(
+                    favourites = favourites,
+                    targetSources = targetSources,
+                    onProgress = { progress ->
+                        _uiState.value = _uiState.value.copy(migrationProgress = progress)
+                    },
+                )
                 _uiState.value = _uiState.value.copy(
                     isExecuting = false,
                     isFinished = true,
+                    migrationProgress = _uiState.value.migrationProgress?.copy(isFinished = true),
                     readingSourcePreviews = result.previews,
                     acceptedReadingPreviewIds = result.previews.mapTo(LinkedHashSet(result.previews.size)) { it.mangaId },
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
@@ -1106,6 +1143,7 @@ class SourceMigrationViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isExecuting = false,
                     isFinished = true,
+                    migrationProgress = _uiState.value.migrationProgress?.copy(isFinished = true),
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.READING,
                         kind = EntityOrganizeFeedbackKind.PREVIEW,
@@ -1124,6 +1162,50 @@ class SourceMigrationViewModel @Inject constructor(
             state.acceptedReadingPreviewIds + mangaId
         }
         _uiState.value = state.copy(acceptedReadingPreviewIds = next)
+    }
+
+    fun toggleReadingScopeGroup(groupId: String) {
+        val state = _uiState.value
+        val scopeMangaId = state.mergeCandidateGroups
+            .firstOrNull { it.id == groupId }
+            ?.items
+            ?.firstOrNull()
+            ?.mangaId
+            ?: return
+        val next = if (scopeMangaId in state.selectedContentIds) {
+            state.selectedContentIds - scopeMangaId
+        } else {
+            state.selectedContentIds + scopeMangaId
+        }
+        _uiState.value = state.copy(
+            selectedContentIds = next,
+            selectedFromSource = null,
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
+    }
+
+    fun setReadingScopeGroupsSelected(groupIds: Set<String>, selected: Boolean) {
+        if (groupIds.isEmpty()) return
+        val state = _uiState.value
+        val scopeMangaIds = state.mergeCandidateGroups
+            .asSequence()
+            .filter { it.id in groupIds }
+            .mapNotNull { it.items.firstOrNull()?.mangaId }
+            .toSet()
+        if (scopeMangaIds.isEmpty()) return
+        _uiState.value = state.copy(
+            selectedContentIds = if (selected) {
+                state.selectedContentIds + scopeMangaIds
+            } else {
+                clearSelectionIds(state.selectedContentIds, scopeMangaIds)
+            },
+            selectedFromSource = null,
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
     }
 
     fun acceptReadingPreviews(mangaIds: Set<Long>) {
@@ -1407,6 +1489,20 @@ class SourceMigrationViewModel @Inject constructor(
         val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
             contents.map { it.id },
         )
+        val preferredLocalIdsByEntity = (
+            candidateGroups.mapNotNull { it.resolvedEntityId } +
+                entityIdsByMangaId.values
+        ).distinct().associateWith { entityId ->
+            contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+        }
+        val reorderedCandidateGroups = candidateGroups.map { group ->
+            group.copy(
+                items = sortGroupItems(
+                    items = group.items,
+                    preferredLocalMangaId = group.resolvedEntityId?.let(preferredLocalIdsByEntity::get),
+                ),
+            )
+        }
         val singletonGroups = contents
             .asSequence()
             .filterNot { it.id in groupedIds }
@@ -1426,27 +1522,43 @@ class SourceMigrationViewModel @Inject constructor(
                     normalizedTitle = primary.title.trim().lowercase(),
                     contentType = primary.source.contentType,
                     mangaIds = groupedContents.mapTo(LinkedHashSet(groupedContents.size)) { it.id },
-                    items = groupedContents.map { content ->
-                        org.skepsun.kototoro.favourites.domain.MergeCandidateItem(
-                            mangaId = content.id,
-                            title = content.title,
-                            normalizedTitle = content.title.trim().lowercase(),
-                            sourceName = content.source.name,
-                            coverUrl = content.coverUrl,
-                            score = 1f,
-                        )
-                    },
+                    items = sortGroupItems(
+                        items = groupedContents.map { content ->
+                            org.skepsun.kototoro.favourites.domain.MergeCandidateItem(
+                                mangaId = content.id,
+                                title = content.title,
+                                normalizedTitle = content.title.trim().lowercase(),
+                                sourceName = content.source.name,
+                                coverUrl = content.coverUrl,
+                                score = 1f,
+                            )
+                        },
+                        preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get),
+                    ),
                     matchScore = 1f,
                     isExactMatch = true,
                     resolvedEntityId = entityId,
                     isAlreadyMerged = hasEntity,
                 )
             }
-        return (candidateGroups + singletonGroups).sortedWith(
+        return (reorderedCandidateGroups + singletonGroups).sortedWith(
             compareByDescending<MergeCandidateGroup> { it.mangaIds.size > 1 }
                 .thenByDescending { it.isExactMatch }
                 .thenByDescending { it.matchScore }
                 .thenByDescending { it.mangaIds.size }
+                .thenBy { it.title.lowercase() },
+        )
+    }
+
+    private fun sortGroupItems(
+        items: List<org.skepsun.kototoro.favourites.domain.MergeCandidateItem>,
+        preferredLocalMangaId: Long?,
+    ): List<org.skepsun.kototoro.favourites.domain.MergeCandidateItem> {
+        if (preferredLocalMangaId == null) {
+            return items
+        }
+        return items.sortedWith(
+            compareByDescending<org.skepsun.kototoro.favourites.domain.MergeCandidateItem> { it.mangaId == preferredLocalMangaId }
                 .thenBy { it.title.lowercase() },
         )
     }
@@ -1464,6 +1576,16 @@ class SourceMigrationViewModel @Inject constructor(
 
         else -> {
             favouriteSourcesRepository.getAllFavouriteContents()
+        }
+    }
+
+    private fun loadPreviewScopeEstimate(state: MigrationUiState): Int {
+        return when {
+            state.selectedContentIds.isNotEmpty() -> state.selectedContentIds.size
+            state.selectedFromSource != null -> state.mergeCandidateGroups.count {
+                it.items.firstOrNull()?.sourceName == state.selectedFromSource.name
+            }
+            else -> state.mergeCandidateGroups.size
         }
     }
 
