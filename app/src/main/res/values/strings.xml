@@ -1111,6 +1111,8 @@
     <string name="entity_organize_workbench_expand_members">Expand %1$d projections</string>
     <string name="entity_organize_workbench_collapse_members">Collapse projections (%1$d total)</string>
     <string name="entity_organize_workbench_metric_action_required">Needs action</string>
+    <string name="entity_organize_workbench_metric_selected_contents">Selected items</string>
+    <string name="entity_organize_workbench_metric_matched_groups">Matched groups</string>
     <string name="entity_organize_workbench_metric_selected_rows">Selected rows</string>
     <string name="entity_organize_workbench_metric_visible_rows">Visible scope</string>
     <string name="entity_organize_workbench_metric_selected_groups">Selected groups</string>
@@ -1387,6 +1389,8 @@
     <string name="tts_section_voice_subtitle">Voice &amp; subtitle (TTS)</string>
     <string name="tts_enable">Enable TTS system</string>
     <string name="tts_engine_type">TTS engine type</string>
+    <string name="tts_engine_service_label">TTS engine</string>
+    <string name="epub_download_service_label">EPUB download</string>
     <string name="tts_engine_system">System TTS (Native)</string>
     <string name="tts_engine_legado">Legado Network TTS</string>
     <string name="tts_test">Test voice</string>

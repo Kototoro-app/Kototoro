@@ -912,6 +912,10 @@ class SourceMigrationViewModel @Inject constructor(
                 val groups = buildWorkbenchGroups(contents)
                 val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
                 val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
+                val defaultSelectedGroupIds = resolveDefaultSelectedMergeGroupIds(
+                    groups = groups,
+                    selectedContentIds = _uiState.value.selectedContentIds,
+                )
                 val selectedItemsByGroup = buildMap {
                     groups.forEach { group ->
                         put(
@@ -919,12 +923,16 @@ class SourceMigrationViewModel @Inject constructor(
                             _uiState.value.selectedMergeItemsByGroup[group.id]
                                 ?.intersect(group.mangaIds)
                                 ?.takeIf { it.isNotEmpty() }
-                                ?: group.mangaIds,
+                                ?: resolveDefaultSelectedMergeItemIds(
+                                    group = group,
+                                    selectedContentIds = _uiState.value.selectedContentIds,
+                                ),
                         )
                     }
                 }
                 val mergeableCount = groups.count { it.mangaIds.size >= 2 }
-                val mergeableSelectedCount = groups.count { it.id in selected && it.mangaIds.size >= 2 }
+                val effectiveSelected = if (selected.isEmpty()) defaultSelectedGroupIds else selected
+                val mergeableSelectedCount = groups.count { it.id in effectiveSelected && it.mangaIds.size >= 2 }
                 _uiState.value = _uiState.value.copy(
                     isExecuting = false,
                     isFinished = true,
@@ -932,7 +940,7 @@ class SourceMigrationViewModel @Inject constructor(
                     mergeCandidateGroups = groups,
                     selectedMergeItemsByGroup = selectedItemsByGroup,
                     selectedMergeGroupIds = if (selected.isEmpty()) {
-                        groups.mapTo(LinkedHashSet(groups.size)) { it.id }
+                        defaultSelectedGroupIds
                     } else {
                         selected
                     },
@@ -1166,16 +1174,15 @@ class SourceMigrationViewModel @Inject constructor(
 
     fun toggleReadingScopeGroup(groupId: String) {
         val state = _uiState.value
-        val scopeMangaId = state.mergeCandidateGroups
+        val scopeMangaIds = state.mergeCandidateGroups
             .firstOrNull { it.id == groupId }
-            ?.items
-            ?.firstOrNull()
-            ?.mangaId
+            ?.mangaIds
+            ?.takeIf { it.isNotEmpty() }
             ?: return
-        val next = if (scopeMangaId in state.selectedContentIds) {
-            state.selectedContentIds - scopeMangaId
+        val next = if (scopeMangaIds.all(state.selectedContentIds::contains)) {
+            clearSelectionIds(state.selectedContentIds, scopeMangaIds)
         } else {
-            state.selectedContentIds + scopeMangaId
+            state.selectedContentIds + scopeMangaIds
         }
         _uiState.value = state.copy(
             selectedContentIds = next,
@@ -1192,7 +1199,7 @@ class SourceMigrationViewModel @Inject constructor(
         val scopeMangaIds = state.mergeCandidateGroups
             .asSequence()
             .filter { it.id in groupIds }
-            .mapNotNull { it.items.firstOrNull()?.mangaId }
+            .flatMap { it.mangaIds.asSequence() }
             .toSet()
         if (scopeMangaIds.isEmpty()) return
         _uiState.value = state.copy(
@@ -1355,6 +1362,15 @@ class SourceMigrationViewModel @Inject constructor(
             val existingTrackingPreviews = buildExistingTrackingPreviews(groups)
             val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
             val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
+            val defaultSelectedGroupIds = resolveDefaultSelectedMergeGroupIds(
+                groups = groups,
+                selectedContentIds = _uiState.value.selectedContentIds,
+            )
+            val trackingScopeGroupIds = if (_uiState.value.selectedContentIds.isEmpty()) {
+                availableGroupIds
+            } else {
+                defaultSelectedGroupIds
+            }
             val selectedItemsByGroup = buildMap {
                 groups.forEach { group ->
                     put(
@@ -1362,7 +1378,10 @@ class SourceMigrationViewModel @Inject constructor(
                         _uiState.value.selectedMergeItemsByGroup[group.id]
                             ?.intersect(group.mangaIds)
                             ?.takeIf { it.isNotEmpty() }
-                            ?: group.mangaIds,
+                            ?: resolveDefaultSelectedMergeItemIds(
+                                group = group,
+                                selectedContentIds = _uiState.value.selectedContentIds,
+                            ),
                     )
                 }
             }
@@ -1370,15 +1389,15 @@ class SourceMigrationViewModel @Inject constructor(
                 scopedFavouriteContents = favourites,
                 mergeCandidateGroups = groups,
                 selectedMergeItemsByGroup = selectedItemsByGroup,
-                selectedMergeGroupIds = if (selected.isEmpty()) groups.mapTo(LinkedHashSet(groups.size)) { it.id } else selected,
+                selectedMergeGroupIds = if (selected.isEmpty()) defaultSelectedGroupIds else selected,
                 trackingPreviews = mergeTrackingPreviews(
-                    existing = existingTrackingPreviews,
-                    current = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
+                    existing = existingTrackingPreviews.filter { it.groupId in trackingScopeGroupIds },
+                    current = _uiState.value.trackingPreviews.filter { it.groupId in trackingScopeGroupIds },
                 ),
                 selectedTrackingPreviewIds = run {
                     val mergedPreviews = mergeTrackingPreviews(
-                        existing = existingTrackingPreviews,
-                        current = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
+                        existing = existingTrackingPreviews.filter { it.groupId in trackingScopeGroupIds },
+                        current = _uiState.value.trackingPreviews.filter { it.groupId in trackingScopeGroupIds },
                     )
                     val availablePreviewIds = mergedPreviews.mapTo(HashSet()) { it.previewId }
                     val existingBoundPreviewIds = mergedPreviews
@@ -1603,6 +1622,29 @@ class SourceMigrationViewModel @Inject constructor(
     private fun MergeCandidateGroup.withMergeableSelectedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
         val scoped = withScopedItems(selectedIds) ?: return null
         return scoped.takeIf { it.mangaIds.size >= 2 }
+    }
+
+    private fun resolveDefaultSelectedMergeGroupIds(
+        groups: List<MergeCandidateGroup>,
+        selectedContentIds: Set<Long>,
+    ): Set<String> {
+        if (selectedContentIds.isEmpty()) {
+            return groups.mapTo(LinkedHashSet(groups.size)) { it.id }
+        }
+        return groups
+            .asSequence()
+            .filter { group -> group.mangaIds.any(selectedContentIds::contains) }
+            .mapTo(LinkedHashSet()) { it.id }
+    }
+
+    private fun resolveDefaultSelectedMergeItemIds(
+        group: MergeCandidateGroup,
+        selectedContentIds: Set<Long>,
+    ): Set<Long> {
+        if (selectedContentIds.isEmpty()) {
+            return group.mangaIds
+        }
+        return group.mangaIds.intersect(selectedContentIds).ifEmpty { group.mangaIds }
     }
 
     private fun removeMigrationObserver() {

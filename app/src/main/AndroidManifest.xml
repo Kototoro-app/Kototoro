@@ -422,7 +422,7 @@
             android:name="org.skepsun.kototoro.reader.novel.tts.TtsService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="false"
-            android:label="TTS 引擎" />
+            android:label="@string/tts_engine_service_label" />
 		<service
 			android:name="org.skepsun.kototoro.local.ui.LocalChaptersRemoveService"
 			android:foregroundServiceType="dataSync"
@@ -430,7 +430,7 @@
 		<service
 			android:name="org.skepsun.kototoro.local.epub.EpubDownloadService"
 			android:foregroundServiceType="dataSync"
-			android:label="EPUB下载" />
+			android:label="@string/epub_download_service_label" />
 		<service
 			android:name="org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupService"
 			android:foregroundServiceType="dataSync"

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -71,7 +72,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,9 +161,9 @@ internal data class EntityWorkbenchRow(
 )
 
 internal data class WorkbenchSelectionSummary(
-    val totalRows: Int,
-    val actionRequiredRows: Int,
-    val selectedGroups: Int,
+    val selectedContents: Int,
+    val matchedGroups: Int,
+    val selectedMergeGroups: Int,
     val selectedTracking: Int,
     val selectedReading: Int,
 )
@@ -735,7 +738,7 @@ internal fun resolveEntityOrganizeWorkbenchDefaults(
 ): EntityOrganizeWorkbenchDefaults {
     return when (entryMode) {
         EntityOrganizeEntryMode.MANUAL_SELECTION -> EntityOrganizeWorkbenchDefaults(
-            statusFilter = WorkbenchStatusFilter.ALL,
+            statusFilter = WorkbenchStatusFilter.SELECTED,
             sortMode = WorkbenchSortMode.MATCH_SCORE,
         )
 
@@ -1439,9 +1442,9 @@ internal fun buildWorkbenchSelectionSummary(
     uiState: MigrationUiState,
 ): WorkbenchSelectionSummary {
     return WorkbenchSelectionSummary(
-        totalRows = rows.size,
-        actionRequiredRows = filteredRows.count { it.needsAction(uiState) },
-        selectedGroups = uiState.selectedMergeGroupIds.size,
+        selectedContents = uiState.selectedContentIds.size,
+        matchedGroups = filteredRows.size,
+        selectedMergeGroups = uiState.selectedMergeGroupIds.size,
         selectedTracking = uiState.selectedTrackingPreviewIds.size,
         selectedReading = uiState.acceptedReadingPreviewIds.size,
     )
@@ -1508,13 +1511,23 @@ private fun WorkbenchSelectionSummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_action_required),
-                    value = summary.actionRequiredRows.toString(),
+                    label = stringResource(R.string.entity_organize_workbench_metric_selected_contents),
+                    value = summary.selectedContents.toString(),
                     modifier = Modifier.weight(1f),
                 )
                 WorkbenchMetricChip(
+                    label = stringResource(R.string.entity_organize_workbench_metric_matched_groups),
+                    value = summary.matchedGroups.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                WorkbenchMetricChip(
                     label = stringResource(R.string.entity_organize_workbench_metric_selected_groups),
-                    value = summary.selectedGroups.toString(),
+                    value = summary.selectedMergeGroups.toString(),
                     modifier = Modifier.weight(1f),
                 )
                 WorkbenchMetricChip(
@@ -2158,7 +2171,7 @@ private fun EntityWorkbenchRowCard(
     val rowChecked = when (selectedStage) {
         EntityOrganizeStage.MERGE -> mergeSelected
         EntityOrganizeStage.TRACKING -> selectedTrackingId != null
-        EntityOrganizeStage.READING -> row.group.items.firstOrNull()?.mangaId in uiState.selectedContentIds
+        EntityOrganizeStage.READING -> row.group.mangaIds.any(uiState.selectedContentIds::contains)
     }
     val rowEnabled = when (selectedStage) {
         EntityOrganizeStage.MERGE -> row.isMergeCandidate
@@ -2179,12 +2192,27 @@ private fun EntityWorkbenchRowCard(
             }
         }
     }
+    val rowContainerColor = if (rowChecked) {
+        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.36f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+    }
+    val rowBorderColor = if (rowChecked) {
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.58f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)
+    }
+    val titleColor = if (rowChecked) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
+        color = rowContainerColor,
         border = BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+            rowBorderColor,
         ),
     ) {
         Column(
@@ -2203,12 +2231,18 @@ private fun EntityWorkbenchRowCard(
             ) {
                 Column(modifier = Modifier.width(widths.entity)) {
                     Row(
+                        modifier = Modifier.toggleable(
+                            value = rowChecked,
+                            enabled = rowEnabled,
+                            role = Role.Checkbox,
+                            onValueChange = { onToggleRowSelection() },
+                        ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Checkbox(
                             checked = rowChecked,
-                            onCheckedChange = { onToggleRowSelection() },
+                            onCheckedChange = null,
                             enabled = rowEnabled,
                         )
                         Column {
@@ -2216,6 +2250,7 @@ private fun EntityWorkbenchRowCard(
                                 text = row.group.title,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
+                                color = titleColor,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -2484,9 +2519,9 @@ private fun CompactSelectCard(
 ) {
     val containerColor = when (tone) {
         CompactSelectTone.Neutral -> MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
-        CompactSelectTone.Recommended -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
-        CompactSelectTone.Selected -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.52f)
-        CompactSelectTone.Warning -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.44f)
+        CompactSelectTone.Recommended -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.44f)
+        CompactSelectTone.Selected -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.82f)
+        CompactSelectTone.Warning -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
     }
     val accentColor = when (tone) {
         CompactSelectTone.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -2494,9 +2529,21 @@ private fun CompactSelectCard(
         CompactSelectTone.Selected -> MaterialTheme.colorScheme.secondary
         CompactSelectTone.Warning -> MaterialTheme.colorScheme.error
     }
+    val borderColor = when (tone) {
+        CompactSelectTone.Neutral -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)
+        CompactSelectTone.Recommended -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        CompactSelectTone.Selected -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
+        CompactSelectTone.Warning -> MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+    }
+    val titleColor = when (tone) {
+        CompactSelectTone.Selected -> MaterialTheme.colorScheme.onSecondaryContainer
+        CompactSelectTone.Warning -> MaterialTheme.colorScheme.onErrorContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = containerColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
             modifier = Modifier
@@ -2544,6 +2591,7 @@ private fun CompactSelectCard(
                     text = title,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -3302,7 +3350,7 @@ private fun SourceFilterSection(
         ) {
             FilterDropdown(
                 label = stringResource(R.string.content_type_filter),
-                summary = contentTypeFilter.takeIf { it.isNotEmpty() }?.joinToString { contentTypeLabel(it) }
+                summary = contentTypeFilter.takeIf { it.isNotEmpty() }?.joinToString { contentTypeLabel(context, it) }
                     ?: stringResource(R.string.filter_all),
                 enabled = enabled,
                 modifier = Modifier.weight(1f),
@@ -3386,7 +3434,7 @@ private fun TargetSourcesSection(
         ) {
             FilterDropdown(
                 label = stringResource(R.string.content_type_filter),
-                summary = uiState.toContentTypeFilter.takeIf { it.isNotEmpty() }?.joinToString { contentTypeLabel(it) }
+                summary = uiState.toContentTypeFilter.takeIf { it.isNotEmpty() }?.joinToString { contentTypeLabel(context, it) }
                     ?: stringResource(R.string.filter_all),
                 enabled = enabled,
                 modifier = Modifier.weight(1f),
@@ -4245,10 +4293,13 @@ private fun stageShortLabel(stage: EntityOrganizeStage): String = when (stage) {
     EntityOrganizeStage.READING -> "投影"
 }
 
-private fun contentTypeLabel(tab: BrowseGroupTab): String = when (tab) {
-    BrowseGroupTab.Content -> "Manga"
-    BrowseGroupTab.Novel -> "Novel"
-    BrowseGroupTab.Video -> "Video"
+
+
+
+private fun contentTypeLabel(context: Context, tab: BrowseGroupTab): String = when (tab) {
+    BrowseGroupTab.Content -> context.getString(R.string.content_type_manga)
+    BrowseGroupTab.Novel -> context.getString(R.string.content_type_novel)
+    BrowseGroupTab.Video -> context.getString(R.string.content_type_video)
     else -> tab.id
 }
 

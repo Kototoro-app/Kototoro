@@ -1426,6 +1426,8 @@
     <string name="tts_section_voice_subtitle">语音与字幕（TTS）</string>
     <string name="tts_enable">启用 TTS 系统</string>
     <string name="tts_engine_type">TTS 引擎类型</string>
+    <string name="tts_engine_service_label">TTS 引擎</string>
+    <string name="epub_download_service_label">EPUB 下载</string>
     <string name="tts_engine_system">系统 TTS（原生）</string>
     <string name="tts_engine_legado">Legado 网络 TTS</string>
     <string name="tts_test">测试听音</string>
@@ -2675,6 +2677,8 @@ SHA-256 指纹:
     <string name="entity_organize_workbench_expand_members">展开 %1$d 个投影</string>
     <string name="entity_organize_workbench_collapse_members">收起投影（共 %1$d 个）</string>
     <string name="entity_organize_workbench_metric_action_required">待处理</string>
+    <string name="entity_organize_workbench_metric_selected_contents">已选收藏项</string>
+    <string name="entity_organize_workbench_metric_matched_groups">命中实体组</string>
     <string name="entity_organize_workbench_metric_selected_rows">已选行</string>
     <string name="entity_organize_workbench_metric_visible_rows">当前页范围</string>
     <string name="entity_organize_workbench_metric_selected_groups">已选实体组</string>
