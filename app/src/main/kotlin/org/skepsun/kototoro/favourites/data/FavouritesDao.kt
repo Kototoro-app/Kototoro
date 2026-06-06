@@ -159,6 +159,13 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT * FROM favourites WHERE deleted_at = 0 AND manga_id IN (SELECT manga_id FROM manga WHERE source = :sourceName)")
 	abstract suspend fun findAllBySource(sourceName: String): List<FavouriteContent>
 
+	@Transaction
+	@Query(
+		"SELECT * FROM favourites WHERE deleted_at = 0 AND manga_id IN (:mangaIds) " +
+			"GROUP BY manga_id ORDER BY created_at DESC",
+	)
+	abstract suspend fun findAllByIds(mangaIds: LongArray): List<FavouriteContent>
+
 	@Query(
 		"""SELECT tags.* FROM tags
 		LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id

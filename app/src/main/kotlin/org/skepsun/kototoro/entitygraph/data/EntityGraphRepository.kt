@@ -17,6 +17,7 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingCharacterDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingPersonDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
@@ -152,6 +153,289 @@ class EntityGraphRepository @Inject constructor(
 		}
 	}
 
+	suspend fun findEntityIdsByAnyMangaIds(mangaIds: Collection<Long>): Map<Long, Long> = withContext(Dispatchers.Default) {
+		if (mangaIds.isEmpty()) {
+			return@withContext emptyMap()
+		}
+		val dao = db.getEntityGraphDao()
+		val trackingDao = db.getTrackingSiteDao()
+		val ids = mangaIds.distinct()
+		val localBindings = buildMap<Long, Long> {
+			ids.map(Long::toString).chunked(MAX_BINDING_QUERY_PARAMS).forEach { chunk ->
+				dao.findBindingsBySources(
+					sources = listOf("local_manga", "0"),
+					externalIds = chunk,
+				).forEach { binding ->
+					binding.externalId.toLongOrNull()?.let { localMangaId ->
+						put(localMangaId, binding.entityId)
+					}
+				}
+			}
+		}.toMutableMap()
+		val unresolvedIds = ids.filterNot { it in localBindings }
+		if (unresolvedIds.isEmpty()) {
+			return@withContext localBindings
+		}
+		val serviceById = ScrobblerService.entries.associateBy { it.id }
+		for (mangaId in unresolvedIds) {
+			val link = trackingDao.findLinksByManga(mangaId).firstOrNull() ?: continue
+			val service = serviceById[link.service] ?: continue
+			findEntityByBinding(service.id.toString(), link.remoteId.toString())?.id?.let { entityId ->
+				localBindings[mangaId] = entityId
+			}
+		}
+		localBindings
+	}
+
+	suspend fun ensureLocalWorkEntities(
+		contents: Collection<Content>,
+	): Map<Long, Long> = withContext(Dispatchers.Default) {
+		if (contents.isEmpty()) {
+			return@withContext emptyMap()
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val now = System.currentTimeMillis()
+			val distinctContents = contents.distinctBy { it.id }
+			val existingBindings = LinkedHashMap<Long, EntityBindingRecord>(distinctContents.size)
+			distinctContents.map { it.id.toString() }.chunked(MAX_BINDING_QUERY_PARAMS).forEach { chunk ->
+				dao.findBindingsBySources(
+					sources = listOf("local_manga", "0"),
+					externalIds = chunk,
+				).forEach { binding ->
+					binding.externalId.toLongOrNull()?.let { localMangaId ->
+						existingBindings.putIfAbsent(localMangaId, binding)
+					}
+				}
+			}
+			val entityRecords = dao.findEntitiesByIds(existingBindings.values.map { it.entityId }.distinct())
+				.associateByTo(LinkedHashMap()) { it.id }
+			buildMap(distinctContents.size) {
+				for (content in distinctContents) {
+					val existingBinding = existingBindings[content.id]
+					if (existingBinding != null) {
+						val record = entityRecords[existingBinding.entityId] ?: dao.findEntity(existingBinding.entityId)
+						if (record != null) {
+							val merged = mergeEntityRecord(
+								record = record,
+								primaryName = content.title,
+								aliases = content.altTitles.toList(),
+								now = now,
+							)
+							if (merged != record) {
+								dao.updateEntity(merged)
+								entityRecords[merged.id] = merged
+							}
+						}
+						dao.upsertBindingForSource(
+							entityId = existingBinding.entityId,
+							source = "local_manga",
+							externalId = content.id.toString(),
+							confidence = existingBinding.confidence,
+						)
+						put(content.id, existingBinding.entityId)
+					} else {
+						val entity = createEntity(
+							type = EntityType.WORK,
+							primaryName = content.title,
+							aliases = content.altTitles.toList(),
+							source = "local_manga",
+							externalId = content.id.toString(),
+							confidence = 1f,
+							now = now,
+						)
+						entityRecords[entity.id] = entity.toRecord()
+						put(content.id, entity.id)
+					}
+				}
+			}
+		}
+	}
+
+	suspend fun mergeLocalWorkEntities(contents: Collection<Content>): Long? = withContext(Dispatchers.Default) {
+		val distinctContents = contents.distinctBy { it.id }
+		if (distinctContents.size < 2) {
+			return@withContext null
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val now = System.currentTimeMillis()
+			val ensuredIds = ensureLocalWorkEntities(distinctContents)
+			val entityIds = distinctContents.mapNotNullTo(LinkedHashSet()) { ensuredIds[it.id] }
+			if (entityIds.isEmpty()) {
+				return@withTransaction null
+			}
+			val records = dao.findEntitiesByIds(entityIds.toList()).associateBy { it.id }
+			val targetEntityId = entityIds
+				.mapNotNull { records[it] }
+				.maxWithOrNull(
+					compareBy<EntityRecord> { it.accessCount }
+						.thenBy { it.lastAccessed }
+						.thenByDescending { it.id },
+				)
+				?.id
+				?: entityIds.first()
+			var mergedRecord = requireNotNull(records[targetEntityId])
+			distinctContents.forEach { content ->
+				mergedRecord = mergeEntityRecord(
+					record = mergedRecord,
+					primaryName = content.title,
+					aliases = content.altTitles.toList(),
+					now = now,
+				)
+			}
+			entityIds.filterNot { it == targetEntityId }
+				.mapNotNull { records[it] }
+				.forEach { record ->
+					mergedRecord = mergeEntityRecord(
+						record = mergedRecord,
+						primaryName = record.primaryName,
+						aliases = decodeStringList(record.aliases),
+						now = now,
+					)
+				}
+			dao.updateEntity(mergedRecord)
+
+			val sourceEntityIds = entityIds.filterNot { it == targetEntityId }
+			sourceEntityIds.forEach { sourceEntityId ->
+				dao.findBindingsByEntity(sourceEntityId).forEach { binding ->
+					dao.upsertBinding(
+						binding.copy(
+							entityId = targetEntityId,
+							isPrimary = false,
+						),
+					)
+				}
+				dao.findRelationsForEntity(sourceEntityId).forEach { relation ->
+					val remappedFrom = if (relation.fromEntityId == sourceEntityId) targetEntityId else relation.fromEntityId
+					val remappedTo = if (relation.toEntityId == sourceEntityId) targetEntityId else relation.toEntityId
+					if (remappedFrom != remappedTo) {
+						dao.insertRelation(
+							relation.copy(
+								id = 0L,
+								fromEntityId = remappedFrom,
+								toEntityId = remappedTo,
+							),
+						)
+					}
+				}
+			}
+			distinctContents.forEach { content ->
+				dao.upsertBindingForSource(
+					entityId = targetEntityId,
+					source = "local_manga",
+					externalId = content.id.toString(),
+					confidence = 1f,
+				)
+			}
+			if (sourceEntityIds.isNotEmpty()) {
+				dao.deleteBindingsByEntityIds(sourceEntityIds)
+				dao.deleteRelationsByEntityIds(sourceEntityIds)
+				dao.deleteEntitiesByIds(sourceEntityIds)
+			}
+			dao.touchEntity(targetEntityId, now)
+			targetEntityId
+		}
+	}
+
+	suspend fun mergeEntities(
+		targetEntityId: Long,
+		sourceEntityIds: Collection<Long>,
+	): Long? = withContext(Dispatchers.Default) {
+		val distinctSourceIds = sourceEntityIds
+			.asSequence()
+			.filter { it != targetEntityId }
+			.distinct()
+			.toList()
+		if (distinctSourceIds.isEmpty()) {
+			return@withContext targetEntityId
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val now = System.currentTimeMillis()
+			val allIds = (distinctSourceIds + targetEntityId).distinct()
+			val records = dao.findEntitiesByIds(allIds).associateBy { it.id }
+			var mergedRecord = records[targetEntityId] ?: return@withTransaction null
+			distinctSourceIds.mapNotNull { records[it] }.forEach { record ->
+				mergedRecord = mergeEntityRecord(
+					record = mergedRecord,
+					primaryName = record.primaryName,
+					aliases = decodeStringList(record.aliases),
+					now = now,
+				)
+			}
+			dao.updateEntity(mergedRecord)
+			distinctSourceIds.forEach { sourceEntityId ->
+				dao.findBindingsByEntity(sourceEntityId).forEach { binding ->
+					dao.upsertBinding(
+						binding.copy(
+							entityId = targetEntityId,
+							isPrimary = false,
+						),
+					)
+				}
+				dao.findRelationsForEntity(sourceEntityId).forEach { relation ->
+					val remappedFrom = if (relation.fromEntityId == sourceEntityId) targetEntityId else relation.fromEntityId
+					val remappedTo = if (relation.toEntityId == sourceEntityId) targetEntityId else relation.toEntityId
+					if (remappedFrom != remappedTo) {
+						dao.insertRelation(
+							relation.copy(
+								id = 0L,
+								fromEntityId = remappedFrom,
+								toEntityId = remappedTo,
+							),
+						)
+					}
+				}
+			}
+			dao.deleteBindingsByEntityIds(distinctSourceIds)
+			dao.deleteRelationsByEntityIds(distinctSourceIds)
+			dao.deleteEntitiesByIds(distinctSourceIds)
+			dao.touchEntity(targetEntityId, now)
+			targetEntityId
+		}
+	}
+
+	suspend fun ensureLocalWorkEntity(
+		content: Content,
+	): Entity = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val now = System.currentTimeMillis()
+			val existing = findEntityByLocalMangaId(content.id)
+			if (existing != null) {
+				val dao = db.getEntityGraphDao()
+				val record = dao.findEntity(existing.entityId)
+				if (record != null) {
+					dao.updateEntity(
+						mergeEntityRecord(
+							record = record,
+							primaryName = content.title,
+							aliases = content.altTitles.toList(),
+							now = now,
+						),
+					)
+				}
+				dao.upsertBindingForSource(
+					entityId = existing.entityId,
+					source = "local_manga",
+					externalId = content.id.toString(),
+					confidence = existing.confidence,
+				)
+				dao.touchEntity(existing.entityId, now)
+				return@withTransaction requireNotNull(dao.findEntity(existing.entityId)).toModel()
+			}
+			resolveOrCreateEntity(
+				type = EntityType.WORK,
+				primaryName = content.title,
+				aliases = content.altTitles.toList(),
+				source = "local_manga",
+				externalId = content.id.toString(),
+				contentType = content.source.contentType,
+				now = now,
+			)
+		}
+	}
+
 	suspend fun getRelations(entityId: Long): List<Relation> = withContext(Dispatchers.Default) {
 		db.getEntityGraphDao().findRelationsForEntity(entityId).map { it.toModel() }
 	}
@@ -201,6 +485,14 @@ class EntityGraphRepository @Inject constructor(
 			now = now,
 		)
 		return entity
+	}
+
+	private suspend fun findEntityByLocalMangaId(
+		localMangaId: Long,
+	): EntityBindingRecord? {
+		val dao = db.getEntityGraphDao()
+		return dao.findBinding("local_manga", localMangaId.toString())
+			?: dao.findBinding("0", localMangaId.toString())
 	}
 
 	private suspend fun resolveOrCreatePerson(

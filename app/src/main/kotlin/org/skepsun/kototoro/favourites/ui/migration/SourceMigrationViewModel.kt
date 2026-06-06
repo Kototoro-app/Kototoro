@@ -2,74 +2,265 @@ package org.skepsun.kototoro.favourites.ui.migration
 
 import android.app.Application
 import android.content.Context
+import android.text.format.DateUtils
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.getStableIdentityKey
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.TrackingMetadataSourceStrategy
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.favourites.data.FavouriteContent
 import org.skepsun.kototoro.favourites.data.FavouriteSourcesRepository
-import org.skepsun.kototoro.favourites.domain.MigrationItem
+import org.skepsun.kototoro.favourites.data.toContent
+import org.skepsun.kototoro.favourites.domain.BindTrackingToEntitiesUseCase
 import org.skepsun.kototoro.favourites.domain.MigrationProgress
+import org.skepsun.kototoro.favourites.domain.MergeCandidateGroup
+import org.skepsun.kototoro.favourites.domain.MergeFavoriteEntitiesUseCase
+import org.skepsun.kototoro.favourites.domain.PreviewReadingSourceMigrationUseCase
+import org.skepsun.kototoro.favourites.domain.ReadingSourcePreview
+import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
+import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.favourites.work.SourceMigrationWorker
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
+import org.skepsun.kototoro.tracking.animeoffline.work.AnimeOfflineUpdateWorker
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
+import org.skepsun.kototoro.tracking.mangabaka.data.MangaBakaMetadataRepository
 import javax.inject.Inject
 
 private const val TAG = "SourceMigrationVM"
 
+enum class EntityOrganizeStage {
+    MERGE,
+    TRACKING,
+    READING,
+}
+
+enum class EntityOrganizeFeedbackKind {
+    PREVIEW,
+    EXECUTE,
+}
+
+data class EntityOrganizeFeedback(
+    val stage: EntityOrganizeStage,
+    val kind: EntityOrganizeFeedbackKind,
+    val message: String,
+)
+
+data class EntityOrganizeCloseResult(
+    val shouldRefreshFavorites: Boolean,
+    val message: String?,
+)
+
+data class EntityOrganizeStagePlan(
+    val stage: EntityOrganizeStage,
+    val enabled: Boolean,
+    val canPreview: Boolean,
+    val canExecute: Boolean,
+    val previewCount: Int,
+    val acceptedCount: Int,
+    val feedback: EntityOrganizeFeedback?,
+)
+
+data class EntityOrganizeDatasetStatus(
+    val isLoading: Boolean = true,
+    val summary: String = "",
+    val version: String? = null,
+    val latestVersion: String? = null,
+    val hasUpdate: Boolean = false,
+    val sizeBytes: Long = 0L,
+    val entryCount: Int = 0,
+    val isInstalled: Boolean = false,
+    val hasSearchIndex: Boolean = false,
+    val searchIndexVersion: String? = null,
+    val searchIndexEntries: Int = 0,
+    val downloadProgress: Float? = null,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long = 0L,
+    val progressIsCount: Boolean = false,
+)
+
+enum class EntityOrganizeDatasetBridge {
+    ANIME_OFFLINE,
+    MANGABAKA,
+}
+
 data class MigrationUiState(
     val favouriteSources: List<ContentSource> = emptyList(),
     val availableSources: List<ContentSource> = emptyList(),
+    val selectedContentIds: Set<Long> = emptySet(),
+    val scopedFavouriteContents: List<FavouriteContent> = emptyList(),
+    val mergeCandidateGroups: List<MergeCandidateGroup> = emptyList(),
+    val selectedMergeGroupIds: Set<String> = emptySet(),
+    val selectedMergeItemsByGroup: Map<String, Set<Long>> = emptyMap(),
+    val availableTrackingServices: List<ScrobblerService> = emptyList(),
+    val selectedTrackingServices: List<ScrobblerService> = emptyList(),
+    val trackingMetadataSourceStrategy: TrackingMetadataSourceStrategy = TrackingMetadataSourceStrategy.LOCAL_THEN_API,
+    val trackingPreviews: List<TrackingBindingPreview> = emptyList(),
+    val selectedTrackingPreviewIds: Set<String> = emptySet(),
+    val readingSourcePreviews: List<ReadingSourcePreview> = emptyList(),
+    val acceptedReadingPreviewIds: Set<Long> = emptySet(),
+    val stageFeedbacks: Map<EntityOrganizeStage, EntityOrganizeFeedback> = emptyMap(),
     val selectedFromSource: ContentSource? = null,
-    val selectedToSource: ContentSource? = null,
+    val selectedTargetSources: List<ContentSource> = emptyList(),
     val fromContentTypeFilter: Set<BrowseGroupTab> = emptySet(),
     val fromSourceTagFilter: Set<SourceTag> = emptySet(),
     val toContentTypeFilter: Set<BrowseGroupTab> = emptySet(),
     val toSourceTagFilter: Set<SourceTag> = emptySet(),
     val concurrency: Int = 3,
+    val trackingProgress: MigrationProgress? = null,
     val migrationProgress: MigrationProgress? = null,
     val isExecuting: Boolean = false,
     val workId: String? = null,
     val isFinished: Boolean = false,
     val fromFilteredSources: List<ContentSource> = emptyList(),
     val toFilteredSources: List<ContentSource> = emptyList(),
-)
+    val animeDatasetStatus: EntityOrganizeDatasetStatus = EntityOrganizeDatasetStatus(),
+    val mangaBakaDatasetStatus: EntityOrganizeDatasetStatus = EntityOrganizeDatasetStatus(
+        isLoading = false,
+        summary = "",
+    ),
+) {
+    val hasManualSelection: Boolean
+        get() = selectedContentIds.isNotEmpty()
+
+    fun feedbackOf(stage: EntityOrganizeStage): EntityOrganizeFeedback? = stageFeedbacks[stage]
+
+    fun stagePlan(stage: EntityOrganizeStage): EntityOrganizeStagePlan {
+        return when (stage) {
+            EntityOrganizeStage.MERGE -> EntityOrganizeStagePlan(
+                stage = stage,
+                enabled = true,
+                canPreview = !isExecuting,
+                canExecute = mergeCandidateGroups.any { it.id in selectedMergeGroupIds && it.mangaIds.size >= 2 } && !isExecuting,
+                previewCount = mergeCandidateGroups.count { it.mangaIds.size >= 2 },
+                acceptedCount = mergeCandidateGroups.count { it.id in selectedMergeGroupIds && it.mangaIds.size >= 2 },
+                feedback = feedbackOf(stage),
+            )
+
+            EntityOrganizeStage.TRACKING -> EntityOrganizeStagePlan(
+                stage = stage,
+                enabled = true,
+                canPreview =
+                    selectedMergeGroupIds.isNotEmpty() &&
+                    selectedTrackingServices.isNotEmpty() &&
+                    !isExecuting,
+                canExecute =
+                    selectedTrackingPreviewIds.isNotEmpty() &&
+                    !isExecuting,
+                previewCount = trackingPreviews.size,
+                acceptedCount = trackingPreviews.count { it.previewId in selectedTrackingPreviewIds },
+                feedback = feedbackOf(stage),
+            )
+
+            EntityOrganizeStage.READING -> {
+                val hasScope = hasManualSelection || selectedFromSource != null
+                EntityOrganizeStagePlan(
+                    stage = stage,
+                    enabled = true,
+                    canPreview =
+                        hasScope &&
+                        selectedTargetSources.isNotEmpty() &&
+                        !isExecuting,
+                    canExecute =
+                        hasScope &&
+                        selectedTargetSources.isNotEmpty() &&
+                        acceptedReadingPreviewIds.isNotEmpty() &&
+                        !isExecuting,
+                    previewCount = readingSourcePreviews.size,
+                    acceptedCount = acceptedReadingPreviewIds.size,
+                    feedback = feedbackOf(stage),
+                )
+            }
+        }
+    }
+}
+
+internal fun buildEntityOrganizeCloseResult(
+    uiState: MigrationUiState,
+): EntityOrganizeCloseResult {
+    val executeFeedbacks = EntityOrganizeStage.entries.mapNotNull { stage ->
+        uiState.feedbackOf(stage)?.takeIf { it.kind == EntityOrganizeFeedbackKind.EXECUTE }
+    }
+    if (executeFeedbacks.isEmpty()) {
+        return EntityOrganizeCloseResult(
+            shouldRefreshFavorites = false,
+            message = null,
+        )
+    }
+    val primaryMessage = executeFeedbacks.lastOrNull()?.message
+    val summaryMessage = if (executeFeedbacks.size <= 1) {
+        primaryMessage
+    } else {
+        "已执行 ${executeFeedbacks.size} 个整理阶段，收藏视图将刷新。最近结果：$primaryMessage"
+    }
+    return EntityOrganizeCloseResult(
+        shouldRefreshFavorites = true,
+        message = summaryMessage,
+    )
+}
 
 @HiltViewModel
 class SourceMigrationViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
+    private val appSettings: AppSettings,
     private val favouriteSourcesRepository: FavouriteSourcesRepository,
     private val sourcesRepository: ContentSourcesRepository,
     private val sourceGroupManager: SourceGroupManager,
+    private val mergeFavoriteEntitiesUseCase: MergeFavoriteEntitiesUseCase,
+    private val bindTrackingToEntitiesUseCase: BindTrackingToEntitiesUseCase,
+    private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
+    private val entityGraphRepository: EntityGraphRepository,
+    private val animeOfflineRepository: AnimeOfflineRepository,
+    private val trackingSiteDiscoveryService: TrackingSiteDiscoveryService,
+    private val mangaBakaMetadataRepository: MangaBakaMetadataRepository,
 ) : AndroidViewModel(appContext as Application) {
+
+    companion object {
+        private const val LOW_CONFIDENCE_THRESHOLD = 0.85f
+    }
 
     private val _uiState = MutableStateFlow(MigrationUiState())
     val uiState: StateFlow<MigrationUiState> = _uiState.asStateFlow()
 
     private var migrationObserver: Observer<WorkInfo?>? = null
+    private var animeDatasetObserver: Observer<List<WorkInfo>>? = null
 
     init {
         loadSources()
+        observeAnimeDatasetProgress()
+        refreshAnimeDatasetStatus()
+        refreshMangaBakaDatasetStatus()
+        refreshMergeCandidates()
     }
 
     override fun onCleared() {
         super.onCleared()
         removeMigrationObserver()
+        removeAnimeDatasetObserver()
     }
 
     fun loadSources() {
@@ -80,22 +271,738 @@ class SourceMigrationViewModel @Inject constructor(
             }
             val sortedFavSources = favSources.sortedByDescending { sourceCounts[it] ?: 0 }
             val allSources = sourcesRepository.getAllAvailableSourcesForListing()
+            val trackingServices = ScrobblerService.entries.filter { service ->
+                trackingSiteDiscoveryService.getCapabilities(service).supportsSearch
+            }
             val state = _uiState.value
             _uiState.value = state.copy(
                 favouriteSources = sortedFavSources,
                 availableSources = allSources,
+                availableTrackingServices = trackingServices,
+                trackingMetadataSourceStrategy = appSettings.trackingMetadataSourceStrategy,
+                selectedTrackingServices = state.selectedTrackingServices.filter { it in trackingServices },
                 fromFilteredSources = filterSources(sortedFavSources, state.fromContentTypeFilter, state.fromSourceTagFilter),
                 toFilteredSources = filterSources(allSources, state.toContentTypeFilter, state.toSourceTagFilter),
+                selectedTargetSources = state.selectedTargetSources.filter { selected ->
+                    allSources.any { it.name == selected.name }
+                },
+            )
+            refreshMergeCandidates()
+        }
+    }
+
+    fun setSelectedContentIds(ids: Set<Long>) {
+        val state = _uiState.value
+        if (state.selectedContentIds == ids) {
+            return
+        }
+        _uiState.value = state.copy(
+            selectedContentIds = ids,
+            selectedFromSource = if (ids.isNotEmpty()) null else state.selectedFromSource,
+            trackingProgress = null,
+            trackingPreviews = emptyList(),
+            selectedTrackingPreviewIds = emptySet(),
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks
+                .without(EntityOrganizeStage.TRACKING)
+                .without(EntityOrganizeStage.READING),
+        )
+        refreshMergeCandidates()
+    }
+
+    fun selectFromSource(source: ContentSource?) {
+        _uiState.value = _uiState.value.copy(
+            selectedFromSource = source,
+            trackingProgress = null,
+            trackingPreviews = emptyList(),
+            selectedTrackingPreviewIds = emptySet(),
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = _uiState.value.stageFeedbacks
+                .without(EntityOrganizeStage.TRACKING)
+                .without(EntityOrganizeStage.READING),
+        )
+        refreshMergeCandidates()
+    }
+
+    fun toggleTrackingService(service: ScrobblerService) {
+        val state = _uiState.value
+        val existingIndex = state.selectedTrackingServices.indexOf(service)
+        val updated = if (existingIndex >= 0) {
+            state.selectedTrackingServices.toMutableList().apply { removeAt(existingIndex) }
+        } else {
+            state.selectedTrackingServices + service
+        }
+        _uiState.value = state.copy(selectedTrackingServices = updated)
+    }
+
+    fun moveTrackingServiceUp(service: ScrobblerService) {
+        val state = _uiState.value
+        val index = state.selectedTrackingServices.indexOf(service)
+        if (index <= 0) return
+        val updated = state.selectedTrackingServices.toMutableList()
+        val item = updated.removeAt(index)
+        updated.add(index - 1, item)
+        _uiState.value = state.copy(selectedTrackingServices = updated)
+    }
+
+    fun moveTrackingServiceDown(service: ScrobblerService) {
+        val state = _uiState.value
+        val index = state.selectedTrackingServices.indexOf(service)
+        if (index < 0 || index >= state.selectedTrackingServices.lastIndex) return
+        val updated = state.selectedTrackingServices.toMutableList()
+        val item = updated.removeAt(index)
+        updated.add(index + 1, item)
+        _uiState.value = state.copy(selectedTrackingServices = updated)
+    }
+
+    fun setTrackingMetadataSourceStrategy(strategy: TrackingMetadataSourceStrategy) {
+        appSettings.trackingMetadataSourceStrategy = strategy
+        _uiState.value = _uiState.value.copy(
+            trackingMetadataSourceStrategy = strategy,
+            trackingProgress = null,
+            trackingPreviews = emptyList(),
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = _uiState.value.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+    }
+
+    fun refreshAnimeDatasetStatus() {
+        _uiState.value = _uiState.value.copy(
+            animeDatasetStatus = _uiState.value.animeDatasetStatus.copy(isLoading = true),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val nextStatus = runCatching {
+                val local = animeOfflineRepository.readStatus()
+                val latest = animeOfflineRepository.fetchLatestRelease()
+                animeOfflineRepository.recordCheck()
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = buildAnimeDatasetSummary(local, latest?.tag),
+                    version = local.releaseTag,
+                    latestVersion = latest?.tag,
+                    hasUpdate = latest?.let { animeOfflineRepository.isUpdateRequired(it) } ?: false,
+                    sizeBytes = local.installedBytes,
+                    entryCount = local.entryCount,
+                    isInstalled = local.isInstalled,
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }.getOrElse { error ->
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = error.getDisplayMessage(getApplication<Application>().resources),
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }
+            _uiState.value = _uiState.value.copy(animeDatasetStatus = nextStatus)
+        }
+    }
+
+    fun refreshMangaBakaDatasetStatus() {
+        _uiState.value = _uiState.value.copy(
+            mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(isLoading = true),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val nextStatus = runCatching {
+                val status = mangaBakaMetadataRepository.readStatus()
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = status.summary,
+                    version = status.version,
+                    latestVersion = status.latestVersion,
+                    hasUpdate = status.hasUpdate,
+                    sizeBytes = status.sizeBytes,
+                    entryCount = status.entryCount,
+                    isInstalled = status.isInstalled,
+                    hasSearchIndex = status.hasSearchIndex,
+                    searchIndexVersion = status.searchIndexVersion,
+                    searchIndexEntries = status.searchIndexEntries,
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }.getOrElse { error ->
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = error.getDisplayMessage(getApplication<Application>().resources),
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }
+            _uiState.value = _uiState.value.copy(mangaBakaDatasetStatus = nextStatus)
+        }
+    }
+
+    fun updateAnimeDataset() {
+        AnimeOfflineUpdateWorker.enqueue(appContext.applicationContext, force = true)
+        _uiState.value = _uiState.value.copy(
+            animeDatasetStatus = _uiState.value.animeDatasetStatus.copy(
+                isLoading = true,
+                summary = appContext.getString(R.string.anime_offline_database_update_started),
+            ),
+        )
+    }
+
+    fun updateMangaBakaDataset() {
+        _uiState.value = _uiState.value.copy(
+            mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(
+                isLoading = true,
+                downloadProgress = 0f,
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+                progressIsCount = false,
+            ),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val nextStatus = runCatching {
+                val remote = mangaBakaMetadataRepository.fetchLatestDatabaseInfo()
+                    ?: error(appContext.getString(R.string.entity_organize_dataset_refresh_failed))
+                mangaBakaMetadataRepository.downloadAndInstall(remote) { downloadedBytes, totalBytes ->
+                    val progress = if (totalBytes > 0L) {
+                        (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        null
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(
+                            isLoading = true,
+                            downloadProgress = progress,
+                            downloadedBytes = downloadedBytes,
+                            totalBytes = totalBytes.coerceAtLeast(0L),
+                            progressIsCount = false,
+                        ),
+                    )
+                }
+                val status = mangaBakaMetadataRepository.readStatus()
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = status.summary,
+                    version = status.version,
+                    latestVersion = status.latestVersion,
+                    hasUpdate = status.hasUpdate,
+                    sizeBytes = status.sizeBytes,
+                    entryCount = status.entryCount,
+                    isInstalled = status.isInstalled,
+                    hasSearchIndex = status.hasSearchIndex,
+                    searchIndexVersion = status.searchIndexVersion,
+                    searchIndexEntries = status.searchIndexEntries,
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }.getOrElse { error ->
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = error.getDisplayMessage(getApplication<Application>().resources),
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }
+            _uiState.value = _uiState.value.copy(mangaBakaDatasetStatus = nextStatus)
+        }
+    }
+
+    fun buildMangaBakaSearchIndex() {
+        _uiState.value = _uiState.value.copy(
+            mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(
+                isLoading = true,
+                summary = appContext.getString(R.string.entity_organize_dataset_index_building),
+                downloadProgress = 0f,
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+                progressIsCount = true,
+            ),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val previous = _uiState.value.mangaBakaDatasetStatus
+            val nextStatus = runCatching {
+                mangaBakaMetadataRepository.rebuildSearchIndex { processedRows, totalRows ->
+                    val progress = if (totalRows > 0L) {
+                        (processedRows.toFloat() / totalRows.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        null
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(
+                            isLoading = true,
+                            summary = appContext.getString(R.string.entity_organize_dataset_index_building),
+                            downloadProgress = progress,
+                            downloadedBytes = processedRows,
+                            totalBytes = totalRows.coerceAtLeast(0L),
+                            progressIsCount = true,
+                        ),
+                    )
+                }
+                val status = mangaBakaMetadataRepository.readStatus()
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = status.summary,
+                    version = status.version,
+                    latestVersion = status.latestVersion,
+                    hasUpdate = status.hasUpdate,
+                    sizeBytes = status.sizeBytes,
+                    entryCount = status.entryCount,
+                    isInstalled = status.isInstalled,
+                    hasSearchIndex = status.hasSearchIndex,
+                    searchIndexVersion = status.searchIndexVersion,
+                    searchIndexEntries = status.searchIndexEntries,
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }.getOrElse { error ->
+                previous.copy(
+                    isLoading = false,
+                    summary = error.getDisplayMessage(getApplication<Application>().resources),
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }
+            _uiState.value = _uiState.value.copy(mangaBakaDatasetStatus = nextStatus)
+        }
+    }
+
+    private fun observeAnimeDatasetProgress() {
+        removeAnimeDatasetObserver()
+        val workManager = WorkManager.getInstance(appContext)
+        animeDatasetObserver = Observer { infos ->
+            val info = infos.firstOrNull() ?: run {
+                val current = _uiState.value.animeDatasetStatus
+                if (current.downloadProgress != null || current.isLoading) {
+                    refreshAnimeDatasetStatus()
+                }
+                return@Observer
+            }
+            val downloadedBytes = info.progress.getLong(AnimeOfflineUpdateWorker.KEY_DOWNLOADED_BYTES, 0L)
+            val totalBytes = info.progress.getLong(AnimeOfflineUpdateWorker.KEY_TOTAL_BYTES, 0L)
+            val progress = if (totalBytes > 0L) {
+                (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+            } else {
+                null
+            }
+            if (info.state.isFinished) {
+                refreshAnimeDatasetStatus()
+                return@Observer
+            }
+            _uiState.value = _uiState.value.copy(
+                animeDatasetStatus = _uiState.value.animeDatasetStatus.copy(
+                    isLoading = true,
+                    summary = appContext.getString(R.string.anime_offline_database_update_checking),
+                    downloadProgress = progress,
+                    downloadedBytes = downloadedBytes,
+                    totalBytes = totalBytes,
+                ),
+            )
+        }
+        workManager.getWorkInfosForUniqueWorkLiveData(AnimeOfflineUpdateWorker.UNIQUE_WORK_NAME)
+            .observeForever(animeDatasetObserver!!)
+    }
+
+    private fun removeAnimeDatasetObserver() {
+        val observer = animeDatasetObserver ?: return
+        WorkManager.getInstance(appContext)
+            .getWorkInfosForUniqueWorkLiveData(AnimeOfflineUpdateWorker.UNIQUE_WORK_NAME)
+            .removeObserver(observer)
+        animeDatasetObserver = null
+    }
+
+    fun bindSelectedTracking() {
+        val state = _uiState.value
+        if (
+            state.selectedMergeGroupIds.isEmpty() ||
+            state.selectedTrackingServices.isEmpty() ||
+            state.selectedTrackingPreviewIds.isEmpty() ||
+            state.isExecuting
+        ) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            trackingProgress = MigrationProgress(
+                total = state.selectedTrackingPreviewIds.size,
+                completed = 0,
+                failed = 0,
+                notFound = 0,
+                currentItem = null,
+                items = emptyList(),
+            ),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val selectedGroups = state.mergeCandidateGroups
+                .filter { it.id in state.selectedMergeGroupIds }
+                .mapNotNull { it.withScopedItems(state.selectedMergeItemsByGroup[it.id]) }
+            val result = bindTrackingToEntitiesUseCase.bind(
+                groups = selectedGroups,
+                previews = state.trackingPreviews.filter { it.previewId in state.selectedTrackingPreviewIds },
+                onProgress = { progress ->
+                    _uiState.value = _uiState.value.copy(
+                        trackingProgress = progress,
+                    )
+                },
+            )
+            refreshMergeCandidates()
+            _uiState.value = _uiState.value.copy(
+                isExecuting = false,
+                isFinished = true,
+                trackingProgress = _uiState.value.trackingProgress?.copy(isFinished = true),
+                stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.TRACKING,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = "已绑定 ${result.succeeded} 组，失败 ${result.failed} 组，跳过 ${result.skipped} 组",
+                ),
             )
         }
     }
 
-    fun selectFromSource(source: ContentSource?) {
-        _uiState.value = _uiState.value.copy(selectedFromSource = source)
+    fun previewSelectedTracking() {
+        val state = _uiState.value
+        if (
+            state.selectedMergeGroupIds.isEmpty() ||
+            state.selectedTrackingServices.isEmpty() ||
+            state.isExecuting
+        ) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            trackingProgress = MigrationProgress(
+                total = state.selectedMergeGroupIds.size,
+                completed = 0,
+                failed = 0,
+                notFound = 0,
+                currentItem = null,
+                items = emptyList(),
+            ),
+            trackingPreviews = emptyList(),
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val selectedGroups = state.mergeCandidateGroups
+                .filter { it.id in state.selectedMergeGroupIds }
+                .mapNotNull { it.withScopedItems(state.selectedMergeItemsByGroup[it.id]) }
+            try {
+                val representativeContents = loadScopedFavouriteContents()
+                    .associate { favourite ->
+                        favourite.manga.id to favourite.toContent()
+                    }
+                Log.d(
+                    TAG,
+                    "previewSelectedTracking: groups=${selectedGroups.size}, services=${state.selectedTrackingServices.joinToString { it.id.toString() }}, " +
+                        "representatives=${representativeContents.size}",
+                )
+                var lastLoggedCompleted = -1
+                var lastLoggedNotFound = -1
+                val result = bindTrackingToEntitiesUseCase.preview(
+                    selectedGroups,
+                    state.selectedTrackingServices,
+                    representativeContents = representativeContents,
+                ) { progress ->
+                    _uiState.value = _uiState.value.copy(
+                        trackingProgress = progress,
+                    )
+                    if (
+                        progress.completed != lastLoggedCompleted &&
+                        (progress.completed == 1 || progress.completed % 10 == 0 || progress.isFinished)
+                    ) {
+                        lastLoggedCompleted = progress.completed
+                        Log.d(
+                            TAG,
+                            "previewSelectedTracking progress: matched=${progress.completed}/${progress.total}, " +
+                                "skipped=${progress.notFound}, current=${progress.currentItem?.title}",
+                        )
+                    } else if (progress.notFound != lastLoggedNotFound && progress.notFound % 10 == 0 && progress.notFound > 0) {
+                        lastLoggedNotFound = progress.notFound
+                        Log.d(
+                            TAG,
+                            "previewSelectedTracking progress: matched=${progress.completed}/${progress.total}, " +
+                                "skipped=${progress.notFound}, current=${progress.currentItem?.title}",
+                        )
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    trackingProgress = _uiState.value.trackingProgress?.copy(isFinished = true),
+                    trackingPreviews = result.previews,
+                    selectedTrackingPreviewIds = result.previews
+                        .groupBy { it.groupId }
+                        .values
+                        .mapNotNull { it.maxByOrNull(TrackingBindingPreview::confidence)?.previewId }
+                        .toSet(),
+                    stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.TRACKING,
+                        kind = EntityOrganizeFeedbackKind.PREVIEW,
+                        message = "已命中 ${result.previews.size} 组，未命中 ${result.skipped} 组",
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "previewSelectedTracking failed", e)
+                _uiState.value = _uiState.value.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.TRACKING,
+                        kind = EntityOrganizeFeedbackKind.PREVIEW,
+                        message = e.getDisplayMessage(getApplication<Application>().resources),
+                    ),
+                )
+            }
+        }
     }
 
-    fun selectToSource(source: ContentSource?) {
-        _uiState.value = _uiState.value.copy(selectedToSource = source)
+    fun toggleTrackingPreview(previewId: String) {
+        val state = _uiState.value
+        val preview = state.trackingPreviews.firstOrNull { it.previewId == previewId } ?: return
+        val sameGroupPreviewIds = state.trackingPreviews
+            .filter { it.groupId == preview.groupId }
+            .mapTo(HashSet()) { it.previewId }
+        val next = if (previewId in state.selectedTrackingPreviewIds) {
+            state.selectedTrackingPreviewIds - previewId
+        } else {
+            (state.selectedTrackingPreviewIds - sameGroupPreviewIds) + previewId
+        }
+        _uiState.value = state.copy(selectedTrackingPreviewIds = next)
+    }
+
+    fun selectRecommendedTrackingPreviews(groupIds: Set<String>) {
+        val state = _uiState.value
+        if (groupIds.isEmpty()) return
+        val grouped = state.trackingPreviews
+            .filter { it.groupId in groupIds }
+            .groupBy { it.groupId }
+        if (grouped.isEmpty()) return
+        val idsInGroups = grouped.values.flatten().mapTo(HashSet()) { it.previewId }
+        val recommendedIds = grouped.values.mapNotNull { previews ->
+            previews.maxByOrNull(TrackingBindingPreview::confidence)?.previewId
+        }
+        _uiState.value = state.copy(
+            selectedTrackingPreviewIds = (state.selectedTrackingPreviewIds - idsInGroups) + recommendedIds,
+        )
+    }
+
+    fun clearLowConfidenceTrackingSelections(groupIds: Set<String>) {
+        val state = _uiState.value
+        if (groupIds.isEmpty()) return
+        val lowConfidenceSelectedIds = state.trackingPreviews
+            .asSequence()
+            .filter { it.groupId in groupIds }
+            .filter { it.previewId in state.selectedTrackingPreviewIds }
+            .filter { it.confidence < LOW_CONFIDENCE_THRESHOLD }
+            .map { it.previewId }
+            .toSet()
+        if (lowConfidenceSelectedIds.isEmpty()) return
+        _uiState.value = state.copy(
+            selectedTrackingPreviewIds = state.selectedTrackingPreviewIds - lowConfidenceSelectedIds,
+        )
+    }
+
+    fun clearTrackingSelections(groupIds: Set<String>) {
+        val state = _uiState.value
+        if (groupIds.isEmpty()) return
+        val previewIds = previewIdsForGroups(state.trackingPreviews, groupIds)
+        if (previewIds.isEmpty()) return
+        _uiState.value = state.copy(
+            selectedTrackingPreviewIds = clearSelectionIds(state.selectedTrackingPreviewIds, previewIds),
+        )
+    }
+
+    fun toggleMergeGroup(groupId: String) {
+        val state = _uiState.value
+        val next = if (groupId in state.selectedMergeGroupIds) {
+            state.selectedMergeGroupIds - groupId
+        } else {
+            state.selectedMergeGroupIds + groupId
+        }
+        _uiState.value = state.copy(selectedMergeGroupIds = next)
+    }
+
+    fun setMergeGroupsSelected(groupIds: Set<String>, selected: Boolean) {
+        if (groupIds.isEmpty()) return
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            selectedMergeGroupIds = updateMergeGroupSelection(
+                current = state.selectedMergeGroupIds,
+                groupIds = groupIds,
+                selected = selected,
+            ),
+        )
+    }
+
+    fun toggleMergeItem(groupId: String, mangaId: Long) {
+        val state = _uiState.value
+        val current = state.selectedMergeItemsByGroup[groupId].orEmpty()
+        val next = if (mangaId in current) current - mangaId else current + mangaId
+        _uiState.value = state.copy(
+            selectedMergeItemsByGroup = state.selectedMergeItemsByGroup + (groupId to next),
+        )
+    }
+
+    fun mergeSelectedEntities() {
+        val state = _uiState.value
+        if (state.selectedMergeGroupIds.isEmpty() || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val selectedGroups = state.mergeCandidateGroups
+                .filter { it.id in state.selectedMergeGroupIds }
+                .mapNotNull { it.withMergeableSelectedItems(state.selectedMergeItemsByGroup[it.id]) }
+            val result = mergeFavoriteEntitiesUseCase.merge(selectedGroups)
+            refreshMergeCandidates()
+            _uiState.value = _uiState.value.copy(
+                isExecuting = false,
+                isFinished = true,
+                stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.MERGE,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = "已合并 ${result.succeeded} 组，失败 ${result.failed} 组，跳过 ${result.skipped} 组",
+                ),
+            )
+        }
+    }
+
+    fun previewMergeCandidates() {
+        val state = _uiState.value
+        if (state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val favourites = loadScopedFavouriteContents()
+                val contents = favourites.map { it.toContent() }
+                val groups = buildWorkbenchGroups(contents)
+                val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
+                val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
+                val selectedItemsByGroup = buildMap {
+                    groups.forEach { group ->
+                        put(
+                            group.id,
+                            _uiState.value.selectedMergeItemsByGroup[group.id]
+                                ?.intersect(group.mangaIds)
+                                ?.takeIf { it.isNotEmpty() }
+                                ?: group.mangaIds,
+                        )
+                    }
+                }
+                val mergeableCount = groups.count { it.mangaIds.size >= 2 }
+                val mergeableSelectedCount = groups.count { it.id in selected && it.mangaIds.size >= 2 }
+                _uiState.value = _uiState.value.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    scopedFavouriteContents = favourites,
+                    mergeCandidateGroups = groups,
+                    selectedMergeItemsByGroup = selectedItemsByGroup,
+                    selectedMergeGroupIds = if (selected.isEmpty()) {
+                        groups.mapTo(LinkedHashSet(groups.size)) { it.id }
+                    } else {
+                        selected
+                    },
+                    trackingPreviews = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
+                    selectedTrackingPreviewIds = _uiState.value.selectedTrackingPreviewIds.intersect(
+                        _uiState.value.trackingPreviews
+                            .filter { it.groupId in availableGroupIds }
+                            .mapTo(HashSet()) { it.previewId },
+                    ),
+                    stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.MERGE,
+                        kind = EntityOrganizeFeedbackKind.PREVIEW,
+                        message = "已找到 $mergeableCount 组合并候选，当前勾选 $mergeableSelectedCount 组",
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.MERGE,
+                        kind = EntityOrganizeFeedbackKind.PREVIEW,
+                        message = e.getDisplayMessage(getApplication<Application>().resources),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun toggleTargetSource(source: ContentSource) {
+        val state = _uiState.value
+        val sourceKey = source.getStableIdentityKey()
+        val existingIndex = state.selectedTargetSources.indexOfFirst { it.getStableIdentityKey() == sourceKey }
+        val updated = if (existingIndex >= 0) {
+            state.selectedTargetSources.toMutableList().apply { removeAt(existingIndex) }
+        } else {
+            (state.selectedTargetSources + source)
+        }
+        _uiState.value = state.copy(
+            selectedTargetSources = updated,
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
+    }
+
+    fun moveTargetSourceUp(sourceKey: String) {
+        val state = _uiState.value
+        val index = state.selectedTargetSources.indexOfFirst { it.getStableIdentityKey() == sourceKey }
+        if (index <= 0) return
+        val updated = state.selectedTargetSources.toMutableList()
+        val item = updated.removeAt(index)
+        updated.add(index - 1, item)
+        _uiState.value = state.copy(
+            selectedTargetSources = updated,
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
+    }
+
+    fun moveTargetSourceDown(sourceKey: String) {
+        val state = _uiState.value
+        val index = state.selectedTargetSources.indexOfFirst { it.getStableIdentityKey() == sourceKey }
+        if (index < 0 || index >= state.selectedTargetSources.lastIndex) return
+        val updated = state.selectedTargetSources.toMutableList()
+        val item = updated.removeAt(index)
+        updated.add(index + 1, item)
+        _uiState.value = state.copy(
+            selectedTargetSources = updated,
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
+    }
+
+    fun removeTargetSource(sourceKey: String) {
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            selectedTargetSources = state.selectedTargetSources.filterNot { it.getStableIdentityKey() == sourceKey },
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
     }
 
     fun setConcurrency(value: Int) {
@@ -105,8 +1012,7 @@ class SourceMigrationViewModel @Inject constructor(
     fun toggleFromContentType(tab: BrowseGroupTab) {
         val state = _uiState.value
         val tabs = if (tab in state.fromContentTypeFilter) {
-            if (state.fromContentTypeFilter.size == 1) state.fromContentTypeFilter
-            else state.fromContentTypeFilter - tab
+            if (state.fromContentTypeFilter.size == 1) state.fromContentTypeFilter else state.fromContentTypeFilter - tab
         } else {
             state.fromContentTypeFilter + tab
         }
@@ -132,14 +1038,16 @@ class SourceMigrationViewModel @Inject constructor(
     fun toggleToContentType(tab: BrowseGroupTab) {
         val state = _uiState.value
         val tabs = if (tab in state.toContentTypeFilter) {
-            if (state.toContentTypeFilter.size == 1) state.toContentTypeFilter
-            else state.toContentTypeFilter - tab
+            if (state.toContentTypeFilter.size == 1) state.toContentTypeFilter else state.toContentTypeFilter - tab
         } else {
             state.toContentTypeFilter + tab
         }
         _uiState.value = state.copy(
             toContentTypeFilter = tabs,
             toFilteredSources = filterSources(state.availableSources, tabs, state.toSourceTagFilter),
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
         )
     }
 
@@ -153,43 +1061,130 @@ class SourceMigrationViewModel @Inject constructor(
         _uiState.value = state.copy(
             toSourceTagFilter = tags,
             toFilteredSources = filterSources(state.availableSources, state.toContentTypeFilter, tags),
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
+    }
+
+    fun previewReadingSources() {
+        val state = _uiState.value
+        val targetSources = state.selectedTargetSources
+        val hasScope = state.selectedContentIds.isNotEmpty() || state.selectedFromSource != null
+        if (!hasScope || targetSources.isEmpty() || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            readingSourcePreviews = emptyList(),
+            acceptedReadingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val favourites = loadScopedFavouriteContents()
+                val result = previewReadingSourceMigrationUseCase.preview(favourites, targetSources)
+                _uiState.value = _uiState.value.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    readingSourcePreviews = result.previews,
+                    acceptedReadingPreviewIds = result.previews.mapTo(LinkedHashSet(result.previews.size)) { it.mangaId },
+                    stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.READING,
+                        kind = EntityOrganizeFeedbackKind.PREVIEW,
+                        message = "已命中 ${result.previews.size} 个收藏，未命中 ${result.skipped} 个收藏",
+                    ),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.READING,
+                        kind = EntityOrganizeFeedbackKind.PREVIEW,
+                        message = e.getDisplayMessage(getApplication<Application>().resources),
+                    ),
+                )
+            }
+        }
+    }
+
+    fun toggleReadingPreview(mangaId: Long) {
+        val state = _uiState.value
+        val next = if (mangaId in state.acceptedReadingPreviewIds) {
+            state.acceptedReadingPreviewIds - mangaId
+        } else {
+            state.acceptedReadingPreviewIds + mangaId
+        }
+        _uiState.value = state.copy(acceptedReadingPreviewIds = next)
+    }
+
+    fun acceptReadingPreviews(mangaIds: Set<Long>) {
+        val state = _uiState.value
+        if (mangaIds.isEmpty()) return
+        _uiState.value = state.copy(
+            acceptedReadingPreviewIds = state.acceptedReadingPreviewIds + mangaIds,
+        )
+    }
+
+    fun clearReadingPreviews(mangaIds: Set<Long>) {
+        if (mangaIds.isEmpty()) return
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            acceptedReadingPreviewIds = clearSelectionIds(state.acceptedReadingPreviewIds, mangaIds),
         )
     }
 
     fun startMigration() {
         val state = _uiState.value
-        val fromSource = state.selectedFromSource ?: return
-        val toSource = state.selectedToSource ?: return
-        if (fromSource.name == toSource.name) return
+        val selectedTargetSourceNames = state.selectedTargetSources.map { it.name }.distinct()
+        val hasSourceScope = state.selectedFromSource != null
+        val hasSelectionScope = state.selectedContentIds.isNotEmpty()
+        val acceptedPreviews = state.readingSourcePreviews.filter { it.mangaId in state.acceptedReadingPreviewIds }
+        if ((!hasSelectionScope && !hasSourceScope) || selectedTargetSourceNames.isEmpty() || acceptedPreviews.isEmpty()) {
+            return
+        }
 
-        Log.d(TAG, "startMigration: from=${fromSource.name}, to=${toSource.name}, concurrency=${state.concurrency}")
+        Log.d(
+            TAG,
+            "startMigration: selectedIds=${state.selectedContentIds.size}, from=${state.selectedFromSource?.name}, " +
+                "targets=${selectedTargetSourceNames.joinToString()} concurrency=${state.concurrency}",
+        )
 
+        val input = workDataOf(
+            SourceMigrationWorker.KEY_CONCURRENCY to state.concurrency,
+            SourceMigrationWorker.KEY_TARGET_SOURCES to selectedTargetSourceNames.toTypedArray(),
+            SourceMigrationWorker.KEY_SELECTED_CONTENT_IDS to state.selectedContentIds.toLongArray(),
+            SourceMigrationWorker.KEY_FROM_SOURCE to state.selectedFromSource?.name,
+            SourceMigrationWorker.KEY_PREVIEW_MANGA_IDS to acceptedPreviews.map { it.mangaId }.toLongArray(),
+            SourceMigrationWorker.KEY_PREVIEW_TARGET_IDS to acceptedPreviews.map { it.targetContentId }.toLongArray(),
+            SourceMigrationWorker.KEY_PREVIEW_ACTIONS to acceptedPreviews.map { it.action.ordinal }.toIntArray(),
+        )
         val workManager = WorkManager.getInstance(appContext)
         val request = OneTimeWorkRequestBuilder<SourceMigrationWorker>()
-            .setInputData(
-                workDataOf(
-                    Pair(SourceMigrationWorker.KEY_FROM_SOURCE, fromSource.name),
-                    Pair(SourceMigrationWorker.KEY_TO_SOURCE, toSource.name),
-                    Pair(SourceMigrationWorker.KEY_CONCURRENCY, state.concurrency),
-                ),
-            )
+            .setInputData(input)
             .addTag(SourceMigrationWorker.WORK_TAG)
             .build()
 
         removeMigrationObserver()
         workManager.enqueue(request)
         val workId = request.id.toString()
-        Log.d(TAG, "Work enqueued: id=$workId")
 
         _uiState.value = state.copy(
             isExecuting = true,
             workId = workId,
             isFinished = false,
+            trackingProgress = null,
             migrationProgress = MigrationProgress(
                 total = 0,
                 completed = 0,
                 failed = 0,
                 notFound = 0,
+                reused = 0,
+                attached = 0,
                 currentItem = null,
                 items = emptyList(),
             ),
@@ -199,36 +1194,60 @@ class SourceMigrationViewModel @Inject constructor(
             workInfo ?: return@Observer
             val currentState = _uiState.value
             val progressData = workInfo.progress
+            val outputData = workInfo.outputData
             val prevProgress = currentState.migrationProgress
-            val newTotal = progressData.getInt(SourceMigrationWorker.KEY_TOTAL, 0)
-            val newCompleted = progressData.getInt(SourceMigrationWorker.KEY_COMPLETED, 0)
-            val newFailed = progressData.getInt(SourceMigrationWorker.KEY_FAILED, 0)
-            val newNotFound = progressData.getInt(SourceMigrationWorker.KEY_NOT_FOUND, 0)
-            val finished = progressData.getBoolean(SourceMigrationWorker.KEY_FINISHED, false)
-            val workDone = finished || workInfo.state.isFinished
-
-            Log.d(TAG, "Progress: total=$newTotal completed=$newCompleted failed=$newFailed notFound=$newNotFound finished=$finished state=${workInfo.state}")
-
-            // Never regress: always keep the max of current and new values
-            val total = maxOf(newTotal, prevProgress?.total ?: 0)
-            val completed = maxOf(newCompleted, prevProgress?.completed ?: 0)
-            val failed = maxOf(newFailed, prevProgress?.failed ?: 0)
-            val notFound = maxOf(newNotFound, prevProgress?.notFound ?: 0)
-
-            val progress = MigrationProgress(
-                total = total,
-                completed = completed,
-                failed = failed,
-                notFound = notFound,
-                currentItem = prevProgress?.currentItem,
-                items = prevProgress?.items ?: emptyList(),
-                isFinished = workDone,
+            val total = maxOf(progressData.getInt(SourceMigrationWorker.KEY_TOTAL, 0), prevProgress?.total ?: 0)
+            val completed = maxOf(progressData.getInt(SourceMigrationWorker.KEY_COMPLETED, 0), prevProgress?.completed ?: 0)
+            val failed = maxOf(progressData.getInt(SourceMigrationWorker.KEY_FAILED, 0), prevProgress?.failed ?: 0)
+            val notFound = maxOf(progressData.getInt(SourceMigrationWorker.KEY_NOT_FOUND, 0), prevProgress?.notFound ?: 0)
+            val reused = maxOf(
+                progressData.getInt(SourceMigrationWorker.KEY_REUSED, 0),
+                outputData.getInt(SourceMigrationWorker.KEY_REUSED, 0),
+                prevProgress?.reused ?: 0,
             )
-
+            val attached = maxOf(
+                progressData.getInt(SourceMigrationWorker.KEY_ATTACHED, 0),
+                outputData.getInt(SourceMigrationWorker.KEY_ATTACHED, 0),
+                prevProgress?.attached ?: 0,
+            )
+            val currentTitle = progressData.getString(SourceMigrationWorker.KEY_CURRENT_TITLE)
+            val finished = progressData.getBoolean(SourceMigrationWorker.KEY_FINISHED, false) || workInfo.state.isFinished
+            val feedbackMessage = when {
+                !workInfo.state.isFinished -> null
+                !outputData.getString(SourceMigrationWorker.KEY_MESSAGE).isNullOrBlank() ->
+                    outputData.getString(SourceMigrationWorker.KEY_MESSAGE)
+                workInfo.state == WorkInfo.State.SUCCEEDED ->
+                    "迁移完成：成功 $completed 项，复用现有 $reused 项，新增投影 $attached 项，失败 $failed 项，未命中 $notFound 项"
+                else -> "迁移未完成，请检查当前范围、候选和目标源设置"
+            }
             _uiState.value = currentState.copy(
-                migrationProgress = progress,
+                migrationProgress = MigrationProgress(
+                    total = total,
+                    completed = completed,
+                    failed = failed,
+                    notFound = notFound,
+                    reused = reused,
+                    attached = attached,
+                    currentItem = currentTitle?.takeIf { it.isNotBlank() }?.let {
+                        org.skepsun.kototoro.favourites.domain.MigrationItem(
+                            mangaId = -1L,
+                            title = it,
+                        )
+                    } ?: prevProgress?.currentItem,
+                    items = prevProgress?.items ?: emptyList(),
+                    isFinished = finished,
+                ),
                 isExecuting = !workInfo.state.isFinished,
                 isFinished = workInfo.state == WorkInfo.State.SUCCEEDED,
+                stageFeedbacks = if (feedbackMessage != null) {
+                    currentState.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.READING,
+                        kind = EntityOrganizeFeedbackKind.EXECUTE,
+                        message = feedbackMessage,
+                    )
+                } else {
+                    currentState.stageFeedbacks
+                },
             )
         }
 
@@ -242,22 +1261,127 @@ class SourceMigrationViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isExecuting = false, isFinished = true)
     }
 
-    fun checkExistingMigration() {
-        val workManager = WorkManager.getInstance(appContext)
+    private fun refreshMergeCandidates() {
         viewModelScope.launch(Dispatchers.IO) {
-            val workInfos = workManager.getWorkInfosByTag(SourceMigrationWorker.WORK_TAG).get()
-            val activeWork = workInfos.firstOrNull { !it.state.isFinished }
-            if (activeWork != null) {
-                val state = _uiState.value
-                _uiState.value = state.copy(isExecuting = true, workId = activeWork.id.toString())
+            val favourites = loadScopedFavouriteContents()
+            val contents = favourites.map { it.toContent() }
+            val groups = buildWorkbenchGroups(contents)
+            val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
+            val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
+            val selectedItemsByGroup = buildMap {
+                groups.forEach { group ->
+                    put(
+                        group.id,
+                        _uiState.value.selectedMergeItemsByGroup[group.id]
+                            ?.intersect(group.mangaIds)
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: group.mangaIds,
+                    )
+                }
             }
+            _uiState.value = _uiState.value.copy(
+                scopedFavouriteContents = favourites,
+                mergeCandidateGroups = groups,
+                selectedMergeItemsByGroup = selectedItemsByGroup,
+                selectedMergeGroupIds = if (selected.isEmpty()) groups.mapTo(LinkedHashSet(groups.size)) { it.id } else selected,
+                trackingPreviews = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
+                selectedTrackingPreviewIds = _uiState.value.selectedTrackingPreviewIds.intersect(
+                    _uiState.value.trackingPreviews
+                        .filter { it.groupId in availableGroupIds }
+                        .mapTo(HashSet()) { it.previewId },
+                ),
+            )
         }
+    }
+
+    private suspend fun buildWorkbenchGroups(
+        contents: List<org.skepsun.kototoro.parsers.model.Content>,
+    ): List<MergeCandidateGroup> {
+        val candidateGroups = mergeFavoriteEntitiesUseCase.buildCandidateGroups(contents)
+        val groupedIds = candidateGroups.flatMapTo(HashSet()) { it.mangaIds }
+        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
+            contents.map { it.id },
+        )
+        val singletonGroups = contents
+            .asSequence()
+            .filterNot { it.id in groupedIds }
+            .groupBy { entityIdsByMangaId[it.id] ?: -it.id }
+            .map { (_, groupedContents) ->
+                val primary = groupedContents.first()
+                val entityId = entityIdsByMangaId[primary.id]
+                val hasEntity = entityId != null
+                val groupId = if (hasEntity) {
+                    "${primary.source.contentType.name}:entity:$entityId"
+                } else {
+                    "${primary.source.contentType.name}:single:${primary.id}"
+                }
+                MergeCandidateGroup(
+                    id = groupId,
+                    title = primary.title,
+                    normalizedTitle = primary.title.trim().lowercase(),
+                    contentType = primary.source.contentType,
+                    mangaIds = groupedContents.mapTo(LinkedHashSet(groupedContents.size)) { it.id },
+                    items = groupedContents.map { content ->
+                        org.skepsun.kototoro.favourites.domain.MergeCandidateItem(
+                            mangaId = content.id,
+                            title = content.title,
+                            normalizedTitle = content.title.trim().lowercase(),
+                            sourceName = content.source.name,
+                            coverUrl = content.coverUrl,
+                            score = 1f,
+                        )
+                    },
+                    matchScore = 1f,
+                    isExactMatch = true,
+                    resolvedEntityId = entityId,
+                    isAlreadyMerged = hasEntity,
+                )
+            }
+        return (candidateGroups + singletonGroups).sortedWith(
+            compareByDescending<MergeCandidateGroup> { it.mangaIds.size > 1 }
+                .thenByDescending { it.isExactMatch }
+                .thenByDescending { it.matchScore }
+                .thenByDescending { it.mangaIds.size }
+                .thenBy { it.title.lowercase() },
+        )
+    }
+
+    private suspend fun loadScopedFavouriteContents() = when {
+        _uiState.value.selectedContentIds.isNotEmpty() -> {
+            favouriteSourcesRepository.getFavouriteContentsByIds(_uiState.value.selectedContentIds)
+        }
+
+        _uiState.value.selectedFromSource != null -> {
+            favouriteSourcesRepository.getFavouriteContentsBySource(
+                checkNotNull(_uiState.value.selectedFromSource).name,
+            )
+        }
+
+        else -> {
+            favouriteSourcesRepository.getAllFavouriteContents()
+        }
+    }
+
+    private fun MergeCandidateGroup.withScopedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
+        val resolvedIds = selectedIds.orEmpty().ifEmpty { mangaIds }.intersect(mangaIds)
+        if (resolvedIds.isEmpty()) {
+            return null
+        }
+        return copy(
+            mangaIds = resolvedIds,
+            items = items.filter { it.mangaId in resolvedIds },
+        )
+    }
+
+    private fun MergeCandidateGroup.withMergeableSelectedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
+        val scoped = withScopedItems(selectedIds) ?: return null
+        return scoped.takeIf { it.mangaIds.size >= 2 }
     }
 
     private fun removeMigrationObserver() {
         val observer = migrationObserver ?: return
         val workId = _uiState.value.workId ?: return
-        kotlin.runCatching {
+        runCatching {
             WorkManager.getInstance(appContext)
                 .getWorkInfoByIdLiveData(java.util.UUID.fromString(workId))
                 .removeObserver(observer)
@@ -275,14 +1399,81 @@ class SourceMigrationViewModel @Inject constructor(
             val sourceName = source.name
             val contentGroup = sourceGroupManager.getContentGroupByName(sourceName, source.isNsfw())
             val originGroup = sourceGroupManager.getOriginGroupByName(sourceName)
-
             val contentTypeMatch = contentTypeFilter.isEmpty() ||
                 contentTypeFilter.any { it.matchesContentGroup(contentGroup) }
-
             val sourceTagMatch = sourceTagFilter.isEmpty() ||
                 sourceTagFilter.any { it.matches(contentGroup, originGroup) }
-
             contentTypeMatch && sourceTagMatch
         }
     }
+
+    private fun buildAnimeDatasetSummary(
+        status: AnimeOfflineRepository.Status,
+        latestVersion: String?,
+    ): String {
+        val baseSummary = when {
+            status.isInstalled && !status.releaseTag.isNullOrBlank() && status.downloadedAt > 0L -> {
+                appContext.getString(
+                    R.string.anime_offline_database_summary_installed,
+                    status.releaseTag,
+                    DateUtils.getRelativeTimeSpanString(status.downloadedAt),
+                )
+            }
+
+            status.isInstalled -> appContext.getString(R.string.anime_offline_database_summary_installed_unknown)
+            status.lastCheckedAt > 0L -> {
+                appContext.getString(
+                    R.string.anime_offline_database_summary_not_installed_checked,
+                    DateUtils.getRelativeTimeSpanString(status.lastCheckedAt),
+                )
+            }
+
+            else -> appContext.getString(R.string.anime_offline_database_summary_not_installed)
+        }
+        return if (latestVersion.isNullOrBlank() || latestVersion == status.releaseTag) {
+            baseSummary
+        } else {
+            "$baseSummary · 最新 $latestVersion"
+        }
+    }
+}
+
+private fun Map<EntityOrganizeStage, EntityOrganizeFeedback>.withFeedback(
+    stage: EntityOrganizeStage,
+    kind: EntityOrganizeFeedbackKind,
+    message: String,
+): Map<EntityOrganizeStage, EntityOrganizeFeedback> {
+    return this + (stage to EntityOrganizeFeedback(stage = stage, kind = kind, message = message))
+}
+
+private fun Map<EntityOrganizeStage, EntityOrganizeFeedback>.without(
+    stage: EntityOrganizeStage,
+): Map<EntityOrganizeStage, EntityOrganizeFeedback> {
+    return this - stage
+}
+
+internal fun updateMergeGroupSelection(
+    current: Set<String>,
+    groupIds: Set<String>,
+    selected: Boolean,
+): Set<String> {
+    return if (selected) current + groupIds else current - groupIds
+}
+
+internal fun previewIdsForGroups(
+    previews: List<TrackingBindingPreview>,
+    groupIds: Set<String>,
+): Set<String> {
+    return previews
+        .asSequence()
+        .filter { it.groupId in groupIds }
+        .map { it.previewId }
+        .toSet()
+}
+
+internal fun <T> clearSelectionIds(
+    current: Set<T>,
+    idsToClear: Set<T>,
+): Set<T> {
+    return current - idsToClear
 }

@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.tracker.ui.updates
 
+import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
@@ -11,6 +13,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -48,6 +51,7 @@ import java.time.Instant
 
 @HiltViewModel
 class UpdatesViewModel @Inject constructor(
+	@ApplicationContext private val appContext: Context,
 	private val repository: TrackingRepository,
 	private val scheduler: TrackWorker.Scheduler,
 	settings: AppSettings,
@@ -55,13 +59,19 @@ class UpdatesViewModel @Inject constructor(
 	private val quickFilter: UpdatesListQuickFilter,
 	private val sourceGroupManager: SourceGroupManager,
 	private val entityGraphRepository: EntityGraphRepository,
-	mangaDataRepository: ContentDataRepository,
+	private val dataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
-) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), QuickFilterListener by quickFilter {
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	@Volatile
 	private var groupedRemovalIds: Map<Long, Set<Long>> = emptyMap()
+
+	@Volatile
+	private var groupedEntityIds: Map<Long, Long> = emptyMap()
+
+	@Volatile
+	private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
 
 	override val isFilterBarVisible = MutableStateFlow(true)
 
@@ -183,6 +193,8 @@ class UpdatesViewModel @Inject constructor(
 
 		if (visibleList.isEmpty()) {
 			groupedRemovalIds = emptyMap()
+			groupedEntityIds = emptyMap()
+			groupedPreferredLocalIds = emptyMap()
 			return listOfNotNull(
 				quickFilter.filterItem(filters),
 				EmptyState(
@@ -196,6 +208,12 @@ class UpdatesViewModel @Inject constructor(
 
 		val groupedList = visibleList.aggregateByEntity()
 		groupedRemovalIds = groupedList.associate { it.uiId to it.mangaIds }
+		groupedEntityIds = groupedList.mapNotNull { group ->
+			group.entityId?.let { group.uiId to it }
+		}.toMap()
+		groupedPreferredLocalIds = groupedList.mapNotNull { group ->
+			group.preferredLocalMangaId?.let { group.uiId to it }
+		}.toMap()
 
 		val result = ArrayList<ListModel>(if (grouped) (groupedList.size * 1.4).toInt() else groupedList.size + 1)
 		quickFilter.filterItem(filters)?.let(result::add)
@@ -219,19 +237,50 @@ class UpdatesViewModel @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByLocalMangaIds(map { it.manga.id })
-		val grouped = LinkedHashMap<Long, MutableList<ContentTracking>>(size)
+		val existingEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.manga.id })
+		val unresolvedItems = filterNot { it.manga.id in existingEntityIdsByMangaId }
+		val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
+			entityGraphRepository.ensureLocalWorkEntities(unresolvedItems.map { it.manga })
+		} else {
+			emptyMap()
+		}
+		val entityIdsByMangaId = existingEntityIdsByMangaId + ensuredEntityIdsByMangaId
+		val preferredLocalIdsByEntity = entityIdsByMangaId.values
+			.distinct()
+			.associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
+		val displayTypeOrdinalByEntity = this
+			.groupBy { entityIdsByMangaId[it.manga.id] }
+			.mapNotNull { (entityId, items) ->
+				entityId?.let { it to items.resolveDisplayContentTypeOrdinal() }
+			}
+			.toMap()
+		val grouped = LinkedHashMap<UpdateGroupKey, MutableList<ContentTracking>>(size)
 		for (item in this) {
-			val key = entityIdsByMangaId[item.manga.id]?.toUiGroupId() ?: item.manga.id
+			val entityId = entityIdsByMangaId[item.manga.id]
+			val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: item.manga.source.contentType.ordinal
+			val key = UpdateGroupKey(
+				uiId = entityId?.toUiGroupId(contentTypeOrdinal) ?: item.manga.id,
+				contentTypeOrdinal = contentTypeOrdinal,
+			)
 			grouped.getOrPut(key) { ArrayList(1) }.add(item)
 		}
-		return grouped.map { (uiId, items) ->
-			items.toUpdateGroup(uiId)
+		return grouped.map { (key, items) ->
+			items.toUpdateGroup(
+				uiId = key.uiId,
+				entityId = items.firstNotNullOfOrNull { entityIdsByMangaId[it.manga.id] },
+				preferredLocalMangaId = items.firstNotNullOfOrNull { item ->
+					entityIdsByMangaId[item.manga.id]?.let(preferredLocalIdsByEntity::get)
+				},
+			)
 		}
 	}
 
-	private fun List<ContentTracking>.toUpdateGroup(uiId: Long): UpdateGroup {
-		val representative = maxWithOrNull(
+	private fun List<ContentTracking>.toUpdateGroup(
+		uiId: Long,
+		entityId: Long?,
+		preferredLocalMangaId: Long?,
+	): UpdateGroup {
+		val representative = firstOrNull { it.manga.id == preferredLocalMangaId } ?: maxWithOrNull(
 			compareBy<ContentTracking>(
 				{ it.lastChapterDate ?: Instant.EPOCH },
 				{ it.lastCheck ?: Instant.EPOCH },
@@ -242,10 +291,24 @@ class UpdatesViewModel @Inject constructor(
 			uiId = uiId,
 			representative = representative,
 			mangaIds = mapTo(LinkedHashSet(size)) { it.manga.id },
-			sourceCount = map { it.manga.source.name }.distinct().size,
 			lastChapterDate = mapNotNull { it.lastChapterDate }.maxOrNull(),
 			totalNewChapters = sumOf { it.newChapters },
+			entityId = entityId,
+			preferredLocalMangaId = preferredLocalMangaId ?: representative.manga.id,
 		)
+	}
+
+	private fun List<ContentTracking>.resolveDisplayContentTypeOrdinal(): Int {
+		return firstOrNull { !it.manga.source.name.startsWith("TRACKING_") }?.manga?.source?.contentType?.ordinal
+			?: first().manga.source.contentType.ordinal
+	}
+
+	override fun resolveEntityIdForUiItemId(id: Long): Long? {
+		return groupedEntityIds[id]
+	}
+
+	override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
+		return groupedPreferredLocalIds[id] ?: groupedRemovalIds[id]?.firstOrNull()
 	}
 
 	private fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(group: UpdateGroup): ListModel {
@@ -269,17 +332,32 @@ class UpdatesViewModel @Inject constructor(
 	}
 
 	private fun UpdateGroup.groupSuffix(): String? {
-		return sourceCount.takeIf { it > 1 }?.let { "$it 个来源" }
+		val projectionLabel = representative.manga.source.getTitle(appContext)
+		return if (mangaIds.size > 1) {
+			appContext.getString(
+				R.string.favourites_entity_current_projection_with_count,
+				projectionLabel,
+				mangaIds.size,
+			)
+		} else {
+			appContext.getString(R.string.favourites_entity_current_projection, projectionLabel)
+		}
 	}
 
-	private fun Long.toUiGroupId(): Long = -this
+	private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
+
+	private data class UpdateGroupKey(
+		val uiId: Long,
+		val contentTypeOrdinal: Int,
+	)
 
 	private data class UpdateGroup(
 		val uiId: Long,
 		val representative: ContentTracking,
 		val mangaIds: Set<Long>,
-		val sourceCount: Int,
 		val lastChapterDate: Instant?,
 		val totalNewChapters: Int,
+		val entityId: Long?,
+		val preferredLocalMangaId: Long?,
 	)
 }

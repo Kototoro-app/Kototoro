@@ -27,6 +27,7 @@ import org.skepsun.kototoro.backups.domain.BackupStartupCoordinator
 import org.skepsun.kototoro.browser.AdListUpdateService
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.os.VoiceInputContract
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentLinkResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -72,6 +73,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var sourcePresetsRepository: SourcePresetsRepository
+
+    @Inject
+    lateinit var contentDataRepository: ContentDataRepository
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -240,6 +244,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 isResumeEnabled = isResumeEnabledState,
                 onResumeClick = viewModel::openLastReader,
                 onContentSuggestionClick = router::openDetails,
+                onLocalEntitySuggestionClick = { suggestion ->
+                    suggestion.entityId?.let { entityId ->
+                        openEntityDetailsWithPreferredProjection(
+                            entityId = entityId,
+                            fallbackLocalMangaId = suggestion.representative.id,
+                        )
+                    } ?: router.openDetails(suggestion.representative)
+                },
                 onTrackingEntitySuggestionClick = { entity ->
                     when (entity.entityType) {
                         EntityType.WORK -> router.openTrackingSiteDetails(
@@ -371,6 +383,18 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         }
 
         observeFoldableState()
+    }
+
+    private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {
+        lifecycleScope.launch {
+            val preferredLocalMangaId = withContext(Dispatchers.IO) {
+                contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+            }
+            router.openEntityDetails(
+                entityId = entityId,
+                preferredLocalMangaId = preferredLocalMangaId ?: fallbackLocalMangaId,
+            )
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

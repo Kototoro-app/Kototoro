@@ -135,10 +135,14 @@ import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.discover.ui.details.LocalSearchState
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
+import org.skepsun.kototoro.details.ui.model.DetailsSourceDisplayContext
+import org.skepsun.kototoro.details.ui.model.DetailsSourceDisplayStrings
+import org.skepsun.kototoro.details.ui.model.DetailsSourceRole
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
 import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
+import org.skepsun.kototoro.details.ui.model.toPresentationModel
 import org.skepsun.kototoro.main.ui.compose.SearchFilterSheet
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.Content
@@ -541,9 +545,23 @@ fun DetailsHeader(
                         ) {
                             if (metadataSourceOptions.isNotEmpty()) {
                                 DetailsSourceSelectorButton(
-                                    label = stringResource(R.string.details_metadata_source),
-                                    currentOption = metadataSourceOption,
-                                    unavailableText = stringResource(R.string.details_reading_source_unavailable),
+                                    label = stringResource(R.string.details_entity_metadata),
+                                    currentDisplayModel = metadataSourceOption?.resolveDisplayModel(
+                                        role = DetailsSourceRole.ENTITY_METADATA,
+                                        currentContent = content,
+                                        linkedTrackingItem = metadataSourceOption.trackingService?.let { service ->
+                                            linkedTrackingItems.firstOrNull {
+                                                it.service == service && it.remoteId == metadataSourceOption.remoteId
+                                            }
+                                        },
+                                        strings = DetailsSourceDisplayStrings(
+                                            unavailableText = stringResource(R.string.details_metadata_binding_unavailable),
+                                            metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                            currentProjectionLabel = stringResource(R.string.details_current_projection),
+                                            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                        ),
+                                        isSelected = true,
+                                    ),
                                     onPrimaryClick = {
                                         when {
                                             metadataSourceOption?.source != null -> onSourceClick(metadataSourceOption.source)
@@ -558,9 +576,19 @@ fun DetailsHeader(
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                             DetailsSourceSelectorButton(
-                                label = stringResource(readingSourceLabelRes),
-                                currentOption = readingSourceOption,
-                                unavailableText = stringResource(R.string.details_reading_source_unavailable),
+                                label = stringResource(R.string.details_current_projection),
+                                currentDisplayModel = readingSourceOption?.resolveDisplayModel(
+                                    role = DetailsSourceRole.READING_PROJECTION,
+                                    currentContent = content,
+                                    linkedTrackingItem = null,
+                                    strings = DetailsSourceDisplayStrings(
+                                        unavailableText = stringResource(R.string.details_reading_source_unavailable),
+                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                        currentProjectionLabel = stringResource(readingSourceLabelRes),
+                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                    ),
+                                    isSelected = true,
+                                ),
                                 onPrimaryClick = {
                                     when {
                                         readingSourceOption?.source != null -> onSourceClick(readingSourceOption.source)
@@ -1057,14 +1085,12 @@ private fun resolveCyclicRatingSelection(currentStars: Float, tappedStarIndex: I
 private fun DetailsSourceSelectorButton(
     modifier: Modifier = Modifier,
     label: String,
-    currentOption: DetailsSourceOption?,
-    unavailableText: String,
+    currentDisplayModel: SourceOptionDisplayModel?,
     onPrimaryClick: () -> Unit,
     isMenuEnabled: Boolean,
     onMenuClick: () -> Unit,
 ) {
-    val currentTitle = detailsSourceOptionTitle(currentOption, unavailableText)
-    val isPrimaryEnabled = currentOption?.source != null || currentOption?.trackingService != null
+    val isPrimaryEnabled = currentDisplayModel != null
 
     Column(
         modifier = modifier,
@@ -1101,15 +1127,15 @@ private fun DetailsSourceSelectorButton(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     when {
-                        currentOption?.source != null -> {
+                        currentDisplayModel?.source != null -> {
                             ContentSourceIcon(
-                                source = currentOption.source,
+                                source = currentDisplayModel.source,
                                 modifier = Modifier.size(14.dp),
                             )
                         }
-                        currentOption?.trackingService != null -> {
+                        currentDisplayModel?.trackingService != null -> {
                             Icon(
-                                painter = rememberSafePainter(currentOption.trackingService.iconResId),
+                                painter = rememberSafePainter(currentDisplayModel.trackingService.iconResId),
                                 contentDescription = null,
                                 tint = Color.Unspecified,
                                 modifier = Modifier.size(14.dp),
@@ -1124,18 +1150,34 @@ private fun DetailsSourceSelectorButton(
                             )
                         }
                     }
-                    Text(
-                        text = currentTitle,
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (isPrimaryEnabled) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Column(
                         modifier = Modifier.weight(1f),
-                    )
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
+                    ) {
+                        Text(
+                            text = currentDisplayModel?.title.orEmpty(),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (isPrimaryEnabled) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        currentDisplayModel
+                            ?.subtitle
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { subtitle ->
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -1169,20 +1211,6 @@ private fun isSensitiveDetailsTag(tag: ContentTag): Boolean {
     return tag.title.containsAdultTagKeyword()
 }
 
-@Composable
-private fun detailsSourceOptionTitle(
-    option: DetailsSourceOption?,
-    unavailableText: String,
-): String {
-    return when {
-        option?.source != null -> rememberResolvedSourceTitle(option.source)
-        option?.trackingService != null -> stringResource(option.trackingService.titleResId)
-        !option?.subtitle.isNullOrBlank() -> option?.subtitle.orEmpty()
-        !option?.title.isNullOrBlank() -> option?.title.orEmpty()
-        else -> unavailableText
-    }
-}
-
 private data class SourceOptionDisplayModel(
     val title: String,
     val subtitle: String,
@@ -1195,33 +1223,32 @@ private data class SourceOptionDisplayModel(
 
 @Composable
 private fun DetailsSourceOption.resolveDisplayModel(
+    role: DetailsSourceRole,
     currentContent: Content?,
     linkedTrackingItem: LinkedTrackingItemUiModel?,
+    strings: DetailsSourceDisplayStrings,
     isSelected: Boolean,
 ): SourceOptionDisplayModel {
     val sourceTitle = if (source != null) rememberResolvedSourceTitle(source) else ""
     val trackingTitle = trackingService?.let { stringResource(it.titleResId) }.orEmpty()
-    val title = when {
-        !this.title.isNullOrBlank() -> this.title.orEmpty()
-        source != null && currentContent != null && currentContent.source.name == source.name -> currentContent.title
-        sourceTitle.isNotBlank() -> sourceTitle
-        linkedTrackingItem?.title?.isNotBlank() == true -> linkedTrackingItem.title
-        trackingTitle.isNotBlank() -> trackingTitle
-        else -> key
-    }
-    val subtitle = when {
-        !this.subtitle.isNullOrBlank() -> this.subtitle.orEmpty()
-        trackingTitle.isNotBlank() -> trackingTitle
-        source != null -> sourceTitle
-        remoteId != null -> "#$remoteId"
-        else -> ""
-    }
+    val presentation = toPresentationModel(
+        context = DetailsSourceDisplayContext(
+            role = role,
+            currentContentTitle = currentContent?.title,
+            currentContentSourceName = currentContent?.source?.name,
+            linkedTrackingTitle = linkedTrackingItem?.title,
+            resolvedSourceTitle = sourceTitle,
+            resolvedTrackingTitle = trackingTitle,
+            isSelected = isSelected,
+            strings = strings,
+        ),
+    )
     val coverUrl = coverUrl
         ?: linkedTrackingItem?.coverUrl
         ?: currentContent?.coverUrl?.takeIf { source != null && currentContent.source.name == source.name }
     return SourceOptionDisplayModel(
-        title = title,
-        subtitle = subtitle,
+        title = presentation.title,
+        subtitle = presentation.subtitle,
         coverUrl = coverUrl,
         source = source,
         trackingService = trackingService,
@@ -1236,6 +1263,7 @@ private fun SourceOptionCard(
     onClick: () -> Unit,
     scrobblingStatuses: Array<String>,
     onTrackingStatusClick: ((LinkedTrackingItemUiModel, ScrobblingStatus) -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var statusMenuExpanded by remember(displayModel.linkedTrackingItem?.service, displayModel.linkedTrackingItem?.remoteId) {
@@ -1245,7 +1273,10 @@ private fun SourceOptionCard(
     Surface(
         modifier = modifier
             .width(112.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         shape = RoundedCornerShape(12.dp),
         color = if (displayModel.isSelected)
             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
@@ -1297,12 +1328,19 @@ private fun SourceOptionCard(
                         )
                     }
                     displayModel.source != null -> {
-                        Icon(
-                            painter = rememberSafePainter(displayModel.source.iconResForUi()),
-                            contentDescription = null,
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(28.dp),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            ContentSourceIcon(
+                                source = displayModel.source,
+                                modifier = Modifier.size(20.dp),
+                                contentDescription = null,
+                            )
+                        }
                     }
                     else -> {
                         Icon(
@@ -1471,10 +1509,15 @@ fun MetadataSourceSheet(
 	                verticalArrangement = Arrangement.spacedBy(10.dp),
 	            ) {
 	                Text(
-	                    text = stringResource(R.string.details_metadata_source),
+	                    text = stringResource(R.string.details_entity_metadata),
 	                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
 	                    color = MaterialTheme.colorScheme.onSurface,
 	                )
+                    Text(
+                        text = stringResource(R.string.details_entity_metadata_sheet_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 	                if (currentOptions.isNotEmpty()) {
 	                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 	                    itemsIndexed(
@@ -1486,8 +1529,15 @@ fun MetadataSourceSheet(
 	                            }
                             SourceOptionCard(
                                 displayModel = option.resolveDisplayModel(
+                                    role = DetailsSourceRole.ENTITY_METADATA,
                                     currentContent = currentContent,
                                     linkedTrackingItem = linked,
+                                    strings = DetailsSourceDisplayStrings(
+                                        unavailableText = unavailableText,
+                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                        currentProjectionLabel = stringResource(R.string.details_current_projection),
+                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                    ),
                                     isSelected = option == selectedOption || option.isSelected,
                                 ),
                                 scrobblingStatuses = scrobblingStatuses,
@@ -1608,6 +1658,7 @@ fun ReadingSourceSheet(
     languagePresets: List<SourcePreset>,
     activeLanguagePresetId: Long,
     currentContent: Content?,
+    entityChapterSourceInfo: EntityChapterSourceInfo?,
     unavailableText: String,
     label: String,
     onDismissRequest: () -> Unit,
@@ -1622,9 +1673,11 @@ fun ReadingSourceSheet(
     onHideEmptyChange: (Boolean) -> Unit,
     onTemporaryOpenResult: (Content) -> Unit,
     onMigrateResult: (Content) -> Unit,
+    onDeleteProjection: (DetailsSourceOption) -> Unit,
 ) {
     val context = LocalContext.current
     var pendingMigrationTarget by remember { mutableStateOf<Content?>(null) }
+    var pendingDeleteOption by remember { mutableStateOf<DetailsSourceOption?>(null) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     val visibleSections = remember(searchSources, searchSections, hasSearched, isLoading) {
         when {
@@ -1681,10 +1734,29 @@ fun ReadingSourceSheet(
 	                verticalArrangement = Arrangement.spacedBy(10.dp),
 	            ) {
 	                Text(
-	                    text = label,
+	                    text = stringResource(R.string.details_current_projection),
 	                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
 	                    color = MaterialTheme.colorScheme.onSurface,
 	                )
+                    Text(
+                        text = buildString {
+                            append(stringResource(R.string.details_current_projection_sheet_hint, label))
+                            entityChapterSourceInfo
+                                ?.projectionCount
+                                ?.takeIf { it > 0 }
+                                ?.let { count ->
+                                    append(' ')
+                                    append(
+                                        stringResource(
+                                            R.string.entity_graph_chapter_source_projection_count,
+                                            count,
+                                        ),
+                                    )
+                                }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 	                if (currentOptions.isNotEmpty()) {
 	                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 	                    itemsIndexed(
@@ -1693,8 +1765,15 @@ fun ReadingSourceSheet(
 	                    ) { _, option ->
                             SourceOptionCard(
                                 displayModel = option.resolveDisplayModel(
+                                    role = DetailsSourceRole.READING_PROJECTION,
                                     currentContent = currentContent,
                                     linkedTrackingItem = null,
+                                    strings = DetailsSourceDisplayStrings(
+                                        unavailableText = unavailableText,
+                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                        currentProjectionLabel = label,
+                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                    ),
                                     isSelected = option == selectedOption || option.isSelected,
                                 ),
                                 scrobblingStatuses = emptyArray(),
@@ -1702,9 +1781,28 @@ fun ReadingSourceSheet(
                                     onDismissRequest()
                                     onSelectOption(option)
 	                                },
+                                onLongClick = {
+                                    if (option.targetMangaId != null) {
+                                        pendingDeleteOption = option
+                                    }
+                                },
 	                            )
 	                        }
 	                    }
+                        pendingDeleteOption?.let { option ->
+                            DropdownMenu(
+                                expanded = true,
+                                onDismissRequest = { pendingDeleteOption = null },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.details_remove_projection)) },
+                                    onClick = {
+                                        pendingDeleteOption = null
+                                        onDeleteProjection(option)
+                                    },
+                                )
+                            }
+                        }
 	                }
 	                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     Row(
@@ -2710,10 +2808,16 @@ private fun Content.readingSearchLatestChapterInfo(): ReadingSearchLatestChapter
 private fun EntityChapterSourceCard(
     info: EntityChapterSourceInfo,
 ) {
-    val chapterSourceTitle = info.source?.let { rememberResolvedSourceTitle(it) }
+    val chapterSourceTitle = info.projectionTitle?.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.entity_graph_chapter_source_unavailable)
     val supportingText = if (info.source != null) {
-        stringResource(R.string.entity_graph_chapter_source_selected_hint)
+        buildString {
+            append(stringResource(R.string.entity_graph_chapter_source_selected_hint))
+            if (info.projectionCount > 1) {
+                append(' ')
+                append(stringResource(R.string.entity_graph_chapter_source_projection_count, info.projectionCount))
+            }
+        }
     } else {
         stringResource(R.string.entity_graph_chapter_source_unavailable_hint)
     }

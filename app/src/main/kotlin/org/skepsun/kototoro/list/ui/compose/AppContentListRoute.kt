@@ -84,18 +84,20 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     registerFilterCallback: Boolean = true,
     onRemoveSelection: ((Set<Long>) -> Unit)? = null,
     onShareSelection: ((Set<Long>) -> Unit)? = null,
+    onFixSelection: ((Set<Long>) -> Unit)? = null,
     onPinSelection: ((Set<Long>) -> Unit)? = null,
     onMarkAsCompletedSelection: ((List<ContentListModel>) -> Unit)? = null,
     preferredSelectionInlineActions: List<SelectionAction>? = null,
     removeSelectionActionIconRes: Int? = null,
     removeSelectionActionTitleRes: Int? = null,
+    fixSelectionActionTitleRes: Int? = null,
     onEmptyActionClick: (() -> Unit)? = null,
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
     emitFilterRailOverride: Boolean = true,
     pullRefreshEnabled: Boolean = true,
     onLoadMore: () -> Unit = {},
     loadMoreVisibleThreshold: Int = 4,
-    onNavigateToDetails: ((org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
+    onNavigateToDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
     onAddMenuProvider: ((androidx.activity.ComponentActivity, VM, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
     showQuickFilterInline: Boolean = true,
@@ -203,6 +205,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                     preferredInlineActions = preferredSelectionInlineActions,
                     removeActionIconRes = removeSelectionActionIconRes,
                     removeActionTitleRes = removeSelectionActionTitleRes,
+                    fixActionTitleRes = fixSelectionActionTitleRes,
                     onClearSelection = { composeSelectionIds = emptySet() },
                     onActionClick = { action ->
                         when (action) {
@@ -240,7 +243,12 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                             }
 
                             SelectionAction.FIX -> {
-                                pendingFixIds = composeSelectionIds
+                                if (onFixSelection != null) {
+                                    onFixSelection(composeSelectionIds)
+                                    composeSelectionIds = emptySet()
+                                } else {
+                                    pendingFixIds = composeSelectionIds
+                                }
                             }
 
                             SelectionAction.PIN -> {
@@ -461,8 +469,14 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                     item.coverUrl.orEmpty(),
                     sharedElementInstanceKey,
                 )
-                if (onNavigateToDetails != null) {
-                    onNavigateToDetails(content, sharedElementKey)
+                val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
+                if (entityId != null) {
+                    appRouter.openEntityDetails(
+                        entityId = entityId,
+                        preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id) ?: content.id,
+                    )
+                } else if (onNavigateToDetails != null) {
+                    onNavigateToDetails(item, content, sharedElementKey)
                 } else {
                     appRouter.openDetails(content)
                 }

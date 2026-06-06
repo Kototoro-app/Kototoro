@@ -119,26 +119,26 @@ class ContentSourcesRepository @Inject constructor(
 
 	suspend fun getAllAvailableSourcesUnfiltered(): List<ContentSource> {
 		assimilateNewSources()
-		return buildList {
+		return canonicalizeSourcesByName(buildList {
 			addAll(allContentSources)
 			addAll(getExternalSources())
 			addAll(getEnabledJsonSources())
 			addAll(getEnabledMihonSources())
 			addAll(getEnabledAniyomiSources())
 			addAll(getEnabledIReaderSources())
-		}
+		})
 	}
 
 	suspend fun getAllAvailableSourcesForListing(): List<ContentSource> {
 		assimilateNewSources()
-		return buildList {
+		return canonicalizeSourcesByName(buildList {
 			addAll(allContentSources)
 			addAll(getExternalSources())
 			addAll(jsonDao.observeAllSummaries().first().map(::JsonSourceListSource))
 			addAll(getEnabledMihonSources())
 			addAll(getEnabledAniyomiSources())
 			addAll(getEnabledIReaderSources())
-		}
+		})
 	}
 
 	suspend fun getEnabledSources(): List<ContentSource> {
@@ -156,28 +156,23 @@ class ContentSourcesRepository @Inject constructor(
 				
 				val list = ArrayList<ContentSource>()
 				enabledSources.mapTo(list) { it.mangaSource }
-				
-				val existingNames = list.mapToSet { it.name }
-				
-				external.forEach { if ((settings.isAllSourcesEnabled || it.name !in disabledNames) && it.name !in existingNames) list.add(it) }
-				jsonSources.forEach { 
-					if (it.name !in existingNames) list.add(it) 
-				}
+				external.forEach { if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it) }
+				jsonSources.forEach(list::add)
 				mihonSources.forEach {
-					if ((settings.isAllSourcesEnabled || it.name !in disabledNames) && it.name !in existingNames) list.add(it)
+					if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
 				}
 				aniyomiSources.forEach {
-					if ((settings.isAllSourcesEnabled || it.name !in disabledNames) && it.name !in existingNames) list.add(it)
+					if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
 				}
 				ireaderSources.forEach {
-					if ((settings.isAllSourcesEnabled || it.name !in disabledNames) && it.name !in existingNames) list.add(it)
+					if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
 				}
 				
 				if (!settings.isShowBrokenSources) {
 					list.retainAll { !it.isBroken }
 				}
 				
-				list
+				canonicalizeSourcesByName(list)
 			}
 	}
 	
@@ -254,14 +249,16 @@ class ContentSourcesRepository @Inject constructor(
 	suspend fun getPinnedSources(): Set<ContentSource> {
 		assimilateNewSources()
 		val skipNsfw = settings.isNsfwContentDisabled
-		return dao.findAllPinned().mapNotNullToSet {
+		return canonicalizeSourcesByName(dao.findAllPinned().mapNotNull {
 			it.source.toContentSourceOrNull()?.takeUnless { x -> skipNsfw && x.isNsfw() }
-		}
+		}).toSet()
 	}
 
 	suspend fun getTopSources(limit: Int): List<ContentSource> {
 		assimilateNewSources()
-		return dao.findLastUsed(limit).toSources(settings.isNsfwContentDisabled, null)
+		return canonicalizeSourcesByName(
+			dao.findLastUsed(limit).toSources(settings.isNsfwContentDisabled, null).map { it.mangaSource },
+		).take(limit)
 	}
 
 	suspend fun getDisabledSources(): Set<ContentSource> {
@@ -269,13 +266,13 @@ class ContentSourcesRepository @Inject constructor(
 		if (settings.isAllSourcesEnabled) {
 			return emptySet()
 		}
-		val result = allContentSources.toMutableSet()
+		val result = getAllAvailableSourcesUnfiltered().toMutableSet()
 		val enabled = dao.findAllEnabledNames()
 		for (name in enabled) {
 			val source = name.toContentSourceOrNull() ?: continue
 			result.remove(source)
 		}
-		return result
+		return canonicalizeSourcesByName(result.toList()).toSet()
 	}
 
 	suspend fun queryParserSources(
@@ -687,7 +684,7 @@ class ContentSourcesRepository @Inject constructor(
 					list.add(ContentSourceInfo(ireaderSource, isEnabled = true, isPinned = false))
 				}
 			}
-			list
+			canonicalizeSourceInfosByName(list)
 		}
 
 	/**
@@ -1138,5 +1135,27 @@ class ContentSourcesRepository @Inject constructor(
 		// Fallback to anonymous/static wrapper
 		val fallback = org.skepsun.kototoro.core.model.ContentSource(this)
 		return if (fallback == org.skepsun.kototoro.core.model.UnknownContentSource) null else fallback
+	}
+
+	private fun canonicalizeSourcesByName(sources: List<ContentSource>): List<ContentSource> {
+		if (sources.size <= 1) {
+			return sources
+		}
+		return LinkedHashMap<String, ContentSource>(sources.size).apply {
+			sources.forEach { source ->
+				putIfAbsent(source.name, source)
+			}
+		}.values.toList()
+	}
+
+	private fun canonicalizeSourceInfosByName(sources: List<ContentSourceInfo>): List<ContentSourceInfo> {
+		if (sources.size <= 1) {
+			return sources
+		}
+		return LinkedHashMap<String, ContentSourceInfo>(sources.size).apply {
+			sources.forEach { source ->
+				putIfAbsent(source.mangaSource.name, source)
+			}
+		}.values.toList()
 	}
 }

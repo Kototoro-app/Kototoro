@@ -37,7 +37,11 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
+import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.core.model.isNsfw
 
@@ -50,12 +54,22 @@ class SuggestionsViewModel @Inject constructor(
 	private val suggestionsScheduler: SuggestionsWorker.Scheduler,
 	private val sourceGroupManager: SourceGroupManager,
 	private val sourcePresetsRepository: SourcePresetsRepository,
-	mangaDataRepository: ContentDataRepository,
+	private val entityGraphRepository: EntityGraphRepository,
+	private val dataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
-) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), QuickFilterListener by quickFilter {
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	override val isFilterBarVisible = MutableStateFlow(true)
+
+	@Volatile
+	private var groupedSuggestionIds: Map<Long, Set<Long>> = emptyMap()
+
+	@Volatile
+	private var groupedEntityIds: Map<Long, Long> = emptyMap()
+
+	@Volatile
+	private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
 
 	override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
@@ -114,6 +128,9 @@ class SuggestionsViewModel @Inject constructor(
 		val resultList = ArrayList<ListModel>()
 
 		if (visibleList.isEmpty()) {
+			groupedSuggestionIds = emptyMap()
+			groupedEntityIds = emptyMap()
+			groupedPreferredLocalIds = emptyMap()
 			if (filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty()) {
 				resultList.add(
 					EmptyState(
@@ -135,8 +152,19 @@ class SuggestionsViewModel @Inject constructor(
 				)
 			}
 		} else {
+			val groupedList = visibleList.aggregateByEntity()
+			groupedSuggestionIds = groupedList.associate { it.uiId to it.mangaIds }
+			groupedEntityIds = groupedList.mapNotNull { group ->
+				group.entityId?.let { group.uiId to it }
+			}.toMap()
+			groupedPreferredLocalIds = groupedList.mapNotNull { group ->
+				group.preferredLocalMangaId?.let { group.uiId to it }
+			}.toMap()
 			quickFilter.filterItem(filters)?.let { resultList.add(it) }
-			mangaListMapper.toListModelList(resultList, visibleList, mode)
+			for (group in groupedList) {
+				val model = mangaListMapper.toListModel(group.representative, mode)
+				resultList += model.toGroupedListModel(group)
+			}
 		}
 		resultList as List<ListModel>
 	}.onStart {
@@ -159,6 +187,81 @@ class SuggestionsViewModel @Inject constructor(
 		}
 	}
 
+	override fun resolveEntityIdForUiItemId(id: Long): Long? {
+		return groupedEntityIds[id]
+	}
+
+	override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
+		return groupedPreferredLocalIds[id] ?: groupedSuggestionIds[id]?.firstOrNull()
+	}
+
+	private suspend fun List<Content>.aggregateByEntity(): List<SuggestionGroup> {
+		if (isEmpty()) {
+			return emptyList()
+		}
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
+		val unresolvedItems = filterNot { it.id in entityIdsByMangaId }
+		val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
+			entityGraphRepository.ensureLocalWorkEntities(unresolvedItems)
+		} else {
+			emptyMap()
+		}
+		val resolvedEntityIdsByMangaId = entityIdsByMangaId + ensuredEntityIdsByMangaId
+		val preferredLocalIdsByEntity = resolvedEntityIdsByMangaId.values
+			.distinct()
+			.associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
+		val displayTypeOrdinalByEntity = this
+			.groupBy { resolvedEntityIdsByMangaId[it.id] }
+			.mapNotNull { (entityId, items) ->
+				entityId?.let { it to items.resolveDisplayContentTypeOrdinal() }
+			}
+			.toMap()
+		val grouped = LinkedHashMap<SuggestionGroupKey, MutableList<Content>>(size)
+		for (item in this) {
+			val entityId = resolvedEntityIdsByMangaId[item.id]
+			val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: item.source.contentType.ordinal
+			val key = SuggestionGroupKey(
+				uiId = entityId?.toUiGroupId(contentTypeOrdinal) ?: item.id,
+				contentTypeOrdinal = contentTypeOrdinal,
+			)
+			grouped.getOrPut(key) { ArrayList(1) }.add(item)
+		}
+		return grouped.map { (key, items) ->
+			val entityId = resolvedEntityIdsByMangaId[items.first().id]
+			val preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get)
+			val representative = items.firstOrNull { it.id == preferredLocalMangaId } ?: items.first()
+			SuggestionGroup(
+				uiId = key.uiId,
+				representative = representative,
+				mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id },
+				projectionCount = items.size,
+				entityId = entityId,
+				preferredLocalMangaId = preferredLocalMangaId ?: representative.id,
+			)
+		}
+	}
+
+	private fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(group: SuggestionGroup): ListModel {
+		val groupSuffix = if (group.projectionCount > 1) {
+			"${group.projectionCount} 个投影来源"
+		} else {
+			null
+		}
+		return when (this) {
+			is ContentCompactListModel -> copy(
+				id = group.uiId,
+				subtitle = listOfNotNull(subtitle?.takeIf { it.isNotBlank() }, groupSuffix).joinToString(" · "),
+			)
+			is ContentDetailedListModel -> copy(
+				id = group.uiId,
+				subtitle = listOfNotNull(subtitle.takeIf { !it.isNullOrBlank() }, groupSuffix).joinToString(" · "),
+			)
+			is ContentGridModel -> copy(
+				id = group.uiId,
+			)
+		}
+	}
+
 	private fun SourcePreset?.matches(source: org.skepsun.kototoro.parsers.model.ContentSource): Boolean {
 		this ?: return true
 		if (sources.isNotEmpty() && source.name !in sources) {
@@ -171,5 +274,26 @@ class SuggestionsViewModel @Inject constructor(
 			}
 		}
 		return true
+	}
+
+	private data class SuggestionGroup(
+		val uiId: Long,
+		val representative: Content,
+		val mangaIds: Set<Long>,
+		val entityId: Long?,
+		val preferredLocalMangaId: Long?,
+		val projectionCount: Int,
+	)
+
+	private data class SuggestionGroupKey(
+		val uiId: Long,
+		val contentTypeOrdinal: Int,
+	)
+
+	private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
+
+	private fun List<Content>.resolveDisplayContentTypeOrdinal(): Int {
+		return firstOrNull { !it.source.name.startsWith("TRACKING_") }?.source?.contentType?.ordinal
+			?: first().source.contentType.ordinal
 	}
 }

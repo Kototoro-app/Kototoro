@@ -1,9 +1,11 @@
 package org.skepsun.kototoro.favourites.ui.list
 
+import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +28,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
+import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -71,11 +74,12 @@ class FavouritesListViewModel @AssistedInject constructor(
     private val sourceGroupManager: SourceGroupManager,
     private val entityGraphRepository: EntityGraphRepository,
     settings: AppSettings,
-    mangaDataRepository: ContentDataRepository,
+    private val dataRepository: ContentDataRepository,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
-) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), QuickFilterListener {
+    @ApplicationContext private val appContext: Context,
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
 
     @AssistedFactory
     interface Factory {
@@ -89,6 +93,12 @@ class FavouritesListViewModel @AssistedInject constructor(
 
     @Volatile
     private var groupedFavoriteIds: Map<Long, Set<Long>> = emptyMap()
+
+    @Volatile
+    private var groupedEntityIds: Map<Long, Long> = emptyMap()
+
+    @Volatile
+    private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
 
     override val isFilterBarVisible = MutableStateFlow(false)
 
@@ -194,6 +204,18 @@ class FavouritesListViewModel @AssistedInject constructor(
         }
     }
 
+    fun resolveSelectionToMangaIds(ids: Set<Long>): Set<Long> {
+        return ids.expandGroupedIds()
+    }
+
+    override fun resolveEntityIdForUiItemId(id: Long): Long? {
+        return groupedEntityIds[id]
+    }
+
+    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
+        return groupedPreferredLocalIds[id] ?: groupedFavoriteIds[id]?.firstOrNull()
+    }
+
     suspend fun isPinned(ids: Set<Long>): Boolean {
         return repository.isPinned(ids.expandGroupedIds())
     }
@@ -268,6 +290,7 @@ class FavouritesListViewModel @AssistedInject constructor(
 
         if (visibleItems.isEmpty()) {
             groupedFavoriteIds = emptyMap()
+            groupedEntityIds = emptyMap()
             val models = mutableListOf<ListModel>()
             quickFilter.filterItem(filters)?.let(models::add)
             if (hideAdult && adultItems.isNotEmpty()) {
@@ -292,6 +315,12 @@ class FavouritesListViewModel @AssistedInject constructor(
 
         val groupedItems = visibleItems.aggregateByEntity()
         groupedFavoriteIds = groupedItems.associate { it.uiId to it.mangaIds }
+        groupedEntityIds = groupedItems.mapNotNull { group ->
+            group.entityId?.let { group.uiId to it }
+        }.toMap()
+        groupedPreferredLocalIds = groupedItems.mapNotNull { group ->
+            group.preferredLocalMangaId?.let { group.uiId to it }
+        }.toMap()
 
         val result = ArrayList<ListModel>(groupedItems.size + 1)
         quickFilter.filterItem(filters)?.let(result::add)
@@ -313,18 +342,46 @@ class FavouritesListViewModel @AssistedInject constructor(
         if (isEmpty()) {
             return emptyList()
         }
-        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByLocalMangaIds(map { it.id })
-        val grouped = LinkedHashMap<Long, MutableList<Content>>(size)
+        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
+        val unresolvedItems = filterNot { it.id in entityIdsByMangaId }
+        val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
+            entityGraphRepository.ensureLocalWorkEntities(unresolvedItems)
+        } else {
+            emptyMap()
+        }
+        val resolvedEntityIdsByMangaId = entityIdsByMangaId + ensuredEntityIdsByMangaId
+        val preferredLocalIdsByEntity = resolvedEntityIdsByMangaId.values
+            .distinct()
+            .associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
+        val displayTypeOrdinalByEntity = this
+            .groupBy { resolvedEntityIdsByMangaId[it.id] }
+            .mapNotNull { (entityId, items) ->
+                entityId?.let {
+                    it to items.resolveDisplayContentTypeOrdinal()
+                }
+            }
+            .toMap()
+        val grouped = LinkedHashMap<FavouriteGroupKey, MutableList<Content>>(size)
         for (item in this) {
-            val key = entityIdsByMangaId[item.id]?.toUiGroupId() ?: item.id
+            val entityId = resolvedEntityIdsByMangaId[item.id]
+            val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: item.source.contentType.ordinal
+            val key = FavouriteGroupKey(
+                uiId = entityId?.toUiGroupId(contentTypeOrdinal) ?: item.id,
+                contentTypeOrdinal = contentTypeOrdinal,
+            )
             grouped.getOrPut(key) { ArrayList(1) }.add(item)
         }
-        return grouped.map { (uiId, items) ->
+        return grouped.map { (key, items) ->
+            val entityId = resolvedEntityIdsByMangaId[items.first().id]
+            val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
+            val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
             FavouriteGroup(
-                uiId = uiId,
-                representative = items.first(),
+                uiId = key.uiId,
+                representative = representative,
                 mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id },
-                sourceCount = items.map { it.source.name }.distinct().size,
+                projectionCount = items.size,
+                entityId = entityId,
+                preferredLocalMangaId = preferredLocalId ?: representative.id,
             )
         }
     }
@@ -361,17 +418,38 @@ class FavouritesListViewModel @AssistedInject constructor(
     }
 
     private fun FavouriteGroup.groupSuffix(): String? {
-        return sourceCount.takeIf { it > 1 }?.let { "$it 个来源" }
+        val projectionLabel = representative.source.getTitle(appContext)
+        return if (projectionCount > 1) {
+            appContext.getString(
+                R.string.favourites_entity_current_projection_with_count,
+                projectionLabel,
+                projectionCount,
+            )
+        } else {
+            appContext.getString(R.string.favourites_entity_current_projection, projectionLabel)
+        }
     }
 
-    private fun Long.toUiGroupId(): Long = -this
+    private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
 
     private data class FavouriteGroup(
         val uiId: Long,
         val representative: Content,
         val mangaIds: Set<Long>,
-        val sourceCount: Int,
+        val projectionCount: Int,
+        val entityId: Long?,
+        val preferredLocalMangaId: Long?,
     )
+
+    private data class FavouriteGroupKey(
+        val uiId: Long,
+        val contentTypeOrdinal: Int,
+    )
+
+    private fun List<Content>.resolveDisplayContentTypeOrdinal(): Int {
+        return firstOrNull { !it.source.name.startsWith("TRACKING_") }?.source?.contentType?.ordinal
+            ?: first().source.contentType.ordinal
+    }
 
     private fun observeFavorites() = if (categoryId == NO_ID) {
         combine(

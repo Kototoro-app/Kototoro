@@ -25,7 +25,9 @@ import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTag
 import org.skepsun.kototoro.core.db.entity.toContentTagsList
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -36,6 +38,13 @@ import org.skepsun.kototoro.search.ui.ContentSuggestionsProvider
 import javax.inject.Inject
 import kotlin.math.abs
 
+data class LocalEntitySuggestion(
+	val entityId: Long?,
+	val representative: Content,
+	val projectionCount: Int,
+	val sourceCount: Int,
+)
+
 @Reusable
 class ContentSearchRepository @Inject constructor(
 	private val db: MangaDatabase,
@@ -43,9 +52,11 @@ class ContentSearchRepository @Inject constructor(
 	@ApplicationContext private val context: Context,
 	private val recentSuggestions: SearchRecentSuggestions,
 	private val settings: AppSettings,
+	private val entityGraphRepository: EntityGraphRepository,
+	private val dataRepository: ContentDataRepository,
 ) {
 
-	suspend fun getContentSuggestion(query: String, limit: Int, source: ContentSource?): List<Content> = when {
+	suspend fun getContentSuggestion(query: String, limit: Int, source: ContentSource?): List<LocalEntitySuggestion> = when {
 		query.isEmpty() -> db.getSuggestionDao().getTopContent(limit)
 		source != null -> db.getMangaDao().searchByTitle("%$query%", source.name, limit)
 		else -> db.getMangaDao().searchByTitle("%$query%", limit)
@@ -55,7 +66,7 @@ class ContentSearchRepository @Inject constructor(
 		it.toContent()
 	}.sortedBy { x ->
 		x.title.levenshteinDistance(query)
-	}
+	}.aggregateByEntity(limit)
 
 	suspend fun getQuerySuggestion(
 		query: String,
@@ -81,6 +92,56 @@ class ContentSearchRepository @Inject constructor(
 			}
 			result
 		}.orEmpty()
+	}
+
+	private suspend fun List<Content>.aggregateByEntity(limit: Int): List<LocalEntitySuggestion> {
+		if (isEmpty()) {
+			return emptyList()
+		}
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
+		val unresolvedItems = filterNot { it.id in entityIdsByMangaId }
+		val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
+			entityGraphRepository.ensureLocalWorkEntities(unresolvedItems)
+		} else {
+			emptyMap()
+		}
+		val resolvedEntityIdsByMangaId = entityIdsByMangaId + ensuredEntityIdsByMangaId
+		val preferredLocalIdsByEntity = resolvedEntityIdsByMangaId.values
+			.distinct()
+			.associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
+		val displayTypeOrdinalByEntity = this
+			.groupBy { resolvedEntityIdsByMangaId[it.id] }
+			.mapNotNull { (entityId, items) ->
+				entityId?.let { it to items.resolveDisplayContentTypeOrdinal() }
+			}
+			.toMap()
+		val grouped = LinkedHashMap<String, MutableList<Content>>(size)
+		val entityIdsByKey = HashMap<String, Long?>()
+		forEach { content ->
+			val entityId = resolvedEntityIdsByMangaId[content.id]
+			val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: content.source.contentType.ordinal
+			val key = entityId?.let { "entity:$it:type:$contentTypeOrdinal" } ?: "content:${content.id}"
+			grouped.getOrPut(key) { ArrayList(1) } += content
+			entityIdsByKey.putIfAbsent(key, entityId)
+		}
+		return grouped.asSequence()
+			.map { (key, items) ->
+				val entityId = entityIdsByKey[key]
+				val preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get)
+				LocalEntitySuggestion(
+					entityId = entityId,
+					representative = items.firstOrNull { it.id == preferredLocalMangaId } ?: items.first(),
+					projectionCount = items.size,
+					sourceCount = items.mapTo(mutableSetOf()) { it.source.name }.size,
+				)
+			}
+			.take(limit)
+			.toList()
+	}
+
+	private fun List<Content>.resolveDisplayContentTypeOrdinal(): Int {
+		return firstOrNull { !it.source.name.startsWith("TRACKING_") }?.source?.contentType?.ordinal
+			?: first().source.contentType.ordinal
 	}
 
 	fun observeRecentQueries(limit: Int): Flow<List<String>> = callbackFlow {

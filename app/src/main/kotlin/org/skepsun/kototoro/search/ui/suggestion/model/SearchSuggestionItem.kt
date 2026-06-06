@@ -9,6 +9,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 
 sealed interface SearchSuggestionItem : ListModel {
 
@@ -18,6 +19,19 @@ sealed interface SearchSuggestionItem : ListModel {
 
 		override fun areItemsTheSame(other: ListModel): Boolean {
 			return other is ContentList
+		}
+	}
+
+	data class LocalEntityList(
+		val items: List<LocalEntitySuggestion>,
+	) : SearchSuggestionItem {
+
+		override fun areItemsTheSame(other: ListModel): Boolean {
+			return other is LocalEntityList
+		}
+
+		override fun getChangePayload(previousState: ListModel): Any {
+			return ListModelDiffCallback.PAYLOAD_NESTED_LIST_CHANGED
 		}
 	}
 

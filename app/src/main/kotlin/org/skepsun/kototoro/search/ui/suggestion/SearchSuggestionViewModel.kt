@@ -362,17 +362,17 @@ class SearchSuggestionViewModel @Inject constructor(
 	}
 
 	private suspend fun getContent(searchQuery: String): List<SearchSuggestionItem> = runCatchingCancellable {
-		val manga = repository.getContentSuggestion(searchQuery, MAX_MANGA_ITEMS, null)
-			.filter { item -> contentKinds.value.any { kind -> kind.matches(item) } }
-		if (manga.isEmpty()) {
+		val entities = repository.getContentSuggestion(searchQuery, MAX_MANGA_ITEMS, null)
+			.filter { item -> contentKinds.value.any { kind -> kind.matches(item.representative) } }
+		if (entities.isEmpty()) {
 			emptyList()
 		} else {
-			listOf(SearchSuggestionItem.ContentList(manga))
+			listOf(SearchSuggestionItem.LocalEntityList(entities))
 		}
-		}.getOrElse { e ->
-			e.printStackTraceDebug()
-			listOf(SearchSuggestionItem.Text(0, e))
-		}
+	}.getOrElse { e ->
+		e.printStackTraceDebug()
+		listOf(SearchSuggestionItem.Text(0, e))
+	}
 
 	private fun getSources(searchQuery: String, enabledSources: EnabledSourcesSnapshot): List<SearchSuggestionItem> =
 		runCatchingCancellable {

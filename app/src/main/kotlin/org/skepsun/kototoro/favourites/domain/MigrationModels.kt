@@ -21,6 +21,8 @@ data class MigrationProgress(
     val completed: Int,
     val failed: Int,
     val notFound: Int,
+    val reused: Int = 0,
+    val attached: Int = 0,
     val currentItem: MigrationItem?,
     val items: List<MigrationItem>,
     val isFinished: Boolean = false,

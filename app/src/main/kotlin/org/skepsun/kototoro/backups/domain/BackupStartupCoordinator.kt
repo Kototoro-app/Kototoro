@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupService
@@ -24,7 +25,7 @@ class BackupStartupCoordinator @Inject constructor(
 
 	fun startOnFirstLaunch(scope: CoroutineScope) {
 		startPeriodicalBackupService()
-		startAutoSyncObserver()
+		startAutoSyncObserver(scope)
 		scheduleAutoRestore(scope)
 	}
 
@@ -38,13 +39,20 @@ class BackupStartupCoordinator @Inject constructor(
 		}
 	}
 
-	private fun startAutoSyncObserver() {
+	private fun startAutoSyncObserver(scope: CoroutineScope) {
 		logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_start_requested")
-		runCatching {
-			dataSyncManager.start()
-		}.onFailure {
-			logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_start_failed", reason = it::class.java.simpleName)
-			it.printStackTraceDebug()
+		scope.launch(Dispatchers.IO) {
+			runCatching {
+				dataSyncManager.start()
+			}.onFailure {
+				logBackupFlow(
+					TAG,
+					flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD,
+					event = "observer_start_failed",
+					reason = it::class.java.simpleName,
+				)
+				it.printStackTraceDebug()
+			}
 		}
 	}
 

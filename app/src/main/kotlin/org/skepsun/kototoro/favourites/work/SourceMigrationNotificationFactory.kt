@@ -94,10 +94,12 @@ class SourceMigrationNotificationFactory @AssistedInject constructor(
         completed: Int,
         failed: Int,
         notFound: Int,
+        reused: Int,
+        attached: Int,
     ): Notification {
         builder
             .setContentTitle(context.getString(R.string.migration_completed_title))
-            .setContentText(context.getString(R.string.migration_completed_summary, completed, failed, notFound))
+            .setContentText(context.getString(R.string.migration_completed_summary, completed, reused, attached, failed, notFound))
             .setProgress(0, 0, false)
             .setOngoing(false)
             .setAutoCancel(true)

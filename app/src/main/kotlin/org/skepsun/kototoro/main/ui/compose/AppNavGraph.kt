@@ -9,9 +9,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -22,12 +24,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
 import org.skepsun.kototoro.favourites.ui.compose.KototoroFavoritesHostRoute
+import org.skepsun.kototoro.favourites.ui.migration.compose.EntityOrganizeScreen
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.core.nav.router
@@ -55,6 +59,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -184,7 +189,7 @@ private fun NavDestination.isMainRoute(): Boolean =
         hasRoute<BookmarksRoute>() ||
         hasRoute<UpdatedRoute>()
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
@@ -243,8 +248,8 @@ fun AppNavGraph(
 
             androidx.compose.runtime.LaunchedEffect(viewModel.onOpenContent, navigateToDetailsWithContent) {
                 viewModel.onOpenContent.collect { event ->
-                    event?.consume { content ->
-                        navigateToDetailsWithContent(content, null)
+                    event?.consume { contentEvent ->
+                        navigateToDetailsWithContent(contentEvent.content, null)
                     }
                 }
             }
@@ -692,11 +697,12 @@ fun AppNavGraph(
             }
             }
         }
-        composable<FavoritesRoute> {
+        composable<FavoritesRoute> { backStackEntry ->
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>()
             val selectedGroupTab by viewModel.globalFavoritesState.selectedGroupTab.collectAsStateWithLifecycle()
             val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
+            var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
             val coroutineScope = rememberCoroutineScope()
             val context = LocalContext.current
             fun showToast(messageRes: Int) {
@@ -728,6 +734,29 @@ fun AppNavGraph(
                 }
             }
 
+            LaunchedEffect(backStackEntry) {
+                backStackEntry.savedStateHandle
+                    .getStateFlow(ENTITY_ORGANIZE_RESULT_REFRESH_KEY, false)
+                    .collect {
+                        if (!consumeEntityOrganizeRefreshResult(backStackEntry.savedStateHandle)) {
+                            return@collect
+                        }
+                        entityOrganizeRefreshGeneration += 1
+                    }
+            }
+
+            LaunchedEffect(backStackEntry) {
+                backStackEntry.savedStateHandle
+                    .getStateFlow<String?>(ENTITY_ORGANIZE_RESULT_MESSAGE_KEY, null)
+                    .collect {
+                        val message = consumeEntityOrganizeMessageResult(backStackEntry.savedStateHandle)
+                        if (message == null) {
+                            return@collect
+                        }
+                        viewModel.notifyEntityOrganizeResult(message)
+                    }
+            }
+
             fun showSyncDialog(scope: CoroutineScope) {
                 scope.launch {
                     val candidates = viewModel.loadSyncCandidates()
@@ -756,8 +785,8 @@ fun AppNavGraph(
                         KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
                             appRouter.openFavoriteCategories()
                         },
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.batch_source_migration) {
-                            viewModel.showMigrationPanel()
+                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.entity_organize_title) {
+                            appRouter.openEntityOrganizeSettings()
                         },
                         KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
                             showImportDialog(coroutineScope)
@@ -782,6 +811,14 @@ fun AppNavGraph(
 
             LaunchedEffect(viewModel.syncMessages) {
                 viewModel.syncMessages.collect { event ->
+                    event?.consume(eventCollector { message ->
+                        showToast(message)
+                    })
+                }
+            }
+
+            LaunchedEffect(viewModel.organizeMessages) {
+                viewModel.organizeMessages.collect { event ->
                     event?.consume(eventCollector { message ->
                         showToast(message)
                     })
@@ -828,7 +865,14 @@ fun AppNavGraph(
                 KototoroFavoritesHostRoute(
                     appRouter = appRouter,
                     contentPadding = contentPadding,
-                    onNavigateToDetails = navigateToDetailsWithContent,
+                    refreshGeneration = entityOrganizeRefreshGeneration,
+                    consumeOrganizeMessages = false,
+                    onOpenEntityOrganize = { selectedIds ->
+                        appRouter.openEntityOrganizeSettings(selectedIds)
+                    },
+                    onNavigateToDetails = { _, content, sharedKey ->
+                        navigateToDetailsWithContent(content, sharedKey)
+                    },
                     registerFilterCallback = false,
                     onTopBarOverrideChanged = {
                         onExploreSourceSelectionTopBarChanged(
@@ -839,6 +883,26 @@ fun AppNavGraph(
                 )
             }
             }
+        }
+        composable<EntityOrganizeRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<EntityOrganizeRoute>()
+            val initialSelectedIds = remember(route.selectedContentIds) {
+                parseEntityOrganizeSelection(route.selectedContentIds)
+            }
+            EntityOrganizeScreen(
+                initialSelectedContentIds = initialSelectedIds,
+                onBack = { shouldRefreshFavorites, message ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        ENTITY_ORGANIZE_RESULT_REFRESH_KEY,
+                        shouldRefreshFavorites,
+                    )
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        ENTITY_ORGANIZE_RESULT_MESSAGE_KEY,
+                        message,
+                    )
+                    navController.navigateUp()
+                },
+            )
         }
         composable<ExploreRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
@@ -1093,7 +1157,9 @@ fun AppNavGraph(
                     showRemoveOption = true,
                     sharedElementInstanceKey = "main_local",
                     isContentTypeFilterVisible = true,
-                    onNavigateToDetails = navigateToDetailsWithContent,
+                    onNavigateToDetails = { _, content, sharedKey ->
+                        navigateToDetailsWithContent(content, sharedKey)
+                    },
                     isSourceTagFilterVisible = false,
                     onRemoveSelection = { ids ->
                         if (activity != null) {
@@ -1151,7 +1217,9 @@ fun AppNavGraph(
                     sharedElementInstanceKey = "main_suggestions",
                     isContentTypeFilterVisible = true,
                     isSourceTagFilterVisible = true,
-                    onNavigateToDetails = navigateToDetailsWithContent,
+                    onNavigateToDetails = { _, content, sharedKey ->
+                        navigateToDetailsWithContent(content, sharedKey)
+                    },
                     onFilterRailOverrideChanged = { suggestionsFilterRailOverride = it },
                     onAddMenuProvider = { act, _, _ ->
                         object : androidx.core.view.MenuProvider {
@@ -1272,7 +1340,9 @@ fun AppNavGraph(
                     isContentTypeFilterVisible = true,
                     isSourceTagFilterVisible = true,
                     onRemoveSelection = { ids -> viewModel.remove(ids) },
-                    onNavigateToDetails = navigateToDetailsWithContent,
+                    onNavigateToDetails = { _, content, sharedKey ->
+                        navigateToDetailsWithContent(content, sharedKey)
+                    },
                     onFilterRailOverrideChanged = {},
                     onAddMenuProvider = { _, _, _ ->
                         object : androidx.core.view.MenuProvider {

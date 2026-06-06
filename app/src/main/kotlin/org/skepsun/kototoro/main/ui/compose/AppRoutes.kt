@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.annotation.IdRes
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.R
@@ -10,6 +11,7 @@ object AppRouteNames {
     const val DISCOVER = "discover"
     const val HISTORY = "history"
     const val FAVORITES = "favorites"
+    const val ENTITY_ORGANIZE = "entity_organize"
     const val EXPLORE = "explore"
     const val FEED = "feed"
     const val LOCAL = "local"
@@ -21,6 +23,25 @@ object AppRouteNames {
 }
 
 internal const val RETURN_HOME_ON_BACK_KEY = "return_home_on_back"
+internal const val ENTITY_ORGANIZE_RESULT_REFRESH_KEY = "entity_organize_result_refresh"
+internal const val ENTITY_ORGANIZE_RESULT_MESSAGE_KEY = "entity_organize_result_message"
+
+internal fun consumeEntityOrganizeRefreshResult(savedStateHandle: SavedStateHandle): Boolean {
+    val shouldRefresh = savedStateHandle.get<Boolean>(ENTITY_ORGANIZE_RESULT_REFRESH_KEY) == true
+    if (shouldRefresh) {
+        savedStateHandle[ENTITY_ORGANIZE_RESULT_REFRESH_KEY] = false
+    }
+    return shouldRefresh
+}
+
+internal fun consumeEntityOrganizeMessageResult(savedStateHandle: SavedStateHandle): String? {
+    val message = savedStateHandle.get<String>(ENTITY_ORGANIZE_RESULT_MESSAGE_KEY)
+        ?.takeIf { it.isNotBlank() }
+    if (message != null) {
+        savedStateHandle[ENTITY_ORGANIZE_RESULT_MESSAGE_KEY] = null
+    }
+    return message
+}
 
 @Serializable
 @SerialName(AppRouteNames.HOME)
@@ -37,6 +58,26 @@ data object HistoryRoute
 @Serializable
 @SerialName(AppRouteNames.FAVORITES)
 data object FavoritesRoute
+
+@Serializable
+@SerialName(AppRouteNames.ENTITY_ORGANIZE)
+data class EntityOrganizeRoute(
+    val selectedContentIds: String = "",
+)
+
+fun encodeEntityOrganizeSelection(ids: Set<Long>): String {
+    return ids.sorted().joinToString(separator = ",")
+}
+
+fun parseEntityOrganizeSelection(value: String): Set<Long> {
+    return value
+        .split(',')
+        .asSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .mapNotNull(String::toLongOrNull)
+        .toSet()
+}
 
 @Serializable
 @SerialName(AppRouteNames.EXPLORE)

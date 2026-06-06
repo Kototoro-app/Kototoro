@@ -18,17 +18,17 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import org.skepsun.kototoro.alternatives.domain.MigrateUseCase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTag
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
 import org.skepsun.kototoro.core.util.ext.trySetForeground
-import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.favourites.data.FavouriteContent
+import org.skepsun.kototoro.favourites.domain.AttachReadingSourceToEntityUseCase
 import org.skepsun.kototoro.favourites.data.FavouriteSourcesRepository
 import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationStatus
-import org.skepsun.kototoro.search.domain.SearchKind
-import org.skepsun.kototoro.search.domain.SearchV2Helper
+import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
@@ -40,9 +40,8 @@ class SourceMigrationWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
     private val favouriteSourcesRepository: FavouriteSourcesRepository,
-    private val sourcesRepository: ContentSourcesRepository,
-    private val searchHelperFactory: SearchV2Helper.Factory,
-    private val migrateUseCase: MigrateUseCase,
+    private val attachReadingSourceToEntityUseCase: AttachReadingSourceToEntityUseCase,
+    private val contentDataRepository: ContentDataRepository,
     private val notificationFactoryFactory: SourceMigrationNotificationFactory.Factory,
 ) : CoroutineWorker(appContext, params) {
 
@@ -56,111 +55,146 @@ class SourceMigrationWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result {
-        val fromSourceName = inputData.getString(KEY_FROM_SOURCE) ?: return Result.failure()
-        val toSourceName = inputData.getString(KEY_TO_SOURCE) ?: return Result.failure()
+        val targetSourceNames = inputData.getStringArray(KEY_TARGET_SOURCES)?.filter { it.isNotBlank() }.orEmpty()
+        val selectedContentIds = inputData.getLongArray(KEY_SELECTED_CONTENT_IDS)?.toSet().orEmpty()
+        val fromSourceName = inputData.getString(KEY_FROM_SOURCE)
         val concurrency = inputData.getInt(KEY_CONCURRENCY, 3)
+        val previewMangaIds = inputData.getLongArray(KEY_PREVIEW_MANGA_IDS) ?: longArrayOf()
+        val previewTargetIds = inputData.getLongArray(KEY_PREVIEW_TARGET_IDS) ?: longArrayOf()
+        val previewActions = inputData.getIntArray(KEY_PREVIEW_ACTIONS) ?: intArrayOf()
 
-        Log.d(TAG, "Worker started: from=$fromSourceName, to=$toSourceName, concurrency=$concurrency")
-
-        val allSources = sourcesRepository.getAllAvailableSourcesForListing()
-        val toSource = allSources.find { it.name == toSourceName }
-        Log.d(TAG, "Resolved target source: ${toSource?.javaClass?.simpleName}(${toSource != null})")
-        if (toSource == null) {
-            Log.e(TAG, "Target source not found: $toSourceName")
-            return Result.failure()
+        if (targetSourceNames.isEmpty()) {
+            Log.e(TAG, "No target sources configured")
+            return failureResult("未配置目标源")
+        }
+        if (
+            previewMangaIds.isEmpty() ||
+            previewMangaIds.size != previewTargetIds.size ||
+            previewMangaIds.size != previewActions.size
+        ) {
+            Log.e(TAG, "No valid migration preview plan configured")
+            return failureResult("未生成有效的迁移计划，请先预览并接受候选")
         }
 
-        val favouriteContents = favouriteSourcesRepository.getFavouriteContentsBySource(fromSourceName)
-        Log.d(TAG, "Favorites from source '$fromSourceName': ${favouriteContents.size} items")
-        favouriteContents.take(3).forEach { fc ->
-            Log.d(TAG, "  item: id=${fc.manga.id} title=${fc.manga.title} tags=${fc.tags.size}")
-        }
+        Log.d(
+            TAG,
+            "Worker started: selectedIds=${selectedContentIds.size} from=$fromSourceName " +
+                "targets=${targetSourceNames.joinToString()} concurrency=$concurrency",
+        )
+
+        val favouriteContents = loadFavouriteContents(selectedContentIds, fromSourceName)
         if (favouriteContents.isEmpty()) {
             Log.d(TAG, "No favorites to migrate")
-            return Result.success()
+            return failureResult("当前范围内没有可迁移的收藏投影")
+        }
+        val plan: Map<Long, PreviewPlanItem> = previewMangaIds.indices.associate { index: Int ->
+            previewMangaIds[index] to PreviewPlanItem(
+                targetContentId = previewTargetIds[index],
+                action = ReadingSourcePreviewAction.entries[previewActions[index]],
+            )
+        }
+        val plannedFavouriteIds = plan.keys
+        val plannedFavourites = favouriteContents.filter { favourite: FavouriteContent ->
+            favourite.manga.id in plannedFavouriteIds
+        }
+        if (plannedFavourites.isEmpty()) {
+            Log.e(TAG, "No favorites matched accepted preview plan")
+            return failureResult("已接受的候选与当前收藏范围不匹配，请重新预览")
         }
 
         val hasPermission = applicationContext.checkNotificationPermission(CHANNEL_ID_SOURCE_MIGRATION)
-        Log.d(TAG, "Notification permission: $hasPermission")
         val foregroundActive = if (hasPermission) {
-            val ok = trySetForeground()
-            Log.d(TAG, "Foreground started: $ok")
-            ok
+            trySetForeground()
         } else {
             false
         }
 
         return withContext(Dispatchers.IO) {
-            val items = favouriteContents.map { fc ->
+            val items = plannedFavourites.map { fc ->
                 MigrationItem(mangaId = fc.manga.id, title = fc.manga.title)
             }.toMutableList()
 
             val completedCount = AtomicInteger(0)
             val failedCount = AtomicInteger(0)
             val notFoundCount = AtomicInteger(0)
+            val reusedCount = AtomicInteger(0)
+            val attachedCount = AtomicInteger(0)
             val semaphore = Semaphore(concurrency)
-            val searchHelper = searchHelperFactory.create(toSource)
-            Log.d(TAG, "SearchHelper created for: ${toSource.name}")
-
-            publishProgress(items.size, 0, 0, 0, foregroundActive)
+            publishProgress(items.size, 0, 0, 0, 0, 0, foregroundActive, null)
 
             coroutineScope {
-                favouriteContents.mapIndexed { index, fc ->
+                plannedFavourites.mapIndexed { index, favourite ->
                     async {
                         semaphore.withPermit {
                             if (isStopped) return@async
 
-                            val item = items[index]
-                            Log.d(TAG, "[${index + 1}/${items.size}] Searching: ${fc.manga.title}")
-                            items[index] = item.copy(status = MigrationStatus.SEARCHING)
+                            val currentItem = items[index]
+                            items[index] = currentItem.copy(status = MigrationStatus.SEARCHING)
                             publishProgress(
-                                items.size, completedCount.get(), failedCount.get(),
-                                notFoundCount.get(), foregroundActive,
+                                items.size,
+                                completedCount.get(),
+                                failedCount.get(),
+                                notFoundCount.get(),
+                                reusedCount.get(),
+                                attachedCount.get(),
+                                foregroundActive,
+                                currentItem.title,
                             )
 
-                            val searchResults = runCatchingCancellable {
-                                searchHelper(fc.manga.title, SearchKind.TITLE, null)
-                            }.onFailure { e ->
-                                Log.e(TAG, "[${index + 1}/${items.size}] Search error '${fc.manga.title}': ${e.message}", e)
-                            }.getOrNull()
+                            val planItem = plan[favourite.manga.id]
+                            val match = planItem?.let {
+                                contentDataRepository.findContentById(it.targetContentId, withChapters = false)
+                            }
 
-                            if (searchResults == null || searchResults.manga.isEmpty()) {
-                                Log.d(TAG, "[${index + 1}/${items.size}] NOT FOUND: ${fc.manga.title}")
-                                items[index] = item.copy(status = MigrationStatus.NOT_FOUND, errorMessage = "No match on target source")
+                            if (match == null) {
+                                items[index] = currentItem.copy(
+                                    status = MigrationStatus.NOT_FOUND,
+                                    errorMessage = "No accepted preview target found",
+                                )
                                 notFoundCount.incrementAndGet()
                                 publishProgress(
-                                    items.size, completedCount.get(), failedCount.get(),
-                                    notFoundCount.get(), foregroundActive,
+                                    items.size,
+                                    completedCount.get(),
+                                    failedCount.get(),
+                                    notFoundCount.get(),
+                                    reusedCount.get(),
+                                    attachedCount.get(),
+                                    foregroundActive,
+                                    currentItem.title,
                                 )
                                 return@async
                             }
 
-                            val match = searchResults.manga.first()
-                            Log.d(TAG, "[${index + 1}/${items.size}] Found match: ${match.title} (id=${match.id})")
-                            items[index] = item.copy(status = MigrationStatus.MIGRATING)
-
-                            // Build Content from DB entity for the MigrateUseCase
-                            val oldContent = fc.manga.toContent(
-                                tags = fc.tags.mapTo(mutableSetOf()) { it.toContentTag() },
+                            items[index] = currentItem.copy(status = MigrationStatus.MIGRATING)
+                            val oldContent = favourite.manga.toContent(
+                                tags = favourite.tags.mapTo(mutableSetOf()) { it.toContentTag() },
                                 chapters = null,
                             )
-
                             val result = runCatchingCancellable {
-                                migrateUseCase(oldContent, match)
+                                attachReadingSourceToEntityUseCase(oldContent, match)
                             }
                             if (result.isSuccess) {
-                                items[index] = item.copy(status = MigrationStatus.SUCCESS)
+                                items[index] = currentItem.copy(status = MigrationStatus.SUCCESS)
                                 completedCount.incrementAndGet()
-                                Log.d(TAG, "[${index + 1}/${items.size}] SUCCESS: ${fc.manga.title} -> ${match.title}")
+                                when (planItem?.action) {
+                                    ReadingSourcePreviewAction.ACTIVATE_EXISTING -> reusedCount.incrementAndGet()
+                                    ReadingSourcePreviewAction.ATTACH_NEW -> attachedCount.incrementAndGet()
+                                    null -> Unit
+                                }
                             } else {
                                 val error = result.exceptionOrNull()?.message ?: "unknown"
-                                Log.e(TAG, "[${index + 1}/${items.size}] FAILED: ${fc.manga.title} error=$error")
-                                items[index] = item.copy(status = MigrationStatus.ERROR, errorMessage = error)
+                                items[index] = currentItem.copy(status = MigrationStatus.ERROR, errorMessage = error)
                                 failedCount.incrementAndGet()
                             }
                             publishProgress(
-                                items.size, completedCount.get(), failedCount.get(),
-                                notFoundCount.get(), foregroundActive,
+                                items.size,
+                                completedCount.get(),
+                                failedCount.get(),
+                                notFoundCount.get(),
+                                reusedCount.get(),
+                                attachedCount.get(),
+                                foregroundActive,
+                                currentItem.title,
                             )
                         }
                     }
@@ -170,25 +204,39 @@ class SourceMigrationWorker @AssistedInject constructor(
             val completed = completedCount.get()
             val failed = failedCount.get()
             val notFound = notFoundCount.get()
-            Log.d(TAG, "Migration finished: total=${items.size} success=$completed failed=$failed notFound=$notFound")
-
+            val reused = reusedCount.get()
+            val attached = attachedCount.get()
             if (foregroundActive) {
                 setForeground(
                     buildForegroundInfo(
-                        notificationFactory.createFinished(items.size, completed, failed, notFound),
+                        notificationFactory.createFinished(items.size, completed, failed, notFound, reused, attached),
                     ),
                 )
             }
 
             val progressData = workDataOf(
-                Pair(KEY_FINISHED, true),
-                Pair(KEY_TOTAL, items.size),
-                Pair(KEY_COMPLETED, completed),
-                Pair(KEY_FAILED, failed),
-                Pair(KEY_NOT_FOUND, notFound),
+                KEY_FINISHED to true,
+                KEY_TOTAL to items.size,
+                KEY_COMPLETED to completed,
+                KEY_FAILED to failed,
+                KEY_NOT_FOUND to notFound,
+                KEY_REUSED to reused,
+                KEY_ATTACHED to attached,
+                KEY_MESSAGE to "迁移完成：成功 $completed 项，复用现有 $reused 项，新增投影 $attached 项，失败 $failed 项，未命中 $notFound 项",
             )
             setProgress(progressData)
             Result.success(progressData)
+        }
+    }
+
+    private suspend fun loadFavouriteContents(
+        selectedContentIds: Set<Long>,
+        fromSourceName: String?,
+    ): List<FavouriteContent> {
+        return when {
+            selectedContentIds.isNotEmpty() -> favouriteSourcesRepository.getFavouriteContentsByIds(selectedContentIds)
+            !fromSourceName.isNullOrBlank() -> favouriteSourcesRepository.getFavouriteContentsBySource(fromSourceName)
+            else -> emptyList()
         }
     }
 
@@ -201,15 +249,24 @@ class SourceMigrationWorker @AssistedInject constructor(
     }
 
     private suspend fun publishProgress(
-        total: Int, completed: Int, failed: Int, notFound: Int,
+        total: Int,
+        completed: Int,
+        failed: Int,
+        notFound: Int,
+        reused: Int,
+        attached: Int,
         updateNotification: Boolean,
+        currentTitle: String?,
     ) {
         setProgress(
             workDataOf(
-                Pair(KEY_TOTAL, total),
-                Pair(KEY_COMPLETED, completed),
-                Pair(KEY_FAILED, failed),
-                Pair(KEY_NOT_FOUND, notFound),
+                KEY_TOTAL to total,
+                KEY_COMPLETED to completed,
+                KEY_FAILED to failed,
+                KEY_NOT_FOUND to notFound,
+                KEY_REUSED to reused,
+                KEY_ATTACHED to attached,
+                KEY_CURRENT_TITLE to currentTitle,
             ),
         )
         if (updateNotification && !isStopped) {
@@ -221,15 +278,43 @@ class SourceMigrationWorker @AssistedInject constructor(
         }
     }
 
+    private fun failureResult(message: String): Result {
+        return Result.failure(
+            workDataOf(
+                KEY_FINISHED to true,
+                KEY_TOTAL to 0,
+                KEY_COMPLETED to 0,
+                KEY_FAILED to 0,
+                KEY_NOT_FOUND to 0,
+                KEY_REUSED to 0,
+                KEY_ATTACHED to 0,
+                KEY_MESSAGE to message,
+            ),
+        )
+    }
+
+    private data class PreviewPlanItem(
+        val targetContentId: Long,
+        val action: ReadingSourcePreviewAction,
+    )
+
     companion object {
         const val KEY_FROM_SOURCE = "from_source"
-        const val KEY_TO_SOURCE = "to_source"
+        const val KEY_TARGET_SOURCES = "target_sources"
+        const val KEY_SELECTED_CONTENT_IDS = "selected_content_ids"
+        const val KEY_PREVIEW_MANGA_IDS = "preview_manga_ids"
+        const val KEY_PREVIEW_TARGET_IDS = "preview_target_ids"
+        const val KEY_PREVIEW_ACTIONS = "preview_actions"
         const val KEY_CONCURRENCY = "concurrency"
         const val KEY_FINISHED = "finished"
         const val KEY_TOTAL = "total"
         const val KEY_COMPLETED = "completed"
         const val KEY_FAILED = "failed"
         const val KEY_NOT_FOUND = "not_found"
+        const val KEY_REUSED = "reused"
+        const val KEY_ATTACHED = "attached"
+        const val KEY_CURRENT_TITLE = "current_title"
+        const val KEY_MESSAGE = "message"
         const val WORK_TAG = "source_migration"
     }
 }

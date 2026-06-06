@@ -11,6 +11,7 @@ import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
+import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.parsers.model.Content
 
 private const val FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD = 48
@@ -20,7 +21,8 @@ fun KototoroFavoritesListScreen(
     categoryId: Long,
     appRouter: AppRouter,
     contentPadding: PaddingValues,
-    onNavigateToDetails: ((Content, String?) -> Unit)? = null,
+    onNavigateToDetails: ((ContentListModel, Content, String?) -> Unit)? = null,
+    onEntityOrganizeSelection: ((Set<Long>) -> Unit)? = null,
     sharedTransitionEnabled: Boolean = true,
     isActivePage: Boolean = true,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
@@ -54,10 +56,26 @@ fun KototoroFavoritesListScreen(
         pullRefreshEnabled = false,
         onLoadMore = { viewModel.requestMoreItems() },
         loadMoreVisibleThreshold = FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD,
-        onNavigateToDetails = onNavigateToDetails,
+        onNavigateToDetails = { item, content, sharedKey ->
+            val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
+            if (entityId != null) {
+                appRouter.openEntityDetails(
+                    entityId = entityId,
+                    preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id) ?: content.id,
+                )
+            } else if (onNavigateToDetails != null) {
+                onNavigateToDetails(item, content, sharedKey)
+            } else {
+                appRouter.openDetails(content)
+            }
+        },
         onRemoveSelection = { ids -> viewModel.removeFromFavourites(ids) },
         onPinSelection = { ids -> viewModel.togglePinned(ids) },
         onMarkAsCompletedSelection = { items -> viewModel.markAsRead(items.map { it.manga }.toSet()) },
+        onFixSelection = { ids ->
+            onEntityOrganizeSelection?.invoke(viewModel.resolveSelectionToMangaIds(ids))
+        },
+        fixSelectionActionTitleRes = R.string.entity_organize_title,
         showQuickFilterInline = true,
         enableItemAnimations = false,
     )

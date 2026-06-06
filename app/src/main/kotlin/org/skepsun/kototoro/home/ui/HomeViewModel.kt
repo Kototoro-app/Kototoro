@@ -330,6 +330,9 @@ class HomeViewModel @Inject constructor(
         val recentSearches = extras.first
 
         val allRecommendations = if (isSuggestionNsfwDisabled) contentData.recommendations.filterNot { it.isNsfw() } else contentData.recommendations
+        val preferredLocalIdsByEntity = entityIdsByMangaId.values
+            .distinct()
+            .associateWith { entityId -> contentDataRepository.getEntityPreferredLocalMangaId(entityId) }
         val displayContentOverrides = buildDisplayContentOverrides(
             resumeContent = contentData.resumeState.content,
             history = contentData.history,
@@ -351,18 +354,18 @@ class HomeViewModel @Inject constructor(
             .withGroupKey(entityIdsByMangaId)
         val recentHistory = contentData.history
             .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-            .aggregateHomeContentByEntity(entityIdsByMangaId)
+            .aggregateHomeContentByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
             .selectHomeHistoryByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
         val recentUpdates = contentData.updates
             .map { tracking ->
                 val override = displayContentOverrides[tracking.manga.id]
                 if (override == null) tracking else tracking.copy(manga = tracking.manga.withOverride(override))
             }
-            .aggregateHomeUpdatesByEntity(entityIdsByMangaId)
+            .aggregateHomeUpdatesByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
             .selectHomeUpdatesByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
         val recommendations = allRecommendations
             .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-            .aggregateHomeRecommendationsByEntity(entityIdsByMangaId)
+            .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
             .selectHomeRecommendationsByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
 
         HomeSummaryState(
@@ -412,7 +415,13 @@ class HomeViewModel @Inject constructor(
     }
 
     val isRandomLoading = MutableStateFlow(false)
-    val onOpenContent = org.skepsun.kototoro.core.util.ext.MutableEventFlow<Content>()
+    data class HomeOpenContentEvent(
+        val content: Content,
+        val entityId: Long? = null,
+        val preferredLocalMangaId: Long? = null,
+    )
+
+    val onOpenContent = org.skepsun.kototoro.core.util.ext.MutableEventFlow<HomeOpenContentEvent>()
 
     fun openRandom() {
         if (isRandomLoading.value) return
@@ -420,10 +429,40 @@ class HomeViewModel @Inject constructor(
             isRandomLoading.value = true
             try {
                 val manga = exploreRepository.findRandomContent(tagsLimit = 8)
-                onOpenContent.call(manga)
+                val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(manga.id))[manga.id]
+                val preferredLocalMangaId = if (entityId != null) {
+                    contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                } else {
+                    null
+                }
+                onOpenContent.call(
+                    HomeOpenContentEvent(
+                        content = manga,
+                        entityId = entityId,
+                        preferredLocalMangaId = preferredLocalMangaId,
+                    ),
+                )
             } finally {
                 isRandomLoading.value = false
             }
+        }
+    }
+
+    fun openContent(content: Content) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+            val preferredLocalMangaId = if (entityId != null) {
+                contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+            } else {
+                null
+            }
+            onOpenContent.call(
+                HomeOpenContentEvent(
+                    content = content,
+                    entityId = entityId,
+                    preferredLocalMangaId = preferredLocalMangaId,
+                ),
+            )
         }
     }
 
@@ -602,7 +641,7 @@ private fun HomeResumeState.withOverrides(overrides: Map<Long, ContentOverride>)
 
 private fun HomeResumeState.withGroupKey(entityIdsByMangaId: Map<Long, Long>): HomeResumeState {
     val current = content ?: return this
-    return copy(groupKey = entityIdsByMangaId[current.id]?.toHomeGroupKey() ?: current.id)
+    return copy(groupKey = entityIdsByMangaId[current.id]?.toHomeGroupKey(current.source.getContentType().ordinal) ?: current.id)
 }
 
 private fun Content.matchesHomeFilters(
@@ -629,53 +668,78 @@ private fun Content.matchesHomeFilters(
     return sourceTags.any { it.matches(contentGroup, originGroup) }
 }
 
-private fun List<Content>.aggregateHomeContentByEntity(entityIdsByMangaId: Map<Long, Long>): List<HomeRecentItem> {
+private fun List<Content>.aggregateHomeContentByEntity(
+    entityIdsByMangaId: Map<Long, Long>,
+    preferredLocalIdsByEntity: Map<Long, Long?>,
+): List<HomeRecentItem> {
     if (isEmpty()) {
         return emptyList()
     }
-    val result = ArrayList<HomeRecentItem>(size)
-    val seen = LinkedHashSet<Long>()
+    val grouped = LinkedHashMap<Long, MutableList<Content>>()
     for (item in this) {
-        val groupKey = entityIdsByMangaId[item.id]?.toHomeGroupKey() ?: item.id
-        if (seen.add(groupKey)) {
-            result += HomeRecentItem(content = item, groupKey = groupKey)
-        }
+        val groupKey = entityIdsByMangaId[item.id]?.toHomeGroupKey(item.source.getContentType().ordinal) ?: item.id
+        grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
+    }
+    val result = ArrayList<HomeRecentItem>(grouped.size)
+    grouped.forEach { (groupKey, items) ->
+        val entityId = entityIdsByMangaId[items.first().id]
+        val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
+        val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
+        result += HomeRecentItem(content = representative, groupKey = groupKey)
     }
     return result
 }
 
-private fun List<ContentTracking>.aggregateHomeUpdatesByEntity(entityIdsByMangaId: Map<Long, Long>): List<HomeUpdateItem> {
+private fun List<ContentTracking>.aggregateHomeUpdatesByEntity(
+    entityIdsByMangaId: Map<Long, Long>,
+    preferredLocalIdsByEntity: Map<Long, Long?>,
+): List<HomeUpdateItem> {
     if (isEmpty()) {
         return emptyList()
     }
-    val grouped = LinkedHashMap<Long, HomeUpdateItem>()
+    val grouped = LinkedHashMap<Long, MutableList<ContentTracking>>()
     for (item in this) {
-        val groupKey = entityIdsByMangaId[item.manga.id]?.toHomeGroupKey() ?: item.manga.id
-        val existing = grouped[groupKey]
-        grouped[groupKey] = if (existing == null) {
-            HomeUpdateItem(
-                content = item.manga,
-                newChapters = item.newChapters,
-                groupKey = groupKey,
-            )
-        } else {
-            existing.copy(newChapters = existing.newChapters + item.newChapters)
-        }
+        val groupKey = entityIdsByMangaId[item.manga.id]?.toHomeGroupKey(item.manga.source.getContentType().ordinal) ?: item.manga.id
+        grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
     }
-    return grouped.values.toList()
+    return grouped.map { (groupKey, items) ->
+        val entityId = entityIdsByMangaId[items.first().manga.id]
+        val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
+        val representative = items.firstOrNull { it.manga.id == preferredLocalId }
+            ?: items.maxWithOrNull(
+                compareBy<ContentTracking>(
+                    { it.lastChapterDate ?: java.time.Instant.EPOCH },
+                    { it.lastCheck ?: java.time.Instant.EPOCH },
+                    { it.newChapters },
+                ),
+            )
+            ?: items.first()
+        HomeUpdateItem(
+            content = representative.manga,
+            newChapters = items.sumOf { it.newChapters },
+            groupKey = groupKey,
+        )
+    }
 }
 
-private fun List<Content>.aggregateHomeRecommendationsByEntity(entityIdsByMangaId: Map<Long, Long>): List<HomeRecommendationItem> {
+private fun List<Content>.aggregateHomeRecommendationsByEntity(
+    entityIdsByMangaId: Map<Long, Long>,
+    preferredLocalIdsByEntity: Map<Long, Long?>,
+): List<HomeRecommendationItem> {
     if (isEmpty()) {
         return emptyList()
     }
-    val result = ArrayList<HomeRecommendationItem>(size)
-    val seen = LinkedHashSet<Long>()
+    val grouped = LinkedHashMap<Long, MutableList<Content>>()
     for (item in this) {
-        val groupKey = entityIdsByMangaId[item.id]?.toHomeGroupKey() ?: item.id
-        if (seen.add(groupKey)) {
-            result += HomeRecommendationItem(content = item, groupKey = groupKey)
-        }
+        val groupKey = entityIdsByMangaId[item.id]?.toHomeGroupKey(item.source.getContentType().ordinal) ?: item.id
+        grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
+    }
+    val result = ArrayList<HomeRecommendationItem>(grouped.size)
+    grouped.forEach { (groupKey, items) ->
+        val entityId = entityIdsByMangaId[items.first().id]
+        val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
+        val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
+        result += HomeRecommendationItem(content = representative, groupKey = groupKey)
     }
     return result
 }
@@ -755,7 +819,7 @@ private suspend fun resolveDisplayOverride(
     }
 }
 
-private fun Long.toHomeGroupKey(): Long = -this
+private fun Long.toHomeGroupKey(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
 
 private fun ContentType.toHomeTab(): HomeContentTab? = when (this) {
     ContentType.NOVEL,

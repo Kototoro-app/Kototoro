@@ -27,6 +27,17 @@ class FavouriteSourcesRepository @Inject constructor(
         return db.getFavouritesDao().findAllBySource(sourceName)
     }
 
+    suspend fun getAllFavouriteContents(): List<FavouriteContent> {
+        return db.getFavouritesDao().findAll()
+    }
+
+    suspend fun getFavouriteContentsByIds(mangaIds: Set<Long>): List<FavouriteContent> {
+        if (mangaIds.isEmpty()) {
+            return emptyList()
+        }
+        return db.getFavouritesDao().findAllByIds(mangaIds.toLongArray())
+    }
+
     suspend fun getCategoriesForManga(mangaId: Long): List<Long> {
         return db.getFavouritesDao().findCategoriesIds(mangaId)
     }

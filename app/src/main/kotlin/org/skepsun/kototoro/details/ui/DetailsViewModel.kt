@@ -1221,6 +1221,75 @@ class DetailsViewModel @Inject constructor(
 		)
 	}
 
+	private suspend fun applyEntityContext(
+		entityId: Long,
+		preferredLocalMangaId: Long? = null,
+		populateSyntheticHeader: Boolean,
+	) {
+		val entity = entityGraphRepository.getEntity(entityId) ?: return
+		val entityTrackingDetails = if (populateSyntheticHeader) {
+			loadEntityTrackingDetails(entity)
+		} else {
+			null
+		}
+		if (populateSyntheticHeader && mangaDetails.value == null) {
+			val entityCoverUrl = entityTrackingDetails?.coverUrl.normalizedImageUrl() ?: resolveEntityCoverUrl(entityId)
+			baseLoadedDetails = ContentDetails(
+				Content(
+					id = entityId,
+					title = entity.primaryName,
+					altTitles = setOfNotNull(entityTrackingDetails?.altTitle?.takeIf { it.isNotBlank() }),
+					url = "",
+					publicUrl = entityTrackingDetails?.url.orEmpty(),
+					rating = 0f,
+					contentRating = null,
+					coverUrl = entityCoverUrl,
+					largeCoverUrl = entityCoverUrl,
+					tags = emptySet(),
+					state = null,
+					authors = emptySet(),
+					description = entityTrackingDetails?.description,
+					chapters = null,
+					source = syntheticSource("Entity Graph", ContentType.MANGA),
+				),
+			)
+			syncDisplayedState()
+		}
+		val bindings = entityGraphRepository.getBindings(entityId)
+		val persistedPreferredLocalId = dataRepository.getEntityPreferredLocalMangaId(entityId)
+		val boundLocalId = preferredLocalMangaId?.takeIf { preferredId ->
+			bindings.any { binding ->
+				(binding.source == "0" || binding.source == "local_manga") &&
+					binding.externalId.toLongOrNull() == preferredId
+			}
+		} ?: persistedPreferredLocalId?.takeIf { persistedId ->
+			bindings.any { binding ->
+				(binding.source == "0" || binding.source == "local_manga") &&
+					binding.externalId.toLongOrNull() == persistedId
+			}
+		} ?: bindings.firstOrNull { it.source == "0" || it.source == "local_manga" }?.externalId?.toLongOrNull()
+		val localBindingCount = bindings.count { binding ->
+			binding.source == "0" || binding.source == "local_manga"
+		}
+		android.util.Log.d(
+			"DetailsViewModel",
+			"applyEntityContext: entityId=$entityId, preferredLocalMangaId=$preferredLocalMangaId, " +
+				"persistedPreferredLocalId=$persistedPreferredLocalId, boundLocalId=$boundLocalId, " +
+				"populateSyntheticHeader=$populateSyntheticHeader, localBindings=$localBindingCount",
+		)
+		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
+		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
+		updateSourceOptions()
+		if (boundLocalId != null && activeMangaIdFlow.value != boundLocalId) {
+			currentLoadIntentOverride = ContentIntent.of(boundLocalId)
+			activeMangaIdFlow.value = boundLocalId
+			loadingJob.cancel()
+			loadingJob = doLoad(force = false)
+		}
+		restoreEntityMetadataSourceSelection(entityId = entityId, fallbackMangaId = boundLocalId)
+		submitEntityRelationSections(buildEntityRelationSections(entityId))
+	}
+
 	init {
 		// Apply instant first paint from Intent or DetailsOrigin
 		baseLoadedDetails = (originContent ?: intent.manga)?.let { ContentDetails(it) }
@@ -1243,7 +1312,16 @@ class DetailsViewModel @Inject constructor(
 			?.takeIf { activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem }
 			?.let { mangaId ->
 				launchJob(Dispatchers.IO) {
-					restorePersistedMetadataSourceSelection(mangaId)
+					val localEntityId = entityGraphRepository.findEntityByBinding("0", mangaId.toString())?.id
+						?: entityGraphRepository.findEntityByBinding("local_manga", mangaId.toString())?.id
+					if (localEntityId != null) {
+						restoreEntityMetadataSourceSelection(
+							entityId = localEntityId,
+							fallbackMangaId = mangaId,
+						)
+					} else {
+						restorePersistedMetadataSourceSelection(mangaId)
+					}
 				}
 			}
 
@@ -1295,48 +1373,31 @@ class DetailsViewModel @Inject constructor(
 			}
 		}
 
+		if (
+			activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph &&
+			activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity &&
+			activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem
+		) {
+			launchJob(Dispatchers.IO) {
+				val localContent = originContent
+					?: activeMangaIdFlow.value?.let { mangaId -> db.getMangaDao().find(mangaId)?.toContent() }
+					?: return@launchJob
+				val entity = entityGraphRepository.ensureLocalWorkEntity(localContent)
+				applyEntityContext(
+					entityId = entity.id,
+					preferredLocalMangaId = localContent.id,
+					populateSyntheticHeader = false,
+				)
+			}
+		}
+
 		if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph) {
 			launchJob(Dispatchers.IO) {
-				val graphGraphId = activeExternalOrigin.entityId
-				val entity = entityGraphRepository.getEntity(graphGraphId) ?: return@launchJob
-				val entityTrackingDetails = loadEntityTrackingDetails(entity)
-				val entityCoverUrl = entityTrackingDetails?.coverUrl.normalizedImageUrl() ?: resolveEntityCoverUrl(graphGraphId)
-				
-				if (mangaDetails.value == null) {
-				    val syntheticContent = Content(
-				        id = graphGraphId,
-				        title = entity.primaryName,
-				        altTitles = setOfNotNull(entityTrackingDetails?.altTitle?.takeIf { it.isNotBlank() }),
-				        url = "",
-				        publicUrl = entityTrackingDetails?.url.orEmpty(),
-				        rating = 0f,
-				        contentRating = null,
-				        coverUrl = entityCoverUrl,
-				        largeCoverUrl = entityCoverUrl,
-				        tags = emptySet(),
-				        state = null,
-				        authors = emptySet(),
-				        description = entityTrackingDetails?.description,
-				        chapters = null,
-				        source = syntheticSource("Entity Graph", ContentType.MANGA),
-				    )
-				    baseLoadedDetails = ContentDetails(syntheticContent)
-				    syncDisplayedState()
-				}
-				
-				val bindings = entityGraphRepository.getBindings(graphGraphId)
-				val boundLocalId = bindings.firstOrNull { it.source == "0" || it.source == "local_manga" }?.externalId?.toLongOrNull()
-				activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
-				entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
-				updateSourceOptions()
-				if (boundLocalId != null) {
-				    currentLoadIntentOverride = ContentIntent.of(boundLocalId)
-				    activeMangaIdFlow.value = boundLocalId
-				    loadingJob = doLoad(force = false) // Trigger reload locally!
-				}
-				
-				submitEntityRelationSections(buildEntityRelationSections(graphGraphId))
-
+				applyEntityContext(
+					entityId = activeExternalOrigin.entityId,
+					preferredLocalMangaId = activeExternalOrigin.preferredLocalMangaId,
+					populateSyntheticHeader = true,
+				)
 			}
 		} else if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity) {
 			entityChapterSourceInfo.value = null
@@ -1405,6 +1466,17 @@ class DetailsViewModel @Inject constructor(
 			    
 			    if (remoteDetails != null) {
 			        trackingSiteCacheRepository.saveDetails(remoteDetails)
+                    val trackedEntity = entityGraphRepository.findEntityByBinding(
+                        source = service.id.toString(),
+                        externalId = remoteDetails.remoteId.toString(),
+                    )
+                    if (trackedEntity != null) {
+                        applyEntityContext(
+                            entityId = trackedEntity.id,
+                            preferredLocalMangaId = activeMangaIdFlow.value,
+                            populateSyntheticHeader = true,
+                        )
+                    }
 			    }
 			    
 			    // Bind local manga if tracked
@@ -1414,8 +1486,19 @@ class DetailsViewModel @Inject constructor(
 			            if (trackingMangaId != 0L) {
 			                currentLoadIntentOverride = ContentIntent.of(trackingMangaId)
 			                activeMangaIdFlow.value = trackingMangaId
-			                persistMetadataSourceSelection(trackingMangaId)
+			                persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = trackingMangaId)
 			                loadingJob = doLoad(force = false)
+                            val trackedEntity = entityGraphRepository.findEntityByBinding(
+                                source = service.id.toString(),
+                                externalId = activeExternalOrigin.remoteId.toString(),
+                            )
+                            if (trackedEntity != null) {
+                                applyEntityContext(
+                                    entityId = trackedEntity.id,
+                                    preferredLocalMangaId = trackingMangaId,
+                                    populateSyntheticHeader = true,
+                                )
+                            }
 			            }
 			        }
 			    }
@@ -1662,8 +1745,119 @@ class DetailsViewModel @Inject constructor(
 		)
 	}
 
+	private suspend fun persistMetadataSourceSelectionForCurrentEntity(
+		fallbackMangaId: Long? = activeMangaIdFlow.value,
+	) {
+		val selection = selectedMetadataSource.value.toPersistedSelection()
+		val entityId = resolveContextualEntityId()
+		val localMangaIds = entityId?.let {
+			entityGraphRepository.getBindings(entityId)
+				.asSequence()
+				.filter { it.source == "local_manga" || it.source == "0" }
+				.mapNotNull { it.externalId.toLongOrNull() }
+				.distinct()
+				.toList()
+		}.orEmpty()
+		val targetIds = if (localMangaIds.isNotEmpty()) {
+			localMangaIds
+		} else {
+			listOfNotNull(fallbackMangaId)
+		}
+		android.util.Log.d(
+			"DetailsViewModel",
+			"persistMetadataSourceSelectionForCurrentEntity: entityId=$entityId, fallbackMangaId=$fallbackMangaId, " +
+				"selection=$selection, targetIds=$targetIds",
+		)
+		if (entityId != null) {
+			dataRepository.setEntityMetadataSourceSelection(
+				entityId = entityId,
+				selection = selection,
+				mirrorLocalMangaIds = targetIds,
+			)
+		} else {
+			targetIds.forEach { mangaId ->
+				dataRepository.setMetadataSourceSelection(
+					mangaId = mangaId,
+					selection = selection,
+				)
+			}
+		}
+	}
+
+	private suspend fun persistPreferredLocalSourceForCurrentEntity(mangaId: Long) {
+		val entityId = resolveContextualEntityId()
+		if (entityId != null) {
+			dataRepository.setEntityPreferredLocalMangaId(entityId = entityId, mangaId = mangaId)
+		}
+	}
+
+	private suspend fun restoreEntityMetadataSourceSelection(
+		entityId: Long,
+		fallbackMangaId: Long?,
+	) {
+		val entitySelection = dataRepository.getEntityMetadataSourceSelection(entityId)
+		android.util.Log.d(
+			"DetailsViewModel",
+			"restoreEntityMetadataSourceSelection: entityId=$entityId, fallbackMangaId=$fallbackMangaId, entitySelection=$entitySelection",
+		)
+		if (entitySelection != null) {
+			when (entitySelection) {
+				PersistedMetadataSourceSelection.Base -> {
+					if (selectedMetadataSource.value != MetadataSourceSelection.Base) {
+						selectedMetadataSource.value = MetadataSourceSelection.Base
+						syncDisplayedState()
+					}
+				}
+				is PersistedMetadataSourceSelection.Tracking -> {
+					restorePersistedMetadataSelection(entitySelection)
+				}
+			}
+			return
+		}
+		fallbackMangaId?.let { restorePersistedMetadataSourceSelection(it) }
+	}
+
+	private suspend fun restorePersistedMetadataSelection(
+		persisted: PersistedMetadataSourceSelection.Tracking,
+	) {
+		val service = ScrobblerService.entries.firstOrNull { it.id == persisted.serviceId } ?: return
+		val cached = trackingSiteCacheRepository.readDetails(service, persisted.remoteId)
+		android.util.Log.d(
+			"DetailsViewModel",
+			"restorePersistedMetadataSelection: service=${service.name}, remoteId=${persisted.remoteId}, cached=${cached != null}",
+		)
+		if (cached != null) {
+			cacheTrackingDetails(cached)
+			ingestTrackingDetailsIntoEntityGraph(cached)
+		}
+		trackingMetadataCandidates.value = mergeTrackingMetadataCandidates(
+			trackingMetadataCandidates.value + TrackingMetadataCandidate(
+				service = service,
+				remoteId = persisted.remoteId,
+				url = cached?.url,
+			),
+		)
+		selectedMetadataSource.value = MetadataSourceSelection.Tracking(
+			service = service,
+			remoteId = persisted.remoteId,
+			url = cached?.url,
+		)
+		selectedMetadataSearchService.value = service
+		syncDisplayedState()
+		ensureTrackingDetailsLoaded(
+			service = service,
+			remoteId = persisted.remoteId,
+			url = cached?.url,
+		)
+	}
+
 	private suspend fun restorePersistedMetadataSourceSelection(mangaId: Long) {
-		when (val persisted = dataRepository.getMetadataSourceSelection(mangaId)) {
+		val persisted = dataRepository.getMetadataSourceSelection(mangaId)
+		android.util.Log.d(
+			"DetailsViewModel",
+			"restorePersistedMetadataSourceSelection: mangaId=$mangaId, persisted=$persisted",
+		)
+		when (persisted) {
 			null -> Unit
 			PersistedMetadataSourceSelection.Base -> {
 				if (selectedMetadataSource.value != MetadataSourceSelection.Base) {
@@ -1672,31 +1866,7 @@ class DetailsViewModel @Inject constructor(
 				}
 			}
 			is PersistedMetadataSourceSelection.Tracking -> {
-				val service = ScrobblerService.entries.firstOrNull { it.id == persisted.serviceId } ?: return
-				val cached = trackingSiteCacheRepository.readDetails(service, persisted.remoteId)
-				if (cached != null) {
-					cacheTrackingDetails(cached)
-					ingestTrackingDetailsIntoEntityGraph(cached)
-				}
-				trackingMetadataCandidates.value = mergeTrackingMetadataCandidates(
-					trackingMetadataCandidates.value + TrackingMetadataCandidate(
-						service = service,
-						remoteId = persisted.remoteId,
-						url = cached?.url,
-					),
-				)
-				selectedMetadataSource.value = MetadataSourceSelection.Tracking(
-					service = service,
-					remoteId = persisted.remoteId,
-					url = cached?.url,
-				)
-				selectedMetadataSearchService.value = service
-				syncDisplayedState()
-				ensureTrackingDetailsLoaded(
-					service = service,
-					remoteId = persisted.remoteId,
-					url = cached?.url,
-				)
+				restorePersistedMetadataSelection(persisted)
 			}
 		}
 	}
@@ -2176,16 +2346,42 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private suspend fun resolveContextualEntityId(): Long? {
+		val localMangaId = activeMangaIdFlow.value ?: baseLoadedDetails?.id
+		if (localMangaId != null) {
+			entityGraphRepository.findEntityByBinding("0", localMangaId.toString())?.let {
+				android.util.Log.d(
+					"DetailsViewModel",
+					"resolveContextualEntityId: resolved from source=0, localMangaId=$localMangaId, entityId=${it.id}",
+				)
+				return it.id
+			}
+			entityGraphRepository.findEntityByBinding("local_manga", localMangaId.toString())?.let {
+				android.util.Log.d(
+					"DetailsViewModel",
+					"resolveContextualEntityId: resolved from source=local_manga, localMangaId=$localMangaId, entityId=${it.id}",
+				)
+				return it.id
+			}
+		}
 		val currentSelection = selectedMetadataSource.value
 		if (currentSelection is MetadataSourceSelection.Tracking) {
 			entityGraphRepository.findEntityByBinding(
 				source = currentSelection.service.id.toString(),
 				externalId = currentSelection.remoteId.toString(),
-			)?.let { return it.id }
+			)?.let {
+				android.util.Log.d(
+					"DetailsViewModel",
+					"resolveContextualEntityId: resolved from tracking selection service=${currentSelection.service.name}, " +
+						"remoteId=${currentSelection.remoteId}, entityId=${it.id}",
+				)
+				return it.id
+			}
 		}
-		val localMangaId = activeMangaIdFlow.value ?: baseLoadedDetails?.id ?: return null
-		entityGraphRepository.findEntityByBinding("0", localMangaId.toString())?.let { return it.id }
-		return entityGraphRepository.findEntityByBinding("local_manga", localMangaId.toString())?.id
+		android.util.Log.d(
+			"DetailsViewModel",
+			"resolveContextualEntityId: unresolved, activeMangaId=${activeMangaIdFlow.value}, baseId=${baseLoadedDetails?.id}, selection=$currentSelection",
+		)
+		return null
 	}
 
 	private suspend fun ensureTrackingDetailsLoaded(
@@ -3178,11 +3374,11 @@ class DetailsViewModel @Inject constructor(
 			.mapNotNull { it.externalId.toLongOrNull() }
 			.distinct()
 			.toList()
-		if (localMangaIds.size <= 1) {
-			return emptyList()
-		}
-		return localMangaIds.mapNotNull { localMangaId ->
+		val localMangaOptions = localMangaIds.mapNotNull { localMangaId ->
 			val manga = db.getMangaDao().find(localMangaId)?.manga ?: return@mapNotNull null
+			if (manga.source.startsWith("TRACKING_")) {
+				return@mapNotNull null
+			}
 			ActiveLocalSourceOption(
 				mangaId = localMangaId,
 				title = manga.title,
@@ -3190,6 +3386,10 @@ class DetailsViewModel @Inject constructor(
 				isActive = localMangaId == activeMangaId,
 			)
 		}
+		if (localMangaOptions.size <= 1) {
+			return emptyList()
+		}
+		return localMangaOptions
 	}
 
 	private fun updateActiveLocalSourceSelection(activeMangaId: Long) {
@@ -3204,10 +3404,14 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private suspend fun resolveEntityChapterSourceInfo(mangaId: Long?): EntityChapterSourceInfo {
-		val source = mangaId?.let { localMangaId ->
-			db.getMangaDao().find(localMangaId)?.manga?.source?.let(::ContentSource)
+		val manga = mangaId?.let { localMangaId ->
+			db.getMangaDao().find(localMangaId)?.manga
 		}
-		return EntityChapterSourceInfo(source = source)
+		return EntityChapterSourceInfo(
+			source = manga?.source?.let(::ContentSource),
+			projectionTitle = manga?.title,
+			projectionCount = activeLocalSourceOptions.value.size.coerceAtLeast(if (manga != null) 1 else 0),
+		)
 	}
 
 	fun selectActiveLocalSource(mangaId: Long) {
@@ -3225,9 +3429,47 @@ class DetailsViewModel @Inject constructor(
 		syncDisplayedState()
 		loadingJob.cancel()
 		launchJob(Dispatchers.IO) {
-			persistMetadataSourceSelection(mangaId)
+			persistPreferredLocalSourceForCurrentEntity(mangaId)
+			persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = mangaId)
 			entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(mangaId)
 			loadingJob = doLoad(force = false)
+		}
+	}
+
+	fun removeActiveLocalSource(mangaId: Long) {
+		launchJob(Dispatchers.IO) {
+			val entityId = resolveContextualEntityId() ?: return@launchJob
+			val bindings = entityGraphRepository.getBindings(entityId)
+			val localBindings = bindings.filter {
+				(it.source == "0" || it.source == "local_manga") && it.externalId.toLongOrNull() != null
+			}
+			if (localBindings.size <= 1) {
+				return@launchJob
+			}
+			val targetBinding = localBindings.firstOrNull { it.externalId.toLongOrNull() == mangaId } ?: return@launchJob
+			db.withTransaction {
+				db.getEntityGraphDao().deleteBindingBySource(targetBinding.source, targetBinding.externalId)
+			}
+			val nextActiveMangaId = if (activeMangaIdFlow.value == mangaId) {
+				localBindings.firstNotNullOfOrNull { binding ->
+					binding.externalId.toLongOrNull()?.takeIf { it != mangaId }
+				}
+			} else {
+				activeMangaIdFlow.value
+			}
+			if (nextActiveMangaId != null && nextActiveMangaId != activeMangaIdFlow.value) {
+				currentLoadIntentOverride = ContentIntent.of(nextActiveMangaId)
+				activeMangaIdFlow.value = nextActiveMangaId
+				selectedBranch.value = null
+				selectedMetadataSource.value = MetadataSourceSelection.Base
+				updateActiveLocalSourceSelection(nextActiveMangaId)
+				syncDisplayedState()
+				persistPreferredLocalSourceForCurrentEntity(nextActiveMangaId)
+				persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = nextActiveMangaId)
+				loadingJob.cancel()
+				loadingJob = doLoad(force = false)
+			}
+			refreshEntityBoundLocalSources(nextActiveMangaId ?: return@launchJob)
 		}
 	}
 
@@ -3247,9 +3489,7 @@ class DetailsViewModel @Inject constructor(
 				selectedMetadataSearchService.value = option.trackingService
 				syncDisplayedState()
 				launchJob(Dispatchers.IO) {
-					if (activeLocalMangaId != null) {
-						persistMetadataSourceSelection(activeLocalMangaId)
-					}
+					persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = activeLocalMangaId)
 					ensureTrackingDetailsLoaded(
 						service = option.trackingService,
 						remoteId = option.remoteId,
@@ -3265,9 +3505,7 @@ class DetailsViewModel @Inject constructor(
 				selectedMetadataSource.value = MetadataSourceSelection.Base
 				syncDisplayedState()
 				launchJob(Dispatchers.IO) {
-					if (activeLocalMangaId != null) {
-						persistMetadataSourceSelection(activeLocalMangaId)
-					}
+					persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = activeLocalMangaId)
 				}
 			}
 		}
@@ -3372,7 +3610,7 @@ class DetailsViewModel @Inject constructor(
 			val localMangaId = activeMangaIdFlow.value
 			if (localMangaId != null) {
 				trackingSiteMatcher.confirmMatch(item.service, localMangaId, item.remoteId)
-				persistMetadataSourceSelection(localMangaId)
+				persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = localMangaId)
 				dataRepository.setIgnoredTrackingSuggestion(localMangaId, null)
 						autoLinkTrackingServiceIfAuthorized(
 							mangaId = localMangaId,
@@ -3914,6 +4152,9 @@ class DetailsViewModel @Inject constructor(
 				runCatchingCancellable {
 					bindReadingCandidateToCurrentEntity(targetContent.id)
 				}
+				runCatchingCancellable {
+					persistPreferredLocalSourceForCurrentEntity(targetContent.id)
+				}
 				activeMangaIdFlow.value = targetContent.id
 				currentLoadIntentOverride = ContentIntent.of(targetContent.id)
 				refreshEntityBoundLocalSources(targetContent.id)
@@ -3924,13 +4165,7 @@ class DetailsViewModel @Inject constructor(
 						trackingSiteMatcher.confirmMatch(selection.service, targetContent.id, selection.remoteId)
 					}
 					runCatchingCancellable {
-						dataRepository.setMetadataSourceSelection(
-							mangaId = targetContent.id,
-							selection = PersistedMetadataSourceSelection.Tracking(
-								serviceId = selection.service.id,
-								remoteId = selection.remoteId,
-							),
-						)
+						persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = targetContent.id)
 					}
 				}
 			} finally {
@@ -4172,6 +4407,14 @@ class DetailsViewModel @Inject constructor(
 				)
 				baseLoadedDetails = finalDetails
 				syncDisplayedState()
+				val localEntityId = entityGraphRepository.findEntityByBinding("0", finalDetails.id.toString())?.id
+					?: entityGraphRepository.findEntityByBinding("local_manga", finalDetails.id.toString())?.id
+				if (localEntityId != null) {
+					restoreEntityMetadataSourceSelection(
+						entityId = localEntityId,
+						fallbackMangaId = finalDetails.id,
+					)
+				}
 				}
 	}
 

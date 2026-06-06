@@ -1194,11 +1194,12 @@ class UnifiedSourcesViewModel @Inject constructor(
 
 	private fun UnifiedSourceCatalogState.toUiState(filters: UnifiedSourcesFilterState): UnifiedSourcesUiState.Ready {
 		val repositoriesById = repositories.associateBy { it.id }
-		val packagesById = packages.associateBy { it.id }
+		val enrichedPackages = packages.enrichWithSourceCoverage(sources)
+		val packagesById = enrichedPackages.associateBy { it.id }
 		val visibleRepositories = repositories.filterBy(filters)
-		val visiblePackages = packages.filterBy(filters, repositoriesById)
+		val visiblePackages = enrichedPackages.filterBy(filters, repositoriesById)
 		val visibleSources = sources.filterBy(filters, repositoriesById, packagesById)
-		val availableLanguages = (packages.mapNotNull { it.language } + sources.mapNotNull { it.language })
+		val availableLanguages = (enrichedPackages.mapNotNull { it.language } + sources.mapNotNull { it.language })
 			.map { it.normalizeLanguageCode() }
 			.filter { it.isNotBlank() }
 			.distinct()
@@ -1214,9 +1215,10 @@ class UnifiedSourcesViewModel @Inject constructor(
 			packages = visiblePackages,
 			sources = visibleSources,
 			allRepositories = repositories,
-			allPackages = packages,
+			allPackages = enrichedPackages,
 			allSources = sources,
-			availableKinds = (repositories.map { it.kind } + packages.map { it.kind } + sources.map { it.kind })
+			hiddenShadowedSourcesCount = enrichedPackages.sumOf { it.shadowedSourceCount },
+			availableKinds = (repositories.map { it.kind } + enrichedPackages.map { it.kind } + sources.map { it.kind })
 				.distinct()
 				.sortedBy { it.ordinal },
 			availableContentTypes = sources.map { it.contentType }
@@ -1227,6 +1229,29 @@ class UnifiedSourcesViewModel @Inject constructor(
 				.sortedBy { it.ordinal },
 			availableLanguages = availableLanguages,
 		)
+	}
+
+	private fun List<UnifiedSourcePackageItem>.enrichWithSourceCoverage(
+		sources: List<UnifiedSourceItem>,
+	): List<UnifiedSourcePackageItem> {
+		if (isEmpty()) {
+			return this
+		}
+		val activeSourceCountByPackageId = sources
+			.asSequence()
+			.mapNotNull { source -> source.packageId }
+			.groupBy { it }
+			.mapValues { (_, packageIds) -> packageIds.size }
+		return map { item ->
+			val declaredCount = item.sourceCount.coerceAtLeast(item.sourceNames.size)
+			val activeCount = (activeSourceCountByPackageId[item.id] ?: 0)
+				.coerceIn(0, declaredCount)
+			val shadowedCount = (declaredCount - activeCount).coerceAtLeast(0)
+			item.copy(
+				activeSourceCount = activeCount,
+				shadowedSourceCount = shadowedCount,
+			)
+		}
 	}
 
 	private fun List<UnifiedSourceRepositoryItem>.filterBy(
@@ -1310,6 +1335,7 @@ sealed interface UnifiedSourcesUiState {
 		val allRepositories: List<UnifiedSourceRepositoryItem>,
 		val allPackages: List<UnifiedSourcePackageItem>,
 		val allSources: List<UnifiedSourceItem>,
+		val hiddenShadowedSourcesCount: Int,
 		val availableKinds: List<UnifiedSourceKind>,
 		val availableContentTypes: List<ContentType>,
 		val availableLocationTypes: List<UnifiedRepositoryLocationType>,

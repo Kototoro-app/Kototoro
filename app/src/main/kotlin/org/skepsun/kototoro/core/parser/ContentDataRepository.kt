@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
@@ -26,6 +27,7 @@ import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
+import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -107,6 +109,58 @@ class ContentDataRepository @Inject constructor(
 			map[entity.mangaId] = entity.getMetadataSourceSelectionOrNull() ?: continue
 		}
 		return map
+	}
+
+	suspend fun getEntityMetadataSourceSelection(entityId: Long): MetadataSourceSelection? {
+		return db.getEntityGraphDao().findEntityPrefs(entityId)?.getMetadataSourceSelectionOrNull()
+	}
+
+	suspend fun setEntityMetadataSourceSelection(
+		entityId: Long,
+		selection: MetadataSourceSelection?,
+		mirrorLocalMangaIds: Collection<Long> = emptyList(),
+	) {
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
+			dao.updateEntityMetadataSourceSelection(
+				entityId = entityId,
+				metadataSourceKind = when (selection) {
+					null -> null
+					MetadataSourceSelection.Base -> "base"
+					is MetadataSourceSelection.Tracking -> "tracking"
+				},
+				metadataSourceService = (selection as? MetadataSourceSelection.Tracking)?.serviceId,
+				metadataSourceRemoteId = (selection as? MetadataSourceSelection.Tracking)?.remoteId,
+			)
+			mirrorLocalMangaIds.distinct().forEach { mangaId ->
+				val prefsDao = db.getPreferencesDao()
+				val entity = prefsDao.find(mangaId) ?: newEntity(mangaId)
+				prefsDao.upsert(
+					entity.copy(
+						metadataSourceKind = when (selection) {
+							null -> null
+							MetadataSourceSelection.Base -> "base"
+							is MetadataSourceSelection.Tracking -> "tracking"
+						},
+						metadataSourceService = (selection as? MetadataSourceSelection.Tracking)?.serviceId,
+						metadataSourceRemoteId = (selection as? MetadataSourceSelection.Tracking)?.remoteId,
+					),
+				)
+			}
+		}
+	}
+
+	suspend fun getEntityPreferredLocalMangaId(entityId: Long): Long? {
+		return db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
+	}
+
+	suspend fun setEntityPreferredLocalMangaId(entityId: Long, mangaId: Long?) {
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
+			dao.updateEntityPreferredLocalMangaId(entityId = entityId, preferredLocalMangaId = mangaId)
+		}
 	}
 
 	suspend fun getIgnoredTrackingSuggestion(mangaId: Long): IgnoredTrackingSuggestion? {
@@ -218,7 +272,10 @@ class ContentDataRepository @Inject constructor(
 	}
 
 	fun observeDisplayPreferencesChanges(): Flow<Int> {
-		return db.getPreferencesDao().observeAll()
+		return db.invalidationTracker.createFlow(
+			tables = arrayOf(TABLE_PREFERENCES, TABLE_ENTITY_PREFERENCES),
+			emitInitialState = true,
+		)
 			.map { it.hashCode() }
 			.distinctUntilChanged()
 	}
@@ -348,6 +405,26 @@ class ContentDataRepository @Inject constructor(
 	}
 
 	private fun MangaPrefsEntity.getMetadataSourceSelectionOrNull(): MetadataSourceSelection? {
+		return metadataSourceSelectionOrNull(
+			metadataSourceKind = metadataSourceKind,
+			metadataSourceService = metadataSourceService,
+			metadataSourceRemoteId = metadataSourceRemoteId,
+		)
+	}
+
+	private fun EntityPrefsRecord.getMetadataSourceSelectionOrNull(): MetadataSourceSelection? {
+		return metadataSourceSelectionOrNull(
+			metadataSourceKind = metadataSourceKind,
+			metadataSourceService = metadataSourceService,
+			metadataSourceRemoteId = metadataSourceRemoteId,
+		)
+	}
+
+	private fun metadataSourceSelectionOrNull(
+		metadataSourceKind: String?,
+		metadataSourceService: Int?,
+		metadataSourceRemoteId: Long?,
+	): MetadataSourceSelection? {
 		return when (metadataSourceKind) {
 			null -> null
 			"base" -> MetadataSourceSelection.Base
@@ -362,6 +439,14 @@ class ContentDataRepository @Inject constructor(
 			else -> null
 		}
 	}
+
+	private fun newEntityPrefs(entityId: Long) = EntityPrefsRecord(
+		entityId = entityId,
+		preferredLocalMangaId = null,
+		metadataSourceKind = null,
+		metadataSourceService = null,
+		metadataSourceRemoteId = null,
+	)
 
 	private fun newEntity(mangaId: Long) = MangaPrefsEntity(
 		mangaId = mangaId,

@@ -98,6 +98,13 @@ private fun SharedPreferences.getSafeFloat(key: String, defValue: Float): Float 
 	}
 }
 
+enum class TrackingMetadataSourceStrategy {
+	LOCAL_THEN_API,
+	API_THEN_LOCAL,
+	LOCAL_ONLY,
+	API_ONLY,
+}
+
 @Singleton
 class AppSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -474,6 +481,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var preferredTrackingSite: ScrobblerService
 		get() = prefs.getEnumValue(KEY_PREFERRED_TRACKING_SITE, ScrobblerService.BANGUMI)
 		set(value) = prefs.edit { putEnumValue(KEY_PREFERRED_TRACKING_SITE, value) }
+
+	var trackingMetadataSourceStrategy: TrackingMetadataSourceStrategy
+		get() = prefs.getEnumValue(KEY_TRACKING_METADATA_SOURCE_STRATEGY, TrackingMetadataSourceStrategy.LOCAL_THEN_API)
+		set(value) = prefs.edit { putEnumValue(KEY_TRACKING_METADATA_SOURCE_STRATEGY, value) }
 
 	var isTrackerNsfwDisabled: Boolean
 		get() = prefs.getBoolean(KEY_TRACKER_NO_NSFW, false)
@@ -2008,6 +2019,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_KITSU = "kitsu"
 		const val KEY_BANGUMI = "bangumi"
 		const val KEY_MANGAUPDATES = "mangaupdates"
+		const val KEY_TRACKING_METADATA_SOURCE_STRATEGY = "tracking_metadata_source_strategy"
 		const val KEY_DOWNLOADS_METERED_NETWORK = "downloads_metered_network"
 		const val KEY_DOWNLOADS_FORMAT = "downloads_format"
 		const val KEY_DOWNLOADS_ALIGN_READER = "downloads_align_reader"

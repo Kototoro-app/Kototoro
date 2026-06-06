@@ -1,9 +1,6 @@
 package org.skepsun.kototoro.favourites.ui.compose
 
 import android.os.Build
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -46,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -54,7 +52,6 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
-import org.skepsun.kototoro.favourites.ui.migration.compose.SourceMigrationPanel
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
@@ -62,6 +59,7 @@ import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
 import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
+import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.parsers.model.Content
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,14 +69,17 @@ fun KototoroFavoritesHostRoute(
     contentPadding: PaddingValues,
     initialCategoryId: Long = NO_ID,
     initialCategoryTitle: String? = null,
-    onNavigateToDetails: ((Content, String?) -> Unit)? = null,
+    onOpenEntityOrganize: (Set<Long>) -> Unit = {},
+    onNavigateToDetails: ((ContentListModel, Content, String?) -> Unit)? = null,
     registerFilterCallback: Boolean = true,
+    refreshGeneration: Int = 0,
+    consumeOrganizeMessages: Boolean = true,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     viewModel: FavouritesContainerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val showMigrationPanel by viewModel.showMigrationPanel.collectAsStateWithLifecycle()
     val mainActivity = LocalContext.current as? MainActivity
+    val context = LocalContext.current
     val globalState = viewModel.globalFavoritesState
     val selectedGroupTab by globalState.selectedGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
@@ -221,6 +222,18 @@ fun KototoroFavoritesHostRoute(
         }
     }
 
+    if (consumeOrganizeMessages) {
+        LaunchedEffect(viewModel.organizeMessages) {
+            viewModel.organizeMessages.collect { event ->
+                event?.consume(
+                    FlowCollector { message ->
+                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                )
+            }
+        }
+    }
+
     val hazeState = remember { HazeState() }
     val useBackgroundHaze = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
@@ -272,7 +285,10 @@ fun KototoroFavoritesHostRoute(
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                    key = { page -> displayCategories.getOrNull(page)?.id ?: page.toLong() },
+                    key = { page ->
+                        val categoryId = displayCategories.getOrNull(page)?.id ?: page.toLong()
+                        "${categoryId}_$refreshGeneration"
+                    },
                 ) { page ->
                     val category = displayCategories.getOrNull(page) ?: return@HorizontalPager
                     val enabled = page == activePage
@@ -281,6 +297,7 @@ fun KototoroFavoritesHostRoute(
                         appRouter = appRouter,
                         contentPadding = innerPadding,
                         onNavigateToDetails = onNavigateToDetails,
+                        onEntityOrganizeSelection = onOpenEntityOrganize,
                         sharedTransitionEnabled = enabled,
                         isActivePage = enabled,
                         onTopBarOverrideChanged = { overrideState ->
@@ -294,15 +311,6 @@ fun KototoroFavoritesHostRoute(
                 }
             }
 
-            AnimatedVisibility(
-                visible = showMigrationPanel,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-                SourceMigrationPanel(
-                    onDismiss = { viewModel.hideMigrationPanel() },
-                )
-            }
         }
     }
 }

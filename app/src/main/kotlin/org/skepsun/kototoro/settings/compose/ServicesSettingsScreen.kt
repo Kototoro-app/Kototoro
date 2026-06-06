@@ -21,7 +21,6 @@ import org.skepsun.kototoro.R
 
 data class ServicesSettingsUiState(
     val suggestionsSummary: String,
-    val animeOfflineSummary: String,
     val isBrowseTrackingRecommendationsEnabled: Boolean,
     val isBrowseMoreTrackingRecommendationsEnabled: Boolean,
     val isRelatedContentEnabled: Boolean,
@@ -34,7 +33,6 @@ fun ServicesSettingsScreen(
     servicesTitle: String,
     state: ServicesSettingsUiState,
     snackbarHostState: SnackbarHostState,
-    onAnimeOfflineClick: () -> Unit,
     onSuggestionsClick: () -> Unit,
     onBrowseTrackingRecommendationsChange: (Boolean) -> Unit,
     onBrowseMoreTrackingRecommendationsChange: (Boolean) -> Unit,
@@ -67,12 +65,6 @@ fun ServicesSettingsScreen(
         ) {
             item(key = "services") {
                 SettingsPreferenceSection(title = servicesTitle) {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.anime_offline_database),
-                        summary = state.animeOfflineSummary,
-                        onClick = onAnimeOfflineClick,
-                    )
-                    SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.suggestions),
                         summary = state.suggestionsSummary,

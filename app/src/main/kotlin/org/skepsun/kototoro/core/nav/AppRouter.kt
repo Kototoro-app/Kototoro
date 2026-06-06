@@ -229,6 +229,7 @@ class AppRouter private constructor(
 
     fun openEntityDetails(
         entityId: Long,
+        preferredLocalMangaId: Long? = null,
         service: ScrobblerService? = null,
         remoteId: Long? = null,
         url: String? = null,
@@ -238,6 +239,7 @@ class AppRouter private constructor(
                 contextOrNull() ?: return,
                 DetailsOrigin.EntityGraph(
                     entityId = entityId,
+                    preferredLocalMangaId = preferredLocalMangaId,
                     serviceId = service?.id?.toString(),
                     remoteId = remoteId,
                     url = url,
@@ -659,6 +661,17 @@ class AppRouter private constructor(
         val hostActivity = activity
         startActivity(
             Intent(contextOrNull() ?: return, SettingsActivity::class.java),
+            hostActivity?.let(::activityTransitionOptionsOf),
+        )
+    }
+
+    fun openEntityOrganizeSettings(selectedContentIds: Set<Long> = emptySet()) {
+        val hostActivity = activity
+        startActivity(
+            SettingsActivity.newEntityOrganizeIntent(
+                context = contextOrNull() ?: return,
+                selectedContentIds = selectedContentIds,
+            ),
             hostActivity?.let(::activityTransitionOptionsOf),
         )
     }
@@ -1326,6 +1339,14 @@ class AppRouter private constructor(
             Intent(context, SettingsActivity::class.java)
                 .setAction(ACTION_SUGGESTIONS)
 
+        fun entityOrganizeSettingsIntent(
+            context: Context,
+            selectedContentIds: Set<Long> = emptySet(),
+        ) = SettingsActivity.newEntityOrganizeIntent(
+            context = context,
+            selectedContentIds = selectedContentIds,
+        )
+
         fun trackerSettingsIntent(context: Context) =
             Intent(context, SettingsActivity::class.java)
                 .setAction(ACTION_TRACKER)
@@ -1489,6 +1510,7 @@ class AppRouter private constructor(
         val ACTION_HISTORY = "${BuildConfig.APPLICATION_ID}.action.MANAGE_HISTORY"
         val ACTION_MANAGE_DOWNLOADS = "${BuildConfig.APPLICATION_ID}.action.MANAGE_DOWNLOADS"
         val ACTION_MANAGE_SOURCES = "${BuildConfig.APPLICATION_ID}.action.MANAGE_SOURCES_LIST"
+        val ACTION_ENTITY_ORGANIZE = "${BuildConfig.APPLICATION_ID}.action.ENTITY_ORGANIZE"
         val ACTION_MANGA_EXPLORE = "${BuildConfig.APPLICATION_ID}.action.EXPLORE_MANGA"
         val ACTION_PROXY = "${BuildConfig.APPLICATION_ID}.action.MANAGE_PROXY"
         val ACTION_READER = "${BuildConfig.APPLICATION_ID}.action.MANAGE_READER_SETTINGS"

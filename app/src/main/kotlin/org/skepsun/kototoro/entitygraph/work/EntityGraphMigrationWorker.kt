@@ -14,6 +14,7 @@ import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
+import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
 @HiltWorker
@@ -22,6 +23,7 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val db: MangaDatabase,
     private val entityGraphRepository: EntityGraphRepository,
+    private val favouritesRepository: FavouritesRepository,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -70,6 +72,7 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                     )
                 )
             }
+            entityGraphRepository.ensureLocalWorkEntities(favouritesRepository.getAllContent())
             Result.success()
         } catch (e: Throwable) {
             e.printStackTrace()

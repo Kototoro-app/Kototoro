@@ -271,6 +271,29 @@ fun ContentSource.getTitle(context: Context): String {
 	}
 }
 
+fun ContentSource.getStableIdentityKey(): String {
+	return when (val source = unwrap()) {
+		is org.skepsun.kototoro.mihon.model.MihonMangaSource ->
+			"mihon:${source.pkgName}:${source.sourceId}:${source.language}:${source.contentType.name}"
+		is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource ->
+			"aniyomi:${source.pkgName}:${source.sourceId}:${source.language}:${source.contentType.name}"
+		is org.skepsun.kototoro.ireader.model.IReaderMangaSource ->
+			"ireader:${source.pkgName}:${source.catalogueSource.id}:${source.language}:${source.contentType.name}"
+		is org.skepsun.kototoro.cloudstream.model.CloudstreamSource ->
+			"cloudstream:${source.pluginPackageName}:${source.pluginFileName}:${source.api.name}:${source.locale}:${source.contentType.name}"
+		is org.skepsun.kototoro.core.parser.external.ExternalContentSource ->
+			"external:${source.packageName}:${source.authority}"
+		is org.skepsun.kototoro.core.jsonsource.JsonContentSource ->
+			"json:${source.entity.id}:${source.entity.type}:${source.contentType.name}"
+		is org.skepsun.kototoro.core.jsonsource.JsonSourceListSource ->
+			"json_list:${source.name}:${source.contentType.name}"
+		is KotatsuParserSource ->
+			"kotatsu:${source.name}:${source.locale}:${source.contentType.name}"
+		else ->
+			"${source::class.java.name}:${source.name}:${source.locale}:${source.contentType.name}"
+	}
+}
+
 val ContentSource.isBroken: Boolean
 	get() {
 		val unwrapped = this.unwrap()

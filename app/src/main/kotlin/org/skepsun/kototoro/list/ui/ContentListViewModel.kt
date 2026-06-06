@@ -92,6 +92,10 @@ abstract class ContentListViewModel(
 		selectedCategoryIds.value = ids
 	}
 
+	open fun resolveEntityIdForUiItemId(id: Long): Long? = null
+
+	open fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
+
 	val isIncognitoModeEnabled: Boolean
 		get() = settings.isIncognitoModeEnabled
 

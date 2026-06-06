@@ -20,6 +20,7 @@ import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.EmptyHistoryException
 import org.skepsun.kototoro.core.model.LocalVideoSource
+import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.model.ContentHistory
@@ -81,13 +82,19 @@ class HistoryListViewModel @Inject constructor(
 	private val entityGraphRepository: EntityGraphRepository,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	private val networkState: NetworkState,
-	mangaDataRepository: ContentDataRepository,
+	private val dataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
-) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), QuickFilterListener by quickFilter {
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	@Volatile
 	private var groupedHistoryIds: Map<Long, Set<Long>> = emptyMap()
+
+	@Volatile
+	private var groupedEntityIds: Map<Long, Long> = emptyMap()
+
+	@Volatile
+	private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
 	val onOpenReader = MutableEventFlow<Content>()
 
 	override val isFilterBarVisible = MutableStateFlow(true)
@@ -287,6 +294,7 @@ class HistoryListViewModel @Inject constructor(
 
 		if (visibleItems.isEmpty()) {
 			groupedHistoryIds = emptyMap()
+			groupedEntityIds = emptyMap()
 			return if (filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty()) {
 				listOf(getEmptyState(hasFilters = false))
 			} else {
@@ -295,6 +303,12 @@ class HistoryListViewModel @Inject constructor(
 		}
 		val foldedItems = visibleItems.foldAdjacentByEntity()
 		groupedHistoryIds = foldedItems.associate { it.uiId to it.mangaIds }
+		groupedEntityIds = foldedItems.mapNotNull { group ->
+			group.entityId?.let { group.uiId to it }
+		}.toMap()
+		groupedPreferredLocalIds = foldedItems.mapNotNull { group ->
+			group.preferredLocalMangaId?.let { group.uiId to it }
+		}.toMap()
 
 		val result = ArrayList<ListModel>((if (grouped) (foldedItems.size * 1.4).toInt() else foldedItems.size) + 2)
 		quickFilter.filterItem(filters)?.let(result::add)
@@ -332,37 +346,52 @@ class HistoryListViewModel @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByLocalMangaIds(map { it.manga.id })
+		val entityIdsByMangaId = entityGraphRepository.ensureLocalWorkEntities(map { it.manga })
+		val preferredLocalIdsByEntity = entityIdsByMangaId.values
+			.distinct()
+			.associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
 		val result = ArrayList<HistoryGroup>(size)
 		var current: MutableList<ContentWithHistory>? = null
 		var currentUiId: Long? = null
 		var currentEntityId: Long? = null
+		var currentContentTypeOrdinal: Int? = null
 
 		fun flushCurrent() {
 			val items = current ?: return
 			val uiId = currentUiId ?: return
-			result += items.toHistoryGroup(uiId)
+			result += items.toHistoryGroup(
+				uiId = uiId,
+				entityId = currentEntityId,
+				preferredLocalMangaId = currentEntityId?.let(preferredLocalIdsByEntity::get),
+			)
 			current = null
 			currentUiId = null
 			currentEntityId = null
+			currentContentTypeOrdinal = null
 		}
 
 		for (item in this) {
 			val entityId = entityIdsByMangaId[item.manga.id]
+			val contentTypeOrdinal = item.manga.source.contentType.ordinal
 			when {
 				entityId == null -> {
 					flushCurrent()
-					result += listOf(item).toHistoryGroup(item.manga.id)
+					result += listOf(item).toHistoryGroup(
+						uiId = item.manga.id,
+						entityId = null,
+						preferredLocalMangaId = null,
+					)
 				}
 
-				currentEntityId == entityId -> {
+				currentEntityId == entityId && currentContentTypeOrdinal == contentTypeOrdinal -> {
 					current?.add(item)
 				}
 
 				else -> {
 					flushCurrent()
 					currentEntityId = entityId
-					currentUiId = entityId.toUiGroupId()
+					currentContentTypeOrdinal = contentTypeOrdinal
+					currentUiId = entityId.toUiGroupId(contentTypeOrdinal)
 					current = arrayListOf(item)
 				}
 			}
@@ -371,13 +400,26 @@ class HistoryListViewModel @Inject constructor(
 		return result
 	}
 
-	private fun List<ContentWithHistory>.toHistoryGroup(uiId: Long): HistoryGroup {
+	private fun List<ContentWithHistory>.toHistoryGroup(
+		uiId: Long,
+		entityId: Long?,
+		preferredLocalMangaId: Long?,
+	): HistoryGroup {
 		return HistoryGroup(
 			uiId = uiId,
-			representative = first(),
+			representative = firstOrNull { it.manga.id == preferredLocalMangaId } ?: first(),
 			mangaIds = mapTo(LinkedHashSet(size)) { it.manga.id },
-			sourceCount = map { it.manga.source.name }.distinct().size,
+			entityId = entityId,
+			preferredLocalMangaId = preferredLocalMangaId ?: first().manga.id,
 		)
+	}
+
+	override fun resolveEntityIdForUiItemId(id: Long): Long? {
+		return groupedEntityIds[id]
+	}
+
+	override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
+		return groupedPreferredLocalIds[id] ?: groupedHistoryIds[id]?.firstOrNull()
 	}
 
 	private fun Set<Long>.expandGroupedIds(): Set<Long> {
@@ -404,25 +446,28 @@ class HistoryListViewModel @Inject constructor(
 	}
 
 	private fun HistoryGroup.groupSuffix(): String? {
+		val projectionLabel = representative.manga.source.getTitle(appContext)
+		val currentProjectionLabel = if (mangaIds.size > 1) {
+			appContext.getString(
+				R.string.favourites_entity_current_projection_with_count,
+				projectionLabel,
+				mangaIds.size,
+			)
+		} else {
+			appContext.getString(R.string.favourites_entity_current_projection, projectionLabel)
+		}
 		if (mangaIds.size <= 1) {
-			return null
+			return currentProjectionLabel
 		}
 		val recordsLabel = appContext.resources.getQuantityString(
 			R.plurals.history_grouped_records,
 			mangaIds.size,
 			mangaIds.size,
 		)
-		val sourcesLabel = sourceCount.takeIf { it > 1 }?.let {
-			appContext.resources.getQuantityString(
-				R.plurals.history_grouped_sources,
-				it,
-				it,
-			)
-		}
-		return listOfNotNull(recordsLabel, sourcesLabel).joinToString(" · ")
+		return listOf(currentProjectionLabel, recordsLabel).joinToString(" · ")
 	}
 
-	private fun Long.toUiGroupId(): Long = -this
+	private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
 
 	private fun ContentHistory.header(order: ListSortOrder): ListHeader? = when (order) {
 		ListSortOrder.LAST_READ,
@@ -473,6 +518,7 @@ class HistoryListViewModel @Inject constructor(
 		val uiId: Long,
 		val representative: ContentWithHistory,
 		val mangaIds: Set<Long>,
-		val sourceCount: Int,
+		val entityId: Long?,
+		val preferredLocalMangaId: Long?,
 	)
 }

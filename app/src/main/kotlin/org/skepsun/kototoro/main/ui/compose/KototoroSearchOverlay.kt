@@ -92,6 +92,7 @@ import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
+import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
@@ -134,6 +135,7 @@ fun KototoroSearchOverlay(
     onSourceTypesChange: (Set<SourceType>) -> Unit,
     onContentKindsChange: (Set<SearchContentKind>) -> Unit,
     onContentSuggestionClick: (Content) -> Unit,
+    onLocalEntitySuggestionClick: (LocalEntitySuggestion) -> Unit,
     onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit,
     onTagSuggestionClick: (ContentTag) -> Unit,
     onSourceSuggestionClick: (ContentSource) -> Unit,
@@ -440,6 +442,7 @@ fun KototoroSearchOverlay(
                     submitSearch(author)
                 },
                 onContentSuggestionClick = onContentSuggestionClick,
+                onLocalEntitySuggestionClick = onLocalEntitySuggestionClick,
                 onTrackingEntitySuggestionClick = onTrackingEntitySuggestionClick,
                 onTagSuggestionClick = { tag ->
                     onQueryChanged(tag.title)
@@ -549,6 +552,7 @@ private fun SuggestionList(
     onHintClick: (String) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
     onContentSuggestionClick: (Content) -> Unit,
+    onLocalEntitySuggestionClick: (LocalEntitySuggestion) -> Unit,
     onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit,
     onTagSuggestionClick: (ContentTag) -> Unit,
     onSourceSuggestionClick: (ContentSource) -> Unit,
@@ -569,6 +573,7 @@ private fun SuggestionList(
                     is SearchSuggestionItem.SourceTip -> "srctip_${item.source.name}"
                     is SearchSuggestionItem.Tags -> "tags"
                     is SearchSuggestionItem.ContentList -> "content"
+                    is SearchSuggestionItem.LocalEntityList -> "local_entity"
                     is SearchSuggestionItem.TrackingEntityList -> "tracking_${item.service.name}"
                     is SearchSuggestionItem.Text -> "text_${item.textResId}"
                 }
@@ -582,6 +587,7 @@ private fun SuggestionList(
                     is SearchSuggestionItem.SourceTip -> "source_tip"
                     is SearchSuggestionItem.Tags -> "tags"
                     is SearchSuggestionItem.ContentList -> "content_list"
+                    is SearchSuggestionItem.LocalEntityList -> "local_entity_list"
                     is SearchSuggestionItem.TrackingEntityList -> "tracking_entity_list"
                     is SearchSuggestionItem.Text -> "text"
                 }
@@ -689,6 +695,27 @@ private fun SuggestionList(
                             ContentSuggestionCard(
                                 content = content,
                                 onClick = { onContentSuggestionClick(content) },
+                            )
+                        }
+                    }
+                }
+
+                is SearchSuggestionItem.LocalEntityList -> {
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(
+                            items = item.items,
+                            key = { suggestion -> suggestion.entityId ?: suggestion.representative.id },
+                            contentType = { "local_entity_card" },
+                        ) { suggestion ->
+                            LocalEntitySuggestionCard(
+                                suggestion = suggestion,
+                                onClick = { onLocalEntitySuggestionClick(suggestion) },
                             )
                         }
                     }
@@ -910,6 +937,76 @@ private fun ContentSuggestionCard(
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LocalEntitySuggestionCard(
+    suggestion: LocalEntitySuggestion,
+    onClick: () -> Unit,
+) {
+    val representative = suggestion.representative
+    val context = LocalContext.current
+    val sourceTitle = rememberResolvedSourceTitle(representative.source)
+    val imageRequest = remember(representative.id, representative.coverUrl) {
+        ImageRequest.Builder(context)
+            .data(representative.coverUrl)
+            .crossfade(true)
+            .apply { mangaExtra(representative) }
+            .build()
+    }
+
+    Surface(
+        modifier = Modifier
+            .width(SearchSuggestionCardWidth)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(SearchSuggestionCardCornerRadius),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+        ),
+    ) {
+        Column {
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = representative.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.7f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentScale = ContentScale.Crop,
+            )
+            Column(
+                modifier = Modifier.padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = representative.title,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text(
+                    text = sourceTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.search_local_entity_suggestion_meta,
+                        suggestion.projectionCount,
+                        suggestion.sourceCount,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

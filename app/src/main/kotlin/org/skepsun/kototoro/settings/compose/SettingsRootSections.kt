@@ -94,6 +94,13 @@ fun buildSettingsRootSections(
 				summary = context.summaryOf(R.string.create_backup, R.string.restore_backup, R.string.backups_output_directory),
 				onClick = { onOpenDestination(SettingsDestination.BackupsSettings) },
 			),
+			settingsRootItem(
+				key = "entity_organize_settings",
+				iconRes = R.drawable.ic_select_group,
+				title = context.getString(R.string.entity_organize_title),
+				summary = context.getString(R.string.entity_organize_settings_summary),
+				onClick = { onOpenDestination(SettingsDestination.EntityOrganizeSettings) },
+			),
 		),
 	)
 

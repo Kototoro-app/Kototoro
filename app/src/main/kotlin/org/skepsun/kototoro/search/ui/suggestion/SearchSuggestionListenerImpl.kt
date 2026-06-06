@@ -6,7 +6,9 @@ import android.widget.TextView
 import androidx.core.net.toUri
 import com.google.android.material.search.SearchView
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentLinkResolver
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -16,10 +18,28 @@ class SearchSuggestionListenerImpl(
 	private val router: AppRouter,
 	private val searchView: SearchView,
 	private val viewModel: SearchSuggestionViewModel,
+	private val entityGraphRepository: EntityGraphRepository,
+	private val contentDataRepository: ContentDataRepository,
 ) : SearchSuggestionListener {
 
 	override fun onContentClick(manga: Content) {
-		router.openDetails(manga)
+		val (entityId, preferredLocalMangaId) = kotlinx.coroutines.runBlocking {
+			val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(manga.id))[manga.id]
+			val preferredLocalMangaId = if (entityId != null) {
+				contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+			} else {
+				null
+			}
+			entityId to preferredLocalMangaId
+		}
+		if (entityId != null) {
+			router.openEntityDetails(
+				entityId = entityId,
+				preferredLocalMangaId = preferredLocalMangaId ?: manga.id,
+			)
+		} else {
+			router.openDetails(manga)
+		}
 	}
 
 	override fun onQueryClick(query: String, kind: SearchKind, submit: Boolean) {

@@ -54,8 +54,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 		filterMenuProvider?.attachTo(this)
 		showHomeChrome()
 
-		viewModel.onOpenContent.observeEvent(viewLifecycleOwner) { manga ->
-			router.openDetails(manga, binding.root)
+		viewModel.onOpenContent.observeEvent(viewLifecycleOwner) { event ->
+			event.entityId?.let { entityId ->
+				router.openEntityDetails(
+					entityId = entityId,
+					preferredLocalMangaId = event.preferredLocalMangaId ?: event.content.id,
+				)
+			} ?: router.openDetails(event.content, binding.root)
         }
 
         binding.composeView.setContent {
@@ -86,7 +91,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 				HomeScreen(
 					state = state,
 					onContentClick = { content, coverBounds, _ ->
-						router.openDetails(content, binding.root)
+						viewModel.openContent(content)
 					},
 					actions = actions,
 					isRandomLoading = isRandomLoading

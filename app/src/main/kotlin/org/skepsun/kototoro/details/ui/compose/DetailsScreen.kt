@@ -1360,7 +1360,7 @@ fun DetailsScreen(
                     isLoading = metadataSearchLoading,
                     hasSearched = metadataSearchHasSearched,
                     currentContent = content,
-                    unavailableText = stringResource(R.string.details_reading_source_unavailable),
+                    unavailableText = stringResource(R.string.details_metadata_binding_unavailable),
                     linkedTrackingItems = linkedTrackingItems,
                     scrobblingStatuses = arrayOf(
                         stringResource(R.string.status_planned),
@@ -1405,6 +1405,7 @@ fun DetailsScreen(
                     languagePresets = languagePresets,
                     activeLanguagePresetId = activeLanguagePresetId,
                     currentContent = content,
+                    entityChapterSourceInfo = entityChapterSourceInfo,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
                     onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectActiveLocalSource) },
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,
@@ -1422,6 +1423,9 @@ fun DetailsScreen(
                         viewModel.bindReadingCandidateToTracking(candidate) {
                             appRouter.openDetails(candidate)
                         }
+                    },
+                    onDeleteProjection = { option ->
+                        option.targetMangaId?.let(viewModel::removeActiveLocalSource)
                     },
                     onDismissRequest = { showReadingSourceDialog = false },
                 )

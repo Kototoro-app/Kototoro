@@ -49,6 +49,12 @@ class AnimeOfflineUpdateWorker @AssistedInject constructor(
         }
         return try {
             repository.downloadAndInstall(latest) { downloadedBytes, totalBytes ->
+                this.setProgress(
+                    workDataOf(
+                        KEY_DOWNLOADED_BYTES to downloadedBytes,
+                        KEY_TOTAL_BYTES to totalBytes,
+                    ),
+                )
                 if (applicationContext.checkNotificationPermission(CHANNEL_ID)) {
                     notificationManager.notify(NOTIFICATION_ID, createNotification(downloadedBytes, totalBytes))
                 }
@@ -123,10 +129,12 @@ class AnimeOfflineUpdateWorker @AssistedInject constructor(
     interface Factory : WorkerAssistedFactory<AnimeOfflineUpdateWorker>
 
     companion object {
-        private const val UNIQUE_WORK_NAME = "anime_offline_database_update"
+        const val UNIQUE_WORK_NAME = "anime_offline_database_update"
         private const val CHANNEL_ID = "anime_offline_database_update"
         private const val NOTIFICATION_ID = 44231
         private const val INPUT_FORCE = "force"
+        const val KEY_DOWNLOADED_BYTES = "downloaded_bytes"
+        const val KEY_TOTAL_BYTES = "total_bytes"
 
         fun enqueue(
             context: Context,

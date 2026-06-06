@@ -41,6 +41,8 @@ class AnimeOfflineRepository @Inject constructor(
         val assetName: String?,
         val downloadedAt: Long,
         val lastCheckedAt: Long,
+        val installedBytes: Long,
+        val entryCount: Int,
     )
 
     data class Mapping(
@@ -54,6 +56,15 @@ class AnimeOfflineRepository @Inject constructor(
         val tag: String,
         val assetName: String,
         val downloadUrl: String,
+    )
+
+    data class CanonicalMatch(
+        val canonicalId: String,
+        val title: String,
+        val synonyms: List<String>,
+        val year: Int?,
+        val type: String?,
+        val mappings: List<Mapping>,
     )
 
     private val json = Json {
@@ -71,12 +82,15 @@ class AnimeOfflineRepository @Inject constructor(
 
     suspend fun readStatus(): Status = withContext(Dispatchers.IO) {
         val meta = readMeta()
+        val state = loadState()
         Status(
             isInstalled = indexFile.exists(),
             releaseTag = meta.releaseTag,
             assetName = meta.assetName,
             downloadedAt = meta.downloadedAt,
             lastCheckedAt = meta.lastCheckedAt,
+            installedBytes = indexFile.takeIf { it.exists() }?.length() ?: 0L,
+            entryCount = state.entries.size,
         )
     }
 
@@ -226,6 +240,76 @@ class AnimeOfflineRepository @Inject constructor(
         candidates.values
             .sortedWith(compareByDescending<TrackingSiteMatchResult> { it.confidence }.thenBy { it.title })
             .take(resultLimit)
+    }
+
+    suspend fun resolveCandidateTitlesForLocalVideoContent(
+        content: Content,
+        limit: Int = 8,
+    ): List<String> = withContext(Dispatchers.Default) {
+        if (content.source.getContentType() !in VIDEO_TYPES) {
+            return@withContext emptyList()
+        }
+        val state = loadState()
+        if (state.entries.isEmpty()) {
+            return@withContext emptyList()
+        }
+        val matches = LinkedHashMap<String, CompactEntry>()
+        buildCandidateQueries(content).forEach { query ->
+            val normalized = normalizeTitle(query)
+            if (normalized.isBlank()) {
+                return@forEach
+            }
+            state.byNormalizedTitle[normalized].orEmpty().forEach { entry ->
+                matches.putIfAbsent(entry.id, entry)
+            }
+        }
+        matches.values
+            .flatMap { entry -> listOf(entry.title) + entry.synonyms }
+            .map(String::trim)
+            .filter { it.isNotBlank() }
+            .distinctBy(::normalizeTitle)
+            .take(limit)
+    }
+
+    suspend fun resolveCanonicalMatchForLocalVideoContent(
+        content: Content,
+    ): CanonicalMatch? = withContext(Dispatchers.Default) {
+        if (content.source.getContentType() !in VIDEO_TYPES) {
+            return@withContext null
+        }
+        val state = loadState()
+        if (state.entries.isEmpty()) {
+            return@withContext null
+        }
+        val matchedEntry = buildCandidateQueries(content)
+            .asSequence()
+            .map(::normalizeTitle)
+            .filter(String::isNotBlank)
+            .flatMap { normalized -> state.byNormalizedTitle[normalized].orEmpty().asSequence() }
+            .distinctBy(CompactEntry::id)
+            .maxByOrNull { entry ->
+                maxOf(
+                    similarity(normalizeTitle(content.title), normalizeTitle(entry.title)),
+                    entry.synonyms.maxOfOrNull { similarity(normalizeTitle(content.title), normalizeTitle(it)) } ?: 0f,
+                )
+            }
+            ?: return@withContext null
+        CanonicalMatch(
+            canonicalId = matchedEntry.id,
+            title = matchedEntry.title,
+            synonyms = matchedEntry.synonyms,
+            year = matchedEntry.year,
+            type = matchedEntry.type,
+            mappings = matchedEntry.mappings.mapNotNull { mapping ->
+                val service = ScrobblerService.entries.firstOrNull { it.id == mapping.serviceId } ?: return@mapNotNull null
+                Mapping(
+                    service = service,
+                    remoteId = mapping.remoteId,
+                    title = matchedEntry.title,
+                    url = mapping.url,
+                )
+            },
+        )
     }
 
     private suspend fun loadState(): CachedState {
@@ -437,6 +521,36 @@ class AnimeOfflineRepository @Inject constructor(
         return title.lowercase()
             .replace(Regex("\\s+"), "")
             .replace(Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]"), "")
+    }
+
+    private fun similarity(left: String, right: String): Float {
+        if (left.isBlank() || right.isBlank()) return 0f
+        if (left == right) return 1f
+        val maxLength = maxOf(left.length, right.length).coerceAtLeast(1)
+        val distance = levenshtein(left, right)
+        return (1f - distance.toFloat() / maxLength.toFloat()).coerceIn(0f, 1f)
+    }
+
+    private fun levenshtein(left: String, right: String): Int {
+        if (left.isEmpty()) return right.length
+        if (right.isEmpty()) return left.length
+        val previous = IntArray(right.length + 1) { it }
+        val current = IntArray(right.length + 1)
+        for (i in left.indices) {
+            current[0] = i + 1
+            for (j in right.indices) {
+                val cost = if (left[i] == right[j]) 0 else 1
+                current[j + 1] = minOf(
+                    current[j] + 1,
+                    previous[j + 1] + 1,
+                    previous[j] + cost,
+                )
+            }
+            for (j in previous.indices) {
+                previous[j] = current[j]
+            }
+        }
+        return previous[right.length]
     }
 
     private fun ensureRootDir() {

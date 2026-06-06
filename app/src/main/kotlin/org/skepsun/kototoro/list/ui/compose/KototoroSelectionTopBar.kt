@@ -53,6 +53,7 @@ fun KototoroSelectionTopBar(
     preferredInlineActions: List<SelectionAction>? = null,
     removeActionIconRes: Int? = null,
     removeActionTitleRes: Int? = null,
+    fixActionTitleRes: Int? = null,
     onClearSelection: () -> Unit,
     onActionClick: (SelectionAction) -> Unit,
     modifier: Modifier = Modifier
@@ -124,6 +125,7 @@ fun KototoroSelectionTopBar(
                                             action = action,
                                             allPinned = allPinned,
                                             removeActionTitleRes = removeActionTitleRes,
+                                            fixActionTitleRes = fixActionTitleRes,
                                         ),
                                     )
                                 },
@@ -176,7 +178,15 @@ private fun SelectionActionIconButton(
                         contentDescription = selectionActionTitle(action, allPinned, removeActionTitleRes),
                     )
                 } else {
-                    Icon(Icons.Default.Delete, contentDescription = selectionActionTitle(action, allPinned, removeActionTitleRes))
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = selectionActionTitle(
+                            action,
+                            allPinned,
+                            removeActionTitleRes,
+                            fixActionTitleRes = null,
+                        ),
+                    )
                 }
             }
             SelectionAction.SAVE -> {
@@ -239,6 +249,7 @@ private fun selectionActionTitle(
     action: SelectionAction,
     allPinned: Boolean,
     removeActionTitleRes: Int?,
+    fixActionTitleRes: Int? = null,
 ): String {
     return when (action) {
         SelectionAction.SELECT_ALL -> stringResource(R.string.select_all)
@@ -246,7 +257,7 @@ private fun selectionActionTitle(
         SelectionAction.FAVOURITE -> stringResource(R.string.categories)
         SelectionAction.SAVE -> stringResource(R.string.download)
         SelectionAction.EDIT_OVERRIDE -> stringResource(R.string.edit)
-        SelectionAction.FIX -> stringResource(R.string.fix)
+        SelectionAction.FIX -> stringResource(fixActionTitleRes ?: R.string.fix)
         SelectionAction.REMOVE -> stringResource(removeActionTitleRes ?: R.string.remove)
         SelectionAction.PIN -> if (allPinned) stringResource(R.string.unpin) else stringResource(R.string.pin)
         SelectionAction.MARK_AS_COMPLETED -> stringResource(R.string.mark_as_completed)

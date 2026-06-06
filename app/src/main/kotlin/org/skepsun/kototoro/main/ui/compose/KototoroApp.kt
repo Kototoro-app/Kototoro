@@ -68,6 +68,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -237,6 +238,7 @@ fun KototoroApp(
     onSearchOverlayContentKindsChange: (Set<SearchContentKind>) -> Unit = {},
     onSearchOverlayDismiss: () -> Unit = {},
     onContentSuggestionClick: (Content) -> Unit = {},
+    onLocalEntitySuggestionClick: (LocalEntitySuggestion) -> Unit = {},
     onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit = {},
     onTagSuggestionClick: (ContentTag) -> Unit = {},
     onSourceSuggestionClick: (ContentSource) -> Unit = {},
@@ -1019,6 +1021,10 @@ fun KototoroApp(
                             onContentSuggestionClick(it)
                             isSearchOverlayVisible = false
                         },
+                        onLocalEntitySuggestionClick = {
+                            onLocalEntitySuggestionClick(it)
+                            isSearchOverlayVisible = false
+                        },
                         onTrackingEntitySuggestionClick = {
                             onTrackingEntitySuggestionClick(it)
                             isSearchOverlayVisible = false
@@ -1258,6 +1264,7 @@ private fun MainSelectionTopChrome(
                 preferredInlineActions = effectiveTopBarOverrideState.preferredInlineActions,
                 removeActionIconRes = effectiveTopBarOverrideState.removeActionIconRes,
                 removeActionTitleRes = effectiveTopBarOverrideState.removeActionTitleRes,
+                fixActionTitleRes = effectiveTopBarOverrideState.fixActionTitleRes,
                 onClearSelection = effectiveTopBarOverrideState.onClearSelection,
                 onActionClick = effectiveTopBarOverrideState.onActionClick,
                 modifier = modifier,

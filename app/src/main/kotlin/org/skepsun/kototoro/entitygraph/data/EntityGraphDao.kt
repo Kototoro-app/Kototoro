@@ -17,6 +17,9 @@ abstract class EntityGraphDao {
 	@Query("SELECT * FROM `entity` WHERE id = :entityId LIMIT 1")
 	abstract fun observeEntity(entityId: Long): Flow<EntityRecord?>
 
+	@Query("SELECT * FROM entity_preferences WHERE entity_id = :entityId LIMIT 1")
+	abstract suspend fun findEntityPrefs(entityId: Long): EntityPrefsRecord?
+
 	@Query("SELECT * FROM `entity` WHERE id IN (:entityIds)")
 	abstract suspend fun findEntitiesByIds(entityIds: List<Long>): List<EntityRecord>
 
@@ -71,6 +74,34 @@ abstract class EntityGraphDao {
 
 	@Upsert
 	abstract suspend fun upsertBinding(binding: EntityBindingRecord)
+
+	@Insert(onConflict = OnConflictStrategy.IGNORE)
+	abstract suspend fun insertEntityPrefsIgnore(prefs: EntityPrefsRecord): Long
+
+	@Query(
+		"""
+		UPDATE entity_preferences
+		SET preferred_local_manga_id = :preferredLocalMangaId
+		WHERE entity_id = :entityId
+		"""
+	)
+	abstract suspend fun updateEntityPreferredLocalMangaId(entityId: Long, preferredLocalMangaId: Long?)
+
+	@Query(
+		"""
+		UPDATE entity_preferences
+		SET metadata_source_kind = :metadataSourceKind,
+			metadata_source_service = :metadataSourceService,
+			metadata_source_remote_id = :metadataSourceRemoteId
+		WHERE entity_id = :entityId
+		"""
+	)
+	abstract suspend fun updateEntityMetadataSourceSelection(
+		entityId: Long,
+		metadataSourceKind: String?,
+		metadataSourceService: Int?,
+		metadataSourceRemoteId: Long?,
+	)
 
 	@Query(
 		"""
@@ -131,6 +162,28 @@ abstract class EntityGraphDao {
 
 	@Query("DELETE FROM entity_binding WHERE entity_id IN (:entityIds)")
 	abstract suspend fun deleteBindingsByEntityIds(entityIds: List<Long>)
+
+	@Query(
+		"""
+		DELETE FROM entity_binding
+		WHERE source = :source AND external_id = :externalId
+		"""
+	)
+	abstract suspend fun deleteBindingBySource(source: String, externalId: String)
+
+	@Query(
+		"""
+		DELETE FROM entity_binding
+		WHERE entity_id IN (:entityIds)
+			AND source IN (:sources)
+			AND external_id != :externalId
+		"""
+	)
+	abstract suspend fun deleteBindingsByEntityIdsAndSourcesExcept(
+		entityIds: List<Long>,
+		sources: List<String>,
+		externalId: String,
+	)
 
 	@Query("DELETE FROM relation WHERE from_entity_id IN (:entityIds) OR to_entity_id IN (:entityIds)")
 	abstract suspend fun deleteRelationsByEntityIds(entityIds: List<Long>)
