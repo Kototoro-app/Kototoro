@@ -159,9 +159,7 @@ internal data class EntityWorkbenchRow(
 
 internal data class WorkbenchSelectionSummary(
     val totalRows: Int,
-    val visibleRows: Int,
     val actionRequiredRows: Int,
-    val selectedRows: Int,
     val selectedGroups: Int,
     val selectedTracking: Int,
     val selectedReading: Int,
@@ -742,7 +740,7 @@ internal fun resolveEntityOrganizeWorkbenchDefaults(
         )
 
         EntityOrganizeEntryMode.ALL_FAVORITES -> EntityOrganizeWorkbenchDefaults(
-            statusFilter = WorkbenchStatusFilter.ACTION_REQUIRED,
+            statusFilter = WorkbenchStatusFilter.ALL,
             sortMode = WorkbenchSortMode.ACTION_FIRST,
         )
     }
@@ -1374,6 +1372,13 @@ internal fun EntityWorkbenchRow.hasReadingSelected(uiState: MigrationUiState): B
     return readingCandidates.any { it.mangaId in uiState.acceptedReadingPreviewIds }
 }
 
+internal fun EntityWorkbenchRow.currentProjectionItem(): org.skepsun.kototoro.favourites.domain.MergeCandidateItem? {
+    if (group.resolvedEntityId == null) {
+        return null
+    }
+    return group.items.firstOrNull()
+}
+
 internal fun EntityWorkbenchRow.hasLowConfidenceTracking(): Boolean {
     return trackingCandidates.any { it.confidence.toPercentInt() < TRACKING_CONFIDENCE_WARNING_THRESHOLD }
 }
@@ -1392,6 +1397,7 @@ internal fun EntityWorkbenchRow.stageSnapshot(uiState: MigrationUiState): Workbe
         else -> WorkbenchStageState.READY
     }
     val readingState = when {
+        currentProjectionItem() != null -> WorkbenchStageState.READY
         readingCandidates.isEmpty() -> WorkbenchStageState.EMPTY
         !hasReadingSelected(uiState) -> WorkbenchStageState.MISSING
         else -> WorkbenchStageState.READY
@@ -1434,11 +1440,7 @@ internal fun buildWorkbenchSelectionSummary(
 ): WorkbenchSelectionSummary {
     return WorkbenchSelectionSummary(
         totalRows = rows.size,
-        visibleRows = filteredRows.size,
         actionRequiredRows = filteredRows.count { it.needsAction(uiState) },
-        selectedRows = filteredRows.count {
-            it.isMergeSelected(uiState) || it.hasTrackingSelected(uiState) || it.hasReadingSelected(uiState)
-        },
         selectedGroups = uiState.selectedMergeGroupIds.size,
         selectedTracking = uiState.selectedTrackingPreviewIds.size,
         selectedReading = uiState.acceptedReadingPreviewIds.size,
@@ -1508,16 +1510,6 @@ private fun WorkbenchSelectionSummaryCard(
                 WorkbenchMetricChip(
                     label = stringResource(R.string.entity_organize_workbench_metric_action_required),
                     value = summary.actionRequiredRows.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_selected_rows),
-                    value = summary.selectedRows.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_visible_rows),
-                    value = "${summary.visibleRows}/${summary.totalRows}",
                     modifier = Modifier.weight(1f),
                 )
                 WorkbenchMetricChip(
@@ -2369,11 +2361,20 @@ private fun EntityWorkbenchRowCard(
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     if (row.readingCandidates.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.entity_organize_workbench_reading_empty),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        val currentProjection = row.currentProjectionItem()
+                        if (currentProjection != null) {
+                            ProjectionSummaryCard(
+                                title = currentProjection.sourceName,
+                                subtitle = currentProjection.title,
+                                meta = stringResource(R.string.favourites_entity_current_projection, currentProjection.sourceName),
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.entity_organize_workbench_reading_empty),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     } else {
                         row.readingCandidates.take(if (expanded) 3 else 2).forEach { preview ->
                             val checked = preview.mangaId in uiState.acceptedReadingPreviewIds
@@ -2419,6 +2420,54 @@ private enum class CompactSelectTone {
     Recommended,
     Selected,
     Warning,
+}
+
+@Composable
+private fun ProjectionSummaryCard(
+    title: String,
+    subtitle: String,
+    meta: String,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.details_current_projection),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable
