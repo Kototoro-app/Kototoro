@@ -135,12 +135,7 @@ class WebtoonReaderFragment : BaseReaderFragment<FragmentReaderWebtoonBinding>()
 		firstVisiblePosition: Int,
 		lastVisiblePosition: Int,
 	) {
-		val currentPosition = recyclerView.findCurrentPagePosition()
-		if (currentPosition == RecyclerView.NO_POSITION) {
-			viewModel.onCurrentPageChanged(firstVisiblePosition, lastVisiblePosition)
-		} else {
-			viewModel.onCurrentPageChanged(currentPosition, currentPosition)
-		}
+		viewModel.onCurrentPageChanged(firstVisiblePosition, lastVisiblePosition)
 	}
 
 	override suspend fun onPagesChanged(pages: List<ReaderPage>, pendingState: ReaderState?) {

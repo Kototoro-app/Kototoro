@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PointF
 import android.util.AttributeSet
-import android.util.Log
 import androidx.core.view.ancestors
 import androidx.recyclerview.widget.RecyclerView
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
@@ -33,7 +32,6 @@ class WebtoonImageView @JvmOverloads constructor(
 	fun scrollBy(delta: Int) {
 		val maxScroll = getScrollRange()
 		if (maxScroll == 0) {
-			Log.d(TAG, "scrollBy: delta=$delta, maxScroll=0, ignored")
 			return
 		}
 		val newScroll = scrollPos + delta
@@ -102,7 +100,6 @@ class WebtoonImageView @JvmOverloads constructor(
 		}
 		desiredWidth = desiredWidth.coerceAtLeast(suggestedMinimumWidth)
 		desiredHeight = desiredHeight.coerceAtLeast(suggestedMinimumHeight).coerceAtMost(parentHeight())
-		Log.d(TAG, "onMeasure: specModes=$widthSpecMode/$heightSpecMode, parentSize=${parentWidth}x$parentHeight, imgSize=${sWidth}x${sHeight}, desired=${desiredWidth}x$desiredHeight, currentScale=$minScale/$maxScale, scaleType=$minimumScaleType")
 		setMeasuredDimension(desiredWidth, desiredHeight)
 	}
 
@@ -114,21 +111,15 @@ class WebtoonImageView @JvmOverloads constructor(
 	}
 
 	override fun onReady() {
-		Log.d(TAG, "onReady: viewSize=${width}x$height, imgSize=${sWidth}x${sHeight}, isReady=$isReady")
 		super.onReady()
 		updateReadyState()
 	}
 
 	private fun scrollToInternal(pos: Int) {
-		if (width <= 0 || height <= 0 || sWidth <= 0 || sHeight <= 0) {
-			scrollPos = 0
-			return
-		}
 		minScale = width / sWidth.toFloat()
 		maxScale = minScale
-		scrollPos = pos.coerceIn(0, getMaxScrollForCurrentImage())
-		ct.set(sWidth / 2f, (height / 2f + scrollPos.toFloat()) / minScale)
-		Log.d(TAG, "scrollToInternal: viewSize=${width}x$height, imgSize=${sWidth}x${sHeight}, scale=$minScale, scroll=$scrollPos")
+		scrollPos = pos
+		ct.set(sWidth / 2f, (height / 2f + pos.toFloat()) / minScale)
 		setScaleAndCenter(minScale, ct)
 	}
 
@@ -137,7 +128,6 @@ class WebtoonImageView @JvmOverloads constructor(
 			return
 		}
 		val newScale = width / sWidth.toFloat()
-		Log.d(TAG, "adjustScale: viewSize=${width}x$height, imgSize=${sWidth}x${sHeight}, newScale=$newScale, isReady=$isReady")
 		minScale = newScale
 		maxScale = newScale
 		minimumScaleType = SCALE_TYPE_CUSTOM
@@ -198,7 +188,5 @@ class WebtoonImageView @JvmOverloads constructor(
 		canvas.drawText("${getScroll()} / ${getScrollRange()}", 100f, 100f, paint)
 	}
 
-	companion object {
-		private const val TAG = "WebtoonImageView"
-	}
+
 }
