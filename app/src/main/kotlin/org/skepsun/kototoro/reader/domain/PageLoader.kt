@@ -417,12 +417,15 @@ class PageLoader @Inject constructor(
 							downloadSlowdownDispatcher.delay(page.source)
 						}
 						val repo = getRepository(page.source)
-						val request = repo.createPageRequest(pageUrl, page)
-						val imageClient = repo.getImageClient() ?: okHttp
-						val response = imageProxyInterceptor.interceptPageRequest(request, imageClient)
+						val response = repo.fetchPageResponse(pageUrl, page)
+							?: run {
+								val request = repo.createPageRequest(pageUrl, page)
+								val imageClient = repo.getImageClient() ?: okHttp
+								imageProxyInterceptor.interceptPageRequest(request, imageClient)
+							}
 						Log.d(
 							"JsPageResponse",
-							"resp code=${response.code} protocol=${response.protocol} redirected=${response.priorResponse != null} reqUrl=${response.request.url} prior=${response.priorResponse?.code}"
+							"resp code=${response.code} protocol=${response.protocol} redirected=${response.priorResponse != null} reqUrl=${response.request.url} prior=${response.priorResponse?.code} server=${response.header("server")} cf-ray=${response.header("cf-ray")} cf-mitigated=${response.header("cf-mitigated")}"
 						)
 						response.ensureSuccess().use { resp ->
 							resp.requireBody().withProgress(progress).use {

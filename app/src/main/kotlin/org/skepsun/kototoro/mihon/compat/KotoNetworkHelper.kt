@@ -15,6 +15,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okio.IOException
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
+import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
@@ -91,12 +92,19 @@ class KotoNetworkHelper(
         // Some Mihon sources build their own clients from network.cloudflareClient, and in practice
         // the copied base interceptor chain is not always enough to surface Kototoro's CF flow.
         builder.addInterceptor { chain ->
-            val originalRequest = chain.request()
+            val originalRequest = chain.request().withCurrentSourceTagIfAbsent()
             val request = enrichApiRequestHeadersIfNeeded(originalRequest)
             val response = chain.proceed(request)
             val challengeUrl = request.toChallengeUrl()
             val successCookieUrl = request.toSuccessCookieUrl()
-            when (CloudFlareHelper.checkResponseForProtection(response)) {
+            val protection = CloudFlareHelper.checkResponseForProtection(response)
+            if (protection != CloudFlareHelper.PROTECTION_NOT_DETECTED) {
+                android.util.Log.w(
+                    "MihonNetwork",
+                    "Protection detected: type=${protectionLabel(protection)}, host=${request.url.host}, code=${response.code}, server=${response.header("server")}, cf-ray=${response.header("cf-ray")}, cf-mitigated=${response.header("cf-mitigated")}, url=${request.url}",
+                )
+            }
+            when (protection) {
                 CloudFlareHelper.PROTECTION_BLOCKED -> response.closeThrowing(
                     CloudFlareBlockedException(
                         url = challengeUrl,
@@ -109,6 +117,7 @@ class KotoNetworkHelper(
                     val clearance = cookieJar.loadForRequest(request.url)
                         .firstOrNull { it.name == "cf_clearance" }
                         ?.value
+                    clearCloudflareCookieIfPossible(request, clearance)
 
                     when (val webViewResult = tryFetchWithWebView(request)) {
                         is WebViewFallbackResult.BrowserResponse -> {
@@ -155,12 +164,25 @@ class KotoNetworkHelper(
                             "MihonNetwork",
                             "Skip interactive action for host=$host: repeated challenge with same cf_clearance",
                         )
-                        response.closeThrowing(
-                            CloudFlareBlockedException(
-                                url = challengeUrl,
-                                source = request.tag(ContentSource::class.java),
-                            ),
-                        )
+                        val source = request.tag(ContentSource::class.java)
+                        if (source != null) {
+                            response.closeThrowing(
+                                InteractiveActionRequiredException(
+                                    source = source,
+                                    url = challengeUrl,
+                                    userAgent = request.header("User-Agent"),
+                                    successCookieUrl = successCookieUrl,
+                                    successCookieName = "cf_clearance",
+                                ),
+                            )
+                        } else {
+                            response.closeThrowing(
+                                CloudFlareBlockedException(
+                                    url = challengeUrl,
+                                    source = null,
+                                ),
+                            )
+                        }
                     } else {
                         val source = request.tag(ContentSource::class.java)
                         if (source == null) {
@@ -278,6 +300,12 @@ class KotoNetworkHelper(
             .toString()
     }
 
+    private fun Request.withCurrentSourceTagIfAbsent(): Request {
+        if (tag(ContentSource::class.java) != null) return this
+        val source = MihonRequestContext.currentSource() ?: return this
+        return newBuilder().tag(ContentSource::class.java, source).build()
+    }
+
     private fun enrichApiRequestHeadersIfNeeded(request: okhttp3.Request): okhttp3.Request {
         if (!request.url.encodedPath.startsWith("/api/")) return request
         val cookies = cookieJar.loadForRequest(request.url)
@@ -334,6 +362,18 @@ class KotoNetworkHelper(
     private fun maskCookieValue(value: String?): String {
         if (value.isNullOrEmpty()) return "<empty>"
         return if (value.length <= 8) "***" else "${value.take(4)}...${value.takeLast(4)}"
+    }
+
+    private fun clearCloudflareCookieIfPossible(request: Request, clearance: String?) {
+        if (clearance.isNullOrBlank()) return
+        val mutableCookieJar = cookieJar as? MutableCookieJar ?: return
+        android.util.Log.i(
+            "MihonNetwork",
+            "Clearing stale cf_clearance before challenge solve for host=${request.url.host}, value=${maskCookieValue(clearance)}",
+        )
+        mutableCookieJar.removeCookies(request.url) { cookie ->
+            cookie.name == "cf_clearance"
+        }
     }
 
     private fun tryFetchWithWebView(request: Request): WebViewFallbackResult {
@@ -470,5 +510,11 @@ class KotoNetworkHelper(
         private val recentChallengeAttempts = ConcurrentHashMap<String, ChallengeAttempt>()
         private val recentWebViewSolveSuccessAt = ConcurrentHashMap<String, Long>()
         private val webViewFallbackMutexes = ConcurrentHashMap<String, Mutex>()
+
+        private fun protectionLabel(protection: Int): String = when (protection) {
+            CloudFlareHelper.PROTECTION_CAPTCHA -> "captcha"
+            CloudFlareHelper.PROTECTION_BLOCKED -> "blocked"
+            else -> "none"
+        }
     }
 }

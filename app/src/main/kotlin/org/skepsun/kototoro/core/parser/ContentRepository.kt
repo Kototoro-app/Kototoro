@@ -2,6 +2,7 @@ package org.skepsun.kototoro.core.parser
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import okhttp3.Response
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.parsers.model.Content
@@ -93,6 +94,16 @@ interface ContentRepository {
 	 * cookies (cf_clearance), rate limiters, and custom interceptors for the source's CDN.
 	 */
 	fun getImageClient(): okhttp3.OkHttpClient? = null
+
+	/**
+	 * 可选：让源自行执行页面图片请求。
+	 *
+	 * 主要用于 Mihon 这类宿主需要复用扩展原生取图逻辑的场景，避免宿主重新拼接
+	 * request/client 后丢失扩展侧的 token 刷新、重试或特殊拦截行为。
+	 *
+	 * 返回 null 表示继续走 Kototoro 默认下载链路。
+	 */
+	suspend fun fetchPageResponse(pageUrl: String, page: ContentPage): Response? = null
 
 	fun isSlowdownEnabled(): Boolean {
 		return source != LocalMangaSource && source != TestContentSource && source != org.skepsun.kototoro.core.model.LocalNovelSource

@@ -102,9 +102,17 @@ class ContentPageFetcher(
 			tag = "ContentPageFetcher",
 			prefix = "fetchPage_repository_unavailable",
 		) { "Page source ${page.source.name} is not available" }
-		val request = repo.createPageRequest(pageUrl, page)
-		val imageClient = repo.getImageClient() ?: okHttpClient
-		return imageProxyInterceptor.interceptPageRequest(request, imageClient).use { response ->
+		val response = repo.fetchPageResponse(pageUrl, page)
+			?: run {
+				val request = repo.createPageRequest(pageUrl, page)
+				val imageClient = repo.getImageClient() ?: okHttpClient
+				imageProxyInterceptor.interceptPageRequest(request, imageClient)
+			}
+		android.util.Log.d(
+			"ContentPageFetcher",
+			"fetchPage response: source=${page.source.name}, pageId=${page.id}, code=${response.code}, finalUrl=${response.request.url}, server=${response.header("server")}, cf-ray=${response.header("cf-ray")}, cf-mitigated=${response.header("cf-mitigated")}",
+		)
+		return response.use {
 			if (!response.isSuccessful) {
 				throw HttpException(response.toNetworkResponse())
 			}

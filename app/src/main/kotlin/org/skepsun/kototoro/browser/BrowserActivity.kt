@@ -107,12 +107,7 @@ class BrowserActivity : BaseBrowserActivity() {
                 sawChallengePage = true
                 return@launch
             }
-            if (shouldAutoCompleteVerification()) {
-                autoSavingVerificationResult = true
-                pendingResult = RESULT_OK
-                completeBrowserWait()
-                superFinishAfterVerification()
-            }
+            maybeAutoFinishAfterVerification()
         }
     }
 
@@ -224,19 +219,25 @@ class BrowserActivity : BaseBrowserActivity() {
 	}
 
     private fun maybeCompleteAfterVerification() {
-        if (browserWaitToken == null || browserWaitCompleted) return
+        lifecycleScope.launch {
+            maybeAutoFinishAfterVerification()
+        }
+    }
+
+    private suspend fun maybeAutoFinishAfterVerification() {
+        if (browserWaitCompleted || autoSavingVerificationResult) return
         if (!hasSuccessCookieTarget()) return
         val currentValue = getSuccessCookieValue()
-        if (isSuccessCookieSatisfied(currentValue)) {
-            logCookieState("auto_complete", currentValue)
-            syncCookiesToPersistentJar()
-            pendingResult = RESULT_OK
+        if (!isSuccessCookieSatisfied(currentValue)) return
+        logCookieState("auto_complete", currentValue)
+        syncCookiesToPersistentJar()
+        pendingResult = RESULT_OK
+        autoSavingVerificationResult = true
+        if (browserWaitToken != null) {
             browserWaitCompleted = true
-            lifecycleScope.launch {
-                completeBrowserWait()
-                superFinishAfterVerification()
-            }
+            completeBrowserWait()
         }
+        superFinishAfterVerification()
     }
 
     private fun shouldAutoCompleteVerification(): Boolean {
