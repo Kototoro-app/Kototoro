@@ -20,6 +20,7 @@ sealed interface DetailsOrigin : Parcelable {
     data class EntityGraph(
         val entityId: Long,
         val preferredLocalMangaId: Long? = null,
+        val initialProjectionLocalMangaId: Long? = null,
         val serviceId: String? = null,
         val remoteId: Long? = null,
         val url: String? = null,

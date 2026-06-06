@@ -230,20 +230,25 @@ class AppRouter private constructor(
     fun openEntityDetails(
         entityId: Long,
         preferredLocalMangaId: Long? = null,
+        initialProjectionLocalMangaId: Long? = null,
         service: ScrobblerService? = null,
         remoteId: Long? = null,
         url: String? = null,
+        sharedElementKey: String? = null,
     ) {
+        val origin = DetailsOrigin.EntityGraph(
+            entityId = entityId,
+            preferredLocalMangaId = preferredLocalMangaId,
+            initialProjectionLocalMangaId = initialProjectionLocalMangaId,
+            serviceId = service?.id?.toString(),
+            remoteId = remoteId,
+            url = url,
+        )
+        PendingDetailsNavigation.set(origin, sharedElementKey)
         startActivity(
             detailsIntent(
                 contextOrNull() ?: return,
-                DetailsOrigin.EntityGraph(
-                    entityId = entityId,
-                    preferredLocalMangaId = preferredLocalMangaId,
-                    serviceId = service?.id?.toString(),
-                    remoteId = remoteId,
-                    url = url,
-                ),
+                origin,
             ),
         )
     }

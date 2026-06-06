@@ -1003,7 +1003,7 @@ fun DetailsScreen(
                                     viewModel.selectMetadataSource(matchingOption)
                                 },
                                 onSelectReadingChapterTab = { tab ->
-                                    tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
+                                    tab.targetMangaId?.let(viewModel::selectReadingProjection)
                                 },
                                 selectedTabId = sheetTabSelection,
                                 availableTabIds = availableTabIds,
@@ -1176,7 +1176,7 @@ fun DetailsScreen(
                             viewModel.selectMetadataSource(matchingOption)
                         },
                         onSelectReadingChapterTab = { tab ->
-                            tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
+                            tab.targetMangaId?.let(viewModel::selectReadingProjection)
                         },
                         selectedTabId = sheetTabSelection,
                         availableTabIds = availableTabIds,
@@ -1407,7 +1407,7 @@ fun DetailsScreen(
                     currentContent = content,
                     entityChapterSourceInfo = entityChapterSourceInfo,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
-                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectActiveLocalSource) },
+                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectReadingProjection) },
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,
                     onSearch = viewModel::searchReadingBindings,
                     onLanguagePresetSelected = viewModel::setActiveLanguagePreset,

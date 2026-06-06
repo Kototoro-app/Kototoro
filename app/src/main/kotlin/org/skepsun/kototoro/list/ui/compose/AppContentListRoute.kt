@@ -98,6 +98,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onLoadMore: () -> Unit = {},
     loadMoreVisibleThreshold: Int = 4,
     onNavigateToDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
+    onNavigateToEntityDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, Long, Long?, String?) -> Unit)? = null,
     onAddMenuProvider: ((androidx.activity.ComponentActivity, VM, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
     showQuickFilterInline: Boolean = true,
@@ -471,10 +472,17 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                 )
                 val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
                 if (entityId != null) {
-                    appRouter.openEntityDetails(
-                        entityId = entityId,
-                        preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id) ?: content.id,
-                    )
+                    val preferredLocalMangaId =
+                        viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id) ?: content.id
+                    if (onNavigateToEntityDetails != null) {
+                        onNavigateToEntityDetails(item, content, entityId, preferredLocalMangaId, sharedElementKey)
+                    } else {
+                        appRouter.openEntityDetails(
+                            entityId = entityId,
+                            preferredLocalMangaId = preferredLocalMangaId,
+                            sharedElementKey = sharedElementKey,
+                        )
+                    }
                 } else if (onNavigateToDetails != null) {
                     onNavigateToDetails(item, content, sharedElementKey)
                 } else {

@@ -504,6 +504,7 @@ class DetailsViewModel @Inject constructor(
 	val readingSourceOptions = MutableStateFlow<List<DetailsSourceOption>>(emptyList())
 	val metadataChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
 	val readingChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
+	private val sessionReadingProjectionLocalMangaId = MutableStateFlow<Long?>(null)
 	val supplementalMetadataProperties = MutableStateFlow<List<Pair<String, String>>>(emptyList())
 	val supplementalSections = MutableStateFlow<List<EntityRelationSection>>(emptyList())
 	val supplementalActions = MutableStateFlow<List<DetailsSupplementAction>>(emptyList())
@@ -1224,6 +1225,7 @@ class DetailsViewModel @Inject constructor(
 	private suspend fun applyEntityContext(
 		entityId: Long,
 		preferredLocalMangaId: Long? = null,
+		initialProjectionLocalMangaId: Long? = null,
 		populateSyntheticHeader: Boolean,
 	) {
 		val entity = entityGraphRepository.getEntity(entityId) ?: return
@@ -1274,10 +1276,14 @@ class DetailsViewModel @Inject constructor(
 		android.util.Log.d(
 			"DetailsViewModel",
 			"applyEntityContext: entityId=$entityId, preferredLocalMangaId=$preferredLocalMangaId, " +
+				"initialProjectionLocalMangaId=$initialProjectionLocalMangaId, " +
 				"persistedPreferredLocalId=$persistedPreferredLocalId, boundLocalId=$boundLocalId, " +
 				"populateSyntheticHeader=$populateSyntheticHeader, localBindings=$localBindingCount",
 		)
 		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
+		sessionReadingProjectionLocalMangaId.value = initialProjectionLocalMangaId
+			?.takeIf { projectionId -> activeLocalSourceOptions.value.any { it.mangaId == projectionId } }
+			?: boundLocalId
 		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
 		updateSourceOptions()
 		if (boundLocalId != null && activeMangaIdFlow.value != boundLocalId) {
@@ -1396,6 +1402,7 @@ class DetailsViewModel @Inject constructor(
 				applyEntityContext(
 					entityId = activeExternalOrigin.entityId,
 					preferredLocalMangaId = activeExternalOrigin.preferredLocalMangaId,
+					initialProjectionLocalMangaId = activeExternalOrigin.initialProjectionLocalMangaId,
 					populateSyntheticHeader = true,
 				)
 			}
@@ -2075,13 +2082,16 @@ class DetailsViewModel @Inject constructor(
 
 		val currentDisplayedDetails = mangaDetails.value
 		readingSourceOptions.value = if (activeLocalSourceOptions.value.isNotEmpty()) {
+			val selectedReadingProjectionId = sessionReadingProjectionLocalMangaId.value
+				?.takeIf { projectionId -> activeLocalSourceOptions.value.any { it.mangaId == projectionId } }
+				?: activeLocalSourceOptions.value.firstOrNull { it.isActive }?.mangaId
 			activeLocalSourceOptions.value.map { option ->
 				DetailsSourceOption(
 					key = "reading:${option.mangaId}",
 					source = option.source,
 					targetMangaId = option.mangaId,
 					title = option.title,
-					isSelected = option.isActive,
+					isSelected = option.mangaId == selectedReadingProjectionId,
 				)
 			}
 		} else {
@@ -3411,6 +3421,8 @@ class DetailsViewModel @Inject constructor(
 			source = manga?.source?.let(::ContentSource),
 			projectionTitle = manga?.title,
 			projectionCount = activeLocalSourceOptions.value.size.coerceAtLeast(if (manga != null) 1 else 0),
+			activeProjectionMangaId = activeMangaIdFlow.value,
+			currentReadingProjectionMangaId = sessionReadingProjectionLocalMangaId.value,
 		)
 	}
 
@@ -3418,6 +3430,7 @@ class DetailsViewModel @Inject constructor(
 		if (activeLocalSourceOptions.value.none { it.mangaId == mangaId } || activeMangaIdFlow.value == mangaId) {
 			return
 		}
+		sessionReadingProjectionLocalMangaId.value = mangaId
 		val shouldFollowSelectedLocalSource = selectedMetadataSource.value !is MetadataSourceSelection.Tracking
 		currentLoadIntentOverride = ContentIntent.of(mangaId)
 		activeMangaIdFlow.value = mangaId
@@ -3471,6 +3484,20 @@ class DetailsViewModel @Inject constructor(
 			}
 			refreshEntityBoundLocalSources(nextActiveMangaId ?: return@launchJob)
 		}
+	}
+
+	fun selectReadingProjection(mangaId: Long) {
+		if (activeLocalSourceOptions.value.none { it.mangaId == mangaId }) {
+			return
+		}
+		if (sessionReadingProjectionLocalMangaId.value == mangaId) {
+			return
+		}
+		sessionReadingProjectionLocalMangaId.value = mangaId
+		launchJob(Dispatchers.IO) {
+			entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(activeMangaIdFlow.value)
+		}
+		updateSourceOptions()
 	}
 
 	fun selectMetadataSource(option: DetailsSourceOption) {

@@ -60,6 +60,7 @@ import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.parsers.model.Content
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,7 +71,8 @@ fun KototoroFavoritesHostRoute(
     initialCategoryId: Long = NO_ID,
     initialCategoryTitle: String? = null,
     onOpenEntityOrganize: (Set<Long>) -> Unit = {},
-    onNavigateToDetails: ((ContentListModel, Content, String?) -> Unit)? = null,
+    onNavigateToDetails: ((Content, String?) -> Unit)? = null,
+    onNavigateToEntityDetails: ((DetailsOrigin, String?) -> Unit)? = null,
     registerFilterCallback: Boolean = true,
     refreshGeneration: Int = 0,
     consumeOrganizeMessages: Boolean = true,
@@ -297,6 +299,7 @@ fun KototoroFavoritesHostRoute(
                         appRouter = appRouter,
                         contentPadding = innerPadding,
                         onNavigateToDetails = onNavigateToDetails,
+                        onNavigateToEntityDetails = onNavigateToEntityDetails,
                         onEntityOrganizeSelection = onOpenEntityOrganize,
                         sharedTransitionEnabled = enabled,
                         isActivePage = enabled,

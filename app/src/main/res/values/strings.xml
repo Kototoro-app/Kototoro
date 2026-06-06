@@ -1831,6 +1831,7 @@
     <string name="details_current_projection">Current Projection</string>
     <string name="details_remove_projection">Remove projection</string>
     <string name="details_switchable_projection">Switchable projection</string>
+    <string name="details_temporary_projection_badge">Temporary</string>
     <string name="details_reading_status">Reading status</string>
     <string name="details_rating_and_status">Rating and status</string>
     <string name="details_rating">Rating</string>
@@ -1863,6 +1864,7 @@
     <string name="details_metadata_source_login_hint">Search and local binding work without login. Sign in to auto-link online progress.</string>
     <string name="details_entity_metadata_sheet_hint">The selected binding defines which metadata projection this entity prefers for title, summary, tags, and linked tracking sync.</string>
     <string name="details_current_projection_sheet_hint">Select which local %1$s projection this entity should use right now. Search results attached later will appear here as additional projections.</string>
+    <string name="details_temporary_projection_sheet_hint">This only affects chapters and continue reading for this view.</string>
     <string name="details_additional_metadata">Additional metadata</string>
     <string name="details_related_works">Related works</string>
     <string name="details_recommendations">Recommendations</string>

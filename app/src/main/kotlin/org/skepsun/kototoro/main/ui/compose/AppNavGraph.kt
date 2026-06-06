@@ -655,10 +655,21 @@ fun AppNavGraph(
                             selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
                         } else {
                             val content = item.toContentWithOverride()
-                            navigateToDetailsWithContent(
-                                content,
-                                contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty()),
-                            )
+                            val sharedKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
+                            val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
+                            val preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id)
+                            if (entityId != null) {
+                                navigateToDetailsWithOrigin(
+                                    org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                                        entityId = entityId,
+                                        preferredLocalMangaId = preferredLocalMangaId ?: content.id,
+                                        initialProjectionLocalMangaId = content.id,
+                                    ),
+                                    sharedKey,
+                                )
+                            } else {
+                                navigateToDetailsWithContent(content, sharedKey)
+                            }
                         }
                     },
                     onItemLongClick = { item ->
@@ -870,8 +881,11 @@ fun AppNavGraph(
                     onOpenEntityOrganize = { selectedIds ->
                         appRouter.openEntityOrganizeSettings(selectedIds)
                     },
-                    onNavigateToDetails = { _, content, sharedKey ->
+                    onNavigateToDetails = { content, sharedKey ->
                         navigateToDetailsWithContent(content, sharedKey)
+                    },
+                    onNavigateToEntityDetails = { origin, sharedKey ->
+                        navigateToDetailsWithOrigin(origin, sharedKey)
                     },
                     registerFilterCallback = false,
                     onTopBarOverrideChanged = {

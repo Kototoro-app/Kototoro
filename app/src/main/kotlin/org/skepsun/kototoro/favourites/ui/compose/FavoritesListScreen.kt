@@ -12,6 +12,7 @@ import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.parsers.model.Content
 
 private const val FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD = 48
@@ -21,7 +22,8 @@ fun KototoroFavoritesListScreen(
     categoryId: Long,
     appRouter: AppRouter,
     contentPadding: PaddingValues,
-    onNavigateToDetails: ((ContentListModel, Content, String?) -> Unit)? = null,
+    onNavigateToDetails: ((Content, String?) -> Unit)? = null,
+    onNavigateToEntityDetails: ((DetailsOrigin, String?) -> Unit)? = null,
     onEntityOrganizeSelection: ((Set<Long>) -> Unit)? = null,
     sharedTransitionEnabled: Boolean = true,
     isActivePage: Boolean = true,
@@ -56,17 +58,26 @@ fun KototoroFavoritesListScreen(
         pullRefreshEnabled = false,
         onLoadMore = { viewModel.requestMoreItems() },
         loadMoreVisibleThreshold = FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD,
-        onNavigateToDetails = { item, content, sharedKey ->
-            val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
-            if (entityId != null) {
-                appRouter.openEntityDetails(
-                    entityId = entityId,
-                    preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id) ?: content.id,
-                )
-            } else if (onNavigateToDetails != null) {
-                onNavigateToDetails(item, content, sharedKey)
+        onNavigateToDetails = { _, content, sharedKey ->
+            if (onNavigateToDetails != null) {
+                onNavigateToDetails(content, sharedKey)
             } else {
                 appRouter.openDetails(content)
+            }
+        },
+        onNavigateToEntityDetails = { _, content, entityId, preferredLocalMangaId, sharedKey ->
+            val origin = DetailsOrigin.EntityGraph(
+                entityId = entityId,
+                preferredLocalMangaId = preferredLocalMangaId ?: content.id,
+            )
+            if (onNavigateToEntityDetails != null) {
+                onNavigateToEntityDetails(origin, sharedKey)
+            } else {
+                appRouter.openEntityDetails(
+                    entityId = entityId,
+                    preferredLocalMangaId = preferredLocalMangaId ?: content.id,
+                    sharedElementKey = sharedKey,
+                )
             }
         },
         onRemoveSelection = { ids -> viewModel.removeFromFavourites(ids) },

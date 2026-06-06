@@ -1219,6 +1219,7 @@ private data class SourceOptionDisplayModel(
     val trackingService: ScrobblerService?,
     val linkedTrackingItem: LinkedTrackingItemUiModel?,
     val isSelected: Boolean,
+    val badgeText: String? = null,
 )
 
 @Composable
@@ -1348,6 +1349,23 @@ private fun SourceOptionCard(
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp),
+                        )
+                    }
+                }
+                displayModel.badgeText?.let { badgeText ->
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.92f),
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    ) {
+                        Text(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            maxLines = 1,
                         )
                     }
                 }
@@ -1753,6 +1771,13 @@ fun ReadingSourceSheet(
                                         ),
                                     )
                                 }
+                            if (
+                                entityChapterSourceInfo?.currentReadingProjectionMangaId != null &&
+                                entityChapterSourceInfo.currentReadingProjectionMangaId != entityChapterSourceInfo.activeProjectionMangaId
+                            ) {
+                                append(' ')
+                                append(stringResource(R.string.details_temporary_projection_sheet_hint))
+                            }
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1763,6 +1788,10 @@ fun ReadingSourceSheet(
 	                        items = currentOptions,
 	                        key = { index, option -> "${option.key}:$index" },
 	                    ) { _, option ->
+                            val isTemporaryProjection =
+                                option.targetMangaId != null &&
+                                    entityChapterSourceInfo?.currentReadingProjectionMangaId == option.targetMangaId &&
+                                    entityChapterSourceInfo.activeProjectionMangaId != option.targetMangaId
                             SourceOptionCard(
                                 displayModel = option.resolveDisplayModel(
                                     role = DetailsSourceRole.READING_PROJECTION,
@@ -1775,6 +1804,12 @@ fun ReadingSourceSheet(
                                         switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
                                     ),
                                     isSelected = option == selectedOption || option.isSelected,
+                                ).copy(
+                                    badgeText = if (isTemporaryProjection) {
+                                        stringResource(R.string.details_temporary_projection_badge)
+                                    } else {
+                                        null
+                                    },
                                 ),
                                 scrobblingStatuses = emptyArray(),
                                 onClick = {
