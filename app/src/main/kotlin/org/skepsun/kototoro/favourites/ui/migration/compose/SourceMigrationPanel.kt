@@ -2890,6 +2890,7 @@ private fun TrackingPreviewCard(
                                     TrackingBindingMatchKind.ANIME_DATASET -> R.string.entity_organize_tracking_match_dataset
                                     TrackingBindingMatchKind.AGGREGATE_API -> R.string.entity_organize_tracking_match_api
                                     TrackingBindingMatchKind.ONLINE_SEARCH -> R.string.entity_organize_tracking_match_online
+                                    TrackingBindingMatchKind.EXISTING_BINDING -> R.string.entity_organize_tracking_match_existing
                                 },
                             ),
                         )

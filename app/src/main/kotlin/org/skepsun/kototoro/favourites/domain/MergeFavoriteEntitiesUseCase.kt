@@ -48,7 +48,12 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
 
     suspend fun buildCandidateGroups(contents: List<Content>): List<MergeCandidateGroup> {
         val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(contents.map { it.id })
+        val trackingGroups = buildTrackingBindingGroups(
+            contents = contents,
+            entityIdsByMangaId = entityIdsByMangaId,
+        )
         val exactGroups = contents
+            .filterNot { content -> trackingGroups.any { content.id in it.mangaIds } }
             .groupBy { MergeGroupKey(normalizeTitle(it.title), it.source.contentType) }
             .mapNotNull { (key, items) ->
                 val mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id }
@@ -80,18 +85,66 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                 }
             }
 
-        val consumedIds = exactGroups.flatMapTo(HashSet()) { it.mangaIds }
+        val consumedIds = (trackingGroups + exactGroups).flatMapTo(HashSet()) { it.mangaIds }
         val fuzzyGroups = buildFuzzyGroups(
             contents = contents.filterNot { it.id in consumedIds },
             entityIdsByMangaId = entityIdsByMangaId,
         )
 
-        return (exactGroups + fuzzyGroups).sortedWith(
-            compareByDescending<MergeCandidateGroup> { it.isExactMatch }
+        return (trackingGroups + exactGroups + fuzzyGroups).sortedWith(
+            compareByDescending<MergeCandidateGroup> { it.id.contains(":tracking:") }
+                .thenByDescending { it.isExactMatch }
                 .thenByDescending { it.matchScore }
                 .thenByDescending { it.mangaIds.size }
                 .thenBy { it.title.lowercase() },
         )
+    }
+
+    private suspend fun buildTrackingBindingGroups(
+        contents: List<Content>,
+        entityIdsByMangaId: Map<Long, Long>,
+    ): List<MergeCandidateGroup> {
+        if (contents.size < 2) return emptyList()
+        val contentById = contents.associateBy { it.id }
+        val linksByTrackingKey = LinkedHashMap<Pair<Int, Long>, MutableList<Content>>()
+        contents.forEach { content ->
+            database.getTrackingSiteDao()
+                .findLinksByManga(content.id)
+                .forEach { link ->
+                    linksByTrackingKey.getOrPut(link.service to link.remoteId) { mutableListOf() } += content
+                }
+        }
+        return linksByTrackingKey.entries.mapNotNull { (trackingKey, groupedContents) ->
+            val distinctContents = groupedContents.distinctBy { it.id }
+            if (distinctContents.size < 2) {
+                return@mapNotNull null
+            }
+            val service = ScrobblerService.entries.firstOrNull { it.id == trackingKey.first } ?: return@mapNotNull null
+            val mangaIds = distinctContents.mapTo(LinkedHashSet(distinctContents.size)) { it.id }
+            val mergeState = resolveMergeState(mangaIds, entityIdsByMangaId)
+            val primary = distinctContents.first()
+            MergeCandidateGroup(
+                id = "${primary.source.contentType.name}:tracking:${service.id}:${trackingKey.second}",
+                title = primary.title,
+                normalizedTitle = normalizeTitle(primary.title),
+                contentType = primary.source.contentType,
+                mangaIds = mangaIds,
+                items = distinctContents.map { content ->
+                    MergeCandidateItem(
+                        mangaId = content.id,
+                        title = content.title,
+                        normalizedTitle = normalizeTitle(content.title),
+                        sourceName = content.source.name,
+                        coverUrl = content.coverUrl,
+                        score = 1f,
+                    )
+                },
+                matchScore = 1f,
+                isExactMatch = true,
+                resolvedEntityId = mergeState.entityId,
+                isAlreadyMerged = mergeState.isAlreadyMerged,
+            )
+        }
     }
 
     suspend fun merge(groups: List<MergeCandidateGroup>): MergeEntitiesResult {

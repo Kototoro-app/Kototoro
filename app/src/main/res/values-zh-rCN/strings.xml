@@ -2737,6 +2737,7 @@ SHA-256 指纹:
     <string name="entity_organize_tracking_match_dataset">Anime dataset</string>
     <string name="entity_organize_tracking_match_api">聚合 API</string>
     <string name="entity_organize_tracking_match_online">在线搜索</string>
+    <string name="entity_organize_tracking_match_existing">已有绑定</string>
     <string name="entity_organize_tracking_recommended">推荐</string>
     <string name="entity_organize_tracking_recommended_hint">当前组默认优先选择这一项。</string>
     <string name="entity_organize_tracking_low_confidence_warning">相似度偏低，请人工确认后再绑定。</string>

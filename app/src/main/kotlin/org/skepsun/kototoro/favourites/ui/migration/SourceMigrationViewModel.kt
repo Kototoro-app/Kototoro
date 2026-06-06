@@ -43,10 +43,13 @@ import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.favourites.work.SourceMigrationWorker
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.animeoffline.work.AnimeOfflineUpdateWorker
+import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
 import org.skepsun.kototoro.tracking.mangabaka.data.MangaBakaMetadataRepository
 import javax.inject.Inject
@@ -235,6 +238,7 @@ class SourceMigrationViewModel @Inject constructor(
     private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
     private val entityGraphRepository: EntityGraphRepository,
     private val animeOfflineRepository: AnimeOfflineRepository,
+    private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     private val trackingSiteDiscoveryService: TrackingSiteDiscoveryService,
     private val mangaBakaMetadataRepository: MangaBakaMetadataRepository,
 ) : AndroidViewModel(appContext as Application) {
@@ -1266,6 +1270,7 @@ class SourceMigrationViewModel @Inject constructor(
             val favourites = loadScopedFavouriteContents()
             val contents = favourites.map { it.toContent() }
             val groups = buildWorkbenchGroups(contents)
+            val existingTrackingPreviews = buildExistingTrackingPreviews(groups)
             val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
             val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
             val selectedItemsByGroup = buildMap {
@@ -1284,14 +1289,114 @@ class SourceMigrationViewModel @Inject constructor(
                 mergeCandidateGroups = groups,
                 selectedMergeItemsByGroup = selectedItemsByGroup,
                 selectedMergeGroupIds = if (selected.isEmpty()) groups.mapTo(LinkedHashSet(groups.size)) { it.id } else selected,
-                trackingPreviews = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
-                selectedTrackingPreviewIds = _uiState.value.selectedTrackingPreviewIds.intersect(
-                    _uiState.value.trackingPreviews
-                        .filter { it.groupId in availableGroupIds }
-                        .mapTo(HashSet()) { it.previewId },
+                trackingPreviews = mergeTrackingPreviews(
+                    existing = existingTrackingPreviews,
+                    current = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
                 ),
+                selectedTrackingPreviewIds = run {
+                    val mergedPreviews = mergeTrackingPreviews(
+                        existing = existingTrackingPreviews,
+                        current = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
+                    )
+                    val availablePreviewIds = mergedPreviews.mapTo(HashSet()) { it.previewId }
+                    val existingBoundPreviewIds = mergedPreviews
+                        .asSequence()
+                        .filter { it.matchedBy == org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING }
+                        .map { it.previewId }
+                        .toSet()
+                    (_uiState.value.selectedTrackingPreviewIds.intersect(availablePreviewIds) + existingBoundPreviewIds)
+                },
             )
         }
+    }
+
+    private suspend fun buildExistingTrackingPreviews(
+        groups: List<MergeCandidateGroup>,
+    ): List<TrackingBindingPreview> {
+        if (groups.isEmpty()) {
+            return emptyList()
+        }
+        val serviceById = ScrobblerService.entries.associateBy { it.id.toString() }
+        return buildList {
+            groups.forEach { group ->
+                val entityId = group.resolvedEntityId ?: return@forEach
+                val bindings = entityGraphRepository.getBindings(entityId)
+                bindings
+                    .asSequence()
+                    .mapNotNull { binding -> binding.toTrackingServiceBinding(serviceById) }
+                    .distinctBy { it.first.id to it.second.externalId }
+                    .forEach { (service, binding) ->
+                        val remoteId = binding.externalId.toLongOrNull() ?: return@forEach
+                        val cached = trackingSiteCacheRepository.readDetails(service, remoteId)
+                        val details = cached ?: TrackingSiteItemDetails(
+                            service = service,
+                            remoteId = remoteId,
+                            title = group.title,
+                            altTitle = null,
+                            coverUrl = null,
+                            contentType = group.contentType,
+                            description = null,
+                            score = null,
+                            rank = null,
+                            tags = emptyList(),
+                            authors = emptyList(),
+                            staff = emptyList(),
+                            year = null,
+                            totalEpisodes = null,
+                            url = null,
+                        )
+                        add(
+                            TrackingBindingPreview(
+                                previewId = "${group.id}:${service.id}:$remoteId",
+                                groupId = group.id,
+                                title = group.title,
+                                contentTypeName = group.contentType.name,
+                                service = service,
+                                remoteId = remoteId,
+                                matchedTitle = cached?.title ?: group.title,
+                                matchedAltTitle = cached?.altTitle,
+                                url = cached?.url,
+                                confidence = 1f,
+                                matchedBy = org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING,
+                                year = cached?.year,
+                                details = details,
+                                aliases = emptyList(),
+                            ),
+                        )
+                    }
+            }
+        }
+    }
+
+    private fun mergeTrackingPreviews(
+        existing: List<TrackingBindingPreview>,
+        current: List<TrackingBindingPreview>,
+    ): List<TrackingBindingPreview> {
+        if (existing.isEmpty()) return current
+        if (current.isEmpty()) return existing
+        val byPreviewId = LinkedHashMap<String, TrackingBindingPreview>(existing.size + current.size)
+        existing.forEach { preview ->
+            byPreviewId[preview.previewId] = preview
+        }
+        current.forEach { preview ->
+            byPreviewId[preview.previewId] = preview
+        }
+        return byPreviewId.values.toList()
+    }
+
+    private fun EntityBinding.toTrackingServiceBinding(
+        serviceById: Map<String, ScrobblerService>,
+    ): Pair<ScrobblerService, EntityBinding>? {
+        if (source == "0" || source == "local_manga") {
+            return null
+        }
+        val service = serviceById[source]
+            ?: ScrobblerService.entries.firstOrNull { it.name.equals(source, ignoreCase = true) }
+            ?: return null
+        if (externalId.toLongOrNull() == null) {
+            return null
+        }
+        return service to this
     }
 
     private suspend fun buildWorkbenchGroups(

@@ -64,6 +64,7 @@ enum class TrackingBindingMatchKind {
     ANIME_DATASET,
     AGGREGATE_API,
     ONLINE_SEARCH,
+    EXISTING_BINDING,
 }
 
 data class TrackingBindingPreviewResult(

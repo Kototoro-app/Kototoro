@@ -1173,6 +1173,7 @@
     <string name="entity_organize_tracking_match_dataset">Anime dataset</string>
     <string name="entity_organize_tracking_match_api">Aggregate API</string>
     <string name="entity_organize_tracking_match_online">Online search</string>
+    <string name="entity_organize_tracking_match_existing">Existing binding</string>
     <string name="entity_organize_tracking_recommended">Recommended</string>
     <string name="entity_organize_tracking_recommended_hint">This candidate is currently selected as the default for its group.</string>
     <string name="entity_organize_tracking_low_confidence_warning">Confidence is low. Review this match manually before binding.</string>
