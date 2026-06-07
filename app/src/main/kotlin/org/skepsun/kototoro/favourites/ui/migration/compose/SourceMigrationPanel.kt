@@ -800,40 +800,6 @@ fun EntityOrganizePageIntroCard(
         }
     }
 }
-
-@Composable
-private fun CompactInfoChip(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
-}
-
 @Composable
 private fun StageConfigCard(
     selectedStage: EntityOrganizeStage,
@@ -1110,34 +1076,6 @@ private fun StageConfigCard(
         }
     }
 }
-
-@Composable
-private fun StageExecuteButton(
-    text: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier.heightIn(min = 44.dp),
-    ) {
-        ButtonLabel(text)
-    }
-}
-
-@Composable
-private fun ButtonLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-    )
-}
-
 @Composable
 private fun EntityWorkbenchSection(
     selectedStage: EntityOrganizeStage,
