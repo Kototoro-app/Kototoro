@@ -846,3 +846,92 @@ private suspend fun MangaDatabase.restoreEntityBinding(
 ### 数据库版本
 
 Phase 4 不引入新的 migration（无需新增列/索引），所有修改均为应用层逻辑修正。当前 DB 版本保持在 52。
+
+---
+
+## 第五轮：EntityWorkbench UI 架构重构（统一表格方案）
+
+### 设计评审结论
+
+实体整理功能的核心设计——**统一工作台表格 + 三阶段操作维度**——在概念上是合理的：
+
+- 每行是一个实体组，MERGE/TRACKING/READING 是同一行的三组列操作
+- 跨阶段筛选器（`ACTION_REQUIRED`）和排序（`ACTION_FIRST`）需要统一表格上下文
+- `EntityWorkbenchRow` 和 `WorkbenchRowStageSnapshot` 数据模型正确表达了这种同表多维度语义
+
+问题不在设计概念，而在**实现分层**：
+
+| 反模式 | 具体表现 |
+|--------|---------|
+| ViewModel 混合表格元数据和 UI-local 操作 | `moveTrackingServiceUp/Down`、`toggleXxxContentType/Tag`、`setConcurrency` 等纯 UI 状态操作不应该在 VM 层 |
+| Compose 文件 4427 行单文件 | 60+ 个 `@Composable` 函数堆在一个文件，表格行渲染和阶段面板和对话框全混在一起 |
+| 工作台状态关闭即丢失 | 表格选中状态只在 `rememberSaveable` 中，Activity 重建后丢失 |
+
+### 重构目标
+
+1. **保留统一表格语义** — 不拆 stage，不拆 ViewModel（表格状态需要集中管理）
+2. **拆分 Compose 文件** — 按组件类型分文件，不改变任何行为
+3. **分离 UI-local 状态** — 纯 UI 操作（上下移动列表项、切换筛选器）从 VM 移出
+
+### Compose 文件拆分方案
+
+```
+favourites/ui/migration/compose/
+├── SourceMigrationPanel.kt          ← 面板主入口 + HeaderSection + 顶层 LazyColumn 组装
+├── EntityWorkbenchTable.kt          ← EntityWorkbenchSection + 表头 + 行渲染 + 工具栏
+├── EntityWorkbenchCells.kt          ← MergeCandidateSection / TrackingPreviewCard /
+│                                       ReadingPreviewCard / ProjectionSummaryCard
+├── EntityWorkbenchDialogs.kt        ← TrackingServiceSelectorDialog /
+│                                       SourceSelectorDialog / SourceSearchDialog
+├── StageConfigCard.kt               ← StageConfigCard + TrackingBindingSection +
+│                                       TargetSourcesSection + SourceFilterSection
+├── DatasetBridgeCard.kt             ← DatasetBridgeCard + DatasetMetaChip
+├── SharedComponents.kt              ← CompactInfoChip, ButtonLabel, SearchPillTextField,
+│                                       FilterDropdown, ConcurrencyDropdown, etc.
+└── EntityWorkbenchModels.kt         ← data classes (EntityWorkbenchRow, WorkbenchStageSnapshot,
+                                        WorkbenchColumnWidths, etc.) + 工具函数
+```
+
+拆分后每个文件预计 200-500 行，可读性大幅提升。
+
+### ViewModel 瘦身方案
+
+将以下纯 UI-local 操作从 `SourceMigrationViewModel` 移到 Compose 层 `remember` + `mutableStateListOf`：
+
+```kotlin
+// 从 ViewModel 移除，在 Compose 用 remember { mutableStateListOf<ScrobblerService>() } 替代
+fun moveTrackingServiceUp(service)
+fun moveTrackingServiceDown(service)
+
+// 从 ViewModel 移除，在 Compose 用 remember { mutableStateListOf<ContentSource>() } 替代
+fun moveTargetSourceUp(sourceKey)
+fun moveTargetSourceDown(sourceKey)
+fun toggleTargetSource(source)
+fun removeTargetSource(sourceKey)
+
+// 从 ViewModel 移除，在 Compose 用 remember { mutableStateOf() } 替代
+fun toggleFromContentType(tab)
+fun toggleFromSourceTag(tag)
+fun toggleToContentType(tab)
+fun toggleToSourceTag(tag)
+fun setConcurrency(value)
+```
+
+这些操作都是瞬时的 UI 排列变化，不涉及数据层，不需要在 ViewModel 中管理。
+
+### 实施步骤
+
+| 步骤 | 内容 | 文件变更 |
+|------|------|---------|
+| 6a | 提取 `SharedComponents.kt`（CompactInfoChip、ButtonLabel、SearchPillTextField、FilterDropdown、ConcurrencyDropdown） | 新建 1 文件，SourceMigrationPanel.kt 删除对应代码 |
+| 6b | 提取 `EntityWorkbenchModels.kt`（data class + 工具函数） | 新建 1 文件 |
+| 6c | 提取 `EntityWorkbenchCells.kt`（MergeCandidateSection、TrackingPreviewCard 等） | 新建 1 文件 |
+| 6d | 提取 `EntityWorkbenchDialogs.kt`（所有 Dialog composable） | 新建 1 文件 |
+| 6e | 提取 `EntityWorkbenchTable.kt`（EntityWorkbenchSection + 表头 + 行 + 工具栏） | 新建 1 文件 |
+| 6f | 提取 `StageConfigCard.kt` | 新建 1 文件 |
+| 6g | 提取 `DatasetBridgeCard.kt` | 新建 1 文件 |
+| 6h | 将 UI-local 状态从 VM 移到 Compose 层 | SourceMigrationViewModel.kt 删方法，Compose 加 remember |
+
+### 数据库版本
+
+不引入 migration。当前 DB 版本保持在 52。

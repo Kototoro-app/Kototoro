@@ -126,7 +126,7 @@ private val ENTITY_ORGANIZE_NON_JAR_ORIGINS = setOf(
 
 private fun Float.toPercentInt(): Int = (coerceIn(0f, 1f) * 100f).toInt()
 
-private fun ContentSource.getEntityOrganizeDisplayTitle(context: Context): String {
+internal fun ContentSource.getEntityOrganizeDisplayTitle(context: Context): String {
     val title = getTitle(context)
     val originLabel = getOriginLabel(context)?.takeIf { it.isNotBlank() } ?: return title
     val shouldAppendOrigin = originLabel in ENTITY_ORGANIZE_NON_JAR_ORIGINS ||
@@ -3226,75 +3226,6 @@ private fun TrackingPreviewGroupCard(
     }
 }
 
-@Composable
-private fun TrackingServiceSelectorDialog(
-    services: List<ScrobblerService>,
-    selectedServices: Set<ScrobblerService>,
-    onToggle: (ScrobblerService) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.62f),
-            shape = RoundedCornerShape(28.dp),
-            tonalElevation = 10.dp,
-            shadowElevation = 16.dp,
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.entity_organize_tracking_select),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = null)
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(services, key = { it.id }) { service ->
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onToggle(service) }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(
-                                    checked = service in selectedServices,
-                                    onCheckedChange = { onToggle(service) },
-                                )
-                                Text(
-                                    text = stringResource(service.titleResId),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SourceFilterSection(
@@ -3651,7 +3582,7 @@ private fun SectionFilterBar(
 }
 
 @Composable
-private fun SearchPillTextField(
+internal fun SearchPillTextField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
@@ -4061,165 +3992,6 @@ private fun CompactDropdownButton(
 }
 
 @Composable
-private fun SourceSelectorDialog(
-    title: String,
-    sources: List<ContentSource>,
-    onSelect: (ContentSource) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    SourceSearchDialog(
-        title = title,
-        sources = sources,
-        onDismiss = onDismiss,
-    ) { entry ->
-        androidx.compose.material3.TextButton(
-            onClick = { onSelect(entry.source) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(text = entry.displayTitle, modifier = Modifier.fillMaxWidth())
-        }
-    }
-}
-
-@Composable
-private fun MultiSourceSelectorDialog(
-    title: String,
-    sources: List<ContentSource>,
-    selectedSourceKeys: Set<String>,
-    onToggle: (ContentSource) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    SourceSearchDialog(
-        title = title,
-        sources = sources,
-        onDismiss = onDismiss,
-    ) { entry ->
-        androidx.compose.material3.TextButton(
-            onClick = { onToggle(entry.source) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(text = entry.displayTitle, modifier = Modifier.weight(1f))
-            if (entry.source.getStableIdentityKey() in selectedSourceKeys) {
-                Icon(Icons.Default.Check, contentDescription = null)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SourceSearchDialog(
-    title: String,
-    sources: List<ContentSource>,
-    onDismiss: () -> Unit,
-    rowContent: @Composable (SourceSearchEntry) -> Unit,
-) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var debouncedQuery by rememberSaveable { mutableStateOf("") }
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    LaunchedEffect(query) {
-        delay(180)
-        debouncedQuery = query
-    }
-
-    val sourceEntries = remember(sources, context) {
-        sources.mapIndexed { index, source ->
-            val displayTitle = source.getEntityOrganizeDisplayTitle(context)
-            SourceSearchEntry(
-                stableKey = buildSourceEntryKey(source, displayTitle, index),
-                source = source,
-                displayTitle = displayTitle,
-                normalizedName = source.name.lowercase(Locale.ROOT),
-                normalizedTitle = displayTitle.lowercase(Locale.ROOT),
-            )
-        }
-    }
-    val normalizedQuery = remember(debouncedQuery) {
-        debouncedQuery.trim().lowercase(Locale.ROOT)
-    }
-    val filtered by produceState(
-        initialValue = sourceEntries,
-        normalizedQuery,
-        sourceEntries,
-    ) {
-        value = withContext(Dispatchers.Default) {
-            if (normalizedQuery.isBlank()) {
-                sourceEntries
-            } else {
-                sourceEntries.filter { entry ->
-                    entry.normalizedName.contains(normalizedQuery) || entry.normalizedTitle.contains(normalizedQuery)
-                }
-            }
-        }
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.7f),
-            shape = RoundedCornerShape(28.dp),
-            tonalElevation = 10.dp,
-            shadowElevation = 16.dp,
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = null)
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                SearchPillTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = stringResource(R.string.search_sources),
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    items(
-                        items = filtered,
-                        key = { it.stableKey },
-                        contentType = { "source_option" },
-                    ) { entry ->
-                        rowContent(entry)
-                    }
-                    if (filtered.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.nothing_found),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 private fun buildWorkbenchEntityMeta(row: EntityWorkbenchRow): String {
     val typeName = row.group.contentType.name
     val projectionCount = row.group.mangaIds.size
@@ -4248,7 +4020,7 @@ private fun buildWorkbenchEntityDetail(row: EntityWorkbenchRow): String {
     }
 }
 
-private data class SourceSearchEntry(
+internal data class SourceSearchEntry(
     val stableKey: String,
     val source: ContentSource,
     val displayTitle: String,
@@ -4256,7 +4028,7 @@ private data class SourceSearchEntry(
     val normalizedTitle: String,
 )
 
-private fun buildSourceEntryKey(
+internal fun buildSourceEntryKey(
     source: ContentSource,
     displayTitle: String,
     index: Int,
