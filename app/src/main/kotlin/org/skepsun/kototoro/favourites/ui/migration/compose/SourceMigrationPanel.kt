@@ -3662,21 +3662,6 @@ private fun PagedBrowseToolbar(
         }
     }
 }
-
-@Composable
-private fun StageFeedbackText(
-    uiState: MigrationUiState,
-    stage: EntityOrganizeStage,
-) {
-    uiState.stagePlan(stage).feedback?.message?.let { summary ->
-        Text(
-            text = summary,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
 @Composable
 private fun <T> rememberPagedBrowsePage(
     items: List<T>,

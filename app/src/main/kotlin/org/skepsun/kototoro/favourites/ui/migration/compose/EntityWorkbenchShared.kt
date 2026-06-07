@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeStage
+import org.skepsun.kototoro.favourites.ui.migration.MigrationUiState
 
 @Composable
 internal fun ButtonLabel(text: String) {
@@ -104,5 +106,19 @@ internal fun DatasetMetaChip(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+@Composable
+internal fun StageFeedbackText(
+    uiState: MigrationUiState,
+    stage: EntityOrganizeStage,
+) {
+    uiState.stagePlan(stage).feedback?.message?.let { summary ->
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
