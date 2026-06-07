@@ -205,6 +205,7 @@ data class MigrationUiState(
 
 internal fun buildEntityOrganizeCloseResult(
     uiState: MigrationUiState,
+    context: Context,
 ): EntityOrganizeCloseResult {
     val executeFeedbacks = EntityOrganizeStage.entries.mapNotNull { stage ->
         uiState.feedbackOf(stage)?.takeIf { it.kind == EntityOrganizeFeedbackKind.EXECUTE }
@@ -219,7 +220,11 @@ internal fun buildEntityOrganizeCloseResult(
     val summaryMessage = if (executeFeedbacks.size <= 1) {
         primaryMessage
     } else {
-        "已执行 ${executeFeedbacks.size} 个整理阶段，收藏视图将刷新。最近结果：$primaryMessage"
+        context.getString(
+            R.string.entity_organize_close_summary,
+            executeFeedbacks.size,
+            primaryMessage,
+        )
     }
     return EntityOrganizeCloseResult(
         shouldRefreshFavorites = true,
@@ -674,7 +679,12 @@ class SourceMigrationViewModel @Inject constructor(
                 stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                     stage = EntityOrganizeStage.TRACKING,
                     kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = "已绑定 ${result.succeeded} 组，失败 ${result.failed} 组，跳过 ${result.skipped} 组",
+                    message = appContext.getString(
+                        R.string.entity_organize_tracking_execute_feedback,
+                        result.succeeded,
+                        result.failed,
+                        result.skipped,
+                    ),
                 ),
             )
         }
@@ -760,7 +770,11 @@ class SourceMigrationViewModel @Inject constructor(
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.TRACKING,
                         kind = EntityOrganizeFeedbackKind.PREVIEW,
-                        message = "已命中 ${result.previews.size} 组，未命中 ${result.skipped} 组",
+                        message = appContext.getString(
+                            R.string.entity_organize_tracking_preview_feedback,
+                            result.previews.size,
+                            result.skipped,
+                        ),
                     ),
                 )
             } catch (e: CancellationException) {
@@ -889,7 +903,12 @@ class SourceMigrationViewModel @Inject constructor(
                 stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                     stage = EntityOrganizeStage.MERGE,
                     kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = "已合并 ${result.succeeded} 组，失败 ${result.failed} 组，跳过 ${result.skipped} 组",
+                    message = appContext.getString(
+                        R.string.entity_organize_merge_execute_feedback,
+                        result.succeeded,
+                        result.failed,
+                        result.skipped,
+                    ),
                 ),
             )
         }
@@ -953,7 +972,11 @@ class SourceMigrationViewModel @Inject constructor(
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.MERGE,
                         kind = EntityOrganizeFeedbackKind.PREVIEW,
-                        message = "已找到 $mergeableCount 组合并候选，当前勾选 $mergeableSelectedCount 组",
+                        message = appContext.getString(
+                            R.string.entity_organize_merge_preview_feedback,
+                            mergeableCount,
+                            mergeableSelectedCount,
+                        ),
                     ),
                 )
             } catch (e: CancellationException) {
@@ -1142,7 +1165,11 @@ class SourceMigrationViewModel @Inject constructor(
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.READING,
                         kind = EntityOrganizeFeedbackKind.PREVIEW,
-                        message = "已命中 ${result.previews.size} 个收藏，未命中 ${result.skipped} 个收藏",
+                        message = appContext.getString(
+                            R.string.entity_organize_reading_preview_feedback,
+                            result.previews.size,
+                            result.skipped,
+                        ),
                     ),
                 )
             } catch (e: CancellationException) {
@@ -1310,8 +1337,15 @@ class SourceMigrationViewModel @Inject constructor(
                 !outputData.getString(SourceMigrationWorker.KEY_MESSAGE).isNullOrBlank() ->
                     outputData.getString(SourceMigrationWorker.KEY_MESSAGE)
                 workInfo.state == WorkInfo.State.SUCCEEDED ->
-                    "迁移完成：成功 $completed 项，复用现有 $reused 项，新增投影 $attached 项，失败 $failed 项，未命中 $notFound 项"
-                else -> "迁移未完成，请检查当前范围、候选和目标源设置"
+                    appContext.getString(
+                        R.string.entity_organize_reading_execute_feedback,
+                        completed,
+                        reused,
+                        attached,
+                        failed,
+                        notFound,
+                    )
+                else -> appContext.getString(R.string.entity_organize_reading_execute_incomplete)
             }
             _uiState.value = currentState.copy(
                 migrationProgress = MigrationProgress(
@@ -1702,7 +1736,11 @@ class SourceMigrationViewModel @Inject constructor(
         return if (latestVersion.isNullOrBlank() || latestVersion == status.releaseTag) {
             baseSummary
         } else {
-            "$baseSummary · 最新 $latestVersion"
+            appContext.getString(
+                R.string.entity_organize_dataset_summary_latest,
+                baseSummary,
+                latestVersion,
+            )
         }
     }
 }

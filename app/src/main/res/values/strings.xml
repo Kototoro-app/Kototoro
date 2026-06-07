@@ -1184,6 +1184,7 @@
     <string name="entity_organize_tracking_low_confidence_warning">Confidence is low. Review this match manually before binding.</string>
     <string name="entity_organize_dataset_title">Anime dataset bridge</string>
     <string name="entity_organize_dataset_mangabaka_title">MangaBaka bridge</string>
+    <string name="entity_organize_dataset_summary_latest">%1$s · Latest %2$s</string>
     <string name="entity_organize_dataset_version">Version</string>
     <string name="entity_organize_dataset_size">Size</string>
     <string name="entity_organize_dataset_entries">Entries</string>
@@ -1216,6 +1217,17 @@
     <string name="entity_organize_execute_placeholder">Enable at least one organize stage. No executable stage is currently enabled.</string>
     <string name="entity_organize_execute_action">Run organize</string>
     <string name="entity_organize_execute_current_stage">Run current stage</string>
+    <string name="entity_organize_stage_short_merge">Entity</string>
+    <string name="entity_organize_stage_short_tracking">Tracking</string>
+    <string name="entity_organize_stage_short_reading">Projection</string>
+    <string name="entity_organize_close_summary">%1$d organize stages were executed. Favorites will refresh. Latest result: %2$s</string>
+    <string name="entity_organize_tracking_execute_feedback">Bound %1$d groups, failed %2$d groups, skipped %3$d groups</string>
+    <string name="entity_organize_tracking_preview_feedback">Matched %1$d groups, missed %2$d groups</string>
+    <string name="entity_organize_merge_execute_feedback">Merged %1$d groups, failed %2$d groups, skipped %3$d groups</string>
+    <string name="entity_organize_merge_preview_feedback">Found %1$d merge candidate groups, %2$d currently selected</string>
+    <string name="entity_organize_reading_preview_feedback">Matched %1$d favorites, missed %2$d favorites</string>
+    <string name="entity_organize_reading_execute_feedback">Migration complete: succeeded %1$d items, reused %2$d items, attached %3$d projections, failed %4$d items, missed %5$d items</string>
+    <string name="entity_organize_reading_execute_incomplete">Migration did not finish. Check the current scope, accepted candidates, and target source settings.</string>
     <string name="source_migration_from_label">From source</string>
     <string name="source_migration_to_label">To source</string>
     <string name="source_migration_start">Start migration</string>

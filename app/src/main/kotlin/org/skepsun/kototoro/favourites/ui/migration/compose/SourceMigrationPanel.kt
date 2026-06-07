@@ -4287,11 +4287,14 @@ private fun stageSpec(stage: EntityOrganizeStage): EntityOrganizeStageSpec = whe
     )
 }
 
-private fun stageShortLabel(stage: EntityOrganizeStage): String = when (stage) {
-    EntityOrganizeStage.MERGE -> "实体"
-    EntityOrganizeStage.TRACKING -> "追踪"
-    EntityOrganizeStage.READING -> "投影"
-}
+@Composable
+private fun stageShortLabel(stage: EntityOrganizeStage): String = stringResource(
+    when (stage) {
+        EntityOrganizeStage.MERGE -> R.string.entity_organize_stage_short_merge
+        EntityOrganizeStage.TRACKING -> R.string.entity_organize_stage_short_tracking
+        EntityOrganizeStage.READING -> R.string.entity_organize_stage_short_reading
+    },
+)
 
 
 

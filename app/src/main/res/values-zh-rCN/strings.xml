@@ -2749,6 +2749,7 @@ SHA-256 指纹:
     <string name="entity_organize_tracking_recommended_hint">当前组默认优先选择这一项。</string>
     <string name="entity_organize_tracking_low_confidence_warning">相似度偏低，请人工确认后再绑定。</string>
     <string name="entity_organize_dataset_title">Anime 数据桥接</string>
+    <string name="entity_organize_dataset_summary_latest">%1$s · 最新 %2$s</string>
     <string name="entity_organize_dataset_version">版本</string>
     <string name="entity_organize_dataset_size">大小</string>
     <string name="entity_organize_dataset_entries">条目</string>
@@ -2788,6 +2789,17 @@ SHA-256 指纹:
     <string name="entity_organize_execute_placeholder">请至少启用一个整理阶段。当前未启用可执行阶段。</string>
     <string name="entity_organize_execute_action">执行整理</string>
     <string name="entity_organize_execute_current_stage">执行当前阶段</string>
+    <string name="entity_organize_stage_short_merge">实体</string>
+    <string name="entity_organize_stage_short_tracking">追踪</string>
+    <string name="entity_organize_stage_short_reading">投影</string>
+    <string name="entity_organize_close_summary">已执行 %1$d 个整理阶段，收藏视图将刷新。最近结果：%2$s</string>
+    <string name="entity_organize_tracking_execute_feedback">已绑定 %1$d 组，失败 %2$d 组，跳过 %3$d 组</string>
+    <string name="entity_organize_tracking_preview_feedback">已命中 %1$d 组，未命中 %2$d 组</string>
+    <string name="entity_organize_merge_execute_feedback">已合并 %1$d 组，失败 %2$d 组，跳过 %3$d 组</string>
+    <string name="entity_organize_merge_preview_feedback">已找到 %1$d 组合并候选，当前勾选 %2$d 组</string>
+    <string name="entity_organize_reading_preview_feedback">已命中 %1$d 个收藏，未命中 %2$d 个收藏</string>
+    <string name="entity_organize_reading_execute_feedback">迁移完成：成功 %1$d 项，复用现有 %2$d 项，新增投影 %3$d 项，失败 %4$d 项，未命中 %5$d 项</string>
+    <string name="entity_organize_reading_execute_incomplete">迁移未完成，请检查当前范围、候选和目标源设置</string>
     <string name="source_migration_from_label">源来源</string>
     <string name="source_migration_to_label">目标源</string>
     <string name="source_migration_start">开始迁移</string>

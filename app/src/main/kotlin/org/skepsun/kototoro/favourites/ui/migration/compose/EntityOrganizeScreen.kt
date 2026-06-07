@@ -12,6 +12,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.stringResource
@@ -27,6 +28,7 @@ fun EntityOrganizeScreen(
     viewModel: SourceMigrationViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -36,7 +38,7 @@ fun EntityOrganizeScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            val result = buildEntityOrganizeCloseResult(uiState)
+                            val result = buildEntityOrganizeCloseResult(uiState, context)
                             onBack(result.shouldRefreshFavorites, result.message)
                         },
                     ) {
@@ -55,7 +57,7 @@ fun EntityOrganizeScreen(
         SourceMigrationPanel(
             initialSelectedContentIds = initialSelectedContentIds,
             onDismiss = {
-                val result = buildEntityOrganizeCloseResult(uiState)
+                val result = buildEntityOrganizeCloseResult(uiState, context)
                 onBack(result.shouldRefreshFavorites, result.message)
             },
             contentPadding = innerPadding,
