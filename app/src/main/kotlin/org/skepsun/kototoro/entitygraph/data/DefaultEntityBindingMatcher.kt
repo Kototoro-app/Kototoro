@@ -111,10 +111,4 @@ class DefaultEntityBindingMatcher @Inject constructor(
 		}
 		return (0.7f + ((similarity - 0.72f) / 0.28f) * 0.18f).coerceIn(0.7f, 0.88f)
 	}
-
-	private fun normalizeName(value: String): String {
-		return value.lowercase()
-			.replace(Regex("\\s+"), "")
-			.replace(Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]"), "")
-	}
 }

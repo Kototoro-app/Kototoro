@@ -770,16 +770,35 @@ class EntityGraphRepository @Inject constructor(
 		now: Long,
 	): Entity {
 		val dao = db.getEntityGraphDao()
-		val id = dao.insertEntity(
-			EntityRecord(
-				type = type.name,
-				primaryName = primaryName.trim(),
-				aliases = encodeStringList(mergeAliases(primaryName, aliases).drop(1)),
-				createdAt = now,
-				lastAccessed = now,
-				accessCount = 1,
-			),
+		val trimmedName = primaryName.trim()
+		val nameHash = computeNameHash(trimmedName)
+		val record = EntityRecord(
+			type = type.name,
+			primaryName = trimmedName,
+			nameHash = nameHash,
+			aliases = encodeStringList(mergeAliases(primaryName, aliases).drop(1)),
+			createdAt = now,
+			lastAccessed = now,
+			accessCount = 1,
 		)
+		// INSERT OR IGNORE: if a concurrent request already created this entity (same type + name_hash),
+		// we fall back to merging into the existing one instead of creating a duplicate.
+		val id = dao.insertEntityIgnore(record)
+		if (id == -1L) {
+			// Conflict — another call won the race. Resolve the existing entity.
+			val existing = dao.findEntityByTypeAndNameHash(type.name, nameHash)
+			if (existing != null) {
+				return mergeIntoResolvedEntity(
+					entity = existing.toModel(),
+					primaryName = primaryName,
+					aliases = aliases,
+					source = source,
+					externalId = externalId,
+					confidence = confidence,
+					now = now,
+				)
+			}
+		}
 		if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
 			dao.upsertBinding(
 				EntityBindingRecord(
@@ -904,8 +923,10 @@ class EntityGraphRepository @Inject constructor(
 			primaryName = record.primaryName,
 			aliases = decodeStringList(record.aliases) + listOf(primaryName) + aliases,
 		)
+		val newPrimaryName = mergedNames.first()
 		return record.copy(
-			primaryName = mergedNames.first(),
+			primaryName = newPrimaryName,
+			nameHash = computeNameHash(newPrimaryName),
 			aliases = encodeStringList(mergedNames.drop(1)),
 			lastAccessed = now,
 		)
@@ -915,6 +936,7 @@ class EntityGraphRepository @Inject constructor(
 		id = id,
 		type = type.name,
 		primaryName = primaryName,
+		nameHash = computeNameHash(primaryName),
 		aliases = encodeStringList(aliases),
 		createdAt = createdAt,
 		lastAccessed = lastAccessed,

@@ -13,6 +13,7 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
 	tableName = TABLE_ENTITY_GRAPH_ENTITY,
 	indices = [
 		Index(name = "idx_entity_name", value = ["primary_name"]),
+		Index(name = "idx_entity_name_hash", value = ["type", "name_hash"], unique = true),
 	],
 )
 data class EntityRecord(
@@ -20,6 +21,7 @@ data class EntityRecord(
 	@ColumnInfo(name = "id") val id: Long = 0L,
 	@ColumnInfo(name = "type") val type: String,
 	@ColumnInfo(name = "primary_name") val primaryName: String,
+	@ColumnInfo(name = "name_hash") val nameHash: Long = 0L,
 	@ColumnInfo(name = "aliases") val aliases: String?,
 	@ColumnInfo(name = "created_at") val createdAt: Long,
 	@ColumnInfo(name = "last_accessed") val lastAccessed: Long,

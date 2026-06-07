@@ -58,6 +58,19 @@ abstract class EntityGraphDao {
 	@Insert
 	abstract suspend fun insertEntity(entity: EntityRecord): Long
 
+	@Insert(onConflict = OnConflictStrategy.IGNORE)
+	abstract suspend fun insertEntityIgnore(entity: EntityRecord): Long
+
+	@Query(
+		"""
+		SELECT * FROM `entity`
+		WHERE type = :type AND name_hash = :nameHash
+		ORDER BY access_count DESC, last_accessed DESC, id DESC
+		LIMIT 1
+		"""
+	)
+	abstract suspend fun findEntityByTypeAndNameHash(type: String, nameHash: Long): EntityRecord?
+
 	@Upsert
 	abstract suspend fun upsertEntityRecord(entity: EntityRecord)
 

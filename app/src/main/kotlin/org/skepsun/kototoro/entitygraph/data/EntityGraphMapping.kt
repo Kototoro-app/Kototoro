@@ -6,6 +6,7 @@ import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.entitygraph.domain.Relation
 import org.skepsun.kototoro.entitygraph.domain.RelationType
+import org.skepsun.kototoro.parsers.util.longHashCode
 
 internal fun EntityRecord.toModel(): Entity = Entity(
 	id = id,
@@ -70,4 +71,24 @@ internal fun mergeAliases(primaryName: String, aliases: Collection<String>): Lis
 	}.map { it.trim() }
 		.filter { it.isNotEmpty() }
 		.distinct()
+}
+
+private val NAME_NORMALIZE_REGEX = Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]")
+
+/**
+ * Normalise a name for case-insensitive, whitespace-insensitive, punctuation-stripped comparison.
+ * Used by binding matchers and source adapters.
+ */
+internal fun normalizeName(value: String): String {
+	return value.lowercase()
+		.replace(Regex("\\s+"), "")
+		.replace(NAME_NORMALIZE_REGEX, "")
+}
+
+/**
+ * Compute a deterministic 64-bit hash of the normalised primary name.
+ * Used as a dedup key with a UNIQUE constraint on (type, name_hash).
+ */
+internal fun computeNameHash(primaryName: String): Long {
+	return normalizeName(primaryName.trim()).longHashCode()
 }
