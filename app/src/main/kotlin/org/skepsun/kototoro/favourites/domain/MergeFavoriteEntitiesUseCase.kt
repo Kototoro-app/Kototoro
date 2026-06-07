@@ -184,11 +184,15 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         }
         Log.d(
             TAG,
-            buildMergeAuditLog(
-                group = group,
-                entityIdsByMangaId = entityIdsByMangaId,
-                trackingLinksByMangaId = trackingLinksByMangaId,
-            ),
+            if (Log.isLoggable(TAG, Log.DEBUG)) {
+                buildMergeAuditLog(
+                    group = group,
+                    entityIdsByMangaId = entityIdsByMangaId,
+                    trackingLinksByMangaId = trackingLinksByMangaId,
+                )
+            } else {
+                "merge audit: group=${group.title}, items=${group.items.size}"
+            },
         )
         val shouldAvoidLocalProjectionMerge = contents.all { content ->
             entityIdsByMangaId[content.id] != null || trackingLinksByMangaId[content.id].orEmpty().isNotEmpty()

@@ -30,6 +30,7 @@ private const val RELATION_WEIGHT_DEFAULT = 1f
 private const val STALE_ENTITY_DAYS = 30L
 private const val STALE_ENTITY_ACCESS_THRESHOLD = 2
 private const val MAX_BINDING_QUERY_PARAMS = 500
+private const val MAX_ENTITY_ALIASES = 50
 
 @Singleton
 class EntityGraphRepository @Inject constructor(
@@ -295,38 +296,13 @@ class EntityGraphRepository @Inject constructor(
 					)
 				}
 			dao.updateEntity(mergedRecord)
-
-			val sourceEntityIds = entityIds.filterNot { it == targetEntityId }
-			sourceEntityIds.forEach { sourceEntityId ->
-				dao.findBindingsByEntity(sourceEntityId).forEach { sourceBinding ->
-					val existingTarget = dao.findBinding(sourceBinding.source, sourceBinding.externalId)
-					if (existingTarget != null && existingTarget.confidence >= sourceBinding.confidence) {
-						// Target already has a binding with equal or higher confidence — keep it
-						return@forEach
-					}
-					// Preserve target's isPrimary if a binding already exists
-					val isPrimary = existingTarget?.isPrimary ?: false
-					dao.upsertBinding(
-						sourceBinding.copy(
-							entityId = targetEntityId,
-							isPrimary = isPrimary,
-						),
-					)
-				}
-				dao.findRelationsForEntity(sourceEntityId).forEach { relation ->
-					val remappedFrom = if (relation.fromEntityId == sourceEntityId) targetEntityId else relation.fromEntityId
-					val remappedTo = if (relation.toEntityId == sourceEntityId) targetEntityId else relation.toEntityId
-					if (remappedFrom != remappedTo) {
-						dao.insertRelation(
-							relation.copy(
-								id = 0L,
-								fromEntityId = remappedFrom,
-								toEntityId = remappedTo,
-							),
-						)
-					}
-				}
-			}
+			// Remap bindings and relations from source entities to target
+			remapBindingsAndRelations(
+				dao = dao,
+				targetEntityId = targetEntityId,
+				sourceEntityIds = entityIds.filterNot { it == targetEntityId },
+			)
+			// Re-bind all contents to the target entity
 			distinctContents.forEach { content ->
 				dao.upsertBindingForSource(
 					entityId = targetEntityId,
@@ -335,11 +311,7 @@ class EntityGraphRepository @Inject constructor(
 					confidence = 1f,
 				)
 			}
-			if (sourceEntityIds.isNotEmpty()) {
-				dao.deleteBindingsByEntityIds(sourceEntityIds)
-				dao.deleteRelationsByEntityIds(sourceEntityIds)
-				dao.deleteEntitiesByIds(sourceEntityIds)
-			}
+			dao.deleteEntitiesByIds(entityIds.filterNot { it == targetEntityId })
 			dao.touchEntity(targetEntityId, now)
 			targetEntityId
 		}
@@ -372,38 +344,13 @@ class EntityGraphRepository @Inject constructor(
 				)
 			}
 			dao.updateEntity(mergedRecord)
-			distinctSourceIds.forEach { sourceEntityId ->
-				dao.findBindingsByEntity(sourceEntityId).forEach { sourceBinding ->
-					val existingTarget = dao.findBinding(sourceBinding.source, sourceBinding.externalId)
-					if (existingTarget != null && existingTarget.confidence >= sourceBinding.confidence) {
-						// Target already has a binding with equal or higher confidence — keep it
-						return@forEach
-					}
-					// Preserve target's isPrimary if a binding already exists
-					val isPrimary = existingTarget?.isPrimary ?: false
-					dao.upsertBinding(
-						sourceBinding.copy(
-							entityId = targetEntityId,
-							isPrimary = isPrimary,
-						),
-					)
-				}
-				dao.findRelationsForEntity(sourceEntityId).forEach { relation ->
-					val remappedFrom = if (relation.fromEntityId == sourceEntityId) targetEntityId else relation.fromEntityId
-					val remappedTo = if (relation.toEntityId == sourceEntityId) targetEntityId else relation.toEntityId
-					if (remappedFrom != remappedTo) {
-						dao.insertRelation(
-							relation.copy(
-								id = 0L,
-								fromEntityId = remappedFrom,
-								toEntityId = remappedTo,
-							),
-						)
-					}
-				}
-			}
-			dao.deleteBindingsByEntityIds(distinctSourceIds)
-			dao.deleteRelationsByEntityIds(distinctSourceIds)
+			// Remap bindings and relations from source entities to target
+			remapBindingsAndRelations(
+				dao = dao,
+				targetEntityId = targetEntityId,
+				sourceEntityIds = distinctSourceIds,
+			)
+			// FK constraints (CASCADE) handle deletions automatically on source entities
 			dao.deleteEntitiesByIds(distinctSourceIds)
 			dao.touchEntity(targetEntityId, now)
 			targetEntityId
@@ -471,8 +418,7 @@ class EntityGraphRepository @Inject constructor(
 			if (entityIds.isEmpty()) {
 				return@withTransaction 0
 			}
-			db.getEntityGraphDao().deleteBindingsByEntityIds(entityIds)
-			db.getEntityGraphDao().deleteRelationsByEntityIds(entityIds)
+			// FK constraints (CASCADE) now handle bindings and relations automatically.
 			db.getEntityGraphDao().deleteEntitiesByIds(entityIds)
 			entityIds.size
 		}
@@ -927,9 +873,44 @@ class EntityGraphRepository @Inject constructor(
 		return record.copy(
 			primaryName = newPrimaryName,
 			nameHash = computeNameHash(newPrimaryName),
-			aliases = encodeStringList(mergedNames.drop(1)),
+			aliases = encodeStringList(mergedNames.drop(1).take(MAX_ENTITY_ALIASES)),
 			lastAccessed = now,
 		)
+	}
+
+	/**
+	 * Shared helper for mergeEntities and mergeLocalWorkEntities:
+	 * remaps bindings (with confidence-aware overwrite protection) and relations
+	 * from source entities to the target entity.
+	 */
+	private suspend fun remapBindingsAndRelations(
+		dao: EntityGraphDao,
+		targetEntityId: Long,
+		sourceEntityIds: Collection<Long>,
+	) {
+		sourceEntityIds.forEach { sourceEntityId ->
+			// Bindings: move to target, preserving higher confidence
+			dao.findBindingsByEntity(sourceEntityId).forEach { sourceBinding ->
+				val existingTarget = dao.findBinding(sourceBinding.source, sourceBinding.externalId)
+				if (existingTarget != null && existingTarget.confidence >= sourceBinding.confidence) {
+					return@forEach
+				}
+				val isPrimary = existingTarget?.isPrimary ?: false
+				dao.upsertBinding(
+					sourceBinding.copy(entityId = targetEntityId, isPrimary = isPrimary),
+				)
+			}
+			// Relations: remap from/to source entity to target
+			dao.findRelationsForEntity(sourceEntityId).forEach { relation ->
+				val remappedFrom = if (relation.fromEntityId == sourceEntityId) targetEntityId else relation.fromEntityId
+				val remappedTo = if (relation.toEntityId == sourceEntityId) targetEntityId else relation.toEntityId
+				if (remappedFrom != remappedTo) {
+					dao.insertRelation(
+						relation.copy(id = 0L, fromEntityId = remappedFrom, toEntityId = remappedTo),
+					)
+				}
+			}
+		}
 	}
 
 	private fun Entity.toRecord(): EntityRecord = EntityRecord(
