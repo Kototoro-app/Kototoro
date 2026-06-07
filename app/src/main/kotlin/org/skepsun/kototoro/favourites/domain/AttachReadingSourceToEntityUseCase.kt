@@ -6,6 +6,7 @@ import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
@@ -16,6 +17,7 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
     private val contentRepositoryFactory: ContentRepository.Factory,
     private val contentDataRepository: ContentDataRepository,
     private val database: MangaDatabase,
+    private val entityGraphRepository: EntityGraphRepository,
 ) {
 
     suspend operator fun invoke(
@@ -66,28 +68,7 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
     }
 
     private suspend fun resolveOrCreateEntityId(content: Content): Long {
-        findLocalBinding(content.id)?.let { return it.entityId }
-        val now = System.currentTimeMillis()
-        val entityId = database.getEntityGraphDao().insertEntity(
-            EntityRecord(
-                type = EntityType.WORK.name,
-                primaryName = content.title.trim(),
-                aliases = null,
-                createdAt = now,
-                lastAccessed = now,
-                accessCount = 1,
-            ),
-        )
-        database.getEntityGraphDao().upsertBinding(
-            EntityBindingRecord(
-                entityId = entityId,
-                source = "local_manga",
-                externalId = content.id.toString(),
-                confidence = 1f,
-                isPrimary = true,
-            ),
-        )
-        return entityId
+        return entityGraphRepository.ensureLocalWorkEntity(content).id
     }
 
     private suspend fun findLocalBinding(mangaId: Long): EntityBindingRecord? {

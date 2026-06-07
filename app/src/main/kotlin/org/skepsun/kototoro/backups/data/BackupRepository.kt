@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.backups.data
 
 import android.content.Context
+import android.util.Log
 import android.webkit.CookieManager
 import androidx.collection.ArrayMap
 import androidx.room.withTransaction
@@ -47,6 +48,7 @@ import org.skepsun.kototoro.entitygraph.data.RelationRecord
 import org.skepsun.kototoro.entitygraph.data.decodeStringList
 import org.skepsun.kototoro.entitygraph.data.encodeStringList
 import org.skepsun.kototoro.entitygraph.data.mergeAliases
+import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.filter.data.PersistableFilter
@@ -65,6 +67,8 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
+
+private const val TAG = "BackupRepo"
 
 @Reusable
 class BackupRepository @Inject constructor(
@@ -541,27 +545,46 @@ class BackupRepository @Inject constructor(
         entityIdMapping: MutableMap<Long, Long>,
     ) {
         val dao = getEntityGraphDao()
+        val trimmedName = remote.primaryName.trim()
+        val computedHash = computeNameHash(trimmedName)
         val existing = dao.findEntity(remote.id)
             ?.takeIf { it.type == remote.type }
-            ?: dao.findEntityByTypeAndPrimaryName(remote.type, remote.primaryName)
+            ?: dao.findEntityByTypeAndPrimaryName(remote.type, trimmedName)
         val localId = if (existing == null) {
-            dao.insertEntity(
-                remote.copy(
-                    id = 0L,
-                    aliases = encodeStringList(mergeAliases(remote.primaryName, decodeStringList(remote.aliases)).drop(1)),
-                ),
+            val newRecord = EntityRecord(
+                type = remote.type,
+                primaryName = trimmedName,
+                nameHash = computedHash,
+                aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),
+                createdAt = remote.createdAt.coerceAtLeast(0L),
+                lastAccessed = remote.lastAccessed.coerceAtLeast(0L),
+                accessCount = remote.accessCount.coerceAtLeast(1),
             )
+            val insertedId = dao.insertEntityIgnore(newRecord)
+            if (insertedId != -1L) {
+                insertedId
+            } else {
+                // Hash collision — another entity already has this name hash. Try to merge.
+                dao.findEntityByTypeAndNameHash(remote.type, computedHash)?.id
+                    ?: dao.insertEntity(
+                        newRecord.copy(
+                            nameHash = remote.id.takeIf { it > 0L } ?: -(remote.id + 1),
+                        ),
+                    )
+            }
         } else {
             val mergedNames = mergeAliases(
                 existing.primaryName,
-                decodeStringList(existing.aliases) + listOf(remote.primaryName) + decodeStringList(remote.aliases),
+                decodeStringList(existing.aliases) + listOf(trimmedName) + decodeStringList(remote.aliases),
             )
+            val newPrimary = mergedNames.firstOrNull() ?: existing.primaryName
             val merged = existing.copy(
-                primaryName = mergedNames.firstOrNull() ?: existing.primaryName,
+                primaryName = newPrimary,
+                nameHash = computeNameHash(newPrimary),
                 aliases = encodeStringList(mergedNames.drop(1)),
-                createdAt = minOf(existing.createdAt, remote.createdAt),
-                lastAccessed = maxOf(existing.lastAccessed, remote.lastAccessed),
-                accessCount = maxOf(existing.accessCount, remote.accessCount),
+                createdAt = minOf(existing.createdAt, remote.createdAt.coerceAtLeast(0L)),
+                lastAccessed = maxOf(existing.lastAccessed, remote.lastAccessed.coerceAtLeast(0L)),
+                accessCount = maxOf(existing.accessCount, remote.accessCount.coerceAtLeast(1)),
             )
             dao.upsertEntityRecord(merged)
             existing.id
@@ -573,7 +596,11 @@ class BackupRepository @Inject constructor(
         remote: EntityBindingRecord,
         entityIdMapping: Map<Long, Long>,
     ) {
-        val localEntityId = entityIdMapping[remote.entityId] ?: return
+        val localEntityId = entityIdMapping[remote.entityId]
+        if (localEntityId == null) {
+            Log.w(TAG, "restore: skip entity_binding for unmapped entityId=${remote.entityId}, source=${remote.source}, externalId=${remote.externalId}")
+            return
+        }
         getEntityGraphDao().upsertBinding(
             remote.copy(
                 entityId = localEntityId,
@@ -586,8 +613,12 @@ class BackupRepository @Inject constructor(
         remote: RelationRecord,
         entityIdMapping: Map<Long, Long>,
     ) {
-        val localFromId = entityIdMapping[remote.fromEntityId] ?: return
-        val localToId = entityIdMapping[remote.toEntityId] ?: return
+        val localFromId = entityIdMapping[remote.fromEntityId]
+        val localToId = entityIdMapping[remote.toEntityId]
+        if (localFromId == null || localToId == null) {
+            Log.w(TAG, "restore: skip relation id=${remote.id}, from=${remote.fromEntityId}->${localFromId}, to=${remote.toEntityId}->${localToId}")
+            return
+        }
         if (localFromId == localToId) {
             return
         }

@@ -12,6 +12,7 @@ import org.json.JSONArray
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -73,10 +74,29 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                 )
             }
             entityGraphRepository.ensureLocalWorkEntities(favouritesRepository.getAllContent())
+
+            // 3. Backfill name_hash for entities that still use the migration placeholder (name_hash = id).
+            //    After Migration50To51, existing entities had name_hash set to row-id as a temporary value.
+            //    This step recomputes the true normalised name hash.
+            backfillNameHashes()
+
             Result.success()
         } catch (e: Throwable) {
             e.printStackTrace()
             Result.failure()
+        }
+    }
+
+    private suspend fun backfillNameHashes() {
+        val dao = db.getEntityGraphDao()
+        val entities = dao.dumpEntities()
+        for (record in entities) {
+            val computedHash = computeNameHash(record.primaryName)
+            if (record.nameHash != computedHash && record.nameHash == record.id) {
+                // Only fix entities that still have the migration placeholder (name_hash == id).
+                // Entities created after the migration will already have correct name_hash.
+                dao.upsertEntityRecord(record.copy(nameHash = computedHash))
+            }
         }
     }
 

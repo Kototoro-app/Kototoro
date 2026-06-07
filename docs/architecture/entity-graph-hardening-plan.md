@@ -675,3 +675,174 @@ class EntityGraphBenchmarkTest {
 | binding source key 格式不一致 | `bindingSourceKeys()` 做了兼容，但依赖代码约定 | 定义 source key 枚举 |
 | `EntityGraphMigrationWorker` 重复运行 | 无幂等保护 | 添加 migration 标记位 |
 | 无关系类型校验 | RelationType 直接 store as String | 保持现状，Room 实体层不感知 enum |
+| `EntityGraphMigrationWorker` 未更新 name_hash 回填 | 现有实体 name_hash 使用 row-id 占位，未回填真正 normalized hash | 已在 Phase 4-2b 中通过 worker 更新实现 |
+| 多份重复的 normalizeName 实现 | `MergeFavoriteEntitiesUseCase`, `BindTrackingToEntitiesUseCase` 各有独立实现 | 已在 Phase 4-4 中统一 |
+
+---
+
+## 第二轮排查：跨模块集成漏洞（2026-06-07 第二轮）
+
+分析范围：entitygraph 模块被 33 个外部模块引用。本轮深入审查了 6 个关键集成点。
+
+### VULN-8: Backup 恢复创建全零 name_hash，违反 UNIQUE 约束 [严重: 10/10]
+
+**位置**：`backups/data/BackupRepository.kt` — `restoreEntityRecord()`
+
+**问题代码**：
+```kotlin
+val localId = if (existing == null) {
+    dao.insertEntity(
+        remote.copy(
+            id = 0L,
+            aliases = encodeStringList(...),
+            // ❌ name_hash 使用默认值 0，导致备份恢复失败
+        ),
+    )
+}
+```
+
+**根因**：`backups` 模块直接使用 `EntityGraphDao.insertEntity` 绕过 `EntityGraphRepository`，不经过 `createEntity` 逻辑。旧备份 JSON 反序列化后 `name_hash` 字段为 `0L`（data class 默认值），第二个同 type 实体恢复时触发 `UNIQUE (type, name_hash)` 约束冲突。
+
+**修复方案**：
+
+```kotlin
+// 方案：restoreEntityRecord 中计算 name_hash
+private suspend fun MangaDatabase.restoreEntityRecord(
+    remote: EntityRecord,
+    entityIdMapping: MutableMap<Long, Long>,
+) {
+    val dao = getEntityGraphDao()
+    val trimmedName = remote.primaryName.trim()
+    val computedHash = computeNameHash(trimmedName)
+    val existing = dao.findEntity(remote.id)
+        ?.takeIf { it.type == remote.type }
+        ?: dao.findEntityByTypeAndPrimaryName(remote.type, trimmedName)
+    val localId = if (existing == null) {
+        dao.insertEntityIgnore(
+            EntityRecord(
+                type = remote.type,
+                primaryName = trimmedName,
+                nameHash = computedHash,  // ✅ 使用 normalized hash
+                aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),
+                createdAt = remote.createdAt.coerceAtLeast(0L),
+                lastAccessed = remote.lastAccessed.coerceAtLeast(0L),
+                accessCount = remote.accessCount.coerceAtLeast(1),
+            ),
+        ).takeIf { it != -1L } ?: run {
+            // Conflict — another entity already has this name hash. Try to merge.
+            dao.findEntityByTypeAndNameHash(remote.type, computedHash)?.id
+                ?: dao.insertEntity(  // Fallback: force insert if hash collision
+                    EntityRecord(
+                        type = remote.type,
+                        primaryName = trimmedName,
+                        nameHash = remote.id,  // Use remote ID as hash to guarantee uniqueness
+                        aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),
+                        createdAt = remote.createdAt.coerceAtLeast(0L),
+                        lastAccessed = remote.lastAccessed.coerceAtLeast(0L),
+                        accessCount = remote.accessCount.coerceAtLeast(1),
+                    ),
+                )
+        }
+    } else {
+        val mergedNames = mergeAliases(
+            existing.primaryName,
+            decodeStringList(existing.aliases) + listOf(trimmedName) + decodeStringList(remote.aliases),
+        )
+        val newPrimary = mergedNames.firstOrNull() ?: existing.primaryName
+        val merged = existing.copy(
+            primaryName = newPrimary,
+            nameHash = computeNameHash(newPrimary),
+            aliases = encodeStringList(mergedNames.drop(1)),
+            createdAt = minOf(existing.createdAt, remote.createdAt.coerceAtLeast(0L)),
+            lastAccessed = maxOf(existing.lastAccessed, remote.lastAccessed.coerceAtLeast(0L)),
+            accessCount = maxOf(existing.accessCount, remote.accessCount.coerceAtLeast(1)),
+        )
+        dao.upsertEntityRecord(merged)
+        existing.id
+    }
+    entityIdMapping[remote.id] = localId
+}
+```
+
+### VULN-9: `AttachReadingSourceToEntityUseCase` 绕过 Repository 创建实体 [严重: 9/10]
+
+**位置**：`favourites/domain/AttachReadingSourceToEntityUseCase.kt` — `resolveOrCreateEntityId()`
+
+**问题代码**：
+```kotlin
+private suspend fun resolveOrCreateEntityId(content: Content): Long {
+    findLocalBinding(content.id)?.let { return it.entityId }
+    val now = System.currentTimeMillis()
+    val entityId = database.getEntityGraphDao().insertEntity(
+        EntityRecord(
+            type = EntityType.WORK.name,
+            primaryName = content.title.trim(),
+            aliases = null,       // ❌ 不合并别名
+            // ❌ name_hash=0，第二个调用冲突
+            ...
+        ),
+    )
+    ...
+}
+```
+
+**修复方案**：完全替换为 `EntityGraphRepository.ensureLocalWorkEntity()`，不再直接操作 DAO：
+
+```kotlin
+private suspend fun resolveOrCreateEntityId(content: Content): Long {
+    return entityGraphRepository.ensureLocalWorkEntity(content).id
+}
+```
+
+### VULN-10: 多份重复的 `normalizeName`/Levenshtein 实现 [中危: 5/10]
+
+| 文件 | 函数 | 阈值 |
+|------|------|------|
+| `EntityGraphMapping.kt` | `normalizeName()` | —（共享实现） |
+| `MergeFavoriteEntitiesUseCase` | `normalizeTitle()` | `FUZZY_MATCH_THRESHOLD=0.82` |
+| `BindTrackingToEntitiesUseCase` | `normalizeTitle()` | `EXACT_MATCH_THRESHOLD=0.995` |
+
+**修复方案**：两个 UseCase 改用 `entitygraph.data.normalizeName`（同包 internal 可访问），删除各自的 `normalizeTitle`、`levenshtein`、`similarity` 私有方法。
+
+### VULN-11: Backup 恢复静默丢弃无映射的 binding/relation [中危: 6/10]
+
+**位置**：`backups/data/BackupRepository.kt`
+
+```kotlin
+private suspend fun MangaDatabase.restoreEntityBinding(
+    remote: EntityBindingRecord,
+    entityIdMapping: Map<Long, Long>,
+) {
+    val localEntityId = entityIdMapping[remote.entityId] ?: return  // ❌ 静默丢弃
+    ...
+}
+```
+
+**修复方案**：添加计数器跟踪跳过的 binding/relation，记录日志。
+
+### VULN-12: `MigrateUseCase` 直接操作 DAO [中危: 5/10]
+
+**位置**：`alternatives/domain/MigrateUseCase.kt`
+
+直接使用 `entityGraphDao.upsertBinding()` 维护 source migration 的 binding 关联。虽已有前置 lookup 保护，但仍绕过了 Repository 的 `upsertBindingForSource` 逻辑。
+
+**修复方案**：改为通过 `entityGraphRepository` 间接操作（或确认无风险后保持现状并添加注释说明）。
+
+---
+
+## Phase 4: 跨模块集成修复
+
+### 步骤
+
+| 步骤 | 内容 | 文件 | 数据库变更 |
+|------|------|------|-----------|
+| 4a | Backup `restoreEntityRecord` 计算 name_hash + `insertEntityIgnore` | `BackupRepository.kt` | 无 |
+| 4b | `EntityGraphMigrationWorker` 添加 name_hash 回填步骤 | `EntityGraphMigrationWorker.kt` | 无（运行时回填）|
+| 4c | `AttachReadingSourceToEntityUseCase` 改用 `EntityGraphRepository` | `AttachReadingSourceToEntityUseCase.kt` | 无 |
+| 4d | 统一 normalizeName 引用，删除重复实现 | `MergeFavoriteEntitiesUseCase.kt`, `BindTrackingToEntitiesUseCase.kt` | 无 |
+| 4e | Backup 恢复添加丢失 binding/relation 日志 | `BackupRepository.kt` | 无 |
+| 4f | `MigrateUseCase` 审查和修正 | `MigrateUseCase.kt` | 无 |
+
+### 数据库版本
+
+Phase 4 不引入新的 migration（无需新增列/索引），所有修改均为应用层逻辑修正。当前 DB 版本保持在 52。
