@@ -7,8 +7,6 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.entitygraph.data.EntityRecord
-import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import javax.inject.Inject

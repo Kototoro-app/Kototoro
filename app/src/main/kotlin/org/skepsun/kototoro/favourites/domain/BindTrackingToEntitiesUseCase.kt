@@ -22,6 +22,7 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingCharacterDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingPersonDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
+import org.skepsun.kototoro.entitygraph.domain.normalizeEntityName
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -820,12 +821,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         return candidates.maxOfOrNull { candidate -> similarity(normalizedLocal, candidate) } ?: 0f
     }
 
-    private fun normalizeTitle(value: String): String {
-        return value.trim()
-            .lowercase()
-            .replace(Regex("\\s+"), "")
-            .replace(Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]"), "")
-    }
+    private fun normalizeTitle(value: String): String = normalizeEntityName(value)
 
     private suspend fun buildTrackingSearchQueries(
         content: Content,

@@ -5,6 +5,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.domain.normalizeEntityName
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -308,12 +309,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         )
     }
 
-    private fun normalizeTitle(value: String): String {
-        return value.trim()
-            .lowercase()
-            .replace(Regex("\\s+"), "")
-            .replace(Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]"), "")
-    }
+    private fun normalizeTitle(value: String): String = normalizeEntityName(value)
 
     private fun buildFuzzyGroups(
         contents: List<Content>,
