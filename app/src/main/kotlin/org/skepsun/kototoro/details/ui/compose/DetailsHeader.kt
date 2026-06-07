@@ -1155,7 +1155,7 @@ private fun DetailsSourceSelectorButton(
                         verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
                         Text(
-                            text = currentDisplayModel?.title.orEmpty(),
+                            text = currentDisplayModel?.selectorTitle.orEmpty(),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                             color = if (isPrimaryEnabled) {
                                 MaterialTheme.colorScheme.onSurface
@@ -1166,7 +1166,7 @@ private fun DetailsSourceSelectorButton(
                             overflow = TextOverflow.Ellipsis,
                         )
                         currentDisplayModel
-                            ?.subtitle
+                            ?.selectorSubtitle
                             ?.takeIf { it.isNotBlank() }
                             ?.let { subtitle ->
                                 Text(
@@ -1214,6 +1214,8 @@ private fun isSensitiveDetailsTag(tag: ContentTag): Boolean {
 private data class SourceOptionDisplayModel(
     val title: String,
     val subtitle: String,
+    val selectorTitle: String,
+    val selectorSubtitle: String,
     val coverUrl: String?,
     val source: ContentSource?,
     val trackingService: ScrobblerService?,
@@ -1247,9 +1249,22 @@ private fun DetailsSourceOption.resolveDisplayModel(
     val coverUrl = coverUrl
         ?: linkedTrackingItem?.coverUrl
         ?: currentContent?.coverUrl?.takeIf { source != null && currentContent.source.name == source.name }
+    val selectorTitle = when {
+        trackingTitle.isNotBlank() -> trackingTitle
+        sourceTitle.isNotBlank() -> sourceTitle
+        !subtitle.isNullOrBlank() -> subtitle.orEmpty()
+        else -> presentation.title
+    }
+    val selectorSubtitle = when {
+        presentation.title.isNotBlank() && presentation.title != selectorTitle -> presentation.title
+        presentation.subtitle.isNotBlank() -> presentation.subtitle
+        else -> ""
+    }
     return SourceOptionDisplayModel(
         title = presentation.title,
         subtitle = presentation.subtitle,
+        selectorTitle = selectorTitle,
+        selectorSubtitle = selectorSubtitle,
         coverUrl = coverUrl,
         source = source,
         trackingService = trackingService,

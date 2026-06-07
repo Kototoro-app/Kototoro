@@ -123,14 +123,13 @@ fun KototoroFavoritesHostRoute(
     }
 
     val displayCategories = remember(uiState.categories, initialCategoryId, initialCategoryTitle) {
-        val categories = buildList {
-            add(FavouriteTabModel(id = NO_ID, title = null))
-            uiState.categories.filterTo(this) { it.id != NO_ID }
-        }
-        if (initialCategoryId == NO_ID || categories.any { it.id == initialCategoryId }) {
+        val categories = uiState.categories
+        if (categories.any { it.id == initialCategoryId }) {
             categories
-        } else {
+        } else if (initialCategoryId != NO_ID) {
             categories + FavouriteTabModel(id = initialCategoryId, title = initialCategoryTitle)
+        } else {
+            categories
         }
     }
     val initialPage = remember(displayCategories, initialCategoryId) {
