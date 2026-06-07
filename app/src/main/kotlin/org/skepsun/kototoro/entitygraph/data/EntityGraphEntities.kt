@@ -2,6 +2,7 @@ package org.skepsun.kototoro.entitygraph.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
@@ -28,7 +29,16 @@ data class EntityRecord(
 @Entity(
 	tableName = TABLE_ENTITY_GRAPH_BINDING,
 	primaryKeys = ["source", "external_id"],
+	foreignKeys = [
+		ForeignKey(
+			entity = EntityRecord::class,
+			parentColumns = ["id"],
+			childColumns = ["entity_id"],
+			onDelete = ForeignKey.CASCADE,
+		),
+	],
 	indices = [
+		Index(name = "idx_binding_entity", value = ["entity_id"]),
 		Index(name = "idx_binding_external", value = ["source", "external_id"]),
 	],
 )
@@ -42,6 +52,20 @@ data class EntityBindingRecord(
 
 @Entity(
 	tableName = TABLE_ENTITY_GRAPH_RELATION,
+	foreignKeys = [
+		ForeignKey(
+			entity = EntityRecord::class,
+			parentColumns = ["id"],
+			childColumns = ["from_entity_id"],
+			onDelete = ForeignKey.CASCADE,
+		),
+		ForeignKey(
+			entity = EntityRecord::class,
+			parentColumns = ["id"],
+			childColumns = ["to_entity_id"],
+			onDelete = ForeignKey.CASCADE,
+		),
+	],
 	indices = [
 		Index(name = "idx_relation_from", value = ["from_entity_id"]),
 		Index(name = "idx_relation_to", value = ["to_entity_id"]),

@@ -298,11 +298,18 @@ class EntityGraphRepository @Inject constructor(
 
 			val sourceEntityIds = entityIds.filterNot { it == targetEntityId }
 			sourceEntityIds.forEach { sourceEntityId ->
-				dao.findBindingsByEntity(sourceEntityId).forEach { binding ->
+				dao.findBindingsByEntity(sourceEntityId).forEach { sourceBinding ->
+					val existingTarget = dao.findBinding(sourceBinding.source, sourceBinding.externalId)
+					if (existingTarget != null && existingTarget.confidence >= sourceBinding.confidence) {
+						// Target already has a binding with equal or higher confidence — keep it
+						return@forEach
+					}
+					// Preserve target's isPrimary if a binding already exists
+					val isPrimary = existingTarget?.isPrimary ?: false
 					dao.upsertBinding(
-						binding.copy(
+						sourceBinding.copy(
 							entityId = targetEntityId,
-							isPrimary = false,
+							isPrimary = isPrimary,
 						),
 					)
 				}
@@ -366,11 +373,18 @@ class EntityGraphRepository @Inject constructor(
 			}
 			dao.updateEntity(mergedRecord)
 			distinctSourceIds.forEach { sourceEntityId ->
-				dao.findBindingsByEntity(sourceEntityId).forEach { binding ->
+				dao.findBindingsByEntity(sourceEntityId).forEach { sourceBinding ->
+					val existingTarget = dao.findBinding(sourceBinding.source, sourceBinding.externalId)
+					if (existingTarget != null && existingTarget.confidence >= sourceBinding.confidence) {
+						// Target already has a binding with equal or higher confidence — keep it
+						return@forEach
+					}
+					// Preserve target's isPrimary if a binding already exists
+					val isPrimary = existingTarget?.isPrimary ?: false
 					dao.upsertBinding(
-						binding.copy(
+						sourceBinding.copy(
 							entityId = targetEntityId,
-							isPrimary = false,
+							isPrimary = isPrimary,
 						),
 					)
 				}
