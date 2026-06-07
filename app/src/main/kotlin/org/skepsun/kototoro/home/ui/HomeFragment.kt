@@ -74,7 +74,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 					HomeScreenActions(
 						onSettingsClick = { router.openSettings() },
 						onReaderSettingsClick = { router.openReaderSettings() },
-						onSyncSettingsClick = { router.openSyncSettings() },
 						onViewAllRecentClick = { router.openHistory(currentBrowseGroupTab()) },
 						onViewAllUpdatesClick = { /* router.openMangaUpdates(currentBrowseGroupTab()) */ },
 						onViewAllRecommendationsClick = { /* router.openSuggestions(currentBrowseGroupTab()) */ },

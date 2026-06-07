@@ -26,6 +26,7 @@ fun SyncSettingsRoute(
     val context = LocalContext.current
     val webDavLastAction = backupSettingsViewModel.webDavLastAction.collectAsStateWithLifecycle().value
     val isWebDavCheckLoading = backupSettingsViewModel.isWebDavCheckLoading.collectAsStateWithLifecycle().value
+    val webDavBusyMessageRes = backupSettingsViewModel.webDavBusyMessageRes.collectAsStateWithLifecycle().value
     val isWebDavEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_ENABLED) { isBackupWebDavUploadEnabled }.value
     val webDavServerUrl =
@@ -42,6 +43,10 @@ fun SyncSettingsRoute(
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_AUTO_RESTORE) { isBackupWebDavAutoRestoreEnabled }.value
     val isWebDavKeepLocalCopyEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_KEEP_LOCAL_COPY) { isBackupWebDavKeepLocalCopyEnabled }.value
+    val isLegacyRestoreUploadBlocked =
+        settings.observeAsState(
+            AppSettings.KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
+        ) { isBackupWebDavAutoUploadBlockedByLegacyRestore }.value
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(backupSettingsViewModel.onError, context, snackbarHostState) {
@@ -76,6 +81,12 @@ fun SyncSettingsRoute(
             isWebDavKeepLocalCopyEnabled = isWebDavKeepLocalCopyEnabled,
             webDavLastActionSummary = webDavLastActionSummary,
             isPolicyNoteVisible = !isWebDavKeepLocalCopyEnabled && isWebDavEnabled,
+            legacyRestoreBlockSummary = if (isLegacyRestoreUploadBlocked) {
+                context.getString(R.string.webdav_legacy_restore_block_summary)
+            } else {
+                null
+            },
+            webDavBusySummary = webDavBusyMessageRes?.let(context::getString),
         ),
         snackbarHostState = snackbarHostState,
         onWebDavEnabledChange = { settings.isBackupWebDavUploadEnabled = it },

@@ -20,6 +20,10 @@ enum class BackupSection(
 	STATS("statistics"),
 	SAVED_FILTERS("saved_filters"),
 	AUTH("auth"),
+	ENTITY_GRAPH_ENTITIES("entity_graph_entities"),
+	ENTITY_GRAPH_BINDINGS("entity_graph_bindings"),
+	ENTITY_GRAPH_RELATIONS("entity_graph_relations"),
+	ENTITY_GRAPH_PREFS("entity_graph_prefs"),
 	;
 
 	companion object {

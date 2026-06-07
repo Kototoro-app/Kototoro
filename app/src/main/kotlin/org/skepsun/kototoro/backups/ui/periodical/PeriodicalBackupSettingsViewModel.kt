@@ -40,6 +40,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	val backupsDirectory = MutableStateFlow<String?>("")
 	val isTelegramCheckLoading = MutableStateFlow(false)
 	val isWebDavCheckLoading = MutableStateFlow(false)
+	val webDavBusyMessageRes = MutableStateFlow<Int?>(null)
 	val onActionDone = MutableEventFlow<ReversibleAction>()
 
 	// 最近一次 WebDAV 操作（类型文案资源ID，发生时间毫秒）
@@ -65,10 +66,12 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			try {
 				isWebDavCheckLoading.value = true
+				webDavBusyMessageRes.value = R.string.webdav_connection_check_in_progress
 				webDavUploader.sendTestConnection()
 				onActionDone.call(ReversibleAction(R.string.connection_ok, null))
 			} finally {
 				isWebDavCheckLoading.value = false
+				webDavBusyMessageRes.value = null
 			}
 		}
 	}
@@ -77,6 +80,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			val output = org.skepsun.kototoro.backups.domain.BackupUtils.createTempFile(appContext)
 			try {
+				webDavBusyMessageRes.value = R.string.webdav_upload_in_progress
 				java.util.zip.ZipOutputStream(output.outputStream()).use {
 					repository.createBackup(it, null)
 				}
@@ -101,6 +105,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 			} catch (e: Exception) {
 				errorEvent.call(e)
 			} finally {
+				webDavBusyMessageRes.value = null
 				output.delete()
 			}
 		}
@@ -109,13 +114,15 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	fun restoreWebDavNow() {
 		launchJob(Dispatchers.Default) {
 			try {
-				val latest = webDavUploader.getLatestBackup()
+				webDavBusyMessageRes.value = R.string.webdav_restore_in_progress
+				val latest = webDavUploader.getLatestBackup(RemoteNamespace.V2)
+					?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
 				if (latest == null) {
 					throw IllegalStateException("No WebDAV backups found")
 				}
 				val tempFile = java.io.File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
 				try {
-					webDavUploader.downloadBackup(latest.name, tempFile)
+					webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
 					val allSections = setOf(
 						org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
 						org.skepsun.kototoro.backups.domain.BackupSection.CATEGORIES,
@@ -124,6 +131,10 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 						org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
 						org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
 						org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
+						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,
+						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
+						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
+						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_PREFS,
 					)
 					val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
 						repository.restoreBackup(zis, allSections, null)
@@ -145,6 +156,8 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 				}
 			} catch (e: Exception) {
 				errorEvent.call(e)
+			} finally {
+				webDavBusyMessageRes.value = null
 			}
 		}
 	}

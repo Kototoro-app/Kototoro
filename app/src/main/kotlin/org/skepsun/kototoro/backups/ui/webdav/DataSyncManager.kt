@@ -21,6 +21,10 @@ import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.ExternalBackupStorage
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.TABLE_CHAPTERS
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_ENTITY
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_HISTORY
@@ -74,6 +78,10 @@ class DataSyncManager @Inject constructor(
         TABLE_MANGA_TAGS,
         TABLE_SOURCES,
         TABLE_CHAPTERS,
+        TABLE_ENTITY_GRAPH_ENTITY,
+        TABLE_ENTITY_GRAPH_BINDING,
+        TABLE_ENTITY_GRAPH_RELATION,
+        TABLE_ENTITY_PREFERENCES,
     )
 
     private val observer = object : InvalidationTracker.Observer(tablesToObserve) {

@@ -26,8 +26,17 @@ data class BackupFileInfo(
     val name: String,
     val lastModified: Date,
     val size: Long,
-    val dataVersion: Int? = null
+    val dataVersion: Int? = null,
+    val writerGeneration: Int = RemoteNamespace.V1.writerGeneration,
+    val namespace: RemoteNamespace = RemoteNamespace.V1,
 )
+
+enum class RemoteNamespace(
+    val writerGeneration: Int,
+) {
+    V1(writerGeneration = 1),
+    V2(writerGeneration = 2),
+}
 
 class WebDavBackupUploader @Inject constructor(
     private val settings: AppSettings,
@@ -51,28 +60,33 @@ class WebDavBackupUploader @Inject constructor(
 		return if (!user.isNullOrEmpty() && pass != null) Credentials.basic(user, pass) else null
 	}
 
-	private fun composeUrl(fileName: String?): String {
+	private fun composeUrl(fileName: String?, namespace: RemoteNamespace): String {
 		// Compose URL like: <server>/<remotePath>/<fileName?>
 		// When targeting a directory (fileName == null), ensure trailing slash for better WebDAV compatibility
 		val base = requireServerUrl().trimEnd('/')
-		val path = requireRemotePath().trim('/').let { if (it.isEmpty()) "" else "/$it" }
+		val basePath = requireRemotePath().trim('/').let { if (it.isEmpty()) "" else "/$it" }
 		return if (fileName == null) {
-			"$base$path/"
+			"$base$basePath/"
 		} else {
-			"$base$path/$fileName"
+			"$base$basePath/$fileName"
 		}
 	}
 
-    private fun buildVersionedRemoteName(version: Int): String {
-        // 延续使用 .zip 扩展名，版本写在文件名：
-        // kototoro-v<version>-<yyyyMMdd-HHmmss>.zip
+    private fun buildVersionedRemoteName(version: Int, namespace: RemoteNamespace): String {
         val ts = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
-        return "kototoro-v${version}-${ts}.zip"
+        return when (namespace) {
+            RemoteNamespace.V1 -> "kototoro-v${version}-${ts}.zip"
+            RemoteNamespace.V2 -> "kototoro-v2-data-v${version}-${ts}.zip"
+        }
     }
 
-    suspend fun uploadBackup(file: File, targetVersion: Int = settings.backupWebDavDataVersion) {
-        val remoteName = buildVersionedRemoteName(targetVersion)
-        val url = composeUrl(remoteName)
+    suspend fun uploadBackup(
+        file: File,
+        targetVersion: Int = settings.backupWebDavDataVersion,
+        namespace: RemoteNamespace = RemoteNamespace.V2,
+    ) {
+        val remoteName = buildVersionedRemoteName(targetVersion, namespace)
+        val url = composeUrl(remoteName, namespace)
         val body = file.asRequestBody("application/zip".toMediaTypeOrNull())
 
         // 简单重试 + 退避，提升上传可靠性
@@ -97,7 +111,7 @@ class WebDavBackupUploader @Inject constructor(
 
         // 按最多保留数量进行修剪（失败不影响主流程）
         try {
-            trimRemote(maxCount = settings.periodicalBackupRemoteMaxCount)
+            trimRemote(maxCount = settings.periodicalBackupRemoteMaxCount, namespace = namespace)
         } catch (e: Exception) {
             Log.w(TAG, "WebDAV remote trim failed after upload", e)
         }
@@ -124,7 +138,7 @@ class WebDavBackupUploader @Inject constructor(
 	suspend fun sendTestConnection() {
 		// Use PROPFIND Depth: 0 against the directory URL (with trailing slash)
 		// Many WebDAV servers do not support HEAD on directories reliably
-		val url = composeUrl(null)
+		val url = composeUrl(null, RemoteNamespace.V2)
 		val propfindBody = """
 			<?xml version="1.0" encoding="utf-8" ?>
 			<D:propfind xmlns:D="DAV:">
@@ -150,8 +164,8 @@ class WebDavBackupUploader @Inject constructor(
 		resp.close()
 	}
 
-    suspend fun listBackupFiles(): List<BackupFileInfo> {
-		val url = composeUrl(null)
+    suspend fun listBackupFiles(namespace: RemoteNamespace = RemoteNamespace.V2): List<BackupFileInfo> {
+		val url = composeUrl(null, namespace)
 		val propfindBody = """
 			<?xml version="1.0" encoding="utf-8" ?>
 			<D:propfind xmlns:D="DAV:">
@@ -173,6 +187,10 @@ class WebDavBackupUploader @Inject constructor(
 		if (!resp.isSuccessful) {
 			val code = resp.code
 			val msg = resp.message
+			if (code == 404) {
+				resp.close()
+				return emptyList()
+			}
 			resp.close()
 			throw RuntimeException("WebDAV PROPFIND failed: $code $msg")
 		}
@@ -181,13 +199,23 @@ class WebDavBackupUploader @Inject constructor(
 		resp.close()
 
         return parseWebDavResponse(responseBody)
-            .filter { isBackupFileName(it.name) }
-            .map { it.copy(dataVersion = parseDataVersion(it.name)) }
+            .filter { isBackupFileName(it.name) && matchesNamespace(it.name, namespace) }
+            .map {
+                it.copy(
+                    dataVersion = parseDataVersion(it.name, namespace),
+                    writerGeneration = namespace.writerGeneration,
+                    namespace = namespace,
+                )
+            }
             .sortedByDescending { it.lastModified } // 最新在前
     }
 
-	suspend fun downloadBackup(fileName: String, destinationFile: File) {
-		val url = composeUrl(fileName)
+	suspend fun downloadBackup(
+		fileName: String,
+		destinationFile: File,
+		namespace: RemoteNamespace = RemoteNamespace.V2,
+	) {
+		val url = composeUrl(fileName, namespace)
 		val builder = Request.Builder().url(url).get()
 		basicAuthHeaderOrNull()?.let { builder.header("Authorization", it) }
 
@@ -209,8 +237,8 @@ class WebDavBackupUploader @Inject constructor(
 		resp.close()
 	}
 
-    suspend fun getLatestBackup(): BackupFileInfo? {
-        return listBackupFiles().firstOrNull()
+    suspend fun getLatestBackup(namespace: RemoteNamespace = RemoteNamespace.V2): BackupFileInfo? {
+        return listBackupFiles(namespace).firstOrNull()
     }
 
     private fun parseWebDavResponse(xml: String): List<BackupFileInfo> {
@@ -241,7 +269,13 @@ class WebDavBackupUploader @Inject constructor(
 			val lastModified = lastModifiedStr?.let { parseWebDavDate(it) } ?: Date(0)
 			val size = sizeStr?.toLongOrNull() ?: 0L
 
-            backupFiles.add(BackupFileInfo(fileName, lastModified, size))
+            backupFiles.add(
+                BackupFileInfo(
+                    name = fileName,
+                    lastModified = lastModified,
+                    size = size,
+                ),
+            )
         }
 
         return backupFiles
@@ -264,12 +298,16 @@ class WebDavBackupUploader @Inject constructor(
         return if (raw.length <= maxLen) raw else raw.take(maxLen) + "..."
     }
 
-    private fun parseDataVersion(fileName: String): Int? {
-        // 优先匹配新的 .kototoro 命名：kototoro-v<version>-<ts>.kototoro
-        val strict = Regex("^kototoro(?:-data)?-v(\\d+)-")
+    private fun parseDataVersion(fileName: String, namespace: RemoteNamespace): Int? {
+        val strict = when (namespace) {
+            RemoteNamespace.V1 -> Regex("^kototoro(?:-data)?-v(\\d+)-")
+            RemoteNamespace.V2 -> Regex("^kototoro-v2-data-v(\\d+)-")
+        }
         val m1 = strict.find(fileName)
         if (m1 != null) return m1.groupValues.getOrNull(1)?.toIntOrNull()
-        // 兼容其它命名包含 -v<version>- 的形式
+        if (namespace == RemoteNamespace.V2) {
+            return null
+        }
         val fallback = Regex("-v(\\d+)-")
         val m2 = fallback.find(fileName) ?: return null
         return m2.groupValues.getOrNull(1)?.toIntOrNull()
@@ -280,8 +318,15 @@ class WebDavBackupUploader @Inject constructor(
         return name.endsWith(".zip", ignoreCase = true)
     }
 
-    suspend fun deleteRemote(fileName: String) {
-        val url = composeUrl(fileName)
+    private fun matchesNamespace(name: String, namespace: RemoteNamespace): Boolean {
+        return when (namespace) {
+            RemoteNamespace.V1 -> !name.startsWith("kototoro-v2-data-v")
+            RemoteNamespace.V2 -> name.startsWith("kototoro-v2-data-v")
+        }
+    }
+
+    suspend fun deleteRemote(fileName: String, namespace: RemoteNamespace = RemoteNamespace.V2) {
+        val url = composeUrl(fileName, namespace)
         val builder = Request.Builder().url(url).delete()
         basicAuthHeaderOrNull()?.let { builder.header("Authorization", it) }
         val resp = client.newCall(builder.build()).await()
@@ -294,13 +339,13 @@ class WebDavBackupUploader @Inject constructor(
         resp.close()
     }
 
-    suspend fun trimRemote(maxCount: Int) {
+    suspend fun trimRemote(maxCount: Int, namespace: RemoteNamespace = RemoteNamespace.V2) {
         if (maxCount <= 0) return
-        val files = listBackupFiles()
+        val files = listBackupFiles(namespace)
         if (files.size <= maxCount) return
         val toDelete = files.drop(maxCount)
         toDelete.forEach { file ->
-            runCatching { deleteRemote(file.name) }
+            runCatching { deleteRemote(file.name, namespace) }
                 .onFailure { error ->
                     Log.w(TAG, "Failed to delete remote backup ${file.name}", error)
                 }

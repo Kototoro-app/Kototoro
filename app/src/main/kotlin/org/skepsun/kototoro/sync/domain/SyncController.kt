@@ -21,6 +21,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_HISTORY
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.logSyncFlow
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import javax.inject.Inject
@@ -29,6 +30,7 @@ import javax.inject.Singleton
 @Singleton
 class SyncController @Inject constructor(
 	@ApplicationContext context: Context,
+	private val appSettings: AppSettings,
 	private val syncRequestPlanner: SyncRequestPlanner,
 	private val syncGcCoordinator: SyncGcCoordinator,
 	private val syncAuthorityExecutor: SyncAuthorityExecutor,
@@ -40,6 +42,11 @@ class SyncController @Inject constructor(
 	private val accountType = context.getString(R.string.account_type_sync)
 	private val mutex = Mutex()
 	override fun onInvalidated(tables: Set<String>) {
+		if (isLegacySyncSuppressed()) {
+			logSyncFlow(TAG, event = "request_skipped", reason = "legacy_sync_suppressed", "tables" to tables.joinToString())
+			disableLegacySyncAuthorities()
+			return
+		}
 		val decision = syncRequestPlanner.planInvalidation(
 			tables = tables,
 			favouritesTable = TABLE_FAVOURITES,
@@ -62,6 +69,9 @@ class SyncController @Inject constructor(
 	}
 
 	fun isEnabled(account: Account): Boolean {
+		if (isLegacySyncSuppressed()) {
+			return false
+		}
 		return ContentResolver.getMasterSyncAutomatically() && (ContentResolver.getSyncAutomatically(
 			account,
 			authorityFavourites,
@@ -85,6 +95,11 @@ class SyncController @Inject constructor(
 	}
 
 	suspend fun requestFullSync() = withContext(Dispatchers.Default) {
+		if (isLegacySyncSuppressed()) {
+			logSyncFlow(TAG, event = "request_skipped", reason = "legacy_sync_suppressed_manual")
+			disableLegacySyncAuthorities()
+			return@withContext
+		}
 		logSyncFlow(TAG, event = "request_full_sync")
 		requestSyncImpl(favourites = true, history = true)
 	}
@@ -94,6 +109,11 @@ class SyncController @Inject constructor(
 	}
 
 	private suspend fun requestSyncImpl(favourites: Boolean, history: Boolean) = mutex.withLock {
+		if (isLegacySyncSuppressed()) {
+			logSyncFlow(TAG, event = "request_skipped", reason = "legacy_sync_suppressed_impl")
+			disableLegacySyncAuthorities()
+			return
+		}
 		if (!favourites && !history) {
 			logSyncFlow(TAG, event = "request_skipped", reason = "no_authority_selected")
 			return
@@ -149,6 +169,19 @@ class SyncController @Inject constructor(
 
 	private fun peekAccount(): Account? {
 		return am.getAccountsByType(accountType).firstOrNull()
+	}
+
+	private fun isLegacySyncSuppressed(): Boolean {
+		return appSettings.hasCompletedBackupWebDavV2Migration &&
+			appSettings.backupWebDavWriterGeneration >= 2
+	}
+
+	private fun disableLegacySyncAuthorities() {
+		val account = peekAccount() ?: return
+		runCatching {
+			ContentResolver.setSyncAutomatically(account, authorityFavourites, false)
+			ContentResolver.setSyncAutomatically(account, authorityHistory, false)
+		}
 	}
 
 	private fun isSyncActiveOrPending(authority: String): Boolean {

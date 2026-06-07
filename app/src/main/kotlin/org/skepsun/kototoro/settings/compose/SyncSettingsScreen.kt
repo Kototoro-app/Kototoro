@@ -32,6 +32,8 @@ data class SyncSettingsUiState(
     val isWebDavKeepLocalCopyEnabled: Boolean,
     val webDavLastActionSummary: String?,
     val isPolicyNoteVisible: Boolean,
+    val legacyRestoreBlockSummary: String?,
+    val webDavBusySummary: String?,
 )
 
 @Composable
@@ -130,7 +132,7 @@ fun SyncSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.webdav_restore_now),
-                        summary = stringResource(R.string.restore_backup),
+                        summary = state.webDavBusySummary ?: stringResource(R.string.restore_backup),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading,
                         onClick = onWebDavRestoreNowClick,
                     )
@@ -138,7 +140,7 @@ fun SyncSettingsScreen(
                     SettingsSwitchPreference(
                         title = stringResource(R.string.webdav_auto_sync),
                         checked = state.isWebDavAutoSyncEnabled,
-                        summary = stringResource(R.string.webdav_auto_sync_summary),
+                        summary = state.legacyRestoreBlockSummary ?: stringResource(R.string.webdav_auto_sync_summary),
                         enabled = state.isWebDavEnabled,
                         onCheckedChange = onWebDavAutoSyncChange,
                     )
@@ -165,11 +167,27 @@ fun SyncSettingsScreen(
                             summary = it,
                         )
                     }
+                    state.webDavBusySummary?.let {
+                        SettingsSectionDivider()
+                        SettingsInfoPreference(
+                            title = stringResource(R.string.processing_),
+                            summary = it,
+                            iconRes = R.drawable.ic_info_outline,
+                        )
+                    }
                     if (state.isPolicyNoteVisible) {
                         SettingsSectionDivider()
                         SettingsInfoPreference(
                             title = stringResource(R.string.read_more),
                             summary = stringResource(R.string.backup_periodic_explain_keep_local_copy_off),
+                            iconRes = R.drawable.ic_info_outline,
+                        )
+                    }
+                    state.legacyRestoreBlockSummary?.let {
+                        SettingsSectionDivider()
+                        SettingsInfoPreference(
+                            title = stringResource(R.string.webdav_sync_attention_title),
+                            summary = it,
                             iconRes = R.drawable.ic_info_outline,
                         )
                     }

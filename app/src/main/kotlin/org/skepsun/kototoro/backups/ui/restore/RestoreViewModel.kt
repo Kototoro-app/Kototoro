@@ -66,11 +66,15 @@ class RestoreViewModel @Inject constructor(
 				return@mapNotNull null
 			}
 			val present = entry in sections
-			BackupSectionModel(
+			val model = BackupSectionModel(
 				section = entry,
 				isChecked = present,
 				isEnabled = present,
 			)
+			if (model.titleResId == 0) {
+				return@mapNotNull null
+			}
+			model
 		}
 	}
 

@@ -1599,6 +1599,22 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeLong(KEY_BACKUP_WEBDAV_LAST_MANUAL_RESTORE_TIME, 0L)
 		set(value) = prefs.edit { putLong(KEY_BACKUP_WEBDAV_LAST_MANUAL_RESTORE_TIME, value) }
 
+	var backupWebDavWriterGeneration: Int
+		get() = prefs.getSafeInt(KEY_BACKUP_WEBDAV_WRITER_GENERATION, 2).coerceAtLeast(1)
+		set(value) = prefs.edit { putInt(KEY_BACKUP_WEBDAV_WRITER_GENERATION, value.coerceAtLeast(1)) }
+
+	var hasCompletedBackupWebDavV2Migration: Boolean
+		get() = prefs.getBoolean(KEY_BACKUP_WEBDAV_V2_MIGRATED, false)
+		set(value) = prefs.edit { putBoolean(KEY_BACKUP_WEBDAV_V2_MIGRATED, value) }
+
+	var backupWebDavLastSeenLegacyCreatedAt: Long
+		get() = prefs.getSafeLong(KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT, 0L)
+		set(value) = prefs.edit { putLong(KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT, value) }
+
+	var isBackupWebDavAutoUploadBlockedByLegacyRestore: Boolean
+		get() = prefs.getBoolean(KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE, false)
+		set(value) = prefs.edit { putBoolean(KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE, value) }
+
 	var isReadingTimeEstimationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READING_TIME, true)
 		set(value) = prefs.edit { putBoolean(KEY_READING_TIME, value) }
@@ -1730,6 +1746,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putLong(KEY_BACKUP_WEBDAV_LAST_UPLOAD_TIME, backupWebDavLastUploadTime)
 			putLong(KEY_BACKUP_WEBDAV_LAST_AUTO_RESTORE_CHECK_TIME, backupWebDavLastAutoRestoreCheckTime)
 			putLong(KEY_BACKUP_WEBDAV_LAST_MANUAL_RESTORE_TIME, backupWebDavLastManualRestoreTime)
+			putInt(KEY_BACKUP_WEBDAV_WRITER_GENERATION, backupWebDavWriterGeneration)
+			putBoolean(KEY_BACKUP_WEBDAV_V2_MIGRATED, hasCompletedBackupWebDavV2Migration)
+			putLong(KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT, backupWebDavLastSeenLegacyCreatedAt)
+			putBoolean(
+				KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
+				isBackupWebDavAutoUploadBlockedByLegacyRestore,
+			)
 		}
 	}
 
@@ -2229,6 +2252,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_BACKUP_WEBDAV_LAST_AUTO_RESTORE_CHECK_TIME = "backup_periodic_webdav_last_auto_restore_check_time"
 		const val KEY_BACKUP_WEBDAV_LAST_UPLOAD_KIND = "backup_periodic_webdav_last_upload_kind"
 		const val KEY_BACKUP_WEBDAV_LAST_MANUAL_RESTORE_TIME = "backup_periodic_webdav_last_manual_restore_time"
+		const val KEY_BACKUP_WEBDAV_WRITER_GENERATION = "backup_periodic_webdav_writer_generation"
+		const val KEY_BACKUP_WEBDAV_V2_MIGRATED = "backup_periodic_webdav_v2_migrated"
+		const val KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT = "backup_periodic_webdav_last_seen_legacy_created_at"
+		const val KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE =
+			"backup_periodic_webdav_block_auto_upload_after_legacy_restore"
 		const val KEY_BACKUP_WEBDAV_LAST_ACTIONS = "backup_periodic_webdav_last_actions"
 
 		// WebDAV 自动同步与数据版本

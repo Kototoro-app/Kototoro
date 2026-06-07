@@ -122,6 +122,7 @@ class ContentDataRepository @Inject constructor(
 	) {
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
+			val now = System.currentTimeMillis()
 			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
 			dao.updateEntityMetadataSourceSelection(
 				entityId = entityId,
@@ -132,6 +133,7 @@ class ContentDataRepository @Inject constructor(
 				},
 				metadataSourceService = (selection as? MetadataSourceSelection.Tracking)?.serviceId,
 				metadataSourceRemoteId = (selection as? MetadataSourceSelection.Tracking)?.remoteId,
+				updatedAt = now,
 			)
 			mirrorLocalMangaIds.distinct().forEach { mangaId ->
 				val prefsDao = db.getPreferencesDao()
@@ -159,7 +161,11 @@ class ContentDataRepository @Inject constructor(
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
 			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
-			dao.updateEntityPreferredLocalMangaId(entityId = entityId, preferredLocalMangaId = mangaId)
+			dao.updateEntityPreferredLocalMangaId(
+				entityId = entityId,
+				preferredLocalMangaId = mangaId,
+				updatedAt = System.currentTimeMillis(),
+			)
 		}
 	}
 
@@ -446,6 +452,7 @@ class ContentDataRepository @Inject constructor(
 		metadataSourceKind = null,
 		metadataSourceService = null,
 		metadataSourceRemoteId = null,
+		updatedAt = System.currentTimeMillis(),
 	)
 
 	private fun newEntity(mangaId: Long) = MangaPrefsEntity(

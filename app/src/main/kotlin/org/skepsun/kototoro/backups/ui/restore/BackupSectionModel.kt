@@ -28,6 +28,10 @@ data class BackupSectionModel(
 				BackupSection.STATS -> R.string.statistics
 				BackupSection.SAVED_FILTERS -> R.string.saved_filters
 				BackupSection.AUTH -> R.string.auth_title
+				BackupSection.ENTITY_GRAPH_ENTITIES -> 0
+				BackupSection.ENTITY_GRAPH_BINDINGS -> 0
+				BackupSection.ENTITY_GRAPH_RELATIONS -> 0
+				BackupSection.ENTITY_GRAPH_PREFS -> 0
 			}
 
 	override fun areItemsTheSame(other: ListModel): Boolean {

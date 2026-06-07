@@ -29,4 +29,6 @@ data class EntityPrefsRecord(
 	val metadataSourceService: Int?,
 	@ColumnInfo(name = "metadata_source_remote_id")
 	val metadataSourceRemoteId: Long?,
+	@ColumnInfo(name = "updated_at")
+	val updatedAt: Long,
 )

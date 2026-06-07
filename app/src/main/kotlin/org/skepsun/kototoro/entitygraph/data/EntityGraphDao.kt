@@ -23,6 +23,18 @@ abstract class EntityGraphDao {
 	@Query("SELECT * FROM `entity` WHERE id IN (:entityIds)")
 	abstract suspend fun findEntitiesByIds(entityIds: List<Long>): List<EntityRecord>
 
+	@Query("SELECT * FROM `entity` ORDER BY id ASC")
+	abstract suspend fun dumpEntities(): List<EntityRecord>
+
+	@Query("SELECT * FROM entity_binding ORDER BY source ASC, external_id ASC")
+	abstract suspend fun dumpBindings(): List<EntityBindingRecord>
+
+	@Query("SELECT * FROM relation ORDER BY id ASC")
+	abstract suspend fun dumpRelations(): List<RelationRecord>
+
+	@Query("SELECT * FROM entity_preferences ORDER BY entity_id ASC")
+	abstract suspend fun dumpPrefs(): List<EntityPrefsRecord>
+
 	@Query(
 		"""
 		SELECT * FROM `entity`
@@ -33,8 +45,21 @@ abstract class EntityGraphDao {
 	)
 	abstract suspend fun findEntitiesByType(type: String, limit: Int): List<EntityRecord>
 
+	@Query(
+		"""
+		SELECT * FROM `entity`
+		WHERE type = :type AND primary_name = :primaryName
+		ORDER BY access_count DESC, last_accessed DESC, id DESC
+		LIMIT 1
+		"""
+	)
+	abstract suspend fun findEntityByTypeAndPrimaryName(type: String, primaryName: String): EntityRecord?
+
 	@Insert
 	abstract suspend fun insertEntity(entity: EntityRecord): Long
+
+	@Upsert
+	abstract suspend fun upsertEntityRecord(entity: EntityRecord)
 
 	@Update
 	abstract suspend fun updateEntity(entity: EntityRecord)
@@ -78,21 +103,26 @@ abstract class EntityGraphDao {
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
 	abstract suspend fun insertEntityPrefsIgnore(prefs: EntityPrefsRecord): Long
 
+	@Upsert
+	abstract suspend fun upsertPrefsRecord(prefs: EntityPrefsRecord)
+
 	@Query(
 		"""
 		UPDATE entity_preferences
 		SET preferred_local_manga_id = :preferredLocalMangaId
+			, updated_at = :updatedAt
 		WHERE entity_id = :entityId
 		"""
 	)
-	abstract suspend fun updateEntityPreferredLocalMangaId(entityId: Long, preferredLocalMangaId: Long?)
+	abstract suspend fun updateEntityPreferredLocalMangaId(entityId: Long, preferredLocalMangaId: Long?, updatedAt: Long)
 
 	@Query(
 		"""
 		UPDATE entity_preferences
 		SET metadata_source_kind = :metadataSourceKind,
 			metadata_source_service = :metadataSourceService,
-			metadata_source_remote_id = :metadataSourceRemoteId
+			metadata_source_remote_id = :metadataSourceRemoteId,
+			updated_at = :updatedAt
 		WHERE entity_id = :entityId
 		"""
 	)
@@ -101,6 +131,7 @@ abstract class EntityGraphDao {
 		metadataSourceKind: String?,
 		metadataSourceService: Int?,
 		metadataSourceRemoteId: Long?,
+		updatedAt: Long,
 	)
 
 	@Query(
@@ -132,6 +163,9 @@ abstract class EntityGraphDao {
 
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
 	abstract suspend fun insertRelation(relation: RelationRecord): Long
+
+	@Upsert
+	abstract suspend fun upsertRelationRecord(relation: RelationRecord)
 
 	@Query(
 		"""

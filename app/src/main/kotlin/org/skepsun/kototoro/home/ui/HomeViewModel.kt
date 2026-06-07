@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.annotation.StringRes
 import androidx.collection.LongObjectMap
 import androidx.compose.runtime.Immutable
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,6 +25,7 @@ import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.ExternalBackupStorage
+import org.skepsun.kototoro.backups.ui.periodical.RemoteNamespace
 import org.skepsun.kototoro.backups.ui.periodical.WebDavBackupUploader
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.jsonsource.SourceGroup
@@ -35,7 +35,10 @@ import org.skepsun.kototoro.core.model.withOverride
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.core.ui.BaseViewModel
+import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.ui.model.ContentOverride
+import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
@@ -128,6 +131,7 @@ data class HomeSyncState(
     val isAutoSyncEnabled: Boolean = false,
     val lastUploadTime: Long = 0L,
     val lastUploadKind: String? = null,
+    val isLegacyRestoreUploadBlocked: Boolean = false,
 )
 
 @Immutable
@@ -172,7 +176,9 @@ class HomeViewModel @Inject constructor(
     private val contentDataRepository: ContentDataRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     @ApplicationContext private val appContext: Context,
-) : ViewModel() {
+) : BaseViewModel() {
+
+    val onActionDone = MutableEventFlow<ReversibleAction>()
 
     private val selectedTabFlow = globalFavoritesState.selectedGroupTab.map { tabId ->
         when (tabId) {
@@ -252,12 +258,14 @@ class HomeViewModel @Inject constructor(
         AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC,
         AppSettings.KEY_BACKUP_WEBDAV_LAST_UPLOAD_TIME,
         AppSettings.KEY_BACKUP_WEBDAV_LAST_UPLOAD_KIND,
+        AppSettings.KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
     ).map {
         HomeSyncState(
             isWebDavEnabled = settings.isBackupWebDavUploadEnabled,
             isAutoSyncEnabled = settings.isBackupWebDavAutoSyncEnabled,
             lastUploadTime = settings.backupWebDavLastUploadTime,
             lastUploadKind = settings.backupWebDavLastUploadKind,
+            isLegacyRestoreUploadBlocked = settings.isBackupWebDavAutoUploadBlockedByLegacyRestore,
         )
     }
 
@@ -498,10 +506,15 @@ class HomeViewModel @Inject constructor(
     fun restoreWebDavNow() {
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val latest = webDavUploader.getLatestBackup() ?: return@launch
+                val latest = webDavUploader.getLatestBackup(RemoteNamespace.V2)
+                    ?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
+                    ?: run {
+                        errorEvent.call(IllegalStateException("No WebDAV backups found"))
+                        return@launch
+                    }
                 val tempFile = java.io.File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
                 try {
-                    webDavUploader.downloadBackup(latest.name, tempFile)
+                    webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
                     val allSections = setOf(
                         org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
                         org.skepsun.kototoro.backups.domain.BackupSection.CATEGORIES,
@@ -510,19 +523,31 @@ class HomeViewModel @Inject constructor(
                         org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
                         org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,
+                        org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_PREFS,
                     )
-                    val zis = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile))
-                    try {
+                    val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
                         repository.restoreBackup(zis, allSections, null)
-                    } finally {
-                        zis.close()
                     }
                     backupWebDavRestoreCoordinator.commitManualRestore()
+                    onActionDone.call(
+                        ReversibleAction(
+                            if (restoreResult.legacyJarReposImported) {
+                                R.string.webdav_restore_success_legacy_jar_hint
+                            } else {
+                                R.string.webdav_restore_success
+                            },
+                            null,
+                        ),
+                    )
                 } finally {
                     if (tempFile.exists()) tempFile.delete()
                 }
             } catch (e: Exception) {
                 e.printStackTraceDebug()
+                errorEvent.call(e)
             }
         }
     }

@@ -254,6 +254,22 @@ fun AppNavGraph(
                 }
             }
 
+            androidx.compose.runtime.LaunchedEffect(viewModel.onActionDone) {
+                val observer = org.skepsun.kototoro.core.ui.util.ReversibleActionObserver(rootView)
+                viewModel.onActionDone.collect { event ->
+                    event?.consume(observer)
+                }
+            }
+
+            androidx.compose.runtime.LaunchedEffect(viewModel.onError) {
+                val host = activity.window.decorView.rootView
+                val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+                val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
+                viewModel.onError.collect { event ->
+                    event?.consume(observer)
+                }
+            }
+
             DisposableEffect(mainActivity, viewModel, state.selectedTab, state.selectedSourceTags) {
                 val callback = object : SearchBarFilterViewController.Callback {
                     override fun getSelectedContentType(): BrowseGroupTab = when (state.selectedTab) {
@@ -309,7 +325,6 @@ fun AppNavGraph(
                 }
                 val onHomeSettingsClick = remember(appRouter) { { appRouter.openSettings() } }
                 val onHomeReaderSettingsClick = remember(appRouter) { { appRouter.openReaderSettings() } }
-                val onHomeSyncSettingsClick = remember(appRouter) { { appRouter.openSyncSettings() } }
                 val onHomeViewAllRecentClick = remember(navController, markReturnHomeOnBack) {
                     {
                         navController.navigate(HistoryRoute) {
@@ -381,7 +396,6 @@ fun AppNavGraph(
                 val homeActions = remember(
                     onHomeSettingsClick,
                     onHomeReaderSettingsClick,
-                    onHomeSyncSettingsClick,
                     onHomeViewAllRecentClick,
                     onHomeViewAllUpdatesClick,
                     onHomeViewAllRecommendationsClick,
@@ -397,7 +411,6 @@ fun AppNavGraph(
                     HomeScreenActions(
                         onSettingsClick = onHomeSettingsClick,
                         onReaderSettingsClick = onHomeReaderSettingsClick,
-                        onSyncSettingsClick = onHomeSyncSettingsClick,
                         onViewAllRecentClick = onHomeViewAllRecentClick,
                         onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
                         onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,

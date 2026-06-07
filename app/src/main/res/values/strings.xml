@@ -2027,8 +2027,13 @@
     <string name="webdav_auto_restore_summary">On the first app startup of each day, restores the latest backup once; may upload once post-restore if content differs</string>
     <string name="webdav_auto_sync">Auto sync to WebDAV</string>
     <string name="webdav_auto_sync_summary">Monitors changes and uploads backups to WebDAV on unmetered networks after a short delay, with a minimum interval of 12 hours</string>
+    <string name="webdav_sync_attention_title">Sync attention</string>
+    <string name="webdav_legacy_restore_block_summary">This device was restored from an older backup format. Automatic WebDAV upload is temporarily blocked to avoid overwriting newer remote data. Review the restored data, then use \"Upload now\" to establish a new baseline.</string>
     <string name="webdav_upload_now">Upload backup now</string>
     <string name="webdav_restore_now">Restore latest backup</string>
+    <string name="webdav_connection_check_in_progress">Checking WebDAV connection…</string>
+    <string name="webdav_upload_in_progress">Uploading backup to WebDAV…</string>
+    <string name="webdav_restore_in_progress">Restoring latest backup from WebDAV…</string>
     <string name="webdav_upload_success">Backup uploaded to WebDAV</string>
     <string name="webdav_restore_success">Data restored from WebDAV</string>
     <string name="webdav_restore_success_legacy_jar_hint">Data restored from WebDAV. Compatible JAR repositories were added for a legacy backup.</string>

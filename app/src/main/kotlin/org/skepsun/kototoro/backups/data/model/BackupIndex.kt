@@ -16,4 +16,11 @@ class BackupIndex(
 		appVersion = BuildConfig.VERSION_CODE,
 		createdAt = System.currentTimeMillis(),
 	)
+
+	companion object {
+		const val CURRENT_BACKUP_FORMAT_VERSION = 2
+		const val CURRENT_SYNC_SCHEMA_VERSION = 2
+		const val WRITER_GENERATION_V1 = 1
+		const val WRITER_GENERATION_V2 = 2
+	}
 }

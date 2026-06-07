@@ -25,6 +25,8 @@ import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.ui.BaseBackupRestoreService
+import org.skepsun.kototoro.backups.ui.periodical.BackupFileInfo
+import org.skepsun.kototoro.backups.ui.periodical.RemoteNamespace
 import org.skepsun.kototoro.backups.ui.periodical.WebDavBackupUploader
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.BackupFlow
@@ -120,81 +122,99 @@ class WebDavAutoRestoreService : Service() {
         logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_check_started")
 
         try {
-            // 拉取远端文件列表并按数据版本选择
-            val remoteFiles = webDavUploader.listBackupFiles()
+            val remoteFiles = webDavUploader.listBackupFiles(RemoteNamespace.V2)
             if (remoteFiles.isEmpty()) {
-                logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_remote_backups")
+                val legacy = selectLegacyCandidate()
+                if (legacy == null) {
+                    logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_remote_backups")
+                    return
+                }
+                restoreCandidate(legacy, currentTime, isLegacyMigration = true)
                 return
             }
 
-            // 强制策略：每次都选择“最新版本”的备份（若无法解析版本则选最新时间）
-            val highestVersionItem = remoteFiles.filter { it.dataVersion != null }
-                .maxByOrNull { it.dataVersion!! }
-            val candidate = if (highestVersionItem != null) {
-                // 若同一版本存在多个文件，取修改时间最新的一个
-                remoteFiles.filter { it.dataVersion == highestVersionItem.dataVersion }
-                    .maxByOrNull { it.lastModified } ?: highestVersionItem
-            } else {
-                remoteFiles.maxByOrNull { it.lastModified }!!
+            val candidate = selectPreferredCandidate(remoteFiles)
+                ?: run {
+                    logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_compatible_v2_backup")
+                    return
+                }
+            restoreCandidate(candidate, currentTime, isLegacyMigration = false)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to perform auto restore", e)
+            throw e
+        }
+
+        // 记录本次检查的时间（不再用于节流，仅用于状态展示）
+        settings.backupWebDavLastAutoRestoreCheckTime = currentTime
+    }
+
+    private suspend fun restoreCandidate(
+        candidate: BackupFileInfo,
+        currentTime: Long,
+        isLegacyMigration: Boolean,
+    ) {
+        logBackupFlow(
+            TAG,
+            flow = BackupFlow.WEBDAV_AUTO_RESTORE,
+            event = "backup_selected",
+            reason = null,
+            "name" to candidate.name,
+            "version" to candidate.dataVersion,
+            "modified" to candidate.lastModified,
+            "writerGeneration" to candidate.writerGeneration,
+        )
+
+        val tempFile = File.createTempFile("webdav_backup", ".bk.zip", this.cacheDir)
+        try {
+            Log.d(TAG, "Downloading backup file: ${candidate.name}")
+            webDavUploader.downloadBackup(candidate.name, tempFile, candidate.namespace)
+
+            Log.d(TAG, "Restoring backup from: ${tempFile.absolutePath}")
+            val zipInputStream = ZipInputStream(FileInputStream(tempFile))
+            val allSections = buildRestoreSections(candidate.writerGeneration)
+
+            val restoreResult = zipInputStream.use { zis ->
+                backupRepository.restoreBackup(zis, allSections, null)
             }
 
+            val changesApplied = !restoreResult.result.isEmpty
+
+            val restoreResultCommit = backupWebDavRestoreCoordinator.commitAutoRestore(
+                restoredVersion = candidate.dataVersion,
+                now = currentTime,
+            )
             logBackupFlow(
                 TAG,
                 flow = BackupFlow.WEBDAV_AUTO_RESTORE,
-                event = "backup_selected",
+                event = "restore_complete",
                 reason = null,
-                "name" to candidate.name,
-                "version" to candidate.dataVersion,
-                "modified" to candidate.lastModified,
+                "changesApplied" to changesApplied,
+                "version" to restoreResultCommit.restoredVersion,
+                "legacyJarReposImported" to restoreResult.legacyJarReposImported,
+                "legacyMigration" to isLegacyMigration,
             )
 
-            // 下载并恢复备份
-            val tempFile = File.createTempFile("webdav_backup", ".bk.zip", this.cacheDir)
-            try {
-                Log.d(TAG, "Downloading backup file: ${candidate.name}")
-                webDavUploader.downloadBackup(candidate.name, tempFile)
+            if (isLegacyMigration) {
+                settings.backupWebDavLastSeenLegacyCreatedAt = candidate.lastModified.time
+                settings.isBackupWebDavAutoUploadBlockedByLegacyRestore = true
+            }
+            settings.hasCompletedBackupWebDavV2Migration = true
 
-                Log.d(TAG, "Restoring backup from: ${tempFile.absolutePath}")
-                val zipInputStream = ZipInputStream(FileInputStream(tempFile))
-                // 自动恢复不包含 SETTINGS，以免覆盖本地偏好（例如阅读器横屏双页开关）
-                // 手动恢复仍可包含 SETTINGS（见 PeriodicalBackupSettingsViewModel.restoreWebDavNow）
-                val allSections = setOf(
-                    BackupSection.HISTORY,
-                    BackupSection.CATEGORIES,
-                    BackupSection.FAVOURITES,
-                    BackupSection.BOOKMARKS,
-                    BackupSection.SOURCES,
-                    BackupSection.EXTENSION_REPOS,
-                )
-
-                val restoreResult = zipInputStream.use { zis ->
-                    backupRepository.restoreBackup(zis, allSections, null)
-                }
-
-                val changesApplied = !restoreResult.result.isEmpty
-
-                val restoreResultCommit = backupWebDavRestoreCoordinator.commitAutoRestore(
-                    restoredVersion = candidate.dataVersion,
-                    now = currentTime,
-                )
+            if (isLegacyMigration) {
                 logBackupFlow(
                     TAG,
                     flow = BackupFlow.WEBDAV_AUTO_RESTORE,
-                    event = "restore_complete",
-                    reason = null,
-                    "changesApplied" to changesApplied,
-                    "version" to restoreResultCommit.restoredVersion,
-                    "legacyJarReposImported" to restoreResult.legacyJarReposImported,
+                    event = "post_restore_upload_skipped",
+                    reason = "legacy_restore_block",
                 )
-
-                // 仅在“合并后的本地备份”与“拉取的远端备份”内容不同的情况下，上传一次
+            } else {
                 kotlin.runCatching {
                     val out = File.createTempFile("webdav_backup_post_restore", ".bk.zip", this.cacheDir)
                     try {
                         java.util.zip.ZipOutputStream(out.outputStream()).use { zos ->
                             backupRepository.createBackup(zos, null)
                         }
-                        val isSame = areBackupsEqual(tempFile, out)
+                        val isSame = candidate.namespace == RemoteNamespace.V2 && areBackupsEqual(tempFile, out)
                         if (!isSame) {
                             val uploadResult = backupWebDavUploadCoordinator.uploadAndCommit(
                                 file = out,
@@ -210,20 +230,53 @@ class WebDavAutoRestoreService : Service() {
                 }.onFailure { e ->
                     Log.e(TAG, "Post-restore comparison/upload failed", e)
                 }
-
-            } finally {
-                if (tempFile.exists()) {
-                    tempFile.delete()
-                }
             }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to perform auto restore", e)
-            throw e
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
         }
+    }
 
-        // 记录本次检查的时间（不再用于节流，仅用于状态展示）
-        settings.backupWebDavLastAutoRestoreCheckTime = currentTime
+    private suspend fun selectLegacyCandidate(): BackupFileInfo? {
+        if (settings.hasCompletedBackupWebDavV2Migration) {
+            return null
+        }
+        val legacyFiles = runCatching { webDavUploader.listBackupFiles(RemoteNamespace.V1) }
+            .getOrElse { emptyList() }
+        val candidate = selectPreferredCandidate(legacyFiles) ?: return null
+        if (candidate.lastModified.time <= settings.backupWebDavLastSeenLegacyCreatedAt) {
+            return null
+        }
+        return candidate
+    }
+
+    private fun selectPreferredCandidate(remoteFiles: List<BackupFileInfo>): BackupFileInfo? {
+        return remoteFiles
+            .sortedWith(
+                compareByDescending<BackupFileInfo> { it.writerGeneration }
+                    .thenByDescending { it.lastModified.time }
+                    .thenByDescending { it.dataVersion ?: Int.MIN_VALUE },
+            )
+            .firstOrNull()
+    }
+
+    private fun buildRestoreSections(writerGeneration: Int): Set<BackupSection> {
+        val baseSections = linkedSetOf(
+            BackupSection.HISTORY,
+            BackupSection.CATEGORIES,
+            BackupSection.FAVOURITES,
+            BackupSection.BOOKMARKS,
+            BackupSection.SOURCES,
+            BackupSection.EXTENSION_REPOS,
+        )
+        if (writerGeneration >= RemoteNamespace.V2.writerGeneration) {
+            baseSections += BackupSection.ENTITY_GRAPH_ENTITIES
+            baseSections += BackupSection.ENTITY_GRAPH_BINDINGS
+            baseSections += BackupSection.ENTITY_GRAPH_RELATIONS
+            baseSections += BackupSection.ENTITY_GRAPH_PREFS
+        }
+        return baseSections
     }
 
 	companion object {

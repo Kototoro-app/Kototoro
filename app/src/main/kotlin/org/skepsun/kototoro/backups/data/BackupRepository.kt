@@ -40,6 +40,13 @@ import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.progress.Progress
+import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
+import org.skepsun.kototoro.entitygraph.data.EntityRecord
+import org.skepsun.kototoro.entitygraph.data.RelationRecord
+import org.skepsun.kototoro.entitygraph.data.decodeStringList
+import org.skepsun.kototoro.entitygraph.data.encodeStringList
+import org.skepsun.kototoro.entitygraph.data.mergeAliases
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.filter.data.PersistableFilter
@@ -195,6 +202,30 @@ class BackupRepository @Inject constructor(
                     section = BackupSection.AUTH,
                     data = dumpAuth(),
                 )
+
+                BackupSection.ENTITY_GRAPH_ENTITIES -> output.writeJsonArray(
+                    section = BackupSection.ENTITY_GRAPH_ENTITIES,
+                    data = database.getEntityGraphDao().dumpEntities().asFlow(),
+                    serializer = serializer(),
+                )
+
+                BackupSection.ENTITY_GRAPH_BINDINGS -> output.writeJsonArray(
+                    section = BackupSection.ENTITY_GRAPH_BINDINGS,
+                    data = database.getEntityGraphDao().dumpBindings().asFlow(),
+                    serializer = serializer(),
+                )
+
+                BackupSection.ENTITY_GRAPH_RELATIONS -> output.writeJsonArray(
+                    section = BackupSection.ENTITY_GRAPH_RELATIONS,
+                    data = database.getEntityGraphDao().dumpRelations().asFlow(),
+                    serializer = serializer(),
+                )
+
+                BackupSection.ENTITY_GRAPH_PREFS -> output.writeJsonArray(
+                    section = BackupSection.ENTITY_GRAPH_PREFS,
+                    data = database.getEntityGraphDao().dumpPrefs().asFlow(),
+                    serializer = serializer(),
+                )
             }
             progress?.emit(commonProgress)
             commonProgress++
@@ -213,6 +244,7 @@ class BackupRepository @Inject constructor(
         var result = CompositeResult.EMPTY
         val archiveSections = linkedSetOf<BackupSection>()
         val restoredSections = linkedSetOf<BackupSection>()
+        val entityIdMapping = LinkedHashMap<Long, Long>()
         while (entry != null) {
             val section = BackupSection.of(entry)
             if (section != null) {
@@ -277,6 +309,22 @@ class BackupRepository @Inject constructor(
                     BackupSection.AUTH -> input.readMap().let {
                         restoreAuth(it)
                         CompositeResult.success()
+                    }
+
+                    BackupSection.ENTITY_GRAPH_ENTITIES -> input.readJsonArray<EntityRecord>(serializer()).restoreToDb {
+                        restoreEntityRecord(it, entityIdMapping)
+                    }
+
+                    BackupSection.ENTITY_GRAPH_BINDINGS -> input.readJsonArray<EntityBindingRecord>(serializer()).restoreToDb {
+                        restoreEntityBinding(it, entityIdMapping)
+                    }
+
+                    BackupSection.ENTITY_GRAPH_RELATIONS -> input.readJsonArray<RelationRecord>(serializer()).restoreToDb {
+                        restoreEntityRelation(it, entityIdMapping)
+                    }
+
+                    BackupSection.ENTITY_GRAPH_PREFS -> input.readJsonArray<EntityPrefsRecord>(serializer()).restoreToDb {
+                        restoreEntityPrefs(it, entityIdMapping)
                     }
 
                     null -> CompositeResult.EMPTY // skip unknown entries
@@ -485,6 +533,83 @@ class BackupRepository @Inject constructor(
                     )
                 },
             )
+        }
+    }
+
+    private suspend fun MangaDatabase.restoreEntityRecord(
+        remote: EntityRecord,
+        entityIdMapping: MutableMap<Long, Long>,
+    ) {
+        val dao = getEntityGraphDao()
+        val existing = dao.findEntity(remote.id)
+            ?.takeIf { it.type == remote.type }
+            ?: dao.findEntityByTypeAndPrimaryName(remote.type, remote.primaryName)
+        val localId = if (existing == null) {
+            dao.insertEntity(
+                remote.copy(
+                    id = 0L,
+                    aliases = encodeStringList(mergeAliases(remote.primaryName, decodeStringList(remote.aliases)).drop(1)),
+                ),
+            )
+        } else {
+            val mergedNames = mergeAliases(
+                existing.primaryName,
+                decodeStringList(existing.aliases) + listOf(remote.primaryName) + decodeStringList(remote.aliases),
+            )
+            val merged = existing.copy(
+                primaryName = mergedNames.firstOrNull() ?: existing.primaryName,
+                aliases = encodeStringList(mergedNames.drop(1)),
+                createdAt = minOf(existing.createdAt, remote.createdAt),
+                lastAccessed = maxOf(existing.lastAccessed, remote.lastAccessed),
+                accessCount = maxOf(existing.accessCount, remote.accessCount),
+            )
+            dao.upsertEntityRecord(merged)
+            existing.id
+        }
+        entityIdMapping[remote.id] = localId
+    }
+
+    private suspend fun MangaDatabase.restoreEntityBinding(
+        remote: EntityBindingRecord,
+        entityIdMapping: Map<Long, Long>,
+    ) {
+        val localEntityId = entityIdMapping[remote.entityId] ?: return
+        getEntityGraphDao().upsertBinding(
+            remote.copy(
+                entityId = localEntityId,
+                isPrimary = false,
+            ),
+        )
+    }
+
+    private suspend fun MangaDatabase.restoreEntityRelation(
+        remote: RelationRecord,
+        entityIdMapping: Map<Long, Long>,
+    ) {
+        val localFromId = entityIdMapping[remote.fromEntityId] ?: return
+        val localToId = entityIdMapping[remote.toEntityId] ?: return
+        if (localFromId == localToId) {
+            return
+        }
+        getEntityGraphDao().upsertRelationRecord(
+            remote.copy(
+                id = 0L,
+                fromEntityId = localFromId,
+                toEntityId = localToId,
+            ),
+        )
+    }
+
+    private suspend fun MangaDatabase.restoreEntityPrefs(
+        remote: EntityPrefsRecord,
+        entityIdMapping: Map<Long, Long>,
+    ) {
+        val localEntityId = entityIdMapping[remote.entityId] ?: return
+        val dao = getEntityGraphDao()
+        val local = dao.findEntityPrefs(localEntityId)
+        val candidate = remote.copy(entityId = localEntityId)
+        if (local == null || candidate.updatedAt >= local.updatedAt) {
+            dao.upsertPrefsRecord(candidate)
         }
     }
 
