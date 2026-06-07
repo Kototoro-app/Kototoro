@@ -20,6 +20,9 @@ abstract class EntityGraphDao {
 	@Query("SELECT * FROM entity_preferences WHERE entity_id = :entityId LIMIT 1")
 	abstract suspend fun findEntityPrefs(entityId: Long): EntityPrefsRecord?
 
+	@Query("SELECT * FROM entity_preferences WHERE entity_id IN (:entityIds)")
+	abstract suspend fun findEntityPrefsByIds(entityIds: List<Long>): List<EntityPrefsRecord>
+
 	@Query("SELECT * FROM `entity` WHERE id IN (:entityIds)")
 	abstract suspend fun findEntitiesByIds(entityIds: List<Long>): List<EntityRecord>
 

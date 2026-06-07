@@ -207,9 +207,7 @@ class SuggestionsViewModel @Inject constructor(
 			emptyMap()
 		}
 		val resolvedEntityIdsByMangaId = entityIdsByMangaId + ensuredEntityIdsByMangaId
-		val preferredLocalIdsByEntity = resolvedEntityIdsByMangaId.values
-			.distinct()
-			.associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
+		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIdsByMangaId.values)
 		val displayTypeOrdinalByEntity = this
 			.groupBy { resolvedEntityIdsByMangaId[it.id] }
 			.mapNotNull { (entityId, items) ->

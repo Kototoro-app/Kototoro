@@ -1542,12 +1542,9 @@ class SourceMigrationViewModel @Inject constructor(
         val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
             contents.map { it.id },
         )
-        val preferredLocalIdsByEntity = (
-            candidateGroups.mapNotNull { it.resolvedEntityId } +
-                entityIdsByMangaId.values
-        ).distinct().associateWith { entityId ->
-            contentDataRepository.getEntityPreferredLocalMangaId(entityId)
-        }
+        val preferredLocalIdsByEntity = contentDataRepository.getEntityPreferredLocalMangaIds(
+            (candidateGroups.mapNotNull { it.resolvedEntityId } + entityIdsByMangaId.values).distinct(),
+        )
         val reorderedCandidateGroups = candidateGroups.map { group ->
             group.copy(
                 items = sortGroupItems(

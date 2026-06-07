@@ -338,9 +338,7 @@ class HomeViewModel @Inject constructor(
         val recentSearches = extras.first
 
         val allRecommendations = if (isSuggestionNsfwDisabled) contentData.recommendations.filterNot { it.isNsfw() } else contentData.recommendations
-        val preferredLocalIdsByEntity = entityIdsByMangaId.values
-            .distinct()
-            .associateWith { entityId -> contentDataRepository.getEntityPreferredLocalMangaId(entityId) }
+        val preferredLocalIdsByEntity = contentDataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
         val displayContentOverrides = buildDisplayContentOverrides(
             resumeContent = contentData.resumeState.content,
             history = contentData.history,

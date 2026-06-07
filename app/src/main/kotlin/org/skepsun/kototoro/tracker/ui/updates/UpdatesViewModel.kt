@@ -245,9 +245,7 @@ class UpdatesViewModel @Inject constructor(
 			emptyMap()
 		}
 		val entityIdsByMangaId = existingEntityIdsByMangaId + ensuredEntityIdsByMangaId
-		val preferredLocalIdsByEntity = entityIdsByMangaId.values
-			.distinct()
-			.associateWith { entityId -> dataRepository.getEntityPreferredLocalMangaId(entityId) }
+		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
 		val displayTypeOrdinalByEntity = this
 			.groupBy { entityIdsByMangaId[it.manga.id] }
 			.mapNotNull { (entityId, items) ->

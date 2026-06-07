@@ -157,6 +157,14 @@ class ContentDataRepository @Inject constructor(
 		return db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
 	}
 
+	/** Batch version of getEntityPreferredLocalMangaId — avoids N+1 queries in UI loops. */
+	suspend fun getEntityPreferredLocalMangaIds(entityIds: Collection<Long>): Map<Long, Long?> {
+		if (entityIds.isEmpty()) return emptyMap()
+		val prefs = db.getEntityGraphDao().findEntityPrefsByIds(entityIds.distinct())
+			.associate { it.entityId to it.preferredLocalMangaId }
+		return entityIds.associateWith { prefs[it] }
+	}
+
 	suspend fun setEntityPreferredLocalMangaId(entityId: Long, mangaId: Long?) {
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
