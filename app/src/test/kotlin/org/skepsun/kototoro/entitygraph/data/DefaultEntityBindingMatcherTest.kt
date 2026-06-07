@@ -58,10 +58,18 @@ class DefaultEntityBindingMatcherTest {
 	}
 
 	@Test
+	fun `short names below 5 chars require exact match`() = runTest {
+		val left = entity(id = 1L, type = EntityType.WORK, name = "A")
+		val right = entity(id = 2L, type = EntityType.WORK, name = "B")
+		val confidence = matcher.tryBindEntities(left, right)
+		assertEquals(0f, confidence)
+	}
+
+	@Test
 	fun `classify uses auto weak and ignore thresholds`() {
-		assertEquals(EntityBindingStrength.AUTO_BIND, matcher.classify(0.86f))
-		assertEquals(EntityBindingStrength.WEAK_BIND, matcher.classify(0.60f))
-		assertEquals(EntityBindingStrength.IGNORE, matcher.classify(0.59f))
+		assertEquals(EntityBindingStrength.AUTO_BIND, matcher.classify(0.91f))
+		assertEquals(EntityBindingStrength.WEAK_BIND, matcher.classify(0.65f))
+		assertEquals(EntityBindingStrength.IGNORE, matcher.classify(0.64f))
 	}
 
 	private fun entity(

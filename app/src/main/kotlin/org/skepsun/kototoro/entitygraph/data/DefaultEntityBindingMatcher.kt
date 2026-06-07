@@ -10,11 +10,12 @@ import org.skepsun.kototoro.entitygraph.domain.RelationType
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import javax.inject.Inject
 
-private const val AUTO_BIND_THRESHOLD = 0.85f
-private const val WEAK_BIND_THRESHOLD = 0.60f
+private const val AUTO_BIND_THRESHOLD = 0.90f
+private const val WEAK_BIND_THRESHOLD = 0.65f
 private const val SAME_WORK_BONUS = 0.08f
 private const val SAME_CHARACTER_BONUS = 0.08f
 private const val SAME_CREATED_WORK_BONUS = 0.05f
+private const val MIN_LENGTH_FOR_FUZZY = 5
 
 @Reusable
 class DefaultEntityBindingMatcher @Inject constructor(
@@ -77,6 +78,20 @@ class DefaultEntityBindingMatcher @Inject constructor(
 	private fun scoreNames(entityA: Entity, entityB: Entity): Float {
 		val namesA = mergeAliases(entityA.primaryName, entityA.aliases)
 		val namesB = mergeAliases(entityB.primaryName, entityB.aliases)
+
+		// Fast path 1: exact match (set-based, O(n+m))
+		val aSet = namesA.toSet()
+		if (namesB.any { it in aSet }) return 1f
+
+		// Fast path 2: lowercase exact match
+		val aLower = namesA.mapTo(HashSet(namesA.size)) { it.lowercase() }
+		if (namesB.any { it.lowercase() in aLower }) return 0.9f
+
+		// Fast path 3: normalised match
+		val aNormalized = namesA.mapTo(HashSet(namesA.size)) { normalizeName(it) }
+		if (namesB.any { normalizeName(it) in aNormalized }) return 0.9f
+
+		// Slow path 4: Levenshtein across remaining pairs
 		var best = 0f
 		for (left in namesA) {
 			for (right in namesB) {
@@ -84,6 +99,7 @@ class DefaultEntityBindingMatcher @Inject constructor(
 				if (score > best) {
 					best = score
 				}
+				if (best >= 0.88f) return best // ceiling reached
 			}
 		}
 		return best
@@ -103,6 +119,13 @@ class DefaultEntityBindingMatcher @Inject constructor(
 		}
 		if (normalizedLeft == normalizedRight) {
 			return 0.9f
+		}
+		// Short name protection: if either normalized name is < 5 characters,
+		// require exact match (already checked above). Levenshtein on very short
+		// names is too prone to false positives (e.g. "ab" vs "ba" has 100% edit).
+		val minNormLength = minOf(normalizedLeft.length, normalizedRight.length)
+		if (minNormLength < MIN_LENGTH_FOR_FUZZY) {
+			return 0f
 		}
 		val maxLength = maxOf(normalizedLeft.length, normalizedRight.length).coerceAtLeast(1)
 		val similarity = 1f - normalizedLeft.levenshteinDistance(normalizedRight).toFloat() / maxLength.toFloat()

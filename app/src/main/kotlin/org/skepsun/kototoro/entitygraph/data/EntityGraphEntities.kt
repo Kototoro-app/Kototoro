@@ -14,6 +14,7 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
 	indices = [
 		Index(name = "idx_entity_name", value = ["primary_name"]),
 		Index(name = "idx_entity_name_hash", value = ["type", "name_hash"], unique = true),
+		Index(name = "idx_entity_type_access", value = ["type", "access_count", "last_accessed", "id"]),
 	],
 )
 data class EntityRecord(
