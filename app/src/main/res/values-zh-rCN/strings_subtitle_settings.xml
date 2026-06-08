@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_subtitle_settings">字幕设置</string>
+    <string name="video_subtitle_style">排版样式</string>
+    <string name="video_subtitle_font_size">字体大小</string>
+    <string name="video_subtitle_border_size">边框大小</string>
+    <string name="video_subtitle_position">位置（边距）</string>
+    <string name="video_subtitle_color_text">文字</string>
+    <string name="video_subtitle_color_border">边框</string>
+    <string name="video_subtitle_color_bg">背景</string>
+</resources>

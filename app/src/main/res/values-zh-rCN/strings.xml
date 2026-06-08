@@ -1971,8 +1971,13 @@
     <string name="webdav_auto_restore_summary">应用每天首次启动时检查并恢复 WebDAV 上最新备份；恢复完成后仅在内容不一致时可能上传一次以保持远端同步</string>
     <string name="webdav_auto_sync">自动同步到 WebDAV</string>
     <string name="webdav_auto_sync_summary">仅在非计量网络下，监听历史/收藏等变更并在短暂聚合后自动上传到 WebDAV；触发间隔至少 12 小时。</string>
+    <string name="webdav_sync_attention_title">同步注意事项</string>
+    <string name="webdav_legacy_restore_block_summary">此设备从旧版备份格式恢复。为避免覆盖较新的远端数据，已临时阻止自动 WebDAV 上传。请检查恢复的数据，然后使用"立即上传备份"建立新的数据基线。</string>
     <string name="webdav_upload_now">立即上传备份</string>
     <string name="webdav_restore_now">恢复最新备份</string>
+    <string name="webdav_connection_check_in_progress">正在检查 WebDAV 连接…</string>
+    <string name="webdav_upload_in_progress">正在上传备份到 WebDAV…</string>
+    <string name="webdav_restore_in_progress">正在从 WebDAV 恢复最新备份…</string>
     <string name="webdav_upload_success">已上传到 WebDAV</string>
     <string name="webdav_upload_success_local_copy_failed">已上传到 WebDAV（本地副本保存失败）</string>
         <string name="recent_webdav_action">最近的 WebDAV 操作</string>
@@ -2095,9 +2100,6 @@
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背后的内容</string>
     <string name="pref_haze_opacity">玻璃容器不透明度</string>
     <string name="pref_haze_opacity_summary">控制玻璃风格容器的不透明度，关闭模糊后依然生效</string>
-    <string name="blur_mode_standard">轻度</string>
-    <string name="blur_mode_immersive">平衡（推荐）</string>
-    <string name="blur_mode_enhanced">强化</string>
     <string name="mark_as_safe">标记为非 NSFW</string>
     <string name="mark_as_nsfw">标记为 NSFW</string>
     <string name="video_mpv_conf_guide"><![CDATA[<b>常用配置:</b><br/>• <tt>deband=yes</tt> (减少色带)<br/>• <tt>interpolation=yes</tt> (平滑播放)<br/>• <tt>hwdec=mediacodec</tt> (硬件解码)<br/><br/><a href="https://mpv.io/manual/master/#options">查看详细的 MPV 配置手册</a>]]></string>
@@ -2213,6 +2215,7 @@
     <string name="details_reading_language">阅读语言</string>
     <string name="details_reading_source">阅读源</string>
     <string name="details_switchable_projection">可切换投影</string>
+    <string name="details_temporary_projection_badge">临时</string>
     <string name="details_source_search_no_results_group">无结果</string>
     <string name="details_source_search_no_visible_results">没有可显示的结果。关闭“隐藏空源”后可查看无结果或不可用的来源。</string>
     <string name="details_reading_source_unavailable">不可用</string>
@@ -2229,6 +2232,7 @@
     <string name="details_tracking_suggestion_view">查看候选</string>
     <string name="details_entity_metadata_sheet_hint">这里决定该实体优先采用哪个元数据绑定来展示标题、简介、标签以及同步追踪状态。</string>
     <string name="details_current_projection_sheet_hint">这里决定该实体当前使用哪个本地%1$s投影；后续搜索并挂入的新投影也会出现在这里。</string>
+    <string name="details_temporary_projection_sheet_hint">此设置仅影响本章节和继续阅读视图。</string>
     <string name="details_remove_projection">移除投影</string>
     <string name="details_translate_button_visible">在详情页显示翻译按钮</string>
     <string name="details_translate_button_visible_summary">当翻译可用时，在作品详情页显示翻译操作按钮</string>

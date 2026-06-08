@@ -27,6 +27,9 @@
     <plurals name="minutes">
         <item quantity="other">%1$d 分钟</item>
     </plurals>
+    <plurals name="home_updates_new_chapters">
+        <item quantity="other">%1$d 个新章节</item>
+    </plurals>
     <plurals name="home_enabled_sources">
         <item quantity="other">已启用 %1$d 个内容源</item>
     </plurals>

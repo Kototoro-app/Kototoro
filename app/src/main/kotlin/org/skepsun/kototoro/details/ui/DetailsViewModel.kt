@@ -1822,6 +1822,102 @@ class DetailsViewModel @Inject constructor(
 			return
 		}
 		fallbackMangaId?.let { restorePersistedMetadataSourceSelection(it) }
+		// Fallback: if still no tracking source selected, resolve from entity tracking bindings.
+		if (selectedMetadataSource.value == MetadataSourceSelection.Base) {
+			resolveTrackingSourceFromEntityBindings(entityId)
+		}
+	}
+
+	private suspend fun resolveTrackingSourceFromEntityBindings(entityId: Long) {
+		val bindings = entityGraphRepository.getBindings(entityId)
+		android.util.Log.d(
+			"DetailsViewModel",
+			"resolveTrackingSourceFromEntityBindings: entityId=$entityId, bindingCount=${bindings.size}, " +
+				"sources=${bindings.map { it.source }}",
+		)
+		// Method 1: direct tracking bindings (source = ScrobblerService id like 1,2,3...)
+		val directTrackingBindings = bindings.filter { binding ->
+			binding.source.toIntOrNull()?.let { sourceId ->
+				ScrobblerService.entries.any { it.id == sourceId }
+			} == true
+		}.sortedByDescending { it.confidence }
+		if (directTrackingBindings.isNotEmpty()) {
+			val preferredService = settings.preferredTrackingSite
+			val bestBinding = directTrackingBindings.firstOrNull { binding ->
+				binding.source.toIntOrNull() == preferredService.id
+			} ?: directTrackingBindings.first()
+			val service = ScrobblerService.entries.firstOrNull {
+				it.id == bestBinding.source.toIntOrNull()
+			}
+			val remoteId = bestBinding.externalId.toLongOrNull()
+			if (service != null && remoteId != null) {
+				applyTrackingSource(entityId, service, remoteId)
+				return
+			}
+		}
+		// Method 2: check if any bound local manga is from a tracking source (TRACKING_*)
+		val localMangaIds = bindings.asSequence()
+			.filter { it.source == "0" || it.source == "local_manga" }
+			.mapNotNull { it.externalId.toLongOrNull() }
+			.distinct()
+			.toList()
+		android.util.Log.d(
+			"DetailsViewModel",
+			"resolveTrackingSourceFromEntityBindings: checking local manga sources, mangaIds=$localMangaIds",
+		)
+		for (mangaId in localMangaIds) {
+			val mangaSource = db.getMangaDao().find(mangaId)?.manga?.source ?: continue
+			if (!mangaSource.startsWith("TRACKING_")) continue
+			val serviceName = mangaSource.removePrefix("TRACKING_")
+			val service = ScrobblerService.entries.firstOrNull {
+				it.name.equals(serviceName, ignoreCase = true)
+			} ?: continue
+			// For tracking-sourced manga, the mangaId IS the tracking remoteId
+			val remoteId = mangaId
+			android.util.Log.d(
+				"DetailsViewModel",
+				"resolveTrackingSourceFromEntityBindings: found tracking-sourced manga, " +
+					"mangaId=$mangaId, source=$mangaSource, service=${service.name}, remoteId=$remoteId",
+			)
+			applyTrackingSource(entityId, service, remoteId)
+			return
+		}
+		android.util.Log.d(
+			"DetailsViewModel",
+			"resolveTrackingSourceFromEntityBindings: no tracking source found for entityId=$entityId",
+		)
+	}
+
+	private suspend fun applyTrackingSource(entityId: Long, service: ScrobblerService, remoteId: Long) {
+		android.util.Log.d(
+			"DetailsViewModel",
+			"applyTrackingSource: entityId=$entityId, service=${service.name}, remoteId=$remoteId",
+		)
+		val cached = trackingSiteCacheRepository.readDetails(service, remoteId)
+		if (cached != null) {
+			cacheTrackingDetails(cached)
+		}
+		trackingMetadataCandidates.value = mergeTrackingMetadataCandidates(
+			trackingMetadataCandidates.value + TrackingMetadataCandidate(
+				service = service,
+				remoteId = remoteId,
+				url = cached?.url,
+			),
+		)
+		selectedMetadataSource.value = MetadataSourceSelection.Tracking(
+			service = service,
+			remoteId = remoteId,
+			url = cached?.url,
+		)
+		selectedMetadataSearchService.value = service
+		syncDisplayedState()
+		if (cached == null) {
+			ensureTrackingDetailsLoaded(
+				service = service,
+				remoteId = remoteId,
+				url = null,
+			)
+		}
 	}
 
 	private suspend fun restorePersistedMetadataSelection(

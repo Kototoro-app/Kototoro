@@ -45,5 +45,7 @@ docs/.vitepress/dist/
 .claude/scheduled_tasks.lock
 .mindfs/
 .tmp/
+.pi-esr-memory/
+.pirc.json
 *.txt
 policy
