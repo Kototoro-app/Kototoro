@@ -20,7 +20,8 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize" />
+            android:layout_height="?attr/actionBarSize"
+            android:theme="@style/ThemeOverlay.Kototoro.MainToolbar" />
 
     </com.google.android.material.appbar.AppBarLayout>
 

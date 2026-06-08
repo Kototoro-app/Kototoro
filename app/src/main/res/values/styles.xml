@@ -265,6 +265,7 @@
 
 	<style name="ThemeOverlay.Kototoro.MainToolbar" parent="">
 		<item name="colorControlHighlight">@color/selector_overlay</item>
+		<item name="actionButtonStyle">@style/Widget.AppCompat.ActionButton</item>
 	</style>
 
 	<style name="ThemeOverlay.Kototoro.VideoControls" parent="ThemeOverlay.Material3.Dark">
