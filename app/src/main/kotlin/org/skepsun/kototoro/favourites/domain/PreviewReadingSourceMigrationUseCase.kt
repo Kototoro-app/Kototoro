@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.favourites.domain
 
+import android.util.Log
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.model.ContentSource as SourceRef
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
@@ -8,10 +9,14 @@ import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationProgress
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchV2Helper
 import javax.inject.Inject
+
+private const val TAG = "ReadingPreview"
+private val ALT_TITLE_SPLIT_REGEX = Regex("[,;\n\r]+")
 
 data class ReadingSourcePreview(
     val mangaId: Long,
@@ -123,15 +128,31 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
         targetSources: List<ContentSource>,
         searchHelpers: Map<ContentSource, SearchV2Helper>,
     ): SourceMatch? {
-        val sourceType = favourite.manga.source.let { SourceRef(it).contentType.name }
+        val sourceType = favourite.manga.source.let { SourceRef(it).contentType }
         val entityId = entityGraphRepository.findEntityByBinding("local_manga", favourite.manga.id.toString())?.id
             ?: entityGraphRepository.findEntityByBinding("0", favourite.manga.id.toString())?.id
+        val searchQueries = buildSearchQueries(favourite, entityId)
+        Log.d(
+            TAG,
+            "findBestMatch:start mangaId=${favourite.manga.id} sourceType=${sourceType.name} " +
+                "entityId=$entityId queries=${searchQueries.joinToString()}",
+        )
         for (targetSource in targetSources) {
-            if (targetSource.contentType.name != sourceType) {
+            if (!targetSource.contentType.isCompatibleWith(sourceType)) {
+                Log.d(
+                    TAG,
+                    "findBestMatch:skipType mangaId=${favourite.manga.id} target=${targetSource.name} " +
+                        "targetType=${targetSource.contentType.name} expectedType=${sourceType.name}",
+                )
                 continue
             }
             val existingProjection = entityId?.let { findExistingProjection(it, targetSource.name) }
             if (existingProjection != null) {
+                Log.d(
+                    TAG,
+                    "findBestMatch:reuse mangaId=${favourite.manga.id} target=${targetSource.name} " +
+                        "contentId=${existingProjection.id} title=${existingProjection.title}",
+                )
                 return SourceMatch(
                     source = targetSource,
                     content = existingProjection,
@@ -139,13 +160,86 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
                 )
             }
             val helper = searchHelpers[targetSource] ?: continue
-            val searchResults = runCatchingCancellable {
-                helper(favourite.manga.title, SearchKind.TITLE, null)
-            }.getOrNull()
-            val match = searchResults?.manga?.firstOrNull() ?: continue
-            return SourceMatch(targetSource, match, ReadingSourcePreviewAction.ATTACH_NEW)
+            for (query in searchQueries) {
+                val titleResults = runCatchingCancellable {
+                    helper(query, SearchKind.TITLE, null)
+                }.onFailure { error ->
+                    Log.w(
+                        TAG,
+                        "findBestMatch:titleSearchFailed mangaId=${favourite.manga.id} target=${targetSource.name} query=$query",
+                        error,
+                    )
+                }.getOrNull()
+                val titleMatch = titleResults?.manga?.firstOrNull()
+                Log.d(
+                    TAG,
+                    "findBestMatch:titleSearch mangaId=${favourite.manga.id} target=${targetSource.name} query=$query " +
+                        "results=${titleResults?.manga?.size ?: 0} first=${titleMatch?.title}",
+                )
+                if (titleMatch != null) {
+                    return SourceMatch(targetSource, titleMatch, ReadingSourcePreviewAction.ATTACH_NEW)
+                }
+
+                val simpleResults = runCatchingCancellable {
+                    helper(query, SearchKind.SIMPLE, null)
+                }.onFailure { error ->
+                    Log.w(
+                        TAG,
+                        "findBestMatch:simpleSearchFailed mangaId=${favourite.manga.id} target=${targetSource.name} query=$query",
+                        error,
+                    )
+                }.getOrNull()
+                val simpleMatch = simpleResults?.manga?.firstOrNull()
+                Log.d(
+                    TAG,
+                    "findBestMatch:simpleSearch mangaId=${favourite.manga.id} target=${targetSource.name} query=$query " +
+                        "results=${simpleResults?.manga?.size ?: 0} first=${simpleMatch?.title}",
+                )
+                if (simpleMatch != null) {
+                    return SourceMatch(targetSource, simpleMatch, ReadingSourcePreviewAction.ATTACH_NEW)
+                }
+            }
+            Log.d(
+                TAG,
+                "findBestMatch:noMatchOnTarget mangaId=${favourite.manga.id} target=${targetSource.name}",
+            )
         }
+        Log.d(TAG, "findBestMatch:notFound mangaId=${favourite.manga.id}")
         return null
+    }
+
+    private suspend fun buildSearchQueries(
+        favourite: FavouriteContent,
+        entityId: Long?,
+    ): List<String> {
+        val entity = if (entityId != null) {
+            entityGraphRepository.getEntity(entityId)
+        } else {
+            null
+        }
+        return buildList<String> {
+            add(favourite.manga.title)
+            favourite.manga.altTitles
+                ?.split(ALT_TITLE_SPLIT_REGEX)
+                .orEmpty()
+                .forEach { altTitle ->
+                    val normalizedAltTitle = altTitle.trim()
+                    if (normalizedAltTitle.isNotEmpty()) {
+                        add(normalizedAltTitle)
+                    }
+                }
+            entity?.let { resolvedEntity ->
+                add(resolvedEntity.primaryName)
+                resolvedEntity.aliases.forEach { alias ->
+                    val normalizedAlias = alias.toString().trim()
+                    if (normalizedAlias.isNotEmpty()) {
+                        add(normalizedAlias)
+                    }
+                }
+            }
+        }.map { query -> query.trim() }
+            .filter { query -> query.isNotEmpty() }
+            .distinct()
     }
 
     private suspend fun findExistingProjection(
@@ -171,4 +265,21 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
         val content: Content,
         val action: ReadingSourcePreviewAction,
     )
+}
+
+private fun ContentType.isCompatibleWith(other: ContentType): Boolean {
+    return normalizedFamily() == other.normalizedFamily()
+}
+
+private fun ContentType.normalizedFamily(): String = when (this) {
+    ContentType.MANGA,
+    ContentType.HENTAI_MANGA -> "manga"
+
+    ContentType.NOVEL,
+    ContentType.HENTAI_NOVEL -> "novel"
+
+    ContentType.VIDEO,
+    ContentType.HENTAI_VIDEO -> "video"
+
+    else -> name
 }

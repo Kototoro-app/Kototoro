@@ -53,6 +53,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 
+private data class EnabledSourcesSnapshot(
+	val sources: List<ContentSourceInfo>,
+	val disabledNames: Set<String>,
+	val enabledNames: Set<String>,
+	val allEnabled: Boolean,
+)
+
 @Singleton
 class ContentSourcesRepository @Inject constructor(
 	@LocalizedAppContext private val context: Context,
@@ -622,65 +629,78 @@ class ContentSourcesRepository @Inject constructor(
 			jsonSourceManager.observeEnabledJsonSources()
 		) { entities, _, _, _, _ ->
 			val disabledNames = if (!allEnabled) entities.filter { !it.isEnabled }.mapToSet { it.source } else emptySet<String>()
+			val enabledNames = if (!allEnabled) entities.filter { it.isEnabled }.mapToSet { it.source } else emptySet<String>()
 			val enabledEntities = if (!allEnabled) entities.filter { it.isEnabled } else entities
 			val sources = enabledEntities.toSources(skipNsfw, order).filter { info ->
 				val source = info.mangaSource
 				if (!showBroken && source.isBroken) return@filter false
 				true
 			}
-			Pair(sources, disabledNames)
+			EnabledSourcesSnapshot(
+				sources = sources,
+				disabledNames = disabledNames,
+				enabledNames = enabledNames,
+				allEnabled = allEnabled,
+			)
 		}
 	}.flattenLatest()
 		.onStart { assimilateNewSources() }
-		.combine(observeExternalSources()) { (sources, disabledNames), external ->
+		.combine(observeExternalSources()) { snapshot, external ->
 			val list = ArrayList<ContentSourceInfo>()
-			external.forEach { if (it.name !in disabledNames) list.add(ContentSourceInfo(it, isEnabled = true, isPinned = true)) }
-			list.addAll(sources)
-			Pair(list, disabledNames)
+			external.forEach {
+				if (it.name !in snapshot.disabledNames) {
+					list.add(ContentSourceInfo(it, isEnabled = true, isPinned = true))
+				}
+			}
+			list.addAll(snapshot.sources)
+			snapshot.copy(sources = list)
 		}
-		.combine(observeJsonSources()) { (sources, disabledNames), jsonSources ->
+		.combine(observeJsonSources()) { snapshot, jsonSources ->
 			val list = ArrayList<ContentSourceInfo>()
-			list.addAll(sources)
+			list.addAll(snapshot.sources)
 			
-			val existingNames = sources.mapToSet { it.mangaSource.name }
+			val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
 			jsonSources.forEach { jsonSource ->
 				if (jsonSource.name !in existingNames) {
 					list.add(ContentSourceInfo(jsonSource, isEnabled = jsonSource.isEnabled, isPinned = jsonSource.isPinned))
 				}
 			}
-			Pair(list, disabledNames)
+			snapshot.copy(sources = list)
 		}
-		.combine(observeMihonSources()) { (sources, disabledNames), mihonSources ->
+		.combine(observeMihonSources()) { snapshot, mihonSources ->
 			val list = ArrayList<ContentSourceInfo>()
-			list.addAll(sources)
+			list.addAll(snapshot.sources)
 			
-			val existingNames = sources.mapToSet { it.mangaSource.name }
+			val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
 			mihonSources.forEach { mihonSource ->
-				if (mihonSource.name !in existingNames && mihonSource.name !in disabledNames) {
+				val isVisible = if (snapshot.allEnabled) true else mihonSource.name in snapshot.enabledNames
+				if (isVisible && mihonSource.name !in existingNames && mihonSource.name !in snapshot.disabledNames) {
 					list.add(ContentSourceInfo(mihonSource, isEnabled = true, isPinned = false))
 				}
 			}
-			Pair(list, disabledNames)
+			snapshot.copy(sources = list)
 		}
-		.combine(observeAniyomiSources()) { (sources, disabledNames), aniyomiSources ->
+		.combine(observeAniyomiSources()) { snapshot, aniyomiSources ->
 			val list = ArrayList<ContentSourceInfo>()
-			list.addAll(sources)
+			list.addAll(snapshot.sources)
 			
-			val existingNames = sources.mapToSet { it.mangaSource.name }
+			val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
 			aniyomiSources.forEach { aniyomiSource ->
-				if (aniyomiSource.name !in existingNames && aniyomiSource.name !in disabledNames) {
+				val isVisible = if (snapshot.allEnabled) true else aniyomiSource.name in snapshot.enabledNames
+				if (isVisible && aniyomiSource.name !in existingNames && aniyomiSource.name !in snapshot.disabledNames) {
 					list.add(ContentSourceInfo(aniyomiSource, isEnabled = true, isPinned = false))
 				}
 			}
-			Pair(list, disabledNames)
+			snapshot.copy(sources = list)
 		}
-		.combine(observeIReaderSources()) { (sources, disabledNames), ireaderSources ->
+		.combine(observeIReaderSources()) { snapshot, ireaderSources ->
 			val list = ArrayList<ContentSourceInfo>()
-			list.addAll(sources)
+			list.addAll(snapshot.sources)
 
-			val existingNames = sources.mapToSet { it.mangaSource.name }
+			val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
 			ireaderSources.forEach { ireaderSource ->
-				if (ireaderSource.name !in existingNames && ireaderSource.name !in disabledNames) {
+				val isVisible = if (snapshot.allEnabled) true else ireaderSource.name in snapshot.enabledNames
+				if (isVisible && ireaderSource.name !in existingNames && ireaderSource.name !in snapshot.disabledNames) {
 					list.add(ContentSourceInfo(ireaderSource, isEnabled = true, isPinned = false))
 				}
 			}
