@@ -40,7 +40,8 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	val backupsDirectory = MutableStateFlow<String?>("")
 	val isTelegramCheckLoading = MutableStateFlow(false)
 	val isWebDavCheckLoading = MutableStateFlow(false)
-	val webDavBusyMessageRes = MutableStateFlow<Int?>(null)
+	val webDavUploadBusyMessageRes = MutableStateFlow<Int?>(null)
+	val webDavRestoreBusyMessageRes = MutableStateFlow<Int?>(null)
 	val onActionDone = MutableEventFlow<ReversibleAction>()
 
 	// 最近一次 WebDAV 操作（类型文案资源ID，发生时间毫秒）
@@ -66,12 +67,12 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			try {
 				isWebDavCheckLoading.value = true
-				webDavBusyMessageRes.value = R.string.webdav_connection_check_in_progress
+				webDavUploadBusyMessageRes.value = R.string.webdav_connection_check_in_progress
 				webDavUploader.sendTestConnection()
 				onActionDone.call(ReversibleAction(R.string.connection_ok, null))
 			} finally {
 				isWebDavCheckLoading.value = false
-				webDavBusyMessageRes.value = null
+				webDavUploadBusyMessageRes.value = null
 			}
 		}
 	}
@@ -80,23 +81,30 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			val output = org.skepsun.kototoro.backups.domain.BackupUtils.createTempFile(appContext)
 			try {
-				webDavBusyMessageRes.value = R.string.webdav_upload_in_progress
+				webDavUploadBusyMessageRes.value = R.string.webdav_upload_in_progress
 				java.util.zip.ZipOutputStream(output.outputStream()).use {
 					repository.createBackup(it, null)
 				}
 				// 根据设置决定是否保留本地副本
+				var localCopyFailed = false
 				if (settings.isBackupWebDavKeepLocalCopyEnabled) {
 					// 本地副本失败不应阻断 WebDAV 上传
 					runCatching {
 						backupStorage.put(output)
 						backupStorage.trim(settings.periodicalBackupMaxCount)
-					}.onFailure { errorEvent.call(it) }
+					}.onFailure { localCopyFailed = true }
 				}
 				backupWebDavUploadCoordinator.uploadAndCommit(
 					file = output,
 					uploadKind = "manual",
 				)
-				onActionDone.call(ReversibleAction(R.string.webdav_upload_success, null))
+				onActionDone.call(
+					ReversibleAction(
+						if (localCopyFailed) R.string.webdav_upload_success_local_copy_failed
+						else R.string.webdav_upload_success,
+						null,
+					),
+				)
 				// 仅在保留本地副本时，更新上次本地备份时间展示
 				if (settings.isBackupWebDavKeepLocalCopyEnabled) {
 					updateLastBackupDate()
@@ -105,7 +113,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 			} catch (e: Exception) {
 				errorEvent.call(e)
 			} finally {
-				webDavBusyMessageRes.value = null
+				webDavUploadBusyMessageRes.value = null
 				output.delete()
 			}
 		}
@@ -114,7 +122,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	fun restoreWebDavNow() {
 		launchJob(Dispatchers.Default) {
 			try {
-				webDavBusyMessageRes.value = R.string.webdav_restore_in_progress
+				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
 				val latest = webDavUploader.getLatestBackup(RemoteNamespace.V2)
 					?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
 				if (latest == null) {
@@ -157,7 +165,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 			} catch (e: Exception) {
 				errorEvent.call(e)
 			} finally {
-				webDavBusyMessageRes.value = null
+				webDavRestoreBusyMessageRes.value = null
 			}
 		}
 	}

@@ -2035,7 +2035,8 @@
     <string name="webdav_upload_in_progress">Uploading backup to WebDAV…</string>
     <string name="webdav_restore_in_progress">Restoring latest backup from WebDAV…</string>
     <string name="webdav_upload_success">Backup uploaded to WebDAV</string>
-    <string name="webdav_restore_success">Data restored from WebDAV</string>
+    <string name="webdav_upload_success_local_copy_failed">Backup uploaded to WebDAV (local copy failed)</string>
+        <string name="webdav_restore_success">Data restored from WebDAV</string>
     <string name="webdav_restore_success_legacy_jar_hint">Data restored from WebDAV. Compatible JAR repositories were added for a legacy backup.</string>
     <string name="checking_for_backups">Checking for backups…</string>
     <string name="recent_webdav_action">Recent WebDAV action</string>

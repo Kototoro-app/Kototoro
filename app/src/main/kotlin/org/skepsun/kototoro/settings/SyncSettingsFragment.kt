@@ -26,7 +26,8 @@ fun SyncSettingsRoute(
     val context = LocalContext.current
     val webDavLastAction = backupSettingsViewModel.webDavLastAction.collectAsStateWithLifecycle().value
     val isWebDavCheckLoading = backupSettingsViewModel.isWebDavCheckLoading.collectAsStateWithLifecycle().value
-    val webDavBusyMessageRes = backupSettingsViewModel.webDavBusyMessageRes.collectAsStateWithLifecycle().value
+    val webDavUploadBusyMessageRes = backupSettingsViewModel.webDavUploadBusyMessageRes.collectAsStateWithLifecycle().value
+    val webDavRestoreBusyMessageRes = backupSettingsViewModel.webDavRestoreBusyMessageRes.collectAsStateWithLifecycle().value
     val isWebDavEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_ENABLED) { isBackupWebDavUploadEnabled }.value
     val webDavServerUrl =
@@ -67,6 +68,7 @@ fun SyncSettingsRoute(
     val webDavLastActionSummary = webDavLastAction?.let {
         context.getString(it.first) + " - " + DateUtils.getRelativeTimeSpanString(it.second)
     }
+    val isAnyBusy = webDavUploadBusyMessageRes != null || webDavRestoreBusyMessageRes != null
     SyncSettingsScreen(
         settings = settings,
         state = SyncSettingsUiState(
@@ -86,7 +88,9 @@ fun SyncSettingsRoute(
             } else {
                 null
             },
-            webDavBusySummary = webDavBusyMessageRes?.let(context::getString),
+            webDavUploadBusySummary = webDavUploadBusyMessageRes?.let(context::getString),
+            webDavRestoreBusySummary = webDavRestoreBusyMessageRes?.let(context::getString),
+            isAnyBusy = isAnyBusy,
         ),
         snackbarHostState = snackbarHostState,
         onWebDavEnabledChange = { settings.isBackupWebDavUploadEnabled = it },

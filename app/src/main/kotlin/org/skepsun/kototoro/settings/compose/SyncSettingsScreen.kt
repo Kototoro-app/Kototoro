@@ -33,7 +33,9 @@ data class SyncSettingsUiState(
     val webDavLastActionSummary: String?,
     val isPolicyNoteVisible: Boolean,
     val legacyRestoreBlockSummary: String?,
-    val webDavBusySummary: String?,
+    val webDavUploadBusySummary: String?,
+    val webDavRestoreBusySummary: String?,
+    val isAnyBusy: Boolean,
 )
 
 @Composable
@@ -125,22 +127,22 @@ fun SyncSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.webdav_upload_now),
-                        summary = stringResource(R.string.create_backup),
-                        enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading,
+                        summary = state.webDavUploadBusySummary ?: stringResource(R.string.create_backup),
+                        enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isAnyBusy,
                         onClick = onWebDavUploadNowClick,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.webdav_restore_now),
-                        summary = state.webDavBusySummary ?: stringResource(R.string.restore_backup),
-                        enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading,
+                        summary = state.webDavRestoreBusySummary ?: stringResource(R.string.restore_backup),
+                        enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isAnyBusy,
                         onClick = onWebDavRestoreNowClick,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.webdav_auto_sync),
                         checked = state.isWebDavAutoSyncEnabled,
-                        summary = state.legacyRestoreBlockSummary ?: stringResource(R.string.webdav_auto_sync_summary),
+                        summary = stringResource(R.string.webdav_auto_sync_summary),
                         enabled = state.isWebDavEnabled,
                         onCheckedChange = onWebDavAutoSyncChange,
                     )
@@ -167,19 +169,20 @@ fun SyncSettingsScreen(
                             summary = it,
                         )
                     }
-                    state.webDavBusySummary?.let {
-                        SettingsSectionDivider()
-                        SettingsInfoPreference(
-                            title = stringResource(R.string.processing_),
-                            summary = it,
-                            iconRes = R.drawable.ic_info_outline,
-                        )
-                    }
                     if (state.isPolicyNoteVisible) {
                         SettingsSectionDivider()
                         SettingsInfoPreference(
                             title = stringResource(R.string.read_more),
                             summary = stringResource(R.string.backup_periodic_explain_keep_local_copy_off),
+                            iconRes = R.drawable.ic_info_outline,
+                        )
+                    }
+                    if (state.isAnyBusy) {
+                        SettingsSectionDivider()
+                        val busyText = state.webDavUploadBusySummary ?: state.webDavRestoreBusySummary ?: ""
+                        SettingsInfoPreference(
+                            title = stringResource(R.string.processing_),
+                            summary = busyText,
                             iconRes = R.drawable.ic_info_outline,
                         )
                     }

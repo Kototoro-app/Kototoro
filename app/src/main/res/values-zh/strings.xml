@@ -34,7 +34,8 @@
     <!-- 内容类型：视频（用于来源筛选标签） -->
     <string name="content_type_video">视频</string>
     <string name="webdav_upload_success">已上传到 WebDAV</string>
-    <string name="recent_webdav_action">最近的 WebDAV 操作</string>
+    <string name="webdav_upload_success_local_copy_failed">已上传到 WebDAV（本地副本保存失败）</string>
+        <string name="recent_webdav_action">最近的 WebDAV 操作</string>
 	<string name="action_upload">上传</string>
 	<string name="action_auto_upload">自动上传</string>
 	<string name="action_manual_upload">手动上传</string>

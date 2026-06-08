@@ -5,10 +5,12 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_ENTITY
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
 
+@Serializable
 @Entity(
 	tableName = TABLE_ENTITY_GRAPH_ENTITY,
 	indices = [
@@ -29,6 +31,7 @@ data class EntityRecord(
 	@ColumnInfo(name = "access_count") val accessCount: Int,
 )
 
+@Serializable
 @Entity(
 	tableName = TABLE_ENTITY_GRAPH_BINDING,
 	primaryKeys = ["source", "external_id"],
@@ -53,6 +56,7 @@ data class EntityBindingRecord(
 	@ColumnInfo(name = "is_primary") val isPrimary: Boolean,
 )
 
+@Serializable
 @Entity(
 	tableName = TABLE_ENTITY_GRAPH_RELATION,
 	foreignKeys = [

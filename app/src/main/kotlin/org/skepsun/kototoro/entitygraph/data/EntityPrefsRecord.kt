@@ -4,8 +4,10 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 
+@Serializable
 @Entity(
 	tableName = TABLE_ENTITY_PREFERENCES,
 	foreignKeys = [
