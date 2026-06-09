@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
@@ -470,7 +471,11 @@ private fun ChapterSourceTabsRow(
 						}
 
 						tab.source != null -> {
-							ContentSourceIcon(source = tab.source)
+							ContentSourceIcon(
+								source = tab.source,
+								modifier = Modifier.size(18.dp),
+								styleResId = R.style.FaviconDrawable_Chip,
+							)
 						}
 					}
 				},

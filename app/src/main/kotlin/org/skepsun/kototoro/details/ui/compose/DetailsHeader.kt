@@ -1710,7 +1710,6 @@ fun ReadingSourceSheet(
 ) {
     val context = LocalContext.current
     var pendingMigrationTarget by remember { mutableStateOf<Content?>(null) }
-    var pendingDeleteOption by remember { mutableStateOf<DetailsSourceOption?>(null) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     val visibleSections = remember(searchSources, searchSections, hasSearched, isLoading) {
         when {
@@ -1807,52 +1806,53 @@ fun ReadingSourceSheet(
                                 option.targetMangaId != null &&
                                     entityChapterSourceInfo?.currentReadingProjectionMangaId == option.targetMangaId &&
                                     entityChapterSourceInfo.activeProjectionMangaId != option.targetMangaId
-                            SourceOptionCard(
-                                displayModel = option.resolveDisplayModel(
-                                    role = DetailsSourceRole.READING_PROJECTION,
-                                    currentContent = currentContent,
-                                    linkedTrackingItem = null,
-                                    strings = DetailsSourceDisplayStrings(
-                                        unavailableText = unavailableText,
-                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                        currentProjectionLabel = label,
-                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                            var showMenu by remember(option.key) { mutableStateOf(false) }
+                            Box {
+                                SourceOptionCard(
+                                    displayModel = option.resolveDisplayModel(
+                                        role = DetailsSourceRole.READING_PROJECTION,
+                                        currentContent = currentContent,
+                                        linkedTrackingItem = null,
+                                        strings = DetailsSourceDisplayStrings(
+                                            unavailableText = unavailableText,
+                                            metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                            currentProjectionLabel = label,
+                                            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                        ),
+                                        isSelected = option == selectedOption || option.isSelected,
+                                    ).copy(
+                                        badgeText = if (isTemporaryProjection) {
+                                            stringResource(R.string.details_temporary_projection_badge)
+                                        } else {
+                                            null
+                                        },
                                     ),
-                                    isSelected = option == selectedOption || option.isSelected,
-                                ).copy(
-                                    badgeText = if (isTemporaryProjection) {
-                                        stringResource(R.string.details_temporary_projection_badge)
-                                    } else {
-                                        null
-                                    },
-                                ),
-                                scrobblingStatuses = emptyArray(),
-                                onClick = {
-                                    onDismissRequest()
-                                    onSelectOption(option)
-	                                },
-                                onLongClick = {
-                                    if (option.targetMangaId != null) {
-                                        pendingDeleteOption = option
-                                    }
-                                },
-	                            )
-	                        }
-	                    }
-                        pendingDeleteOption?.let { option ->
-                            DropdownMenu(
-                                expanded = true,
-                                onDismissRequest = { pendingDeleteOption = null },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.details_remove_projection)) },
+                                    scrobblingStatuses = emptyArray(),
                                     onClick = {
-                                        pendingDeleteOption = null
-                                        onDeleteProjection(option)
+                                        onDismissRequest()
+                                        onSelectOption(option)
+                                        },
+                                    onLongClick = {
+                                        if (option.targetMangaId != null) {
+                                            showMenu = true
+                                        }
                                     },
                                 )
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.details_remove_projection)) },
+                                        onClick = {
+                                            showMenu = false
+                                            onDeleteProjection(option)
+                                        },
+                                    )
+                                }
                             }
-                        }
+	                        }
+	                    }
 	                }
 	                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     Row(

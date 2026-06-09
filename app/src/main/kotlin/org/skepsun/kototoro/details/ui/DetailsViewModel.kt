@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -3523,7 +3524,18 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	fun selectActiveLocalSource(mangaId: Long) {
-		if (activeLocalSourceOptions.value.none { it.mangaId == mangaId } || activeMangaIdFlow.value == mangaId) {
+		if (activeLocalSourceOptions.value.none { it.mangaId == mangaId }) {
+			return
+		}
+		if (activeMangaIdFlow.value == mangaId) {
+			// Already active; just clear any temporary session projection
+			if (sessionReadingProjectionLocalMangaId.value != mangaId) {
+				sessionReadingProjectionLocalMangaId.value = mangaId
+				launchJob(Dispatchers.IO) {
+					entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(mangaId)
+				}
+				updateSourceOptions()
+			}
 			return
 		}
 		sessionReadingProjectionLocalMangaId.value = mangaId
@@ -3983,7 +3995,23 @@ class DetailsViewModel @Inject constructor(
 		readingSearchJob?.cancel()
 		val generation = ++readingSearchGeneration
 		val scopeFilter = readingSearchScopeFilters.value
-		val sources = readingSearchSources.value.filter { sourceInfo ->
+		val allEnabledSources = allEnabledSourceInfos.value
+		val availableSources = readingSearchSources.value
+		// If allEnabledSourceInfos hasn't been populated yet (race condition during init),
+		// defer the search until the full source list becomes available.
+		if (allEnabledSources.isEmpty() && availableSources.size <= 1) {
+			Log.d(READING_SEARCH_LOG_TAG, "defer search: allEnabledSourceInfos not yet populated, sources=${availableSources.size}")
+			readingSearchLoading.value = true
+			readingSearchHasSearched.value = false
+			readingSearchState.value = LocalSearchState.Loading
+			launchJob(Dispatchers.Default) {
+				allEnabledSourceInfos.first { it.isNotEmpty() }
+				if (generation != readingSearchGeneration) return@launchJob
+				searchReadingBindings()
+			}
+			return
+		}
+		val sources = availableSources.filter { sourceInfo ->
 			val source = sourceInfo.mangaSource
 			val sourceType = sourceTypeIdentifier.getSourceType(source.name)
 			sourceType in scopeFilter.sourceTypes &&
