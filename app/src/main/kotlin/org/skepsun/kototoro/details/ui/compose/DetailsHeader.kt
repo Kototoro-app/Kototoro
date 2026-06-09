@@ -1222,6 +1222,7 @@ private data class SourceOptionDisplayModel(
     val linkedTrackingItem: LinkedTrackingItemUiModel?,
     val isSelected: Boolean,
     val badgeText: String? = null,
+    val isActiveProjection: Boolean = false,
 )
 
 @Composable
@@ -1294,13 +1295,16 @@ private fun SourceOptionCard(
                 onLongClick = onLongClick,
             ),
         shape = RoundedCornerShape(12.dp),
-        color = if (displayModel.isSelected)
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        else
-            optionCardColors.containerColor,
-        border = if (displayModel.isSelected)
-            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-        else optionCardColors.border,
+        color = when {
+            displayModel.isActiveProjection -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+            displayModel.isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            else -> optionCardColors.containerColor
+        },
+        border = when {
+            displayModel.isActiveProjection -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+            displayModel.isSelected -> BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+            else -> optionCardColors.border
+        },
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1707,6 +1711,7 @@ fun ReadingSourceSheet(
     onTemporaryOpenResult: (Content) -> Unit,
     onMigrateResult: (Content) -> Unit,
     onDeleteProjection: (DetailsSourceOption) -> Unit,
+    onActivateProjection: (DetailsSourceOption) -> Unit,
 ) {
     val context = LocalContext.current
     var pendingMigrationTarget by remember { mutableStateOf<Content?>(null) }
@@ -1806,6 +1811,9 @@ fun ReadingSourceSheet(
                                 option.targetMangaId != null &&
                                     entityChapterSourceInfo?.currentReadingProjectionMangaId == option.targetMangaId &&
                                     entityChapterSourceInfo.activeProjectionMangaId != option.targetMangaId
+                            val isActiveProjection =
+                                option.targetMangaId != null &&
+                                    entityChapterSourceInfo?.activeProjectionMangaId == option.targetMangaId
                             var showMenu by remember(option.key) { mutableStateOf(false) }
                             Box {
                                 SourceOptionCard(
@@ -1821,11 +1829,12 @@ fun ReadingSourceSheet(
                                         ),
                                         isSelected = option == selectedOption || option.isSelected,
                                     ).copy(
-                                        badgeText = if (isTemporaryProjection) {
-                                            stringResource(R.string.details_temporary_projection_badge)
-                                        } else {
-                                            null
+                                        badgeText = when {
+                                            isActiveProjection -> stringResource(R.string.details_active_projection_badge)
+                                            isTemporaryProjection -> stringResource(R.string.details_temporary_projection_badge)
+                                            else -> null
                                         },
+                                        isActiveProjection = isActiveProjection,
                                     ),
                                     scrobblingStatuses = emptyArray(),
                                     onClick = {
@@ -1847,6 +1856,15 @@ fun ReadingSourceSheet(
                                         onClick = {
                                             showMenu = false
                                             onDeleteProjection(option)
+                                        },
+                                    )
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.details_activate_projection)) },
+                                        onClick = {
+                                            showMenu = false
+                                            onActivateProjection(option)
+                                            onDismissRequest()
                                         },
                                     )
                                 }

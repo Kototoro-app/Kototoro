@@ -1846,6 +1846,8 @@
     <string name="details_playback_source">Playback Source</string>
     <string name="details_current_projection">Current Projection</string>
     <string name="details_remove_projection">Remove projection</string>
+    <string name="details_activate_projection">Formally activate</string>
+    <string name="details_active_projection_badge">Active</string>
     <string name="details_switchable_projection">Switchable projection</string>
     <string name="details_temporary_projection_badge">Temporary</string>
     <string name="details_reading_status">Reading status</string>

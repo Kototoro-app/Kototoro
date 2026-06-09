@@ -1407,7 +1407,7 @@ fun DetailsScreen(
                     currentContent = content,
                     entityChapterSourceInfo = entityChapterSourceInfo,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
-                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectActiveLocalSource) },
+                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectReadingProjection) },
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,
                     onSearch = viewModel::searchReadingBindings,
                     onLanguagePresetSelected = viewModel::setActiveLanguagePreset,
@@ -1426,6 +1426,9 @@ fun DetailsScreen(
                     },
                     onDeleteProjection = { option ->
                         option.targetMangaId?.let(viewModel::removeActiveLocalSource)
+                    },
+                    onActivateProjection = { option ->
+                        option.targetMangaId?.let(viewModel::selectActiveLocalSource)
                     },
                     onDismissRequest = { showReadingSourceDialog = false },
                 )
