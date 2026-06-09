@@ -1285,7 +1285,6 @@ class DetailsViewModel @Inject constructor(
 		sessionReadingProjectionLocalMangaId.value = initialProjectionLocalMangaId
 			?.takeIf { projectionId -> activeLocalSourceOptions.value.any { it.mangaId == projectionId } }
 			?: boundLocalId
-		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
 		updateSourceOptions()
 		if (boundLocalId != null && activeMangaIdFlow.value != boundLocalId) {
 			currentLoadIntentOverride = ContentIntent.of(boundLocalId)
@@ -1293,6 +1292,7 @@ class DetailsViewModel @Inject constructor(
 			loadingJob.cancel()
 			loadingJob = doLoad(force = false)
 		}
+		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
 		restoreEntityMetadataSourceSelection(entityId = entityId, fallbackMangaId = boundLocalId)
 		submitEntityRelationSections(buildEntityRelationSections(entityId))
 	}
