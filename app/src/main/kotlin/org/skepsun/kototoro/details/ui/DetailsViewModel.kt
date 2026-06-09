@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -478,6 +477,7 @@ class DetailsViewModel @Inject constructor(
 	private var translateAvailabilityJob: Job? = null
 	private var readingSearchJob: Job? = null
 	private var readingSearchGeneration: Int = 0
+	private var allEnabledSourcesLoaded = false
 	private var currentLoadIntentOverride: ContentIntent? = initialLoadIntentOverride
 	private var translationCacheSourceLang: String? = null
 	private var translationCacheTargetLang: String? = null
@@ -1260,15 +1260,15 @@ class DetailsViewModel @Inject constructor(
 		}
 		val bindings = entityGraphRepository.getBindings(entityId)
 		val persistedPreferredLocalId = dataRepository.getEntityPreferredLocalMangaId(entityId)
-		val boundLocalId = preferredLocalMangaId?.takeIf { preferredId ->
-			bindings.any { binding ->
-				(binding.source == "0" || binding.source == "local_manga") &&
-					binding.externalId.toLongOrNull() == preferredId
-			}
-		} ?: persistedPreferredLocalId?.takeIf { persistedId ->
+		val boundLocalId = persistedPreferredLocalId?.takeIf { persistedId ->
 			bindings.any { binding ->
 				(binding.source == "0" || binding.source == "local_manga") &&
 					binding.externalId.toLongOrNull() == persistedId
+			}
+		} ?: preferredLocalMangaId?.takeIf { preferredId ->
+			bindings.any { binding ->
+				(binding.source == "0" || binding.source == "local_manga") &&
+					binding.externalId.toLongOrNull() == preferredId
 			}
 		} ?: bindings.firstOrNull { it.source == "0" || it.source == "local_manga" }?.externalId?.toLongOrNull()
 		val localBindingCount = bindings.count { binding ->
@@ -1355,6 +1355,7 @@ class DetailsViewModel @Inject constructor(
 			}.collect { sources ->
 				allEnabledSourceInfos.value = sources
 				refreshReadingSearchSources()
+				allEnabledSourcesLoaded = true
 			}
 		}
 
@@ -3995,17 +3996,21 @@ class DetailsViewModel @Inject constructor(
 		readingSearchJob?.cancel()
 		val generation = ++readingSearchGeneration
 		val scopeFilter = readingSearchScopeFilters.value
-		val allEnabledSources = allEnabledSourceInfos.value
 		val availableSources = readingSearchSources.value
 		// If allEnabledSourceInfos hasn't been populated yet (race condition during init),
 		// defer the search until the full source list becomes available.
-		if (allEnabledSources.isEmpty() && availableSources.size <= 1) {
-			Log.d(READING_SEARCH_LOG_TAG, "defer search: allEnabledSourceInfos not yet populated, sources=${availableSources.size}")
+		if (!allEnabledSourcesLoaded) {
+			Log.d(READING_SEARCH_LOG_TAG, "defer search: allEnabledSourceInfos not yet loaded, sources=${availableSources.size}")
 			readingSearchLoading.value = true
 			readingSearchHasSearched.value = false
 			readingSearchState.value = LocalSearchState.Loading
 			launchJob(Dispatchers.Default) {
-				allEnabledSourceInfos.first { it.isNotEmpty() }
+				// Wait up to 3s for the source list to load, then proceed anyway
+				kotlinx.coroutines.withTimeoutOrNull(3000L) {
+					while (!allEnabledSourcesLoaded && generation == readingSearchGeneration) {
+						kotlinx.coroutines.delay(100)
+					}
+				}
 				if (generation != readingSearchGeneration) return@launchJob
 				searchReadingBindings()
 			}
