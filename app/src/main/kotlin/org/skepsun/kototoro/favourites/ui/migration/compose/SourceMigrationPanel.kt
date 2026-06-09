@@ -1098,7 +1098,7 @@ private fun EntityWorkbenchSection(
                 row.group.items.forEach {
                     append(it.title)
                     append(' ')
-                    append(it.sourceName)
+                    append(it.displaySourceName)
                     append(' ')
                 }
                 row.trackingCandidates.forEach {
@@ -1108,7 +1108,7 @@ private fun EntityWorkbenchSection(
                     append(' ')
                 }
                 row.readingCandidates.forEach {
-                    append(it.targetSourceName)
+                    append(it.targetSourceDisplayName)
                     append(' ')
                     append(it.matchedTitle)
                     append(' ')
@@ -2228,7 +2228,7 @@ private fun EntityWorkbenchRowCard(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    text = "${item.sourceName} · ${item.score.toPercentInt()}%",
+                                    text = "${item.displaySourceName} · ${item.score.toPercentInt()}%",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -2306,9 +2306,12 @@ private fun EntityWorkbenchRowCard(
                         val currentProjection = row.currentProjectionItem()
                         if (currentProjection != null) {
                             ProjectionSummaryCard(
-                                title = currentProjection.sourceName,
+                                title = currentProjection.displaySourceName,
                                 subtitle = currentProjection.title,
-                                meta = stringResource(R.string.favourites_entity_current_projection, currentProjection.sourceName),
+                                meta = stringResource(
+                                    R.string.favourites_entity_current_projection,
+                                    currentProjection.displaySourceName,
+                                ),
                             )
                         } else {
                             Text(
@@ -2323,7 +2326,7 @@ private fun EntityWorkbenchRowCard(
                             CompactSelectCard(
                                 checked = checked,
                                 prefix = "#${row.readingCandidates.indexOf(preview) + 1}",
-                                title = preview.targetSourceName,
+                                title = preview.targetSourceDisplayName,
                                 subtitle = preview.matchedTitle,
                                 meta = preview.title,
                                 emphasized = checked,
@@ -2631,7 +2634,7 @@ private fun MergeCandidateSection(
                 group.items.forEach { item ->
                     append(item.title)
                     append(' ')
-                    append(item.sourceName)
+                    append(item.displaySourceName)
                     append(' ')
                 }
             }.lowercase(Locale.ROOT).contains(normalizedQuery)
@@ -2757,7 +2760,7 @@ private fun MergeCandidateSection(
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                             Text(
-                                                text = "${item.sourceName} · ${item.score.toPercentInt()}%",
+                                                text = "${item.displaySourceName} · ${item.score.toPercentInt()}%",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -3722,7 +3725,7 @@ private fun ReadingPreviewCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = preview.targetSourceName,
+                    text = preview.targetSourceDisplayName,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                 )

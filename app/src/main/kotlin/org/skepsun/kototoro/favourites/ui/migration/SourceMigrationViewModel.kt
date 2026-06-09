@@ -45,6 +45,7 @@ import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.favourites.work.SourceMigrationWorker
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
+import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
@@ -244,6 +245,7 @@ class SourceMigrationViewModel @Inject constructor(
     private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
     private val entityGraphRepository: EntityGraphRepository,
     private val contentDataRepository: ContentDataRepository,
+    private val mihonExtensionManager: MihonExtensionManager,
     private val animeOfflineRepository: AnimeOfflineRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     private val trackingSiteDiscoveryService: TrackingSiteDiscoveryService,
@@ -1160,7 +1162,7 @@ class SourceMigrationViewModel @Inject constructor(
                     isExecuting = false,
                     isFinished = true,
                     migrationProgress = _uiState.value.migrationProgress?.copy(isFinished = true),
-                    readingSourcePreviews = result.previews,
+                    readingSourcePreviews = result.previews.map(::withResolvedDisplaySourceName),
                     acceptedReadingPreviewIds = result.previews.mapTo(LinkedHashSet(result.previews.size)) { it.mangaId },
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.READING,
@@ -1548,7 +1550,7 @@ class SourceMigrationViewModel @Inject constructor(
         val reorderedCandidateGroups = candidateGroups.map { group ->
             group.copy(
                 items = sortGroupItems(
-                    items = group.items,
+                    items = group.items.map(::withResolvedDisplaySourceName),
                     preferredLocalMangaId = group.resolvedEntityId?.let(preferredLocalIdsByEntity::get),
                 ),
             )
@@ -1582,7 +1584,7 @@ class SourceMigrationViewModel @Inject constructor(
                                 coverUrl = content.coverUrl,
                                 score = 1f,
                             )
-                        },
+                        }.map(::withResolvedDisplaySourceName),
                         preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get),
                     ),
                     matchScore = 1f,
@@ -1739,6 +1741,22 @@ class SourceMigrationViewModel @Inject constructor(
                 latestVersion,
             )
         }
+    }
+
+    private fun withResolvedDisplaySourceName(
+        item: org.skepsun.kototoro.favourites.domain.MergeCandidateItem,
+    ): org.skepsun.kototoro.favourites.domain.MergeCandidateItem {
+        return item.copy(displaySourceName = resolveDisplaySourceName(item.sourceName))
+    }
+
+    private fun withResolvedDisplaySourceName(
+        preview: ReadingSourcePreview,
+    ): ReadingSourcePreview {
+        return preview.copy(targetSourceDisplayName = resolveDisplaySourceName(preview.targetSourceName))
+    }
+
+    private fun resolveDisplaySourceName(sourceName: String): String {
+        return mihonExtensionManager.getMihonMangaSourceByName(sourceName)?.displayName ?: sourceName
     }
 }
 

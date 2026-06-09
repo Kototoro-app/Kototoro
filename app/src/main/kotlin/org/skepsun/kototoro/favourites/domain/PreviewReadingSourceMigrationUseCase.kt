@@ -22,6 +22,7 @@ data class ReadingSourcePreview(
     val mangaId: Long,
     val title: String,
     val targetSourceName: String,
+    val targetSourceDisplayName: String = targetSourceName,
     val targetContentId: Long,
     val matchedTitle: String,
     val action: ReadingSourcePreviewAction,

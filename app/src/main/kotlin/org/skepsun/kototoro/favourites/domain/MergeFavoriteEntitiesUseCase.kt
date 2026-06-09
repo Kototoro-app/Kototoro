@@ -31,6 +31,7 @@ data class MergeCandidateItem(
     val title: String,
     val normalizedTitle: String,
     val sourceName: String,
+    val displaySourceName: String = sourceName,
     val coverUrl: String?,
     val score: Float,
 )
