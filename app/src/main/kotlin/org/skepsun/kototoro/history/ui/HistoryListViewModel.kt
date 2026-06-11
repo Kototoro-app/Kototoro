@@ -346,7 +346,7 @@ class HistoryListViewModel @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val entityIdsByMangaId = entityGraphRepository.ensureLocalWorkEntities(map { it.manga })
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByLocalMangaIds(map { it.manga.id })
 		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
 		val result = ArrayList<HistoryGroup>(size)
 		var current: MutableList<ContentWithHistory>? = null

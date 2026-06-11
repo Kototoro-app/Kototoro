@@ -105,6 +105,26 @@ abstract class EntityGraphDao {
 	@Query(
 		"""
 		SELECT * FROM entity_binding
+		WHERE source = :source
+			AND external_id = :externalId
+			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		LIMIT 1
+		"""
+	)
+	abstract suspend fun findActiveBinding(source: String, externalId: String): EntityBindingRecord?
+
+	@Query(
+		"""
+		SELECT * FROM entity_binding
+		WHERE entity_id = :entityId
+			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		"""
+	)
+	abstract suspend fun findActiveBindingsByEntity(entityId: Long): List<EntityBindingRecord>
+
+	@Query(
+		"""
+		SELECT * FROM entity_binding
 		WHERE source IN (:sources) AND external_id IN (:externalIds)
 		"""
 	)
@@ -113,8 +133,36 @@ abstract class EntityGraphDao {
 		externalIds: List<String>,
 	): List<EntityBindingRecord>
 
+	@Query(
+		"""
+		SELECT * FROM entity_binding
+		WHERE source IN (:sources)
+			AND external_id IN (:externalIds)
+			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		"""
+	)
+	abstract suspend fun findActiveBindingsBySources(
+		sources: List<String>,
+		externalIds: List<String>,
+	): List<EntityBindingRecord>
+
 	@Upsert
 	abstract suspend fun upsertBinding(binding: EntityBindingRecord)
+
+	@Query(
+		"""
+		UPDATE entity_binding
+		SET state = :state,
+			updated_at = :updatedAt
+		WHERE source = :source AND external_id = :externalId
+		"""
+	)
+	abstract suspend fun updateBindingState(
+		source: String,
+		externalId: String,
+		state: String,
+		updatedAt: Long,
+	)
 
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
 	abstract suspend fun insertEntityPrefsIgnore(prefs: EntityPrefsRecord): Long
@@ -161,8 +209,44 @@ abstract class EntityGraphDao {
 
 	@Query(
 		"""
+		SELECT * FROM relation
+		WHERE (from_entity_id = :entityId OR to_entity_id = :entityId)
+			AND state IN ('ACTIVE', 'LEGACY')
+		ORDER BY id ASC
+		"""
+	)
+	abstract suspend fun findVisibleRelationsForEntity(entityId: Long): List<RelationRecord>
+
+	@Query(
+		"""
+		SELECT * FROM relation
+		WHERE (from_entity_id = :entityId OR to_entity_id = :entityId)
+			AND (
+				(
+					source_binding_source = :source
+					AND source_binding_external_id = :externalId
+					AND origin = 'TRACKING_INGEST'
+					AND state = 'ACTIVE'
+				)
+				OR (
+					origin = 'MANUAL'
+					AND state = 'ACTIVE'
+				)
+			)
+		ORDER BY id ASC
+		"""
+	)
+	abstract suspend fun findRelationsForEntityAndSource(
+		entityId: Long,
+		source: String,
+		externalId: String,
+	): List<RelationRecord>
+
+	@Query(
+		"""
 		SELECT from_entity_id FROM relation
-		WHERE to_entity_id = :entityId AND type = :type
+		WHERE to_entity_id = :entityId
+			AND type = :type
 		ORDER BY from_entity_id ASC
 		"""
 	)
@@ -170,12 +254,35 @@ abstract class EntityGraphDao {
 
 	@Query(
 		"""
+		SELECT from_entity_id FROM relation
+		WHERE to_entity_id = :entityId
+			AND type = :type
+			AND state IN ('ACTIVE', 'LEGACY')
+		ORDER BY from_entity_id ASC
+		"""
+	)
+	abstract suspend fun findVisibleIncomingEntityIds(entityId: Long, type: String): List<Long>
+
+	@Query(
+		"""
 		SELECT to_entity_id FROM relation
-		WHERE from_entity_id = :entityId AND type = :type
+		WHERE from_entity_id = :entityId
+			AND type = :type
 		ORDER BY to_entity_id ASC
 		"""
 	)
 	abstract suspend fun findOutgoingEntityIds(entityId: Long, type: String): List<Long>
+
+	@Query(
+		"""
+		SELECT to_entity_id FROM relation
+		WHERE from_entity_id = :entityId
+			AND type = :type
+			AND state IN ('ACTIVE', 'LEGACY')
+		ORDER BY to_entity_id ASC
+		"""
+	)
+	abstract suspend fun findVisibleOutgoingEntityIds(entityId: Long, type: String): List<Long>
 
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
 	abstract suspend fun insertRelation(relation: RelationRecord): Long
@@ -197,6 +304,20 @@ abstract class EntityGraphDao {
 		toEntityId: Long,
 		type: String,
 	): Long?
+
+	@Query(
+		"""
+		UPDATE relation
+		SET state = :state,
+			updated_at = :updatedAt
+		WHERE id = :relationId
+		"""
+	)
+	abstract suspend fun updateRelationState(
+		relationId: Long,
+		state: String,
+		updatedAt: Long,
+	)
 
 	@Query(
 		"""

@@ -662,6 +662,7 @@
     <string name="details_metadata_chapter_hint">元数据章节仅用于浏览信息和章节页面，不会直接打开阅读器或播放器。</string>
     <string name="details_metadata_source">元数据源</string>
     <string name="details_metadata_source_label">元数据源: %1$s</string>
+    <string name="details_remove_metadata_binding">移除元数据绑定</string>
     <string name="details_metadata_source_login_hint">搜索和本地绑定无需登录即可使用。登录后可自动同步在线进度。</string>
     <string name="details_more_comments">更多</string>
     <string name="details_more_reviews">更多</string>

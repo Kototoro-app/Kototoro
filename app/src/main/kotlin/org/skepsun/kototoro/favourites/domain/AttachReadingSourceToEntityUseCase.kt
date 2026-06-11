@@ -5,8 +5,9 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.data.isLocalReadingSource
+import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import javax.inject.Inject
@@ -31,7 +32,6 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
         var preferredProjectionId = newDetails.id
         database.withTransaction {
             val entityId = resolveOrCreateEntityId(oldContent)
-            val bindingDao = database.getEntityGraphDao()
             val existingProjectionForSource = findEntityProjectionBySource(
                 entityId = entityId,
                 sourceName = newDetails.source.name,
@@ -40,14 +40,10 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
             val existingBinding = findLocalBinding(newDetails.id)
             if (existingProjectionForSource == null && existingBinding == null) {
                 val confidence = findLocalBinding(oldContent.id)?.confidence ?: 1f
-                bindingDao.upsertBinding(
-                    EntityBindingRecord(
-                        entityId = entityId,
-                        source = "local_manga",
-                        externalId = newDetails.id.toString(),
-                        confidence = confidence,
-                        isPrimary = false,
-                    ),
+                entityGraphRepository.attachLocalReadingBinding(
+                    entityId = entityId,
+                    localMangaId = newDetails.id,
+                    confidence = confidence,
                 )
             }
             contentDataRepository.setEntityPreferredLocalMangaId(
@@ -69,19 +65,17 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
         return entityGraphRepository.ensureLocalWorkEntity(content).id
     }
 
-    private suspend fun findLocalBinding(mangaId: Long): EntityBindingRecord? {
-        val dao = database.getEntityGraphDao()
-        return dao.findBinding("local_manga", mangaId.toString())
-            ?: dao.findBinding("0", mangaId.toString())
+    private suspend fun findLocalBinding(mangaId: Long): EntityBinding? {
+        return entityGraphRepository.findLocalReadingBinding(mangaId)
     }
 
     private suspend fun findEntityProjectionBySource(
         entityId: Long,
         sourceName: String,
     ): Content? {
-        val bindings = database.getEntityGraphDao().findBindingsByEntity(entityId)
+        val bindings = database.getEntityGraphDao().findActiveBindingsByEntity(entityId)
         for (binding in bindings) {
-            if (binding.source != "local_manga" && binding.source != "0") {
+            if (!binding.isLocalReadingSource()) {
                 continue
             }
             val mangaId = binding.externalId.toLongOrNull() ?: continue

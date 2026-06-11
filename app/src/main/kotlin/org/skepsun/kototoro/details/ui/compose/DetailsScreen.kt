@@ -1372,6 +1372,7 @@ fun DetailsScreen(
                     ),
                     onDismissRequest = { showMetadataSourceDialog = false },
                     onSelectOption = viewModel::selectMetadataSource,
+                    onRemoveOption = viewModel::removeMetadataSourceBinding,
                     onSearchQueryChange = viewModel::updateMetadataSearchQuery,
                     onSearch = viewModel::searchMetadataBindings,
                     onBindResult = viewModel::bindMetadataSource,
@@ -2233,8 +2234,18 @@ private fun DetailsScrollableContent(
             DetailsRelationSections(
                 sections = entityRelationSections,
                 onItemClick = { item ->
-                    if (item.entityId != null) {
-                        onEntityClick(item)
+                    val service = item.trackingService
+                    val remoteId = item.remoteId
+                    when {
+                        item.entityId != null -> {
+                            onEntityClick(item)
+                        }
+                        service != null && remoteId != null -> {
+                            onActionClick(DetailsAction.OpenTrackingDetails(service, remoteId, item.url))
+                        }
+                        !item.url.isNullOrBlank() -> {
+                            onSupplementalRelationClick(item)
+                        }
                     }
                 },
             )

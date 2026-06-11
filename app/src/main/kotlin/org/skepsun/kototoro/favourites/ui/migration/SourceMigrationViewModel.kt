@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.model.getStableIdentityKey
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -35,8 +36,11 @@ import org.skepsun.kototoro.favourites.data.FavouriteContent
 import org.skepsun.kototoro.favourites.data.FavouriteSourcesRepository
 import org.skepsun.kototoro.favourites.data.toContent
 import org.skepsun.kototoro.favourites.domain.BindTrackingToEntitiesUseCase
+import org.skepsun.kototoro.favourites.domain.DEFAULT_FUZZY_MERGE_THRESHOLD
 import org.skepsun.kototoro.favourites.domain.MigrationProgress
+import org.skepsun.kototoro.favourites.domain.MergeCandidateOptions
 import org.skepsun.kototoro.favourites.domain.MergeCandidateGroup
+import org.skepsun.kototoro.favourites.domain.MergeEntitiesResult
 import org.skepsun.kototoro.favourites.domain.MergeFavoriteEntitiesUseCase
 import org.skepsun.kototoro.favourites.domain.PreviewReadingSourceMigrationUseCase
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreview
@@ -45,6 +49,8 @@ import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.favourites.work.SourceMigrationWorker
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
+import org.skepsun.kototoro.entitygraph.domain.EntityGraphRepairIssueKind
+import org.skepsun.kototoro.entitygraph.domain.EntityGraphRepairReport
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -57,6 +63,10 @@ import org.skepsun.kototoro.tracking.mangabaka.data.MangaBakaMetadataRepository
 import javax.inject.Inject
 
 private const val TAG = "SourceMigrationVM"
+
+internal fun MergeCandidateGroup.isExecutableMergeCandidate(): Boolean {
+    return mangaIds.size >= 2 && !isAlreadyMerged
+}
 
 enum class EntityOrganizeStage {
     MERGE,
@@ -119,12 +129,18 @@ data class MigrationUiState(
     val selectedContentIds: Set<Long> = emptySet(),
     val scopedFavouriteContents: List<FavouriteContent> = emptyList(),
     val mergeCandidateGroups: List<MergeCandidateGroup> = emptyList(),
+    val mergePreviewReady: Boolean = false,
     val selectedMergeGroupIds: Set<String> = emptySet(),
     val selectedMergeItemsByGroup: Map<String, Set<Long>> = emptyMap(),
+    val selectedManualMergeMangaIds: Set<Long> = emptySet(),
+    val fuzzyMergeCandidatesEnabled: Boolean = false,
+    val fuzzyMergeThresholdPercent: Int = (DEFAULT_FUZZY_MERGE_THRESHOLD * 100).toInt(),
     val availableTrackingServices: List<ScrobblerService> = emptyList(),
     val selectedTrackingServices: List<ScrobblerService> = emptyList(),
     val trackingMetadataSourceStrategy: TrackingMetadataSourceStrategy = TrackingMetadataSourceStrategy.LOCAL_THEN_API,
+    val existingTrackingPreviews: List<TrackingBindingPreview> = emptyList(),
     val trackingPreviews: List<TrackingBindingPreview> = emptyList(),
+    val trackingPreviewReady: Boolean = false,
     val selectedTrackingPreviewIds: Set<String> = emptySet(),
     val readingSourcePreviews: List<ReadingSourcePreview> = emptyList(),
     val acceptedReadingPreviewIds: Set<Long> = emptySet(),
@@ -148,7 +164,21 @@ data class MigrationUiState(
         isLoading = false,
         summary = "",
     ),
+    val repairReport: EntityGraphRepairReport? = null,
+    val isLoadingRepairReport: Boolean = true,
 ) {
+    val suspectMismergedLocalMangaIds: Set<Long>
+        get() = repairReport
+            ?.issues
+            .orEmpty()
+            .asSequence()
+            .filter { it.kind == EntityGraphRepairIssueKind.SUSPECT_MISMERGED_LOCAL_WORK }
+            .mapNotNull { it.externalId?.toLongOrNull() }
+            .toSet()
+
+    val manualMergeMangaIds: Set<Long>
+        get() = selectedManualMergeMangaIds
+
     val hasManualSelection: Boolean
         get() = selectedContentIds.isNotEmpty()
 
@@ -160,9 +190,15 @@ data class MigrationUiState(
                 stage = stage,
                 enabled = true,
                 canPreview = !isExecuting,
-                canExecute = mergeCandidateGroups.any { it.id in selectedMergeGroupIds && it.mangaIds.size >= 2 } && !isExecuting,
-                previewCount = mergeCandidateGroups.count { it.mangaIds.size >= 2 },
-                acceptedCount = mergeCandidateGroups.count { it.id in selectedMergeGroupIds && it.mangaIds.size >= 2 },
+                canExecute = mergePreviewReady &&
+                    mergeCandidateGroups.any {
+                        it.id in selectedMergeGroupIds && it.isExecutableMergeCandidate()
+                    } &&
+                    !isExecuting,
+                previewCount = mergeCandidateGroups.count { it.isExecutableMergeCandidate() },
+                acceptedCount = mergeCandidateGroups.count {
+                    it.id in selectedMergeGroupIds && it.isExecutableMergeCandidate()
+                },
                 feedback = feedbackOf(stage),
             )
 
@@ -170,10 +206,10 @@ data class MigrationUiState(
                 stage = stage,
                 enabled = true,
                 canPreview =
-                    selectedMergeGroupIds.isNotEmpty() &&
                     selectedTrackingServices.isNotEmpty() &&
                     !isExecuting,
                 canExecute =
+                    trackingPreviewReady &&
                     selectedTrackingPreviewIds.isNotEmpty() &&
                     !isExecuting,
                 previewCount = trackingPreviews.size,
@@ -244,6 +280,7 @@ class SourceMigrationViewModel @Inject constructor(
     private val bindTrackingToEntitiesUseCase: BindTrackingToEntitiesUseCase,
     private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
     private val entityGraphRepository: EntityGraphRepository,
+    private val database: MangaDatabase,
     private val contentDataRepository: ContentDataRepository,
     private val mihonExtensionManager: MihonExtensionManager,
     private val animeOfflineRepository: AnimeOfflineRepository,
@@ -268,6 +305,7 @@ class SourceMigrationViewModel @Inject constructor(
         refreshAnimeDatasetStatus()
         refreshMangaBakaDatasetStatus()
         refreshMergeCandidates()
+        refreshRepairReport()
     }
 
     override fun onCleared() {
@@ -304,6 +342,19 @@ class SourceMigrationViewModel @Inject constructor(
         }
     }
 
+    fun refreshRepairReport() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.value = _uiState.value.copy(isLoadingRepairReport = true)
+            val report = runCatching {
+                entityGraphRepository.inspectRepairIssues()
+            }.getOrNull()
+            _uiState.value = _uiState.value.copy(
+                repairReport = report,
+                isLoadingRepairReport = false,
+            )
+        }
+    }
+
     fun setSelectedContentIds(ids: Set<Long>) {
         val state = _uiState.value
         if (state.selectedContentIds == ids) {
@@ -311,13 +362,18 @@ class SourceMigrationViewModel @Inject constructor(
         }
         _uiState.value = state.copy(
             selectedContentIds = ids,
+            selectedManualMergeMangaIds = ids,
             selectedFromSource = if (ids.isNotEmpty()) null else state.selectedFromSource,
+            mergePreviewReady = false,
+            selectedMergeGroupIds = emptySet(),
             trackingProgress = null,
             trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
             selectedTrackingPreviewIds = emptySet(),
             readingSourcePreviews = emptyList(),
             acceptedReadingPreviewIds = emptySet(),
             stageFeedbacks = state.stageFeedbacks
+                .without(EntityOrganizeStage.MERGE)
                 .without(EntityOrganizeStage.TRACKING)
                 .without(EntityOrganizeStage.READING),
         )
@@ -337,12 +393,16 @@ class SourceMigrationViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             selectedFromSource = source,
             selectedContentIds = scopedIds,
+            mergePreviewReady = false,
+            selectedMergeGroupIds = emptySet(),
             trackingProgress = null,
             trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
             selectedTrackingPreviewIds = emptySet(),
             readingSourcePreviews = emptyList(),
             acceptedReadingPreviewIds = emptySet(),
             stageFeedbacks = _uiState.value.stageFeedbacks
+                .without(EntityOrganizeStage.MERGE)
                 .without(EntityOrganizeStage.TRACKING)
                 .without(EntityOrganizeStage.READING),
         )
@@ -357,7 +417,14 @@ class SourceMigrationViewModel @Inject constructor(
         } else {
             state.selectedTrackingServices + service
         }
-        _uiState.value = state.copy(selectedTrackingServices = updated)
+        _uiState.value = state.copy(
+            selectedTrackingServices = updated,
+            trackingProgress = null,
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
     }
 
     fun moveTrackingServiceUp(service: ScrobblerService) {
@@ -367,7 +434,14 @@ class SourceMigrationViewModel @Inject constructor(
         val updated = state.selectedTrackingServices.toMutableList()
         val item = updated.removeAt(index)
         updated.add(index - 1, item)
-        _uiState.value = state.copy(selectedTrackingServices = updated)
+        _uiState.value = state.copy(
+            selectedTrackingServices = updated,
+            trackingProgress = null,
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
     }
 
     fun moveTrackingServiceDown(service: ScrobblerService) {
@@ -377,7 +451,14 @@ class SourceMigrationViewModel @Inject constructor(
         val updated = state.selectedTrackingServices.toMutableList()
         val item = updated.removeAt(index)
         updated.add(index + 1, item)
-        _uiState.value = state.copy(selectedTrackingServices = updated)
+        _uiState.value = state.copy(
+            selectedTrackingServices = updated,
+            trackingProgress = null,
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
     }
 
     fun setTrackingMetadataSourceStrategy(strategy: TrackingMetadataSourceStrategy) {
@@ -386,8 +467,52 @@ class SourceMigrationViewModel @Inject constructor(
             trackingMetadataSourceStrategy = strategy,
             trackingProgress = null,
             trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
             selectedTrackingPreviewIds = emptySet(),
             stageFeedbacks = _uiState.value.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+    }
+
+    fun setFuzzyMergeCandidatesEnabled(enabled: Boolean) {
+        val state = _uiState.value
+        if (state.fuzzyMergeCandidatesEnabled == enabled) {
+            return
+        }
+        _uiState.value = state.copy(
+            fuzzyMergeCandidatesEnabled = enabled,
+            mergeCandidateGroups = emptyList(),
+            mergePreviewReady = false,
+            selectedMergeGroupIds = emptySet(),
+            selectedMergeItemsByGroup = emptyMap(),
+            selectedManualMergeMangaIds = emptySet(),
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks
+                .without(EntityOrganizeStage.MERGE)
+                .without(EntityOrganizeStage.TRACKING),
+        )
+    }
+
+    fun setFuzzyMergeThresholdPercent(percent: Int) {
+        val bounded = percent.coerceIn(80, 100)
+        val state = _uiState.value
+        if (state.fuzzyMergeThresholdPercent == bounded) {
+            return
+        }
+        _uiState.value = state.copy(
+            fuzzyMergeThresholdPercent = bounded,
+            mergeCandidateGroups = emptyList(),
+            mergePreviewReady = false,
+            selectedMergeGroupIds = emptySet(),
+            selectedMergeItemsByGroup = emptyMap(),
+            selectedManualMergeMangaIds = emptySet(),
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks
+                .without(EntityOrganizeStage.MERGE)
+                .without(EntityOrganizeStage.TRACKING),
         )
     }
 
@@ -640,11 +765,15 @@ class SourceMigrationViewModel @Inject constructor(
     fun bindSelectedTracking() {
         val state = _uiState.value
         if (
-            state.selectedMergeGroupIds.isEmpty() ||
+            !state.trackingPreviewReady ||
             state.selectedTrackingServices.isEmpty() ||
             state.selectedTrackingPreviewIds.isEmpty() ||
             state.isExecuting
         ) {
+            return
+        }
+        val selectedGroups = state.groupsForSelectedTrackingBind()
+        if (selectedGroups.isEmpty()) {
             return
         }
         _uiState.value = state.copy(
@@ -661,9 +790,6 @@ class SourceMigrationViewModel @Inject constructor(
             stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
         )
         viewModelScope.launch(Dispatchers.IO) {
-            val selectedGroups = state.mergeCandidateGroups
-                .filter { it.id in state.selectedMergeGroupIds }
-                .mapNotNull { it.withScopedItems(state.selectedMergeItemsByGroup[it.id]) }
             val result = bindTrackingToEntitiesUseCase.bind(
                 groups = selectedGroups,
                 previews = state.trackingPreviews.filter { it.previewId in state.selectedTrackingPreviewIds },
@@ -677,6 +803,7 @@ class SourceMigrationViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 isExecuting = false,
                 isFinished = true,
+                trackingPreviewReady = false,
                 trackingProgress = _uiState.value.trackingProgress?.copy(isFinished = true),
                 stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                     stage = EntityOrganizeStage.TRACKING,
@@ -695,17 +822,21 @@ class SourceMigrationViewModel @Inject constructor(
     fun previewSelectedTracking() {
         val state = _uiState.value
         if (
-            state.selectedMergeGroupIds.isEmpty() ||
             state.selectedTrackingServices.isEmpty() ||
             state.isExecuting
         ) {
             return
         }
+        val scopeGroups = state.groupsForTrackingPreview()
+        if (scopeGroups.isEmpty()) {
+            return
+        }
+        logTrackingPreviewScope(state, scopeGroups)
         _uiState.value = state.copy(
             isExecuting = true,
             isFinished = false,
             trackingProgress = MigrationProgress(
-                total = state.selectedMergeGroupIds.size,
+                total = scopeGroups.size,
                 completed = 0,
                 failed = 0,
                 notFound = 0,
@@ -713,27 +844,25 @@ class SourceMigrationViewModel @Inject constructor(
                 items = emptyList(),
             ),
             trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
             selectedTrackingPreviewIds = emptySet(),
             stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
         )
         viewModelScope.launch(Dispatchers.IO) {
-            val selectedGroups = state.mergeCandidateGroups
-                .filter { it.id in state.selectedMergeGroupIds }
-                .mapNotNull { it.withScopedItems(state.selectedMergeItemsByGroup[it.id]) }
             try {
-                val representativeContents = loadScopedFavouriteContents()
+                val representativeContents = loadTrackingPreviewFavouriteContents(state)
                     .associate { favourite ->
                         favourite.manga.id to favourite.toContent()
                     }
                 Log.d(
                     TAG,
-                    "previewSelectedTracking: groups=${selectedGroups.size}, services=${state.selectedTrackingServices.joinToString { it.id.toString() }}, " +
-                        "representatives=${representativeContents.size}",
+                    "previewSelectedTracking representatives=${representativeContents.size}, " +
+                        "representativeIdSample=${representativeContents.keys.take(12).joinToString()}",
                 )
                 var lastLoggedCompleted = -1
                 var lastLoggedNotFound = -1
                 val result = bindTrackingToEntitiesUseCase.preview(
-                    selectedGroups,
+                    scopeGroups,
                     state.selectedTrackingServices,
                     representativeContents = representativeContents,
                 ) { progress ->
@@ -763,8 +892,15 @@ class SourceMigrationViewModel @Inject constructor(
                     isExecuting = false,
                     isFinished = true,
                     trackingProgress = _uiState.value.trackingProgress?.copy(isFinished = true),
-                    trackingPreviews = result.previews,
+                    trackingPreviews = result.previews.filter {
+                        it.matchedBy != org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING
+                    },
+                    trackingPreviewReady = true,
                     selectedTrackingPreviewIds = result.previews
+                        .asSequence()
+                        .filter {
+                            it.matchedBy != org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING
+                        }
                         .groupBy { it.groupId }
                         .values
                         .mapNotNull { it.maxByOrNull(TrackingBindingPreview::confidence)?.previewId }
@@ -786,6 +922,7 @@ class SourceMigrationViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isExecuting = false,
                     isFinished = true,
+                    trackingPreviewReady = true,
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.TRACKING,
                         kind = EntityOrganizeFeedbackKind.PREVIEW,
@@ -877,15 +1014,213 @@ class SourceMigrationViewModel @Inject constructor(
     fun toggleMergeItem(groupId: String, mangaId: Long) {
         val state = _uiState.value
         val current = state.selectedMergeItemsByGroup[groupId].orEmpty()
-        val next = if (mangaId in current) current - mangaId else current + mangaId
+        val itemSelected = mangaId !in current
+        val next = if (itemSelected) current + mangaId else current - mangaId
         _uiState.value = state.copy(
             selectedMergeItemsByGroup = state.selectedMergeItemsByGroup + (groupId to next),
+            selectedManualMergeMangaIds = if (itemSelected) {
+                state.selectedManualMergeMangaIds + mangaId
+            } else {
+                state.selectedManualMergeMangaIds - mangaId
+            },
         )
+    }
+
+    fun clearManualMergeSelections() {
+        val state = _uiState.value
+        if (state.selectedManualMergeMangaIds.isEmpty() && state.selectedMergeItemsByGroup.values.all { it.isEmpty() }) {
+            return
+        }
+        _uiState.value = state.copy(
+            selectedMergeItemsByGroup = state.selectedMergeItemsByGroup.mapValues { emptySet() },
+            selectedManualMergeMangaIds = emptySet(),
+        )
+    }
+
+    fun splitLocalWorkProjection(mangaId: Long) {
+        repairLocalWorkProjection(
+            mangaId = mangaId,
+            action = {
+                entityGraphRepository.splitLocalWorkProjection(mangaId)
+            },
+            successMessage = R.string.entity_organize_repair_split_feedback,
+        )
+    }
+
+    fun detachLocalWorkProjection(mangaId: Long) {
+        repairLocalWorkProjection(
+            mangaId = mangaId,
+            action = {
+                if (entityGraphRepository.detachLocalWorkProjection(mangaId)) mangaId else null
+            },
+            successMessage = R.string.entity_organize_repair_detach_feedback,
+        )
+    }
+
+    fun splitSuspectMismergedLocalWorks() {
+        val state = _uiState.value
+        val suspectIds = state.suspectMismergedLocalMangaIds
+        if (suspectIds.isEmpty() || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            var repairedCount = 0
+            Log.i(TAG, "splitSuspectMismergedLocalWorks start count=${suspectIds.size} ids=${suspectIds.joinToString()}")
+            suspectIds.forEach { mangaId ->
+                val result = entityGraphRepository.splitLocalWorkProjectionWithDiagnostics(mangaId)
+                if (result.isSuccess) {
+                    repairedCount++
+                }
+                Log.i(
+                    TAG,
+                    "splitSuspectMismergedLocalWorks item mangaId=${result.localMangaId} " +
+                        "success=${result.isSuccess} oldEntity=${result.oldEntityId} " +
+                        "newEntity=${result.newEntityId} oldSource=${result.oldSource} " +
+                        "hadLocalContent=${result.hadLocalContent} failure=${result.failure}",
+                )
+            }
+            refreshMergeCandidates()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            val remainingSuspects = repairReport.issues
+                .asSequence()
+                .filter { it.kind == EntityGraphRepairIssueKind.SUSPECT_MISMERGED_LOCAL_WORK }
+                .mapNotNull { it.externalId?.toLongOrNull() }
+                .toSet()
+            Log.i(
+                TAG,
+                "splitSuspectMismergedLocalWorks finish repaired=$repairedCount " +
+                    "failed=${suspectIds.size - repairedCount} remaining=${remainingSuspects.size} " +
+                    "remainingIds=${remainingSuspects.joinToString()}",
+            )
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                selectedMergeItemsByGroup = current.selectedMergeItemsByGroup.mapValues { (_, ids) ->
+                    ids - suspectIds
+                },
+                selectedManualMergeMangaIds = current.selectedManualMergeMangaIds - suspectIds,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.MERGE,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_split_suspect_feedback,
+                        repairedCount,
+                        suspectIds.size - repairedCount,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun hideStaleLegacyRelations() {
+        val state = _uiState.value
+        val staleRelationCount = state.repairReport?.staleLegacyRelationCount ?: 0
+        if (staleRelationCount <= 0 || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val hiddenCount = entityGraphRepository.hideStaleLegacyRelations()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.MERGE,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_hide_legacy_relations_feedback,
+                        hiddenCount,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun rejectSuspectTrackingBindings() {
+        val state = _uiState.value
+        val suspectCount = state.repairReport?.suspectTrackingBindingCount ?: 0
+        if (suspectCount <= 0 || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val rejectedCount = entityGraphRepository.rejectSuspectTrackingBindings()
+            refreshMergeCandidates()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.TRACKING,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_reject_suspect_tracking_feedback,
+                        rejectedCount,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun repairSuspectMetadataSourceSelections() {
+        val state = _uiState.value
+        val suspectCount = state.repairReport?.suspectMetadataSourceCount ?: 0
+        if (suspectCount <= 0 || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val repairedCount = entityGraphRepository.repairSuspectMetadataSourceSelections()
+            refreshMergeCandidates()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.TRACKING,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_metadata_source_feedback,
+                        repairedCount,
+                    ),
+                ),
+            )
+        }
     }
 
     fun mergeSelectedEntities() {
         val state = _uiState.value
-        if (state.selectedMergeGroupIds.isEmpty() || state.isExecuting) {
+        if (!state.mergePreviewReady || state.selectedMergeGroupIds.isEmpty() || state.isExecuting) {
             return
         }
         _uiState.value = state.copy(
@@ -895,13 +1230,14 @@ class SourceMigrationViewModel @Inject constructor(
         )
         viewModelScope.launch(Dispatchers.IO) {
             val selectedGroups = state.mergeCandidateGroups
-                .filter { it.id in state.selectedMergeGroupIds }
+                .filter { it.id in state.selectedMergeGroupIds && it.isExecutableMergeCandidate() }
                 .mapNotNull { it.withMergeableSelectedItems(state.selectedMergeItemsByGroup[it.id]) }
             val result = mergeFavoriteEntitiesUseCase.merge(selectedGroups)
             refreshMergeCandidates()
             _uiState.value = _uiState.value.copy(
                 isExecuting = false,
                 isFinished = true,
+                mergePreviewReady = false,
                 stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                     stage = EntityOrganizeStage.MERGE,
                     kind = EntityOrganizeFeedbackKind.EXECUTE,
@@ -911,6 +1247,92 @@ class SourceMigrationViewModel @Inject constructor(
                         result.failed,
                         result.skipped,
                     ),
+                ),
+            )
+        }
+    }
+
+    fun manualMergeSelectedWorks() {
+        val state = _uiState.value
+        val selectedMangaIds = state.selectedManualMergeMangaIds
+        if (selectedMangaIds.size < 2 || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val contents = favouriteSourcesRepository.getFavouriteContentsByIds(selectedMangaIds)
+                .map { it.toContent() }
+                .distinctBy { it.id }
+            val sameContentType = contents
+                .mapTo(LinkedHashSet()) { it.source.contentType }
+                .size == 1
+            val result = if (contents.size >= 2 && sameContentType) {
+                mergeFavoriteEntitiesUseCase.mergeManual(contents)
+            } else {
+                MergeEntitiesResult(succeeded = 0, failed = 0, skipped = 1)
+            }
+            refreshMergeCandidates()
+            refreshRepairReport()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.MERGE,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = if (sameContentType) {
+                        appContext.getString(
+                            R.string.entity_organize_manual_merge_feedback,
+                            result.succeeded,
+                            result.failed,
+                            result.skipped,
+                        )
+                    } else {
+                        appContext.getString(R.string.entity_organize_manual_merge_type_mismatch)
+                    },
+                ),
+            )
+        }
+    }
+
+    private fun repairLocalWorkProjection(
+        mangaId: Long,
+        action: suspend (Long) -> Long?,
+        successMessage: Int,
+    ) {
+        val state = _uiState.value
+        if (mangaId == 0L || state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val repairedId = action(mangaId)
+            refreshMergeCandidates()
+            refreshRepairReport()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                selectedMergeItemsByGroup = current.selectedMergeItemsByGroup.mapValues { (_, ids) ->
+                    ids - mangaId
+                },
+                selectedManualMergeMangaIds = current.selectedManualMergeMangaIds - mangaId,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.MERGE,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = if (repairedId != null) {
+                        appContext.getString(successMessage)
+                    } else {
+                        appContext.getString(R.string.entity_organize_repair_action_failed)
+                    },
                 ),
             )
         }
@@ -928,43 +1350,43 @@ class SourceMigrationViewModel @Inject constructor(
         )
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val favourites = loadScopedFavouriteContents()
+                val favourites = loadScopedFavouriteContents(state)
                 val contents = favourites.map { it.toContent() }
-                val groups = buildWorkbenchGroups(contents)
-                val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
+                val groups = buildWorkbenchGroups(contents, state)
                 val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
                 val defaultSelectedGroupIds = resolveDefaultSelectedMergeGroupIds(
                     groups = groups,
-                    selectedContentIds = _uiState.value.selectedContentIds,
+                    selectedContentIds = state.selectedContentIds,
                 )
                 val selectedItemsByGroup = buildMap {
                     groups.forEach { group ->
                         put(
                             group.id,
-                            _uiState.value.selectedMergeItemsByGroup[group.id]
+                            state.selectedMergeItemsByGroup[group.id]
                                 ?.intersect(group.mangaIds)
                                 ?.takeIf { it.isNotEmpty() }
-                                ?: resolveDefaultSelectedMergeItemIds(
-                                    group = group,
-                                    selectedContentIds = _uiState.value.selectedContentIds,
-                                ),
+                                ?: group.mangaIds
+                                    .intersect(state.selectedManualMergeMangaIds)
+                                    .takeIf { it.isNotEmpty() }
+                                ?: emptySet(),
                         )
                     }
                 }
-                val mergeableCount = groups.count { it.mangaIds.size >= 2 }
-                val effectiveSelected = if (selected.isEmpty()) defaultSelectedGroupIds else selected
-                val mergeableSelectedCount = groups.count { it.id in effectiveSelected && it.mangaIds.size >= 2 }
+                val visibleManualMergeIds = selectedItemsByGroup.values.flatten().toSet()
+                val mergeableCount = groups.count { it.isExecutableMergeCandidate() }
+                val mergeableSelectedCount = groups.count {
+                    it.id in defaultSelectedGroupIds && it.isExecutableMergeCandidate()
+                }
                 _uiState.value = _uiState.value.copy(
                     isExecuting = false,
                     isFinished = true,
                     scopedFavouriteContents = favourites,
                     mergeCandidateGroups = groups,
+                    mergePreviewReady = true,
                     selectedMergeItemsByGroup = selectedItemsByGroup,
-                    selectedMergeGroupIds = if (selected.isEmpty()) {
-                        defaultSelectedGroupIds
-                    } else {
-                        selected
-                    },
+                    selectedManualMergeMangaIds = _uiState.value.selectedManualMergeMangaIds
+                        .intersect(visibleManualMergeIds),
+                    selectedMergeGroupIds = defaultSelectedGroupIds,
                     trackingPreviews = _uiState.value.trackingPreviews.filter { it.groupId in availableGroupIds },
                     selectedTrackingPreviewIds = _uiState.value.selectedTrackingPreviewIds.intersect(
                         _uiState.value.trackingPreviews
@@ -987,6 +1409,7 @@ class SourceMigrationViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isExecuting = false,
                     isFinished = true,
+                    mergePreviewReady = true,
                     stageFeedbacks = _uiState.value.stageFeedbacks.withFeedback(
                         stage = EntityOrganizeStage.MERGE,
                         kind = EntityOrganizeFeedbackKind.PREVIEW,
@@ -1140,7 +1563,7 @@ class SourceMigrationViewModel @Inject constructor(
         )
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val favourites = loadScopedFavouriteContents()
+                val favourites = loadScopedFavouriteContents(state)
                 _uiState.value = _uiState.value.copy(
                     migrationProgress = MigrationProgress(
                         total = favourites.size,
@@ -1216,10 +1639,19 @@ class SourceMigrationViewModel @Inject constructor(
         _uiState.value = state.copy(
             selectedContentIds = next,
             selectedFromSource = null,
+            mergePreviewReady = false,
+            selectedMergeGroupIds = emptySet(),
+            selectedTrackingPreviewIds = emptySet(),
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
             readingSourcePreviews = emptyList(),
             acceptedReadingPreviewIds = emptySet(),
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+            stageFeedbacks = state.stageFeedbacks
+                .without(EntityOrganizeStage.MERGE)
+                .without(EntityOrganizeStage.TRACKING)
+                .without(EntityOrganizeStage.READING),
         )
+        refreshMergeCandidates()
     }
 
     fun setReadingScopeGroupsSelected(groupIds: Set<String>, selected: Boolean) {
@@ -1238,10 +1670,19 @@ class SourceMigrationViewModel @Inject constructor(
                 clearSelectionIds(state.selectedContentIds, scopeMangaIds)
             },
             selectedFromSource = null,
+            mergePreviewReady = false,
+            selectedMergeGroupIds = emptySet(),
+            selectedTrackingPreviewIds = emptySet(),
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
             readingSourcePreviews = emptyList(),
             acceptedReadingPreviewIds = emptySet(),
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.READING),
+            stageFeedbacks = state.stageFeedbacks
+                .without(EntityOrganizeStage.MERGE)
+                .without(EntityOrganizeStage.TRACKING)
+                .without(EntityOrganizeStage.READING),
         )
+        refreshMergeCandidates()
     }
 
     fun acceptReadingPreviews(mangaIds: Set<Long>) {
@@ -1391,57 +1832,94 @@ class SourceMigrationViewModel @Inject constructor(
     }
 
     private fun refreshMergeCandidates() {
+        val requestState = _uiState.value
         viewModelScope.launch(Dispatchers.IO) {
-            val favourites = loadScopedFavouriteContents()
+            val favourites = loadScopedFavouriteContents(requestState)
             val contents = favourites.map { it.toContent() }
-            val groups = buildWorkbenchGroups(contents)
+            val groups = buildWorkbenchGroups(contents, requestState)
             val existingTrackingPreviews = buildExistingTrackingPreviews(groups)
-            val selected = _uiState.value.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
-            val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
-            val defaultSelectedGroupIds = resolveDefaultSelectedMergeGroupIds(
-                groups = groups,
-                selectedContentIds = _uiState.value.selectedContentIds,
-            )
-            val trackingScopeGroupIds = if (_uiState.value.selectedContentIds.isEmpty()) {
-                availableGroupIds
+            val selected = requestState.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
+            val mergePreviewReady = requestState.mergePreviewReady
+            val defaultSelectedGroupIds = if (mergePreviewReady) {
+                resolveDefaultSelectedMergeGroupIds(
+                    groups = groups,
+                    selectedContentIds = requestState.selectedContentIds,
+                )
             } else {
-                defaultSelectedGroupIds
+                emptySet()
             }
+            val trackingPreviewReady = requestState.trackingPreviewReady
+            val trackingOperationScopeIds = requestState.trackingOperationScopeIds()
+            val trackingScopeGroupIds = groups
+                .asSequence()
+                .filter { group ->
+                    trackingOperationScopeIds.isEmpty() ||
+                        group.mangaIds.any(trackingOperationScopeIds::contains)
+                }
+                .mapTo(LinkedHashSet()) { it.id }
+            Log.d(
+                TAG,
+                "refreshMergeCandidates tracking scope: requestSelectedContentIds=${requestState.selectedContentIds.size}, " +
+                    "requestManualMergeIds=${requestState.selectedManualMergeMangaIds.size}, " +
+                    "scopeIds=${trackingOperationScopeIds.size}, groups=${groups.size}, " +
+                    "trackingScopeGroups=${trackingScopeGroupIds.size}, existingBindings=${existingTrackingPreviews.size}",
+            )
             val selectedItemsByGroup = buildMap {
                 groups.forEach { group ->
                     put(
                         group.id,
-                        _uiState.value.selectedMergeItemsByGroup[group.id]
+                        requestState.selectedMergeItemsByGroup[group.id]
                             ?.intersect(group.mangaIds)
                             ?.takeIf { it.isNotEmpty() }
-                            ?: resolveDefaultSelectedMergeItemIds(
-                                group = group,
-                                selectedContentIds = _uiState.value.selectedContentIds,
-                            ),
+                            ?: group.mangaIds
+                                .intersect(requestState.selectedManualMergeMangaIds)
+                                .takeIf { it.isNotEmpty() }
+                            ?: emptySet(),
                     )
                 }
             }
-            _uiState.value = _uiState.value.copy(
+            val visibleManualMergeIds = selectedItemsByGroup.values.flatten().toSet()
+            val currentState = _uiState.value
+            if (!currentState.matchesRefreshRequest(requestState)) {
+                Log.d(
+                    TAG,
+                    "refreshMergeCandidates stale result ignored: " +
+                        "requestSelected=${requestState.selectedContentIds.size}, " +
+                        "currentSelected=${currentState.selectedContentIds.size}, " +
+                        "requestManual=${requestState.selectedManualMergeMangaIds.size}, " +
+                        "currentManual=${currentState.selectedManualMergeMangaIds.size}, " +
+                        "requestSource=${requestState.selectedFromSource?.name}, " +
+                        "currentSource=${currentState.selectedFromSource?.name}, groups=${groups.size}",
+                )
+                return@launch
+            }
+            val scopedTrackingPreviews = requestState.trackingPreviews.filter { it.groupId in trackingScopeGroupIds }
+            _uiState.value = currentState.copy(
                 scopedFavouriteContents = favourites,
                 mergeCandidateGroups = groups,
+                mergePreviewReady = mergePreviewReady,
                 selectedMergeItemsByGroup = selectedItemsByGroup,
-                selectedMergeGroupIds = if (selected.isEmpty()) defaultSelectedGroupIds else selected,
-                trackingPreviews = mergeTrackingPreviews(
-                    existing = existingTrackingPreviews.filter { it.groupId in trackingScopeGroupIds },
-                    current = _uiState.value.trackingPreviews.filter { it.groupId in trackingScopeGroupIds },
-                ),
-                selectedTrackingPreviewIds = run {
-                    val mergedPreviews = mergeTrackingPreviews(
-                        existing = existingTrackingPreviews.filter { it.groupId in trackingScopeGroupIds },
-                        current = _uiState.value.trackingPreviews.filter { it.groupId in trackingScopeGroupIds },
-                    )
-                    val availablePreviewIds = mergedPreviews.mapTo(HashSet()) { it.previewId }
-                    val existingBoundPreviewIds = mergedPreviews
-                        .asSequence()
-                        .filter { it.matchedBy == org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING }
-                        .map { it.previewId }
-                        .toSet()
-                    (_uiState.value.selectedTrackingPreviewIds.intersect(availablePreviewIds) + existingBoundPreviewIds)
+                selectedManualMergeMangaIds = requestState.selectedManualMergeMangaIds
+                    .intersect(visibleManualMergeIds),
+                selectedMergeGroupIds = if (!mergePreviewReady) {
+                    emptySet()
+                } else if (selected.isEmpty()) {
+                    defaultSelectedGroupIds
+                } else {
+                    selected
+                },
+                existingTrackingPreviews = existingTrackingPreviews.filter { it.groupId in trackingScopeGroupIds },
+                trackingPreviews = if (trackingPreviewReady) {
+                    scopedTrackingPreviews
+                } else {
+                    emptyList()
+                },
+                trackingPreviewReady = trackingPreviewReady,
+                selectedTrackingPreviewIds = if (trackingPreviewReady) {
+                    val availablePreviewIds = scopedTrackingPreviews.mapTo(HashSet()) { it.previewId }
+                    requestState.selectedTrackingPreviewIds.intersect(availablePreviewIds)
+                } else {
+                    emptySet()
                 },
             )
         }
@@ -1454,56 +1932,124 @@ class SourceMigrationViewModel @Inject constructor(
             return emptyList()
         }
         val serviceById = ScrobblerService.entries.associateBy { it.id.toString() }
+        val serviceByIntId = ScrobblerService.entries.associateBy { it.id }
+        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
+            groups.flatMapTo(LinkedHashSet()) { it.mangaIds },
+        )
+        val trackingDao = database.getTrackingSiteDao()
         return buildList {
             groups.forEach { group ->
-                val entityId = group.resolvedEntityId ?: return@forEach
-                val bindings = entityGraphRepository.getBindings(entityId)
-                bindings
-                    .asSequence()
-                    .mapNotNull { binding -> binding.toTrackingServiceBinding(serviceById) }
-                    .distinctBy { it.first.id to it.second.externalId }
-                    .forEach { (service, binding) ->
-                        val remoteId = binding.externalId.toLongOrNull() ?: return@forEach
-                        val cached = trackingSiteCacheRepository.readDetails(service, remoteId)
-                        val details = cached ?: TrackingSiteItemDetails(
-                            service = service,
-                            remoteId = remoteId,
-                            title = group.title,
-                            altTitle = null,
-                            coverUrl = null,
-                            contentType = group.contentType,
-                            description = null,
-                            score = null,
-                            rank = null,
-                            tags = emptyList(),
-                            authors = emptyList(),
-                            staff = emptyList(),
-                            year = null,
-                            totalEpisodes = null,
-                            url = null,
-                        )
-                        add(
-                            TrackingBindingPreview(
-                                previewId = "${group.id}:${service.id}:$remoteId",
-                                groupId = group.id,
-                                title = group.title,
-                                contentTypeName = group.contentType.name,
+                val existing = LinkedHashMap<String, ExistingTrackingBinding>()
+                val entityIds = buildSet {
+                    group.resolvedEntityId?.let(::add)
+                    group.mangaIds.mapNotNull(entityIdsByMangaId::get).forEach(::add)
+                }
+                entityIds.forEach { entityId ->
+                    existing.putPersistedSelection(
+                        contentDataRepository.getEntityMetadataSourceSelection(entityId),
+                    )
+                    entityGraphRepository.getBindings(entityId)
+                        .asSequence()
+                        .mapNotNull { binding -> binding.toTrackingServiceBinding(serviceById) }
+                        .forEach { (service, binding) ->
+                            val remoteId = binding.externalId.toLongOrNull() ?: return@forEach
+                            existing.putIfAbsent(
+                                "${service.id}:$remoteId",
+                                ExistingTrackingBinding(
+                                    service = service,
+                                    remoteId = remoteId,
+                                    confidence = binding.confidence,
+                                ),
+                            )
+                        }
+                }
+                group.mangaIds.forEach { mangaId ->
+                    existing.putPersistedSelection(
+                        contentDataRepository.getMetadataSourceSelection(mangaId),
+                    )
+                    trackingDao.findLinksByManga(mangaId).forEach { link ->
+                        val service = serviceByIntId[link.service] ?: return@forEach
+                        existing.putIfAbsent(
+                            "${service.id}:${link.remoteId}",
+                            ExistingTrackingBinding(
                                 service = service,
-                                remoteId = remoteId,
-                                matchedTitle = cached?.title ?: group.title,
-                                matchedAltTitle = cached?.altTitle,
-                                url = cached?.url,
-                                confidence = 1f,
-                                matchedBy = org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING,
-                                year = cached?.year,
-                                details = details,
-                                aliases = emptyList(),
+                                remoteId = link.remoteId,
+                                confidence = link.confidence,
                             ),
                         )
                     }
+                }
+                existing.values.forEach { binding ->
+                    add(binding.toPreview(group))
+                }
+                Log.d(
+                    TAG,
+                    "existing tracking group=${group.id} mangaIds=${group.mangaIds.size} " +
+                        "entityIds=${entityIds.size} bindings=${existing.size}",
+                )
             }
         }
     }
+
+    private suspend fun ExistingTrackingBinding.toPreview(
+        group: MergeCandidateGroup,
+    ): TrackingBindingPreview {
+        val cached = trackingSiteCacheRepository.readDetails(service, remoteId)
+        val details = cached ?: TrackingSiteItemDetails(
+            service = service,
+            remoteId = remoteId,
+            title = group.title,
+            altTitle = null,
+            coverUrl = null,
+            contentType = group.contentType,
+            description = null,
+            score = null,
+            rank = null,
+            tags = emptyList(),
+            authors = emptyList(),
+            staff = emptyList(),
+            year = null,
+            totalEpisodes = null,
+            url = null,
+        )
+        return TrackingBindingPreview(
+            previewId = "${group.id}:${service.id}:$remoteId",
+            groupId = group.id,
+            title = group.title,
+            contentTypeName = group.contentType.name,
+            service = service,
+            remoteId = remoteId,
+            matchedTitle = cached?.title ?: group.title,
+            matchedAltTitle = cached?.altTitle,
+            url = cached?.url,
+            confidence = confidence.coerceIn(0f, 1f),
+            matchedBy = org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind.EXISTING_BINDING,
+            year = cached?.year,
+            details = details,
+            aliases = emptyList(),
+        )
+    }
+
+    private fun MutableMap<String, ExistingTrackingBinding>.putPersistedSelection(
+        selection: ContentDataRepository.MetadataSourceSelection?,
+    ) {
+        val tracking = selection as? ContentDataRepository.MetadataSourceSelection.Tracking ?: return
+        val service = ScrobblerService.entries.firstOrNull { it.id == tracking.serviceId } ?: return
+        putIfAbsent(
+            "${service.id}:${tracking.remoteId}",
+            ExistingTrackingBinding(
+                service = service,
+                remoteId = tracking.remoteId,
+                confidence = 1f,
+            ),
+        )
+    }
+
+    private data class ExistingTrackingBinding(
+        val service: ScrobblerService,
+        val remoteId: Long,
+        val confidence: Float,
+    )
 
     private fun mergeTrackingPreviews(
         existing: List<TrackingBindingPreview>,
@@ -1538,8 +2084,15 @@ class SourceMigrationViewModel @Inject constructor(
 
     private suspend fun buildWorkbenchGroups(
         contents: List<org.skepsun.kototoro.parsers.model.Content>,
+        state: MigrationUiState,
     ): List<MergeCandidateGroup> {
-        val candidateGroups = mergeFavoriteEntitiesUseCase.buildCandidateGroups(contents)
+        val candidateGroups = mergeFavoriteEntitiesUseCase.buildCandidateGroups(
+            contents = contents,
+            options = MergeCandidateOptions(
+                fuzzyEnabled = state.fuzzyMergeCandidatesEnabled,
+                fuzzyThreshold = state.fuzzyMergeThresholdPercent.coerceIn(80, 100) / 100f,
+            ),
+        )
         val groupedIds = candidateGroups.flatMapTo(HashSet()) { it.mangaIds }
         val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
             contents.map { it.id },
@@ -1615,14 +2168,18 @@ class SourceMigrationViewModel @Inject constructor(
         )
     }
 
-    private suspend fun loadScopedFavouriteContents() = when {
-        _uiState.value.selectedContentIds.isNotEmpty() -> {
-            favouriteSourcesRepository.getFavouriteContentsByIds(_uiState.value.selectedContentIds)
+    private suspend fun loadScopedFavouriteContents(): List<FavouriteContent> {
+        return loadScopedFavouriteContents(_uiState.value)
+    }
+
+    private suspend fun loadScopedFavouriteContents(state: MigrationUiState): List<FavouriteContent> = when {
+        state.selectedContentIds.isNotEmpty() -> {
+            favouriteSourcesRepository.getFavouriteContentsByIds(state.selectedContentIds)
         }
 
-        _uiState.value.selectedFromSource != null -> {
+        state.selectedFromSource != null -> {
             favouriteSourcesRepository.getFavouriteContentsBySource(
-                checkNotNull(_uiState.value.selectedFromSource).name,
+                state.selectedFromSource.name,
             )
         }
 
@@ -1631,9 +2188,29 @@ class SourceMigrationViewModel @Inject constructor(
         }
     }
 
+    private suspend fun loadTrackingPreviewFavouriteContents(state: MigrationUiState): List<FavouriteContent> {
+        val scopeIds = state.trackingOperationScopeIds()
+        return if (scopeIds.isNotEmpty()) {
+            favouriteSourcesRepository.getFavouriteContentsByIds(scopeIds)
+        } else {
+            loadScopedFavouriteContents(state)
+        }
+    }
+
+    private fun MigrationUiState.matchesRefreshRequest(request: MigrationUiState): Boolean {
+        return selectedContentIds == request.selectedContentIds &&
+            selectedFromSource?.name == request.selectedFromSource?.name &&
+            selectedManualMergeMangaIds == request.selectedManualMergeMangaIds &&
+            fuzzyMergeCandidatesEnabled == request.fuzzyMergeCandidatesEnabled &&
+            fuzzyMergeThresholdPercent == request.fuzzyMergeThresholdPercent &&
+            mergePreviewReady == request.mergePreviewReady &&
+            trackingPreviewReady == request.trackingPreviewReady
+    }
+
     private fun loadPreviewScopeEstimate(state: MigrationUiState): Int {
+        val trackingScopeIds = state.trackingOperationScopeIds()
         return when {
-            state.selectedContentIds.isNotEmpty() -> state.selectedContentIds.size
+            trackingScopeIds.isNotEmpty() -> trackingScopeIds.size
             state.selectedFromSource != null -> state.mergeCandidateGroups.count {
                 it.items.firstOrNull()?.sourceName == state.selectedFromSource.name
             }
@@ -1642,7 +2219,9 @@ class SourceMigrationViewModel @Inject constructor(
     }
 
     private fun MergeCandidateGroup.withScopedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
-        val resolvedIds = selectedIds.orEmpty().ifEmpty { mangaIds }.intersect(mangaIds)
+        val resolvedIds = selectedIds
+            ?.intersect(mangaIds)
+            ?: mangaIds
         if (resolvedIds.isEmpty()) {
             return null
         }
@@ -1657,27 +2236,66 @@ class SourceMigrationViewModel @Inject constructor(
         return scoped.takeIf { it.mangaIds.size >= 2 }
     }
 
+    private fun MigrationUiState.groupsForTrackingPreview(): List<MergeCandidateGroup> {
+        val scopeIds = trackingOperationScopeIds()
+        return mergeCandidateGroups.mapNotNull { group ->
+            val scopedIds = if (scopeIds.isEmpty()) {
+                null
+            } else {
+                group.mangaIds.intersect(scopeIds)
+            }
+            group.withScopedItems(scopedIds)
+        }
+    }
+
+    private fun MigrationUiState.trackingOperationScopeIds(): Set<Long> {
+        return selectedContentIds.ifEmpty { selectedManualMergeMangaIds }
+    }
+
+    private fun logTrackingPreviewScope(
+        state: MigrationUiState,
+        scopeGroups: List<MergeCandidateGroup>,
+    ) {
+        val scopeIds = state.trackingOperationScopeIds()
+        val source = when {
+            state.selectedContentIds.isNotEmpty() -> "selectedContentIds"
+            state.selectedManualMergeMangaIds.isNotEmpty() -> "manualMergeIds"
+            else -> "ALL"
+        }
+        Log.i(
+            TAG,
+            "previewSelectedTracking scope source=$source selectedContentIds=${state.selectedContentIds.size} " +
+                "manualMergeIds=${state.selectedManualMergeMangaIds.size} scopeIds=${scopeIds.size} " +
+                "scopeIdSample=${scopeIds.take(20).joinToString()} groups=${scopeGroups.size} " +
+                "groupIdSample=${scopeGroups.take(20).joinToString { it.id }} " +
+                "itemCount=${scopeGroups.sumOf { it.mangaIds.size }}",
+        )
+    }
+
+    private fun MigrationUiState.groupsForSelectedTrackingBind(): List<MergeCandidateGroup> {
+        val selectedPreviewGroupIds = trackingPreviews
+            .asSequence()
+            .filter { it.previewId in selectedTrackingPreviewIds }
+            .mapTo(LinkedHashSet()) { it.groupId }
+        if (selectedPreviewGroupIds.isEmpty()) {
+            return emptyList()
+        }
+        return groupsForTrackingPreview()
+            .filter { it.id in selectedPreviewGroupIds }
+    }
+
     private fun resolveDefaultSelectedMergeGroupIds(
         groups: List<MergeCandidateGroup>,
         selectedContentIds: Set<Long>,
     ): Set<String> {
+        val defaultSelectableGroups = groups.asSequence()
+            .filter { it.isExecutableMergeCandidate() }
         if (selectedContentIds.isEmpty()) {
-            return groups.mapTo(LinkedHashSet(groups.size)) { it.id }
+            return defaultSelectableGroups.mapTo(LinkedHashSet()) { it.id }
         }
-        return groups
-            .asSequence()
+        return defaultSelectableGroups
             .filter { group -> group.mangaIds.any(selectedContentIds::contains) }
             .mapTo(LinkedHashSet()) { it.id }
-    }
-
-    private fun resolveDefaultSelectedMergeItemIds(
-        group: MergeCandidateGroup,
-        selectedContentIds: Set<Long>,
-    ): Set<Long> {
-        if (selectedContentIds.isEmpty()) {
-            return group.mangaIds
-        }
-        return group.mangaIds.intersect(selectedContentIds).ifEmpty { group.mangaIds }
     }
 
     private fun removeMigrationObserver() {

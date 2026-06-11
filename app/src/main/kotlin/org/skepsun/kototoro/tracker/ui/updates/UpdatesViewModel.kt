@@ -237,14 +237,7 @@ class UpdatesViewModel @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val existingEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.manga.id })
-		val unresolvedItems = filterNot { it.manga.id in existingEntityIdsByMangaId }
-		val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
-			entityGraphRepository.ensureLocalWorkEntities(unresolvedItems.map { it.manga })
-		} else {
-			emptyMap()
-		}
-		val entityIdsByMangaId = existingEntityIdsByMangaId + ensuredEntityIdsByMangaId
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.manga.id })
 		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
 		val displayTypeOrdinalByEntity = this
 			.groupBy { entityIdsByMangaId[it.manga.id] }

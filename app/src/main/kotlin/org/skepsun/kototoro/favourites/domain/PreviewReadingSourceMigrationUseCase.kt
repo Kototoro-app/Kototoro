@@ -4,6 +4,8 @@ import android.util.Log
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.model.ContentSource as SourceRef
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.domain.isLocalReadingSource
+import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
 import org.skepsun.kototoro.favourites.data.FavouriteContent
 import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationProgress
@@ -132,7 +134,7 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
         val sourceType = favourite.manga.source.let { SourceRef(it).contentType }
         val entityId = entityGraphRepository.findEntityByBinding("local_manga", favourite.manga.id.toString())?.id
             ?: entityGraphRepository.findEntityByBinding("0", favourite.manga.id.toString())?.id
-        val searchQueries = buildSearchQueries(favourite, entityId)
+        val searchQueries = buildSearchQueries(favourite, entityId, targetSources)
         Log.d(
             TAG,
             "findBestMatch:start mangaId=${favourite.manga.id} sourceType=${sourceType.name} " +
@@ -212,27 +214,31 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
     private suspend fun buildSearchQueries(
         favourite: FavouriteContent,
         entityId: Long?,
+        targetSources: List<ContentSource>,
     ): List<String> {
         val entity = if (entityId != null) {
             entityGraphRepository.getEntity(entityId)
         } else {
             null
         }
+        val sourceNames = listOf(favourite.manga.source)
         return buildList<String> {
-            add(favourite.manga.title)
+            add(cleanQuery(favourite.manga.title, sourceNames))
             favourite.manga.altTitles
                 ?.split(ALT_TITLE_SPLIT_REGEX)
                 .orEmpty()
                 .forEach { altTitle ->
-                    val normalizedAltTitle = altTitle.trim()
+                    val normalizedAltTitle = cleanQuery(altTitle, sourceNames)
                     if (normalizedAltTitle.isNotEmpty()) {
                         add(normalizedAltTitle)
                     }
                 }
             entity?.let { resolvedEntity ->
-                add(resolvedEntity.primaryName)
+                val entitySourceNames = targetSources.mapTo(LinkedHashSet(targetSources.size + 1)) { it.name }
+                    .also { it += sourceNames }
+                add(cleanQuery(resolvedEntity.primaryName, entitySourceNames))
                 resolvedEntity.aliases.forEach { alias ->
-                    val normalizedAlias = alias.toString().trim()
+                    val normalizedAlias = cleanQuery(alias.toString(), entitySourceNames)
                     if (normalizedAlias.isNotEmpty()) {
                         add(normalizedAlias)
                     }
@@ -243,13 +249,20 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
             .distinct()
     }
 
+    private fun cleanQuery(
+        value: String,
+        sourceNames: Iterable<String>,
+    ): String {
+        return stripEntityDisambiguationTitleSuffix(value, sourceNames).trim()
+    }
+
     private suspend fun findExistingProjection(
         entityId: Long,
         sourceName: String,
     ): Content? {
         val bindings = entityGraphRepository.getBindings(entityId)
         for (binding in bindings) {
-            if (binding.source != "local_manga" && binding.source != "0") {
+            if (!binding.isLocalReadingSource()) {
                 continue
             }
             val mangaId = binding.externalId.toLongOrNull() ?: continue

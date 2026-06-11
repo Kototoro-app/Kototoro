@@ -3,9 +3,12 @@ package org.skepsun.kototoro.entitygraph.data
 import org.json.JSONArray
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.entitygraph.domain.Relation
 import org.skepsun.kototoro.entitygraph.domain.RelationType
+import org.skepsun.kototoro.entitygraph.domain.isLocalEntityBindingSource
+import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.entitygraph.domain.normalizeEntityName
 import org.skepsun.kototoro.parsers.util.longHashCode
 
@@ -25,6 +28,24 @@ internal fun EntityBindingRecord.toModel(): EntityBinding = EntityBinding(
 	externalId = externalId,
 	confidence = confidence,
 	isPrimary = isPrimary,
+	sourceKindName = sourceKind,
+	stateName = state,
+	createdBy = createdBy,
+	updatedAt = updatedAt,
+)
+
+fun EntityBindingRecord.isLocalReadingSource(): Boolean {
+	return source.isLocalEntityBindingSource()
+}
+
+fun EntityBindingRecord.isActiveBinding(): Boolean {
+	return state.toEntityBindingStateOrNull() in ACTIVE_BINDING_STATES
+}
+
+private val ACTIVE_BINDING_STATES = setOf(
+	EntityBindingState.MANUAL,
+	EntityBindingState.CONFIRMED,
+	EntityBindingState.LEGACY,
 )
 
 internal fun RelationRecord.toModel(): Relation = Relation(
@@ -34,6 +55,11 @@ internal fun RelationRecord.toModel(): Relation = Relation(
 	type = RelationType.valueOf(type),
 	weight = weight,
 	createdAt = createdAt,
+	sourceBindingSource = sourceBindingSource.takeIf { it.isNotBlank() },
+	sourceBindingExternalId = sourceBindingExternalId.takeIf { it.isNotBlank() },
+	originName = origin,
+	stateName = state,
+	updatedAt = updatedAt,
 )
 
 internal fun encodeStringList(values: Collection<String>): String? {

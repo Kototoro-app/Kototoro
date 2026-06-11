@@ -16,13 +16,15 @@ import org.skepsun.kototoro.core.prefs.TrackingMetadataSourceStrategy
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.domain.isLocalReadingSource
 import org.skepsun.kototoro.entitygraph.domain.TrackingCharacterDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingPersonDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.entitygraph.domain.normalizeEntityName
+import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
+import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -163,7 +165,8 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                 )
                 return@forEach
             }
-            previews += resolvedCandidates.map { resolved ->
+            val allowedTitleKeys = resolveAllowedTrackingTitleKeys(group)
+            val acceptedPreviews = resolvedCandidates.map { resolved ->
                 TrackingBindingPreview(
                     previewId = "${group.id}:${resolved.service.id}:${resolved.details.remoteId}",
                     groupId = group.id,
@@ -180,7 +183,40 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                     details = resolved.details,
                     aliases = resolved.aliases,
                 )
+            }.filter { preview ->
+                val accepted = preview.isStrictlyCompatibleWith(
+                    group = group,
+                    allowedTitleKeys = allowedTitleKeys,
+                )
+                if (!accepted) {
+                    Log.i(
+                        TAG,
+                        "preview rejected: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
+                            "remoteId=${preview.remoteId}, trackingKeys=${preview.strictTrackingTitleKeys()}, " +
+                            "allowedKeys=$allowedTitleKeys",
+                    )
+                }
+                accepted
             }
+            if (acceptedPreviews.isEmpty()) {
+                skipped++
+                onProgress?.invoke(
+                    MigrationProgress(
+                        total = total,
+                        completed = matched,
+                        failed = 0,
+                        notFound = skipped,
+                        currentItem = MigrationItem(
+                            mangaId = group.items.firstOrNull()?.mangaId ?: -1L,
+                            title = group.title,
+                        ),
+                        items = emptyList(),
+                        isFinished = matched + skipped >= total,
+                    ),
+                )
+                return@forEach
+            }
+            previews += acceptedPreviews
             matched++
             onProgress?.invoke(
                 MigrationProgress(
@@ -287,40 +323,53 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         group: MergeCandidateGroup,
         preview: TrackingBindingPreview,
     ): Boolean {
+        val effectiveDetails = runCatchingCancellable {
+            readOrFetchDetails(preview.service, preview.remoteId, preview.url)
+        }.getOrNull() ?: preview.details
+        val effectivePreview = preview.copy(
+            matchedTitle = effectiveDetails.title,
+            matchedAltTitle = effectiveDetails.altTitle,
+            details = effectiveDetails,
+        )
+        val allowedTitleKeys = resolveAllowedTrackingTitleKeys(group)
+        if (!effectivePreview.isStrictlyCompatibleWith(group, allowedTitleKeys)) {
+            Log.i(
+                TAG,
+                "bindOne rejected: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
+                    "remoteId=${preview.remoteId}, trackingKeys=${effectivePreview.strictTrackingTitleKeys()}, " +
+                    "allowedKeys=$allowedTitleKeys",
+            )
+            return false
+        }
         val ingestedEntity = entityGraphRepository.ingestWorkFromTracking(
-            source = preview.service.id.toString(),
-            workDto = preview.details.toTrackingWorkDto(
-                additionalAliases = preview.aliases + preview.details.inferAdditionalAliases(preview),
+            source = effectivePreview.service.id.toString(),
+            workDto = effectivePreview.details.toTrackingWorkDto(
+                additionalAliases = effectivePreview.aliases + effectivePreview.details.inferAdditionalAliases(effectivePreview),
             ),
         )
         val targetEntityId = database.withTransaction {
             val dao = database.getEntityGraphDao()
             val entityIdsToMerge = linkedSetOf<Long>()
             group.mangaIds.forEach { mangaId ->
-                val existingBinding = dao.findBinding("local_manga", mangaId.toString())
-                    ?: dao.findBinding("0", mangaId.toString())
+                val existingBinding = entityGraphRepository.findLocalReadingBinding(mangaId)
                 if (existingBinding != null && existingBinding.entityId != ingestedEntity.id) {
                     entityIdsToMerge += existingBinding.entityId
                 }
                 if (existingBinding == null) {
-                    dao.upsertBinding(
-                        EntityBindingRecord(
-                            entityId = ingestedEntity.id,
-                            source = "local_manga",
-                            externalId = mangaId.toString(),
-                            confidence = 1f,
-                            isPrimary = false,
-                        ),
+                    entityGraphRepository.attachLocalReadingBinding(
+                        entityId = ingestedEntity.id,
+                        localMangaId = mangaId,
+                        confidence = 1f,
                     )
                 }
-                trackingSiteMatcher.confirmMatch(preview.service, mangaId, preview.remoteId)
+                trackingSiteMatcher.confirmMatch(effectivePreview.service, mangaId, effectivePreview.remoteId)
             }
             val conflictingEntityIds = (entityIdsToMerge + ingestedEntity.id).distinct()
             if (conflictingEntityIds.isNotEmpty()) {
                 dao.deleteBindingsByEntityIdsAndSourcesExcept(
                     entityIds = conflictingEntityIds,
-                    sources = preview.service.bindingSourceKeys(),
-                    externalId = preview.remoteId.toString(),
+                    sources = effectivePreview.service.bindingSourceKeys(),
+                    externalId = effectivePreview.remoteId.toString(),
                 )
             }
             if (entityIdsToMerge.isNotEmpty()) {
@@ -339,8 +388,8 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         syncEntityMetadataSelection(
             entityId = targetEntityId,
             selection = ContentDataRepository.MetadataSourceSelection.Tracking(
-                serviceId = preview.service.id,
-                remoteId = preview.remoteId,
+                serviceId = effectivePreview.service.id,
+                remoteId = effectivePreview.remoteId,
             ),
         )
         return true
@@ -352,7 +401,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     ) {
         val localMangaIds = entityGraphRepository.getBindings(entityId)
             .asSequence()
-            .filter { it.source == "local_manga" || it.source == "0" }
+            .filter { it.isLocalReadingSource() }
             .mapNotNull { it.externalId.toLongOrNull() }
             .distinct()
             .toList()
@@ -665,7 +714,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             .mapNotNull { envelope ->
                 val mapping = envelope.candidate.mappings.firstOrNull { it.service == service } ?: return@mapNotNull null
                 val confidence = envelope.candidate.aliases.maxOfOrNull { alias ->
-                    similarity(normalizeTitle(content.title), normalizeTitle(alias))
+                    similarity(normalizeTitle(content.searchTitle()), normalizeTitle(alias))
                 } ?: 0f
                 AggregateResolvedCandidate(envelope.candidate, mapping, confidence, envelope.origin)
             }
@@ -749,6 +798,49 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             .distinct()
     }
 
+    private suspend fun resolveAllowedTrackingTitleKeys(group: MergeCandidateGroup): Set<String> {
+        val entityIds = buildSet {
+            group.resolvedEntityId?.let(::add)
+            addAll(entityGraphRepository.findEntityIdsByAnyMangaIds(group.mangaIds).values)
+        }
+        val entities = entityGraphRepository.getEntitiesByIds(entityIds)
+        val sourceNames = group.items.mapTo(LinkedHashSet(group.items.size)) { it.sourceName }
+        return buildList {
+            add(group.normalizedTitle)
+            group.items.forEach { item ->
+                add(normalizeStrictTitleKey(item.title, listOf(item.sourceName)))
+            }
+            entities.forEach { entity ->
+                add(stripEntityDisambiguationTitleSuffix(entity.primaryName, sourceNames))
+                addAll(entity.aliases.map { alias -> stripEntityDisambiguationTitleSuffix(alias, sourceNames) })
+            }
+        }.toStrictTitleKeys()
+    }
+
+    private fun TrackingBindingPreview.isStrictlyCompatibleWith(
+        group: MergeCandidateGroup,
+        allowedTitleKeys: Set<String>,
+    ): Boolean {
+        if (details.contentType != null && details.contentType != group.contentType) {
+            return false
+        }
+        return strictTrackingTitleKeys().any { it in allowedTitleKeys }
+    }
+
+    private fun TrackingBindingPreview.strictTrackingTitleKeys(): Set<String> {
+        return listOf(
+            details.title,
+            details.altTitle,
+            matchedTitle,
+            matchedAltTitle,
+        ).filterNotNull().toStrictTitleKeys()
+    }
+
+    private fun Iterable<String>.toStrictTitleKeys(): Set<String> {
+        return mapTo(LinkedHashSet()) { normalizeStrictTitleKey(it) }
+            .filterTo(LinkedHashSet()) { it.isNotBlank() }
+    }
+
     private data class ResolvedTrackingPreview(
         val service: ScrobblerService,
         val details: TrackingSiteItemDetails,
@@ -823,6 +915,10 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
 
     private fun normalizeTitle(value: String): String = normalizeEntityName(value)
 
+    private fun Content.searchTitle(): String {
+        return stripEntityDisambiguationTitleSuffix(title, listOf(source.name))
+    }
+
     private suspend fun buildTrackingSearchQueries(
         content: Content,
         service: ScrobblerService,
@@ -830,7 +926,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         strategy: TrackingMetadataSourceStrategy,
     ): List<String> {
         val baseQueries = buildList {
-            add(content.title.trim())
+            add(content.searchTitle().trim())
             addAll(content.altTitles.map(String::trim))
         }
         val datasetQueries = context.datasetAliases

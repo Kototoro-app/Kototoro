@@ -6,7 +6,7 @@ import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.toContentHistory
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
@@ -25,6 +25,7 @@ constructor(
 	private val mangaRepositoryFactory: ContentRepository.Factory,
 	private val mangaDataRepository: ContentDataRepository,
 	private val database: MangaDatabase,
+	private val entityGraphRepository: EntityGraphRepository,
 	private val progressUpdateUseCase: ProgressUpdateUseCase,
 	private val scrobblers: Set<@JvmSuppressWildcards Scrobbler>,
 ) {
@@ -93,23 +94,13 @@ constructor(
 				}
 			}
 			// keep the migrated content bound to the same entity graph node so source alternatives stay grouped
-			val entityGraphDao = database.getEntityGraphDao()
-			listOf("local_manga", "0")
-				.mapNotNull { source ->
-					entityGraphDao.findBinding(source, oldDetails.id.toString())
-				}
-				.firstOrNull()
-				?.let { binding ->
-					entityGraphDao.upsertBinding(
-						EntityBindingRecord(
-							entityId = binding.entityId,
-							source = "local_manga",
-							externalId = newDetails.id.toString(),
-							confidence = binding.confidence,
-							isPrimary = false,
-						),
-					)
-				}
+			entityGraphRepository.findLocalReadingBinding(oldDetails.id)?.let { binding ->
+				entityGraphRepository.attachLocalReadingBinding(
+					entityId = binding.entityId,
+					localMangaId = newDetails.id,
+					confidence = binding.confidence,
+				)
+			}
 			// track
 			val tracksDao = database.getTracksDao()
 			val oldTrack = tracksDao.find(oldDetails.id)

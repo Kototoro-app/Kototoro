@@ -98,14 +98,7 @@ class ContentSearchRepository @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
-		val unresolvedItems = filterNot { it.id in entityIdsByMangaId }
-		val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
-			entityGraphRepository.ensureLocalWorkEntities(unresolvedItems)
-		} else {
-			emptyMap()
-		}
-		val resolvedEntityIdsByMangaId = entityIdsByMangaId + ensuredEntityIdsByMangaId
+		val resolvedEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
 		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIdsByMangaId.values)
 		val displayTypeOrdinalByEntity = this
 			.groupBy { resolvedEntityIdsByMangaId[it.id] }

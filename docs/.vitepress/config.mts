@@ -53,6 +53,7 @@ export default defineConfig({
           { text: "Architecture Review", link: "/architecture/architecture-review" },
           { text: "Architecture Roadmap", link: "/architecture/architecture-roadmap" },
           { text: "Entity Graph Plan", link: "/architecture/entity-graph-implementation-plan" },
+          { text: "Entity Source Governance", link: "/architecture/entity-source-governance-plan" },
           { text: "OCR Architecture Review", link: "/architecture/ocr-architecture-review" },
           { text: "OCR Pipeline", link: "/architecture/ocr-pipeline-v2" },
           { text: "UI Improvement", link: "/architecture/ui_improvement" },

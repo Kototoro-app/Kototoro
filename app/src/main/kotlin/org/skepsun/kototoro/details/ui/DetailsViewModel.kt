@@ -133,7 +133,9 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingCharacterDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingPersonDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.domain.isLocalReadingSource
+import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
+import org.skepsun.kototoro.entitygraph.domain.trackingServiceOrNull
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -781,11 +783,40 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private fun currentDetailsTitle(): String {
-		return mangaDetails.value?.toContent()?.title
-			?: baseLoadedDetails?.toContent()?.title
-			?: originContent?.title
-			?: intent.manga?.title
-			.orEmpty()
+		return cleanSourceSearchQuery(currentDetailsContent()?.title.orEmpty())
+	}
+
+	private fun currentReadingSearchTitle(): String {
+		return currentDetailsContent()?.readingSearchTitle().orEmpty()
+	}
+
+	private fun currentDetailsContent(): Content? {
+		return mangaDetails.value?.toContent()
+			?: baseLoadedDetails?.toContent()
+			?: originContent
+			?: intent.manga
+	}
+
+	private fun Content.readingSearchTitle(): String {
+		return stripEntityDisambiguationTitleSuffix(title, listOf(source.name)).trim()
+	}
+
+	private fun cleanSourceSearchQuery(value: String): String {
+		return stripEntityDisambiguationTitleSuffix(value, knownSearchSourceNames()).trim()
+	}
+
+	private fun knownSearchSourceNames(): Set<String> {
+		return buildSet {
+			currentDetailsContent()?.source?.name?.let(::add)
+			baseLoadedDetails?.toContent()?.source?.name?.let(::add)
+			originContent?.source?.name?.let(::add)
+			intent.manga?.source?.name?.let(::add)
+			readingSearchSources.value.forEach { add(it.mangaSource.name) }
+			allEnabledSourceInfos.value.forEach { add(it.mangaSource.name) }
+			activeLocalSourceOptions.value.forEach { add(it.source.name) }
+			metadataSourceOptions.value.mapNotNull { it.source?.name }.forEach(::add)
+			readingSourceOptions.value.mapNotNull { it.source?.name }.forEach(::add)
+		}
 	}
 
 	private fun currentBaseContentType(): ContentType? {
@@ -1260,19 +1291,25 @@ class DetailsViewModel @Inject constructor(
 		}
 		val bindings = entityGraphRepository.getBindings(entityId)
 		val persistedPreferredLocalId = dataRepository.getEntityPreferredLocalMangaId(entityId)
-		val boundLocalId = persistedPreferredLocalId?.takeIf { persistedId ->
+		val requestedProjectionLocalId = initialProjectionLocalMangaId?.takeIf { projectionId ->
 			bindings.any { binding ->
-				(binding.source == "0" || binding.source == "local_manga") &&
+				binding.isLocalReadingSource() &&
+					binding.externalId.toLongOrNull() == projectionId
+			}
+		}
+		val boundLocalId = requestedProjectionLocalId ?: persistedPreferredLocalId?.takeIf { persistedId ->
+			bindings.any { binding ->
+				binding.isLocalReadingSource() &&
 					binding.externalId.toLongOrNull() == persistedId
 			}
 		} ?: preferredLocalMangaId?.takeIf { preferredId ->
 			bindings.any { binding ->
-				(binding.source == "0" || binding.source == "local_manga") &&
+				binding.isLocalReadingSource() &&
 					binding.externalId.toLongOrNull() == preferredId
 			}
-		} ?: bindings.firstOrNull { it.source == "0" || it.source == "local_manga" }?.externalId?.toLongOrNull()
+		} ?: bindings.firstOrNull { it.isLocalReadingSource() }?.externalId?.toLongOrNull()
 		val localBindingCount = bindings.count { binding ->
-			binding.source == "0" || binding.source == "local_manga"
+			binding.isLocalReadingSource()
 		}
 		android.util.Log.d(
 			"DetailsViewModel",
@@ -1282,9 +1319,7 @@ class DetailsViewModel @Inject constructor(
 				"populateSyntheticHeader=$populateSyntheticHeader, localBindings=$localBindingCount",
 		)
 		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
-		sessionReadingProjectionLocalMangaId.value = initialProjectionLocalMangaId
-			?.takeIf { projectionId -> activeLocalSourceOptions.value.any { it.mangaId == projectionId } }
-			?: boundLocalId
+		sessionReadingProjectionLocalMangaId.value = requestedProjectionLocalId ?: boundLocalId
 		updateSourceOptions()
 		if (boundLocalId != null && activeMangaIdFlow.value != boundLocalId) {
 			currentLoadIntentOverride = ContentIntent.of(boundLocalId)
@@ -1312,8 +1347,9 @@ class DetailsViewModel @Inject constructor(
 		if (metadataSearchQuery.value.isBlank() && initialTitle.isNotBlank()) {
 			metadataSearchQuery.value = initialTitle
 		}
-		if (readingSearchQuery.value.isBlank() && initialTitle.isNotBlank()) {
-			readingSearchQuery.value = initialTitle
+		val initialReadingTitle = currentReadingSearchTitle()
+		if (readingSearchQuery.value.isBlank() && initialReadingTitle.isNotBlank()) {
+			readingSearchQuery.value = initialReadingTitle
 		}
 		activeMangaIdFlow.value
 			?.takeIf { activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem }
@@ -1334,13 +1370,15 @@ class DetailsViewModel @Inject constructor(
 
 		launchJob(Dispatchers.Default) {
 			mangaDetails.filterNotNull().collect { details ->
-				val title = details.toContent().title
+				val content = details.toContent()
+				val title = cleanSourceSearchQuery(content.title)
+				val readingTitle = content.readingSearchTitle()
 				if (title.isNotBlank()) {
 					if (metadataSearchQuery.value.isBlank()) {
 						metadataSearchQuery.value = title
 					}
-					if (readingSearchQuery.value.isBlank()) {
-						readingSearchQuery.value = title
+					if (readingSearchQuery.value.isBlank() && readingTitle.isNotBlank()) {
+						readingSearchQuery.value = readingTitle
 					}
 				}
 			}
@@ -1607,9 +1645,7 @@ class DetailsViewModel @Inject constructor(
 			origin?.takeIf { supportsEntityTrackingDetails(it.service, entity.type) }?.let(::add)
 			entityGraphRepository.getBindings(entity.id)
 				.mapNotNull { binding ->
-					val service = binding.source.toIntOrNull()?.let { id ->
-						ScrobblerService.entries.firstOrNull { it.id == id }
-					} ?: return@mapNotNull null
+					val service = binding.trackingServiceOrNull() ?: return@mapNotNull null
 					val remoteId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
 					EntityTrackingOrigin(service = service, remoteId = remoteId)
 				}
@@ -1678,14 +1714,11 @@ class DetailsViewModel @Inject constructor(
 					)
 				}.getOrNull() ?: continue
 				cacheEntityTrackingDetails(entity.type, remote)
-				db.getEntityGraphDao().upsertBinding(
-					EntityBindingRecord(
-						entityId = entity.id,
-						source = match.service.id.toString(),
-						externalId = match.remoteId.toString(),
-						confidence = 0.92f,
-						isPrimary = false,
-					),
+				entityGraphRepository.attachEntityTrackingBinding(
+					entityId = entity.id,
+					service = match.service,
+					remoteId = match.remoteId,
+					confidence = 0.92f,
 				)
 				return remote
 			}
@@ -1762,10 +1795,11 @@ class DetailsViewModel @Inject constructor(
 		val localMangaIds = entityId?.let {
 			entityGraphRepository.getBindings(entityId)
 				.asSequence()
-				.filter { it.source == "local_manga" || it.source == "0" }
+				.filter { it.isLocalReadingSource() }
 				.mapNotNull { it.externalId.toLongOrNull() }
 				.distinct()
 				.toList()
+				.filterExistingMangaIds()
 		}.orEmpty()
 		val targetIds = if (localMangaIds.isNotEmpty()) {
 			localMangaIds
@@ -1791,6 +1825,10 @@ class DetailsViewModel @Inject constructor(
 				)
 			}
 		}
+	}
+
+	private suspend fun List<Long>.filterExistingMangaIds(): List<Long> {
+		return filter { mangaId -> db.getMangaDao().contains(mangaId) }
 	}
 
 	private suspend fun persistPreferredLocalSourceForCurrentEntity(mangaId: Long) {
@@ -1839,18 +1877,14 @@ class DetailsViewModel @Inject constructor(
 		)
 		// Method 1: direct tracking bindings (source = ScrobblerService id like 1,2,3...)
 		val directTrackingBindings = bindings.filter { binding ->
-			binding.source.toIntOrNull()?.let { sourceId ->
-				ScrobblerService.entries.any { it.id == sourceId }
-			} == true
+			binding.trackingServiceOrNull() != null
 		}.sortedByDescending { it.confidence }
 		if (directTrackingBindings.isNotEmpty()) {
 			val preferredService = settings.preferredTrackingSite
 			val bestBinding = directTrackingBindings.firstOrNull { binding ->
-				binding.source.toIntOrNull() == preferredService.id
+				binding.trackingServiceOrNull() == preferredService
 			} ?: directTrackingBindings.first()
-			val service = ScrobblerService.entries.firstOrNull {
-				it.id == bestBinding.source.toIntOrNull()
-			}
+			val service = bestBinding.trackingServiceOrNull()
 			val remoteId = bestBinding.externalId.toLongOrNull()
 			if (service != null && remoteId != null) {
 				applyTrackingSource(entityId, service, remoteId)
@@ -1859,7 +1893,7 @@ class DetailsViewModel @Inject constructor(
 		}
 		// Method 2: check if any bound local manga is from a tracking source (TRACKING_*)
 		val localMangaIds = bindings.asSequence()
-			.filter { it.source == "0" || it.source == "local_manga" }
+			.filter { it.isLocalReadingSource() }
 			.mapNotNull { it.externalId.toLongOrNull() }
 			.distinct()
 			.toList()
@@ -2499,6 +2533,14 @@ class DetailsViewModel @Inject constructor(
 	) {
 		val cacheKey = trackingMetadataKey(service, remoteId)
 		if (cachedTrackingDetails.containsKey(cacheKey)) {
+			val currentSelection = selectedMetadataSource.value
+			if (currentSelection is MetadataSourceSelection.Tracking &&
+				currentSelection.service == service &&
+				currentSelection.remoteId == remoteId
+			) {
+				syncDisplayedState()
+				refreshContextualEntityRelations()
+			}
 			return
 		}
 		trackingSiteCacheRepository.readDetails(service, remoteId)?.let { cached ->
@@ -2511,6 +2553,7 @@ class DetailsViewModel @Inject constructor(
 					currentSelection.remoteId == remoteId
 				) {
 					syncDisplayedState()
+					refreshContextualEntityRelations()
 				}
 				return
 			}
@@ -2527,6 +2570,7 @@ class DetailsViewModel @Inject constructor(
 			currentSelection.remoteId == remoteId
 		) {
 			syncDisplayedState()
+			refreshContextualEntityRelations()
 		}
 	}
 
@@ -2898,16 +2942,40 @@ class DetailsViewModel @Inject constructor(
 	private suspend fun buildEntityRelationSections(entityId: Long): List<EntityRelationSection> {
 		val anchorEntity = entityGraphRepository.getEntity(entityId) ?: return emptyList()
 		val entityTrackingDetails = loadEntityTrackingDetails(anchorEntity)
-		val relations = entityGraphRepository.getRelations(entityId)
 		val trackingDetails = currentTrackingMetadataDetails()
-		if (relations.isEmpty() && entityTrackingDetails == null) {
+		val selectedTracking = selectedMetadataSource.value as? MetadataSourceSelection.Tracking
+		val relations = if (selectedTracking != null) {
+			entityGraphRepository.getRelationsForTrackingSource(
+				entityId = entityId,
+				service = selectedTracking.service,
+				remoteId = selectedTracking.remoteId,
+			)
+		} else {
+			entityGraphRepository.getRelations(entityId)
+		}
+		if (relations.isEmpty() && entityTrackingDetails == null && trackingDetails == null) {
 			return emptyList()
 		}
-		val relatedIds = relations.mapNotNull { relation ->
+		val currentTrackingWorkSections = if (anchorEntity.type == EntityType.WORK && trackingDetails != null) {
+			buildCurrentTrackingWorkRelationSections(trackingDetails)
+		} else {
+			emptyList()
+		}
+		if (anchorEntity.type == EntityType.WORK && trackingDetails != null) {
+			return currentTrackingWorkSections
+		}
+		val graphRelations = if (anchorEntity.type == EntityType.WORK && trackingDetails != null) {
+			relations.filterNot { relation ->
+				relation.type == RelationType.CREATED_BY || relation.type == RelationType.HAS_CHARACTER
+			}
+		} else {
+			relations
+		}
+		val relatedIds = graphRelations.mapNotNull { relation ->
 			relation.toEntityId.takeIf { it != entityId } ?: relation.fromEntityId.takeIf { it != entityId }
 		}.distinct()
 		val relatedEntities = entityGraphRepository.getEntitiesByIds(relatedIds).associateBy(Entity::id)
-		val relationSections = relations.groupBy(Relation::type).mapNotNull { (relationType, typeRelations) ->
+		val relationSections = graphRelations.groupBy(Relation::type).mapNotNull { (relationType, typeRelations) ->
 			if (anchorEntity.type == EntityType.WORK && relationType == RelationType.BELONGS_TO) {
 				return@mapNotNull null
 			}
@@ -2947,7 +3015,7 @@ class DetailsViewModel @Inject constructor(
 		}
 		if (anchorEntity.type != EntityType.PERSON) {
 			return mergeEntityTrackingSections(
-				baseSections = relationSections,
+				baseSections = currentTrackingWorkSections + relationSections,
 				entity = anchorEntity,
 				details = entityTrackingDetails,
 			)
@@ -2983,6 +3051,104 @@ class DetailsViewModel @Inject constructor(
 			entity = anchorEntity,
 			details = entityTrackingDetails,
 		)
+	}
+
+	private suspend fun buildCurrentTrackingWorkRelationSections(
+		details: TrackingSiteItemDetails,
+	): List<EntityRelationSection> {
+		val workDto = buildTrackingWorkDto(details)
+		return buildList {
+			workDto.staff
+				.takeIf { it.isNotEmpty() }
+				?.let { staff ->
+					add(
+						EntityRelationSection(
+							titleRes = R.string.entity_graph_section_creators,
+							items = staff.map { person ->
+								val remoteId = person.externalId?.toLongOrNull()
+								EntityRelationItem(
+									stableKey = "tracking:${details.service.id}:staff:${person.primaryName}:${remoteId.orEmptyKey()}",
+									name = person.primaryName,
+									type = EntityType.PERSON,
+									coverUrl = resolveTrackingPersonAvatarUrl(details, remoteId, person.primaryName),
+									subtitle = person.role?.takeIf { it.isNotBlank() },
+									trackingService = details.service.takeIf { remoteId != null },
+									remoteId = remoteId,
+									url = resolveTrackingPersonUrl(details, remoteId, person.primaryName),
+								)
+							}.distinctBy(EntityRelationItem::stableKey),
+						),
+					)
+				}
+			workDto.characters
+				.takeIf { it.isNotEmpty() }
+				?.let { characters ->
+					add(
+						EntityRelationSection(
+							titleRes = R.string.entity_graph_section_characters,
+							items = characters.map { character ->
+								val remoteId = character.externalId?.toLongOrNull()
+								val sourceCharacter = details.characters.firstOrNull { it.id == remoteId }
+									?: details.characters.firstOrNull {
+										it.name.equals(character.primaryName, ignoreCase = true)
+									}
+								EntityRelationItem(
+									stableKey = "tracking:${details.service.id}:character:${character.primaryName}:${remoteId.orEmptyKey()}",
+									name = character.primaryName,
+									type = EntityType.CHARACTER,
+									coverUrl = sourceCharacter?.coverUrl.normalizedImageUrl(),
+									subtitle = sourceCharacter?.role?.takeIf { it.isNotBlank() },
+									supportingText = sourceCharacter?.let(::buildTrackingCharacterVoiceActorsText),
+									detailLines = character.voiceActors
+										.mapNotNull { it.primaryName.takeIf(String::isNotBlank) }
+										.distinct(),
+									trackingService = details.service.takeIf { remoteId != null },
+									remoteId = remoteId,
+									url = sourceCharacter?.url?.takeIf { it.isNotBlank() },
+								)
+							}.distinctBy(EntityRelationItem::stableKey),
+						),
+					)
+				}
+		}
+	}
+
+	private fun resolveTrackingPersonAvatarUrl(
+		details: TrackingSiteItemDetails,
+		remoteId: Long?,
+		name: String,
+	): String? {
+		val staffMatch = details.staff.firstOrNull { person ->
+			(remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
+		}
+		staffMatch?.avatarUrl.normalizedImageUrl()?.let { return it }
+		details.characters.forEach { character ->
+			character.voiceActors.firstOrNull { person ->
+				(remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
+			}?.avatarUrl.normalizedImageUrl()?.let { return it }
+		}
+		return null
+	}
+
+	private fun resolveTrackingPersonUrl(
+		details: TrackingSiteItemDetails,
+		remoteId: Long?,
+		name: String,
+	): String? {
+		val staffMatch = details.staff.firstOrNull { person ->
+			(remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
+		}
+		staffMatch?.url?.takeIf { it.isNotBlank() }?.let { return it }
+		details.characters.forEach { character ->
+			character.voiceActors.firstOrNull { person ->
+				(remoteId != null && person.id == remoteId) || person.name.equals(name, ignoreCase = true)
+			}?.url?.takeIf { it.isNotBlank() }?.let { return it }
+		}
+		return null
+	}
+
+	private fun Long?.orEmptyKey(): String {
+		return this?.toString() ?: "none"
 	}
 
 	private suspend fun buildPersonVoicedWorkItems(
@@ -3400,9 +3566,8 @@ class DetailsViewModel @Inject constructor(
 		return buildList {
 			workIds.forEach { workId ->
 				entityGraphRepository.getBindings(workId).forEach { binding ->
-					val serviceId = binding.source.toIntOrNull() ?: return@forEach
+					val service = binding.trackingServiceOrNull() ?: return@forEach
 					val remoteId = binding.externalId.toLongOrNull() ?: return@forEach
-					val service = ScrobblerService.entries.firstOrNull { it.id == serviceId } ?: return@forEach
 					val cacheKey = trackingMetadataKey(service, remoteId)
 					val details = cachedTrackingDetails[cacheKey]
 						?: trackingSiteCacheRepository.readDetails(service, remoteId)?.also(::cacheTrackingDetails)
@@ -3415,7 +3580,7 @@ class DetailsViewModel @Inject constructor(
 
 	private fun List<EntityBinding>.remoteIdsByService(): Map<Int, List<Long>> {
 		return mapNotNull { binding ->
-			val serviceId = binding.source.toIntOrNull() ?: return@mapNotNull null
+			val serviceId = binding.trackingServiceOrNull()?.id ?: return@mapNotNull null
 			val remoteId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
 			serviceId to remoteId
 		}.groupBy(
@@ -3438,14 +3603,13 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private suspend fun resolveBindingCoverUrl(binding: EntityBinding): String? {
-		if (binding.source == "0" || binding.source == "local_manga") {
+		if (binding.isLocalReadingSource()) {
 			val localMangaId = binding.externalId.toLongOrNull() ?: return null
 			val localManga = db.getMangaDao().find(localMangaId)?.manga ?: return null
 			return localManga.largeCoverUrl.ifNullOrEmpty { localManga.coverUrl }.normalizedImageUrl()
 		}
-		val serviceId = binding.source.toIntOrNull() ?: return null
+		val service = binding.trackingServiceOrNull() ?: return null
 		val remoteId = binding.externalId.toLongOrNull() ?: return null
-		val service = ScrobblerService.entries.firstOrNull { it.id == serviceId } ?: return null
 		return trackingSiteCacheRepository.readDetails(service, remoteId)?.coverUrl.normalizedImageUrl()
 	}
 
@@ -3478,7 +3642,7 @@ class DetailsViewModel @Inject constructor(
 		activeMangaId: Long?,
 	): List<ActiveLocalSourceOption> {
 		val localMangaIds = bindings.asSequence()
-			.filter { it.source == "0" || it.source == "local_manga" }
+			.filter { it.isLocalReadingSource() }
 			.mapNotNull { it.externalId.toLongOrNull() }
 			.distinct()
 			.toList()
@@ -3563,15 +3727,13 @@ class DetailsViewModel @Inject constructor(
 			val entityId = resolveContextualEntityId() ?: return@launchJob
 			val bindings = entityGraphRepository.getBindings(entityId)
 			val localBindings = bindings.filter {
-				(it.source == "0" || it.source == "local_manga") && it.externalId.toLongOrNull() != null
+				it.isLocalReadingSource() && it.externalId.toLongOrNull() != null
 			}
 			if (localBindings.size <= 1) {
 				return@launchJob
 			}
-			val targetBinding = localBindings.firstOrNull { it.externalId.toLongOrNull() == mangaId } ?: return@launchJob
-			db.withTransaction {
-				db.getEntityGraphDao().deleteBindingBySource(targetBinding.source, targetBinding.externalId)
-			}
+			localBindings.firstOrNull { it.externalId.toLongOrNull() == mangaId } ?: return@launchJob
+			entityGraphRepository.removeLocalReadingBinding(mangaId)
 			val nextActiveMangaId = if (activeMangaIdFlow.value == mangaId) {
 				localBindings.firstNotNullOfOrNull { binding ->
 					binding.externalId.toLongOrNull()?.takeIf { it != mangaId }
@@ -3631,6 +3793,18 @@ class DetailsViewModel @Inject constructor(
 						remoteId = option.remoteId,
 						url = option.url,
 					)
+					val nextQuery = cachedTrackingDetails[trackingMetadataKey(option.trackingService, option.remoteId)]
+						?.title
+						?.takeIf { it.isNotBlank() }
+						?: option.title?.takeIf { title ->
+							title.isNotBlank() && title != contentTitleFallback(option.trackingService)
+						}
+						?: currentDetailsTitle()
+					val cleanedNextQuery = cleanSourceSearchQuery(nextQuery)
+					if (cleanedNextQuery.isNotBlank()) {
+						metadataSearchQuery.value = cleanedNextQuery
+					}
+					searchMetadataBindings()
 				}
 			}
 			option.source != null -> {
@@ -3642,8 +3816,36 @@ class DetailsViewModel @Inject constructor(
 				syncDisplayedState()
 				launchJob(Dispatchers.IO) {
 					persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = activeLocalMangaId)
+					refreshContextualEntityRelations()
 				}
 			}
+		}
+	}
+
+	fun removeMetadataSourceBinding(option: DetailsSourceOption) {
+		val service = option.trackingService ?: return
+		val remoteId = option.remoteId ?: return
+		launchJob(Dispatchers.IO) {
+			val activeLocalMangaId = activeMangaIdFlow.value
+			entityGraphRepository.deleteTrackingBinding(service, remoteId)
+			if (activeLocalMangaId != null) {
+				trackingSiteMatcher.removeMatch(service, activeLocalMangaId)
+			}
+			trackingMetadataCandidates.value = trackingMetadataCandidates.value.filterNot { candidate ->
+				candidate.service == service && candidate.remoteId == remoteId
+			}
+			val selection = selectedMetadataSource.value
+			if (
+				selection is MetadataSourceSelection.Tracking &&
+				selection.service == service &&
+				selection.remoteId == remoteId
+			) {
+				selectedMetadataSource.value = MetadataSourceSelection.Base
+				persistMetadataSourceSelectionForCurrentEntity(fallbackMangaId = activeLocalMangaId)
+				refreshContextualEntityRelations()
+			}
+			updateSourceOptions()
+			syncDisplayedState()
 		}
 	}
 
@@ -3655,7 +3857,7 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	fun updateMetadataSearchQuery(query: String) {
-		metadataSearchQuery.value = query
+		metadataSearchQuery.value = cleanSourceSearchQuery(query)
 	}
 
 	fun searchMetadataBindings() {
@@ -3668,7 +3870,10 @@ class DetailsViewModel @Inject constructor(
 			metadataSearchError.value = null
 			return
 		}
-		val query = metadataSearchQuery.value.trim().ifBlank { currentDetailsTitle() }
+		val query = cleanSourceSearchQuery(metadataSearchQuery.value).ifBlank { currentDetailsTitle() }
+		if (query != metadataSearchQuery.value) {
+			metadataSearchQuery.value = query
+		}
 		launchJob(Dispatchers.IO) {
 			metadataSearchLoading.value = true
 			metadataSearchHasSearched.value = false
@@ -3775,7 +3980,7 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	fun updateReadingSearchQuery(query: String) {
-		readingSearchQuery.value = query
+		readingSearchQuery.value = cleanSourceSearchQuery(query)
 	}
 
 	fun toggleReadingSearchSourceType(type: SourceType) {
@@ -4031,7 +4236,10 @@ class DetailsViewModel @Inject constructor(
 			Log.d(READING_SEARCH_LOG_TAG, "skip search: no sources after scope filter")
 			return
 		}
-		val query = readingSearchQuery.value.trim().ifBlank { currentDetailsTitle() }
+		val query = cleanSourceSearchQuery(readingSearchQuery.value).ifBlank { currentReadingSearchTitle() }
+		if (query != readingSearchQuery.value) {
+			readingSearchQuery.value = query
+		}
 		val currentContent = (baseLoadedDetails?.toContent() ?: mangaDetails.value?.toContent() ?: originContent ?: intent.manga)
 			?.takeUnless { it.source.name.startsWith("TRACKING_") }
 		readingSearchJob = launchJob(Dispatchers.IO) {
@@ -4346,28 +4554,17 @@ class DetailsViewModel @Inject constructor(
 			return
 		}
 		val entityId = resolveContextualEntityId() ?: return
-		val dao = db.getEntityGraphDao()
-		if (
-			dao.findBinding("local_manga", mangaId.toString()) != null ||
-			dao.findBinding("0", mangaId.toString()) != null
-		) {
+		if (entityGraphRepository.findLocalReadingBinding(mangaId) != null) {
 			return
 		}
 		val currentConfidence = activeMangaIdFlow.value?.let { activeMangaId ->
-			dao.findBinding("local_manga", activeMangaId.toString())?.confidence
-				?: dao.findBinding("0", activeMangaId.toString())?.confidence
+			entityGraphRepository.findLocalReadingBinding(activeMangaId)?.confidence
 		} ?: 1f
-		db.withTransaction {
-			dao.upsertBinding(
-				EntityBindingRecord(
-					entityId = entityId,
-					source = "local_manga",
-					externalId = mangaId.toString(),
-					confidence = currentConfidence,
-					isPrimary = false,
-				),
-			)
-		}
+		entityGraphRepository.attachLocalReadingBinding(
+			entityId = entityId,
+			localMangaId = mangaId,
+			confidence = currentConfidence,
+		)
 	}
 
 	fun reload() {

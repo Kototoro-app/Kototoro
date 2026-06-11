@@ -9,6 +9,11 @@ import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_ENTITY
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
+import org.skepsun.kototoro.entitygraph.domain.EntityRelationOrigin
+import org.skepsun.kototoro.entitygraph.domain.EntityRelationState
+import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
 
 @Serializable
 @Entity(
@@ -54,6 +59,14 @@ data class EntityBindingRecord(
 	@ColumnInfo(name = "external_id") val externalId: String,
 	@ColumnInfo(name = "confidence") val confidence: Float,
 	@ColumnInfo(name = "is_primary") val isPrimary: Boolean,
+	@ColumnInfo(name = "source_kind", defaultValue = "'UNKNOWN'")
+	val sourceKind: String = source.toEntityBindingSourceKind().name,
+	@ColumnInfo(name = "state", defaultValue = "'CONFIRMED'")
+	val state: String = EntityBindingState.CONFIRMED.name,
+	@ColumnInfo(name = "created_by", defaultValue = "'LEGACY'")
+	val createdBy: String = EntityBindingCreatedBy.LEGACY.name,
+	@ColumnInfo(name = "updated_at", defaultValue = "0")
+	val updatedAt: Long = 0L,
 )
 
 @Serializable
@@ -76,7 +89,18 @@ data class EntityBindingRecord(
 	indices = [
 		Index(name = "idx_relation_from", value = ["from_entity_id"]),
 		Index(name = "idx_relation_to", value = ["to_entity_id"]),
-		Index(name = "idx_relation_unique", value = ["from_entity_id", "to_entity_id", "type"], unique = true),
+		Index(
+			name = "idx_relation_unique",
+			value = [
+				"from_entity_id",
+				"to_entity_id",
+				"type",
+				"source_binding_source",
+				"source_binding_external_id",
+				"origin",
+			],
+			unique = true,
+		),
 	],
 )
 data class RelationRecord(
@@ -87,4 +111,14 @@ data class RelationRecord(
 	@ColumnInfo(name = "type") val type: String,
 	@ColumnInfo(name = "weight") val weight: Float,
 	@ColumnInfo(name = "created_at") val createdAt: Long,
+	@ColumnInfo(name = "source_binding_source", defaultValue = "''")
+	val sourceBindingSource: String = "",
+	@ColumnInfo(name = "source_binding_external_id", defaultValue = "''")
+	val sourceBindingExternalId: String = "",
+	@ColumnInfo(name = "origin", defaultValue = "'LEGACY'")
+	val origin: String = EntityRelationOrigin.LEGACY.name,
+	@ColumnInfo(name = "state", defaultValue = "'LEGACY'")
+	val state: String = EntityRelationState.LEGACY.name,
+	@ColumnInfo(name = "updated_at", defaultValue = "0")
+	val updatedAt: Long = 0L,
 )

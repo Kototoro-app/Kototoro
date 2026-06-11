@@ -1514,6 +1514,7 @@ fun MetadataSourceSheet(
     scrobblingStatuses: Array<String>,
     onDismissRequest: () -> Unit,
     onSelectOption: (DetailsSourceOption) -> Unit,
+    onRemoveOption: (DetailsSourceOption) -> Unit = {},
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onBindResult: (TrackingSiteItem) -> Unit,
@@ -1564,26 +1565,46 @@ fun MetadataSourceSheet(
 	                            val linked = option.trackingService?.let { svc ->
 	                                linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
 	                            }
-                            SourceOptionCard(
-                                displayModel = option.resolveDisplayModel(
-                                    role = DetailsSourceRole.ENTITY_METADATA,
-                                    currentContent = currentContent,
-                                    linkedTrackingItem = linked,
-                                    strings = DetailsSourceDisplayStrings(
-                                        unavailableText = unavailableText,
-                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                        currentProjectionLabel = stringResource(R.string.details_current_projection),
-                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                            var showMenu by remember(option.key) { mutableStateOf(false) }
+                            Box {
+                                SourceOptionCard(
+                                    displayModel = option.resolveDisplayModel(
+                                        role = DetailsSourceRole.ENTITY_METADATA,
+                                        currentContent = currentContent,
+                                        linkedTrackingItem = linked,
+                                        strings = DetailsSourceDisplayStrings(
+                                            unavailableText = unavailableText,
+                                            metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                            currentProjectionLabel = stringResource(R.string.details_current_projection),
+                                            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                        ),
+                                        isSelected = option == selectedOption || option.isSelected,
                                     ),
-                                    isSelected = option == selectedOption || option.isSelected,
-                                ),
-                                scrobblingStatuses = scrobblingStatuses,
-                                onTrackingStatusClick = onUpdateLinkedTrackingStatus,
-                                onClick = {
-                                    onDismissRequest()
-                                    onSelectOption(option)
-	                                },
-	                            )
+                                    scrobblingStatuses = scrobblingStatuses,
+                                    onTrackingStatusClick = onUpdateLinkedTrackingStatus,
+                                    onClick = {
+                                        onDismissRequest()
+                                        onSelectOption(option)
+                                    },
+                                    onLongClick = {
+                                        if (option.trackingService != null && option.remoteId != null) {
+                                            showMenu = true
+                                        }
+                                    },
+                                )
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.details_remove_metadata_binding)) },
+                                        onClick = {
+                                            showMenu = false
+                                            onRemoveOption(option)
+                                        },
+                                    )
+                                }
+                            }
 	                        }
 	                    }
 	                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))

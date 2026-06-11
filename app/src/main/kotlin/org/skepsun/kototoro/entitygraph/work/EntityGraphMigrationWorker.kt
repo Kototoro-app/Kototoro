@@ -10,9 +10,9 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import org.json.JSONArray
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -30,8 +30,6 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         return try {
             val trackingSiteDao = db.getTrackingSiteDao()
-            val entityGraphDao = db.getEntityGraphDao()
-
             val allLinks = trackingSiteDao.findAllLinks()
             
             for (link in allLinks) {
@@ -62,15 +60,12 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                     workDto = workDto
                 )
 
-                // 2. Bind the local manga to this entity graph root node!
-                entityGraphDao.upsertBinding(
-                    EntityBindingRecord(
-                        entityId = entity.id,
-                        source = "local_manga",
-                        externalId = link.mangaId.toString(),
-                        confidence = link.confidence,
-                        isPrimary = false
-                    )
+                // 2. Bind the local manga to this entity graph root node.
+                entityGraphRepository.attachLocalReadingBinding(
+                    entityId = entity.id,
+                    localMangaId = link.mangaId,
+                    confidence = link.confidence,
+                    createdBy = EntityBindingCreatedBy.MIGRATION,
                 )
             }
             entityGraphRepository.ensureLocalWorkEntities(favouritesRepository.getAllContent())

@@ -104,8 +104,14 @@ class ContentListMapper @Inject constructor(
 		manga: Content,
 		mode: ListMode,
 		@Flags flags: Int = DEFAULTS,
+		metadataSelectionOverride: ContentDataRepository.MetadataSourceSelection? = null,
+		useMetadataSelectionOverride: Boolean = false,
 	): ContentListModel {
-		val metadataSelection = dataRepository.getMetadataSourceSelection(manga.id)
+		val metadataSelection = if (useMetadataSelectionOverride) {
+			metadataSelectionOverride
+		} else {
+			dataRepository.getMetadataSourceSelection(manga.id)
+		}
 		return toListModelImpl(
 			manga = manga,
 			mode = mode,

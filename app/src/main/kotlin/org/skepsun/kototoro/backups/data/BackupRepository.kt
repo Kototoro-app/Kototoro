@@ -49,6 +49,11 @@ import org.skepsun.kototoro.entitygraph.data.decodeStringList
 import org.skepsun.kototoro.entitygraph.data.encodeStringList
 import org.skepsun.kototoro.entitygraph.data.mergeAliases
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
+import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
+import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.filter.data.PersistableFilter
@@ -69,6 +74,11 @@ import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 
 private const val TAG = "BackupRepo"
+private val RESTORE_PROTECTED_BINDING_STATES = setOf(
+    EntityBindingState.MANUAL,
+    EntityBindingState.CANDIDATE,
+    EntityBindingState.REJECTED,
+)
 
 @Reusable
 class BackupRepository @Inject constructor(
@@ -601,12 +611,42 @@ class BackupRepository @Inject constructor(
             Log.w(TAG, "restore: skip entity_binding for unmapped entityId=${remote.entityId}, source=${remote.source}, externalId=${remote.externalId}")
             return
         }
-        getEntityGraphDao().upsertBinding(
-            remote.copy(
-                entityId = localEntityId,
-                isPrimary = false,
-            ),
+        val dao = getEntityGraphDao()
+        val existing = dao.findBinding(remote.source, remote.externalId)
+        if (existing != null && existing.shouldKeepOverRestored(remote)) {
+            Log.d(TAG, "restore: keep local entity_binding source=${remote.source}, externalId=${remote.externalId}")
+            return
+        }
+        dao.upsertBinding(remote.normalizedForRestore(localEntityId))
+    }
+
+    private fun EntityBindingRecord.normalizedForRestore(localEntityId: Long): EntityBindingRecord {
+        val restoredState = state.toEntityBindingStateOrNull() ?: EntityBindingState.LEGACY
+        val restoredSourceKind = sourceKind.takeIf { raw ->
+            EntityBindingSourceKind.entries.any { it.name == raw }
+        } ?: source.toEntityBindingSourceKind().name
+        val restoredCreatedBy = createdBy.takeIf { raw ->
+            EntityBindingCreatedBy.entries.any { it.name == raw }
+        } ?: EntityBindingCreatedBy.SYNC.name
+        return copy(
+            entityId = localEntityId,
+            isPrimary = false,
+            sourceKind = restoredSourceKind,
+            state = restoredState.name,
+            createdBy = restoredCreatedBy,
         )
+    }
+
+    private fun EntityBindingRecord.shouldKeepOverRestored(remote: EntityBindingRecord): Boolean {
+        val localState = state.toEntityBindingStateOrNull()
+        val remoteState = remote.state.toEntityBindingStateOrNull()
+        if (updatedAt > 0L && (remote.updatedAt <= 0L || updatedAt > remote.updatedAt)) {
+            return true
+        }
+        if (localState in RESTORE_PROTECTED_BINDING_STATES && remoteState !in RESTORE_PROTECTED_BINDING_STATES) {
+            return true
+        }
+        return localState == EntityBindingState.MANUAL && remoteState != EntityBindingState.MANUAL
     }
 
     private suspend fun MangaDatabase.restoreEntityRelation(

@@ -44,6 +44,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,8 +57,11 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -106,6 +110,8 @@ import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeDatasetStatus
 import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeDatasetBridge
 import org.skepsun.kototoro.favourites.ui.migration.MigrationUiState
 import org.skepsun.kototoro.favourites.ui.migration.SourceMigrationViewModel
+import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeStagePlan
+import org.skepsun.kototoro.favourites.ui.migration.isExecutableMergeCandidate
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.core.prefs.TrackingMetadataSourceStrategy
@@ -153,14 +159,21 @@ private data class EntityBrowsePage<T>(
     val pageCount: Int,
 )
 
+private data class StageTabCount(
+    val accepted: Int,
+    val total: Int,
+)
+
 internal data class EntityWorkbenchRow(
     val group: MergeCandidateGroup,
+    val existingTrackingBindings: List<TrackingBindingPreview>,
     val trackingCandidates: List<TrackingBindingPreview>,
     val readingCandidates: List<ReadingSourcePreview>,
     val isMergeCandidate: Boolean,
 )
 
 internal data class WorkbenchSelectionSummary(
+    val selectedScopeItems: Int,
     val selectedContents: Int,
     val matchedGroups: Int,
     val selectedMergeGroups: Int,
@@ -301,6 +314,7 @@ fun SourceMigrationPanel(
 
     val workbenchRows = remember(
         uiState.mergeCandidateGroups,
+        uiState.existingTrackingPreviews,
         uiState.trackingPreviews,
         uiState.readingSourcePreviews,
     ) {
@@ -330,6 +344,17 @@ fun SourceMigrationPanel(
                 item {
                     leadingContent()
                 }
+            }
+
+            item {
+                RepairDiagnosticsCard(
+                    uiState = uiState,
+                    onRefresh = viewModel::refreshRepairReport,
+                    onHideStaleLegacyRelations = viewModel::hideStaleLegacyRelations,
+                    onRejectSuspectTrackingBindings = viewModel::rejectSuspectTrackingBindings,
+                    onRepairSuspectMetadataSourceSelections = viewModel::repairSuspectMetadataSourceSelections,
+                    onSplitSuspectMismerged = viewModel::splitSuspectMismergedLocalWorks,
+                )
             }
 
             item {
@@ -375,6 +400,8 @@ fun SourceMigrationPanel(
                     onClearTrackingSelections = viewModel::clearTrackingSelections,
                     onAcceptReadingPreviews = viewModel::acceptReadingPreviews,
                     onClearReadingPreviews = viewModel::clearReadingPreviews,
+                    onSplitLocalProjection = viewModel::splitLocalWorkProjection,
+                    onDetachLocalProjection = viewModel::detachLocalWorkProjection,
                 )
             }
 
@@ -382,15 +409,20 @@ fun SourceMigrationPanel(
                 StageConfigCard(
                     selectedStage = selectedStage,
                     rowCount = workbenchRows.size,
+                    workbenchRows = workbenchRows,
                     onStageSelected = { stage ->
                         selectedStage = stage
                     },
                     uiState = uiState,
                     onTrackingMetadataStrategyChange = viewModel::setTrackingMetadataSourceStrategy,
+                    onFuzzyMergeCandidatesEnabledChange = viewModel::setFuzzyMergeCandidatesEnabled,
+                    onFuzzyMergeThresholdPercentChange = viewModel::setFuzzyMergeThresholdPercent,
                     onToggleTrackingService = viewModel::toggleTrackingService,
                     onMoveTrackingServiceUp = viewModel::moveTrackingServiceUp,
                     onMoveTrackingServiceDown = viewModel::moveTrackingServiceDown,
                     onPreviewMerge = viewModel::previewMergeCandidates,
+                    onClearManualMergeSelections = viewModel::clearManualMergeSelections,
+                    onManualMergeSelected = viewModel::manualMergeSelectedWorks,
                     onPreviewTracking = viewModel::previewSelectedTracking,
                     onSelectFromSource = viewModel::selectFromSource,
                     onToggleFromContentType = viewModel::toggleFromContentType,
@@ -441,6 +473,263 @@ private fun HeaderSection(
         }
         IconButton(onClick = { if (!uiState.isExecuting) onDismiss() }) {
             Icon(Icons.Default.Close, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun RepairDiagnosticsCard(
+    uiState: MigrationUiState,
+    onRefresh: () -> Unit,
+    onHideStaleLegacyRelations: () -> Unit,
+    onRejectSuspectTrackingBindings: () -> Unit,
+    onRepairSuspectMetadataSourceSelections: () -> Unit,
+    onSplitSuspectMismerged: () -> Unit,
+) {
+    val report = uiState.repairReport
+    var showHideLegacyConfirm by rememberSaveable { mutableStateOf(false) }
+    var showRejectTrackingConfirm by rememberSaveable { mutableStateOf(false) }
+    var showRepairMetadataSourceConfirm by rememberSaveable { mutableStateOf(false) }
+    var showSplitSuspectConfirm by rememberSaveable { mutableStateOf(false) }
+    if (showHideLegacyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showHideLegacyConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_hide_legacy_relations_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.entity_organize_repair_hide_legacy_relations_confirm,
+                        report?.staleLegacyRelationCount ?: 0,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showHideLegacyConfirm = false
+                        onHideStaleLegacyRelations()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHideLegacyConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (showRejectTrackingConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRejectTrackingConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_reject_suspect_tracking_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.entity_organize_repair_reject_suspect_tracking_confirm,
+                        report?.suspectTrackingBindingCount ?: 0,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRejectTrackingConfirm = false
+                        onRejectSuspectTrackingBindings()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectTrackingConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (showRepairMetadataSourceConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRepairMetadataSourceConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_metadata_source_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.entity_organize_repair_metadata_source_confirm,
+                        report?.suspectMetadataSourceCount ?: 0,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRepairMetadataSourceConfirm = false
+                        onRepairSuspectMetadataSourceSelections()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRepairMetadataSourceConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (showSplitSuspectConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSplitSuspectConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_split_suspect_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.entity_organize_repair_split_suspect_confirm,
+                        uiState.suspectMismergedLocalMangaIds.size,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSplitSuspectConfirm = false
+                        onSplitSuspectMismerged()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSplitSuspectConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    OutlinedCard(
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_diagnostics_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = when {
+                            uiState.isLoadingRepairReport -> stringResource(R.string.entity_organize_repair_diagnostics_loading)
+                            report == null -> stringResource(R.string.entity_organize_repair_diagnostics_failed)
+                            !report.hasIssues -> stringResource(R.string.entity_organize_repair_diagnostics_clean)
+                            else -> stringResource(
+                                R.string.entity_organize_repair_diagnostics_summary,
+                                report.issues.size,
+                            )
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (uiState.isLoadingRepairReport) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    OutlinedButton(onClick = onRefresh) {
+                        Text(text = stringResource(R.string.entity_organize_dataset_refresh))
+                    }
+                }
+            }
+            if (report != null && report.hasIssues) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_orphan_local),
+                        value = report.orphanPreferredLocalCount.toString(),
+                    )
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_orphan_metadata),
+                        value = report.orphanMetadataSourceCount.toString(),
+                    )
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_suspect_tracking),
+                        value = report.suspectTrackingBindingCount.toString(),
+                    )
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_metadata_source),
+                        value = report.suspectMetadataSourceCount.toString(),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { showRejectTrackingConfirm = true },
+                        enabled = !uiState.isExecuting && report.suspectTrackingBindingCount > 0,
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_reject_suspect_tracking_action))
+                    }
+                    OutlinedButton(
+                        onClick = { showRepairMetadataSourceConfirm = true },
+                        enabled = !uiState.isExecuting && report.suspectMetadataSourceCount > 0,
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_metadata_source_action))
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_conflicting_reading),
+                        value = report.conflictingReadingBindingCount.toString(),
+                    )
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_legacy_relations),
+                        value = report.staleLegacyRelationCount.toString(),
+                    )
+                    OutlinedButton(
+                        onClick = { showHideLegacyConfirm = true },
+                        enabled = !uiState.isExecuting && report.staleLegacyRelationCount > 0,
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_hide_legacy_relations_action))
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_suspect_mismerged),
+                        value = report.suspectMismergedLocalWorkCount.toString(),
+                    )
+                    OutlinedButton(
+                        onClick = { showSplitSuspectConfirm = true },
+                        enabled = !uiState.isExecuting && uiState.suspectMismergedLocalMangaIds.isNotEmpty(),
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_split_suspect_action))
+                    }
+                }
+            }
         }
     }
 }
@@ -773,13 +1062,18 @@ fun EntityOrganizePageIntroCard(
 private fun StageConfigCard(
     selectedStage: EntityOrganizeStage,
     rowCount: Int,
+    workbenchRows: List<EntityWorkbenchRow>,
     onStageSelected: (EntityOrganizeStage) -> Unit,
     uiState: MigrationUiState,
     onTrackingMetadataStrategyChange: (TrackingMetadataSourceStrategy) -> Unit,
+    onFuzzyMergeCandidatesEnabledChange: (Boolean) -> Unit,
+    onFuzzyMergeThresholdPercentChange: (Int) -> Unit,
     onToggleTrackingService: (ScrobblerService) -> Unit,
     onMoveTrackingServiceUp: (ScrobblerService) -> Unit,
     onMoveTrackingServiceDown: (ScrobblerService) -> Unit,
     onPreviewMerge: () -> Unit,
+    onClearManualMergeSelections: () -> Unit,
+    onManualMergeSelected: () -> Unit,
     onPreviewTracking: () -> Unit,
     onSelectFromSource: (ContentSource?) -> Unit,
     onToggleFromContentType: (BrowseGroupTab) -> Unit,
@@ -799,8 +1093,17 @@ private fun StageConfigCard(
     onConcurrencyChange: (Int) -> Unit,
 ) {
     val spec = stageSpec(selectedStage)
-    val plans = remember(uiState) {
-        EntityOrganizeStage.entries.map(uiState::stagePlan)
+    val plans = remember(uiState, workbenchRows) {
+        EntityOrganizeStage.entries.map { stage ->
+            val plan = uiState.stagePlan(stage)
+            val count = stageTabCount(
+                stage = stage,
+                rows = workbenchRows,
+                uiState = uiState,
+                plan = plan,
+            )
+            plan to count
+        }
     }
     val mergePlan = uiState.stagePlan(EntityOrganizeStage.MERGE)
     val trackingPlan = uiState.stagePlan(EntityOrganizeStage.TRACKING)
@@ -832,7 +1135,7 @@ private fun StageConfigCard(
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        plans.forEach { plan ->
+                        plans.forEach { (plan, count) ->
                             val selected = selectedStage == plan.stage
                             Surface(
                                 modifier = Modifier
@@ -861,7 +1164,7 @@ private fun StageConfigCard(
                                         },
                                     )
                                     Text(
-                                        text = "${plan.acceptedCount}/${plan.previewCount}",
+                                        text = "${count.accepted}/${count.total}",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (selected) {
@@ -931,6 +1234,56 @@ private fun StageConfigCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.entity_organize_merge_fuzzy_toggle),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.entity_organize_merge_fuzzy_hint),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Switch(
+                                    checked = uiState.fuzzyMergeCandidatesEnabled,
+                                    onCheckedChange = onFuzzyMergeCandidatesEnabledChange,
+                                )
+                            }
+                            Text(
+                                text = stringResource(
+                                    R.string.entity_organize_merge_fuzzy_threshold,
+                                    uiState.fuzzyMergeThresholdPercent,
+                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Slider(
+                                value = uiState.fuzzyMergeThresholdPercent.toFloat(),
+                                onValueChange = {
+                                    onFuzzyMergeThresholdPercentChange(it.toInt())
+                                },
+                                valueRange = 80f..100f,
+                                steps = 19,
+                                enabled = uiState.fuzzyMergeCandidatesEnabled,
+                            )
+                        }
+                    }
                     OutlinedButton(
                         onClick = onPreviewMerge,
                         enabled = mergePlan.canPreview,
@@ -939,6 +1292,39 @@ private fun StageConfigCard(
                             .heightIn(min = 44.dp),
                     ) {
                         ButtonLabel(stringResource(R.string.entity_organize_merge_preview))
+                    }
+                    Text(
+                        text = stringResource(R.string.entity_organize_manual_merge_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = onClearManualMergeSelections,
+                            enabled = uiState.manualMergeMangaIds.isNotEmpty() && !uiState.isExecuting,
+                            modifier = Modifier
+                                .weight(0.42f)
+                                .heightIn(min = 44.dp),
+                        ) {
+                            ButtonLabel(stringResource(R.string.entity_organize_manual_merge_clear))
+                        }
+                        OutlinedButton(
+                            onClick = onManualMergeSelected,
+                            enabled = uiState.manualMergeMangaIds.size >= 2 && !uiState.isExecuting,
+                            modifier = Modifier
+                                .weight(0.58f)
+                                .heightIn(min = 44.dp),
+                        ) {
+                            ButtonLabel(
+                                stringResource(
+                                    R.string.entity_organize_manual_merge_execute,
+                                    uiState.manualMergeMangaIds.size,
+                                ),
+                            )
+                        }
                     }
                     StageFeedbackText(uiState, EntityOrganizeStage.MERGE)
                 }
@@ -1065,10 +1451,16 @@ private fun EntityWorkbenchSection(
     onClearTrackingSelections: (Set<String>) -> Unit,
     onAcceptReadingPreviews: (Set<Long>) -> Unit,
     onClearReadingPreviews: (Set<Long>) -> Unit,
+    onSplitLocalProjection: (Long) -> Unit,
+    onDetachLocalProjection: (Long) -> Unit,
 ) {
     val normalizedQuery = viewState.query.trim().lowercase(Locale.ROOT)
     val filteredRows = remember(
         rows,
+        selectedStage,
+        uiState.mergePreviewReady,
+        uiState.trackingPreviewReady,
+        uiState.selectedMergeItemsByGroup,
         uiState.selectedMergeGroupIds,
         uiState.selectedTrackingPreviewIds,
         uiState.acceptedReadingPreviewIds,
@@ -1079,16 +1471,30 @@ private fun EntityWorkbenchSection(
         viewState.stageFilters,
     ) {
         val matchedRows = rows.filter { row ->
+            val matchesPreviewResult = when (selectedStage) {
+                EntityOrganizeStage.MERGE -> !uiState.mergePreviewReady || row.isMergeCandidate
+                EntityOrganizeStage.TRACKING -> !uiState.trackingPreviewReady ||
+                    row.trackingCandidates.isNotEmpty() ||
+                    row.existingTrackingBindings.isNotEmpty()
+                EntityOrganizeStage.READING -> true
+            }
+            val manualMergeSelected = row.group.items.any { item ->
+                item.mangaId in uiState.selectedMergeItemsByGroup[row.group.id].orEmpty()
+            }
             val mergeSelected = row.isMergeSelected(uiState)
             val trackingSelected = row.hasTrackingSelected(uiState)
             val readingSelected = row.hasReadingSelected(uiState)
-            val matchesSelection = !viewState.showSelectedOnly || mergeSelected || trackingSelected || readingSelected
+            val matchesSelection = !viewState.showSelectedOnly ||
+                manualMergeSelected ||
+                mergeSelected ||
+                trackingSelected ||
+                readingSelected
             val needsAction = row.needsAction(uiState)
             val matchesStatus = when (viewState.statusFilter) {
                 WorkbenchStatusFilter.ALL -> true
                 WorkbenchStatusFilter.ACTION_REQUIRED -> needsAction
-                WorkbenchStatusFilter.SELECTED -> mergeSelected || trackingSelected || readingSelected
-                WorkbenchStatusFilter.UNSELECTED -> !mergeSelected && !trackingSelected && !readingSelected
+                WorkbenchStatusFilter.SELECTED -> manualMergeSelected || mergeSelected || trackingSelected || readingSelected
+                WorkbenchStatusFilter.UNSELECTED -> !manualMergeSelected && !mergeSelected && !trackingSelected && !readingSelected
             }
             val matchesQuery = normalizedQuery.isBlank() || buildString {
                 append(row.group.title)
@@ -1107,6 +1513,12 @@ private fun EntityWorkbenchSection(
                     append(it.service.name)
                     append(' ')
                 }
+                row.existingTrackingBindings.forEach {
+                    append(it.matchedTitle)
+                    append(' ')
+                    append(it.service.name)
+                    append(' ')
+                }
                 row.readingCandidates.forEach {
                     append(it.targetSourceDisplayName)
                     append(' ')
@@ -1118,7 +1530,7 @@ private fun EntityWorkbenchSection(
                 uiState = uiState,
                 filters = viewState.stageFilters,
             )
-            matchesSelection && matchesStatus && matchesQuery && matchesStageFilters
+            matchesPreviewResult && matchesSelection && matchesStatus && matchesQuery && matchesStageFilters
         }
         sortWorkbenchRows(
             rows = matchedRows,
@@ -1129,6 +1541,7 @@ private fun EntityWorkbenchSection(
     val workbenchSummary = remember(
         rows,
         filteredRows,
+        uiState.selectedManualMergeMangaIds,
         uiState.selectedMergeGroupIds,
         uiState.selectedTrackingPreviewIds,
         uiState.acceptedReadingPreviewIds,
@@ -1177,6 +1590,8 @@ private fun EntityWorkbenchSection(
                 WorkbenchSelectionSummaryCard(
                     selectedStage = selectedStage,
                     summary = workbenchSummary,
+                    hasMergePreviewSelection = uiState.mergePreviewReady,
+                    hasTrackingPreviews = uiState.trackingPreviewReady,
                     statusFilter = viewState.statusFilter,
                     onStatusFilterChange = { onViewStateChange(viewState.copy(statusFilter = it)) },
                     sortMode = viewState.sortMode,
@@ -1189,19 +1604,42 @@ private fun EntityWorkbenchSection(
                     },
                     onSelectAllRows = {
                         val allGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
-                        val allReadingScopeGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
                         when (selectedStage) {
-                            EntityOrganizeStage.MERGE -> onSetGroupsSelected(allGroupIds, true)
-                            EntityOrganizeStage.TRACKING -> onSelectRecommendedTracking(allGroupIds)
-                            EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(allReadingScopeGroupIds, true)
+                            EntityOrganizeStage.MERGE -> {
+                                if (!uiState.mergePreviewReady) {
+                                    onSetReadingScopeGroupsSelected(allGroupIds, true)
+                                } else {
+                                    onSetGroupsSelected(allGroupIds, true)
+                                }
+                            }
+                            EntityOrganizeStage.TRACKING -> {
+                                if (!uiState.trackingPreviewReady) {
+                                    onSetReadingScopeGroupsSelected(allGroupIds, true)
+                                } else {
+                                    onSelectRecommendedTracking(allGroupIds)
+                                }
+                            }
+                            EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(allGroupIds, true)
                         }
                     },
                     onClearAllRows = {
                         val allGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
                         val allReadingIds = filteredRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
                         when (selectedStage) {
-                            EntityOrganizeStage.MERGE -> onSetGroupsSelected(allGroupIds, false)
-                            EntityOrganizeStage.TRACKING -> onClearTrackingSelections(allGroupIds)
+                            EntityOrganizeStage.MERGE -> {
+                                if (!uiState.mergePreviewReady) {
+                                    onSetReadingScopeGroupsSelected(allGroupIds, false)
+                                } else {
+                                    onSetGroupsSelected(allGroupIds, false)
+                                }
+                            }
+                            EntityOrganizeStage.TRACKING -> {
+                                if (!uiState.trackingPreviewReady) {
+                                    onSetReadingScopeGroupsSelected(allGroupIds, false)
+                                } else {
+                                    onClearTrackingSelections(allGroupIds)
+                                }
+                            }
                             EntityOrganizeStage.READING -> {
                                 onSetReadingScopeGroupsSelected(allGroupIds, false)
                                 onClearReadingPreviews(allReadingIds)
@@ -1237,13 +1675,37 @@ private fun EntityWorkbenchSection(
                         .flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
                     WorkbenchTableToolbar(
                         selectedStage = selectedStage,
-                        onSelectVisibleGroups = { onSetGroupsSelected(visibleGroupIds, true) },
-                        onClearVisibleMergeSelections = { onSetGroupsSelected(visibleGroupIds, false) },
+                        onSelectVisibleGroups = {
+                            if (!uiState.mergePreviewReady) {
+                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                            } else {
+                                onSetGroupsSelected(visibleGroupIds, true)
+                            }
+                        },
+                        onClearVisibleMergeSelections = {
+                            if (!uiState.mergePreviewReady) {
+                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                            } else {
+                                onSetGroupsSelected(visibleGroupIds, false)
+                            }
+                        },
                         onSelectVisibleReadingScope = { onSetReadingScopeGroupsSelected(visibleGroupIds, true) },
                         onClearVisibleReadingScope = { onSetReadingScopeGroupsSelected(visibleGroupIds, false) },
-                        onSelectRecommendedTracking = { onSelectRecommendedTracking(visibleGroupIds) },
+                        onSelectRecommendedTracking = {
+                            if (!uiState.trackingPreviewReady) {
+                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                            } else {
+                                onSelectRecommendedTracking(visibleGroupIds)
+                            }
+                        },
                         onClearLowConfidenceTracking = { onClearLowConfidenceTracking(visibleGroupIds) },
-                        onClearTrackingSelections = { onClearTrackingSelections(visibleGroupIds) },
+                        onClearTrackingSelections = {
+                            if (!uiState.trackingPreviewReady) {
+                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                            } else {
+                                onClearTrackingSelections(visibleGroupIds)
+                            }
+                        },
                         onAcceptReadingPreviews = { onAcceptReadingPreviews(visibleReadingIds) },
                         onClearReadingPreviews = { onClearReadingPreviews(visibleReadingIds) },
                         hasVisibleMerge = visibleRows.any { it.isMergeCandidate },
@@ -1263,6 +1725,8 @@ private fun EntityWorkbenchSection(
                         onToggleItem = onToggleItem,
                         onToggleTrackingPreview = onToggleTrackingPreview,
                         onToggleReadingPreview = onToggleReadingPreview,
+                        onSplitLocalProjection = onSplitLocalProjection,
+                        onDetachLocalProjection = onDetachLocalProjection,
                     )
                 }
             }
@@ -1301,6 +1765,7 @@ internal fun EntityWorkbenchRow.stageSnapshot(uiState: MigrationUiState): Workbe
         else -> WorkbenchStageState.MISSING
     }
     val trackingState = when {
+        existingTrackingBindings.isNotEmpty() -> WorkbenchStageState.READY
         trackingCandidates.isEmpty() -> WorkbenchStageState.EMPTY
         !hasTrackingSelected(uiState) -> WorkbenchStageState.MISSING
         hasLowConfidenceTracking() -> WorkbenchStageState.WARNING
@@ -1348,8 +1813,10 @@ internal fun buildWorkbenchSelectionSummary(
     filteredRows: List<EntityWorkbenchRow>,
     uiState: MigrationUiState,
 ): WorkbenchSelectionSummary {
+    val operationScopeIds = uiState.selectedContentIds.ifEmpty { uiState.manualMergeMangaIds }
     return WorkbenchSelectionSummary(
-        selectedContents = uiState.selectedContentIds.size,
+        selectedScopeItems = operationScopeIds.size,
+        selectedContents = uiState.manualMergeMangaIds.size,
         matchedGroups = filteredRows.size,
         selectedMergeGroups = uiState.selectedMergeGroupIds.size,
         selectedTracking = uiState.selectedTrackingPreviewIds.size,
@@ -1391,6 +1858,8 @@ internal fun sortWorkbenchRows(
 private fun WorkbenchSelectionSummaryCard(
     selectedStage: EntityOrganizeStage,
     summary: WorkbenchSelectionSummary,
+    hasMergePreviewSelection: Boolean,
+    hasTrackingPreviews: Boolean,
     statusFilter: WorkbenchStatusFilter,
     onStatusFilterChange: (WorkbenchStatusFilter) -> Unit,
     sortMode: WorkbenchSortMode,
@@ -1418,10 +1887,20 @@ private fun WorkbenchSelectionSummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 WorkbenchMetricChip(
+                    label = stringResource(R.string.entity_organize_workbench_metric_scope_items),
+                    value = summary.selectedScopeItems.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                WorkbenchMetricChip(
                     label = stringResource(R.string.entity_organize_workbench_metric_selected_contents),
                     value = summary.selectedContents.toString(),
                     modifier = Modifier.weight(1f),
                 )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 WorkbenchMetricChip(
                     label = stringResource(R.string.entity_organize_workbench_metric_matched_groups),
                     value = summary.matchedGroups.toString(),
@@ -1579,7 +2058,23 @@ private fun WorkbenchSelectionSummaryCard(
                         .weight(1f)
                         .heightIn(min = 44.dp),
                 ) {
-                    ButtonLabel(stringResource(R.string.entity_organize_workbench_select_all))
+                    ButtonLabel(
+                        stringResource(
+                            when (selectedStage) {
+                                EntityOrganizeStage.MERGE -> if (!hasMergePreviewSelection) {
+                                    R.string.entity_organize_workbench_select_all_scope
+                                } else {
+                                    R.string.entity_organize_workbench_select_all_merge_groups
+                                }
+                                EntityOrganizeStage.TRACKING -> if (!hasTrackingPreviews) {
+                                    R.string.entity_organize_workbench_select_all_scope
+                                } else {
+                                    R.string.entity_organize_workbench_select_all
+                                }
+                                EntityOrganizeStage.READING -> R.string.entity_organize_workbench_select_all
+                            },
+                        ),
+                    )
                 }
                 OutlinedButton(
                     onClick = onClearAllRows,
@@ -1590,8 +2085,16 @@ private fun WorkbenchSelectionSummaryCard(
                     ButtonLabel(
                         stringResource(
                             when (selectedStage) {
-                                EntityOrganizeStage.MERGE -> R.string.entity_organize_workbench_clear_all
-                                EntityOrganizeStage.TRACKING -> R.string.entity_organize_workbench_clear_all
+                                EntityOrganizeStage.MERGE -> if (!hasMergePreviewSelection) {
+                                    R.string.entity_organize_workbench_clear_all_scope
+                                } else {
+                                    R.string.entity_organize_workbench_clear_all_merge_groups
+                                }
+                                EntityOrganizeStage.TRACKING -> if (!hasTrackingPreviews) {
+                                    R.string.entity_organize_workbench_clear_all_scope
+                                } else {
+                                    R.string.entity_organize_workbench_clear_all
+                                }
                                 EntityOrganizeStage.READING -> R.string.entity_organize_workbench_clear_all
                             },
                         ),
@@ -1998,12 +2501,67 @@ internal fun buildEntityWorkbenchRows(
     return uiState.mergeCandidateGroups.map { group ->
         EntityWorkbenchRow(
             group = group,
+            existingTrackingBindings = uiState.existingTrackingPreviews.filter { it.groupId == group.id },
             trackingCandidates = uiState.trackingPreviews.filter { it.groupId == group.id },
             readingCandidates = uiState.readingSourcePreviews.filter { preview ->
                 preview.mangaId in group.mangaIds
             },
-            isMergeCandidate = group.mangaIds.size >= 2 && !group.isAlreadyMerged,
+            isMergeCandidate = group.isExecutableMergeCandidate(),
         )
+    }
+}
+
+private fun stageTabCount(
+    stage: EntityOrganizeStage,
+    rows: List<EntityWorkbenchRow>,
+    uiState: MigrationUiState,
+    plan: EntityOrganizeStagePlan,
+): StageTabCount {
+    if (rows.isEmpty()) {
+        return StageTabCount(accepted = plan.acceptedCount, total = plan.previewCount)
+    }
+    val operationScopeIds = uiState.selectedContentIds.ifEmpty { uiState.manualMergeMangaIds }
+    val scopedRows = if (operationScopeIds.isEmpty()) {
+        rows
+    } else {
+        rows.filter { row -> row.group.mangaIds.any(operationScopeIds::contains) }
+    }
+    return when (stage) {
+        EntityOrganizeStage.MERGE -> if (uiState.mergePreviewReady) {
+            StageTabCount(
+                accepted = plan.acceptedCount,
+                total = plan.previewCount,
+            )
+        } else {
+            StageTabCount(
+                accepted = scopedRows.count { row -> row.group.mangaIds.any(operationScopeIds::contains) },
+                total = scopedRows.size,
+            )
+        }
+
+        EntityOrganizeStage.TRACKING -> if (uiState.trackingPreviewReady) {
+            StageTabCount(
+                accepted = plan.acceptedCount,
+                total = plan.previewCount,
+            )
+        } else {
+            StageTabCount(
+                accepted = scopedRows.count { row -> row.group.mangaIds.any(operationScopeIds::contains) },
+                total = scopedRows.size,
+            )
+        }
+
+        EntityOrganizeStage.READING -> if (uiState.readingSourcePreviews.isNotEmpty()) {
+            StageTabCount(
+                accepted = plan.acceptedCount,
+                total = plan.previewCount,
+            )
+        } else {
+            StageTabCount(
+                accepted = scopedRows.count { row -> row.group.mangaIds.any(operationScopeIds::contains) },
+                total = scopedRows.size,
+            )
+        }
     }
 }
 
@@ -2063,6 +2621,8 @@ private fun EntityWorkbenchRowCard(
     onToggleItem: (String, Long) -> Unit,
     onToggleTrackingPreview: (String) -> Unit,
     onToggleReadingPreview: (Long) -> Unit,
+    onSplitLocalProjection: (Long) -> Unit,
+    onDetachLocalProjection: (Long) -> Unit,
 ) {
     val widths = workbenchColumnWidths()
     var expanded by rememberSaveable(row.group.id) { mutableStateOf(false) }
@@ -2073,25 +2633,41 @@ private fun EntityWorkbenchRowCard(
         ?.previewId
     val recommendedTracking = row.trackingCandidates.maxByOrNull { it.confidence }
     val visibleMembers = if (expanded) row.group.items else row.group.items.take(3)
+    var pendingSplitMemberId by rememberSaveable(row.group.id) { mutableStateOf<Long?>(null) }
+    var pendingDetachMemberId by rememberSaveable(row.group.id) { mutableStateOf<Long?>(null) }
     val entityMeta = buildWorkbenchEntityMeta(row)
     val entityDetail = buildWorkbenchEntityDetail(row)
+    val hasMergePreviewSelection = uiState.mergePreviewReady
+    val hasTrackingPreviewSelection = uiState.trackingPreviewReady
+    val operationScopeIds = uiState.selectedContentIds.ifEmpty { uiState.manualMergeMangaIds }
+    val isInOperationScope = row.group.mangaIds.any(operationScopeIds::contains)
     val rowChecked = when (selectedStage) {
-        EntityOrganizeStage.MERGE -> mergeSelected
-        EntityOrganizeStage.TRACKING -> selectedTrackingId != null
-        EntityOrganizeStage.READING -> row.group.mangaIds.any(uiState.selectedContentIds::contains)
+        EntityOrganizeStage.MERGE -> if (hasMergePreviewSelection) mergeSelected else isInOperationScope
+        EntityOrganizeStage.TRACKING -> if (hasTrackingPreviewSelection) selectedTrackingId != null else isInOperationScope
+        EntityOrganizeStage.READING -> isInOperationScope
     }
     val rowEnabled = when (selectedStage) {
-        EntityOrganizeStage.MERGE -> row.isMergeCandidate
-        EntityOrganizeStage.TRACKING -> row.trackingCandidates.isNotEmpty()
+        EntityOrganizeStage.MERGE -> !hasMergePreviewSelection || row.isMergeCandidate
+        EntityOrganizeStage.TRACKING -> !hasTrackingPreviewSelection || row.trackingCandidates.isNotEmpty()
         EntityOrganizeStage.READING -> true
     }
     val onToggleRowSelection = {
         when (selectedStage) {
-            EntityOrganizeStage.MERGE -> onToggleGroup(row.group.id)
+            EntityOrganizeStage.MERGE -> {
+                if (hasMergePreviewSelection) {
+                    onToggleGroup(row.group.id)
+                } else {
+                    onToggleReadingScopeGroup(row.group.id)
+                }
+            }
             EntityOrganizeStage.TRACKING -> {
-                val target = selectedTrackingId ?: recommendedTracking?.previewId
-                if (target != null) {
-                    onToggleTrackingPreview(target)
+                if (hasTrackingPreviewSelection) {
+                    val target = selectedTrackingId ?: recommendedTracking?.previewId
+                    if (target != null) {
+                        onToggleTrackingPreview(target)
+                    }
+                } else {
+                    onToggleReadingScopeGroup(row.group.id)
                 }
             }
             EntityOrganizeStage.READING -> {
@@ -2113,6 +2689,50 @@ private fun EntityWorkbenchRowCard(
         MaterialTheme.colorScheme.onSecondaryContainer
     } else {
         MaterialTheme.colorScheme.onSurface
+    }
+    pendingSplitMemberId?.let { mangaId ->
+        AlertDialog(
+            onDismissRequest = { pendingSplitMemberId = null },
+            title = { Text(stringResource(R.string.entity_organize_repair_split_member)) },
+            text = { Text(stringResource(R.string.entity_organize_repair_split_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingSplitMemberId = null
+                        onSplitLocalProjection(mangaId)
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingSplitMemberId = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    pendingDetachMemberId?.let { mangaId ->
+        AlertDialog(
+            onDismissRequest = { pendingDetachMemberId = null },
+            title = { Text(stringResource(R.string.entity_organize_repair_detach_member)) },
+            text = { Text(stringResource(R.string.entity_organize_repair_detach_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDetachMemberId = null
+                        onDetachLocalProjection(mangaId)
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDetachMemberId = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
     Surface(
         shape = RoundedCornerShape(18.dp),
@@ -2204,6 +2824,7 @@ private fun EntityWorkbenchRowCard(
                 ) {
                     visibleMembers.forEach { item ->
                         val itemChecked = item.mangaId in uiState.selectedMergeItemsByGroup[row.group.id].orEmpty()
+                        val isSuspectMismerged = item.mangaId in uiState.suspectMismergedLocalMangaIds
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2234,6 +2855,36 @@ private fun EntityWorkbenchRowCard(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                                if (isSuspectMismerged) {
+                                    InlineStatusBadge(
+                                        text = stringResource(R.string.entity_organize_repair_suspect_mismerged),
+                                        state = WorkbenchStageState.WARNING,
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    TextButton(
+                                        onClick = { pendingSplitMemberId = item.mangaId },
+                                        enabled = !uiState.isExecuting,
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.entity_organize_repair_split_member),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
+                                    TextButton(
+                                        onClick = { pendingDetachMemberId = item.mangaId },
+                                        enabled = !uiState.isExecuting,
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.entity_organize_repair_detach_member),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -2261,13 +2912,29 @@ private fun EntityWorkbenchRowCard(
                     modifier = Modifier.width(widths.tracking),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    if (row.trackingCandidates.isEmpty()) {
+                    if (row.existingTrackingBindings.isNotEmpty()) {
+                        row.existingTrackingBindings.take(if (expanded) 3 else 1).forEach { preview ->
+                            CompactSelectCard(
+                                checked = false,
+                                prefix = stringResource(R.string.entity_organize_tracking_match_existing),
+                                title = stringResource(preview.service.titleResId),
+                                subtitle = preview.matchedTitle,
+                                meta = preview.remoteId.toString(),
+                                emphasized = false,
+                                badge = stringResource(R.string.entity_organize_tracking_match_existing),
+                                tone = CompactSelectTone.Recommended,
+                                enabled = false,
+                                onToggle = {},
+                            )
+                        }
+                    }
+                    if (row.trackingCandidates.isEmpty() && row.existingTrackingBindings.isEmpty()) {
                         Text(
                             text = stringResource(R.string.entity_organize_workbench_tracking_empty),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    } else {
+                    } else if (row.trackingCandidates.isNotEmpty()) {
                         row.trackingCandidates.take(if (expanded) 3 else 1).forEach { preview ->
                             val checked = preview.previewId == selectedTrackingId
                             val confidencePercent = preview.confidence.toPercentInt()
@@ -2425,6 +3092,7 @@ private fun CompactSelectCard(
     emphasized: Boolean,
     badge: String? = null,
     tone: CompactSelectTone = CompactSelectTone.Neutral,
+    enabled: Boolean = true,
     onToggle: () -> Unit,
 ) {
     val containerColor = when (tone) {
@@ -2458,7 +3126,7 @@ private fun CompactSelectCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggle)
+                .clickable(enabled = enabled, onClick = onToggle)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.Top,
@@ -2466,6 +3134,7 @@ private fun CompactSelectCard(
             Checkbox(
                 checked = checked,
                 onCheckedChange = { onToggle() },
+                enabled = enabled,
                 modifier = Modifier.size(16.dp),
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -2609,7 +3278,6 @@ private fun MergeCandidateSection(
     val stagePlan = uiState.stagePlan(EntityOrganizeStage.MERGE)
     var query by rememberSaveable { mutableStateOf("") }
     var showSelectedOnly by rememberSaveable { mutableStateOf(false) }
-    var showFuzzyGroups by rememberSaveable { mutableStateOf(false) }
     var pageSize by rememberSaveable { mutableStateOf(ENTITY_ORGANIZE_PAGE_SIZES[1]) }
     var currentPage by rememberSaveable { mutableStateOf(0) }
     val normalizedQuery = query.trim().lowercase(Locale.ROOT)
@@ -2619,13 +3287,10 @@ private fun MergeCandidateSection(
         uiState.selectedMergeItemsByGroup,
         normalizedQuery,
         showSelectedOnly,
-        showFuzzyGroups,
     ) {
         uiState.mergeCandidateGroups.filter { group ->
-            val matchesType = showFuzzyGroups || group.isExactMatch
-            val matchesSelection = !showSelectedOnly ||
-                group.id in uiState.selectedMergeGroupIds ||
-                uiState.selectedMergeItemsByGroup[group.id].orEmpty().isNotEmpty()
+            val isMergeCandidate = group.isExecutableMergeCandidate()
+            val matchesSelection = !showSelectedOnly || group.id in uiState.selectedMergeGroupIds
             val matchesQuery = normalizedQuery.isBlank() || buildString {
                 append(group.title)
                 append(' ')
@@ -2638,8 +3303,11 @@ private fun MergeCandidateSection(
                     append(' ')
                 }
             }.lowercase(Locale.ROOT).contains(normalizedQuery)
-            matchesType && matchesSelection && matchesQuery
+            isMergeCandidate && matchesSelection && matchesQuery
         }
+    }
+    val mergeCandidateCount = remember(uiState.mergeCandidateGroups) {
+        uiState.mergeCandidateGroups.count { it.isExecutableMergeCandidate() }
     }
     val pagedGroups = rememberPagedBrowsePage(
         items = filteredGroups,
@@ -2670,16 +3338,8 @@ private fun MergeCandidateSection(
                 onQueryChange = { query = it },
                 showSelectedOnly = showSelectedOnly,
                 onToggleSelectedOnly = { showSelectedOnly = !showSelectedOnly },
-                extraToggleLabel = stringResource(
-                    if (showFuzzyGroups) {
-                        R.string.entity_organize_hide_fuzzy
-                    } else {
-                        R.string.entity_organize_show_fuzzy
-                    },
-                ),
-                onExtraToggle = { showFuzzyGroups = !showFuzzyGroups },
                 visibleCount = filteredGroups.size,
-                totalCount = uiState.mergeCandidateGroups.size,
+                totalCount = mergeCandidateCount,
                 pagedItems = pagedGroups,
                 pageSize = pageSize,
                 onPageSizeChange = { pageSize = it },
@@ -2725,14 +3385,14 @@ private fun MergeCandidateSection(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
-                                        text = stringResource(
-                                            if (group.isExactMatch) {
-                                                R.string.entity_organize_merge_candidates_exact
-                                            } else {
-                                                R.string.entity_organize_merge_candidates_fuzzy
-                                            },
-                                            group.matchScore.toPercentInt(),
-                                        ),
+                                    text = stringResource(
+                                        if (group.isExactMatch) {
+                                            R.string.entity_organize_merge_candidates_exact
+                                        } else {
+                                            R.string.entity_organize_merge_candidates_fuzzy
+                                        },
+                                        group.matchScore.toPercentInt(),
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (group.isExactMatch) {
                                         MaterialTheme.colorScheme.primary

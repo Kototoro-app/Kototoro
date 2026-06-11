@@ -115,6 +115,19 @@ class ContentDataRepository @Inject constructor(
 		return db.getEntityGraphDao().findEntityPrefs(entityId)?.getMetadataSourceSelectionOrNull()
 	}
 
+	suspend fun getEntityMetadataSourceSelections(
+		entityIds: Collection<Long>,
+	): Map<Long, MetadataSourceSelection> {
+		if (entityIds.isEmpty()) return emptyMap()
+		val prefs = db.getEntityGraphDao().findEntityPrefsByIds(entityIds.distinct())
+		return buildMap(prefs.size) {
+			for (entity in prefs) {
+				val selection = entity.getMetadataSourceSelectionOrNull() ?: continue
+				put(entity.entityId, selection)
+			}
+		}
+	}
+
 	suspend fun setEntityMetadataSourceSelection(
 		entityId: Long,
 		selection: MetadataSourceSelection?,
@@ -123,6 +136,9 @@ class ContentDataRepository @Inject constructor(
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
 			val now = System.currentTimeMillis()
+			if (dao.findEntity(entityId) == null) {
+				return@withTransaction
+			}
 			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
 			dao.updateEntityMetadataSourceSelection(
 				entityId = entityId,
@@ -136,6 +152,9 @@ class ContentDataRepository @Inject constructor(
 				updatedAt = now,
 			)
 			mirrorLocalMangaIds.distinct().forEach { mangaId ->
+				if (!db.getMangaDao().contains(mangaId)) {
+					return@forEach
+				}
 				val prefsDao = db.getPreferencesDao()
 				val entity = prefsDao.find(mangaId) ?: newEntity(mangaId)
 				prefsDao.upsert(
@@ -168,6 +187,9 @@ class ContentDataRepository @Inject constructor(
 	suspend fun setEntityPreferredLocalMangaId(entityId: Long, mangaId: Long?) {
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
+			if (dao.findEntity(entityId) == null) {
+				return@withTransaction
+			}
 			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
 			dao.updateEntityPreferredLocalMangaId(
 				entityId = entityId,

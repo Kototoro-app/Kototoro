@@ -329,6 +329,8 @@ class FavouritesListViewModel @AssistedInject constructor(
                 manga = group.representative,
                 mode = mode,
                 flags = ContentListMapper.NO_FAVORITE,
+                metadataSelectionOverride = group.metadataSourceSelection,
+                useMetadataSelectionOverride = group.metadataSourceSelection != null,
             )
             result += model.toGroupedListModel(
                 group = group,
@@ -342,15 +344,9 @@ class FavouritesListViewModel @AssistedInject constructor(
         if (isEmpty()) {
             return emptyList()
         }
-        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
-        val unresolvedItems = filterNot { it.id in entityIdsByMangaId }
-        val ensuredEntityIdsByMangaId = if (unresolvedItems.isNotEmpty()) {
-            entityGraphRepository.ensureLocalWorkEntities(unresolvedItems)
-        } else {
-            emptyMap()
-        }
-        val resolvedEntityIdsByMangaId = entityIdsByMangaId + ensuredEntityIdsByMangaId
+        val resolvedEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
         val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIdsByMangaId.values)
+        val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIdsByMangaId.values)
         val displayTypeOrdinalByEntity = this
             .groupBy { resolvedEntityIdsByMangaId[it.id] }
             .mapNotNull { (entityId, items) ->
@@ -380,6 +376,7 @@ class FavouritesListViewModel @AssistedInject constructor(
                 projectionCount = items.size,
                 entityId = entityId,
                 preferredLocalMangaId = preferredLocalId ?: representative.id,
+                metadataSourceSelection = entityId?.let(metadataSelectionsByEntity::get),
             )
         }
     }
@@ -437,6 +434,7 @@ class FavouritesListViewModel @AssistedInject constructor(
         val projectionCount: Int,
         val entityId: Long?,
         val preferredLocalMangaId: Long?,
+        val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
     )
 
     private data class FavouriteGroupKey(
