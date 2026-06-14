@@ -100,7 +100,7 @@ class SuggestionsViewModel @Inject constructor(
 
 	override val content = combine(
 		loadParams.flatMapLatest { filterOptions ->
-			repository.observeAll(0, filterOptions)
+			repository.observeAll(200, filterOptions)
 		},
 		quickFilter.appliedOptions,
 		observeListModeWithTriggers(),

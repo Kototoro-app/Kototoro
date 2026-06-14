@@ -103,7 +103,7 @@ class UpdatesViewModel @Inject constructor(
 	override val content = combine(
 		loadParams.flatMapLatest { filterOptions ->
 			repository.observeUpdatedContent(
-				limit = 0,
+				limit = 200,
 				filterOptions = filterOptions,
 			)
 		},
