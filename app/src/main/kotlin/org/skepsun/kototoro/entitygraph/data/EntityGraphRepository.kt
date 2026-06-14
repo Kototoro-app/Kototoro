@@ -30,6 +30,7 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
 import org.skepsun.kototoro.entitygraph.domain.toTrackingServiceOrNull
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
@@ -2652,7 +2653,37 @@ class EntityGraphRepository @Inject constructor(
 					)
 				}
 			}
-			Log.d(TAG, "resetAll: complete, rebuilt ${allMangaIdsList.size} entities")
+			// 5. Rebuild work_history from legacy history
+			val bindings = db.getEntityGraphDao().findActiveBindingsBySources(
+				sources = listOf("local_manga", "0"),
+				externalIds = allMangaIdsList.map { it.toString() },
+			)
+			val entityIdByMangaId = HashMap<Long, Long>()
+			for (binding in bindings) {
+				val mangaId = binding.externalId.toLongOrNull() ?: continue
+				entityIdByMangaId[mangaId] = binding.entityId
+			}
+			val historyEntries = db.getHistoryDao().findByIds(allMangaIdsList)
+				.filter { it.deletedAt == 0L }
+			for (entry in historyEntries) {
+				val entityId = entityIdByMangaId[entry.mangaId] ?: continue
+				db.getWorkHistoryDao().upsert(
+					WorkHistoryEntity(
+						entityId = entityId,
+						anchorMangaId = entry.mangaId,
+						createdAt = entry.createdAt,
+						updatedAt = entry.updatedAt,
+						chapterId = entry.chapterId,
+						page = entry.page,
+						scroll = entry.scroll,
+						percent = entry.percent,
+						chaptersCount = entry.chaptersCount,
+						deletedAt = entry.deletedAt,
+						parentChapterId = entry.parentChapterId,
+					)
+				)
+			}
+			Log.d(TAG, "resetAll: complete, rebuilt ${allMangaIdsList.size} entities, ${historyEntries.size} history entries")
 		}
 	}
 }
