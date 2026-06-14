@@ -30,6 +30,7 @@ import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.local.domain.DeleteReadChaptersUseCase
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import java.util.EnumMap
 import javax.inject.Inject
 import javax.inject.Provider
@@ -47,6 +48,7 @@ class DataCleanupSettingsViewModel @Inject constructor(
     private val localContentRepository: LocalMangaRepository,
     private val mangaDataRepositoryProvider: Provider<ContentDataRepository>,
     private val coil: ImageLoader,
+    private val entityGraphRepository: EntityGraphRepository,
 ) : BaseViewModel() {
 
     data class LocalContentCleanupResult(
@@ -217,6 +219,13 @@ class DataCleanupSettingsViewModel @Inject constructor(
             } finally {
                 loadingKeys.update { it - AppSettings.KEY_CHAPTERS_CLEAR }
             }
+        }
+    }
+
+    fun resetEntities() {
+        launchJob(Dispatchers.Default) {
+            entityGraphRepository.resetAllEntities()
+            onActionDone.call(ReversibleAction(R.string.entity_reset_done, null))
         }
     }
 

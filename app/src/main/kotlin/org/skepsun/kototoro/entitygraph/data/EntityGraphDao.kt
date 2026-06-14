@@ -374,4 +374,16 @@ abstract class EntityGraphDao {
 
 	@Query("DELETE FROM `entity` WHERE id IN (:entityIds)")
 	abstract suspend fun deleteEntitiesByIds(entityIds: List<Long>)
+
+	@Query("DELETE FROM entity_binding")
+	abstract suspend fun deleteAllBindings()
+
+	@Query("DELETE FROM relation")
+	abstract suspend fun deleteAllRelations()
+
+	@Query("DELETE FROM entity_preferences")
+	abstract suspend fun deleteAllPrefs()
+
+	@Query("DELETE FROM `entity`")
+	abstract suspend fun deleteAllEntities()
 }

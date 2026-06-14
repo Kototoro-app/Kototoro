@@ -100,6 +100,9 @@ abstract class TrackingSiteDao {
 	@Query("DELETE FROM tracking_site_links WHERE service = :service AND entity_id IN (:entityIds)")
 	abstract suspend fun deleteLinksByEntityIds(service: Int, entityIds: List<Long>)
 
+	@Query("DELETE FROM tracking_site_links")
+	abstract suspend fun deleteAllLinks()
+
 	@Query("DELETE FROM tracking_site_links WHERE service = :service AND manga_id IN (:mangaIds)")
 	abstract suspend fun deleteLinksByMangaIds(service: Int, mangaIds: List<Long>)
 

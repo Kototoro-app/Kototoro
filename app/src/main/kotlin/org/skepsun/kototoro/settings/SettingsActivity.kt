@@ -1266,6 +1266,7 @@ class SettingsActivity :
 					onClearSearchHistory = ::confirmClearSearchHistory,
 					onClearCookies = ::confirmClearCookies,
 					onDeleteReadChapters = ::confirmCleanupChapters,
+					onResetEntities = ::confirmResetEntities,
 					modifier = Modifier.fillMaxSize(),
 				)
 			}
@@ -1608,6 +1609,17 @@ class SettingsActivity :
 			.setNegativeButton(android.R.string.cancel, null)
 			.setPositiveButton(R.string.delete) { _, _ ->
 				dataCleanupSettingsViewModel.cleanupChapters()
+			}
+			.show()
+	}
+
+	private fun confirmResetEntities() {
+		MaterialAlertDialogBuilder(this)
+			.setTitle(R.string.entity_reset_title)
+			.setMessage(R.string.entity_reset_confirm)
+			.setNegativeButton(android.R.string.cancel, null)
+			.setPositiveButton(R.string.entity_reset) { _, _ ->
+				dataCleanupSettingsViewModel.resetEntities()
 			}
 			.show()
 	}

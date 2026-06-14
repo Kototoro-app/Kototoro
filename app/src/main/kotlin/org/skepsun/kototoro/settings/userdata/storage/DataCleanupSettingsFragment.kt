@@ -48,6 +48,7 @@ class DataCleanupSettingsFragment : Fragment() {
                         onClearSearchHistory = ::clearSearchHistory,
                         onClearCookies = ::clearCookies,
                         onDeleteReadChapters = ::cleanupChapters,
+                        onResetEntities = { resetEntities(viewModel, requireContext()) },
                     )
                 }
             }
@@ -118,6 +119,7 @@ fun DataCleanupSettingsRoute(
     onClearSearchHistory: () -> Unit,
     onClearCookies: () -> Unit,
     onDeleteReadChapters: () -> Unit,
+    onResetEntities: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -205,6 +207,20 @@ fun DataCleanupSettingsRoute(
         onClearCookies = onClearCookies,
         onClearBrowserData = viewModel::clearBrowserData,
         onDeleteReadChapters = onDeleteReadChapters,
+        onResetEntities = onResetEntities,
         modifier = modifier,
     )
+}
+
+private fun resetEntities(viewModel: DataCleanupSettingsViewModel, context: android.content.Context) {
+    (context as? android.app.Activity)?.let { activity ->
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.entity_reset_title)
+            .setMessage(R.string.entity_reset_confirm)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.entity_reset) { _, _ ->
+                viewModel.resetEntities()
+            }
+            .show()
+    }
 }

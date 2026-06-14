@@ -2577,4 +2577,66 @@ class EntityGraphRepository @Inject constructor(
 			EntityBindingState.REJECTED.name,
 		)
 	}
+
+	/**
+	 * Complete entity reset: deletes all entities, bindings, relations, preferences,
+	 * work_history, work_favourites, tracks, and tracking_site_links.
+	 * Then re-creates one clean entity per manga found in history/favourites.
+	 *
+	 * Legacy manga-level history and favourites are preserved.
+	 */
+	suspend fun resetAllEntities() = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+
+			// 1. Collect all manga IDs that need entities
+			val historyMangaIds = db.getHistoryDao().findAllIds().toSet()
+			val favouriteMangaIds = db.getFavouritesDao().findAllRaw(offset = 0, limit = Int.MAX_VALUE)
+				.map { it.favourite.mangaId }.toSet()
+			val allMangaIds = (historyMangaIds + favouriteMangaIds).distinct()
+
+			// 2. Clear all entity-dependent tables
+			db.getTracksDao().clear()
+			db.getWorkHistoryDao().clear()
+			db.getWorkFavouritesDao().deleteAll()
+			db.getTrackingSiteDao().deleteAllLinks()
+
+			// 4. Clear entity core tables (order matters for FKs)
+			dao.deleteAllRelations()
+			dao.deleteAllBindings()
+			dao.deleteAllPrefs()
+			dao.deleteAllEntities()
+
+			// 4. Re-create entities: one per manga_id, minimal metadata
+			val now = System.currentTimeMillis()
+			for (mangaId in allMangaIds) {
+				val entityId = dao.insertEntityIgnore(
+					EntityRecord(
+						type = "MANGA",
+						primaryName = "Manga #$mangaId",
+						nameHash = mangaId,
+						aliases = null,
+						createdAt = now,
+						lastAccessed = now,
+						accessCount = 0,
+					)
+				)
+				if (entityId > 0L) {
+					dao.upsertBinding(
+						EntityBindingRecord(
+							entityId = entityId,
+							source = "local_manga",
+							externalId = mangaId.toString(),
+							confidence = 1f,
+							isPrimary = true,
+							sourceKind = "LOCAL_MANGA",
+							state = EntityBindingState.CONFIRMED.name,
+							createdBy = EntityBindingCreatedBy.USER.name,
+							updatedAt = now,
+						)
+					)
+				}
+			}
+		}
+	}
 }

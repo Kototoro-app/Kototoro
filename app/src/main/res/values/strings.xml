@@ -1040,6 +1040,18 @@
     <string name="entity_organize_settings_summary">Organize favourites as entities, review bindings, and complete usable projections in one archival workspace.</string>
     <string name="entity_organize_entry_manual_title">Organizing a manual selection</string>
     <string name="entity_organize_entry_manual_subtitle">This run starts from %1$d selected favorites from the favorites screen. You can review entity merge, tracking bind, and reading attach in one place.</string>
+    <string name="entity_reset_title">Reset entities</string>
+    <string name="entity_reset_description">Restore original state: one entity per work, remove all merges and tracking bindings. Reading history and favorites are preserved.</string>
+    <string name="entity_reset_confirm">This will:
+• Delete all entity merges
+• Remove all tracking bindings
+• Rebuild clean entities (one per work)
+
+History and favorites are NOT deleted.
+
+Proceed?</string>
+    <string name="entity_reset">Reset</string>
+    <string name="entity_reset_done">Entities reset complete</string>
     <string name="entity_organize_entry_all_title">Organizing your full favorites archive</string>
     <string name="entity_organize_entry_all_subtitle">This run starts from the current favorites archive. To organize only part of it, long-press and multi-select favorites before opening this page.</string>
     <string name="entity_organize_entry_default_view_hint">Default view: %1$s, sorted by %2$s.</string>

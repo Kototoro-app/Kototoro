@@ -47,6 +47,9 @@ abstract class WorkFavouritesDao {
 	@Query("UPDATE work_favourites SET deleted_at = :deletedAt, updated_at = :updatedAt WHERE category_id = :categoryId AND deleted_at = 0")
 	abstract suspend fun setDeletedAtAll(categoryId: Long, deletedAt: Long, updatedAt: Long)
 
+	@Query("DELETE FROM work_favourites")
+	abstract suspend fun deleteAll()
+
 	@Query("DELETE FROM work_favourites WHERE deleted_at != 0 AND deleted_at < :maxDeletionTime")
 	abstract suspend fun gc(maxDeletionTime: Long)
 
