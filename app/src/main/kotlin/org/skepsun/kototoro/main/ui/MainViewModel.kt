@@ -23,6 +23,8 @@ import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
+import org.skepsun.kototoro.core.parser.ContentDataRepository
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.main.domain.ReadingResumeEnabledUseCase
@@ -38,6 +40,8 @@ class MainViewModel @Inject constructor(
 	private val settings: AppSettings,
 	readingResumeEnabledUseCase: ReadingResumeEnabledUseCase,
 	private val sourcesRepository: ContentSourcesRepository,
+	private val contentDataRepository: ContentDataRepository,
+	private val entityGraphRepository: EntityGraphRepository,
 ) : BaseViewModel() {
 
 	val onOpenReader = MutableEventFlow<Content>()
@@ -122,7 +126,14 @@ class MainViewModel @Inject constructor(
 
 	fun openLastReader() {
 		launchLoadingJob(Dispatchers.Default) {
-			val manga = historyRepository.getLastOrNull()?.let { content ->
+			val rawContent = historyRepository.getLastOrNull() ?: throw EmptyHistoryException()
+			val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(rawContent.id))[rawContent.id]
+			val preferredLocalMangaId = entityId?.let { contentDataRepository.getEntityPreferredLocalMangaId(it) }
+			val resolvedBase = preferredLocalMangaId
+				?.takeIf { it != rawContent.id }
+				?.let { contentDataRepository.findDisplayContentById(it, withChapters = false) }
+				?: rawContent
+			val manga = resolvedBase.let { content ->
 				if (content.looksLikeLocalVideoContent() && content.source.getContentType() != org.skepsun.kototoro.parsers.model.ContentType.VIDEO) {
 					content.copy(
 						source = LocalVideoSource,
@@ -139,7 +150,7 @@ class MainViewModel @Inject constructor(
 				} else {
 					content
 				}
-			} ?: throw EmptyHistoryException()
+			}
 			onOpenReader.call(manga)
 		}
 	}

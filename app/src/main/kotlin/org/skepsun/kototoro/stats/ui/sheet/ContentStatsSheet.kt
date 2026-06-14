@@ -12,6 +12,7 @@ import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.databinding.SheetStatsContentBinding
+import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 
 @AndroidEntryPoint
@@ -32,7 +33,20 @@ class ContentStatsSheet : BaseAdaptiveSheet<SheetStatsContentBinding>() {
             KototoroTheme {
                 ContentStatsSheetContent(
                     viewModel = viewModel,
-                    onOpenDetails = { router.openDetails(viewModel.manga) },
+                    onOpenDetails = {
+                        val mainActivity = activity as? MainActivity
+                        mainActivity?.resolveDetailsOriginForContent(viewModel.manga) { origin ->
+                            when (origin) {
+                                is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph -> {
+                                    router.openEntityDetails(
+                                        entityId = origin.entityId,
+                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                    )
+                                }
+                                else -> router.openResolvedDetails(viewModel.manga)
+                            }
+                        } ?: router.openResolvedDetails(viewModel.manga)
+                    },
                     modifier = Modifier,
                 )
             }

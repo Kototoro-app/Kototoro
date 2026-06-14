@@ -21,7 +21,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_HISTORY
+import org.skepsun.kototoro.core.db.TABLE_MANGA
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -33,6 +36,7 @@ import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -49,7 +53,13 @@ class AppShortcutManager @Inject constructor(
 	private val historyRepository: HistoryRepository,
 	private val mangaRepository: ContentDataRepository,
 	private val settings: AppSettings,
-) : InvalidationTracker.Observer(TABLE_HISTORY), SharedPreferences.OnSharedPreferenceChangeListener {
+	private val entityGraphRepository: EntityGraphRepository,
+) : InvalidationTracker.Observer(
+	TABLE_HISTORY,
+	TABLE_WORK_HISTORY,
+	TABLE_ENTITY_PREFERENCES,
+	TABLE_MANGA,
+), SharedPreferences.OnSharedPreferenceChangeListener {
 
 	private val iconSize by lazy {
 		Size(ShortcutManagerCompat.getIconMaxWidth(context), ShortcutManagerCompat.getIconMaxHeight(context))
@@ -109,7 +119,10 @@ class AppShortcutManager @Inject constructor(
 	}
 
 	fun notifyContentOpened(mangaId: Long) {
-		ShortcutManagerCompat.reportShortcutUsed(context, mangaId.toString())
+		processLifecycleScope.launch(Dispatchers.Default) {
+			val shortcutMangaId = mangaRepository.findDisplayContentById(mangaId, withChapters = false)?.id ?: mangaId
+			ShortcutManagerCompat.reportShortcutUsed(context, shortcutMangaId.toString())
+		}
 	}
 
 	fun isDynamicShortcutsAvailable(): Boolean {
@@ -135,12 +148,19 @@ class AppShortcutManager @Inject constructor(
 	}
 
 	private suspend fun buildShortcutInfo(manga: Content): ShortcutInfoCompat = withContext(Dispatchers.Default) {
+		val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(manga.id))[manga.id]
+		val preferredLocalMangaId = entityId?.let { mangaRepository.getEntityPreferredLocalMangaId(it) }
+		val resolvedId = preferredLocalMangaId ?: manga.id
+		val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = true)
+			?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = true)
+			?: mangaRepository.findContentById(resolvedId, withChapters = true)
+			?: manga
 		val icon = runCatchingCancellable {
 			coil.execute(
 				ImageRequest.Builder(context)
-					.data(manga.coverUrl)
+					.data(currentManga.coverUrl)
 					.size(iconSize)
-					.mangaSourceExtra(manga.source)
+					.mangaSourceExtra(currentManga.source)
 					.scale(Scale.FILL)
 					.transformations(ThumbnailTransformation())
 					.build(),
@@ -149,20 +169,20 @@ class AppShortcutManager @Inject constructor(
 			onSuccess = { IconCompat.createWithAdaptiveBitmap(it) },
 			onFailure = { IconCompat.createWithResource(context, R.drawable.ic_shortcut_default) },
 		)
-		mangaRepository.storeContent(manga, replaceExisting = true)
-		val title = manga.title.ifEmpty {
-			manga.altTitles.firstOrNull()
+		mangaRepository.storeContent(currentManga, replaceExisting = true)
+		val title = currentManga.title.ifEmpty {
+			currentManga.altTitles.firstOrNull()
 		}.ifNullOrEmpty {
 			context.getString(R.string.unknown)
 		}
-		ShortcutInfoCompat.Builder(context, manga.id.toString())
+		ShortcutInfoCompat.Builder(context, currentManga.id.toString())
 			.setShortLabel(title)
 			.setLongLabel(title)
 			.setIcon(icon)
 			.setLongLived(true)
 			.setIntent(
 				ReaderIntent.Builder(context)
-					.mangaId(manga.id)
+					.mangaId(currentManga.id)
 					.build()
 					.intent,
 			).build()

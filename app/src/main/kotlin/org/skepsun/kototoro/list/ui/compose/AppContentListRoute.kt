@@ -40,6 +40,7 @@ import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
@@ -117,6 +118,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val mainActivity = activity as? MainActivity
     val entryPoint = remember(context.applicationContext) {
         runCatching {
             EntryPointAccessors.fromApplication(
@@ -486,7 +488,18 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                 } else if (onNavigateToDetails != null) {
                     onNavigateToDetails(item, content, sharedElementKey)
                 } else {
-                    appRouter.openDetails(content)
+                    mainActivity?.resolveDetailsOriginForContent(content) { origin ->
+                        when (origin) {
+                            is DetailsOrigin.EntityGraph -> {
+                                appRouter.openEntityDetails(
+                                    entityId = origin.entityId,
+                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                    sharedElementKey = sharedElementKey,
+                                )
+                            }
+                            else -> appRouter.openResolvedDetails(content, sharedElementKey = sharedElementKey)
+                        }
+                    } ?: appRouter.openResolvedDetails(content, sharedElementKey = sharedElementKey)
                 }
             }
         },

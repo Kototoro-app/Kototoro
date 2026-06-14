@@ -27,13 +27,16 @@ import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.getNotificationIconSize
 import org.skepsun.kototoro.core.util.ext.isReportable
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.ui.list.DownloadsActivity
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.format
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
@@ -48,6 +51,8 @@ class DownloadNotificationFactory @AssistedInject constructor(
 	@LocalizedAppContext private val context: Context,
 	private val workManager: WorkManager,
 	private val coil: ImageLoader,
+	private val contentDataRepository: ContentDataRepository,
+	private val entityGraphRepository: EntityGraphRepository,
 	@Assisted private val uuid: UUID,
 	@Assisted val isSilent: Boolean,
 ) {
@@ -120,23 +125,25 @@ class DownloadNotificationFactory @AssistedInject constructor(
 	}
 
 	suspend fun create(state: DownloadState?): Notification = mutex.withLock {
+		val displayContent = resolveDisplayContent(state)
+		val titleContent = displayContent ?: state?.manga
 		if (state == null) {
 			builder.setContentTitle(context.getString(R.string.manga_downloading_))
 			builder.setContentText(context.getString(R.string.preparing_))
 		} else {
-			builder.setContentTitle(state.manga.title)
+			builder.setContentTitle(titleContent?.title ?: state.manga.title)
 			builder.setContentText(context.getString(R.string.manga_downloading_))
 		}
 		builder.setProgress(1, 0, true)
 		builder.setSmallIcon(android.R.drawable.stat_sys_download)
 		builder.setContentIntent(queueIntent)
 		builder.setStyle(null)
-		builder.setLargeIcon(if (state != null) getCover(state.manga)?.toBitmap() else null)
+		builder.setLargeIcon(if (titleContent != null) getCover(titleContent)?.toBitmap() else null)
 		builder.clearActions()
 		builder.setSubText(null)
 		builder.setShowWhen(false)
 		builder.setVisibility(
-			if (state != null && state.manga.isNsfw()) {
+			if (titleContent?.isNsfw() == true || state?.manga?.isNsfw() == true) {
 				NotificationCompat.VISIBILITY_SECRET
 			} else {
 				NotificationCompat.VISIBILITY_PRIVATE
@@ -149,7 +156,11 @@ class DownloadNotificationFactory @AssistedInject constructor(
 				builder.setSubText(context.getString(state.taskKind.actionTitleResId))
 				builder.setContentText(context.getString(state.taskKind.completedStatusResId))
 				builder.setContentIntent(
-					state.localContent?.let { createContentIntent(context, it.manga) } ?: queueIntent,
+					createContentIntent(
+						displayManga = displayContent,
+						localManga = state.localContent?.manga,
+						executionManga = state.manga,
+					),
 				)
 				builder.setAutoCancel(true)
 				builder.setSmallIcon(android.R.drawable.stat_sys_download_done)
@@ -241,6 +252,11 @@ class DownloadNotificationFactory @AssistedInject constructor(
 		return builder.build()
 	}
 
+	private suspend fun resolveDisplayContent(state: DownloadState?): Content? {
+		val displayMangaId = state?.displayMangaId ?: return null
+		return contentDataRepository.findDisplayContentById(displayMangaId, withChapters = false)
+	}
+
 	private fun getProgressString(percent: Float, eta: Long, isStuck: Boolean): CharSequence? {
 		val percentString = if (percent >= 0f) {
 			context.getString(R.string.percent_string_pattern, (percent * 100).format())
@@ -264,17 +280,37 @@ class DownloadNotificationFactory @AssistedInject constructor(
 		}
 	}
 
-	private fun createContentIntent(context: Context, manga: Content?) = PendingIntentCompat.getActivity(
+	private suspend fun createContentIntent(
+		displayManga: Content?,
+		localManga: Content?,
+		executionManga: Content?,
+	) = PendingIntentCompat.getActivity(
 		context,
-		manga.hashCode(),
-		if (manga != null) {
-			AppRouter.detailsIntent(context, manga)
-		} else {
-			AppRouter.listIntent(context, LocalMangaSource, null, null)
+		(displayManga ?: localManga ?: executionManga).hashCode(),
+		when {
+			displayManga != null -> resolveDetailsIntent(displayManga)
+			localManga != null -> resolveDetailsIntent(localManga)
+			executionManga != null -> resolveDetailsIntent(executionManga)
+			else -> AppRouter.listIntent(context, LocalMangaSource, null, null)
 		},
 		PendingIntent.FLAG_CANCEL_CURRENT,
 		false,
 	)
+
+	private suspend fun resolveDetailsIntent(content: Content): Intent {
+		val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+		val origin = if (entityId != null) {
+			DetailsOrigin.EntityGraph(
+				entityId = entityId,
+				initialProjectionLocalMangaId = content.id,
+			)
+		} else {
+			DetailsOrigin.LocalMangaContent(
+				org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
+			)
+		}
+		return AppRouter.detailsIntent(context, origin)
+	}
 
 	private suspend fun getCover(manga: Content) = covers[manga] ?: run {
 		runCatchingCancellable {

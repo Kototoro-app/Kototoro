@@ -143,6 +143,7 @@ import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.parser.favicon.directFaviconUriOrNull
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
@@ -155,6 +156,7 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ErrorState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -301,7 +303,7 @@ private fun SearchInputDialogSurface(
 fun AppSearchContentListRoute(
     appRouter: AppRouter,
     onBackClick: () -> Unit,
-    onOpenDetails: (Content, String?) -> Unit = { content, _ -> appRouter.openDetails(content) },
+    onOpenDetails: ((Content, String?) -> Unit)? = null,
     sharedTransitionEnabled: Boolean = true,
     viewModel: RemoteListViewModel = hiltViewModel(),
 ) {
@@ -326,6 +328,7 @@ fun AppSearchContentListRoute(
     }
 
     val context = LocalContext.current
+    val mainActivity = context as? MainActivity
     val configuration = LocalConfiguration.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
@@ -342,6 +345,22 @@ fun AppSearchContentListRoute(
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val exceptionResolver = (context as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
         ?: (context as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+    val openDetailsHandler = remember(appRouter, mainActivity, onOpenDetails) {
+        onOpenDetails ?: { content: Content, sharedKey: String? ->
+            mainActivity?.resolveDetailsOriginForContent(content) { origin ->
+                when (origin) {
+                    is DetailsOrigin.EntityGraph -> {
+                        appRouter.openEntityDetails(
+                            entityId = origin.entityId,
+                            initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                            sharedElementKey = sharedKey,
+                        )
+                    }
+                    else -> appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
+                }
+            } ?: appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
+        }
+    }
 
     LaunchedEffect(viewModel.source.name) {
         clearFailedContentSourceIcon(viewModel.source.name)
@@ -403,7 +422,7 @@ fun AppSearchContentListRoute(
     LaunchedEffect(viewModel.onOpenContent) {
         viewModel.onOpenContent.collect { event ->
             event?.consume { content ->
-                onOpenDetails(
+                openDetailsHandler(
                     content,
                     contentCoverSharedKey(content.source.name, content.coverUrl.orEmpty()),
                 )
@@ -707,7 +726,7 @@ fun AppSearchContentListRoute(
                                     val content = requireNotNull(previewContent)
                                     val sharedElementKey =
                                         contentCoverSharedKey(content.source.name, content.coverUrl.orEmpty())
-                                    onOpenDetails(
+                                    openDetailsHandler(
                                         content,
                                         sharedElementKey,
                                     )
@@ -784,7 +803,7 @@ fun AppSearchContentListRoute(
                             } else {
                                 val content = item.toContentWithOverride()
                                 val sharedElementKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
-                                onOpenDetails(
+                                openDetailsHandler(
                                     content,
                                     sharedElementKey,
                                 )

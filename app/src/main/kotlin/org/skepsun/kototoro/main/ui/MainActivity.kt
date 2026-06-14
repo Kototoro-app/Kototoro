@@ -26,6 +26,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.domain.BackupStartupCoordinator
 import org.skepsun.kototoro.browser.AdListUpdateService
 import org.skepsun.kototoro.core.nav.router
+import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.os.VoiceInputContract
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentLinkResolver
@@ -39,6 +40,8 @@ import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.databinding.ActivityMainBinding
 import org.skepsun.kototoro.details.service.ContentPrefetchService
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
@@ -47,6 +50,7 @@ import org.skepsun.kototoro.local.ui.LocalIndexUpdateService
 import org.skepsun.kototoro.local.ui.LocalStorageCleanupWorker
 import org.skepsun.kototoro.main.ui.compose.ComposeAppNavBarDelegator
 import org.skepsun.kototoro.main.ui.compose.KototoroApp
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
@@ -76,6 +80,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
+
+    @Inject
+    lateinit var entityGraphRepository: EntityGraphRepository
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -243,14 +250,36 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 query = searchQuery,
                 isResumeEnabled = isResumeEnabledState,
                 onResumeClick = viewModel::openLastReader,
-                onContentSuggestionClick = router::openDetails,
+                onContentSuggestionClick = { content ->
+                    resolveDetailsOriginForContent(content) { origin ->
+                        when (origin) {
+                            is DetailsOrigin.EntityGraph -> {
+                                router.openEntityDetails(
+                                    entityId = origin.entityId,
+                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                )
+                            }
+                            else -> router.openResolvedDetails(content)
+                        }
+                    }
+                },
                 onLocalEntitySuggestionClick = { suggestion ->
                     suggestion.entityId?.let { entityId ->
                         openEntityDetailsWithPreferredProjection(
                             entityId = entityId,
                             fallbackLocalMangaId = suggestion.representative.id,
                         )
-                    } ?: router.openDetails(suggestion.representative)
+                    } ?: resolveDetailsOriginForContent(suggestion.representative) { origin ->
+                        when (origin) {
+                            is DetailsOrigin.EntityGraph -> {
+                                router.openEntityDetails(
+                                    entityId = origin.entityId,
+                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                )
+                            }
+                            else -> router.openResolvedDetails(suggestion.representative)
+                        }
+                    }
                 },
                 onTrackingEntitySuggestionClick = { entity ->
                     when (entity.entityType) {
@@ -394,6 +423,27 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 entityId = entityId,
                 preferredLocalMangaId = preferredLocalMangaId ?: fallbackLocalMangaId,
             )
+        }
+    }
+
+    fun resolveDetailsOriginForContent(
+        content: Content,
+        onResolved: (DetailsOrigin) -> Unit,
+    ) {
+        lifecycleScope.launch {
+            val origin = withContext(Dispatchers.IO) {
+                val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                if (entityId != null) {
+                    android.util.Log.i("MainActivity", "resolveDetailsOrigin: mangaId=${content.id} entityId=$entityId")
+                    DetailsOrigin.EntityGraph(
+                        entityId = entityId,
+                        initialProjectionLocalMangaId = content.id,
+                    )
+                } else {
+                    DetailsOrigin.LocalMangaContent(ParcelableContent(content))
+                }
+            }
+            onResolved(origin)
         }
     }
 

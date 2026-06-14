@@ -26,6 +26,8 @@ import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.findFragment
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
@@ -50,6 +52,7 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentPage
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentListFilter
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
@@ -113,6 +116,7 @@ import org.skepsun.kototoro.parsers.util.mapToArray
 import org.skepsun.kototoro.reader.novel.NovelReaderActivity
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.reader.ui.colorfilter.ColorFilterConfigActivity
 import org.skepsun.kototoro.reader.ui.config.ReaderConfigSheet
@@ -155,6 +159,10 @@ class AppRouter private constructor(
 
     private val mangaRepositoryFactory: ContentRepository.Factory by lazy {
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).mangaRepositoryFactory
+    }
+
+    private val entityGraphRepository: EntityGraphRepository by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).entityGraphRepository
     }
 
     private val jsonSourceManager: org.skepsun.kototoro.core.jsonsource.JsonSourceManager by lazy {
@@ -207,6 +215,28 @@ class AppRouter private constructor(
         val context = contextOrNull() ?: return
         val intent = detailsIntent(context, DetailsOrigin.LocalMangaContent(ParcelableContent(manga)))
         startActivity(intent, null)
+    }
+
+    fun openResolvedDetails(
+        manga: Content,
+        anchor: View? = null,
+        sharedElementKey: String? = null,
+    ) {
+        val lifecycleOwner = getLifecycleOwner() ?: return
+        lifecycleOwner.lifecycleScope.launch {
+            when (val origin = resolveDetailsOriginForContent(manga)) {
+                is DetailsOrigin.EntityGraph -> {
+                    openEntityDetails(
+                        entityId = origin.entityId,
+                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId ?: manga.id,
+                        sharedElementKey = sharedElementKey,
+                    )
+                }
+                is DetailsOrigin.LocalMangaContent -> openDetails(manga, anchor)
+                is DetailsOrigin.LocalMangaId -> openDetails(origin.mangaId)
+                else -> openDetails(manga, anchor)
+            }
+        }
     }
 
     fun openTemporaryDetails(manga: Content) {
@@ -314,7 +344,8 @@ class AppRouter private constructor(
         if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
             startActivity(
                 Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
-                    .putExtra(KEY_MANGA, ParcelableContent(manga)),
+                    .putExtra(KEY_MANGA, ParcelableContent(manga))
+                    .putExtra(KEY_ID, manga.id),
                 anchor?.let { scaleUpActivityOptionsOf(it) },
             )
             return
@@ -432,6 +463,7 @@ class AppRouter private constructor(
                     }
                     val novelIntent = Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
                         .putExtra(KEY_MANGA, ParcelableContent(manga))
+                        .putExtra(KEY_ID, manga.id)
                     // 浼犻€扲eaderState
                     if (state != null) {
                         novelIntent.putExtra(ReaderIntent.EXTRA_STATE, state)
@@ -523,13 +555,15 @@ class AppRouter private constructor(
         }
         AlternativesSheet().withArgs(1) {
             putParcelable(KEY_MANGA, ParcelableContent(manga))
+            putLong(KEY_ID, manga.id)
         }.showDistinct()
     }
 
     fun openRelated(manga: Content) {
         startActivity(
             Intent(contextOrNull(), RelatedContentActivity::class.java)
-                .putExtra(KEY_MANGA, ParcelableContent(manga)),
+                .putExtra(KEY_MANGA, ParcelableContent(manga))
+                .putExtra(KEY_ID, manga.id),
         )
     }
 
@@ -596,6 +630,7 @@ class AppRouter private constructor(
                 .putExtra(KEY_URL, url)
                 .putExtra(KEY_SOURCE, manga.source.name)
                 .putExtra(KEY_TITLE, manga.title)
+                .putExtra(KEY_ID, manga.id)
                 .putExtra(KEY_MANGA, ParcelableContent(manga, withChapters = !manga.chapters.isNullOrEmpty()))
                 .putExtra(ReaderIntent.EXTRA_STATE, state),
             null,
@@ -850,6 +885,7 @@ class AppRouter private constructor(
         }
         DownloadDialogFragment().withArgs(1) {
             putParcelableArray(KEY_MANGA, manga.mapToArray { ParcelableContent(it, withDescription = false) })
+            putLongArray(KEY_ID, manga.map { it.id }.toLongArray())
         }.showDistinct()
     }
 
@@ -866,6 +902,7 @@ class AppRouter private constructor(
         }
         LocalInfoDialog().withArgs(1) {
             putParcelable(KEY_MANGA, ParcelableContent(manga))
+            putLong(KEY_ID, manga.id)
         }.showDistinct()
     }
 
@@ -896,6 +933,7 @@ class AppRouter private constructor(
                 KEY_MANGA_LIST,
                 manga.mapTo(ArrayList(manga.size)) { ParcelableContent(it, withDescription = false) },
             )
+            putLongArray(KEY_ID, manga.map { it.id }.toLongArray())
         }.showDistinct()
     }
 
@@ -1080,6 +1118,7 @@ class AppRouter private constructor(
         }
         ContentStatsSheet().withArgs(1) {
             putParcelable(KEY_MANGA, ParcelableContent(manga))
+            putLong(KEY_ID, manga.id)
         }.showDistinct()
     }
 
@@ -1189,6 +1228,20 @@ class AppRouter private constructor(
 
     private fun getContentType(source: ContentSource): ContentType {
         return source.getContentType()
+    }
+
+    private suspend fun resolveDetailsOriginForContent(content: Content): DetailsOrigin {
+        return withContext(Dispatchers.IO) {
+            val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+            if (entityId != null) {
+                DetailsOrigin.EntityGraph(
+                    entityId = entityId,
+                    initialProjectionLocalMangaId = content.id,
+                )
+            } else {
+                DetailsOrigin.LocalMangaContent(ParcelableContent(content))
+            }
+        }
     }
 
     /** Private utils **/

@@ -34,6 +34,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getThemeColor
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.download.ui.list.DownloadItemModel
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.download.ui.list.DownloadsViewModel
@@ -42,6 +43,8 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.LoadingState
+import org.skepsun.kototoro.main.ui.MainActivity
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +61,7 @@ fun AppDownloadsRoute(
     var selectionIds by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
     val inSelectionMode = selectionIds.isNotEmpty()
     val rootView = LocalView.current
+    val mainActivity = LocalContext.current as? MainActivity
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
@@ -246,7 +250,19 @@ fun AppDownloadsRoute(
                                 if (inSelectionMode) {
                                     selectionIds = if (isSelected) selectionIds - item.id.mostSignificantBits else selectionIds + item.id.mostSignificantBits
                                 } else {
-                                    if (item.manga != null) appRouter.openDetails(item.manga, rootView)
+                                    if (item.displayManga != null) {
+                                        mainActivity?.resolveDetailsOriginForContent(item.displayManga) { origin ->
+                                            when (origin) {
+                                                is DetailsOrigin.EntityGraph -> {
+                                                    appRouter.openEntityDetails(
+                                                        entityId = origin.entityId,
+                                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                                    )
+                                                }
+                                                else -> appRouter.openResolvedDetails(item.displayManga, rootView)
+                                            }
+                                        } ?: appRouter.openResolvedDetails(item.displayManga, rootView)
+                                    }
                                 }
                             },
                             onItemLongClick = {
@@ -297,7 +313,7 @@ fun DownloadItemRow(
         Column(modifier = Modifier.padding(bottom = 12.dp)) {
             Row(modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp)) {
                 AsyncImage(
-                    model = item.manga?.coverUrl,
+                    model = item.displayManga?.coverUrl?.takeIfUsableImageUri(),
                     contentDescription = null,
                     modifier = Modifier
                         .size(64.dp)
@@ -309,7 +325,7 @@ fun DownloadItemRow(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = item.manga?.title ?: stringResource(R.string.unknown),
+                            text = item.displayManga?.title ?: item.executionManga?.title ?: stringResource(R.string.unknown),
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

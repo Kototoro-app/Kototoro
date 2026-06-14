@@ -58,7 +58,6 @@ import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import kotlinx.coroutines.flow.SharedFlow
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.model.isNsfw
@@ -67,6 +66,7 @@ import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 
 private const val PAGE_SIZE = 16
 
@@ -79,12 +79,12 @@ class HistoryListViewModel @Inject constructor(
 	private val markAsReadUseCase: MarkAsReadUseCase,
 	private val quickFilter: HistoryListQuickFilter,
 	private val sourceGroupManager: SourceGroupManager,
-	private val entityGraphRepository: EntityGraphRepository,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	private val networkState: NetworkState,
 	private val dataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
+	private val entityGraphRepository: EntityGraphRepository,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	@Volatile
@@ -235,7 +235,14 @@ class HistoryListViewModel @Inject constructor(
 
 	fun openLastReader() {
 		launchLoadingJob(Dispatchers.Default) {
-			val manga = repository.getLastOrNull()?.let { content ->
+			val rawContent = repository.getLastOrNull() ?: throw EmptyHistoryException()
+			val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(rawContent.id))[rawContent.id]
+			val preferredLocalMangaId = entityId?.let { dataRepository.getEntityPreferredLocalMangaId(it) }
+			val resolvedBase = preferredLocalMangaId
+				?.takeIf { it != rawContent.id }
+				?.let { dataRepository.findDisplayContentById(it, withChapters = false) }
+				?: rawContent
+			val manga = resolvedBase.let { content ->
 				if (content.looksLikeLocalVideoContent()) {
 					content.copy(
 						source = LocalVideoSource,
@@ -246,7 +253,7 @@ class HistoryListViewModel @Inject constructor(
 				} else {
 					content
 				}
-			} ?: throw EmptyHistoryException()
+			}
 			onOpenReader.call(manga)
 		}
 	}
@@ -334,7 +341,12 @@ class HistoryListViewModel @Inject constructor(
 					prevHeader = header
 				}
 			}
-			result += mangaListMapper.toListModel(item.representative.manga, mode).toGroupedListModel(item)
+			result += mangaListMapper.toListModel(
+				manga = item.representative.manga,
+				mode = mode,
+				metadataSelectionOverride = item.metadataSourceSelection,
+				useMetadataSelectionOverride = item.metadataSourceSelection != null,
+			).toGroupedListModel(item)
 		}
 		if ((filters.isNotEmpty() || groupTab != BrowseGroupTab.All || sourceTags.isNotEmpty()) && isEmpty) {
 			result += getEmptyState(hasFilters = true)
@@ -346,8 +358,9 @@ class HistoryListViewModel @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByLocalMangaIds(map { it.manga.id })
-		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
+		val resolvedEntityIds = mapNotNull(ContentWithHistory::entityId).distinct()
+		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+		val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
 		val result = ArrayList<HistoryGroup>(size)
 		var current: MutableList<ContentWithHistory>? = null
 		var currentUiId: Long? = null
@@ -360,7 +373,9 @@ class HistoryListViewModel @Inject constructor(
 			result += items.toHistoryGroup(
 				uiId = uiId,
 				entityId = currentEntityId,
-				preferredLocalMangaId = currentEntityId?.let(preferredLocalIdsByEntity::get),
+				preferredLocalMangaId = currentEntityId?.let(preferredLocalIdsByEntity::get)
+					?: items.firstNotNullOfOrNull(ContentWithHistory::preferredLocalMangaId),
+				metadataSourceSelection = currentEntityId?.let(metadataSelectionsByEntity::get),
 			)
 			current = null
 			currentUiId = null
@@ -369,7 +384,7 @@ class HistoryListViewModel @Inject constructor(
 		}
 
 		for (item in this) {
-			val entityId = entityIdsByMangaId[item.manga.id]
+			val entityId = item.entityId
 			val contentTypeOrdinal = item.manga.source.contentType.ordinal
 			when {
 				entityId == null -> {
@@ -378,6 +393,7 @@ class HistoryListViewModel @Inject constructor(
 						uiId = item.manga.id,
 						entityId = null,
 						preferredLocalMangaId = null,
+						metadataSourceSelection = null,
 					)
 				}
 
@@ -402,13 +418,17 @@ class HistoryListViewModel @Inject constructor(
 		uiId: Long,
 		entityId: Long?,
 		preferredLocalMangaId: Long?,
+		metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
 	): HistoryGroup {
 		return HistoryGroup(
 			uiId = uiId,
-			representative = firstOrNull { it.manga.id == preferredLocalMangaId } ?: first(),
+			representative = firstOrNull { it.manga.id == preferredLocalMangaId }
+				?: firstOrNull { it.manga.id == first().preferredLocalMangaId }
+				?: first(),
 			mangaIds = mapTo(LinkedHashSet(size)) { it.manga.id },
 			entityId = entityId,
 			preferredLocalMangaId = preferredLocalMangaId ?: first().manga.id,
+			metadataSourceSelection = metadataSourceSelection,
 		)
 	}
 
@@ -518,5 +538,6 @@ class HistoryListViewModel @Inject constructor(
 		val mangaIds: Set<Long>,
 		val entityId: Long?,
 		val preferredLocalMangaId: Long?,
+		val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
 	)
 }

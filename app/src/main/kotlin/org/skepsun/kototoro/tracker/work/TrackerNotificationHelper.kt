@@ -18,12 +18,16 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.model.getLocalizedTitle
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.toBitmapOrNull
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import javax.inject.Inject
@@ -32,6 +36,8 @@ class TrackerNotificationHelper @Inject constructor(
 	@LocalizedAppContext private val applicationContext: Context,
 	private val settings: AppSettings,
 	private val coil: ImageLoader,
+	private val contentDataRepository: ContentDataRepository,
+	private val entityGraphRepository: EntityGraphRepository,
 ) {
 
 	fun getAreNotificationsEnabled(): Boolean {
@@ -52,10 +58,14 @@ class TrackerNotificationHelper @Inject constructor(
 		if (newChapters.isEmpty() || !applicationContext.checkNotificationPermission(CHANNEL_ID)) {
 			return null
 		}
-		if (manga.isNsfw() && (settings.isTrackerNsfwDisabled || settings.isNsfwContentDisabled)) {
+		val representativeManga = contentDataRepository.findPreferredLocalContentById(
+			manga.id,
+			withChapters = false,
+		) ?: manga
+		if (representativeManga.isNsfw() && (settings.isTrackerNsfwDisabled || settings.isNsfwContentDisabled)) {
 			return null
 		}
-		val id = manga.url.hashCode()
+		val id = representativeManga.url.hashCode()
 		val builder = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
 		val summary = applicationContext.resources.getQuantityStringSafe(
 			R.plurals.new_chapters,
@@ -64,13 +74,13 @@ class TrackerNotificationHelper @Inject constructor(
 		)
 		with(builder) {
 			setContentText(summary)
-			setContentTitle(manga.title)
+			setContentTitle(representativeManga.title)
 			setNumber(newChapters.size)
 			setLargeIcon(
 				coil.execute(
 					ImageRequest.Builder(applicationContext)
-						.data(manga.coverUrl)
-						.mangaSourceExtra(manga.source)
+						.data(representativeManga.coverUrl)
+						.mangaSourceExtra(representativeManga.source)
 						.build(),
 				).toBitmapOrNull(),
 			)
@@ -80,10 +90,10 @@ class TrackerNotificationHelper @Inject constructor(
 			for (chapter in newChapters) {
 				style.addLine(chapter.getLocalizedTitle(applicationContext.resources))
 			}
-			style.setSummaryText(manga.title)
+			style.setSummaryText(representativeManga.title)
 			style.setBigContentTitle(summary)
 			setStyle(style)
-			val intent = AppRouter.detailsIntent(applicationContext, manga)
+			val intent = resolveDetailsIntent(representativeManga)
 			setContentIntent(
 				PendingIntentCompat.getActivity(
 					applicationContext,
@@ -93,11 +103,11 @@ class TrackerNotificationHelper @Inject constructor(
 					false,
 				),
 			)
-			setVisibility(if (manga.isNsfw()) VISIBILITY_SECRET else VISIBILITY_PRIVATE)
-			setShortcutId(manga.id.toString())
+			setVisibility(if (representativeManga.isNsfw()) VISIBILITY_SECRET else VISIBILITY_PRIVATE)
+			setShortcutId(representativeManga.id.toString())
 			applyCommonSettings(this)
 		}
-		return NotificationInfo(id, TAG, builder.build(), manga, newChapters.size)
+		return NotificationInfo(id, TAG, builder.build(), representativeManga, newChapters.size)
 	}
 
 	fun createGroupNotification(
@@ -149,6 +159,16 @@ class TrackerNotificationHelper @Inject constructor(
 		}
 		return builder.build()
 	}
+
+	private suspend fun resolveDetailsIntent(content: Content) = AppRouter.detailsIntent(
+		applicationContext,
+		entityGraphRepository.findEntityIdsByLocalMangaIds(listOf(content.id))[content.id]?.let { entityId ->
+			DetailsOrigin.EntityGraph(
+				entityId = entityId,
+				initialProjectionLocalMangaId = content.id,
+			)
+		} ?: DetailsOrigin.LocalMangaContent(ParcelableContent(content)),
+	)
 
 	fun updateChannels() {
 		val manager = NotificationManagerCompat.from(applicationContext)

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.favourites.ui.compose
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -13,6 +14,7 @@ import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.parsers.model.Content
 
 private const val FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD = 48
@@ -31,6 +33,7 @@ fun KototoroFavoritesListScreen(
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val mainActivity = LocalContext.current as? MainActivity
     val viewModel = hiltViewModel<FavouritesListViewModel, FavouritesListViewModel.Factory>(
         key = categoryId.toString(),
     ) { factory ->
@@ -62,7 +65,18 @@ fun KototoroFavoritesListScreen(
             if (onNavigateToDetails != null) {
                 onNavigateToDetails(content, sharedKey)
             } else {
-                appRouter.openDetails(content)
+                mainActivity?.resolveDetailsOriginForContent(content) { origin ->
+                    when (origin) {
+                        is DetailsOrigin.EntityGraph -> {
+                            appRouter.openEntityDetails(
+                                entityId = origin.entityId,
+                                initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                sharedElementKey = sharedKey,
+                            )
+                        }
+                        else -> appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
+                    }
+                } ?: appRouter.openResolvedDetails(content, sharedElementKey = sharedKey)
             }
         },
         onNavigateToEntityDetails = { _, content, entityId, preferredLocalMangaId, sharedKey ->

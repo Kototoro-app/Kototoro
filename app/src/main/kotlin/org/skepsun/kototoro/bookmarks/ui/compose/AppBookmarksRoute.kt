@@ -38,6 +38,8 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +55,7 @@ fun AppBookmarksRoute(
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
+    val mainActivity = activity as? MainActivity
     val rootView = LocalView.current
 
     LaunchedEffect(viewModel.onError) {
@@ -120,7 +123,17 @@ fun AppBookmarksRoute(
                                         .clickable {
                                             val manga = listModel.payload as? Content
                                             if (manga != null) {
-                                                appRouter.openDetails(manga, rootView)
+                                                mainActivity?.resolveDetailsOriginForContent(manga) { origin ->
+                                                    when (origin) {
+                                                        is DetailsOrigin.EntityGraph -> {
+                                                            appRouter.openEntityDetails(
+                                                                entityId = origin.entityId,
+                                                                initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                                            )
+                                                        }
+                                                        else -> appRouter.openResolvedDetails(manga, rootView)
+                                                    }
+                                                } ?: appRouter.openResolvedDetails(manga, rootView)
                                             }
                                         }
                                         .padding(horizontal = 16.dp, vertical = 24.dp),

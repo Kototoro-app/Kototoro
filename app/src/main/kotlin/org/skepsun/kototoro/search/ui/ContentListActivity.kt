@@ -35,11 +35,13 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
 import org.skepsun.kototoro.details.ui.compose.handleDetailsAction
 import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.SortOrder
@@ -50,11 +52,15 @@ import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.getSerializableExtraCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
 
@@ -68,6 +74,9 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
 
     @Inject
     lateinit var appShortcutManager: AppShortcutManager
+
+    @Inject
+    lateinit var entityGraphRepository: EntityGraphRepository
 
     private lateinit var pageSaveHelper: PageSaveHelper
 
@@ -129,11 +138,7 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                                         onBackClick = { finishAfterTransition() },
                                         viewModel = viewModel,
                                         onOpenDetails = { content, sharedElementKey ->
-                                            PendingDetailsNavigation.set(
-                                                content = content,
-                                                sharedElementKey = sharedElementKey,
-                                            )
-                                            navController.navigate(ContentListDetailsRoute)
+                                            openContentDetails(navController, content, sharedElementKey)
                                         },
                                     )
                                 }
@@ -217,6 +222,30 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                     }
                 }
             }
+        }
+    }
+
+    private fun openContentDetails(
+        navController: androidx.navigation.NavHostController,
+        content: Content,
+        sharedElementKey: String?,
+    ) {
+        lifecycleScope.launch {
+            val origin = withContext(Dispatchers.IO) {
+                val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                if (entityId != null) {
+                    DetailsOrigin.EntityGraph(
+                        entityId = entityId,
+                        initialProjectionLocalMangaId = content.id,
+                    )
+                } else {
+                    DetailsOrigin.LocalMangaContent(
+                        org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
+                    )
+                }
+            }
+            PendingDetailsNavigation.set(origin, sharedElementKey)
+            navController.navigate(ContentListDetailsRoute)
         }
     }
 }
