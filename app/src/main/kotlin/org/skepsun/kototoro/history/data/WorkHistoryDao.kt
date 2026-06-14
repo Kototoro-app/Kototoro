@@ -16,6 +16,9 @@ abstract class WorkHistoryDao {
 	@Query("SELECT * FROM work_history WHERE entity_id = :entityId LIMIT 1")
 	abstract suspend fun find(entityId: Long): WorkHistoryEntity?
 
+	@Query("SELECT * FROM work_history WHERE entity_id IN (:entityIds) AND deleted_at = 0")
+	abstract suspend fun findByEntityIds(entityIds: List<Long>): List<WorkHistoryEntity>
+
 	@Query("SELECT * FROM work_history WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT 1")
 	abstract suspend fun findLastOrNull(): WorkHistoryEntity?
 

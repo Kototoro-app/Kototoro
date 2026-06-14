@@ -29,6 +29,7 @@ import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -44,6 +45,9 @@ import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.core.model.isNsfw
+import java.util.concurrent.atomic.AtomicBoolean
+
+private const val PAGE_SIZE = 16
 
 @HiltViewModel
 class SuggestionsViewModel @Inject constructor(
@@ -71,6 +75,13 @@ class SuggestionsViewModel @Inject constructor(
 	@Volatile
 	private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
 
+	private val limit = MutableStateFlow(PAGE_SIZE)
+	private val isPaginationReady = AtomicBoolean(false)
+
+	override val hasMoreItems: StateFlow<Boolean> = limit
+		.map { it < Int.MAX_VALUE }
+		.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
 	override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 
@@ -85,8 +96,13 @@ class SuggestionsViewModel @Inject constructor(
 		globalFavoritesState.setSelectedSourceTags(tags)
 	}
 
+	private val loadParams = quickFilter.appliedOptions.combineWithSettings()
+		.combine(limit) { filterOptions, pageLimit -> filterOptions to pageLimit }
+
 	override val content = combine(
-		quickFilter.appliedOptions.combineWithSettings().flatMapLatest { repository.observeAll(0, it) },
+		loadParams.flatMapLatest { (filterOptions, pageLimit) ->
+			repository.observeAll(pageLimit * 4, filterOptions)
+		},
 		quickFilter.appliedOptions,
 		observeListModeWithTriggers(),
 		currentGroupTab,
@@ -169,6 +185,9 @@ class SuggestionsViewModel @Inject constructor(
 		resultList as List<ListModel>
 	}.onStart {
 		loadingCounter.increment()
+	}.map {
+		isPaginationReady.set(true)
+		it
 	}.onFirst {
 		loadingCounter.decrement()
 	}.catch {
@@ -184,6 +203,12 @@ class SuggestionsViewModel @Inject constructor(
 	fun updateSuggestions() {
 		launchJob(Dispatchers.Default) {
 			suggestionsScheduler.startNow()
+		}
+	}
+
+	fun requestMoreItems() {
+		if (isPaginationReady.compareAndSet(true, false)) {
+			limit.value += PAGE_SIZE
 		}
 	}
 

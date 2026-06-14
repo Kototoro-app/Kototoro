@@ -428,8 +428,8 @@ class HistoryRepository @Inject constructor(
 			.map { it.content }
 	}
 
-	private suspend fun getAllRecentContents(): List<Content> {
-		return findRecentContentsByWorkAnchor(offset = 0, limit = null)
+	private suspend fun getAllRecentContents(maxCount: Int = Int.MAX_VALUE): List<Content> {
+		return findRecentContentsByWorkAnchor(offset = 0, limit = if (maxCount == Int.MAX_VALUE) null else maxCount)
 	}
 
 	private suspend fun collectRecentWorkEntries(targetSize: Int): List<RecentContentEntry> {
@@ -489,24 +489,64 @@ class HistoryRepository @Inject constructor(
 		}
 		val favouriteCache = HashMap<Long, Set<Long>>()
 		val trackCache = HashMap<Long, TrackAggregate>()
-		val contents = getAllRecentContents()
-		val ownerRefsByMangaId = contents.associate { content ->
-			content.id to resolveHistoryOwnerRef(content.id)
+
+		// Load a window larger than the requested limit to account for post-load filtering.
+		// Multiplier 4 ensures enough items survive click-through filters without a full table scan.
+		val oversampleLimit = limit * 4
+		val contents = getAllRecentContents(oversampleLimit)
+
+		// ---- Batch entity resolution (eliminates N+1) ----
+		val allMangaIds = contents.mapTo(LinkedHashSet()) { it.id }
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(allMangaIds)
+		val distinctEntityIds = entityIdsByMangaId.values.distinct()
+
+		// Batch entity preferences
+		val prefByEntityId = if (distinctEntityIds.isEmpty()) {
+			emptyMap()
+		} else {
+			db.getEntityGraphDao().findEntityPrefsByIds(distinctEntityIds)
+				.associateBy({ it.entityId }, { it.preferredLocalMangaId })
 		}
-		val preferredLocalIdsByEntity = ownerRefsByMangaId.values
-			.mapNotNull(HistoryOwnerRef::entityId)
-			.distinct()
-			.associateWith { entityId ->
-				db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
+
+		// Build owner refs from precomputed maps (no per-item DB calls)
+		val ownerRefsByMangaId = allMangaIds.associateWith { mangaId ->
+			val entityId = entityIdsByMangaId[mangaId]
+			val anchorMangaId = if (entityId != null) {
+				prefByEntityId[entityId] ?: mangaId
+			} else {
+				mangaId
 			}
-		val workHistoryByEntityId = ownerRefsByMangaId.values
-			.mapNotNull(HistoryOwnerRef::entityId)
-			.distinct()
-			.associateWith { entityId ->
-				db.getWorkHistoryDao().find(entityId)?.takeIf { it.deletedAt == 0L }
-			}
+			HistoryOwnerRef(
+				cacheKey = entityId ?: -mangaId,
+				entityId = entityId,
+				anchorMangaId = anchorMangaId,
+			)
+		}
+
+		val preferredLocalIdsByEntity = distinctEntityIds.associateWith { entityId ->
+			prefByEntityId[entityId]
+		}
+
+		// Batch work history lookup
+		val workHistoryByEntityId = if (distinctEntityIds.isEmpty()) {
+			emptyMap()
+		} else {
+			db.getWorkHistoryDao().findByEntityIds(distinctEntityIds)
+				.filter { it.deletedAt == 0L }
+				.associateBy(WorkHistoryEntity::entityId)
+		}
+
+		// Resolve legacy anchor IDs using precomputed pref map
+		val entitiesWithoutPref = distinctEntityIds.filter { prefByEntityId[it] == null }
+		val bindingsByEntityId = if (entitiesWithoutPref.isEmpty()) {
+			emptyMap()
+		} else {
+			db.getEntityGraphDao().findActiveBindingsByEntities(entitiesWithoutPref)
+				.groupBy({ it.entityId }, { it.externalId.toLongOrNull() })
+				.mapValues { (_, ids) -> ids.filterNotNull().toSet() }
+		}
 		val legacyAnchorIds = ownerRefsByMangaId.values
-			.flatMapTo(LinkedHashSet()) { resolveHistoryAnchorIds(it) }
+			.flatMapTo(LinkedHashSet()) { resolveHistoryAnchorIds(it, prefByEntityId, bindingsByEntityId) }
 		val legacyHistoryByMangaId = db.getHistoryDao().findByIds(legacyAnchorIds).associateBy(HistoryEntity::mangaId)
 		val baseList = contents.mapNotNull { content ->
 			val ownerRef = ownerRefsByMangaId.getValue(content.id)
@@ -774,6 +814,21 @@ class HistoryRepository @Inject constructor(
 				}
 			}
 			.toCollection(LinkedHashSet())
+		return if (localIds.isEmpty()) setOf(ownerRef.anchorMangaId) else localIds
+	}
+
+	private fun resolveHistoryAnchorIds(
+		ownerRef: HistoryOwnerRef,
+		prefByEntityId: Map<Long, Long?>,
+		bindingsByEntityId: Map<Long, Set<Long>>,
+	): Set<Long> {
+		val entityId = ownerRef.entityId ?: return setOf(ownerRef.anchorMangaId)
+		val preferredLocalId = prefByEntityId[entityId]
+		if (preferredLocalId != null) {
+			return setOf(preferredLocalId)
+		}
+		// Fallback: use all local manga bindings for this entity (from batch query).
+		val localIds = bindingsByEntityId[entityId].orEmpty()
 		return if (localIds.isEmpty()) setOf(ownerRef.anchorMangaId) else localIds
 	}
 

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
@@ -39,6 +40,7 @@ import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -47,6 +49,9 @@ import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
+
+private const val PAGE_SIZE = 16
 
 @HiltViewModel
 class UpdatesViewModel @Inject constructor(
@@ -86,12 +91,20 @@ class UpdatesViewModel @Inject constructor(
 	}
 
 	private val refreshTrigger = MutableStateFlow(Any())
+	private val limit = MutableStateFlow(PAGE_SIZE)
+	private val isPaginationReady = AtomicBoolean(false)
+
+	override val hasMoreItems: StateFlow<Boolean> = limit
+		.map { it < Int.MAX_VALUE }
+		.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+	private val loadParams = combine(quickFilter.appliedOptions, refreshTrigger) { fo, _ -> fo }
+		.combine(limit) { filterOptions, pageLimit -> filterOptions to pageLimit }
+
 	override val content = combine(
-		combine(quickFilter.appliedOptions, refreshTrigger) { filterOptions, _ ->
-			filterOptions
-		}.flatMapLatest { filterOptions ->
+		loadParams.flatMapLatest { (filterOptions, pageLimit) ->
 			repository.observeUpdatedContent(
-				limit = 0,
+				limit = pageLimit * 4,
 				filterOptions = filterOptions,
 			)
 		},
@@ -135,6 +148,9 @@ class UpdatesViewModel @Inject constructor(
 		}
 	}.onStart {
 		loadingCounter.increment()
+	}.map {
+		isPaginationReady.set(true)
+		it
 	}.onFirst {
 		loadingCounter.decrement()
 	}.catch {
@@ -161,6 +177,12 @@ class UpdatesViewModel @Inject constructor(
 					groupedRemovalIds[groupId].orEmpty().ifEmpty { setOf(groupId) }
 				},
 			)
+		}
+	}
+
+	fun requestMoreItems() {
+		if (isPaginationReady.compareAndSet(true, false)) {
+			limit.value += PAGE_SIZE
 		}
 	}
 
