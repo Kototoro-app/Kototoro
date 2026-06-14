@@ -2612,7 +2612,7 @@ class EntityGraphRepository @Inject constructor(
 			for (mangaId in allMangaIds) {
 				val entityId = dao.insertEntityIgnore(
 					EntityRecord(
-						type = "MANGA",
+						type = EntityType.WORK.name,
 						primaryName = "Manga #$mangaId",
 						nameHash = mangaId,
 						aliases = null,
