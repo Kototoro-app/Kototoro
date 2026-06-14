@@ -1186,6 +1186,22 @@ class SourceMigrationViewModel @Inject constructor(
         }
     }
 
+    fun resetAllEntities() {
+        val state = _uiState.value
+        if (state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(isExecuting = true, isFinished = false)
+        viewModelScope.launch(Dispatchers.IO) {
+            entityGraphRepository.resetAllEntities()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+            )
+        }
+    }
+
     fun repairSuspectMetadataSourceSelections() {
         val state = _uiState.value
         val suspectCount = state.repairReport?.suspectMetadataSourceCount ?: 0

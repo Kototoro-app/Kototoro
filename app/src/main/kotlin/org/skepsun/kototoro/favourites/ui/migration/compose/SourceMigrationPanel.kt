@@ -357,6 +357,7 @@ fun SourceMigrationPanel(
                     onPruneRedundantProjectionOverrides = viewModel::pruneRedundantProjectionOverrides,
                     onPruneRedundantProjectionReadingStatuses = viewModel::pruneRedundantProjectionReadingStatuses,
                     onSplitSuspectMismerged = viewModel::splitSuspectMismergedLocalWorks,
+                    onResetAllEntities = viewModel::resetAllEntities,
                 )
             }
 
@@ -491,6 +492,7 @@ private fun RepairDiagnosticsCard(
     onPruneRedundantProjectionOverrides: () -> Unit,
     onPruneRedundantProjectionReadingStatuses: () -> Unit,
     onSplitSuspectMismerged: () -> Unit,
+    onResetAllEntities: () -> Unit,
 ) {
     val report = uiState.repairReport
     var showHideLegacyConfirm by rememberSaveable { mutableStateOf(false) }
@@ -500,6 +502,7 @@ private fun RepairDiagnosticsCard(
     var showPruneProjectionOverrideConfirm by rememberSaveable { mutableStateOf(false) }
     var showPruneProjectionReadingStatusConfirm by rememberSaveable { mutableStateOf(false) }
     var showSplitSuspectConfirm by rememberSaveable { mutableStateOf(false) }
+    var showResetAllConfirm by rememberSaveable { mutableStateOf(false) }
     if (showHideLegacyConfirm) {
         AlertDialog(
             onDismissRequest = { showHideLegacyConfirm = false },
@@ -688,6 +691,28 @@ private fun RepairDiagnosticsCard(
             },
         )
     }
+    if (showResetAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetAllConfirm = false },
+            title = { Text(stringResource(R.string.entity_reset_title)) },
+            text = { Text(stringResource(R.string.entity_reset_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetAllConfirm = false
+                        onResetAllEntities()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_reset))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetAllConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
     OutlinedCard(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -858,6 +883,23 @@ private fun RepairDiagnosticsCard(
                     ) {
                         Text(text = stringResource(R.string.entity_organize_repair_split_suspect_action))
                     }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { showResetAllConfirm = true },
+                    enabled = !uiState.isExecuting,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(R.string.entity_reset))
                 }
             }
         }
