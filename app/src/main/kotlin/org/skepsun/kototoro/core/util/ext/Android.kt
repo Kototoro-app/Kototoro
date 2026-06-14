@@ -210,6 +210,13 @@ fun Context.ensureRamAtLeast(requiredSize: Long) {
 fun WebView.configureForParser(userAgentOverride: String?, blockImages: Boolean = false) = with(settings) {
 	javaScriptEnabled = true
 	domStorageEnabled = true
+	useWideViewPort = true
+	loadWithOverviewMode = true
+	cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+	setSupportMultipleWindows(true)
+	setSupportZoom(true)
+	builtInZoomControls = true
+	displayZoomControls = false
 	mediaPlaybackRequiresUserGesture = false
 	if (WebViewFeature.isFeatureSupported(WebViewFeature.MUTE_AUDIO)) {
 		WebViewCompat.setAudioMuted(this@configureForParser, true)

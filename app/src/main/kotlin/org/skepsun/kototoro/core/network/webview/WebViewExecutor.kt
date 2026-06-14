@@ -5,8 +5,12 @@ import android.util.AndroidRuntimeException
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.WebSettings
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.CookieManager
@@ -396,7 +400,7 @@ class WebViewExecutor @Inject constructor(
                 val host: ViewGroup?
                 val isThrowaway: Boolean
                 if (activity != null) {
-                    webView = WebView(activity).apply { configureForParser(null) }
+                    webView = WebView(context).apply { configureForParser(null) }
                     host = attachToHost(webView, activity)
                     isThrowaway = true
                 } else {
@@ -870,12 +874,13 @@ class WebViewExecutor @Inject constructor(
         val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return null
         runCatching {
             (webView.parent as? ViewGroup)?.removeView(webView)
-            // 自动 CF 解析需要真实窗口宿主，但不能把挑战页闪到当前界面上。
+            // MATCH_PARENT gives Turnstile a real viewport (1×1 causes flow/ov1 POST to fail
+            // because Cloudflare fingerprints iframe dimensions). Translating off-screen keeps
+            // visibilityState="visible" and full metrics while Android's hit-testing excludes
+            // the translated position, so touches on the visible UI pass through normally.
             webView.alpha = 0f
-            webView.visibility = View.INVISIBLE
-            webView.isClickable = false
-            webView.isFocusable = false
-            webView.isFocusableInTouchMode = false
+            webView.visibility = View.VISIBLE
+            webView.translationY = 10_000f
             content.addView(
                 webView,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
@@ -1002,49 +1007,187 @@ class WebViewExecutor @Inject constructor(
 		onSuccess: (() -> Unit)? = null,
 		cookiesDomain: String? = null,
 		timeoutMs: Long = TimeUnit.SECONDS.toMillis(20),
+		userAgent: String? = null,
+		headers: Map<String, String> = emptyMap(),
+		clearCookieNames: Set<String> = emptySet(),
+		clearAllWebViewCookies: Boolean = false,
 	): Boolean = mutex.withLock {
 		return runCatching {
 			withContext(Dispatchers.Main.immediate) {
-				val webView = obtainWebView()
+				runCatchingCancellable { proxyProvider.applyWebViewConfig() }.onFailure { it.printStackTraceDebug() }
+				val activity = foregroundActivityHolder.current
+				val webView = if (activity != null) WebView(activity) else WebView(context)
+				val webViewHost: ViewGroup? = if (activity != null) attachToHost(webView, activity) else null
 				try {
-					val result = withTimeout(timeoutMs) {
-						suspendCancellableCoroutine<Boolean> { cont ->
-							webView.webViewClient = object : WebViewClient() {
-								override fun onPageFinished(view: WebView?, url: String?) {
-									val currentUrl = url ?: ""
-									val title = view?.title ?: ""
-									kotlinx.coroutines.CoroutineScope(cont.context).launch {
-										val ok = runCatching { checkStatus(currentUrl, title) }.getOrDefault(false)
-										if (ok && cont.isActive) {
-											cont.resume(true)
+					Log.i(
+						TAG,
+						"loginAndCheck start: url=$loginUrl, userAgentPresent=${!userAgent.isNullOrBlank()}, " +
+							"headerNames=${headers.keys}, attached=${webViewHost != null}, throwaway=true, " +
+							"context=${context.javaClass.name}, appContext=${context.applicationContext.javaClass.name}, " +
+							"webViewContext=${webView.context.javaClass.name}, webViewUserAgentBefore=${webView.settings.userAgentString?.take(80)}",
+					)
+					webView.configureForMihonCloudflare(userAgent)
+					Log.i(
+						TAG,
+						"loginAndCheck configured: url=$loginUrl, " +
+							"webViewUserAgentAfter=${webView.settings.userAgentString?.take(120)}",
+					)
+					webView.webChromeClient = object : WebChromeClient() {
+						override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+							val message = consoleMessage?.message().orEmpty()
+							val shouldLog = consoleMessage?.messageLevel() == ConsoleMessage.MessageLevel.ERROR ||
+								consoleMessage?.messageLevel() == ConsoleMessage.MessageLevel.WARNING ||
+								shouldLogCloudflareDiagnostic(message)
+							if (shouldLog) {
+								Log.d(
+									TAG,
+									"loginAndCheck console: level=${consoleMessage?.messageLevel()}, " +
+										"line=${consoleMessage?.lineNumber()}, " +
+										"source=${consoleMessage?.sourceId()?.take(180)}, " +
+										"message=${message.take(500)}",
+								)
+							}
+							return false
+						}
+					}
+					val result = try {
+						withTimeout(timeoutMs) {
+							suspendCancellableCoroutine<Boolean> { cont ->
+								val loggedChallengeRequests = ConcurrentHashMap.newKeySet<String>()
+								webView.webViewClient = object : WebViewClient() {
+									override fun shouldInterceptRequest(
+										view: WebView?,
+										request: WebResourceRequest?,
+									): WebResourceResponse? {
+										val requestUrl = request?.url?.toString().orEmpty()
+										if (
+											shouldLogCloudflareDiagnostic(requestUrl) &&
+											loggedChallengeRequests.add(requestUrl)
+										) {
+											Log.d(
+												TAG,
+												"loginAndCheck resource: method=${request?.method}, " +
+													"isMainFrame=${request?.isForMainFrame}, url=${requestUrl.take(240)}",
+											)
+										}
+										return null
+									}
+
+									override fun onReceivedError(
+										view: WebView?,
+										request: WebResourceRequest?,
+										error: WebResourceError?,
+									) {
+										val requestUrl = request?.url?.toString().orEmpty()
+										if (request?.isForMainFrame == true || shouldLogCloudflareDiagnostic(requestUrl)) {
+											Log.w(
+												TAG,
+												"loginAndCheck resource error: code=${error?.errorCode}, " +
+													"description=${error?.description?.take(240)}, " +
+													"isMainFrame=${request?.isForMainFrame}, url=${requestUrl.take(240)}",
+											)
+										}
+									}
+
+									override fun onReceivedHttpError(
+										view: WebView?,
+										request: WebResourceRequest?,
+										errorResponse: WebResourceResponse?,
+									) {
+										val requestUrl = request?.url?.toString().orEmpty()
+										if (request?.isForMainFrame == true || shouldLogCloudflareDiagnostic(requestUrl)) {
+											Log.w(
+												TAG,
+												"loginAndCheck http error: status=${errorResponse?.statusCode}, " +
+													"reason=${errorResponse?.reasonPhrase}, " +
+													"isMainFrame=${request?.isForMainFrame}, url=${requestUrl.take(240)}",
+											)
+										}
+									}
+
+									override fun onPageFinished(view: WebView?, url: String?) {
+										val currentUrl = url ?: ""
+										val title = view?.title ?: ""
+										kotlinx.coroutines.CoroutineScope(cont.context).launch {
+											val ok = runCatching { checkStatus(currentUrl, title) }.getOrDefault(false)
+											Log.d(
+												TAG,
+												"loginAndCheck pageFinished: requested=$loginUrl, current=${currentUrl.take(180)}, " +
+													"title=${title.take(120)}, ok=$ok, rawCookies=[${webViewCookieDebugString(loginUrl)}]",
+											)
+											logLoginPageState(webView, loginUrl, "pageFinished")
+											if (ok && cont.isActive) {
+												Log.i(
+													TAG,
+													"loginAndCheck check passed: requested=$loginUrl, current=${currentUrl.take(180)}, " +
+														"rawCookies=[${webViewCookieDebugString(loginUrl)}]",
+												)
+												cont.resume(true)
+											}
 										}
 									}
 								}
+								kotlinx.coroutines.CoroutineScope(cont.context).launch {
+									if (clearAllWebViewCookies) {
+										// removeAllCookies is the only reliable way to clear
+										// HttpOnly+Secure cookies — setCookie-based approaches
+										// are silently ignored by Chromium for such cookies.
+										suspendCancellableCoroutine<Boolean> { c ->
+											android.webkit.CookieManager.getInstance().removeAllCookies { c.resume(it) }
+										}
+										android.webkit.CookieManager.getInstance().flush()
+										Log.i(TAG, "loginAndCheck cleared all WebView cookies for url=$loginUrl")
+									} else if (clearCookieNames.isNotEmpty()) {
+										clearWebViewCookies(loginUrl, clearCookieNames)
+									}
+									if (headers.isNotEmpty()) {
+										webView.loadUrl(loginUrl, headers)
+									} else {
+										webView.loadUrl(loginUrl)
+									}
+								}
 							}
-							webView.loadUrl(loginUrl)
 						}
+					} catch (error: kotlinx.coroutines.TimeoutCancellationException) {
+						logLoginPageState(webView, loginUrl, "timeout")
+						throw error
 					}
+					Log.i(
+						TAG,
+						"loginAndCheck wait result: url=$loginUrl, result=$result, rawCookies=[${webViewCookieDebugString(loginUrl)}]",
+					)
 					if (!result) return@withContext false
-						val domain = cookiesDomain ?: loginUrl.toHttpUrlOrNull()?.host ?: return@withContext true
-						val rootDomain = LegadoNetworkUtils.getSubDomain("https://$domain")
-						// 同步 WebView Cookie 到应用 CookieJar
-						cookieJar.removeCookies(loginUrl.toHttpUrlOrNull() ?: return@withContext true) { true }
-						android.webkit.CookieManager.getInstance().getCookie(loginUrl)?.let { raw ->
-							val httpUrl = "https://$rootDomain".toHttpUrlOrNull() ?: return@let
-							raw.split(";").map { it.trim() }.forEach { line ->
-								val parts = line.split("=", limit = 2)
-								if (parts.size == 2) {
-									val name = parts[0]
-									val value = parts[1]
-									val c = runCatching {
-										Cookie.Builder()
-											.domain(httpUrl.host)
-											.path("/")
-											.name(name)
-											.value(value)
-											.secure()
-											.build()
-									}.getOrNull()
+					val domain = cookiesDomain ?: loginUrl.toHttpUrlOrNull()?.host ?: return@withContext true
+					val rootDomain = LegadoNetworkUtils.getSubDomain("https://$domain")
+					val rawCookies = android.webkit.CookieManager.getInstance().getCookie(loginUrl)
+					// 同步 WebView Cookie 到应用 CookieJar — use removeAllCookies on the jar to avoid
+					// duplicate entries (removeCookies can't delete HttpOnly cookies, leaving stale values).
+					val loginHttpUrl = loginUrl.toHttpUrlOrNull() ?: return@withContext true
+					val allJarCookies = cookieJar.loadForRequest(loginHttpUrl)
+					if (allJarCookies.isNotEmpty()) {
+						cookieJar.removeCookies(loginHttpUrl) { true }
+					}
+					rawCookies?.let { raw ->
+						val httpUrl = "https://$rootDomain".toHttpUrlOrNull() ?: return@let
+						Log.i(
+							TAG,
+							"loginAndCheck sync cookies: url=$loginUrl, rootDomain=$rootDomain, " +
+								"rawCookieNames=[${cookieNamesFromRaw(raw)}]",
+						)
+						raw.split(";").map { it.trim() }.forEach { line ->
+							val parts = line.split("=", limit = 2)
+							if (parts.size == 2) {
+								val name = parts[0]
+								val value = parts[1]
+								val c = runCatching {
+									Cookie.Builder()
+										.domain(httpUrl.host)
+										.path("/")
+										.name(name)
+										.value(value)
+										.secure()
+										.build()
+								}.getOrNull()
 								if (c != null) {
 									cookieJar.saveFromResponse(httpUrl, listOf(c))
 								}
@@ -1054,15 +1197,200 @@ class WebViewExecutor @Inject constructor(
 					onSuccess?.invoke()
 					true
 				} finally {
-					webView.reset()
+					Log.d(TAG, "loginAndCheck cleanup WebView: url=$loginUrl, throwaway=true")
+					runCatching { webView.stopLoading() }
+					webView.webChromeClient = WebChromeClient()
+					webView.webViewClient = WebViewClient()
+					webViewHost?.let { detachFromHost(webView, it) }
+					runCatching { webView.destroy() }
 				}
 			}
+		}.onFailure { error ->
+			Log.w(TAG, "loginAndCheck failed: url=$loginUrl, error=${error::class.java.simpleName}: ${error.message}")
 		}.getOrDefault(false)
+	}
+
+	private suspend fun logLoginPageState(webView: WebView, loginUrl: String, reason: String) {
+		runCatchingCancellable {
+			val state = withTimeoutOrNull(2_000L) {
+				suspendCancellableCoroutine<String> { cont ->
+					webView.evaluateJavascript(LOGIN_PAGE_STATE_SCRIPT) { result ->
+						if (cont.isActive) {
+							cont.resume(decodeJavascriptString(result))
+						}
+					}
+				}
+			}.orEmpty()
+			Log.w(
+				TAG,
+				"loginAndCheck pageState: reason=$reason, requested=$loginUrl, state=${state.take(1200)}",
+			)
+		}.onFailure { error ->
+			Log.w(TAG, "loginAndCheck pageState failed: reason=$reason, error=${error.message}")
+		}
+	}
+
+	private fun shouldLogCloudflareDiagnostic(value: String): Boolean {
+		if (value.isBlank()) return false
+		val lower = value.lowercase()
+		return CLOUDFLARE_DIAGNOSTIC_MARKERS.any(lower::contains)
+	}
+
+	private fun webViewCookieNames(url: String): String {
+		return cookieNamesFromRaw(android.webkit.CookieManager.getInstance().getCookie(url).orEmpty())
+	}
+
+	private fun webViewCookieDebugString(url: String): String {
+		return android.webkit.CookieManager.getInstance().getCookie(url)
+			.orEmpty()
+			.split(";")
+			.mapNotNull { rawCookie ->
+				val parts = rawCookie.trim().split("=", limit = 2)
+				if (parts.size == 2 && parts[0].isNotBlank()) {
+					"${parts[0]}=${maskCookieValue(parts[1])}"
+				} else {
+					null
+				}
+			}
+			.joinToString(",")
+			.ifBlank { "<none>" }
+	}
+
+	private suspend fun clearWebViewCookies(url: String, names: Set<String>) {
+		val httpUrl = url.toHttpUrlOrNull()
+		val host = httpUrl?.host.orEmpty()
+		val rootDomain = host.takeIf(String::isNotBlank)
+			?.let { runCatching { LegadoNetworkUtils.getSubDomain("https://$it") }.getOrNull() }
+			?.takeIf { it.isNotBlank() }
+		val domains = buildSet {
+			if (host.isNotBlank()) {
+				add(host)
+				add(".$host")
+			}
+			if (!rootDomain.isNullOrBlank()) {
+				add(rootDomain)
+				add(".$rootDomain")
+			}
+		}
+		val before = webViewCookieDebugString(url)
+		val cookieManager = android.webkit.CookieManager.getInstance()
+		val rawNames = android.webkit.CookieManager.getInstance().getCookie(url)
+			.orEmpty()
+			.split(";")
+			.mapNotNull { rawCookie ->
+				val rawName = rawCookie.substringBefore("=")
+				rawName.takeIf { it.trim() in names }
+			}
+			.ifEmpty { names.toList() }
+		rawNames.forEach { rawName ->
+			cookieManager.setCookieAwait(url, "$rawName=;Max-Age=0")
+			cookieManager.setCookieAwait(url, "${rawName.trim()}=;Max-Age=0")
+			cookieManager.setCookieAwait(url, "${rawName.trim()}=;Max-Age=0;Path=/")
+			cookieManager.setCookieAwait(url, "${rawName.trim()}=;Expires=Thu, 01 Jan 1970 00:00:00 GMT;Path=/")
+			cookieManager.setCookieAwait(url, "${rawName.trim()}=;Max-Age=0;Path=/;Secure")
+			cookieManager.setCookieAwait(url, "${rawName.trim()}=;Max-Age=0;Path=/;Secure;HttpOnly")
+			cookieManager.setCookieAwait(url, "${rawName.trim()}=;Max-Age=0;Path=/;Secure;HttpOnly;SameSite=None")
+			domains.forEach { domain ->
+				cookieManager.setCookieAwait(
+					url,
+					"$rawName=;Max-Age=0;Domain=$domain",
+				)
+				cookieManager.setCookieAwait(
+					url,
+					"${rawName.trim()}=;Max-Age=0;Domain=$domain",
+				)
+				cookieManager.setCookieAwait(
+					url,
+					"${rawName.trim()}=;Max-Age=0;Domain=$domain;Path=/",
+				)
+				cookieManager.setCookieAwait(
+					url,
+					"${rawName.trim()}=;Expires=Thu, 01 Jan 1970 00:00:00 GMT;Domain=$domain;Path=/",
+				)
+				cookieManager.setCookieAwait(
+					url,
+					"${rawName.trim()}=;Max-Age=0;Domain=$domain;Path=/;Secure",
+				)
+				cookieManager.setCookieAwait(
+					url,
+					"${rawName.trim()}=;Max-Age=0;Domain=$domain;Path=/;Secure;HttpOnly",
+				)
+				cookieManager.setCookieAwait(
+					url,
+					"${rawName.trim()}=;Max-Age=0;Domain=$domain;Path=/;Secure;HttpOnly;SameSite=None",
+				)
+			}
+		}
+		cookieManager.flush()
+		Log.i(
+			TAG,
+			"loginAndCheck cleared WebView cookies: url=$url, names=$names, rootDomain=${rootDomain ?: "<none>"}, " +
+				"before=[$before], after=[${webViewCookieDebugString(url)}], matrix=[${webViewCookieMatrix(url)}]",
+		)
+	}
+
+	private fun webViewCookieMatrix(url: String): String {
+		val httpUrl = url.toHttpUrlOrNull() ?: return "$url=[${webViewCookieDebugString(url)}]"
+		val host = httpUrl.host
+		val rootDomain = runCatching { LegadoNetworkUtils.getSubDomain("https://$host") }
+			.getOrNull()
+			?.takeIf { it.isNotBlank() }
+		val urls = buildSet {
+			add(httpUrl.newBuilder().encodedPath("/").query(null).fragment(null).build().toString())
+			add(httpUrl.newBuilder().scheme("http").encodedPath("/").query(null).fragment(null).build().toString())
+			if (!rootDomain.isNullOrBlank() && rootDomain != host) {
+				add(httpUrl.newBuilder().host(rootDomain).encodedPath("/").query(null).fragment(null).build().toString())
+				add(httpUrl.newBuilder().scheme("http").host(rootDomain).encodedPath("/").query(null).fragment(null).build().toString())
+			}
+		}
+		return urls.joinToString("|") { candidate ->
+			"$candidate=[${webViewCookieDebugString(candidate)}]"
+		}
+	}
+
+	private suspend fun android.webkit.CookieManager.setCookieAwait(url: String, value: String) {
+		suspendCancellableCoroutine<Unit> { cont ->
+			setCookie(url, value) {
+				if (cont.isActive) {
+					cont.resume(Unit)
+				}
+			}
+		}
+	}
+
+	private fun maskCookieValue(value: String?): String {
+		if (value.isNullOrEmpty()) return "<empty>"
+		return if (value.length <= 8) "***" else "${value.take(4)}...${value.takeLast(4)}"
+	}
+
+	private fun cookieNamesFromRaw(raw: String): String {
+		return raw.split(";")
+			.mapNotNull { it.trim().substringBefore("=").takeIf(String::isNotBlank) }
+			.joinToString(",")
+			.ifBlank { "<none>" }
+	}
+
+	@MainThread
+	private fun WebView.configureForMihonCloudflare(userAgent: String?) {
+		with(settings) {
+			javaScriptEnabled = true
+			domStorageEnabled = true
+			useWideViewPort = true
+			loadWithOverviewMode = true
+			cacheMode = WebSettings.LOAD_DEFAULT
+			setSupportMultipleWindows(true)
+			setSupportZoom(true)
+			builtInZoomControls = true
+			displayZoomControls = false
+			userAgentString = userAgent ?: defaultUserAgent
+		}
+		CookieManager.getInstance().acceptThirdPartyCookies(this)
 	}
 
 	@MainThread
 	private fun WebView.reset() {
 		stopLoading()
+		webChromeClient = WebChromeClient()
 		webViewClient = WebViewClient()
 		settings.userAgentString = defaultUserAgent
 		loadDataWithBaseURL(null, " ", "text/html", null, null)
@@ -1074,6 +1402,31 @@ class WebViewExecutor @Inject constructor(
         private const val CHALLENGE_POLL_INTERVAL_MS = 700L
         private const val MAX_CHALLENGE_MS = 11_000L
         private const val FAILURE_COOLDOWN_MS = 30_000L
+		private val CLOUDFLARE_DIAGNOSTIC_MARKERS = listOf(
+			"cloudflare",
+			"challenge",
+			"turnstile",
+			"captcha",
+			"cdn-cgi",
+			"cf_chl",
+			"__cf",
+		)
+		private val LOGIN_PAGE_STATE_SCRIPT = """
+			JSON.stringify({
+			  readyState: document.readyState || '',
+			  href: location.href || '',
+			  title: document.title || '',
+			  visibilityState: document.visibilityState || '',
+			  userAgent: navigator.userAgent || '',
+			  webdriver: navigator.webdriver === undefined ? 'undefined' : String(navigator.webdriver),
+			  language: navigator.language || '',
+			  platform: navigator.platform || '',
+			  cookieEnabled: String(navigator.cookieEnabled),
+			  challengeErrorTitle: document.querySelector('#challenge-error-title')?.textContent?.trim() || '',
+			  challengeErrorText: document.querySelector('#challenge-error-text')?.textContent?.trim() || '',
+			  bodyText: document.body?.innerText?.trim()?.slice(0, 500) || ''
+			})
+		""".trimIndent()
     }
 
 	data class SniffedMediaResult(

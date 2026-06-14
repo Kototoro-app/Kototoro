@@ -67,6 +67,9 @@ import dagger.hilt.components.SingletonComponent;
 public class App extends MultiDexApplication implements Configuration.Provider {
     public static final String HOST_PACKAGE_NAME = "com.github.tvbox.osc";
     private static final String HOST_APPLICATION_CLASS_NAME = "com.github.tvbox.osc.base.App";
+    private static final String CHROME_PACKAGE_NAME = "com.android.chrome";
+    private static final String SYSTEM_SETTINGS_PACKAGE_NAME = "com.android.settings";
+    private static final String YOUTUBE_FOR_TV_PACKAGE_NAME = "com.google.android.youtube.tv";
 
     private static App instance = new App();
     private static volatile Context appContext;
@@ -76,6 +79,7 @@ public class App extends MultiDexApplication implements Configuration.Provider {
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static volatile boolean attached = false;
     private static volatile boolean hostRuntimeBootstrapped = false;
+    private static volatile boolean webViewPackageSpoofLogged = false;
     private static volatile P2PClass p;
     private volatile Configuration workManagerConfiguration;
     public static String burl;
@@ -371,7 +375,63 @@ public class App extends MultiDexApplication implements Configuration.Provider {
 
     @Override
     public String getPackageName() {
+        try {
+            if (isChromiumPackageNameRequest()) {
+                String packageName = spoofedWebViewPackageName();
+                LOG.i("MihonNetwork", "WebView package spoof: requestedBy=Chromium, packageName=" + packageName);
+                return packageName;
+            }
+        } catch (Exception ignored) {
+        }
         return super.getPackageName();
+    }
+
+    private boolean isChromiumPackageNameRequest() {
+        for (StackTraceElement trace : Thread.currentThread().getStackTrace()) {
+            String className = trace.getClassName().toLowerCase();
+            String methodName = trace.getMethodName().toLowerCase();
+            boolean chromiumClass = className.equals("org.chromium.base.buildinfo")
+                    || className.equals("org.chromium.base.apkinfo");
+            boolean packageMethod = methodName.equals("getall")
+                    || methodName.equals("getpackagename")
+                    || methodName.equals("<init>");
+            if (chromiumClass && packageMethod) {
+                if (!webViewPackageSpoofLogged) {
+                    webViewPackageSpoofLogged = true;
+                    LOG.i(
+                            "MihonNetwork",
+                            "WebView package spoof trigger: class=" + trace.getClassName() + ", method=" + trace.getMethodName()
+                    );
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String spoofedWebViewPackageName() {
+        PackageManager packageManager = getPackageManager();
+        String packageName = firstInstalledPackageName(
+                packageManager,
+                CHROME_PACKAGE_NAME,
+                SYSTEM_SETTINGS_PACKAGE_NAME,
+                YOUTUBE_FOR_TV_PACKAGE_NAME
+        );
+        if (packageName != null) {
+            return packageName;
+        }
+        List<PackageInfo> packages = packageManager.getInstalledPackages(0);
+        return packages.isEmpty() ? super.getPackageName() : packages.get(0).packageName;
+    }
+
+    private static String firstInstalledPackageName(PackageManager packageManager, String... packageNames) {
+        for (String packageName : packageNames) {
+            try {
+                return packageManager.getPackageInfo(packageName, 0).packageName;
+            } catch (PackageManager.NameNotFoundException ignored) {
+            }
+        }
+        return null;
     }
 
     public static P2PClass getp2p() {

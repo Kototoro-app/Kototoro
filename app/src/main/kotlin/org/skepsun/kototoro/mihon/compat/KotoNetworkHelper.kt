@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.mihon.compat
 
 import eu.kanade.tachiyomi.network.NetworkHelper
+import android.webkit.CookieManager
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -18,6 +19,7 @@ import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.core.parser.legado.LegadoNetworkUtils
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.parsers.network.UserAgents
 import java.net.URLDecoder
@@ -117,7 +119,68 @@ class KotoNetworkHelper(
                     val clearance = cookieJar.loadForRequest(request.url)
                         .firstOrNull { it.name == "cf_clearance" }
                         ?.value
+                    android.util.Log.w(
+                        "MihonNetwork",
+                        "Cloudflare captcha flow start: host=$host, method=${request.method}, " +
+                            "sourceTagged=${request.tag(ContentSource::class.java) != null}, " +
+                            "challengeUrl=$challengeUrl, successCookieUrl=$successCookieUrl, " +
+                            "oldClearance=${maskCookieValue(clearance)}, cookiesBefore=[${cookieDebugString(request.url)}]",
+                    )
                     clearCloudflareCookieIfPossible(request, clearance)
+                    if (shouldSkipInteractiveAction(host, clearance)) {
+                        android.util.Log.w(
+                            "MihonNetwork",
+                            "Falling back to manual Cloudflare for host=$host: repeated challenge with same cf_clearance, " +
+                                "cookies=[${cookieDebugString(request.url)}]",
+                        )
+                        val source = request.tag(ContentSource::class.java)
+                        if (source != null) {
+                            response.closeThrowing(
+                                InteractiveActionRequiredException(
+                                    source = source,
+                                    url = challengeUrl,
+                                    userAgent = request.header("User-Agent"),
+                                    successCookieUrl = successCookieUrl,
+                                    successCookieName = "cf_clearance",
+                                ),
+                            )
+                        } else {
+                            response.closeThrowing(
+                                CloudFlareBlockedException(
+                                    url = challengeUrl,
+                                    source = null,
+                                ),
+                            )
+                        }
+                    }
+
+                    if (trySolveCloudflareWithWebView(request, challengeUrl, clearance)) {
+                        android.util.Log.i(
+                            "MihonNetwork",
+                            "Cloudflare WebView solve succeeded for host=$host, retrying request=${request.url}, " +
+                                "cookiesAfterSolve=[${cookieDebugString(request.url)}]",
+                        )
+                        response.close()
+                        val retriedResponse = chain.proceed(request)
+                        val retriedProtection = CloudFlareHelper.checkResponseForProtection(retriedResponse)
+                        if (retriedProtection == CloudFlareHelper.PROTECTION_NOT_DETECTED) {
+                            recentWebViewSolveSuccessAt[host] = System.currentTimeMillis()
+                            android.util.Log.i(
+                                "MihonNetwork",
+                                "Cloudflare retry accepted for host=$host, status=${retriedResponse.code}, " +
+                                    "cookiesAfterRetry=[${cookieDebugString(request.url)}]",
+                            )
+                            return@addInterceptor retriedResponse
+                        }
+                        android.util.Log.w(
+                            "MihonNetwork",
+                            "Retry after Cloudflare WebView solve still protected for host=$host, " +
+                                "status=${retriedResponse.code}, protection=${protectionLabel(retriedProtection)}, " +
+                                "server=${retriedResponse.header("server")}, cf-ray=${retriedResponse.header("cf-ray")}, " +
+                                "cookiesAfterRetry=[${cookieDebugString(request.url)}]",
+                        )
+                        retriedResponse.close()
+                    }
 
                     when (val webViewResult = tryFetchWithWebView(request)) {
                         is WebViewFallbackResult.BrowserResponse -> {
@@ -159,31 +222,7 @@ class KotoNetworkHelper(
                         WebViewFallbackResult.NotAttempted -> Unit
                     }
 
-                    if (shouldSkipInteractiveAction(host, clearance)) {
-                        android.util.Log.w(
-                            "MihonNetwork",
-                            "Skip interactive action for host=$host: repeated challenge with same cf_clearance",
-                        )
-                        val source = request.tag(ContentSource::class.java)
-                        if (source != null) {
-                            response.closeThrowing(
-                                InteractiveActionRequiredException(
-                                    source = source,
-                                    url = challengeUrl,
-                                    userAgent = request.header("User-Agent"),
-                                    successCookieUrl = successCookieUrl,
-                                    successCookieName = "cf_clearance",
-                                ),
-                            )
-                        } else {
-                            response.closeThrowing(
-                                CloudFlareBlockedException(
-                                    url = challengeUrl,
-                                    source = null,
-                                ),
-                            )
-                        }
-                    } else {
+                    run {
                         val source = request.tag(ContentSource::class.java)
                         if (source == null) {
                             android.util.Log.w("MihonNetwork", "Missing ContentSource tag, attempting silent Cloudflare solve for host=$host")
@@ -209,6 +248,11 @@ class KotoNetworkHelper(
                             android.util.Log.e("MihonNetwork", "Silent solver failed or executor null, throwing block exception for $host")
                             response.closeThrowing(CloudFlareBlockedException(url = challengeUrl, source = null))
                         } else {
+                            android.util.Log.w(
+                                "MihonNetwork",
+                                "Falling back to manual Cloudflare for host=$host: auto solve/fetch did not produce usable response, " +
+                                    "source=${source.name}, cookies=[${cookieDebugString(request.url)}]",
+                            )
                             response.closeThrowing(
                                 InteractiveActionRequiredException(
                                     source = source,
@@ -239,6 +283,7 @@ class KotoNetworkHelper(
             android.util.Log.d("MihonNetwork", "Request: ${request.method} ${request.url}")
             
             val response = chain.proceed(request)
+            logCloudflareSetCookies(response)
             
             // Log response info
             val responseCode = response.code
@@ -359,9 +404,168 @@ class KotoNetworkHelper(
         return if (modified) builder.build() else request
     }
 
+    private fun trySolveCloudflareWithWebView(request: Request, challengeUrl: String, oldClearance: String?): Boolean {
+        if (request.method != "GET") {
+            android.util.Log.d("MihonNetwork", "Cloudflare WebView solve skipped: non-GET ${request.method}")
+            return false
+        }
+        val executor = webViewExecutor
+        if (executor == null) {
+            android.util.Log.w("MihonNetwork", "Cloudflare WebView solve skipped: WebViewExecutor is null")
+            return false
+        }
+        val host = request.url.host.lowercase()
+        return runBlocking {
+            val mutex = webViewFallbackMutexes.computeIfAbsent(host) { Mutex() }
+            mutex.withLock {
+                if (shouldReuseRecentWebViewSolve(host)) {
+                    android.util.Log.i("MihonNetwork", "Cloudflare WebView solve reused recent success for host=$host")
+                    return@withLock true
+                }
+                android.util.Log.i(
+                    "MihonNetwork",
+                    "Cloudflare WebView solve start: host=$host, challengeUrl=$challengeUrl, " +
+                        "uaPresent=${request.header("User-Agent") != null}, headerNames=${buildWebViewHeaders(request).keys}, " +
+                        "oldClearance=${maskCookieValue(oldClearance)}, cookiesBefore=[${cookieDebugString(request.url)}]",
+                )
+                val solved = executor.loginAndCheck(
+                    loginUrl = challengeUrl,
+                    checkStatus = { _, _ ->
+                        val currentClearance = cookieJar.loadForRequest(request.url)
+                            .firstOrNull { it.name == "cf_clearance" }
+                            ?.value
+                        android.util.Log.d(
+                            "MihonNetwork",
+                            "Cloudflare WebView solve check: host=$host, currentClearance=${maskCookieValue(currentClearance)}, " +
+                                "changed=${!currentClearance.isNullOrBlank() && currentClearance != oldClearance}, " +
+                                "cookies=[${cookieDebugString(request.url)}]",
+                        )
+                        currentClearance
+                            ?.let { it.isNotBlank() && it != oldClearance }
+                            ?: false
+                    },
+                    timeoutMs = CLOUDFLARE_WEBVIEW_SOLVE_TIMEOUT_MS,
+                    userAgent = request.header("User-Agent"),
+                    headers = buildWebViewHeaders(request),
+                    clearAllWebViewCookies = true,
+                )
+                if (solved) {
+                    recentWebViewSolveSuccessAt[host] = System.currentTimeMillis()
+                } else {
+                    android.util.Log.w(
+                        "MihonNetwork",
+                        "Cloudflare WebView solve failed for host=$host, cookiesAfter=[${cookieDebugString(request.url)}]",
+                    )
+                }
+                solved
+            }
+        }
+    }
+
+    private fun buildWebViewHeaders(request: Request): Map<String, String> = buildMap {
+        for ((name, value) in request.headers) {
+            if (isWebViewRequestHeaderSafe(name, value) && !containsKey(name)) {
+                put(name, value)
+            }
+        }
+    }
+
+    private fun isWebViewRequestHeaderSafe(name: String, value: String): Boolean {
+        val lowerName = name.lowercase()
+        val lowerValue = value.lowercase()
+        if (lowerName in WEBVIEW_UNSAFE_HEADER_NAMES || lowerName.startsWith("proxy-")) {
+            return false
+        }
+        if (lowerName == "connection" && lowerValue == "upgrade") {
+            return false
+        }
+        return true
+    }
+
     private fun maskCookieValue(value: String?): String {
         if (value.isNullOrEmpty()) return "<empty>"
         return if (value.length <= 8) "***" else "${value.take(4)}...${value.takeLast(4)}"
+    }
+
+    private fun cookieDebugString(url: okhttp3.HttpUrl): String {
+        return cookieJar.loadForRequest(url)
+            .joinToString(",") { cookie -> "${cookie.name}=${maskCookieValue(cookie.value)}" }
+            .ifBlank { "<none>" }
+    }
+
+    private fun logCloudflareSetCookies(response: Response) {
+        val headers = response.headers("Set-Cookie")
+            .filter { it.startsWith("cf_clearance=", ignoreCase = true) }
+        if (headers.isEmpty()) return
+        android.util.Log.i(
+            "MihonNetwork",
+            "Set-Cookie cf_clearance: status=${response.code}, url=${response.request.url}, " +
+                "cf-ray=${response.header("cf-ray")}, headers=${headers.joinToString(" | ", transform = ::summarizeSetCookie)}",
+        )
+    }
+
+    private fun summarizeSetCookie(header: String): String {
+        return header
+            .split(";")
+            .mapIndexedNotNull { index, part ->
+                val trimmed = part.trim()
+                if (trimmed.isBlank()) {
+                    null
+                } else if (index == 0) {
+                    val name = trimmed.substringBefore("=")
+                    val value = trimmed.substringAfter("=", "")
+                    "$name=${maskCookieValue(value)}"
+                } else {
+                    val attrName = trimmed.substringBefore("=").lowercase()
+                    when (attrName) {
+                        "domain", "path", "max-age", "expires", "samesite" -> trimmed
+                        "secure", "httponly" -> trimmed
+                        else -> null
+                    }
+                }
+            }
+            .joinToString(";")
+    }
+
+    private fun webViewCookieMatrix(url: okhttp3.HttpUrl): String {
+        val host = url.host.lowercase()
+        val rootDomain = runCatching { LegadoNetworkUtils.getSubDomain("https://$host") }
+            .getOrNull()
+            ?.lowercase()
+            ?.takeIf { it.isNotBlank() }
+        val urls = buildSet {
+            add(url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString())
+            add(url.newBuilder().scheme("http").encodedPath("/").query(null).fragment(null).build().toString())
+            if (rootDomain != null && rootDomain != host) {
+                add(url.newBuilder().host(rootDomain).encodedPath("/").query(null).fragment(null).build().toString())
+                add(url.newBuilder().scheme("http").host(rootDomain).encodedPath("/").query(null).fragment(null).build().toString())
+            }
+        }
+        return urls.joinToString("|") { candidateUrl ->
+            val raw = CookieManager.getInstance().getCookie(candidateUrl).orEmpty()
+            "$candidateUrl=[${raw.toMaskedCookieList()}]"
+        }
+    }
+
+    private fun String.toCookieNameList(): String {
+        return split(";")
+            .mapNotNull { it.trim().substringBefore("=").takeIf(String::isNotBlank) }
+            .joinToString(",")
+            .ifBlank { "<none>" }
+    }
+
+    private fun String.toMaskedCookieList(): String {
+        return split(";")
+            .mapNotNull { rawCookie ->
+                val parts = rawCookie.trim().split("=", limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank()) {
+                    "${parts[0]}=${maskCookieValue(parts[1])}"
+                } else {
+                    null
+                }
+            }
+            .joinToString(",")
+            .ifBlank { "<none>" }
     }
 
     private fun clearCloudflareCookieIfPossible(request: Request, clearance: String?) {
@@ -374,6 +578,78 @@ class KotoNetworkHelper(
         mutableCookieJar.removeCookies(request.url) { cookie ->
             cookie.name == "cf_clearance"
         }
+    }
+
+    private fun clearWebViewCloudflareCookie(request: Request) {
+        val cookieManager = CookieManager.getInstance()
+        val host = request.url.host.lowercase()
+        val rootDomain = runCatching { LegadoNetworkUtils.getSubDomain("https://$host") }
+            .getOrNull()
+            ?.lowercase()
+            ?.takeIf { it.isNotBlank() }
+        val urls = buildSet {
+            add(request.url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString())
+            if (rootDomain != null && rootDomain != host) {
+                add(request.url.newBuilder().host(rootDomain).encodedPath("/").query(null).fragment(null).build().toString())
+            }
+        }
+        val domains = buildSet {
+            add(host)
+            add(".$host")
+            if (rootDomain != null) {
+                add(rootDomain)
+                add(".$rootDomain")
+            }
+        }
+        val before = urls.joinToString("|") { url ->
+            "${url}=[${CookieManager.getInstance().getCookie(url).orEmpty().toCookieNameList()}]"
+        }
+        urls.forEach { url ->
+            cookieManager.setCookie(url, "cf_clearance=;Max-Age=0")
+            cookieManager.setCookie(url, "cf_clearance=;Max-Age=0;Path=/")
+            cookieManager.setCookie(url, "cf_clearance=;Expires=Thu, 01 Jan 1970 00:00:00 GMT;Path=/")
+            cookieManager.setCookie(url, "cf_clearance=;Max-Age=0;Path=/;Secure")
+            cookieManager.setCookie(url, "cf_clearance=;Max-Age=0;Path=/;Secure;HttpOnly")
+            cookieManager.setCookie(url, "cf_clearance=;Max-Age=0;Path=/;Secure;HttpOnly;SameSite=None")
+            domains.forEach { domain ->
+                cookieManager.setCookie(
+                    url,
+                    "cf_clearance=;Max-Age=0;Domain=$domain",
+                )
+                cookieManager.setCookie(
+                    url,
+                    "cf_clearance=;Max-Age=0;Domain=$domain;Path=/",
+                )
+                cookieManager.setCookie(
+                    url,
+                    "cf_clearance=;Expires=Thu, 01 Jan 1970 00:00:00 GMT;Domain=$domain;Path=/",
+                )
+                cookieManager.setCookie(
+                    url,
+                    "cf_clearance=;Max-Age=0;Domain=$domain;Path=/;Secure",
+                )
+                cookieManager.setCookie(
+                    url,
+                    "cf_clearance=;Max-Age=0;Domain=$domain;Path=/;Secure;HttpOnly",
+                )
+                cookieManager.setCookie(
+                    url,
+                    "cf_clearance=;Max-Age=0;Domain=$domain;Path=/;Secure;HttpOnly;SameSite=None",
+                )
+            }
+        }
+        cookieManager.flush()
+        val after = urls.joinToString("|") { url ->
+            "${url}=[${CookieManager.getInstance().getCookie(url).orEmpty().toCookieNameList()}]"
+        }
+        android.util.Log.i(
+            "MihonNetwork",
+            "Cleared WebView cf_clearance for host=$host, rootDomain=${rootDomain ?: "<none>"}, before=$before, after=$after",
+        )
+        android.util.Log.i(
+            "MihonNetwork",
+            "WebView cf_clearance matrix for host=$host: ${webViewCookieMatrix(request.url)}",
+        )
     }
 
     private fun tryFetchWithWebView(request: Request): WebViewFallbackResult {
@@ -507,6 +783,18 @@ class KotoNetworkHelper(
         const val WEBVIEW_FINAL_URL_HEADER = "X-Kototoro-WebView-Final-Url"
         private const val INTERACTIVE_RETRY_WINDOW_MS = 10 * 60 * 1000L
         private const val WEBVIEW_SOLVE_REUSE_WINDOW_MS = 10_000L
+        private const val CLOUDFLARE_WEBVIEW_SOLVE_TIMEOUT_MS = 30_000L
+        private val WEBVIEW_UNSAFE_HEADER_NAMES = setOf(
+            "content-length",
+            "host",
+            "trailer",
+            "te",
+            "upgrade",
+            "cookie2",
+            "keep-alive",
+            "transfer-encoding",
+            "set-cookie",
+        )
         private val recentChallengeAttempts = ConcurrentHashMap<String, ChallengeAttempt>()
         private val recentWebViewSolveSuccessAt = ConcurrentHashMap<String, Long>()
         private val webViewFallbackMutexes = ConcurrentHashMap<String, Mutex>()
