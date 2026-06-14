@@ -2591,10 +2591,12 @@ class EntityGraphRepository @Inject constructor(
 			val dao = db.getEntityGraphDao()
 
 			// 1. Collect all manga IDs that need entities
+			Log.d(TAG, "resetAll: collecting manga IDs...")
 			val historyMangaIds = db.getHistoryDao().findAllIds().toSet()
 			val favouriteMangaIds = db.getFavouritesDao().findAllRaw(offset = 0, limit = Int.MAX_VALUE)
 				.map { it.favourite.mangaId }.toSet()
 			val allMangaIds = (historyMangaIds + favouriteMangaIds).distinct()
+			Log.d(TAG, "resetAll: ${allMangaIds.size} manga IDs, clearing tables...")
 
 			// 2. Clear all entity-dependent tables
 			db.getTracksDao().clear()
@@ -2602,11 +2604,12 @@ class EntityGraphRepository @Inject constructor(
 			db.getWorkFavouritesDao().deleteAll()
 			db.getTrackingSiteDao().deleteAllLinks()
 
-			// 4. Clear entity core tables (order matters for FKs)
+			// 3. Clear entity core tables
 			dao.deleteAllRelations()
 			dao.deleteAllBindings()
 			dao.deleteAllPrefs()
 			dao.deleteAllEntities()
+			Log.d(TAG, "resetAll: core tables cleared, rebuilding...")
 
 			// 4. Re-create entities: one per manga, using real manga titles
 			val now = System.currentTimeMillis()
@@ -2621,7 +2624,7 @@ class EntityGraphRepository @Inject constructor(
 			for (mangaId in allMangaIdsList) {
 				val manga = mangaById[mangaId]
 				val title = manga?.title?.ifBlank { null } ?: "Manga #$mangaId"
-				val nameHash = title.longHashCode()
+				val nameHash = (title + "|" + mangaId.toString()).longHashCode()
 				val entityId = dao.insertEntityIgnore(
 					EntityRecord(
 						type = EntityType.WORK.name,
@@ -2649,6 +2652,7 @@ class EntityGraphRepository @Inject constructor(
 					)
 				}
 			}
+			Log.d(TAG, "resetAll: complete, rebuilt ${allMangaIdsList.size} entities")
 		}
 	}
 }
