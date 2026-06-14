@@ -88,7 +88,7 @@ class FavouritesListViewModel @AssistedInject constructor(
 
     private val quickFilter = quickFilterFactory.create(categoryId)
     private val refreshTrigger = MutableStateFlow(Any())
-    private val limit = MutableStateFlow(0)
+    private val limit = MutableStateFlow(if (categoryId == NO_ID) Int.MAX_VALUE else 200)
     private val isPaginationReady = AtomicBoolean(false)
 
     @Volatile

@@ -484,7 +484,7 @@ class HistoryRepository @Inject constructor(
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
 	): List<ContentWithHistory> {
-		val oversampleLimit = if (limit > 0) limit * 4 else Int.MAX_VALUE
+		val oversampleLimit = if (limit > 0) limit * 15 else 500
 		val favouriteCache = HashMap<Long, Set<Long>>()
 		val trackCache = HashMap<Long, TrackAggregate>()
 		val contents = getAllRecentContents(oversampleLimit)
