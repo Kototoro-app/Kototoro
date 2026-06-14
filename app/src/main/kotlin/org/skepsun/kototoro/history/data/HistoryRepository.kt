@@ -151,28 +151,39 @@ class HistoryRepository @Inject constructor(
 		} else {
 			filterOptions
 		}
-		val flow = db.invalidationTracker.createFlow(
-			tables = arrayOf(
-				TABLE_HISTORY,
-				TABLE_WORK_HISTORY,
-				TABLE_ENTITY_GRAPH_BINDING,
-				TABLE_ENTITY_PREFERENCES,
-				TABLE_MANGA,
-				TABLE_FAVOURITES,
-				TABLE_WORK_FAVOURITES,
-				TABLE_MANGA_TAGS,
-				TABLE_TAGS,
-				"tracks",
-				"local_index",
-			),
-			emitInitialState = true,
-		).mapLatest {
-			buildObservedHistoryList(order, effectiveFilters, limit)
-		}.distinctUntilChanged()
+		val flow = db.getHistoryDao().observeAll(order, effectiveFilters, limit)
+			.mapLatest { items ->
+				mapToHistoryList(items)
+			}
+			.distinctUntilChanged()
 		return if (requiresLocalMapping) {
 			localObserver.observe(flow)
 		} else {
 			flow
+		}
+	}
+
+	private suspend fun mapToHistoryList(items: List<HistoryWithContent>): List<ContentWithHistory> {
+		if (items.isEmpty()) return emptyList()
+		val mangaIds = items.map { it.manga.id }
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(mangaIds)
+		val distinctEntityIds = entityIdsByMangaId.values.distinct()
+		val prefByEntityId = if (distinctEntityIds.isEmpty()) {
+			emptyMap()
+		} else {
+			db.getEntityGraphDao().findEntityPrefsByIds(distinctEntityIds)
+				.associate { it.entityId to it.preferredLocalMangaId }
+		}
+		return items.map { item ->
+			val content = item.toContent()
+			val history = item.history.toContentHistory()
+			val entityId = entityIdsByMangaId[content.id]
+			ContentWithHistory(
+				manga = content,
+				history = history,
+				entityId = entityId,
+				preferredLocalMangaId = entityId?.let(prefByEntityId::get) ?: content.id,
+			)
 		}
 	}
 
