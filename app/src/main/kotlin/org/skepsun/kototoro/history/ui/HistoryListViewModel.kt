@@ -68,7 +68,7 @@ import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 
-private const val PAGE_SIZE = 16
+private const val PAGE_SIZE = 32
 
 @HiltViewModel
 class HistoryListViewModel @Inject constructor(

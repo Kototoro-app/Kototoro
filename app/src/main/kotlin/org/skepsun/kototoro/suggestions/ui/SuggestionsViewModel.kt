@@ -47,7 +47,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.core.model.isNsfw
 import java.util.concurrent.atomic.AtomicBoolean
 
-private const val PAGE_SIZE = 16
+private const val PAGE_SIZE = 32
 
 @HiltViewModel
 class SuggestionsViewModel @Inject constructor(

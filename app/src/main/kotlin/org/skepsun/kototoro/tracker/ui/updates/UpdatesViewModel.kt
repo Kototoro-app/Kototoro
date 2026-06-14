@@ -51,7 +51,7 @@ import org.skepsun.kototoro.tracker.work.TrackWorker
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 
-private const val PAGE_SIZE = 16
+private const val PAGE_SIZE = 32
 
 @HiltViewModel
 class UpdatesViewModel @Inject constructor(
