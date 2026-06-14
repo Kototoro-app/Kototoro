@@ -29,6 +29,14 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.preferredMangaMappingByTargetId
+import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingPreview
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingForManga
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -137,7 +145,7 @@ class KitsuRepository(
 	}
 
 	override suspend fun unregister(mangaId: Long) {
-		return db.getScrobblingDao().delete(ScrobblerService.KITSU.id, mangaId)
+		return db.deleteScrobblingByWorkOrManga(ScrobblerService.KITSU.id, mangaId)
 	}
 
 	override suspend fun findContent(query: String, offset: Int, isAnime: Boolean): List<ScrobblerContent> {
@@ -984,10 +992,7 @@ class KitsuRepository(
 		val userId = (cachedUser ?: loadUser()).id
 		val oldMappings = db.getScrobblingDao()
 			.findAllByScrobbler(ScrobblerService.KITSU.id)
-			.groupBy { it.targetId }
-			.mapValues { (_, values) ->
-				values.firstOrNull { it.mangaId != 0L }?.mangaId ?: 0L
-			}
+			.preferredMangaMappingByTargetId()
 
 		val synced = ArrayList<ScrobblingEntity>()
 		var offset = 0
@@ -1047,7 +1052,7 @@ class KitsuRepository(
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.KITSU.id)
 			synced.forEach { entity ->
-				db.getScrobblingDao().upsert(entity)
+				db.upsertScrobbling(entity)
 			}
 		}
 		return synced.size
@@ -1236,7 +1241,7 @@ class KitsuRepository(
 
 	private suspend fun saveRate(json: JSONObject, mangaId: Long, typeKey: String) {
 		val attrs = json.getJSONObject("attributes")
-		val existingEntity = db.getScrobblingDao().find(ScrobblerService.KITSU.id, mangaId)
+		val existingEntity = db.findScrobblingByWorkOrManga(ScrobblerService.KITSU.id, mangaId)
 		val mediaId = existingEntity?.targetId ?: json.optJSONObject("relationships")
 			?.optJSONObject(typeKey)
 			?.optJSONObject("data")
@@ -1261,7 +1266,7 @@ class KitsuRepository(
 			remoteCoverUrl = preview?.remoteCoverUrl,
 			remoteUrl = preview?.remoteUrl,
 		)
-		db.getScrobblingDao().upsert(entity)
+		db.upsertScrobblingForManga(entity, mangaId)
 	}
 
 	private suspend fun findPreviewInfo(mediaId: Long, typeKey: String): ScrobblingEntity? {
@@ -1313,7 +1318,7 @@ class KitsuRepository(
 			.filter {
 				mediaType.isBlank() || it.mediaType == mediaType || it.mangaId == mangaId
 			}
-		if (entities.isEmpty()) return false
+		val preferred = entities.preferredScrobblingEntity() ?: return false
 		val normalizedTitle = title?.takeIf { it.isNotBlank() }
 		val normalizedCover = coverUrl?.takeIf { it.isNotBlank() }
 		val normalizedUrl = url?.takeIf { it.isNotBlank() }
@@ -1326,14 +1331,16 @@ class KitsuRepository(
 			) {
 				return@forEach
 			}
-			db.getScrobblingDao().upsert(
-				entity.copy(
-					remoteTitle = normalizedTitle ?: entity.remoteTitle,
-					remoteCoverUrl = normalizedCover ?: entity.remoteCoverUrl,
-					remoteUrl = normalizedUrl ?: entity.remoteUrl,
-				),
+			db.upsertScrobblingPreview(
+				entity = entity,
+				title = normalizedTitle ?: entity.remoteTitle,
+				coverUrl = normalizedCover ?: entity.remoteCoverUrl,
+				url = normalizedUrl ?: entity.remoteUrl,
 			)
 			updated = true
+		}
+		if (updated) {
+			android.util.Log.d("KitsuRepo", "persistPreview: targetId=$targetId ownerMangaId=${preferred.mangaId}")
 		}
 		return updated
 	}

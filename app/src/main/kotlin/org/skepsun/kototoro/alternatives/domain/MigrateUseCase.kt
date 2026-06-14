@@ -2,10 +2,13 @@ package org.skepsun.kototoro.alternatives.domain
 
 import androidx.room.withTransaction
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.dao.TrackingSiteDao
+import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
+import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.toContentHistory
@@ -17,6 +20,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 import javax.inject.Inject
 
 class MigrateUseCase
@@ -73,28 +77,34 @@ constructor(
 				} else {
 					null
 			}
-			// replace preferences so metadata source selection and reader prefs follow the migrated title
+			// Only projection-local prefs should follow source migration.
+			// Work-owned state such as metadata authority, overrides, and reading status must stay on entity/work.
 			database.getPreferencesDao().find(oldDetails.id)?.let { pref ->
-				database.getPreferencesDao().upsert(pref.copy(mangaId = newDetails.id))
+				database.getPreferencesDao().upsert(
+					pref.copy(
+						mangaId = newDetails.id,
+						titleOverride = null,
+						coverUrlOverride = null,
+						contentRatingOverride = null,
+						metadataSourceKind = null,
+						metadataSourceService = null,
+						metadataSourceRemoteId = null,
+						readingStatus = null,
+					),
+				)
 			}
+			val localReadingBinding = entityGraphRepository.findLocalReadingBinding(oldDetails.id)
+				?: entityGraphRepository.findLocalReadingBinding(newDetails.id)
 			// replace tracking discovery links
-			val trackingSiteDao = database.getTrackingSiteDao()
-			val oldTrackingLinks = trackingSiteDao.findLinksByManga(oldDetails.id)
-			if (oldTrackingLinks.isNotEmpty()) {
-				oldTrackingLinks.forEach { link ->
-					trackingSiteDao.deleteLinksByManga(link.service, newDetails.id)
-					trackingSiteDao.upsertLink(
-						link.copy(
-							mangaId = newDetails.id,
-							sourceName = newDetails.source.name,
-							updatedAt = currentTime,
-						),
-					)
-					trackingSiteDao.deleteLink(link.service, link.remoteId, oldDetails.id)
-				}
-			}
+			migrateTrackingLinkAnchors(
+				trackingSiteDao = database.getTrackingSiteDao(),
+				oldMangaId = oldDetails.id,
+				newContent = newDetails,
+				entityId = localReadingBinding?.entityId,
+				currentTime = currentTime,
+			)
 			// keep the migrated content bound to the same entity graph node so source alternatives stay grouped
-			entityGraphRepository.findLocalReadingBinding(oldDetails.id)?.let { binding ->
+			localReadingBinding?.let { binding ->
 				entityGraphRepository.attachLocalReadingBinding(
 					entityId = binding.entityId,
 					localMangaId = newDetails.id,
@@ -108,7 +118,9 @@ constructor(
 				val lastChapter = newDetails.chapters?.lastOrNull()
 				val newTrack =
 					TrackEntity(
+						ownerId = resolveTrackOwnerId(localReadingBinding?.entityId, newDetails.id),
 						mangaId = newDetails.id,
+						entityId = localReadingBinding?.entityId,
 						lastChapterId = lastChapter?.id ?: 0L,
 						newChapters = 0,
 						lastCheckTime = currentTime,
@@ -156,6 +168,50 @@ constructor(
 			}
 		}
 		progressUpdateUseCase(newDetails)
+	}
+
+	private suspend fun migrateTrackingLinkAnchors(
+		trackingSiteDao: TrackingSiteDao,
+		oldMangaId: Long,
+		newContent: Content,
+		entityId: Long?,
+		currentTime: Long,
+	) {
+		val linksToMove = if (entityId != null) {
+			trackingSiteDao.findLinksByEntity(entityId)
+				.filter { it.mangaId == oldMangaId }
+		} else {
+			trackingSiteDao.findLinksByManga(oldMangaId)
+				.groupBy { "${it.service}:${it.remoteId}" }
+				.values
+				.mapNotNull(::selectLegacyTrackingLinkForMigration)
+		}
+		if (linksToMove.isEmpty()) {
+			return
+		}
+		linksToMove.forEach { link ->
+			trackingSiteDao.deleteLink(link.service, link.remoteId, link.mangaId)
+			trackingSiteDao.upsertLink(
+				database.attachEntityOwnership(
+					link.copy(
+						entityId = entityId ?: link.entityId,
+						mangaId = newContent.id,
+						sourceName = newContent.source.name,
+						updatedAt = currentTime,
+					),
+				),
+			)
+		}
+	}
+
+	private fun selectLegacyTrackingLinkForMigration(
+		candidates: List<TrackingSiteLinkEntity>,
+	): TrackingSiteLinkEntity? {
+		return candidates.sortedWith(
+			compareByDescending<TrackingSiteLinkEntity> { it.isManual }
+				.thenByDescending { it.confidence }
+				.thenByDescending { it.updatedAt },
+		).firstOrNull()
 	}
 
 	private fun makeNewHistory(

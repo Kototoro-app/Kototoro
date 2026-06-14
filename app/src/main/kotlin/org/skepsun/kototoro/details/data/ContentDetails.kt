@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.withOverride
 import org.skepsun.kototoro.core.ui.model.ContentOverride
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -49,7 +50,7 @@ data class ContentDetails(
             .ifNullOrEmpty { manga.largeCoverUrl }
             .ifNullOrEmpty { manga.coverUrl }
             .ifNullOrEmpty { localContent?.manga?.coverUrl }
-            ?.nullIfEmpty()
+            ?.takeIfUsableImageUri()
 
     val isRestricted: Boolean
         get() = manga.state == ContentState.RESTRICTED
@@ -61,10 +62,12 @@ data class ContentDetails(
                 chapters = allChapters,
             )
         } else {
+            val resolvedCoverUrl = override?.coverUrl.ifNullOrEmpty { manga.coverUrl }
+            val resolvedLargeCoverUrl = override?.coverUrl.ifNullOrEmpty { manga.largeCoverUrl }
             manga.copy(
                 title = override?.title.ifNullOrEmpty { manga.title },
-                coverUrl = override?.coverUrl.ifNullOrEmpty { manga.coverUrl },
-                largeCoverUrl = override?.coverUrl.ifNullOrEmpty { manga.largeCoverUrl },
+                coverUrl = resolvedCoverUrl?.takeIfUsableImageUri().orEmpty(),
+                largeCoverUrl = resolvedLargeCoverUrl?.takeIfUsableImageUri(),
                 contentRating = override?.contentRating ?: manga.contentRating,
                 chapters = allChapters,
             )

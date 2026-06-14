@@ -165,12 +165,10 @@ class FavouritesCategoriesViewModel @Inject constructor(
 		if (covers.isEmpty()) {
 			return emptyList()
 		}
-		val metadataSelectionCache = HashMap<Long, ContentDataRepository.MetadataSourceSelection?>()
+		val metadataSelections = dataRepository.getMetadataSourceSelections(covers.map(Cover::mangaId))
 		val trackingCoverCache = HashMap<Pair<Int, Long>, String?>()
 		return covers.map { cover ->
-			val selection = metadataSelectionCache.getOrPut(cover.mangaId) {
-				dataRepository.getMetadataSourceSelection(cover.mangaId)
-			}
+			val selection = metadataSelections[cover.mangaId]
 			val trackingSelection = selection as? ContentDataRepository.MetadataSourceSelection.Tracking
 			if (trackingSelection == null) {
 				cover

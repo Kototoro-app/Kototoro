@@ -219,8 +219,13 @@ fun AppNavGraph(
     val navigateToDetailsWithContent = remember(navController) {
         { content: Content, sharedElementKey: String? ->
             onDetailsTransitionRequested()
-            PendingDetailsNavigation.set(content, sharedElementKey)
-            navController.navigate(DetailsRoute)
+            mainActivity?.resolveDetailsOriginForContent(content) { origin ->
+                PendingDetailsNavigation.set(origin, sharedElementKey)
+                navController.navigate(DetailsRoute)
+            } ?: run {
+                PendingDetailsNavigation.set(content, sharedElementKey)
+                navController.navigate(DetailsRoute)
+            }
         }
     }
     val navigateToDetailsWithOrigin = remember(navController) {
@@ -1086,25 +1091,42 @@ fun AppNavGraph(
                     onFeedItemClick = { item, coverBounds ->
                         viewModel.onItemClick(item)
                         val content = item.toContentWithOverride()
-                        navigateToDetailsWithContent(
-                            content,
-                            contentCoverSharedKey(
-                                item.manga.source.name,
-                                item.imageUrl.orEmpty(),
-                                instanceKey = "feed_${item.id}",
-                            ),
+                        val sharedElementKey = contentCoverSharedKey(
+                            item.manga.source.name,
+                            item.imageUrl.orEmpty(),
+                            instanceKey = "feed_${item.id}",
                         )
+                        if (item.entityId != null) {
+                            navigateToDetailsWithOrigin(
+                                org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                                    entityId = item.entityId,
+                                    preferredLocalMangaId = item.preferredLocalMangaId ?: content.id,
+                                    initialProjectionLocalMangaId = content.id,
+                                ),
+                                sharedElementKey,
+                            )
+                        } else {
+                            navigateToDetailsWithContent(content, sharedElementKey)
+                        }
                     },
                     onUpdatedContentItemClick = { contentItem, coverBounds ->
-                        val content = contentItem.toContentWithOverride()
-                        navigateToDetailsWithContent(
-                            content,
-                            contentCoverSharedKey(
-                                contentItem.manga.source.name,
-                                contentItem.coverUrl.orEmpty(),
-                                instanceKey = "feed_updated_${contentItem.id}",
-                            ),
+                        val content = contentItem.model.toContentWithOverride()
+                        val sharedElementKey = contentCoverSharedKey(
+                            contentItem.model.manga.source.name,
+                            contentItem.model.coverUrl.orEmpty(),
+                            instanceKey = "feed_updated_${contentItem.groupKey}",
                         )
+                        when {
+                            contentItem.entityId != null -> navigateToDetailsWithOrigin(
+                                org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                                    entityId = contentItem.entityId,
+                                    preferredLocalMangaId = contentItem.preferredLocalMangaId ?: content.id,
+                                    initialProjectionLocalMangaId = content.id,
+                                ),
+                                sharedElementKey,
+                            )
+                            else -> navigateToDetailsWithContent(content, sharedElementKey)
+                        }
                     },
                     onUpdatedContentMoreClick = {
                         navController.navigate(UpdatedRoute) {

@@ -21,8 +21,9 @@ abstract class PreferencesDao {
 	@Query("SELECT * FROM preferences WHERE title_override IS NOT NULL OR cover_override IS NOT NULL OR content_rating_override IS NOT NULL")
 	abstract suspend fun getOverrides(): List<MangaPrefsEntity>
 
+	// Legacy fallback only. Work/entity-owned metadata authority should be read from entity prefs first.
 	@Query("SELECT * FROM preferences WHERE manga_id IN (:mangaIds) AND metadata_source_kind IS NOT NULL")
-	abstract suspend fun getMetadataSourceSelections(mangaIds: List<Long>): List<MangaPrefsEntity>
+	abstract suspend fun getLegacyMetadataSourceSelections(mangaIds: List<Long>): List<MangaPrefsEntity>
 
 	@Query("UPDATE preferences SET cf_brightness = 0, cf_contrast = 0, cf_invert = 0, cf_grayscale = 0")
 	abstract suspend fun resetColorFilters()

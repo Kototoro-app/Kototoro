@@ -26,6 +26,11 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetAndMediaType
+import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetId
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -129,7 +134,7 @@ class MALRepository @Inject constructor(
 	}
 
 	override suspend fun unregister(mangaId: Long) {
-		return db.getScrobblingDao().delete(ScrobblerService.MAL.id, mangaId)
+		return db.deleteScrobblingByWorkOrManga(ScrobblerService.MAL.id, mangaId)
 	}
 
 	override suspend fun findContent(query: String, offset: Int, isAnime: Boolean): List<ScrobblerContent> {
@@ -272,6 +277,8 @@ class MALRepository @Inject constructor(
 	override suspend fun getContentInfo(id: Long): ScrobblerContentInfo {
 		val endpoint = db.getScrobblingDao()
 			.findAllByTargetId(ScrobblerService.MAL.id, id)
+			.preferredScrobblingByTargetAndMediaType()
+			.values
 			.firstNotNullOfOrNull { entity ->
 				entity.mediaType.takeIf { it.isNotBlank() }
 					?: entity.takeIf { it.mangaId != 0L }?.let { mediaEndpoint(isAnime(it.mangaId)) }
@@ -476,7 +483,7 @@ class MALRepository @Inject constructor(
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.MAL.id)
 			synced.forEach { entity ->
-				db.getScrobblingDao().upsert(entity)
+				db.upsertScrobbling(entity)
 			}
 		}
 		android.util.Log.d(
@@ -503,11 +510,14 @@ class MALRepository @Inject constructor(
 			rating = (statusJson.optDouble("score", 0.0).toFloat() / 10f).coerceIn(0f, 1f),
 			mediaType = endpoint,
 		)
-		db.getScrobblingDao().upsert(entity)
+		db.upsertScrobbling(entity)
 	}
 
 	private suspend fun buildOldMappings(): Map<RemoteListKey, Long> {
-		val existing = db.getScrobblingDao().findAllByScrobbler(ScrobblerService.MAL.id)
+		val existing = db.getScrobblingDao()
+			.findAllByScrobbler(ScrobblerService.MAL.id)
+			.preferredScrobblingByTargetId()
+			.values
 		val mappings = LinkedHashMap<RemoteListKey, Long>(existing.size)
 		for (entity in existing) {
 			val targetId = entity.targetId

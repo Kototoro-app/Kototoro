@@ -32,7 +32,7 @@ class SearchActivity : BaseActivity<ActivitySearchComposeBinding>() {
 					viewModel = viewModel,
 					onBackClick = ::finishAfterTransition,
 					onOpenContent = { content, _ ->
-						router.openDetails(content)
+						router.openResolvedDetails(content)
 					},
 					onPickContent = { content ->
 						setResult(RESULT_OK, Intent().putExtra(AppRouter.KEY_MANGA, ParcelableContent(content)))

@@ -32,6 +32,9 @@ data class BackupSectionModel(
 				BackupSection.ENTITY_GRAPH_BINDINGS -> 0
 				BackupSection.ENTITY_GRAPH_RELATIONS -> 0
 				BackupSection.ENTITY_GRAPH_PREFS -> 0
+				BackupSection.WORK_HISTORY -> 0
+				BackupSection.WORK_FAVOURITES -> 0
+				BackupSection.WORK_STATS -> 0
 			}
 
 	override fun areItemsTheSame(other: ListModel): Boolean {

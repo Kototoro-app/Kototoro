@@ -25,6 +25,12 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetId
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingForManga
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -145,7 +151,7 @@ class BangumiRepository @Inject constructor(
 		get() = storage.user
 
 	override suspend fun unregister(mangaId: Long) {
-		db.getScrobblingDao().delete(ScrobblerService.BANGUMI.id, mangaId)
+		db.deleteScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId)
 	}
 
 	override fun logout() {
@@ -460,7 +466,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 
 	override suspend fun createRate(mangaId: Long, content: ScrobblerContent) {
 		val scrobblerContentId = content.id
-		db.getScrobblingDao().upsert(
+		db.upsertScrobbling(
 			ScrobblingEntity(
 				scrobbler = ScrobblerService.BANGUMI.id,
 				id = scrobblerContentId.toInt(),
@@ -481,18 +487,18 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			saveCollection(it, mangaId)
 			return
 		}
-		db.getScrobblingDao().delete(ScrobblerService.BANGUMI.id, mangaId)
+		db.deleteScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId)
 		throw IOException("Bangumi collection for subject $scrobblerContentId was not created remotely")
 	}
 
 	override suspend fun updateRate(rateId: Int, mangaId: Long, chapter: Int) {
-		val entity = db.getScrobblingDao().find(ScrobblerService.BANGUMI.id, mangaId) ?: return
+		val entity = db.findScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId) ?: return
 		updateCollection(entity.targetId, null, null, null, chapter)
-		db.getScrobblingDao().upsert(entity.copy(chapter = chapter))
+		db.upsertScrobblingForManga(entity.copy(chapter = chapter), mangaId)
 	}
 
 	override suspend fun updateRate(rateId: Int, mangaId: Long, rating: Float, status: String?, comment: String?) {
-		val entity = db.getScrobblingDao().find(ScrobblerService.BANGUMI.id, mangaId) ?: return
+		val entity = db.findScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId) ?: return
 		val bgmStatus = when (status) {
 			"wish" -> 1
 			"collect" -> 2
@@ -503,11 +509,14 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		}
 		val score = if (rating > 0) (rating * 10).roundToInt() else null
 		updateCollection(entity.targetId, bgmStatus, score, comment, null)
-		db.getScrobblingDao().upsert(entity.copy(
-			status = status ?: entity.status,
-			rating = rating,
-			comment = comment ?: entity.comment
-		))
+		db.upsertScrobblingForManga(
+			entity.copy(
+				status = status ?: entity.status,
+				rating = rating,
+				comment = comment ?: entity.comment,
+			),
+			mangaId,
+		)
 	}
 
 	private suspend fun updateCollection(subjectId: Long, status: Int?, rate: Int?, comment: String?, ep: Int?, isCreate: Boolean = false) {
@@ -1367,18 +1376,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 	suspend fun syncLibraryFromRemote(): Int {
 		val user = cachedUser ?: loadUser()
 		val existingEntities = db.getScrobblingDao().findAllByScrobbler(ScrobblerService.BANGUMI.id)
-		val existingByTargetId = existingEntities
-			.groupBy { it.targetId }
-			.mapValues { (_, values) ->
-				values.maxByOrNull { entity ->
-					var score = 0
-					if (entity.mangaId != 0L) score += 8
-					if (entity.rating > 0f) score += 4
-					if (!entity.comment.isNullOrBlank()) score += 2
-					if (entity.chapter > 0) score += 1
-					score
-				} ?: values.first()
-			}
+		val existingByTargetId = existingEntities.preferredScrobblingByTargetId()
 
 		val synced = ArrayList<ScrobblingEntity>()
 		
@@ -1446,7 +1444,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.BANGUMI.id)
 			(hydrated + preservedLocal).forEach { entity ->
-				db.getScrobblingDao().upsert(entity)
+				db.upsertScrobbling(entity)
 			}
 		}
 		return hydrated.size
@@ -1471,7 +1469,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			5 -> "dropped"
 			else -> null
 		}
-		db.getScrobblingDao().upsert(
+		db.upsertScrobbling(
 			ScrobblingEntity(
 				scrobbler = ScrobblerService.BANGUMI.id,
 				id = subjectId.toInt(),

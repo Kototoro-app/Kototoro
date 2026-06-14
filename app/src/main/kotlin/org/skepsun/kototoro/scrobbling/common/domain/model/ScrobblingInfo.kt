@@ -5,6 +5,8 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 
 data class ScrobblingInfo(
 	val scrobbler: ScrobblerService,
+	val entityId: Long? = null,
+	val preferredLocalMangaId: Long? = null,
 	val mangaId: Long,
 	val targetId: Long,
 	val status: ScrobblingStatus?,
@@ -21,6 +23,8 @@ data class ScrobblingInfo(
 	override fun areItemsTheSame(other: ListModel): Boolean {
 		return other is ScrobblingInfo &&
 			other.scrobbler == scrobbler &&
+			other.entityId == entityId &&
+			other.preferredLocalMangaId == preferredLocalMangaId &&
 			other.targetId == targetId &&
 			other.mangaId == mangaId &&
 			other.mediaType == mediaType

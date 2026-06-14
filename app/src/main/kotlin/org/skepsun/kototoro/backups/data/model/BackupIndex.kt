@@ -8,19 +8,24 @@ import org.skepsun.kototoro.BuildConfig
 class BackupIndex(
 	@SerialName("app_id") val appId: String,
 	@SerialName("app_version") val appVersion: Int,
+	@SerialName("transport_generation") val transportGeneration: Int,
+	@SerialName("semantic_schema_version") val semanticSchemaVersion: Int,
 	@SerialName("created_at") val createdAt: Long,
 ) {
 
 	constructor() : this(
 		appId = BuildConfig.APPLICATION_ID,
 		appVersion = BuildConfig.VERSION_CODE,
+		transportGeneration = WRITER_GENERATION_V3,
+		semanticSchemaVersion = CURRENT_SYNC_SCHEMA_VERSION,
 		createdAt = System.currentTimeMillis(),
 	)
 
 	companion object {
 		const val CURRENT_BACKUP_FORMAT_VERSION = 2
-		const val CURRENT_SYNC_SCHEMA_VERSION = 2
+		const val CURRENT_SYNC_SCHEMA_VERSION = 3
 		const val WRITER_GENERATION_V1 = 1
 		const val WRITER_GENERATION_V2 = 2
+		const val WRITER_GENERATION_V3 = 3
 	}
 }

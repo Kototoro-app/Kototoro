@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
@@ -23,6 +24,8 @@ import kotlinx.coroutines.plus
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.ContentIntent
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.require
@@ -37,17 +40,27 @@ class PreviewViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
 	private val mangaListMapper: ContentListMapper,
 	private val repositoryFactory: ContentRepository.Factory,
+	private val contentDataRepository: ContentDataRepository,
 	private val historyRepository: HistoryRepository,
 	private val imageGetter: Html.ImageGetter,
 ) : BaseViewModel() {
 
+	private val seed = savedStateHandle.require<ParcelableContent>(AppRouter.KEY_MANGA).manga
+	private val intent = ContentIntent(savedStateHandle)
 	val manga = MutableStateFlow(
-		savedStateHandle.require<ParcelableContent>(AppRouter.KEY_MANGA).manga,
+		seed,
 	)
+	private val observedLocalMangaId = MutableStateFlow<Long?>(intent.mangaId.takeIf { it != 0L } ?: seed.id)
 
 	val footer = combine(
 		manga,
-		historyRepository.observeOne(manga.value.id),
+		observedLocalMangaId.flatMapLatest { mangaId ->
+			if (mangaId == null) {
+				flowOf(null)
+			} else {
+				historyRepository.observeOne(mangaId)
+			}
+		},
 		manga.flatMapLatest { historyRepository.observeShouldSkip(it) }.distinctUntilChanged(),
 	) { m, history, incognito ->
 		if (m.chapters == null) {
@@ -85,9 +98,22 @@ class PreviewViewModel @Inject constructor(
 
 	init {
 		launchLoadingJob(Dispatchers.Default) {
-			val repo = repositoryFactory.create(manga.value.source)
-			manga.value = repo.getDetails(manga.value)
+			val current = resolveCurrentContent()
+				?: throw IllegalStateException("Unable to resolve preview content context")
+			observedLocalMangaId.value = current.id
+			val repo = repositoryFactory.create(current.source)
+			manga.value = repo.getDetails(current).also { details ->
+				observedLocalMangaId.value = details.id
+			}
 		}
+	}
+
+	private suspend fun resolveCurrentContent(): org.skepsun.kototoro.parsers.model.Content? {
+		val resolved = contentDataRepository.resolveIntent(intent, withChapters = true)
+		if (resolved != null) {
+			return resolved
+		}
+		return seed.takeIf { intent.mangaId == 0L }
 	}
 
 	private fun Spanned.filterSpans(): CharSequence {

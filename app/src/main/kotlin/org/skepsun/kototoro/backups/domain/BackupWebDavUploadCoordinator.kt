@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.backups.domain
 
 import org.skepsun.kototoro.backups.ui.periodical.WebDavBackupUploader
+import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.backups.ui.periodical.RemoteNamespace
 import org.skepsun.kototoro.core.prefs.AppSettings
 import java.io.File
@@ -28,12 +29,15 @@ class BackupWebDavUploadCoordinator @Inject constructor(
 		webDavBackupUploader.uploadBackup(
 			file = file,
 			targetVersion = targetVersion,
-			namespace = RemoteNamespace.V2,
+			namespace = RemoteNamespace.V3,
 		)
 		settings.backupWebDavLastUploadTime = now
 		settings.backupWebDavLastUploadKind = uploadKind
 		settings.backupWebDavDataVersion = targetVersion
-		settings.backupWebDavWriterGeneration = RemoteNamespace.V2.writerGeneration
+		settings.backupWebDavWriterGeneration = RemoteNamespace.V3.writerGeneration
+		settings.backupWebDavLastAuthoritativeSemanticSchemaVersion = BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+		settings.isWorkMigrationSyncWriteBlocked = false
+		settings.requiresWorkMigrationNormalization = false
 		settings.hasCompletedBackupWebDavV2Migration = true
 		settings.isBackupWebDavAutoUploadBlockedByLegacyRestore = false
 		return UploadCommitResult(

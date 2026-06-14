@@ -35,7 +35,6 @@ import org.skepsun.kototoro.tracker.domain.UpdatesListQuickFilter
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import javax.inject.Inject
 import org.skepsun.kototoro.core.model.isNsfw
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import kotlinx.coroutines.flow.SharedFlow
@@ -58,7 +57,6 @@ class UpdatesViewModel @Inject constructor(
 	private val mangaListMapper: ContentListMapper,
 	private val quickFilter: UpdatesListQuickFilter,
 	private val sourceGroupManager: SourceGroupManager,
-	private val entityGraphRepository: EntityGraphRepository,
 	private val dataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
@@ -228,7 +226,12 @@ class UpdatesViewModel @Inject constructor(
 					prevHeader = header
 				}
 			}
-			result += mangaListMapper.toListModel(item.representative.manga, mode).toGroupedListModel(item)
+			result += mangaListMapper.toListModel(
+				manga = item.representative.manga,
+				mode = mode,
+				metadataSelectionOverride = item.metadataSourceSelection,
+				useMetadataSelectionOverride = item.metadataSourceSelection != null,
+			).toGroupedListModel(item)
 		}
 		return result
 	}
@@ -237,17 +240,18 @@ class UpdatesViewModel @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.manga.id })
-		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
+		val resolvedEntityIds = mapNotNull(ContentTracking::entityId).distinct()
+		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+		val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
 		val displayTypeOrdinalByEntity = this
-			.groupBy { entityIdsByMangaId[it.manga.id] }
+			.groupBy(ContentTracking::entityId)
 			.mapNotNull { (entityId, items) ->
 				entityId?.let { it to items.resolveDisplayContentTypeOrdinal() }
 			}
 			.toMap()
 		val grouped = LinkedHashMap<UpdateGroupKey, MutableList<ContentTracking>>(size)
 		for (item in this) {
-			val entityId = entityIdsByMangaId[item.manga.id]
+			val entityId = item.entityId
 			val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: item.manga.source.contentType.ordinal
 			val key = UpdateGroupKey(
 				uiId = entityId?.toUiGroupId(contentTypeOrdinal) ?: item.manga.id,
@@ -258,9 +262,12 @@ class UpdatesViewModel @Inject constructor(
 		return grouped.map { (key, items) ->
 			items.toUpdateGroup(
 				uiId = key.uiId,
-				entityId = items.firstNotNullOfOrNull { entityIdsByMangaId[it.manga.id] },
+				entityId = items.firstNotNullOfOrNull(ContentTracking::entityId),
 				preferredLocalMangaId = items.firstNotNullOfOrNull { item ->
-					entityIdsByMangaId[item.manga.id]?.let(preferredLocalIdsByEntity::get)
+					item.entityId?.let(preferredLocalIdsByEntity::get) ?: item.preferredLocalMangaId
+				},
+				metadataSourceSelection = items.firstNotNullOfOrNull { item ->
+					item.entityId?.let(metadataSelectionsByEntity::get)
 				},
 			)
 		}
@@ -270,6 +277,7 @@ class UpdatesViewModel @Inject constructor(
 		uiId: Long,
 		entityId: Long?,
 		preferredLocalMangaId: Long?,
+		metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
 	): UpdateGroup {
 		val representative = firstOrNull { it.manga.id == preferredLocalMangaId } ?: maxWithOrNull(
 			compareBy<ContentTracking>(
@@ -286,6 +294,7 @@ class UpdatesViewModel @Inject constructor(
 			totalNewChapters = sumOf { it.newChapters },
 			entityId = entityId,
 			preferredLocalMangaId = preferredLocalMangaId ?: representative.manga.id,
+			metadataSourceSelection = metadataSourceSelection,
 		)
 	}
 
@@ -350,5 +359,6 @@ class UpdatesViewModel @Inject constructor(
 		val totalNewChapters: Int,
 		val entityId: Long?,
 		val preferredLocalMangaId: Long?,
+		val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
 	)
 }

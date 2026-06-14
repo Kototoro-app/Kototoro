@@ -7,8 +7,10 @@ import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.model.parcelable.ParcelableChapter
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.ui.CoroutineIntentService
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -34,12 +36,22 @@ class ContentPrefetchService : CoroutineIntentService() {
 	@Inject
 	lateinit var historyRepository: HistoryRepository
 
+	@Inject
+	lateinit var contentDataRepository: ContentDataRepository
+
 	override suspend fun IntentJobContext.processIntent(intent: Intent) {
 		when (intent.action) {
-			ACTION_PREFETCH_DETAILS -> prefetchDetails(
-				manga = intent.getParcelableExtraCompat<ParcelableContent>(EXTRA_MANGA)?.manga
-					?: return,
-			)
+			ACTION_PREFETCH_DETAILS -> {
+				val mangaId = intent.getLongExtra(AppRouter.KEY_ID, 0L)
+				val manga = if (mangaId != 0L) {
+					contentDataRepository.findPreferredLocalContentById(mangaId, withChapters = false)
+						?: contentDataRepository.findContentById(mangaId, withChapters = false)
+						?: intent.getParcelableExtraCompat<ParcelableContent>(EXTRA_MANGA)?.manga
+				} else {
+					intent.getParcelableExtraCompat<ParcelableContent>(EXTRA_MANGA)?.manga
+				} ?: return
+				prefetchDetails(manga)
+			}
 
 			ACTION_PREFETCH_PAGES -> prefetchPages(
 				chapter = intent.getParcelableExtraCompat<ParcelableChapter>(EXTRA_CHAPTER)?.chapter
@@ -93,6 +105,7 @@ class ContentPrefetchService : CoroutineIntentService() {
 			val intent = Intent(context, ContentPrefetchService::class.java)
 			intent.action = ACTION_PREFETCH_DETAILS
 			intent.putExtra(EXTRA_MANGA, ParcelableContent(manga))
+			intent.putExtra(AppRouter.KEY_ID, manga.id)
 			tryStart(context, intent)
 		}
 

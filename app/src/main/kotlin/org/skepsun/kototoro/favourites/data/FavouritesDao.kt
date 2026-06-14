@@ -146,6 +146,9 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT COUNT(category_id) FROM favourites WHERE manga_id = :mangaId AND deleted_at = 0")
 	abstract suspend fun findCategoriesCount(mangaId: Long): Int
 
+	@Query("SELECT COUNT(*) FROM favourites WHERE manga_id IN (:mangaIds) AND deleted_at = 0")
+	abstract suspend fun countByMangaIds(mangaIds: List<Long>): Int
+
 	@Query("SELECT manga.source AS count FROM favourites LEFT JOIN manga ON manga.manga_id = favourites.manga_id GROUP BY manga.source ORDER BY COUNT(manga.source) DESC LIMIT :limit")
 	abstract suspend fun findPopularSources(limit: Int): List<String>
 
@@ -297,12 +300,12 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 			ListSortOrder.OLDEST -> "favourites.created_at ASC"
 			ListSortOrder.ALPHABETIC -> "manga.title ASC"
 			ListSortOrder.ALPHABETIC_REVERSE -> "manga.title DESC"
-			ListSortOrder.NEW_CHAPTERS -> "IFNULL((SELECT chapters_new FROM tracks WHERE tracks.manga_id = manga.manga_id), 0) DESC"
-			ListSortOrder.PROGRESS -> "IFNULL((SELECT percent FROM history WHERE history.manga_id = manga.manga_id), 0) DESC"
-			ListSortOrder.UNREAD -> "IFNULL((SELECT percent FROM history WHERE history.manga_id = manga.manga_id), 0) ASC"
-			ListSortOrder.LAST_READ -> "IFNULL((SELECT updated_at FROM history WHERE history.manga_id = manga.manga_id), 0) DESC"
-			ListSortOrder.LONG_AGO_READ -> "IFNULL((SELECT updated_at FROM history WHERE history.manga_id = manga.manga_id), 0) ASC"
-			ListSortOrder.UPDATED -> "IFNULL((SELECT last_chapter_date FROM tracks WHERE tracks.manga_id = manga.manga_id), 0) DESC"
+			ListSortOrder.NEW_CHAPTERS -> "${trackFieldExpr("manga.manga_id", "chapters_new")} DESC"
+			ListSortOrder.PROGRESS -> "${historyFieldExpr("manga.manga_id", "percent")} DESC"
+			ListSortOrder.UNREAD -> "${historyFieldExpr("manga.manga_id", "percent")} ASC"
+			ListSortOrder.LAST_READ -> "${historyFieldExpr("manga.manga_id", "updated_at")} DESC"
+			ListSortOrder.LONG_AGO_READ -> "${historyFieldExpr("manga.manga_id", "updated_at")} ASC"
+			ListSortOrder.UPDATED -> "${trackFieldExpr("manga.manga_id", "last_chapter_date")} DESC"
 	
 			else -> throw IllegalArgumentException("Sort order $sortOrder is not supported")
 		}
@@ -310,8 +313,8 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 	}
 
 	override fun getCondition(option: ListFilterOption): String? = when (option) {
-		ListFilterOption.Macro.COMPLETED -> "EXISTS(SELECT * FROM history WHERE history.manga_id = favourites.manga_id AND history.percent >= $PROGRESS_COMPLETED)"
-		ListFilterOption.Macro.NEW_CHAPTERS -> "(SELECT chapters_new FROM tracks WHERE tracks.manga_id = favourites.manga_id) > 0"
+		ListFilterOption.Macro.COMPLETED -> "${historyFieldExpr("favourites.manga_id", "percent")} >= $PROGRESS_COMPLETED"
+		ListFilterOption.Macro.NEW_CHAPTERS -> "${trackFieldExpr("favourites.manga_id", "chapters_new")} > 0"
 		ListFilterOption.Macro.NSFW -> "manga.nsfw = 1"
 		is ListFilterOption.Inverted -> when (option.option) {
 			ListFilterOption.Macro.NSFW -> "manga.nsfw = 0"
@@ -321,5 +324,36 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 		ListFilterOption.Downloaded -> "EXISTS(SELECT * FROM local_index WHERE local_index.manga_id = favourites.manga_id)"
 		is ListFilterOption.Source -> "manga.source = ${sqlEscapeString(option.mangaSource.name)}"
 		else -> null
+	}
+
+	private fun entityIdExpr(localMangaIdExpr: String): String =
+		"(SELECT entity_id FROM entity_binding " +
+			"WHERE source IN ('local_manga', '0') " +
+			"AND external_id = CAST($localMangaIdExpr AS TEXT) " +
+			"AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY') " +
+			"LIMIT 1)"
+
+	private fun preferredTrackAnchorExpr(localMangaIdExpr: String): String =
+		"COALESCE((" +
+			"SELECT preferred_local_manga_id FROM entity_preferences " +
+			"WHERE entity_id = ${entityIdExpr(localMangaIdExpr)} LIMIT 1" +
+			"), $localMangaIdExpr)"
+
+	private fun trackFieldExpr(localMangaIdExpr: String, field: String): String =
+		"IFNULL((" +
+			"SELECT $field FROM tracks " +
+			"WHERE tracks.entity_id = ${entityIdExpr(localMangaIdExpr)} LIMIT 1" +
+			"), IFNULL((" +
+			"SELECT $field FROM tracks " +
+			"WHERE tracks.manga_id = ${preferredTrackAnchorExpr(localMangaIdExpr)} LIMIT 1" +
+			"), 0))"
+
+	private fun historyFieldExpr(localMangaIdExpr: String, field: String): String {
+		val entityExpr = entityIdExpr(localMangaIdExpr)
+		return "IFNULL((" +
+			"SELECT $field FROM work_history wh WHERE wh.entity_id = $entityExpr AND wh.deleted_at = 0 LIMIT 1" +
+			"), IFNULL((" +
+			"SELECT $field FROM history WHERE history.manga_id = $localMangaIdExpr AND history.deleted_at = 0 LIMIT 1" +
+			"), 0))"
 	}
 }

@@ -3,9 +3,18 @@ package org.skepsun.kototoro.tracking.discovery.data
 import androidx.room.withTransaction
 import dagger.Reusable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
 import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership
+import org.skepsun.kototoro.entitygraph.data.deleteTrackingLinksByWorkOrMangaCandidates
+import org.skepsun.kototoro.entitygraph.data.findLinksByWorkOrMangaCandidates
+import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
@@ -37,8 +46,13 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 			return@withContext emptyList()
 		}
 		val dao = db.getTrackingSiteDao()
-		val existing = dao.findLinksByManga(service.id, content.id)
-		val linked = existing.firstOrNull()
+		val anchor = resolveTrackingAnchor(content.id)
+		val existing = dao.findLinksByWorkOrMangaCandidates(
+			service = service.id,
+			entityId = anchor.entityId,
+			mangaIds = anchor.candidateMangaIds,
+		)
+		val linked = selectTrackingLink(anchor, existing)
 		if (linked != null) {
 			return@withContext listOf(linked.toMatchResult(content))
 		}
@@ -104,17 +118,20 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		val best = ranked.firstOrNull()
 		if (persistAutoMatch && best != null && best.confidence >= AUTO_MATCH_THRESHOLD) {
 			db.withTransaction {
-				dao.deleteLinksByManga(service.id, content.id)
+				db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds)
 				dao.upsertLink(
-					org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity(
-						service = service.id,
-						remoteId = best.remoteId,
-						mangaId = content.id,
-						sourceName = content.source.name,
-						confidence = best.confidence,
-						isManual = false,
-						createdAt = System.currentTimeMillis(),
-						updatedAt = System.currentTimeMillis(),
+					db.attachEntityOwnership(
+						TrackingSiteLinkEntity(
+							service = service.id,
+							remoteId = best.remoteId,
+							entityId = anchor.entityId,
+							mangaId = anchor.anchorMangaId,
+							sourceName = content.source.name,
+							confidence = best.confidence,
+							isManual = false,
+							createdAt = System.currentTimeMillis(),
+							updatedAt = System.currentTimeMillis(),
+						),
 					),
 				)
 			}
@@ -128,20 +145,24 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		remoteId: Long,
 	): TrackingSiteMatchResult = withContext(Dispatchers.Default) {
 		val content = db.getMangaDao().find(contentId)?.toContent() ?: error("Missing local content $contentId")
+		val anchor = resolveTrackingAnchor(contentId)
 		val title = db.getTrackingSiteDao().findItem(service.id, remoteId)?.title ?: remoteId.toString()
 		db.withTransaction {
 			val dao = db.getTrackingSiteDao()
-			dao.deleteLinksByManga(service.id, contentId)
+			db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds)
 			dao.upsertLink(
-				org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity(
-					service = service.id,
-					remoteId = remoteId,
-					mangaId = contentId,
-					sourceName = content.source.name,
-					confidence = 1f,
-					isManual = true,
-					createdAt = System.currentTimeMillis(),
-					updatedAt = System.currentTimeMillis(),
+				db.attachEntityOwnership(
+					TrackingSiteLinkEntity(
+						service = service.id,
+						remoteId = remoteId,
+						entityId = anchor.entityId,
+						mangaId = anchor.anchorMangaId,
+						sourceName = content.source.name,
+						confidence = 1f,
+						isManual = true,
+						createdAt = System.currentTimeMillis(),
+						updatedAt = System.currentTimeMillis(),
+					),
 				),
 			)
 		}
@@ -163,7 +184,51 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		service: ScrobblerService,
 		contentId: Long,
 	) {
-		db.getTrackingSiteDao().deleteLinksByManga(service.id, contentId)
+		val anchor = resolveTrackingAnchor(contentId)
+		db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds)
+	}
+
+	private suspend fun resolveTrackingAnchor(mangaId: Long): TrackingAnchor {
+		val graphDao = db.getEntityGraphDao()
+		val entityId = graphDao.findWorkEntityIdByLocalMangaId(mangaId)
+		if (entityId == null) {
+			return TrackingAnchor(
+				entityId = null,
+				requestedMangaId = mangaId,
+				anchorMangaId = mangaId,
+				candidateMangaIds = listOf(mangaId),
+			)
+		}
+		val bindings = graphDao.findActiveBindingsByEntity(entityId)
+		val localMangaIds = bindings.asSequence()
+			.filter { it.source == "local_manga" || it.source == "0" }
+			.mapNotNull { it.externalId.toLongOrNull() }
+			.distinct()
+			.toList()
+		val preferredLocalMangaId = graphDao.findEntityPrefs(entityId)?.preferredLocalMangaId
+		return TrackingAnchor(
+			entityId = entityId,
+			requestedMangaId = mangaId,
+			anchorMangaId = preferredLocalMangaId ?: mangaId,
+			candidateMangaIds = buildList {
+				add(mangaId)
+				preferredLocalMangaId?.let(::add)
+				addAll(localMangaIds)
+			}.distinct().ifEmpty { listOf(mangaId) },
+		)
+	}
+
+	private fun selectTrackingLink(
+		anchor: TrackingAnchor,
+		links: List<TrackingSiteLinkEntity>,
+	): TrackingSiteLinkEntity? {
+		return links.sortedWith(
+			compareByDescending<TrackingSiteLinkEntity> { it.mangaId == anchor.requestedMangaId }
+				.thenByDescending { it.mangaId == anchor.anchorMangaId }
+				.thenByDescending { it.isManual }
+				.thenByDescending { it.confidence }
+				.thenByDescending { it.updatedAt },
+		).firstOrNull()
 	}
 
 	private fun buildCandidateQueries(content: Content): List<String> {
@@ -232,5 +297,12 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		val url: String?,
 		val confidence: Float,
 		val reason: String,
+	)
+
+	private data class TrackingAnchor(
+		val entityId: Long?,
+		val requestedMangaId: Long,
+		val anchorMangaId: Long,
+		val candidateMangaIds: List<Long>,
 	)
 }

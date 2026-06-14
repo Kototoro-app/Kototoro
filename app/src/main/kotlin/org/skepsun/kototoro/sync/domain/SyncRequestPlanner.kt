@@ -23,14 +23,16 @@ class SyncRequestPlanner @Inject constructor() {
 	fun planInvalidation(
 		tables: Set<String>,
 		favouritesTable: String,
+		workFavouritesTable: String,
 		favouriteCategoriesTable: String,
 		historyTable: String,
+		workHistoryTable: String,
 		isFavouritesSyncActiveOrPending: Boolean,
 		isHistorySyncActiveOrPending: Boolean,
 	): InvalidationDecision {
-		val favourites = (favouritesTable in tables || favouriteCategoriesTable in tables) &&
+		val favourites = (favouritesTable in tables || workFavouritesTable in tables || favouriteCategoriesTable in tables) &&
 			!isFavouritesSyncActiveOrPending
-		val history = historyTable in tables && !isHistorySyncActiveOrPending
+		val history = (historyTable in tables || workHistoryTable in tables) && !isHistorySyncActiveOrPending
 		return InvalidationDecision(
 			favourites = favourites,
 			history = history,

@@ -53,7 +53,6 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
             contentDataRepository.setEntityMetadataSourceSelection(
                 entityId = entityId,
                 selection = ContentDataRepository.MetadataSourceSelection.Base,
-                mirrorLocalMangaIds = listOf(preferredProjectionId),
             )
         }
         return runCatchingCancellable {

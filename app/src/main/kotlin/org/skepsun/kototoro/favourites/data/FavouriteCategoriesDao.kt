@@ -53,7 +53,46 @@ abstract class FavouriteCategoriesDao {
 	protected abstract suspend fun getMaxSortKey(): Int?
 
 	@SuppressWarnings(RoomWarnings.QUERY_MISMATCH) // for the new_chapters column
-	@Query("SELECT favourite_categories.*, (SELECT SUM(chapters_new) FROM tracks WHERE tracks.manga_id IN (SELECT manga_id FROM favourites WHERE favourites.category_id = favourite_categories.category_id)) AS new_chapters FROM favourite_categories WHERE track = 1 AND show_in_lib = 1 AND deleted_at = 0 AND new_chapters > 0 ORDER BY new_chapters DESC LIMIT :limit")
+	@Query(
+		"""
+		SELECT favourite_categories.*,
+			(
+				SELECT IFNULL((
+					SELECT SUM(IFNULL(tracks.chapters_new, 0))
+					FROM tracks
+					WHERE tracks.entity_id IN (
+						SELECT DISTINCT wf.entity_id
+						FROM work_favourites wf
+						WHERE wf.category_id = favourite_categories.category_id
+							AND wf.deleted_at = 0
+					)
+				), 0) + IFNULL((
+					SELECT SUM(IFNULL(tracks.chapters_new, 0))
+					FROM tracks
+					WHERE tracks.manga_id IN (
+						SELECT DISTINCT f.manga_id AS anchor_manga_id
+						FROM favourites f
+						WHERE f.category_id = favourite_categories.category_id
+							AND f.deleted_at = 0
+							AND NOT EXISTS (
+								SELECT 1
+								FROM entity_binding eb
+								WHERE eb.source IN ('local_manga', '0')
+									AND eb.external_id = CAST(f.manga_id AS TEXT)
+									AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+							)
+					)
+				), 0)
+			) AS new_chapters
+		FROM favourite_categories
+		WHERE track = 1
+			AND show_in_lib = 1
+			AND deleted_at = 0
+			AND new_chapters > 0
+		ORDER BY new_chapters DESC
+		LIMIT :limit
+		""",
+	)
 	abstract suspend fun getMostUpdatedCategories(limit: Int): List<FavouriteCategoryEntity>
 
 	suspend fun getNextSortKey(): Int {

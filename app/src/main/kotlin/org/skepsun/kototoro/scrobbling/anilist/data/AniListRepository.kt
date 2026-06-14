@@ -24,6 +24,10 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.preferredMangaMappingByTargetId
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -147,7 +151,7 @@ class AniListRepository @Inject constructor(
 		}
 
 	override suspend fun unregister(mangaId: Long) {
-		return db.getScrobblingDao().delete(ScrobblerService.ANILIST.id, mangaId)
+		return db.deleteScrobblingByWorkOrManga(ScrobblerService.ANILIST.id, mangaId)
 	}
 
 	override fun logout() {
@@ -797,10 +801,7 @@ class AniListRepository @Inject constructor(
 		val scoreFormat = ScoreFormat.of(storage[KEY_SCORE_FORMAT])
 		val oldMappings = db.getScrobblingDao()
 			.findAllByScrobbler(ScrobblerService.ANILIST.id)
-			.groupBy { it.targetId }
-			.mapValues { (_, values) ->
-				values.firstOrNull { it.mangaId != 0L }?.mangaId ?: 0L
-			}
+			.preferredMangaMappingByTargetId()
 
 		val synced = ArrayList<ScrobblingEntity>()
 		val typesToSync = listOf("MANGA", "ANIME")
@@ -876,7 +877,7 @@ class AniListRepository @Inject constructor(
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.ANILIST.id)
 			synced.forEach { entity ->
-				db.getScrobblingDao().upsert(entity)
+				db.upsertScrobbling(entity)
 			}
 		}
 		return synced.size
@@ -894,7 +895,7 @@ class AniListRepository @Inject constructor(
 			comment = json.getString("notes"),
 			rating = scoreFormat.normalize(json.getDouble("score").toFloat()),
 		)
-		db.getScrobblingDao().upsert(entity)
+		db.upsertScrobbling(entity)
 	}
 
 	private fun preferredTitle(title: JSONObject): String? {

@@ -9,6 +9,8 @@ import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 
 data class FeedItem(
 	val id: Long,
+	val entityId: Long?,
+	val preferredLocalMangaId: Long?,
 	private val override: ContentOverride?,
 	val manga: Content,
 	val count: Int,

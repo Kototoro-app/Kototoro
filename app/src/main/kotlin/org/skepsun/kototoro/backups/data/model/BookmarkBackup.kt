@@ -3,7 +3,6 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.bookmarks.data.BookmarkEntity
-import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.parsers.util.mapToSet
 
@@ -13,6 +12,8 @@ class BookmarkBackup(
 	@SerialName("tags") val tags: Set<TagBackup>,
 	@SerialName("bookmarks") val bookmarks: List<Bookmark>,
 ) {
+	// Bookmarks keep a projection/content snapshot for legacy restore.
+	// Entity/work state is restored from graph/work sections, not from this payload.
 
 	@Serializable
 	class Bookmark(
@@ -38,8 +39,8 @@ class BookmarkBackup(
 		)
 	}
 
-	constructor(manga: MangaWithTags, entities: List<BookmarkEntity>, prefs: MangaPrefsEntity? = null) : this(
-		manga = ContentBackup(manga.copy(tags = emptyList()), prefs),
+	constructor(manga: MangaWithTags, entities: List<BookmarkEntity>) : this(
+		manga = ContentBackup(manga.copy(tags = emptyList())),
 		tags = manga.tags.mapToSet { TagBackup(it) },
 		bookmarks = entities.map {
 			Bookmark(

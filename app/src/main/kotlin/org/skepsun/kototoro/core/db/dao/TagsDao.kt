@@ -11,6 +11,9 @@ abstract class TagsDao {
 	@Query("SELECT * FROM tags WHERE source = :source")
 	abstract suspend fun findTags(source: String): List<TagEntity>
 
+	@Query("SELECT * FROM tags WHERE tag_id IN (:ids)")
+	abstract suspend fun findByIds(ids: Collection<Long>): List<TagEntity>
+
 	@Query(
 		"""SELECT tags.* FROM tags
 		LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id

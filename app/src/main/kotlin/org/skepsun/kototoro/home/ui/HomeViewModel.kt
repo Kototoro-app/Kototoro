@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -97,6 +98,8 @@ data class HomeRecentSearchItem(
 data class HomeResumeState(
     val content: Content? = null,
     val progressPercent: Int? = null,
+    val entityId: Long? = null,
+    val preferredLocalMangaId: Long? = null,
     val groupKey: Long? = content?.id,
 ) {
     val isAvailable: Boolean
@@ -217,11 +220,30 @@ class HomeViewModel @Inject constructor(
             if (content == null) {
                 flowOf(HomeResumeState())
             } else {
-                historyRepository.observeOne(content.id).map { history ->
-                    HomeResumeState(
-                        content = content,
-                        progressPercent = history.toProgressPercent(),
-                    )
+                flow {
+                    val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                    val preferredLocalMangaId = if (entityId != null) {
+                        contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                    } else {
+                        null
+                    }
+                    val representativeContent = contentDataRepository.findDisplayContentById(
+                        preferredLocalMangaId ?: content.id,
+                        withChapters = false,
+                    ) ?: contentDataRepository.findPreferredLocalContentById(
+                        content.id,
+                        withChapters = false,
+                    ) ?: content
+                    emit(Triple(representativeContent, entityId, preferredLocalMangaId))
+                }.flatMapLatest { (representativeContent, entityId, preferredLocalMangaId) ->
+                    historyRepository.observeOne(preferredLocalMangaId ?: representativeContent.id).map { history ->
+                        HomeResumeState(
+                            content = representativeContent,
+                            progressPercent = history.toProgressPercent(),
+                            entityId = entityId,
+                            preferredLocalMangaId = preferredLocalMangaId ?: representativeContent.id,
+                        )
+                    }
                 }
             }
         }
@@ -504,7 +526,8 @@ class HomeViewModel @Inject constructor(
     fun restoreWebDavNow() {
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val latest = webDavUploader.getLatestBackup(RemoteNamespace.V2)
+                val latest = webDavUploader.getLatestBackup(RemoteNamespace.V3)
+                    ?: webDavUploader.getLatestBackup(RemoteNamespace.V2)
                     ?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
                     ?: run {
                         errorEvent.call(IllegalStateException("No WebDAV backups found"))
@@ -514,13 +537,19 @@ class HomeViewModel @Inject constructor(
                 try {
                     webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
                     val allSections = setOf(
+                        org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
                         org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
                         org.skepsun.kototoro.backups.domain.BackupSection.CATEGORIES,
                         org.skepsun.kototoro.backups.domain.BackupSection.FAVOURITES,
                         org.skepsun.kototoro.backups.domain.BackupSection.BOOKMARKS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.STATS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.WORK_HISTORY,
+                        org.skepsun.kototoro.backups.domain.BackupSection.WORK_FAVOURITES,
+                        org.skepsun.kototoro.backups.domain.BackupSection.WORK_STATS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
                         org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
+                        org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS_READER_GRID,
                         org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,
                         org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
                         org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
@@ -529,10 +558,20 @@ class HomeViewModel @Inject constructor(
                     val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
                         repository.restoreBackup(zis, allSections, null)
                     }
-                    backupWebDavRestoreCoordinator.commitManualRestore()
+                    val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
+                    backupWebDavRestoreCoordinator.commitManualRestore(
+                        state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
+                            semanticSchemaVersion = restoreContext.semanticSchemaVersion,
+                            transportGeneration = restoreContext.transportGeneration,
+                        ),
+                    )
                     onActionDone.call(
                         ReversibleAction(
-                            if (restoreResult.legacyJarReposImported) {
+                            if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
+                                R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
+                            } else if (restoreContext.isLegacySemanticSchema) {
+                                R.string.webdav_restore_success_legacy_requires_normalization
+                            } else if (restoreResult.legacyJarReposImported) {
                                 R.string.webdav_restore_success_legacy_jar_hint
                             } else {
                                 R.string.webdav_restore_success
@@ -664,7 +703,8 @@ private fun HomeResumeState.withOverrides(overrides: Map<Long, ContentOverride>)
 
 private fun HomeResumeState.withGroupKey(entityIdsByMangaId: Map<Long, Long>): HomeResumeState {
     val current = content ?: return this
-    return copy(groupKey = entityIdsByMangaId[current.id]?.toHomeGroupKey(current.source.getContentType().ordinal) ?: current.id)
+    val resolvedEntityId = entityId ?: entityIdsByMangaId[current.id]
+    return copy(groupKey = resolvedEntityId?.toHomeGroupKey(current.source.getContentType().ordinal) ?: current.id)
 }
 
 private fun Content.matchesHomeFilters(
@@ -784,16 +824,15 @@ private suspend fun buildDisplayContentOverrides(
     if (contents.isEmpty()) return emptyMap()
 
     val manualOverrides = contentDataRepository.getOverrides()
-    val metadataSelectionCache = HashMap<Long, ContentDataRepository.MetadataSourceSelection?>(contents.size)
+    val metadataSelections = contentDataRepository.getMetadataSourceSelections(contents.map(Content::id))
     val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>(contents.size)
     return buildMap(contents.size) {
         contents.forEach { content ->
             val override = resolveDisplayOverride(
                 content = content,
                 manualOverride = manualOverrides[content.id],
-                metadataSelectionCache = metadataSelectionCache,
+                metadataSelection = metadataSelections[content.id],
                 trackingDetailsCache = trackingDetailsCache,
-                contentDataRepository = contentDataRepository,
                 trackingSiteCacheRepository = trackingSiteCacheRepository,
             ) ?: return@forEach
             put(content.id, override)
@@ -804,15 +843,11 @@ private suspend fun buildDisplayContentOverrides(
 private suspend fun resolveDisplayOverride(
     content: Content,
     manualOverride: ContentOverride?,
-    metadataSelectionCache: MutableMap<Long, ContentDataRepository.MetadataSourceSelection?>,
+    metadataSelection: ContentDataRepository.MetadataSourceSelection?,
     trackingDetailsCache: MutableMap<Pair<Int, Long>, TrackingSiteItemDetails?>,
-    contentDataRepository: ContentDataRepository,
     trackingSiteCacheRepository: TrackingSiteCacheRepository,
 ): ContentOverride? {
-    val selection = metadataSelectionCache.getOrPut(content.id) {
-        contentDataRepository.getMetadataSourceSelection(content.id)
-    }
-    val trackingOverride = (selection as? ContentDataRepository.MetadataSourceSelection.Tracking)
+    val trackingOverride = (metadataSelection as? ContentDataRepository.MetadataSourceSelection.Tracking)
         ?.let { trackingSelection ->
             val service = ScrobblerService.entries.firstOrNull { it.id == trackingSelection.serviceId }
                 ?: return@let null

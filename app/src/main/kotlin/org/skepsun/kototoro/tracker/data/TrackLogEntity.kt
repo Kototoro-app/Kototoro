@@ -3,11 +3,15 @@ package org.skepsun.kototoro.tracker.data
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 
 @Entity(
 	tableName = "track_logs",
+	indices = [
+		Index(value = ["entity_id"]),
+	],
 	foreignKeys = [
 		ForeignKey(
 			entity = MangaEntity::class,
@@ -20,7 +24,9 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 class TrackLogEntity(
 	@PrimaryKey(autoGenerate = true)
 	@ColumnInfo(name = "id") val id: Long = 0L,
+	@ColumnInfo(name = "owner_id", index = true) val ownerId: Long,
 	@ColumnInfo(name = "manga_id", index = true) val mangaId: Long,
+	@ColumnInfo(name = "entity_id") val entityId: Long? = null,
 	@ColumnInfo(name = "chapters") val chapters: String,
 	@ColumnInfo(name = "created_at") val createdAt: Long,
 	@ColumnInfo(name = "unread") val isUnread: Boolean,

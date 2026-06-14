@@ -2,7 +2,6 @@ package org.skepsun.kototoro.backups.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.HistoryWithContent
@@ -20,8 +19,10 @@ class HistoryBackup(
 	@SerialName("chapters") val chaptersCount: Int = 0,
 	@SerialName("manga") val manga: ContentBackup,
 ) {
+	// Legacy history payload keeps a projection snapshot only.
+	// Work-level history state is exported separately and reconstructed independently.
 
-	constructor(entity: HistoryWithContent, prefs: MangaPrefsEntity? = null) : this(
+	constructor(entity: HistoryWithContent) : this(
 		mangaId = entity.manga.id,
 		createdAt = entity.history.createdAt,
 		updatedAt = entity.history.updatedAt,
@@ -30,7 +31,7 @@ class HistoryBackup(
 		scroll = entity.history.scroll,
 		percent = entity.history.percent,
 		chaptersCount = entity.history.chaptersCount,
-		manga = ContentBackup(MangaWithTags(entity.manga, entity.tags), prefs),
+		manga = ContentBackup(MangaWithTags(entity.manga, entity.tags)),
 	)
 
 	fun toEntity() = HistoryEntity(

@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.util.ext.getBoolean
 
 @Serializable
 data class FavouriteSyncDto(
+	@SerialName("entity_id") val entityId: Long? = null,
 	@SerialName("manga_id") val mangaId: Long,
 	@SerialName("manga") val manga: ContentSyncDto,
 	@SerialName("category_id") val categoryId: Int,
@@ -19,6 +20,7 @@ data class FavouriteSyncDto(
 ) {
 
 	constructor(cursor: Cursor, manga: ContentSyncDto) : this(
+		entityId = null,
 		mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id")),
 		manga = manga,
 		categoryId = cursor.getInt(cursor.getColumnIndexOrThrow("category_id")),

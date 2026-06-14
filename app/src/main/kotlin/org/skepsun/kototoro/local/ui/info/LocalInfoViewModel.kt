@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
@@ -21,6 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class LocalInfoViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
+	private val contentDataRepository: ContentDataRepository,
 	private val localContentRepository: LocalMangaRepository,
 	private val storageManager: LocalStorageManager,
 	private val deleteReadChaptersUseCase: DeleteReadChaptersUseCase,
@@ -40,8 +42,18 @@ class LocalInfoViewModel @Inject constructor(
 	val availableSize = MutableStateFlow(-1L)
 
 	init {
-		if (mangaState != null) {
-			computeSize()
+		launchJob(Dispatchers.Default) {
+			val resolved = mangaState?.id
+				?.takeIf { it != 0L }
+				?.let {
+					contentDataRepository.findPreferredLocalContentById(it, withChapters = false)
+						?: contentDataRepository.findContentById(it, withChapters = false)
+				}
+				?: mangaState
+			if (resolved != null) {
+				mangaState = resolved
+				computeSize().join()
+			}
 		}
 	}
 

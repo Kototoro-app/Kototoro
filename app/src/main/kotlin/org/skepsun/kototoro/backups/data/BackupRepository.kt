@@ -34,6 +34,9 @@ import org.skepsun.kototoro.backups.data.model.ExtensionRepoBackup
 import org.skepsun.kototoro.backups.data.model.ScrobblingBackup
 import org.skepsun.kototoro.backups.data.model.SourceBackup
 import org.skepsun.kototoro.backups.data.model.StatisticBackup
+import org.skepsun.kototoro.backups.data.model.WorkFavouriteBackup
+import org.skepsun.kototoro.backups.data.model.WorkHistoryBackup
+import org.skepsun.kototoro.backups.data.model.WorkStatisticBackup
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
@@ -45,6 +48,7 @@ import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.RelationRecord
+import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.entitygraph.data.decodeStringList
 import org.skepsun.kototoro.entitygraph.data.encodeStringList
 import org.skepsun.kototoro.entitygraph.data.mergeAliases
@@ -58,9 +62,14 @@ import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.filter.data.PersistableFilter
 import org.skepsun.kototoro.filter.data.SavedFiltersRepository
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
+import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.stats.data.WorkStatsEntity
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.reader.data.TapGridSettings
+import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepository
 import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepositories
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
@@ -103,7 +112,21 @@ class BackupRepository @Inject constructor(
     data class RestoreBackupResult(
         val result: CompositeResult,
         val legacyJarReposImported: Boolean,
+        val backupIndex: BackupIndex?,
     )
+
+    data class RestoreSemanticContext(
+        val transportGeneration: Int,
+        val semanticSchemaVersion: Int,
+    ) {
+
+        val isLegacySemanticSchema: Boolean
+            get() = semanticSchemaVersion < BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+
+        val isAuthoritativeWorkSchema: Boolean
+            get() = transportGeneration >= BackupIndex.WRITER_GENERATION_V3 &&
+                semanticSchemaVersion >= BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+    }
 
     suspend fun createBackup(
         output: ZipOutputStream,
@@ -124,7 +147,6 @@ class BackupRepository @Inject constructor(
                     data = database.getHistoryDao().dump().map {
                         HistoryBackup(
                             entity = it,
-                            prefs = database.getPreferencesDao().find(it.manga.id),
                         )
                     },
                     serializer = serializer(),
@@ -141,7 +163,6 @@ class BackupRepository @Inject constructor(
                     data = database.getFavouritesDao().dump().map {
                         FavouriteBackup(
                             entity = it,
-                            prefs = database.getPreferencesDao().find(it.manga.id),
                         )
                     },
                     serializer = serializer(),
@@ -163,7 +184,6 @@ class BackupRepository @Inject constructor(
                         BookmarkBackup(
                             manga = it.first,
                             entities = it.second,
-                            prefs = database.getPreferencesDao().find(it.first.manga.id),
                         )
                     },
                     serializer = serializer(),
@@ -197,6 +217,24 @@ class BackupRepository @Inject constructor(
                 BackupSection.STATS -> output.writeJsonArray(
                     section = BackupSection.STATS,
                     data = database.getStatsDao().dumpEnabled().map { StatisticBackup(it) },
+                    serializer = serializer(),
+                )
+
+                BackupSection.WORK_HISTORY -> output.writeJsonArray(
+                    section = BackupSection.WORK_HISTORY,
+                    data = database.getWorkHistoryDao().dump().map { WorkHistoryBackup(it) },
+                    serializer = serializer(),
+                )
+
+                BackupSection.WORK_FAVOURITES -> output.writeJsonArray(
+                    section = BackupSection.WORK_FAVOURITES,
+                    data = database.getWorkFavouritesDao().dump().map { WorkFavouriteBackup(it) },
+                    serializer = serializer(),
+                )
+
+                BackupSection.WORK_STATS -> output.writeJsonArray(
+                    section = BackupSection.WORK_STATS,
+                    data = database.getWorkStatsDao().dumpEnabled().map { WorkStatisticBackup(it) },
                     serializer = serializer(),
                 )
 
@@ -252,27 +290,38 @@ class BackupRepository @Inject constructor(
         sections: Set<BackupSection>,
         progress: FlowCollector<Progress>?,
     ): RestoreBackupResult {
+        val effectiveSections = sections.withImplicitRestoreSections()
         progress?.emit(Progress.INDETERMINATE)
-        var commonProgress = Progress(0, sections.size)
+        var commonProgress = Progress(0, effectiveSections.size)
         var entry = input.nextEntry
         var result = CompositeResult.EMPTY
         val archiveSections = linkedSetOf<BackupSection>()
         val restoredSections = linkedSetOf<BackupSection>()
         val entityIdMapping = LinkedHashMap<Long, Long>()
+        var backupIndex: BackupIndex? = null
+        var restoreContext = resolveRestoreSemanticContext(null)
         while (entry != null) {
             val section = BackupSection.of(entry)
             if (section != null) {
                 archiveSections.add(section)
             }
-            if (section in sections) {
+            if (section in effectiveSections) {
                 if (section != null) {
                     restoredSections.add(section)
                 }
                 result += when (section) {
-                    BackupSection.INDEX -> CompositeResult.EMPTY // useless in our case
+                    BackupSection.INDEX -> {
+                        backupIndex = input.readBackupIndex()
+                        restoreContext = resolveRestoreSemanticContext(backupIndex)
+                        CompositeResult.EMPTY
+                    }
                     BackupSection.HISTORY -> input.readJsonArray<HistoryBackup>(serializer()).restoreToDb {
-                        upsertContent(it.manga)
-                        getHistoryDao().upsert(it.toEntity())
+                        // Legacy history sections restore the projection snapshot first, then
+                        // normalize the record into work-owned history when entity bindings exist.
+                        upsertContent(it.manga, restoreContext)
+                        val legacy = it.toEntity()
+                        getHistoryDao().upsert(legacy)
+                        upsertWorkHistoryFromLegacy(legacy)
                     }
 
                     BackupSection.CATEGORIES -> input.readJsonArray<CategoryBackup>(serializer()).restoreToDb {
@@ -280,8 +329,12 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.FAVOURITES -> input.readJsonArray<FavouriteBackup>(serializer()).restoreToDb {
-                        upsertContent(it.manga)
-                        getFavouritesDao().mergeWithTimestamp(it.toEntity())
+                        // Legacy favourites sections restore the projection snapshot first, then
+                        // project collection state into work-owned favourites.
+                        upsertContent(it.manga, restoreContext)
+                        val legacy = it.toEntity()
+                        getFavouritesDao().mergeWithTimestamp(legacy)
+                        upsertWorkFavouriteFromLegacy(legacy)
                     }
 
                     BackupSection.SETTINGS -> input.readMap().let {
@@ -295,7 +348,9 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.BOOKMARKS -> input.readJsonArray<BookmarkBackup>(serializer()).restoreToDb {
-                        upsertContent(it.manga)
+                        // Bookmarks remain projection-anchored content data. Entity/work state
+                        // comes from graph/work sections and is not embedded here.
+                        upsertContent(it.manga, restoreContext)
                         getBookmarksDao().upsert(it.bookmarks.map { b -> b.toEntity() })
                     }
 
@@ -308,11 +363,25 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.SCROBBLING -> input.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb {
-                        getScrobblingDao().upsert(it.toEntity())
+                        upsertScrobbling(it.toEntity())
                     }
 
                     BackupSection.STATS -> input.readJsonArray<StatisticBackup>(serializer()).restoreToDb {
-                        getStatsDao().upsert(it.toEntity())
+                        val legacy = it.toEntity()
+                        getStatsDao().upsert(legacy)
+                        upsertWorkStatsFromLegacy(legacy)
+                    }
+
+                    BackupSection.WORK_HISTORY -> input.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb {
+                        getWorkHistoryDao().upsert(it.toEntity())
+                    }
+
+                    BackupSection.WORK_FAVOURITES -> input.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb {
+                        getWorkFavouritesDao().upsert(it.toEntity())
+                    }
+
+                    BackupSection.WORK_STATS -> input.readJsonArray<WorkStatisticBackup>(serializer()).restoreToDb {
+                        getWorkStatsDao().upsert(it.toEntity())
                     }
 
                     BackupSection.SAVED_FILTERS -> input.readJsonArray<PersistableFilter>(serializer())
@@ -330,7 +399,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.ENTITY_GRAPH_BINDINGS -> input.readJsonArray<EntityBindingRecord>(serializer()).restoreToDb {
-                        restoreEntityBinding(it, entityIdMapping)
+                        restoreEntityBinding(it, entityIdMapping, restoreContext)
                     }
 
                     BackupSection.ENTITY_GRAPH_RELATIONS -> input.readJsonArray<RelationRecord>(serializer()).restoreToDb {
@@ -338,7 +407,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.ENTITY_GRAPH_PREFS -> input.readJsonArray<EntityPrefsRecord>(serializer()).restoreToDb {
-                        restoreEntityPrefs(it, entityIdMapping)
+                        restoreEntityPrefs(it, entityIdMapping, restoreContext)
                     }
 
                     null -> CompositeResult.EMPTY // skip unknown entries
@@ -349,12 +418,96 @@ class BackupRepository @Inject constructor(
             input.closeEntry()
             entry = input.nextEntry
         }
-        val legacyJarReposImported = restoreLegacyJarRepositoriesIfNeeded(sections, archiveSections, restoredSections)
+        val legacyJarReposImported = restoreLegacyJarRepositoriesIfNeeded(effectiveSections, archiveSections, restoredSections)
+        normalizeRestoredWorkState(
+            requestedSections = effectiveSections,
+            archiveSections = archiveSections,
+            restoreContext = restoreContext,
+        )
         progress?.emit(commonProgress)
         return RestoreBackupResult(
             result = result,
             legacyJarReposImported = legacyJarReposImported,
+            backupIndex = backupIndex,
         )
+    }
+
+    fun resolveRestoreSemanticContext(backupIndex: BackupIndex?): RestoreSemanticContext {
+        return RestoreSemanticContext(
+            transportGeneration = backupIndex?.transportGeneration ?: BackupIndex.WRITER_GENERATION_V1,
+            semanticSchemaVersion = backupIndex?.semanticSchemaVersion ?: 1,
+        )
+    }
+
+    private suspend fun normalizeRestoredWorkState(
+        requestedSections: Set<BackupSection>,
+        archiveSections: Set<BackupSection>,
+        restoreContext: RestoreSemanticContext,
+    ) {
+        val hasAuthoritativeWorkHistory = restoreContext.isAuthoritativeWorkSchema &&
+            BackupSection.WORK_HISTORY in archiveSections
+        val hasAuthoritativeWorkFavourites = restoreContext.isAuthoritativeWorkSchema &&
+            BackupSection.WORK_FAVOURITES in archiveSections
+        val hasAuthoritativeWorkStats = restoreContext.isAuthoritativeWorkSchema &&
+            BackupSection.WORK_STATS in archiveSections
+
+        database.withTransaction {
+            if (BackupSection.SCROBBLING in requestedSections) {
+                database.normalizeRestoredScrobblingState()
+            }
+            if (!hasAuthoritativeWorkHistory &&
+                (BackupSection.HISTORY in requestedSections || BackupSection.WORK_HISTORY in requestedSections)
+            ) {
+                database.getHistoryDao().findAllIds().forEach { mangaId ->
+                    database.getHistoryDao().find(mangaId)?.let { history ->
+                        database.upsertWorkHistoryFromLegacy(history)
+                    }
+                }
+            }
+            if (!hasAuthoritativeWorkFavourites &&
+                (BackupSection.FAVOURITES in requestedSections || BackupSection.WORK_FAVOURITES in requestedSections)
+            ) {
+                database.getFavouritesDao().findAll().forEach { favouriteContent ->
+                    favouriteContent.favourite.let { favourite ->
+                        database.upsertWorkFavouriteFromLegacy(favourite)
+                    }
+                }
+            }
+            if (!hasAuthoritativeWorkStats &&
+                (BackupSection.STATS in requestedSections || BackupSection.WORK_STATS in requestedSections)
+            ) {
+                database.getStatsDao().dumpEnabled().collect { stats ->
+                    database.upsertWorkStatsFromLegacy(stats)
+                }
+            }
+        }
+    }
+
+    private fun Set<BackupSection>.withImplicitRestoreSections(): Set<BackupSection> {
+        val expanded = LinkedHashSet(this)
+        if (BackupSection.HISTORY in this) {
+            expanded += BackupSection.WORK_HISTORY
+        }
+        if (BackupSection.FAVOURITES in this) {
+            expanded += BackupSection.WORK_FAVOURITES
+        }
+        if (BackupSection.STATS in this) {
+            expanded += BackupSection.WORK_STATS
+        }
+        if (
+            BackupSection.HISTORY in expanded ||
+            BackupSection.FAVOURITES in expanded ||
+            BackupSection.BOOKMARKS in expanded ||
+            BackupSection.WORK_HISTORY in expanded ||
+            BackupSection.WORK_FAVOURITES in expanded ||
+            BackupSection.WORK_STATS in expanded
+        ) {
+            expanded += BackupSection.ENTITY_GRAPH_ENTITIES
+            expanded += BackupSection.ENTITY_GRAPH_BINDINGS
+            expanded += BackupSection.ENTITY_GRAPH_RELATIONS
+            expanded += BackupSection.ENTITY_GRAPH_PREFS
+        }
+        return expanded
     }
 
     private suspend fun restoreLegacyJarRepositoriesIfNeeded(
@@ -414,6 +567,10 @@ class BackupRepository @Inject constructor(
             map[key] = jo.get(key)
         }
         return map
+    }
+
+    private fun InputStream.readBackupIndex(): BackupIndex? {
+        return readJsonArray(BackupIndex.serializer()).firstOrNull()
     }
 
     private fun ZipOutputStream.writeString(
@@ -526,29 +683,150 @@ class BackupRepository @Inject constructor(
         }
     }
 
-    private suspend fun MangaDatabase.upsertContent(manga: ContentBackup) {
+    private suspend fun MangaDatabase.upsertContent(
+        manga: ContentBackup,
+        restoreContext: RestoreSemanticContext,
+    ) {
         val tags = manga.tags.map { it.toEntity() }
         getTagsDao().upsert(tags)
         getMangaDao().upsert(manga.toEntity(), tags)
-        if (manga.hasPrefsPayload()) {
-            val dao = getPreferencesDao()
-            val existing = dao.find(manga.id)
-            dao.upsert(
-                if (existing == null) {
-                    newPrefsEntity(manga)
-                } else {
-                    existing.copy(
-                        titleOverride = manga.titleOverride,
-                        coverUrlOverride = manga.coverUrlOverride,
-                        contentRatingOverride = manga.contentRatingOverride,
-                        metadataSourceKind = manga.metadataSourceKind,
-                        metadataSourceService = manga.metadataSourceService,
-                        metadataSourceRemoteId = manga.metadataSourceRemoteId,
-                    )
-                },
-            )
+        if (restoreContext.isLegacySemanticSchema && manga.hasLegacyPrefsPayload()) {
+            // Legacy embedded prefs are import hints only.
+            // Do not rebuild work-owned state shadows in projection prefs during restore.
+            // Current authoritative owner state must come from ENTITY_GRAPH_PREFS / WORK_* sections
+            // or subsequent normalization, not from embedded content payloads.
         }
     }
+
+    private suspend fun MangaDatabase.findEntityIdByLocalMangaId(mangaId: Long): Long? {
+        return getEntityGraphDao().findWorkEntityIdByLocalMangaId(mangaId)
+    }
+
+    private suspend fun MangaDatabase.upsertWorkHistoryFromLegacy(
+        history: org.skepsun.kototoro.history.data.HistoryEntity,
+    ) {
+        val entityId = findEntityIdByLocalMangaId(history.mangaId) ?: return
+        val anchorMangaId = resolveExistingLocalAnchorForEntity(entityId) ?: history.mangaId
+        getWorkHistoryDao().upsert(
+            WorkHistoryEntity(
+                entityId = entityId,
+                anchorMangaId = anchorMangaId,
+                createdAt = history.createdAt,
+                updatedAt = history.updatedAt,
+                chapterId = history.chapterId,
+                page = history.page,
+                scroll = history.scroll,
+                percent = history.percent,
+                deletedAt = history.deletedAt,
+                chaptersCount = history.chaptersCount,
+                parentChapterId = history.parentChapterId,
+            ),
+        )
+    }
+
+    private suspend fun MangaDatabase.upsertWorkFavouriteFromLegacy(
+        favourite: org.skepsun.kototoro.favourites.data.FavouriteEntity,
+    ) {
+        val entityId = findEntityIdByLocalMangaId(favourite.mangaId) ?: return
+        getWorkFavouritesDao().upsert(
+            WorkFavouriteEntity(
+                entityId = entityId,
+                categoryId = favourite.categoryId,
+                sortKey = favourite.sortKey,
+                isPinned = favourite.isPinned,
+                createdAt = favourite.createdAt,
+                deletedAt = favourite.deletedAt,
+                updatedAt = favourite.updatedAt,
+            ),
+        )
+    }
+
+    private suspend fun MangaDatabase.upsertWorkStatsFromLegacy(
+        stats: org.skepsun.kototoro.stats.data.StatsEntity,
+    ) {
+        val entityId = findEntityIdByLocalMangaId(stats.mangaId) ?: return
+        val anchorMangaId = resolveExistingLocalAnchorForEntity(entityId) ?: stats.mangaId
+        getWorkStatsDao().upsert(
+            WorkStatsEntity(
+                entityId = entityId,
+                anchorMangaId = anchorMangaId,
+                startedAt = stats.startedAt,
+                duration = stats.duration,
+                pages = stats.pages,
+            ),
+        )
+    }
+
+    private suspend fun MangaDatabase.normalizeRestoredScrobblingState() {
+        val scrobblingDao = getScrobblingDao()
+        val all = scrobblingDao.findAllByScrobblerEntries()
+        if (all.isEmpty()) {
+            return
+        }
+        val normalized = LinkedHashMap<ScrobblingRestoreKey, ScrobblingEntity>(all.size)
+        all.forEach { entity ->
+            val entityId = entity.entityId ?: findEntityIdByLocalMangaId(entity.mangaId)
+            val anchorMangaId = resolvePreferredScrobblingAnchor(entity.mangaId) ?: entity.mangaId
+            val anchored = if (anchorMangaId == entity.mangaId) {
+                if (entity.entityId == entityId) entity else entity.copy(entityId = entityId)
+            } else {
+                entity.copy(entityId = entityId, mangaId = anchorMangaId)
+            }
+            val key = ScrobblingRestoreKey(
+                scrobbler = anchored.scrobbler,
+                targetId = anchored.targetId,
+                mediaType = anchored.mediaType,
+            )
+            val existing = normalized[key]
+            normalized[key] = if (existing == null) {
+                anchored
+            } else {
+                choosePreferredScrobblingRestoreEntity(existing, anchored)
+            }
+        }
+        all.forEach { scrobblingDao.delete(it) }
+        normalized.values.forEach { scrobblingDao.upsert(it) }
+    }
+
+    private suspend fun MangaDatabase.resolvePreferredScrobblingAnchor(mangaId: Long): Long? {
+        val entityId = findEntityIdByLocalMangaId(mangaId) ?: return null
+        return resolveExistingLocalAnchorForEntity(entityId) ?: mangaId
+    }
+
+    private suspend fun MangaDatabase.resolveExistingLocalAnchorForEntity(entityId: Long): Long? {
+        getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
+            ?.takeIf { preferredId -> getMangaDao().contains(preferredId) }
+            ?.let { return it }
+        return getEntityGraphDao().findActiveBindingsByEntity(entityId)
+            .firstNotNullOfOrNull { binding ->
+                when (binding.source) {
+                    "local_manga", "0" -> binding.externalId.toLongOrNull()
+                        ?.takeIf { localId -> getMangaDao().contains(localId) }
+                    else -> null
+                }
+            }
+    }
+
+    private fun choosePreferredScrobblingRestoreEntity(
+        left: ScrobblingEntity,
+        right: ScrobblingEntity,
+    ): ScrobblingEntity {
+        return compareValuesBy(
+            right,
+            left,
+            { it.chapter },
+            { it.rating },
+            { it.comment?.length ?: 0 },
+            { it.remoteTitle?.length ?: 0 },
+            { it.id },
+        ).takeIf { it > 0 }?.let { right } ?: left
+    }
+
+    private data class ScrobblingRestoreKey(
+        val scrobbler: Int,
+        val targetId: Long,
+        val mediaType: String,
+    )
 
     private suspend fun MangaDatabase.restoreEntityRecord(
         remote: EntityRecord,
@@ -605,6 +883,7 @@ class BackupRepository @Inject constructor(
     private suspend fun MangaDatabase.restoreEntityBinding(
         remote: EntityBindingRecord,
         entityIdMapping: Map<Long, Long>,
+        restoreContext: RestoreSemanticContext,
     ) {
         val localEntityId = entityIdMapping[remote.entityId]
         if (localEntityId == null) {
@@ -617,17 +896,28 @@ class BackupRepository @Inject constructor(
             Log.d(TAG, "restore: keep local entity_binding source=${remote.source}, externalId=${remote.externalId}")
             return
         }
-        dao.upsertBinding(remote.normalizedForRestore(localEntityId))
+        dao.upsertBinding(remote.normalizedForRestore(localEntityId, restoreContext))
     }
 
-    private fun EntityBindingRecord.normalizedForRestore(localEntityId: Long): EntityBindingRecord {
-        val restoredState = state.toEntityBindingStateOrNull() ?: EntityBindingState.LEGACY
+    private fun EntityBindingRecord.normalizedForRestore(
+        localEntityId: Long,
+        restoreContext: RestoreSemanticContext,
+    ): EntityBindingRecord {
+        val restoredState = if (restoreContext.isLegacySemanticSchema) {
+            EntityBindingState.LEGACY
+        } else {
+            state.toEntityBindingStateOrNull() ?: EntityBindingState.LEGACY
+        }
         val restoredSourceKind = sourceKind.takeIf { raw ->
             EntityBindingSourceKind.entries.any { it.name == raw }
         } ?: source.toEntityBindingSourceKind().name
-        val restoredCreatedBy = createdBy.takeIf { raw ->
-            EntityBindingCreatedBy.entries.any { it.name == raw }
-        } ?: EntityBindingCreatedBy.SYNC.name
+        val restoredCreatedBy = if (restoreContext.isLegacySemanticSchema) {
+            EntityBindingCreatedBy.SYNC.name
+        } else {
+            createdBy.takeIf { raw ->
+                EntityBindingCreatedBy.entries.any { it.name == raw }
+            } ?: EntityBindingCreatedBy.SYNC.name
+        }
         return copy(
             entityId = localEntityId,
             isPrimary = false,
@@ -674,34 +964,37 @@ class BackupRepository @Inject constructor(
     private suspend fun MangaDatabase.restoreEntityPrefs(
         remote: EntityPrefsRecord,
         entityIdMapping: Map<Long, Long>,
+        restoreContext: RestoreSemanticContext,
     ) {
         val localEntityId = entityIdMapping[remote.entityId] ?: return
         val dao = getEntityGraphDao()
         val local = dao.findEntityPrefs(localEntityId)
-        val candidate = remote.copy(entityId = localEntityId)
+        val candidate = remote.normalizedForRestore(localEntityId, restoreContext)
+        if (restoreContext.isLegacySemanticSchema) {
+            if (local == null) {
+                dao.upsertPrefsRecord(candidate)
+            }
+            return
+        }
         if (local == null || candidate.updatedAt >= local.updatedAt) {
             dao.upsertPrefsRecord(candidate)
         }
     }
 
-    private fun newPrefsEntity(manga: ContentBackup) = MangaPrefsEntity(
-        mangaId = manga.id,
-        mode = -1,
-        cfBrightness = ReaderColorFilter.EMPTY.brightness,
-        cfContrast = ReaderColorFilter.EMPTY.contrast,
-        cfInvert = ReaderColorFilter.EMPTY.isInverted,
-        cfGrayscale = ReaderColorFilter.EMPTY.isGrayscale,
-        cfBookEffect = ReaderColorFilter.EMPTY.isBookBackground,
-        titleOverride = manga.titleOverride,
-        coverUrlOverride = manga.coverUrlOverride,
-        contentRatingOverride = manga.contentRatingOverride,
-        metadataSourceKind = manga.metadataSourceKind,
-        metadataSourceService = manga.metadataSourceService,
-        metadataSourceRemoteId = manga.metadataSourceRemoteId,
-        readingStatus = null,
-        ignoredTrackingSuggestionService = null,
-        ignoredTrackingSuggestionRemoteId = null,
-    )
+    private fun EntityPrefsRecord.normalizedForRestore(
+        localEntityId: Long,
+        restoreContext: RestoreSemanticContext,
+    ): EntityPrefsRecord {
+        return if (restoreContext.isLegacySemanticSchema) {
+            copy(
+                entityId = localEntityId,
+                metadataBindingSource = null,
+                metadataBindingExternalId = null,
+            )
+        } else {
+            copy(entityId = localEntityId)
+        }
+    }
 
     private suspend inline fun <T> Sequence<T>.restoreToDb(crossinline block: suspend MangaDatabase.(T) -> Unit): CompositeResult {
         return fold(CompositeResult.EMPTY) { result, item ->

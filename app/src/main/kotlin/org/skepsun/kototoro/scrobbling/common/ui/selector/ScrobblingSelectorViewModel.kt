@@ -18,6 +18,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
@@ -43,6 +44,7 @@ import javax.inject.Inject
 class ScrobblingSelectorViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
 	scrobblers: Set<@JvmSuppressWildcards Scrobbler>,
+	private val contentDataRepository: ContentDataRepository,
 	private val historyRepository: HistoryRepository,
 	private val favouritesRepository: org.skepsun.kototoro.favourites.domain.FavouritesRepository,
 	@dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
@@ -101,7 +103,12 @@ class ScrobblingSelectorViewModel @Inject constructor(
 		get() = scrobblerContentList.value.isEmpty()
 
 	init {
-		initialManga?.let(::initialize)
+		launchJob(Dispatchers.Default) {
+			val resolved = resolveCurrentContent()
+			if (resolved != null) {
+				initialize(resolved)
+			}
+		}
 	}
 
 	fun initialize(manga: Content) {
@@ -208,13 +215,13 @@ class ScrobblingSelectorViewModel @Inject constructor(
 				},
 				comment = prevInfo?.comment,
 			)
-			if (history != null) {
+			if (history != null && manga.chapters?.any { it.id == history.chapterId } == true) {
 				currentScrobbler.scrobble(
 					manga = manga,
 					chapterId = history.chapterId,
 				)
 			}
-			if (favouritesRepository.getCategoriesIds(manga.id).isEmpty()) {
+			if (favouritesRepository.getCategoriesIdsByWork(manga.id).isEmpty()) {
 				val categories = favouritesRepository.observeCategories().firstOrNull()
 				val categoryId = if (!categories.isNullOrEmpty()) {
 					categories.first().id
@@ -226,6 +233,22 @@ class ScrobblingSelectorViewModel @Inject constructor(
 			}
 			onClose.call(Unit)
 		}
+	}
+
+	private suspend fun resolveCurrentContent(): Content? {
+		val resolved = initialManga?.id
+			?.takeIf { it != 0L }
+			?.let {
+				contentDataRepository.findPreferredLocalContentById(it, withChapters = true)
+					?: contentDataRepository.findContentById(it, withChapters = true)
+			}
+		if (resolved != null) {
+			return resolved
+		}
+		// This sheet uses KEY_ID for scrobbler service id, not content id.
+		// Without an explicit local content anchor, missing DB state must still
+		// fall back to the navigation seed for legacy entry compatibility.
+		return initialManga
 	}
 
 	fun setScrobblerIndex(index: Int) {

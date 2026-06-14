@@ -3,11 +3,14 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.resolveScrobblingOwnerId
 
 @Serializable
 class ScrobblingBackup(
 	@SerialName("scrobbler") val scrobbler: Int,
 	@SerialName("id") val id: Int,
+	@SerialName("owner_id") val ownerId: Long? = null,
+	@SerialName("entity_id") val entityId: Long? = null,
 	@SerialName("manga_id") val mangaId: Long,
 	@SerialName("target_id") val targetId: Long,
 	@SerialName("status") val status: String?,
@@ -23,6 +26,8 @@ class ScrobblingBackup(
 	constructor(entity: ScrobblingEntity) : this(
 		scrobbler = entity.scrobbler,
 		id = entity.id,
+		ownerId = entity.ownerId,
+		entityId = entity.entityId,
 		mangaId = entity.mangaId,
 		targetId = entity.targetId,
 		status = entity.status,
@@ -38,6 +43,8 @@ class ScrobblingBackup(
 	fun toEntity() = ScrobblingEntity(
 		scrobbler = scrobbler,
 		id = id,
+		ownerId = ownerId ?: resolveScrobblingOwnerId(entityId, mangaId),
+		entityId = entityId,
 		mangaId = mangaId,
 		targetId = targetId,
 		status = status,

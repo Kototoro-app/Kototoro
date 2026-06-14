@@ -57,8 +57,8 @@ internal fun openDetailsReader(
 
 		if ((contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) && !manga.chapters.isNullOrEmpty()) {
 			val selectedBranch = viewModel.selectedBranchValue
-			val historyMatchesSelectedBranch = history != null &&
-				manga.chapters?.find { it.id == history.chapterId }?.branch == selectedBranch
+			val historyChapter = history?.let { hist -> manga.chapters?.find { it.id == hist.chapterId } }
+			val historyMatchesSelectedBranch = historyChapter?.branch == selectedBranch
 			val state = if (history != null && historyMatchesSelectedBranch) {
 				ReaderState(history)
 			} else {

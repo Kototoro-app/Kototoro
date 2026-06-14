@@ -20,6 +20,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -44,11 +45,14 @@ import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.UpdatesListQuickFilter
+import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
 import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
+import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -65,6 +69,7 @@ class FeedViewModel @Inject constructor(
 	private val favouritesRepository: FavouritesRepository,
 	private val globalFavoritesState: GlobalFavoritesState,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
+	private val dataRepository: ContentDataRepository,
 ) : BaseViewModel(), QuickFilterListener by quickFilter {
 
 	private data class HeaderParams(
@@ -229,9 +234,10 @@ class FeedViewModel @Inject constructor(
 	}
 
 	private suspend fun List<TrackingLogItem>.mapListTo(destination: MutableList<ListModel>) {
+		val feedItems = mangaListMapper.toFeedItems(this)
 		var prevDate: DateTimeAgo? = null
-		for (item in this) {
-			val date = calculateTimeAgo(item.createdAt)
+		for ((logItem, feedItem) in zip(feedItems)) {
+			val date = calculateTimeAgo(logItem.createdAt)
 			if (prevDate != date) {
 				destination += if (date != null) {
 					ListHeader(date)
@@ -240,7 +246,7 @@ class FeedViewModel @Inject constructor(
 				}
 			}
 			prevDate = date
-			destination += mangaListMapper.toFeedItem(item)
+			destination += feedItem
 		}
 	}
 
@@ -286,15 +292,81 @@ class FeedViewModel @Inject constructor(
 				if (filteredContentList.isEmpty()) {
 					null
 				} else {
-					UpdatedContentHeader(
-						filteredContentList.map { mangaListMapper.toListModel(it.manga, ListMode.GRID) },
-					)
+					buildUpdatedContentHeader(filteredContentList)
 				}
 			}
 		} else {
 			flowOf(null)
 		}
 	}
+
+	private suspend fun buildUpdatedContentHeader(items: List<ContentTracking>): UpdatedContentHeader {
+		val groupedList = items.aggregateFeedUpdatesByEntity()
+		return UpdatedContentHeader(
+			list = groupedList.map { group ->
+				UpdatedContentHeaderItem(
+					model = mangaListMapper.toListModel(
+						manga = group.representative.manga,
+						mode = ListMode.GRID,
+						metadataSelectionOverride = group.metadataSourceSelection,
+						useMetadataSelectionOverride = group.metadataSourceSelection != null,
+					),
+					groupKey = group.groupKey,
+					entityId = group.entityId,
+					preferredLocalMangaId = group.preferredLocalMangaId,
+					totalNewChapters = group.totalNewChapters,
+				)
+			},
+		)
+	}
+
+	private suspend fun List<ContentTracking>.aggregateFeedUpdatesByEntity(): List<FeedUpdateGroup> {
+		if (isEmpty()) {
+			return emptyList()
+		}
+		val resolvedEntityIds = mapNotNull(ContentTracking::entityId).distinct()
+		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+		val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
+		val grouped = LinkedHashMap<Long, MutableList<ContentTracking>>()
+		for (item in this) {
+			val contentTypeOrdinal = item.manga.source.getContentType().ordinal
+			val groupKey = item.entityId?.toFeedGroupKey(contentTypeOrdinal) ?: item.manga.id
+			grouped.getOrPut(groupKey) { ArrayList(1) }.add(item)
+		}
+		return grouped.map { (groupKey, groupItems) ->
+			val entityId = groupItems.firstNotNullOfOrNull(ContentTracking::entityId)
+			val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
+				?: groupItems.firstNotNullOfOrNull(ContentTracking::preferredLocalMangaId)
+			val representative = groupItems.firstOrNull { it.manga.id == preferredLocalId }
+				?: groupItems.maxWithOrNull(
+					compareBy<ContentTracking>(
+						{ it.lastChapterDate ?: java.time.Instant.EPOCH },
+						{ it.lastCheck ?: java.time.Instant.EPOCH },
+						{ it.newChapters },
+					),
+				)
+				?: groupItems.first()
+			FeedUpdateGroup(
+				groupKey = groupKey,
+				representative = representative,
+				totalNewChapters = groupItems.sumOf { it.newChapters },
+				entityId = entityId,
+				preferredLocalMangaId = preferredLocalId ?: representative.manga.id,
+				metadataSourceSelection = entityId?.let(metadataSelectionsByEntity::get),
+			)
+		}
+	}
+
+	private fun Long.toFeedGroupKey(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
+
+	private data class FeedUpdateGroup(
+		val groupKey: Long,
+		val representative: ContentTracking,
+		val totalNewChapters: Int,
+		val entityId: Long?,
+		val preferredLocalMangaId: Long?,
+		val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
+	)
 
 	private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> = combine(
 		settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },

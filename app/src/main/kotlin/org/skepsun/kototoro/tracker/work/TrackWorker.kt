@@ -59,6 +59,8 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.trySetForeground
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
+import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.toIntUp
@@ -84,9 +86,15 @@ class TrackWorker @AssistedInject constructor(
 	private val getTracksUseCase: GetTracksUseCase,
 	private val checkNewChaptersUseCase: CheckNewChaptersUseCase,
 	private val workManager: WorkManager,
+	private val contentDataRepository: ContentDataRepository,
 	private val localRepositoryLazy: Lazy<LocalMangaRepository>,
 	private val downloadSchedulerLazy: Lazy<DownloadWorker.Scheduler>,
 ) : CoroutineWorker(context, workerParams) {
+
+	private data class AutoDownloadSeed(
+		val executionManga: org.skepsun.kototoro.parsers.model.Content,
+		val displayManga: org.skepsun.kototoro.parsers.model.Content?,
+	)
 
 	private val notificationManager by lazy { NotificationManagerCompat.from(applicationContext) }
 
@@ -255,21 +263,47 @@ class TrackWorker @AssistedInject constructor(
 		when (settings.trackerDownloadStrategy) {
 			TrackerDownloadStrategy.DISABLED -> Unit
 			TrackerDownloadStrategy.DOWNLOADED -> {
-				val localContent = localRepositoryLazy.get().findSavedContent(mangaUpdates.manga)
+				val downloadSeed = resolveAutoDownloadSeed(mangaUpdates)
+				val localRepository = localRepositoryLazy.get()
+				val localContent = downloadSeed.displayManga
+					?.let { localRepository.findSavedContent(it) }
+					?: localRepository.findSavedContent(downloadSeed.executionManga)
 				if (localContent != null) {
-					val task = DownloadTask(
-						mangaId = mangaUpdates.manga.id,
-						isPaused = false,
-						isSilent = false,
-						chaptersIds = mangaUpdates.newChapters.ids().toLongArray(),
-						destination = null,
-						format = null,
-						allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
-					)
-					downloadSchedulerLazy.get().schedule(setOf(mangaUpdates.manga to task))
+					val displayMangaId = downloadSeed.displayManga?.id ?: downloadSeed.executionManga.id
+						val task = DownloadTask.createExecutionTask(
+							executionMangaId = downloadSeed.executionManga.id,
+							displayMangaId = displayMangaId,
+							isPaused = false,
+							isSilent = false,
+							executionChapterIds = mangaUpdates.newChapters.ids().toLongArray(),
+							executionChapterRefs = mangaUpdates.newChapters.map(ExecutionChapterRef::fromChapter),
+							destination = null,
+							format = null,
+							allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
+						)
+					contentDataRepository.storeContent(downloadSeed.executionManga, replaceExisting = true)
+					downloadSeed.displayManga?.let { displayManga ->
+						contentDataRepository.storeContent(displayManga, replaceExisting = false)
+					}
+					downloadSchedulerLazy.get().schedule(setOf(downloadSeed.executionManga to task))
 				}
 			}
 		}
+	}
+
+	private suspend fun resolveAutoDownloadSeed(mangaUpdates: MangaUpdates.Success): AutoDownloadSeed {
+		val executionManga = contentDataRepository.findContentById(
+			mangaUpdates.manga.id,
+			withChapters = true,
+		) ?: mangaUpdates.manga
+		val displayManga = contentDataRepository.findDisplayContentById(
+			executionManga.id,
+			withChapters = false,
+		)
+		return AutoDownloadSeed(
+			executionManga = executionManga,
+			displayManga = displayManga,
+		)
 	}
 
 	@Reusable

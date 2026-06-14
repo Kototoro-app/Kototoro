@@ -43,6 +43,7 @@ import org.skepsun.kototoro.core.ui.image.rememberPanoramaRequestSize
 import org.skepsun.kototoro.core.ui.image.panoramaBlur
 import org.skepsun.kototoro.core.ui.compose.panoramaAnimationDurations
 import org.skepsun.kototoro.core.ui.compose.panoramaAnimationMotion
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 
 @Immutable
 data class PanoramaBackdropPrefs(
@@ -93,6 +94,7 @@ fun AnimatedPanoramaBackdrop(
     modifier: Modifier = Modifier,
 ) {
     if (!prefs.isEnabled) return
+    val normalizedModel = (model as? String)?.takeIfUsableImageUri() ?: model.takeUnless { it is String }
 
     val panoramaGradientAlphaFactor = (prefs.bottomGradientAlphaPercent / 100f).coerceIn(0f, 1f)
     val animationDurations = panoramaAnimationDurations(prefs.animationSpeedPercent)
@@ -165,15 +167,15 @@ fun AnimatedPanoramaBackdrop(
         downsample = prefs.downsampleEnabled,
     )
     val backgroundRequest = androidx.compose.runtime.remember(
-        model,
+        normalizedModel,
         context,
         crossfadeEnabled,
         prefs.blurPercent,
         panoramaRequestSize,
         useRealtimeBlur,
     ) {
-        when (model) {
-            is ImageRequest -> model.newBuilder()
+        when (normalizedModel) {
+            is ImageRequest -> normalizedModel.newBuilder()
                 .size(panoramaRequestSize)
                 .crossfade(crossfadeEnabled)
                 .apply {
@@ -183,7 +185,7 @@ fun AnimatedPanoramaBackdrop(
                 }
                 .build()
             else -> ImageRequest.Builder(context)
-                .data(model)
+                .data(normalizedModel)
                 .size(panoramaRequestSize)
                 .crossfade(crossfadeEnabled)
                 .apply {
@@ -239,7 +241,7 @@ fun AnimatedPanoramaBackdrop(
         )
     }
 
-    if (model != null) {
+    if (normalizedModel != null) {
         AsyncImage(
             model = backgroundRequest,
             contentDescription = null,

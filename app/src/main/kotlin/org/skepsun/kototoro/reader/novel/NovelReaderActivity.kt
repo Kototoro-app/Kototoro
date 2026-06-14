@@ -37,6 +37,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
@@ -85,6 +86,9 @@ class NovelReaderActivity :
 
     @Inject
     lateinit var readingRecordRepository: ReadingRecordRepository
+
+    @Inject
+    lateinit var contentDataRepository: org.skepsun.kototoro.core.parser.ContentDataRepository
 
     @Inject
     lateinit var novelContentLoader: NovelContentLoader
@@ -271,7 +275,9 @@ class NovelReaderActivity :
         }
 
         val parcelable = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)
-        val mangaSeed = parcelable?.manga
+        val mangaSeed = runBlocking {
+            contentDataRepository.resolveIntent(ContentIntent(intent), withChapters = true)
+        } ?: parcelable?.manga
         if (mangaSeed == null) {
             finish()
             return
@@ -1234,118 +1240,132 @@ class NovelReaderActivity :
         
         // Get history
         val history = historyRepository.getOne(manga)
-        
-        // Determine which chapter ID to restore
-        val targetChapterId = when {
-            state != null && state.chapterId != 0L -> {
-                android.util.Log.d("NovelReaderActivity", "Using chapter ID from Intent: ${state.chapterId}")
-                state.chapterId
+        data class RestoreCandidate(
+            val source: String,
+            val chapterId: Long,
+            val page: Int,
+            val scroll: Int,
+        )
+
+        suspend fun resolveLocalChapterIndex(chapterId: Long): Int {
+            var targetIndex = chapters.indexOfFirst { it.id == chapterId }
+            android.util.Log.d("NovelReaderActivity", "Looking for chapter ID $chapterId in ${chapters.size} expanded chapters")
+            android.util.Log.d("NovelReaderActivity", "Found at index: $targetIndex")
+
+            if (targetIndex >= 0) {
+                return targetIndex
             }
-            history != null -> {
-                android.util.Log.d("NovelReaderActivity", "Using chapter ID from history: ${history.chapterId}")
-                history.chapterId
-            }
-            else -> {
-                android.util.Log.d("NovelReaderActivity", "No saved state, starting from first chapter")
+
+            android.util.Log.d("NovelReaderActivity", "Chapter not found in expanded list, checking database mappings")
+            val mapping = try {
+                epubChapterMappingDao.getById(chapterId)
+            } catch (e: Exception) {
+                android.util.Log.e("NovelReaderActivity", "Failed to query chapter mapping", e)
                 null
             }
-        }
-        
-        if (targetChapterId != null) {
-            // 直接在展开后的章节列表中查找
-            var targetIndex = chapters.indexOfFirst { it.id == targetChapterId }
-            
-            android.util.Log.d("NovelReaderActivity", "Looking for chapter ID $targetChapterId in ${chapters.size} expanded chapters")
-            android.util.Log.d("NovelReaderActivity", "Found at index: $targetIndex")
-            
-            // 如果没找到，尝试通过数据库映射查找
-            if (targetIndex < 0) {
-                android.util.Log.d("NovelReaderActivity", "Chapter not found in expanded list, checking database mappings")
-                
-                // 检查是否是EPUB内部章节
-                val mapping = try {
-                    epubChapterMappingDao.getById(targetChapterId)
-                } catch (e: Exception) {
-                    android.util.Log.e("NovelReaderActivity", "Failed to query chapter mapping", e)
-                    null
+
+            if (mapping != null) {
+                android.util.Log.d(
+                    "NovelReaderActivity",
+                    "Found EPUB mapping: parentId=${mapping.parentChapterId}, index=${mapping.chapterIndex}",
+                )
+                val targetUrl = "#chapter/${mapping.chapterIndex}"
+                targetIndex = chapters.indexOfFirst { chapter ->
+                    chapter.url.contains(targetUrl) &&
+                        (chapter.id == chapterId ||
+                            chapter.url.contains("chapter_${mapping.parentChapterId}.epub") ||
+                            chapter.url.contains("/${mapping.parentChapterId}/"))
                 }
-                
-                if (mapping != null) {
-                    android.util.Log.d("NovelReaderActivity", "Found EPUB mapping: parentId=${mapping.parentChapterId}, index=${mapping.chapterIndex}")
-                    
-                    // 在展开后的章节列表中查找匹配的章节
-                    // 匹配条件：URL包含相同的父章节ID和章节索引
-                    val targetUrl = "#chapter/${mapping.chapterIndex}"
-                    targetIndex = chapters.indexOfFirst { chapter ->
-                        chapter.url.contains(targetUrl) && 
-                        (chapter.id == targetChapterId || 
-                         chapter.url.contains("chapter_${mapping.parentChapterId}.epub") ||
-                         chapter.url.contains("/${mapping.parentChapterId}/"))
-                    }
-                    
-                    android.util.Log.d("NovelReaderActivity", "Searching for URL pattern: $targetUrl, found at index: $targetIndex")
-                }
+                android.util.Log.d("NovelReaderActivity", "Searching for URL pattern: $targetUrl, found at index: $targetIndex")
             }
-            
-            // Requirement 7.6: If chapter ID is not found, fallback to first chapter
+
+            return targetIndex
+        }
+
+        val restoreCandidates = buildList {
+            if (state != null && state.chapterId != 0L) {
+                android.util.Log.d("NovelReaderActivity", "Queued intent restore candidate: ${state.chapterId}")
+                add(
+                    RestoreCandidate(
+                        source = "intent",
+                        chapterId = state.chapterId,
+                        page = state.page,
+                        scroll = state.scroll,
+                    ),
+                )
+            }
+            if (history != null && history.chapterId != 0L && history.chapterId != state?.chapterId) {
+                android.util.Log.d("NovelReaderActivity", "Queued history restore candidate: ${history.chapterId}")
+                add(
+                    RestoreCandidate(
+                        source = "history",
+                        chapterId = history.chapterId,
+                        page = history.page,
+                        scroll = history.scroll,
+                    ),
+                )
+            }
+        }
+
+        var restored = false
+        for (candidate in restoreCandidates) {
+            val targetIndex = resolveLocalChapterIndex(candidate.chapterId)
             if (targetIndex >= 0) {
                 currentChapterIndex = targetIndex
-                // Restore page position/ratio from history if available
-                desiredProgressRatio = history?.scroll?.takeIf { it > 0 }?.let { it / 10000f }
-                currentPageIndex = history?.page ?: state?.page ?: 0
-                android.util.Log.d("NovelReaderActivity", "✅ Restored to chapter index $targetIndex (ID: ${chapters[targetIndex].id}), page $currentPageIndex")
+                desiredProgressRatio = candidate.scroll.takeIf { it > 0 }?.let { it / 10000f }
+                currentPageIndex = candidate.page
+                android.util.Log.d(
+                    "NovelReaderActivity",
+                    "✅ Restored from ${candidate.source} to chapter index $targetIndex (ID: ${chapters[targetIndex].id}), page $currentPageIndex",
+                )
                 android.util.Log.d("NovelReaderActivity", "   Chapter title: ${chapters[targetIndex].title}")
                 android.util.Log.d("NovelReaderActivity", "   Chapter URL: ${chapters[targetIndex].url.takeLast(50)}")
-            } else {
-                android.util.Log.w("NovelReaderActivity", "❌ Chapter ID $targetChapterId not found in local chapters")
-                
-                // Try to find the chapter in original manga (online source)
-                var onlineChapter = originalContent?.chapters?.find { it.id == targetChapterId }
-                if (onlineChapter == null && originalContent != null) {
-                    // 若原始信息没有完整目录，尝试拉取远端详情
-                    runCatching {
-                        val onlineRepo = mangaRepositoryFactory.create(originalContent!!.source)
-                        val details = runBlocking { onlineRepo.getDetails(originalContent!!) }
-                        originalContent = details
-                        onlineChapter = details.chapters?.find { it.id == targetChapterId }
-                    }.onFailure {
-                        android.util.Log.w("NovelReaderActivity", "Failed to fetch online details for missing chapter", it)
-                    }
-                }
-                if (onlineChapter != null) {
-                    // Found in online source - add it to chapters list and switch repository
-                    android.util.Log.d("NovelReaderActivity", "✅ Found chapter in online source: ${onlineChapter.title}")
-                    
-                    // Create a new repository for online source
-                    repository = mangaRepositoryFactory.create(originalContent!!.source)
-                    
-                    // Add the online chapter to our list temporarily
-                    chapters = chapters + onlineChapter
-                    currentChapterIndex = chapters.size - 1
-                    currentPageIndex = 0
-                    
-                    android.widget.Toast.makeText(
-                        this@NovelReaderActivity,
-                        getString(R.string.novel_loading_online_chapter),
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    android.util.Log.w("NovelReaderActivity", "Chapter not found in online source either, falling back to first chapter")
-                    currentChapterIndex = 0
-                    currentPageIndex = 0
-                    
-                    // Show toast to inform user that the chapter is not found
-                    if (state != null && state.chapterId != 0L) {
-                        android.widget.Toast.makeText(
-                            this@NovelReaderActivity,
-                            getString(R.string.novel_chapter_not_downloaded),
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                    }
+                restored = true
+                break
+            }
+        }
+
+        if (!restored && restoreCandidates.isNotEmpty()) {
+            val preferredCandidate = restoreCandidates.first()
+            android.util.Log.w("NovelReaderActivity", "❌ Chapter ID ${preferredCandidate.chapterId} not found in local chapters")
+
+            var onlineChapter = originalContent?.chapters?.find { it.id == preferredCandidate.chapterId }
+            if (onlineChapter == null && originalContent != null) {
+                runCatching {
+                    val onlineRepo = mangaRepositoryFactory.create(originalContent!!.source)
+                    val details = runBlocking { onlineRepo.getDetails(originalContent!!) }
+                    originalContent = details
+                    onlineChapter = details.chapters?.find { it.id == preferredCandidate.chapterId }
+                }.onFailure {
+                    android.util.Log.w("NovelReaderActivity", "Failed to fetch online details for missing chapter", it)
                 }
             }
-        } else {
-            // No saved state, start from first chapter
+            if (onlineChapter != null) {
+                android.util.Log.d("NovelReaderActivity", "✅ Found chapter in online source: ${onlineChapter.title}")
+                repository = mangaRepositoryFactory.create(originalContent!!.source)
+                chapters = chapters + onlineChapter
+                currentChapterIndex = chapters.size - 1
+                currentPageIndex = 0
+
+                android.widget.Toast.makeText(
+                    this@NovelReaderActivity,
+                    getString(R.string.novel_loading_online_chapter),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                android.util.Log.w("NovelReaderActivity", "Chapter not found in online source either, falling back to first chapter")
+                currentChapterIndex = 0
+                currentPageIndex = 0
+
+                if (state != null && state.chapterId != 0L) {
+                    android.widget.Toast.makeText(
+                        this@NovelReaderActivity,
+                        getString(R.string.novel_chapter_not_downloaded),
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        } else if (!restored) {
             currentChapterIndex = 0
             currentPageIndex = 0
         }

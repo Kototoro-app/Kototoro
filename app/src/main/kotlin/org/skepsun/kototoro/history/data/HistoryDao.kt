@@ -66,8 +66,8 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 					ListSortOrder.UNREAD -> "history.percent ASC"
 					ListSortOrder.ALPHABETIC -> "manga.title"
 					ListSortOrder.ALPHABETIC_REVERSE -> "manga.title DESC"
-					ListSortOrder.NEW_CHAPTERS -> "IFNULL((SELECT chapters_new FROM tracks WHERE tracks.manga_id = manga.manga_id), 0) DESC"
-					ListSortOrder.UPDATED -> "IFNULL((SELECT last_chapter_date FROM tracks WHERE tracks.manga_id = manga.manga_id), 0) DESC"
+					ListSortOrder.NEW_CHAPTERS -> "${trackFieldExpr("manga.manga_id", "chapters_new")} DESC"
+					ListSortOrder.UPDATED -> "${trackFieldExpr("manga.manga_id", "last_chapter_date")} DESC"
 					else -> throw IllegalArgumentException("Sort order $order is not supported")
 				},
 			)
@@ -95,6 +95,9 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 
 	@Query("SELECT * FROM history WHERE manga_id = :id AND deleted_at = 0")
 	abstract suspend fun find(id: Long): HistoryEntity?
+
+	@Query("SELECT * FROM history WHERE manga_id IN (:ids) AND deleted_at = 0")
+	abstract suspend fun findByIds(ids: Collection<Long>): List<HistoryEntity>
 
 	@Query("SELECT * FROM history WHERE manga_id = :id AND deleted_at = 0")
 	abstract fun observe(id: Long): Flow<HistoryEntity?>
@@ -206,7 +209,64 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 	@Query("UPDATE history SET deleted_at = :deletedAt WHERE created_at >= :minDate AND deleted_at = 0")
 	protected abstract suspend fun setDeletedAtAfter(minDate: Long, deletedAt: Long)
 
-	@Query("UPDATE history SET deleted_at = :deletedAt WHERE deleted_at = 0 AND NOT EXISTS(SELECT * FROM favourites WHERE history.manga_id = favourites.manga_id)")
+	@Query(
+		"""
+		UPDATE history
+		SET deleted_at = :deletedAt
+		WHERE deleted_at = 0
+			AND NOT EXISTS(
+				SELECT 1
+				FROM work_favourites wf
+				WHERE wf.entity_id = (
+					SELECT entity_id
+					FROM entity_binding eb
+					WHERE eb.source IN ('local_manga', '0')
+						AND eb.external_id = CAST(history.manga_id AS TEXT)
+						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					ORDER BY CASE eb.state
+						WHEN 'MANUAL' THEN 0
+						WHEN 'CONFIRMED' THEN 1
+						WHEN 'LEGACY' THEN 2
+						ELSE 3
+					END,
+					eb.updated_at DESC,
+					eb.rowid DESC
+					LIMIT 1
+				)
+					AND wf.deleted_at = 0
+			)
+			AND NOT EXISTS(
+				SELECT 1
+				FROM favourites
+				WHERE favourites.manga_id = COALESCE(
+					(
+						SELECT m.manga_id
+						FROM entity_preferences ep
+						INNER JOIN manga m ON m.manga_id = ep.preferred_local_manga_id
+						WHERE ep.entity_id = (
+							SELECT entity_id
+							FROM entity_binding eb
+							WHERE eb.source IN ('local_manga', '0')
+								AND eb.external_id = CAST(history.manga_id AS TEXT)
+								AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+							ORDER BY CASE eb.state
+								WHEN 'MANUAL' THEN 0
+								WHEN 'CONFIRMED' THEN 1
+								WHEN 'LEGACY' THEN 2
+								ELSE 3
+							END,
+							eb.updated_at DESC,
+							eb.rowid DESC
+							LIMIT 1
+						)
+						LIMIT 1
+					),
+					history.manga_id
+				)
+					AND favourites.deleted_at = 0
+			)
+		""",
+	)
 	protected abstract suspend fun setDeletedAtNotFavorite(deletedAt: Long)
 
 	@Transaction
@@ -214,14 +274,58 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 	protected abstract fun observeAllImpl(query: SupportSQLiteQuery): Flow<List<HistoryWithContent>>
 
 	override fun getCondition(option: ListFilterOption): String? = when (option) {
-		is ListFilterOption.Favorite -> "EXISTS(SELECT * FROM favourites WHERE history.manga_id = favourites.manga_id AND category_id = ${option.category.id})"
+		is ListFilterOption.Favorite -> favouriteExistsExpr("history.manga_id", option.category.id)
 		ListFilterOption.Macro.COMPLETED -> "percent >= $PROGRESS_COMPLETED"
-		ListFilterOption.Macro.NEW_CHAPTERS -> "(SELECT chapters_new FROM tracks WHERE tracks.manga_id = history.manga_id) > 0"
-		ListFilterOption.Macro.FAVORITE -> "EXISTS(SELECT * FROM favourites WHERE history.manga_id = favourites.manga_id)"
+		ListFilterOption.Macro.NEW_CHAPTERS -> "${trackFieldExpr("history.manga_id", "chapters_new")} > 0"
+		ListFilterOption.Macro.FAVORITE -> favouriteExistsExpr("history.manga_id")
 		ListFilterOption.Macro.NSFW -> "manga.nsfw = 1"
 		is ListFilterOption.Tag -> "EXISTS(SELECT * FROM manga_tags WHERE history.manga_id = manga_tags.manga_id AND tag_id = ${option.tagId})"
 		ListFilterOption.Downloaded -> "EXISTS(SELECT * FROM local_index WHERE local_index.manga_id = history.manga_id)"
 		is ListFilterOption.Source -> "manga.source = ${sqlEscapeString(option.mangaSource.name)}"
 		else -> null
+	}
+
+	private fun entityIdExpr(localMangaIdExpr: String): String =
+		"(SELECT entity_id FROM entity_binding " +
+			"WHERE source IN ('local_manga', '0') " +
+			"AND external_id = CAST($localMangaIdExpr AS TEXT) " +
+			"AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY') " +
+			"ORDER BY CASE state " +
+			"WHEN 'MANUAL' THEN 0 " +
+			"WHEN 'CONFIRMED' THEN 1 " +
+			"WHEN 'LEGACY' THEN 2 " +
+			"ELSE 3 END, " +
+			"updated_at DESC, " +
+			"rowid DESC " +
+			"LIMIT 1)"
+
+	private fun representativeLocalMangaIdExpr(localMangaIdExpr: String): String =
+		"COALESCE((" +
+			"SELECT m.manga_id FROM entity_preferences ep " +
+			"INNER JOIN manga m ON m.manga_id = ep.preferred_local_manga_id " +
+			"WHERE ep.entity_id = ${entityIdExpr(localMangaIdExpr)} LIMIT 1" +
+			"), $localMangaIdExpr)"
+
+	private fun trackFieldExpr(localMangaIdExpr: String, field: String): String =
+		"IFNULL((" +
+			"SELECT $field FROM tracks " +
+			"WHERE tracks.entity_id = ${entityIdExpr(localMangaIdExpr)} LIMIT 1" +
+			"), IFNULL((" +
+			"SELECT $field FROM tracks " +
+			"WHERE tracks.manga_id = ${representativeLocalMangaIdExpr(localMangaIdExpr)} LIMIT 1" +
+			"), 0))"
+
+	private fun favouriteExistsExpr(localMangaIdExpr: String, categoryId: Long? = null): String {
+		val entityExpr = entityIdExpr(localMangaIdExpr)
+		val representativeLocalMangaIdExpr = representativeLocalMangaIdExpr(localMangaIdExpr)
+		val categoryFilter = categoryId?.let { " AND wf.category_id = $it" }.orEmpty()
+		val legacyCategoryFilter = categoryId?.let { " AND favourites.category_id = $it" }.orEmpty()
+		return "(" +
+			"EXISTS(SELECT 1 FROM work_favourites wf " +
+			"WHERE wf.entity_id = $entityExpr AND wf.deleted_at = 0$categoryFilter)" +
+			" OR " +
+			"EXISTS(SELECT 1 FROM favourites " +
+			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0$legacyCategoryFilter)" +
+			")"
 	}
 }

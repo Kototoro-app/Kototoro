@@ -55,6 +55,15 @@ fun File.getStorageName(context: Context): String = runCatching {
 
 fun Uri.toFileOrNull() = if (isFileUri()) path?.let(::File) else null
 
+fun String.takeIfUsableImageUri(): String? {
+	val uri = toUriOrNull() ?: return takeIf { it.isNotBlank() }
+	val file = uri.toFileOrNull()
+	if (file != null && !file.exists()) {
+		return null
+	}
+	return takeIf { it.isNotBlank() }
+}
+
 suspend fun File.deleteAwait() = runInterruptible(Dispatchers.IO) {
 	delete() || deleteRecursively()
 }

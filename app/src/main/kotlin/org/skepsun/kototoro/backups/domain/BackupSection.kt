@@ -24,6 +24,9 @@ enum class BackupSection(
 	ENTITY_GRAPH_BINDINGS("entity_graph_bindings"),
 	ENTITY_GRAPH_RELATIONS("entity_graph_relations"),
 	ENTITY_GRAPH_PREFS("entity_graph_prefs"),
+	WORK_HISTORY("work_history"),
+	WORK_FAVOURITES("work_favourites"),
+	WORK_STATS("work_stats"),
 	;
 
 	companion object {

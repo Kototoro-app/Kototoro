@@ -39,6 +39,7 @@ abstract class BaseBackupRestoreService : CoroutineIntentService() {
 		fileUri: Uri?,
 		result: CompositeResult,
 		showLegacyJarReposImportedHint: Boolean = false,
+		showWorkMigrationNormalizationHint: Boolean = false,
 	) {
 		if (!applicationContext.checkNotificationPermission(CHANNEL_ID)) {
 			return
@@ -55,7 +56,11 @@ abstract class BaseBackupRestoreService : CoroutineIntentService() {
 					notification
 						.setContentTitle(getString(R.string.restoring_backup))
 						.setContentText(
-							if (showLegacyJarReposImportedHint) {
+							if (showWorkMigrationNormalizationHint && showLegacyJarReposImportedHint) {
+								getString(R.string.data_restored_success_legacy_requires_normalization_with_jar_hint)
+							} else if (showWorkMigrationNormalizationHint) {
+								getString(R.string.data_restored_success_legacy_requires_normalization)
+							} else if (showLegacyJarReposImportedHint) {
 								getString(R.string.data_restored_success_legacy_jar_hint)
 							} else {
 								getString(R.string.data_restored_success)
@@ -91,7 +96,11 @@ abstract class BaseBackupRestoreService : CoroutineIntentService() {
 				notification
 					.setContentTitle(getString(R.string.restoring_backup))
 					.setContentText(
-						if (showLegacyJarReposImportedHint) {
+						if (showWorkMigrationNormalizationHint && showLegacyJarReposImportedHint) {
+							getString(R.string.data_restored_with_errors_legacy_requires_normalization_with_jar_hint)
+						} else if (showWorkMigrationNormalizationHint) {
+							getString(R.string.data_restored_with_errors_legacy_requires_normalization)
+						} else if (showLegacyJarReposImportedHint) {
 							getString(R.string.data_restored_with_errors_legacy_jar_hint)
 						} else {
 							getString(R.string.data_restored_with_errors)

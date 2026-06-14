@@ -270,18 +270,24 @@ class DownloadsViewModel @Inject constructor(
 			?: progress.takeUnless { it.isEmpty }
 			?: workScheduler.getInputData(id)
 			?: return null
-		val mangaId = DownloadState.getContentId(workData)
+		val mangaId = DownloadState.getExecutionContentId(workData)
 		if (mangaId == 0L) return null
-		val manga = getContent(mangaId) ?: return null
+		val executionManga = getContent(mangaId) ?: return null
+		val displayMangaId = DownloadState.getDisplayContentId(workData)
+		val displayManga = displayMangaId
+			?.let { getDisplayContent(it) ?: getContent(it) }
+			?: getDisplayContent(mangaId)
+			?: executionManga
 		val chapters = synchronized(chaptersCache) {
 			chaptersCache.getOrPut(id) {
-				observeChapters(manga, id)
+				observeChapters(executionManga, displayManga, id)
 			}
 		}
 		return DownloadItemModel(
 			id = id,
 			workState = state,
-			manga = manga,
+			executionManga = executionManga,
+			displayManga = displayManga,
 			taskKind = DownloadState.getTaskKind(workData),
 			error = DownloadState.getError(workData),
 			isIndeterminate = DownloadState.isIndeterminate(workData),
@@ -319,18 +325,44 @@ class DownloadsViewModel @Inject constructor(
 		}
 	}
 
-	private fun observeChapters(manga: Content, workId: UUID): StateFlow<List<DownloadChapter>?> = flow {
-		val chapterIds = workScheduler.getTask(workId)?.chaptersIds
-		val chapters = (tryLoad(manga) ?: manga).chapters ?: return@flow
+	private suspend fun getDisplayContent(mangaId: Long): Content? {
+		val displayContent = mangaDataRepository.findDisplayContentById(mangaId, withChapters = false)
+		if (displayContent != null) {
+			mangaCache[displayContent.id] = displayContent
+		}
+		return displayContent
+	}
+
+	private fun observeChapters(
+		executionManga: Content,
+		displayManga: Content,
+		workId: UUID,
+	): StateFlow<List<DownloadChapter>?> = flow {
+		val chapterIds = workScheduler.getTask(workId)?.executionChapterIds
+		val chapters = (tryLoad(executionManga) ?: executionManga).chapters ?: return@flow
+		val watchedLocalIds = buildSet {
+			add(executionManga.id)
+			add(displayManga.id)
+		}
 
 		suspend fun mapChapters(): List<DownloadChapter> {
 			val size = chapterIds?.size ?: chapters.size
-			val localChapters = localContentRepository.findSavedContent(manga)
-				?.manga
-				?.chapters
-				?.filter { it.source.isLocal }
-				.orEmpty()
-			val unmatchedLocalChapters = localChapters.toMutableList()
+			val localCandidates = buildList {
+				add(displayManga)
+				if (displayManga.id != executionManga.id) {
+					add(executionManga)
+				}
+			}
+			val resolvedLocalChapters = buildList {
+				for (candidate in localCandidates) {
+					val localChapters = localContentRepository.findSavedContent(candidate)?.manga?.chapters
+					if (localChapters?.any { localChapter -> localChapter.source.isLocal } == true) {
+						addAll(localChapters.filter { localChapter -> localChapter.source.isLocal })
+						break
+					}
+				}
+			}
+			val unmatchedLocalChapters = resolvedLocalChapters.toMutableList()
 			return chapters.mapNotNullTo(ArrayList(size)) {
 				if (chapterIds == null || it.id in chapterIds) {
 					val matchedLocalChapter = unmatchedLocalChapters.find { localChapter ->
@@ -365,7 +397,7 @@ class DownloadsViewModel @Inject constructor(
 		}
 		emit(mapChapters())
 		localStorageChanges.collect {
-			if (it?.manga?.id == manga.id) {
+			if (it?.manga?.id in watchedLocalIds) {
 				emit(mapChapters())
 			}
 		}
@@ -377,19 +409,25 @@ class DownloadsViewModel @Inject constructor(
 
 	private suspend fun retryWork(work: DownloadItemModel): Boolean {
 		val task = workScheduler.getTask(work.id) ?: return false
-		val manga = work.manga ?: getContent(task.mangaId) ?: return false
+		val manga = work.executionManga ?: getContent(task.executionMangaId) ?: return false
+		val displayMangaId = task.displayMangaId
+			?.let { getDisplayContent(it)?.id ?: getContent(it)?.id }
+			?: getDisplayContent(task.executionMangaId)?.id
+			?: manga.id
 		synchronized(chaptersCache) {
 			chaptersCache.remove(work.id)
 		}
 		Log.i(
 			"DownloadsViewModel",
-			"retryWork: requeue workId=${work.id} mangaId=${task.mangaId} title=${manga.title}",
+			"retryWork: requeue workId=${work.id} mangaId=${task.executionMangaId} title=${manga.title}",
 		)
-		val newTask = DownloadTask(
-			mangaId = task.mangaId,
+		val newTask = DownloadTask.createExecutionTask(
+			executionMangaId = task.executionMangaId,
+			displayMangaId = displayMangaId,
 			isPaused = false,
 			isSilent = task.isSilent,
-			chaptersIds = task.chaptersIds,
+			executionChapterIds = task.executionChapterIds,
+			executionChapterRefs = task.executionChapterRefs,
 			destination = task.destination,
 			format = task.format,
 			allowMeteredNetwork = task.allowMeteredNetwork,

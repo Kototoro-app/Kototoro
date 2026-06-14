@@ -3,6 +3,7 @@ package org.skepsun.kototoro.details.ui.scrobbling
 import com.hannesdorfmann.adapterdelegates4.dsl.adapterDelegateViewBinding
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.databinding.ItemScrobblingInfoBinding
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -19,7 +20,7 @@ fun scrobblingInfoAD(
 	}
 
 	bind {
-		binding.imageViewCover.setImageAsync(item.coverUrl)
+		binding.imageViewCover.setImageAsync(item.coverUrl?.takeIfUsableImageUri())
 		binding.textViewTitle.setText(item.scrobbler.titleResId)
 		binding.imageViewIcon.setImageResource(item.scrobbler.iconResId)
 		binding.ratingBar.rating = item.rating * binding.ratingBar.numStars

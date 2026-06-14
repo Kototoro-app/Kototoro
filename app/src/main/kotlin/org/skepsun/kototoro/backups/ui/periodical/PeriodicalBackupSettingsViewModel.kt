@@ -12,6 +12,7 @@ import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.backups.domain.ExternalBackupStorage
+import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
@@ -123,7 +124,8 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			try {
 				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
-				val latest = webDavUploader.getLatestBackup(RemoteNamespace.V2)
+				val latest = webDavUploader.getLatestBackup(RemoteNamespace.V3)
+					?: webDavUploader.getLatestBackup(RemoteNamespace.V2)
 					?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
 				if (latest == null) {
 					throw IllegalStateException("No WebDAV backups found")
@@ -132,13 +134,19 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 				try {
 					webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
 					val allSections = setOf(
+						org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
 						org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
 						org.skepsun.kototoro.backups.domain.BackupSection.CATEGORIES,
 						org.skepsun.kototoro.backups.domain.BackupSection.FAVOURITES,
 						org.skepsun.kototoro.backups.domain.BackupSection.BOOKMARKS,
+						org.skepsun.kototoro.backups.domain.BackupSection.STATS,
+						org.skepsun.kototoro.backups.domain.BackupSection.WORK_HISTORY,
+						org.skepsun.kototoro.backups.domain.BackupSection.WORK_FAVOURITES,
+						org.skepsun.kototoro.backups.domain.BackupSection.WORK_STATS,
 						org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
 						org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
 						org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
+						org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS_READER_GRID,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
@@ -147,10 +155,20 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 					val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
 						repository.restoreBackup(zis, allSections, null)
 					}
-					backupWebDavRestoreCoordinator.commitManualRestore()
+					val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
+					backupWebDavRestoreCoordinator.commitManualRestore(
+						state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
+							semanticSchemaVersion = restoreContext.semanticSchemaVersion,
+							transportGeneration = restoreContext.transportGeneration,
+						),
+					)
 					onActionDone.call(
 						ReversibleAction(
-							if (restoreResult.legacyJarReposImported) {
+							if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
+								R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
+							} else if (restoreContext.isLegacySemanticSchema) {
+								R.string.webdav_restore_success_legacy_requires_normalization
+							} else if (restoreResult.legacyJarReposImported) {
 								R.string.webdav_restore_success_legacy_jar_hint
 							} else {
 								R.string.webdav_restore_success

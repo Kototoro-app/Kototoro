@@ -5,6 +5,9 @@ import java.time.Instant
 
 data class TrackingLogItem(
 	val id: Long,
+	val anchorMangaId: Long,
+	val entityId: Long?,
+	val preferredLocalMangaId: Long?,
 	val manga: Content,
 	val chapters: List<String>,
 	val createdAt: Instant,

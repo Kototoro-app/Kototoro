@@ -1,0 +1,114 @@
+package org.skepsun.kototoro.history.data
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
+
+@Dao
+abstract class WorkHistoryDao {
+
+	@Query("SELECT * FROM work_history WHERE entity_id = :entityId LIMIT 1")
+	abstract suspend fun find(entityId: Long): WorkHistoryEntity?
+
+	@Query("SELECT * FROM work_history WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT 1")
+	abstract suspend fun findLastOrNull(): WorkHistoryEntity?
+
+	@Query("SELECT anchor_manga_id FROM work_history WHERE deleted_at = 0")
+	abstract suspend fun findActiveAnchorMangaIds(): List<Long>
+
+	@Insert(onConflict = OnConflictStrategy.IGNORE)
+	protected abstract suspend fun insert(entity: WorkHistoryEntity): Long
+
+	@Query(
+		"""
+		UPDATE work_history
+		SET anchor_manga_id = :anchorMangaId,
+			page = :page,
+			chapter_id = :chapterId,
+			scroll = :scroll,
+			percent = :percent,
+			updated_at = :updatedAt,
+			chapters = :chapters,
+			parent_chapter_id = :parentChapterId,
+			deleted_at = 0
+		WHERE entity_id = :entityId
+		""",
+	)
+	protected abstract suspend fun update(
+		entityId: Long,
+		anchorMangaId: Long,
+		page: Int,
+		chapterId: Long,
+		scroll: Float,
+		percent: Float,
+		chapters: Int,
+		updatedAt: Long,
+		parentChapterId: Long?,
+	): Int
+
+	suspend fun update(entity: WorkHistoryEntity): Int {
+		return update(
+			entityId = entity.entityId,
+			anchorMangaId = entity.anchorMangaId,
+			page = entity.page,
+			chapterId = entity.chapterId,
+			scroll = entity.scroll,
+			percent = entity.percent,
+			chapters = entity.chaptersCount,
+			updatedAt = entity.updatedAt,
+			parentChapterId = entity.parentChapterId,
+		)
+	}
+
+	@Transaction
+	open suspend fun upsert(entity: WorkHistoryEntity): Boolean {
+		return if (update(entity) == 0) {
+			insert(entity)
+			true
+		} else {
+			false
+		}
+	}
+
+	@Query("UPDATE work_history SET deleted_at = :deletedAt WHERE entity_id = :entityId")
+	abstract suspend fun setDeletedAt(entityId: Long, deletedAt: Long)
+
+	suspend fun delete(entityId: Long) = setDeletedAt(entityId, System.currentTimeMillis())
+
+	suspend fun recover(entityId: Long) = setDeletedAt(entityId, 0L)
+
+	@Query("UPDATE work_history SET deleted_at = :deletedAt WHERE created_at >= :minDate AND deleted_at = 0")
+	abstract suspend fun setDeletedAtAfter(minDate: Long, deletedAt: Long)
+
+	suspend fun deleteAfter(minDate: Long) = setDeletedAtAfter(minDate, System.currentTimeMillis())
+
+	@Query("UPDATE work_history SET deleted_at = :deletedAt WHERE deleted_at = 0")
+	abstract suspend fun setDeletedAtAll(deletedAt: Long)
+
+	suspend fun clear() = setDeletedAtAll(System.currentTimeMillis())
+
+	@Query("DELETE FROM work_history WHERE deleted_at != 0 AND deleted_at < :maxDeletionTime")
+	abstract suspend fun gc(maxDeletionTime: Long)
+
+	@Query("SELECT * FROM work_history ORDER BY updated_at DESC LIMIT :limit OFFSET :offset")
+	abstract suspend fun findAll(offset: Int, limit: Int): List<WorkHistoryEntity>
+
+	fun dump(): Flow<WorkHistoryEntity> = flow {
+		val window = 10
+		var offset = 0
+		while (currentCoroutineContext().isActive) {
+			val list = findAll(offset, window)
+			if (list.isEmpty()) {
+				break
+			}
+			offset += window
+			list.forEach { emit(it) }
+		}
+	}
+}

@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.textAndVisible
 import org.skepsun.kototoro.databinding.FragmentPreviewBinding
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
+import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
@@ -57,7 +58,7 @@ class PreviewFragment : BaseFragment<FragmentPreviewBinding>(), View.OnClickList
 		val manga = viewModel.manga.value
 		when (v.id) {
 			R.id.button_close -> closeSelf()
-			R.id.button_open -> router.openDetails(manga)
+			R.id.button_open -> router.openResolvedDetails(manga)
 			R.id.button_read -> router.openReader(manga)
 
 			R.id.textView_author -> router.showAuthorDialog(

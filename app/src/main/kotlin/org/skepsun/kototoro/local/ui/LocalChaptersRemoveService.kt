@@ -13,6 +13,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ErrorReporterReceiver
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
+import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.CoroutineIntentService
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -107,6 +108,7 @@ class LocalChaptersRemoveService : CoroutineIntentService() {
 			}
 			val intent = Intent(context, LocalChaptersRemoveService::class.java)
 			intent.putExtra(EXTRA_MANGA, ParcelableContent(manga))
+			intent.putExtra(AppRouter.KEY_ID, manga.id)
 			intent.putExtra(EXTRA_CHAPTERS_IDS, chaptersIds.toLongArray())
 			ContextCompat.startForegroundService(context, intent)
 		}

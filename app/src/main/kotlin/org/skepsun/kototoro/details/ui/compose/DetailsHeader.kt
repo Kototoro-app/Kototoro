@@ -129,6 +129,7 @@ import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.computeSize
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
 import org.skepsun.kototoro.details.data.ContentDetails
@@ -295,8 +296,8 @@ fun DetailsHeader(
         else -> R.string.details_reading_language_short
     }
 
-    val normalizedCoverUrl = coverUrl?.takeIf { it.isNotBlank() }
-    val normalizedFallbackCoverUrl = fallbackCoverUrl?.takeIf { it.isNotBlank() }
+    val normalizedCoverUrl = coverUrl?.takeIfUsableImageUri()
+    val normalizedFallbackCoverUrl = fallbackCoverUrl?.takeIfUsableImageUri()
     var hasCoverLoadFailed by remember(normalizedCoverUrl) { mutableStateOf(false) }
     val currentCoverUrl = if (hasCoverLoadFailed && normalizedFallbackCoverUrl != null) {
         normalizedFallbackCoverUrl
@@ -1317,18 +1318,19 @@ private fun SourceOptionCard(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
+                val resolvedCoverUrl = displayModel.coverUrl?.takeIfUsableImageUri()
                 when {
-                    !displayModel.coverUrl.isNullOrBlank() -> {
-                        val cacheKey = remember(displayModel.source?.name, displayModel.coverUrl) {
+                    resolvedCoverUrl != null -> {
+                        val cacheKey = remember(displayModel.source?.name, resolvedCoverUrl) {
                             sharedCoverMemoryCacheKey(
                                 sourceName = displayModel.source?.name,
                                 ownerKey = displayModel.title,
-                                url = displayModel.coverUrl,
+                                url = resolvedCoverUrl,
                             )?.let { "${it}#details-source-cover" }
                         }
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
-                                .data(displayModel.coverUrl)
+                                .data(resolvedCoverUrl)
                                 .memoryCacheKey(cacheKey)
                                 .diskCacheKey(cacheKey)
                                 .apply { displayModel.source?.let(::mangaSourceExtra) }
@@ -2646,7 +2648,7 @@ private fun TrackingCoverImage(
     modifier: Modifier = Modifier,
 ) {
     SourceCoverImage(
-        model = coverUrl?.takeIf { it.isNotBlank() },
+        model = coverUrl?.takeIfUsableImageUri(),
         contentDescription = contentDescription,
         modifier = modifier,
     )
@@ -2688,7 +2690,7 @@ private fun ReadingSearchResultRow(
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
-    val coverUrl = item.coverUrl?.takeIf { it.isNotBlank() }
+    val coverUrl = item.coverUrl?.takeIfUsableImageUri()
     val coverRequest = remember(item.id, coverUrl, item.source) {
         coverUrl?.let {
             ImageRequest.Builder(context)
@@ -2774,7 +2776,7 @@ private fun ReadingSearchResultCard(
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
-    val coverUrl = item.coverUrl?.takeIf { it.isNotBlank() }
+    val coverUrl = item.coverUrl?.takeIfUsableImageUri()
     val coverRequest = remember(item.id, coverUrl, item.source) {
         coverUrl?.let {
             ImageRequest.Builder(context)

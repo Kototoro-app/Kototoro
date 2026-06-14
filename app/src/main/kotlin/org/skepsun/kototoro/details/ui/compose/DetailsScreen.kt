@@ -159,6 +159,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.ContentBranch
@@ -658,15 +659,15 @@ fun DetailsScreen(
                         .background(MaterialTheme.colorScheme.surface),
                 )
                 if (panoramaPrefs.isEnabled) {
-                    val panoramaCoverUrl = mangaDetails?.coverUrl?.takeIf { it.isNotBlank() }
-                        ?: content?.largeCoverUrl?.takeIf { it.isNotBlank() }
-                        ?: content?.coverUrl?.takeIf { it.isNotBlank() }
+                    val panoramaCoverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
+                        ?: content?.largeCoverUrl?.takeIfUsableImageUri()
+                        ?: content?.coverUrl?.takeIfUsableImageUri()
                     if (panoramaCoverUrl != null || sharedElementKey != null) {
                         val panoramaPlaceholderCacheKey = remember(content?.source?.name, content?.url, content?.coverUrl) {
                             sharedCoverMemoryCacheKey(
                                 sourceName = content?.source?.name,
                                 ownerKey = content?.url,
-                                url = content?.coverUrl?.takeIf { it.isNotBlank() },
+                                url = content?.coverUrl?.takeIfUsableImageUri(),
                             )
                         }
                         val request = remember(content?.source?.name, content?.url, panoramaCoverUrl) {
@@ -917,8 +918,9 @@ fun DetailsScreen(
                                     settings = settings,
                                     collapseProgressProvider = remember { { 0f } },
                                     coverVisualAlpha = 1f,
-                                    coverUrl = mangaDetails?.coverUrl?.takeIf { it.isNotBlank() } ?: content?.coverUrl,
-                                    fallbackCoverUrl = content?.coverUrl,
+                                    coverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
+                                        ?: content?.coverUrl?.takeIfUsableImageUri(),
+                                    fallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri(),
                                     showCommentsAction = supplementalCommentThreads.isNotEmpty(),
                                     showReviewsAction = supplementalReviews.isNotEmpty(),
                                     content = content,
@@ -1003,7 +1005,7 @@ fun DetailsScreen(
                                     viewModel.selectMetadataSource(matchingOption)
                                 },
                                 onSelectReadingChapterTab = { tab ->
-                                    tab.targetMangaId?.let(viewModel::selectReadingProjection)
+                                    tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
                                 },
                                 selectedTabId = sheetTabSelection,
                                 availableTabIds = availableTabIds,
@@ -1090,8 +1092,9 @@ fun DetailsScreen(
                                 settings = settings,
                                 collapseProgressProvider = compactCollapseProgressProvider,
                                 coverVisualAlpha = headerCoverVisualAlpha,
-                                coverUrl = mangaDetails?.coverUrl?.takeIf { it.isNotBlank() } ?: content?.coverUrl,
-                                fallbackCoverUrl = content?.coverUrl,
+                                coverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
+                                    ?: content?.coverUrl?.takeIfUsableImageUri(),
+                                fallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri(),
                                 showCommentsAction = supplementalCommentThreads.isNotEmpty(),
                                 showReviewsAction = supplementalReviews.isNotEmpty(),
                                 content = content,
@@ -1176,7 +1179,7 @@ fun DetailsScreen(
                             viewModel.selectMetadataSource(matchingOption)
                         },
                         onSelectReadingChapterTab = { tab ->
-                            tab.targetMangaId?.let(viewModel::selectReadingProjection)
+                            tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
                         },
                         selectedTabId = sheetTabSelection,
                         availableTabIds = availableTabIds,
@@ -1408,7 +1411,7 @@ fun DetailsScreen(
                     currentContent = content,
                     entityChapterSourceInfo = entityChapterSourceInfo,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
-                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectReadingProjection) },
+                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectActiveLocalSource) },
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,
                     onSearch = viewModel::searchReadingBindings,
                     onLanguagePresetSelected = viewModel::setActiveLanguagePreset,
@@ -1422,7 +1425,7 @@ fun DetailsScreen(
                     },
                     onMigrateResult = { candidate ->
                         viewModel.bindReadingCandidateToTracking(candidate) {
-                            appRouter.openDetails(candidate)
+                            showReadingSourceDialog = false
                         }
                     },
                     onDeleteProjection = { option ->
@@ -1605,9 +1608,10 @@ private fun TrackingRelationItemSheet(
                                 )
                             }
                         } else {
+                            val normalizedCoverUrl = item.coverUrl?.takeIfUsableImageUri()
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
-                                    .data(item.coverUrl)
+                                    .data(normalizedCoverUrl)
                                     .crossfade(true)
                                     .build(),
                                 contentDescription = item.name,
@@ -1816,7 +1820,7 @@ private fun TrackingReviewsSheet(
                                 verticalAlignment = Alignment.Top,
                             ) {
                                 AsyncImage(
-                                    model = review.avatarUrl,
+                                    model = review.avatarUrl?.takeIfUsableImageUri(),
                                     contentDescription = review.authorName,
                                     modifier = Modifier
                                         .size(40.dp)
@@ -1947,7 +1951,7 @@ private fun TrackingCommentsSheet(
                                 verticalAlignment = Alignment.Top,
                             ) {
                                 AsyncImage(
-                                    model = thread.avatarUrl,
+                                    model = thread.avatarUrl?.takeIfUsableImageUri(),
                                     contentDescription = thread.userName,
                                     modifier = Modifier
                                         .size(40.dp)
@@ -4253,8 +4257,9 @@ fun EntityRelationCard(
                         )
                     }
                 } else {
+                    val normalizedCoverUrl = item.coverUrl?.takeIfUsableImageUri()
                     AsyncImage(
-                        model = item.coverUrl,
+                        model = normalizedCoverUrl,
                         contentDescription = item.name,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,

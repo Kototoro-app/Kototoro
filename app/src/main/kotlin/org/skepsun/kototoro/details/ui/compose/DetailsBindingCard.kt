@@ -30,6 +30,7 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -48,6 +49,7 @@ fun DetailsBindingCard(
     tertiaryActionLabel: String? = null,
     onTertiaryAction: (() -> Unit)? = null,
 ) {
+    val normalizedCoverUrl = coverUrl?.takeIfUsableImageUri()
     GlassSurface(
         modifier = modifier.fillMaxWidth(),
         style = GlassDefaults.subtleStyle(),
@@ -90,7 +92,7 @@ fun DetailsBindingCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (coverUrl.isNullOrBlank()) {
+                    if (normalizedCoverUrl.isNullOrBlank()) {
                         Icon(
                             painter = rememberSafePainter(badgeIconRes),
                             contentDescription = null,
@@ -99,7 +101,7 @@ fun DetailsBindingCard(
                         )
                     } else {
                         AsyncImage(
-                            model = coverUrl,
+                            model = normalizedCoverUrl,
                             contentDescription = title,
                             modifier = Modifier.matchParentSize(),
                             contentScale = ContentScale.Crop,

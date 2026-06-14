@@ -37,7 +37,8 @@ class ContentLinkResolver @Inject constructor(
 		require(uri.pathSegments.singleOrNull() == "manga") { "Invalid url" }
 		uri.getQueryParameter("id")?.let { mangaId ->
 			// short url
-			return dataRepository.findContentById(mangaId.toLong(), withChapters = false)
+			return dataRepository.findPreferredLocalContentById(mangaId.toLong(), withChapters = false)
+				?: dataRepository.findContentById(mangaId.toLong(), withChapters = false)
 		}
 		val sourceName = requireNotNull(uri.getQueryParameter("source")) { "Source is not specified" }
 		val source = ContentSource(sourceName)

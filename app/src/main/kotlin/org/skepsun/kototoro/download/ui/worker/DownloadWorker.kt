@@ -162,6 +162,16 @@ class DownloadWorker @AssistedInject constructor(
 	private val superResolutionManager: ReaderSuperResolutionManager,
 ) : CoroutineWorker(appContext, params) {
 
+	private data class DownloadExecutionContext(
+		val executionManga: Content,
+		val displayMangaId: Long,
+	)
+
+	private data class DownloadResolvedContent(
+		val executionManga: Content,
+		val executionDetails: Content,
+	)
+
 	private val task = DownloadTask(params.inputData)
 	private val notificationFactory = notificationFactoryFactory.create(uuid = params.id, isSilent = task.isSilent)
 	private val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -174,35 +184,111 @@ class DownloadWorker @AssistedInject constructor(
 	private val etaEstimator = RealtimeEtaEstimator()
 	private val notificationThrottler = Throttler(400)
 
+	private suspend fun resolveExecutionContext(executionManga: Content): DownloadExecutionContext {
+		val displayMangaId = task.displayMangaId
+			?: mangaDataRepository.findDisplayContentById(executionManga.id, withChapters = false)?.id
+			?: executionManga.id
+		return DownloadExecutionContext(
+			executionManga = executionManga,
+			displayMangaId = displayMangaId,
+		)
+	}
+
+	private suspend fun resolveExecutionContent(executionManga: Content): DownloadResolvedContent {
+		if (executionManga.isLocal) {
+			val remoteExecutionManga = localContentRepository.getRemoteContent(executionManga)
+				?: error("Cannot obtain remote manga instance")
+			val repo = mangaRepositoryFactory.createWithDiagnostics(remoteExecutionManga.source).requireAvailableRepository(
+				tag = "DownloadWorker",
+				prefix = "resolveExecutionContent_repository_unavailable",
+			) { "Download source ${remoteExecutionManga.source.name} is not available" }
+			val executionDetails = if (
+				remoteExecutionManga.chapters.isNullOrEmpty() ||
+				remoteExecutionManga.description.isNullOrEmpty()
+			) {
+				repo.getDetails(remoteExecutionManga)
+			} else {
+				remoteExecutionManga
+			}
+			return DownloadResolvedContent(
+				executionManga = remoteExecutionManga,
+				executionDetails = executionDetails,
+			)
+		}
+		val executionDetails = if (
+			executionManga.chapters.isNullOrEmpty() ||
+			executionManga.description.isNullOrEmpty()
+		) {
+			val repo = mangaRepositoryFactory.createWithDiagnostics(executionManga.source).requireAvailableRepository(
+				tag = "DownloadWorker",
+				prefix = "resolveExecutionContent_repository_unavailable",
+			) { "Download source ${executionManga.source.name} is not available" }
+			repo.getDetails(executionManga)
+		} else {
+			executionManga
+		}
+		return DownloadResolvedContent(
+			executionManga = executionManga,
+			executionDetails = executionDetails,
+		)
+	}
+
 	override suspend fun doWork(): Result = withContext(org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
 		setForeground(getForegroundInfo())
-		val manga = mangaDataRepository.findContentById(task.mangaId, withChapters = true) ?: return@withContext Result.failure()
-		publishState(DownloadState(manga = manga, isIndeterminate = true, taskKind = task.kind).also { lastPublishedState = it })
+		val executionManga = mangaDataRepository.findContentById(task.executionMangaId, withChapters = true) ?: return@withContext Result.failure()
+		val executionContext = resolveExecutionContext(executionManga)
+		publishState(
+			DownloadState(
+				manga = executionContext.executionManga,
+				displayMangaId = executionContext.displayMangaId,
+				isIndeterminate = true,
+				taskKind = task.kind,
+			).also { lastPublishedState = it },
+		)
 		Log.i(
 			"DownloadWorker",
-			"doWork start: workId=$id mangaId=${manga.id} title=${manga.title} kind=${task.kind} chapters=${manga.chapters?.size ?: 0} taskChapters=${task.chaptersIds?.size ?: -1}",
+			"doWork start: workId=$id mangaId=${executionContext.executionManga.id} title=${executionContext.executionManga.title} " +
+				"displayMangaId=${executionContext.displayMangaId} kind=${task.kind} " +
+				"chapters=${executionContext.executionManga.chapters?.size ?: 0} taskChapters=${task.executionChapterIds?.size ?: -1}",
 		)
 		try {
 			val pausingHandle = PausingHandle()
 			if (task.isPaused) {
-				Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${manga.id}")
+				Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${executionContext.executionManga.id}")
 				pausingHandle.pause()
 			}
 			withContext(pausingHandle) {
 				when (task.kind) {
 					DownloadTaskKind.DOWNLOAD -> {
-						Log.i("DownloadWorker", "doWork before downloadContentImpl: workId=$id mangaId=${manga.id}")
-						val downloadedIds = getDoneChapters(manga)
-						Log.i("DownloadWorker", "doWork after getDoneChapters: downloadedIds=${downloadedIds.size} workId=$id mangaId=${manga.id}")
-						downloadContentImpl(manga, task, downloadedIds)
-						Log.i("DownloadWorker", "doWork after downloadContentImpl: workId=$id mangaId=${manga.id}")
+						val resolvedContent = resolveExecutionContent(executionContext.executionManga)
+						mangaDataRepository.storeContent(resolvedContent.executionDetails, replaceExisting = true)
+						publishExecutionDetailsState(resolvedContent.executionDetails)
+						Log.i("DownloadWorker", "doWork before downloadContentImpl: workId=$id mangaId=${executionContext.executionManga.id}")
+						val downloadedIds = getDoneChapters(resolvedContent.executionDetails)
+						Log.i(
+							"DownloadWorker",
+							"doWork after getDoneChapters: downloadedIds=${downloadedIds.size} workId=$id mangaId=${executionContext.executionManga.id}",
+						)
+						downloadContentImpl(
+							subject = executionContext.executionManga,
+							resolvedContent = resolvedContent,
+							task = task,
+							excludedIds = downloadedIds,
+						)
+						Log.i("DownloadWorker", "doWork after downloadContentImpl: workId=$id mangaId=${executionContext.executionManga.id}")
 					}
 
 					DownloadTaskKind.PREPARE_TRANSLATION,
 					DownloadTaskKind.PREPARE_SUPER_RESOLUTION -> {
-						Log.i("DownloadWorker", "doWork before prepareContentImpl: workId=$id mangaId=${manga.id} kind=${task.kind}")
-						prepareContentImpl(manga, task)
-						Log.i("DownloadWorker", "doWork after prepareContentImpl: workId=$id mangaId=${manga.id} kind=${task.kind}")
+						Log.i(
+							"DownloadWorker",
+							"doWork before prepareContentImpl: workId=$id mangaId=${executionContext.executionManga.id} kind=${task.kind}",
+						)
+						prepareContentImpl(executionContext.executionManga, task)
+						Log.i(
+							"DownloadWorker",
+							"doWork after prepareContentImpl: workId=$id mangaId=${executionContext.executionManga.id} kind=${task.kind}",
+						)
 					}
 				}
 			}
@@ -218,7 +304,7 @@ class DownloadWorker @AssistedInject constructor(
 		} catch (e: Exception) {
 			Log.e(
 				"DownloadWorker",
-				"doWork failed: workId=$id mangaId=${task.mangaId} error=${e.javaClass.simpleName} msg=${e.message}",
+				"doWork failed: workId=$id mangaId=${task.executionMangaId} error=${e.javaClass.simpleName} msg=${e.message}",
 				e,
 			)
 			e.printStackTraceDebug()
@@ -254,53 +340,50 @@ class DownloadWorker @AssistedInject constructor(
 
 	private suspend fun downloadContentImpl(
 		subject: Content,
+		resolvedContent: DownloadResolvedContent,
 		task: DownloadTask,
 		excludedIds: Set<Long>,
 	) {
-		var manga = subject
-		val contentType = manga.source.getContentType()
+		val contentType = subject.source.getContentType()
 		if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-			downloadVideoImpl(manga, task, excludedIds)
+			downloadVideoImpl(subject, task, excludedIds)
 			return
 		}
-		Log.d("DownloadWorker", "downloadContentImpl start: mangaId=${manga.id} title=${manga.title} excluded=${excludedIds.size}")
+		Log.d("DownloadWorker", "downloadContentImpl start: mangaId=${subject.id} title=${subject.title} excluded=${excludedIds.size}")
 		val chaptersToSkip = excludedIds.toMutableSet()
 		val pausingReceiver = PausingReceiver(id, PausingHandle.current())
-		mangaLock.withLock(manga) {
+		mangaLock.withLock(subject) {
 			ContextCompat.registerReceiver(
 				applicationContext,
 				pausingReceiver,
 				PausingReceiver.createIntentFilter(id),
 				ContextCompat.RECEIVER_NOT_EXPORTED,
 			)
-			var destination = localContentRepository.getOutputDir(manga, task.destination)
+			var destination = localContentRepository.getOutputDir(subject, task.destination)
 			checkNotNull(destination) { applicationContext.getString(R.string.cannot_find_available_storage) }
 			Log.d("DownloadWorker", "downloadContentImpl outputDir=${destination.absolutePath}")
 			var output: LocalContentOutput? = null
 			try {
-				if (manga.isLocal) {
-					manga = localContentRepository.getRemoteContent(manga)
-						?: error("Cannot obtain remote manga instance")
-				}
-				val repo = mangaRepositoryFactory.createWithDiagnostics(manga.source).requireAvailableRepository(
+				val executionManga = resolvedContent.executionManga
+				val executionDetails = resolvedContent.executionDetails
+				val repo = mangaRepositoryFactory.createWithDiagnostics(executionManga.source).requireAvailableRepository(
 					tag = "DownloadWorker",
 					prefix = "downloadContentImpl_repository_unavailable",
-				) { "Download source ${manga.source.name} is not available" }
+				) { "Download source ${executionManga.source.name} is not available" }
 				Log.d("DownloadWorker", "downloadContentImpl repo=${repo.source.name}")
-				val mangaDetails = if (manga.chapters.isNullOrEmpty() || manga.description.isNullOrEmpty()) repo.getDetails(manga) else manga
-				Log.d("DownloadWorker", "downloadContentImpl detailsChapters=${mangaDetails.chapters?.size ?: 0}")
-				val contentType = mangaDetails.source.getContentType()
+				Log.d("DownloadWorker", "downloadContentImpl detailsChapters=${executionDetails.chapters?.size ?: 0}")
+				val contentType = executionDetails.source.getContentType()
 				val isNovel = when (contentType) {
 					ContentType.NOVEL, ContentType.HENTAI_NOVEL -> true
 					else -> false
-				} || mangaDetails.source.name.uppercase() in setOf("BILINOVEL", "LKNOVEL_US", "LIGHTNOVEL_WIKI", "NOVELIA", "WENKU8", "BIQUGE") ||
-					mangaDetails.source.name.startsWith("JSON_LEGADO", ignoreCase = true)
+				} || executionDetails.source.name.uppercase() in setOf("BILINOVEL", "LKNOVEL_US", "LIGHTNOVEL_WIKI", "NOVELIA", "WENKU8", "BIQUGE") ||
+					executionDetails.source.name.startsWith("JSON_LEGADO", ignoreCase = true)
 				
 				// 检测是否包含EPUB章节（仅小说需要，漫画全量扫描会导致长时间阻塞）
 				val hasEpubChapters = if (isNovel) {
 					runCatchingCancellable {
-						val fullChapters = mangaDetails.chapters ?: emptyList()
-						val chaptersToCheck = getChapters(mangaDetails, task).take(3)
+						val fullChapters = executionDetails.chapters ?: emptyList()
+						val chaptersToCheck = getChapters(executionDetails, task).take(3)
 						chaptersToCheck.any { chapter ->
 							val currentInFull = fullChapters.indexOfFirst { it.id == chapter.value.id }
 							val nextChapterUrl = if (currentInFull != -1) fullChapters.getOrNull(currentInFull + 1)?.url else null
@@ -330,10 +413,10 @@ class DownloadWorker @AssistedInject constructor(
 
 				output = LocalContentOutput.getOrCreate(
 					root = destination,
-					manga = mangaDetails,
+					manga = executionDetails,
 					format = downloadFormat,
 				)
-				val coverUrl = mangaDetails.largeCoverUrl.ifNullOrEmpty { mangaDetails.coverUrl }
+				val coverUrl = executionDetails.largeCoverUrl.ifNullOrEmpty { executionDetails.coverUrl }
 				if (!coverUrl.isNullOrEmpty()) {
 					downloadFile(repo, coverUrl, destination, isCover = true).let { file ->
 						output.addCover(file, getMediaType(coverUrl, file))
@@ -341,30 +424,30 @@ class DownloadWorker @AssistedInject constructor(
 					}
 				}
 				if (isNovel && !hasEpubChapters) {
-					downloadNovelChapters(mangaDetails, task, repo, destination, output, chaptersToSkip)
+					downloadNovelChapters(executionDetails, task, repo, destination, output, chaptersToSkip)
 					output.mergeWithExisting()
 					output.finish()
 					val localContent = LocalContentParser(output.rootFile).getContent(withDetails = true)
 					// 刷新缓存，确保 UI 能识别到本地 icon
-					localContentRepository.findSavedContent(mangaDetails)
+					localContentRepository.findSavedContent(executionDetails)
 					android.util.Log.d("DownloadWorker", "Novel download completed, emitting localStorageChanges for ${output.rootFile}")
 					localStorageChanges.emit(localContent)
 					publishState(currentState.copy(localContent = localContent, eta = -1L, isStuck = false, isCompleted = true))
 					return@withLock
 				}
-				processStandardChapters(mangaDetails, task, repo, destination, chaptersToSkip, output)
+				processStandardChapters(executionDetails, task, repo, destination, chaptersToSkip, output)
 				publishState(currentState.copy(isIndeterminate = true, eta = -1L, isStuck = false))
 				output.mergeWithExisting()
 				output.finish()
 				val localContent = LocalContentParser(output.rootFile).getContent(withDetails = true)
 				// 刷新缓存
-				localContentRepository.findSavedContent(mangaDetails)
+				localContentRepository.findSavedContent(executionDetails)
 				localStorageChanges.emit(localContent)
 				publishState(currentState.copy(localContent = localContent, eta = -1L, isStuck = false, isCompleted = true))
 			} catch (e: Exception) {
 				Log.e(
 					"DownloadWorker",
-					"downloadContentImpl failed: mangaId=${manga.id} title=${manga.title} error=${e.javaClass.simpleName} msg=${e.message}",
+					"downloadContentImpl failed: mangaId=${subject.id} title=${subject.title} error=${e.javaClass.simpleName} msg=${e.message}",
 					e,
 				)
 				if (e !is CancellationException) {
@@ -2002,6 +2085,18 @@ class DownloadWorker @AssistedInject constructor(
 		setProgress(state.toWorkData())
 	}
 
+	private suspend fun publishExecutionDetailsState(executionDetails: Content) {
+		val state = currentState
+		if (state.manga == executionDetails) {
+			return
+		}
+		publishState(
+			state.copy(
+				manga = executionDetails,
+			),
+		)
+	}
+
 	private fun scanDownloadedFile(file: File) {
 		runCatching {
 			MediaScannerConnection.scanFile(
@@ -2054,7 +2149,8 @@ class DownloadWorker @AssistedInject constructor(
 		task: DownloadTask,
 	): List<IndexedValue<ContentChapter>> {
 		val chapters = checkNotNull(manga.chapters) { "Chapters list must not be null" }
-		val chaptersIdsSet = task.chaptersIds?.toMutableSet()
+		val requestedChapterIds = task.executionChapterIds
+		val chaptersIdsSet = requestedChapterIds?.toMutableSet()
 		val result = ArrayList<IndexedValue<ContentChapter>>((chaptersIdsSet ?: chapters).size)
 		val counters = HashMap<String?, Int>()
 		for (chapter in chapters) {
@@ -2066,12 +2162,77 @@ class DownloadWorker @AssistedInject constructor(
 			result.add(IndexedValue(index, chapter))
 		}
 		if (chaptersIdsSet != null) {
+			resolveMissingExecutionChapters(
+				chapters = chapters,
+				requestedChapterIds = requestedChapterIds ?: LongArray(0),
+				requestedChapterRefs = task.executionChapterRefs.orEmpty(),
+				missingChapterIds = chaptersIdsSet,
+				result = result,
+				counters = counters,
+			)
 			check(chaptersIdsSet.isEmpty()) {
-				"${chaptersIdsSet.size} of ${task.chaptersIds.size} requested chapters not found in manga"
+				"${chaptersIdsSet.size} of ${task.executionChapterIds?.size ?: 0} requested chapters not found in manga"
 			}
 		}
 		check(result.isNotEmpty()) { "Chapters list must not be empty" }
-		return result
+		return result.sortedWith(compareBy<IndexedValue<ContentChapter>> { it.index }.thenBy { it.value.number }.thenBy { it.value.id })
+	}
+
+	private fun resolveMissingExecutionChapters(
+		chapters: List<ContentChapter>,
+		requestedChapterIds: LongArray,
+		requestedChapterRefs: List<ExecutionChapterRef>,
+		missingChapterIds: MutableSet<Long>,
+		result: MutableList<IndexedValue<ContentChapter>>,
+		counters: MutableMap<String?, Int>,
+	) {
+		if (missingChapterIds.isEmpty()) {
+			return
+		}
+		val usedChapterIds = result.mapTo(mutableSetOf()) { it.value.id }
+		val requestedChapterRefsById = requestedChapterRefs.associateBy { it.id }
+		for (requestedChapterId in requestedChapterIds) {
+			if (!missingChapterIds.contains(requestedChapterId)) {
+				continue
+			}
+			val requestedChapter = requestedChapterRefsById[requestedChapterId] ?: continue
+			val matchedChapter = chapters.firstOrNull { candidate ->
+				candidate.id !in usedChapterIds && chapterExecutionIdentityMatches(requestedChapter, candidate)
+			} ?: continue
+			val branchIndex = counters.getOrPut(matchedChapter.branch) { 0 }
+			counters[matchedChapter.branch] = branchIndex + 1
+			result.add(IndexedValue(branchIndex, matchedChapter))
+			usedChapterIds += matchedChapter.id
+			missingChapterIds.remove(requestedChapterId)
+			Log.w(
+				"DownloadWorker",
+				"getChapters: remapped executionChapterId=$requestedChapterId to chapterId=${matchedChapter.id} " +
+					"title=${matchedChapter.title} branch=${matchedChapter.branch}",
+			)
+		}
+	}
+
+	private fun chapterExecutionIdentityMatches(
+		requested: ExecutionChapterRef,
+		candidate: ContentChapter,
+	): Boolean {
+		if (requested.branch != candidate.branch) {
+			return false
+		}
+		if (requested.url.isNotBlank() && requested.url == candidate.url) {
+			return true
+		}
+		val sameTitle = requested.title?.takeIf { it.isNotBlank() } == candidate.title?.takeIf { it.isNotBlank() }
+		if (sameTitle && requested.number > 0f && candidate.number > 0f && requested.number == candidate.number) {
+			return true
+		}
+		if (sameTitle && requested.volume > 0 && candidate.volume > 0 && requested.volume == candidate.volume) {
+			return true
+		}
+		return requested.number > 0f &&
+			candidate.number > 0f &&
+			requested.number == candidate.number &&
+			requested.volume == candidate.volume
 	}
 
 	@Reusable
@@ -2159,13 +2320,36 @@ class DownloadWorker @AssistedInject constructor(
 				return
 			}
 			val requests = tasks.map { (manga, task) ->
-				mangaDataRepository.storeContent(manga, replaceExisting = true)
+				val currentManga = mangaDataRepository.findContentById(task.executionMangaId, withChapters = true) ?: manga
+				val displayManga = task.displayMangaId
+					?.let { displayId ->
+						mangaDataRepository.findDisplayContentById(displayId, withChapters = false)
+					}
+					?: mangaDataRepository.findDisplayContentById(task.executionMangaId, withChapters = false)
+				val displayMangaId = displayManga?.id ?: currentManga.id
+				val normalizedTask = DownloadTask.createExecutionTask(
+					executionMangaId = task.executionMangaId,
+					displayMangaId = displayMangaId,
+					isPaused = task.isPaused,
+					isSilent = task.isSilent,
+					executionChapterIds = task.executionChapterIds,
+					executionChapterRefs = task.executionChapterRefs,
+					destination = task.destination,
+					format = task.format,
+					allowMeteredNetwork = task.allowMeteredNetwork,
+					preferredQuality = task.preferredQuality,
+					kind = task.kind,
+				)
+				mangaDataRepository.storeContent(currentManga, replaceExisting = true)
+				displayManga?.takeIf { it.id != task.executionMangaId }?.let { representativeManga ->
+					mangaDataRepository.storeContent(representativeManga, replaceExisting = false)
+				}
 				OneTimeWorkRequestBuilder<DownloadWorker>()
 					.setConstraints(createConstraints(task.allowMeteredNetwork))
 					.addTag(TAG)
 					.keepResultsForAtLeast(30, TimeUnit.DAYS)
 					.setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.SECONDS)
-					.setInputData(task.toData())
+					.setInputData(normalizedTask.toData())
 					.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
 					.build()
 			}

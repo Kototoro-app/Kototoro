@@ -34,6 +34,7 @@ import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.sanitize
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.databinding.SheetScrobblingBinding
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
@@ -148,7 +149,7 @@ class ScrobblingInfoSheet :
 		binding.spinnerStatus.setSelection(scrobbling.status?.ordinal ?: -1)
 		binding.imageViewLogo.contentDescription = getString(scrobbling.scrobbler.titleResId)
 		binding.imageViewLogo.setImageResource(scrobbling.scrobbler.iconResId)
-		binding.imageViewCover.setImageAsync(scrobbling.coverUrl)
+		binding.imageViewCover.setImageAsync(scrobbling.coverUrl?.takeIfUsableImageUri())
 	}
 
 	private fun loadTrackingSiteDetails() {

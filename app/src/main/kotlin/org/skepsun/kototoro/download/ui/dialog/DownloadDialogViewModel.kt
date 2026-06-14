@@ -14,6 +14,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.DownloadFormat
@@ -26,6 +27,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
+import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.local.data.LocalStorageManager
@@ -40,13 +42,20 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DownloadDialogViewModel @Inject constructor(
+	private val savedStateHandle: SavedStateHandle,
 	private val scheduler: DownloadWorker.Scheduler,
 	private val localStorageManager: LocalStorageManager,
 	private val localContentRepository: LocalMangaRepository,
+	private val contentDataRepository: ContentDataRepository,
 	private val mangaRepositoryFactory: ContentRepository.Factory,
 	private val historyRepository: HistoryRepository,
 	private val settings: AppSettings,
 ) : BaseViewModel() {
+
+	private val initialManga = savedStateHandle.get<Array<ParcelableContent>>(AppRouter.KEY_MANGA)
+		?.map { it.manga }
+		.orEmpty()
+	private val initialMangaIds = savedStateHandle.get<LongArray>(AppRouter.KEY_ID)?.toList().orEmpty()
 
 	var manga: List<Content> = emptyList()
 		private set
@@ -75,6 +84,19 @@ class DownloadDialogViewModel @Inject constructor(
 	val isVideoQualitiesLoading = MutableStateFlow(false)
 
 	private var isInitialized = false
+
+	init {
+		launchJob(Dispatchers.Default) {
+			if (initialMangaIds.isEmpty()) return@launchJob
+			val resolved = initialMangaIds.mapNotNull { id ->
+				contentDataRepository.findDisplayContentById(id, withChapters = false)
+					?: initialManga.firstOrNull { it.id == id }
+			}
+			if (resolved.isNotEmpty()) {
+				initialize(resolved)
+			}
+		}
+	}
 
 	fun initialize(mangaList: List<Content>) {
 		if (isInitialized || mangaList.isEmpty()) return
@@ -119,11 +141,16 @@ class DownloadDialogViewModel @Inject constructor(
 		launchLoadingJob(Dispatchers.Default) {
 			val tasks = mangaDetails.get().map { m ->
 				val chapters = checkNotNull(m.chapters) { "Content \"${m.title}\" cannot be loaded" }
-				m to DownloadTask(
-					mangaId = m.id,
+				val selectedChapterIds = chaptersMacro.getChaptersIds(m.id, chapters)
+				val selectedChapterRefs = selectedChapterIds
+					?.mapNotNull { chapterId -> chapters.firstOrNull { it.id == chapterId }?.let(ExecutionChapterRef::fromChapter) }
+				m to DownloadTask.createExecutionTask(
+					executionMangaId = m.id,
+					displayMangaId = m.id,
 					isPaused = !startNow,
 					isSilent = false,
-					chaptersIds = chaptersMacro.getChaptersIds(m.id, chapters)?.toLongArray(),
+					executionChapterIds = selectedChapterIds?.toLongArray(),
+					executionChapterRefs = selectedChapterRefs,
 					destination = destination?.file,
 					format = format,
 					allowMeteredNetwork = allowMetered,
@@ -219,8 +246,15 @@ class DownloadDialogViewModel @Inject constructor(
 		details.forEach { m ->
 			val history = historyRepository.getOne(m)
 			if (history != null) {
-				currentChaptersIds[m.id] = history.chapterId
-				val unreadChaptersCount = m.chapters?.dropWhile { it.id != history.chapterId }.sizeOrZero()
+				val historyChapter = m.chapters?.firstOrNull { it.id == history.chapterId }
+				if (historyChapter != null) {
+					currentChaptersIds[m.id] = historyChapter.id
+				}
+				val unreadChaptersCount = if (historyChapter != null) {
+					m.chapters?.dropWhile { it.id != historyChapter.id }.sizeOrZero()
+				} else {
+					m.chapters.sizeOrZero()
+				}
 				maxUnreadChapters = maxOf(maxUnreadChapters, unreadChaptersCount)
 			} else {
 				maxUnreadChapters = maxOf(maxUnreadChapters, m.chapters.sizeOrZero())

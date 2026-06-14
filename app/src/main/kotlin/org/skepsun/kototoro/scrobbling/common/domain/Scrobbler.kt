@@ -6,6 +6,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import org.skepsun.kototoro.core.db.MangaDatabase
@@ -13,9 +15,12 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.findKeyByValue
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.sanitize
+import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.scrobbling.common.data.findByWorkOrMangaCandidates
+import org.skepsun.kototoro.scrobbling.common.data.observeByWorkOrMangaCandidates
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
@@ -76,7 +81,8 @@ abstract class Scrobbler(
 	}
 
 	suspend fun linkContent(mangaId: Long, content: ScrobblerContent) {
-		repository.createRate(mangaId, content)
+		val context = resolveScrobblingContext(mangaId)
+		repository.createRate(context.persistedLocalMangaId, content)
 	}
 
 	suspend fun scrobble(manga: Content, chapterId: Long) {
@@ -94,12 +100,12 @@ abstract class Scrobbler(
 			chapters = chapters.filter { x -> x.branch == chapter.branch }
 			chapters.indexOf(chapter) + 1
 		}
-		val entity = db.getScrobblingDao().find(scrobblerService.id, manga.id) ?: return
+		val entity = resolveScrobblingEntity(manga.id) ?: return
 		repository.updateRate(entity.id, entity.mangaId, number)
 	}
 
 	suspend fun getScrobblingInfoOrNull(mangaId: Long): ScrobblingInfo? {
-		val entity = db.getScrobblingDao().find(scrobblerService.id, mangaId) ?: return null
+		val entity = resolveScrobblingEntity(mangaId) ?: return null
 		return entity.toScrobblingInfo()
 	}
 
@@ -111,8 +117,18 @@ abstract class Scrobbler(
 	)
 
 	fun observeScrobblingInfo(mangaId: Long): Flow<ScrobblingInfo?> {
-		return db.getScrobblingDao().observe(scrobblerService.id, mangaId)
-			.map { it?.toScrobblingInfo() }
+		return observeScrobblingContext(mangaId)
+			.distinctUntilChanged()
+			.flatMapLatest { context ->
+				db.getScrobblingDao().observeByWorkOrMangaCandidates(
+					scrobbler = scrobblerService.id,
+					entityId = context.entityId,
+					mangaIds = context.candidateMangaIds,
+				)
+					.map { entities ->
+						selectScrobblingEntity(context, entities)?.toScrobblingInfo(context)
+					}
+			}
 	}
 
 	fun resolveStatus(statusValue: String?): ScrobblingStatus? {
@@ -139,7 +155,15 @@ abstract class Scrobbler(
 	}
 
 	suspend fun unregisterScrobbling(mangaId: Long) {
-		repository.unregister(mangaId)
+		val context = resolveScrobblingContext(mangaId)
+		val entity = resolveScrobblingEntity(context) ?: return
+		repository.unregister(entity.mangaId)
+	}
+
+	protected suspend fun requireScrobblingEntity(mangaId: Long): ScrobblingEntity {
+		return requireNotNull(resolveScrobblingEntity(mangaId)) {
+			"Scrobbling info for manga $mangaId not found"
+		}
 	}
 
 	protected open suspend fun getContentInfo(entity: ScrobblingEntity): ScrobblerContentInfo {
@@ -150,7 +174,15 @@ abstract class Scrobbler(
 
 	protected open suspend fun fallbackScrobblingInfo(entity: ScrobblingEntity): ScrobblingInfo? = null
 
-	private suspend fun ScrobblingEntity.toScrobblingInfo(): ScrobblingInfo? {
+	private suspend fun ScrobblingEntity.toScrobblingInfo(
+		context: ScrobblingContext = ScrobblingContext(
+			entityId = entityId,
+			requestedMangaId = mangaId,
+			preferredLocalMangaId = mangaId.takeIf { it != 0L },
+			persistedLocalMangaId = mangaId.takeIf { it != 0L } ?: 0L,
+			candidateMangaIds = mangaId.takeIf { it != 0L }?.let(::listOf) ?: emptyList(),
+		),
+	): ScrobblingInfo? {
 		val cacheKey = InfoCacheKey(
 			targetId = targetId,
 			mangaId = mangaId,
@@ -185,6 +217,8 @@ abstract class Scrobbler(
 		val externalUrl = mangaInfo?.url ?: ""
 		return ScrobblingInfo(
 			scrobbler = scrobblerService,
+			entityId = context.entityId ?: entityId,
+			preferredLocalMangaId = context.preferredLocalMangaId ?: mangaId.takeIf { it != 0L },
 			mangaId = mangaId,
 			targetId = targetId,
 			status = statuses.findKeyByValue(status),
@@ -216,10 +250,94 @@ abstract class Scrobbler(
 		}
 	}
 
+	private suspend fun resolveScrobblingEntity(mangaId: Long): ScrobblingEntity? {
+		return resolveScrobblingEntity(resolveScrobblingContext(mangaId))
+	}
+
+	private suspend fun resolveScrobblingEntity(context: ScrobblingContext): ScrobblingEntity? {
+		val entities = db.getScrobblingDao().findByWorkOrMangaCandidates(
+			scrobbler = scrobblerService.id,
+			entityId = context.entityId,
+			mangaIds = context.candidateMangaIds,
+		)
+		return selectScrobblingEntity(context, entities)
+	}
+
+	private fun observeScrobblingContext(mangaId: Long): Flow<ScrobblingContext> {
+		return db.invalidationTracker.createFlow(
+			tables = arrayOf(
+				"entity_binding",
+				"entity_preferences",
+			),
+			emitInitialState = true,
+		).map {
+			resolveScrobblingContext(mangaId)
+		}
+	}
+
+	private suspend fun resolveScrobblingContext(mangaId: Long): ScrobblingContext {
+		val graphDao = db.getEntityGraphDao()
+		val entityId = graphDao.findWorkEntityIdByLocalMangaId(mangaId)
+		if (entityId == null) {
+			return ScrobblingContext(
+				entityId = null,
+				requestedMangaId = mangaId,
+				preferredLocalMangaId = mangaId,
+				persistedLocalMangaId = mangaId,
+				candidateMangaIds = listOf(mangaId),
+			)
+		}
+		val bindings = graphDao.findActiveBindingsByEntity(entityId)
+		val localMangaIds = bindings.asSequence()
+			.filter { it.source == "local_manga" || it.source == "0" }
+			.mapNotNull { it.externalId.toLongOrNull() }
+			.distinct()
+			.toList()
+			.filter { localId -> db.getMangaDao().contains(localId) }
+		val preferredLocalMangaId = graphDao.findEntityPrefs(entityId)?.preferredLocalMangaId
+			?.takeIf { preferredId -> db.getMangaDao().contains(preferredId) }
+		val persistedLocalMangaId = preferredLocalMangaId
+			?: localMangaIds.firstOrNull()
+			?: mangaId
+		val candidateMangaIds = buildList {
+			add(mangaId)
+			preferredLocalMangaId?.let(::add)
+			addAll(localMangaIds)
+		}.distinct()
+		return ScrobblingContext(
+			entityId = entityId,
+			requestedMangaId = mangaId,
+			preferredLocalMangaId = preferredLocalMangaId ?: persistedLocalMangaId,
+			persistedLocalMangaId = persistedLocalMangaId,
+			candidateMangaIds = candidateMangaIds.ifEmpty { listOf(mangaId) },
+		)
+	}
+
+	private fun selectScrobblingEntity(
+		context: ScrobblingContext,
+		entities: List<ScrobblingEntity>,
+	): ScrobblingEntity? {
+		if (entities.isEmpty()) {
+			return null
+		}
+		return entities.firstOrNull { it.mangaId == context.requestedMangaId }
+			?: entities.firstOrNull { it.mangaId == context.preferredLocalMangaId }
+			?: entities.firstOrNull { it.mangaId == context.persistedLocalMangaId }
+			?: entities.first()
+	}
+
 	private data class InfoCacheKey(
 		val targetId: Long,
 		val mangaId: Long,
 		val mediaType: String,
+	)
+
+	private data class ScrobblingContext(
+		val entityId: Long?,
+		val requestedMangaId: Long,
+		val preferredLocalMangaId: Long?,
+		val persistedLocalMangaId: Long,
+		val candidateMangaIds: List<Long>,
 	)
 }
 

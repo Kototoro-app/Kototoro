@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.TrackingMetadataSourceStrategy
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
+import org.skepsun.kototoro.entitygraph.data.findTrackingLinksByWorkOrMangaCandidates
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -1218,6 +1219,102 @@ class SourceMigrationViewModel @Inject constructor(
         }
     }
 
+    fun pruneRedundantProjectionMetadataSelections() {
+        val state = _uiState.value
+        if (state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val prunedCount = entityGraphRepository.pruneRedundantProjectionMetadataSelections()
+            refreshMergeCandidates()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.TRACKING,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_prune_projection_metadata_feedback,
+                        prunedCount,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun pruneRedundantProjectionOverrides() {
+        val state = _uiState.value
+        if (state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val prunedCount = entityGraphRepository.pruneRedundantProjectionOverrides()
+            refreshMergeCandidates()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.TRACKING,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_prune_projection_override_feedback,
+                        prunedCount,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun pruneRedundantProjectionReadingStatuses() {
+        val state = _uiState.value
+        if (state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val prunedCount = entityGraphRepository.pruneRedundantProjectionReadingStatuses()
+            refreshMergeCandidates()
+            val repairReport = entityGraphRepository.inspectRepairIssues()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                repairReport = repairReport,
+                isLoadingRepairReport = false,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.TRACKING,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_prune_projection_reading_status_feedback,
+                        prunedCount,
+                    ),
+                ),
+            )
+        }
+    }
+
     fun mergeSelectedEntities() {
         val state = _uiState.value
         if (!state.mergePreviewReady || state.selectedMergeGroupIds.isEmpty() || state.isExecuting) {
@@ -1229,9 +1326,11 @@ class SourceMigrationViewModel @Inject constructor(
             stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
         )
         viewModelScope.launch(Dispatchers.IO) {
-            val selectedGroups = state.mergeCandidateGroups
-                .filter { it.id in state.selectedMergeGroupIds && it.isExecutableMergeCandidate() }
-                .mapNotNull { it.withMergeableSelectedItems(state.selectedMergeItemsByGroup[it.id]) }
+            val selectedGroups = buildSelectedMergeGroupsForExecution(
+                groups = state.mergeCandidateGroups,
+                selectedGroupIds = state.selectedMergeGroupIds,
+                selectedItemsByGroup = state.selectedMergeItemsByGroup,
+            )
             val result = mergeFavoriteEntitiesUseCase.merge(selectedGroups)
             refreshMergeCandidates()
             _uiState.value = _uiState.value.copy(
@@ -1967,7 +2066,12 @@ class SourceMigrationViewModel @Inject constructor(
                     existing.putPersistedSelection(
                         contentDataRepository.getMetadataSourceSelection(mangaId),
                     )
-                    trackingDao.findLinksByManga(mangaId).forEach { link ->
+                }
+                database.findTrackingLinksByWorkOrMangaCandidates(
+                    mangaIds = group.mangaIds.toList(),
+                )
+                    .distinctBy { "${it.service}:${it.remoteId}" }
+                    .forEach { link ->
                         val service = serviceByIntId[link.service] ?: return@forEach
                         existing.putIfAbsent(
                             "${service.id}:${link.remoteId}",
@@ -1978,7 +2082,6 @@ class SourceMigrationViewModel @Inject constructor(
                             ),
                         )
                     }
-                }
                 existing.values.forEach { binding ->
                     add(binding.toPreview(group))
                 }
@@ -2218,24 +2321,6 @@ class SourceMigrationViewModel @Inject constructor(
         }
     }
 
-    private fun MergeCandidateGroup.withScopedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
-        val resolvedIds = selectedIds
-            ?.intersect(mangaIds)
-            ?: mangaIds
-        if (resolvedIds.isEmpty()) {
-            return null
-        }
-        return copy(
-            mangaIds = resolvedIds,
-            items = items.filter { it.mangaId in resolvedIds },
-        )
-    }
-
-    private fun MergeCandidateGroup.withMergeableSelectedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
-        val scoped = withScopedItems(selectedIds) ?: return null
-        return scoped.takeIf { it.mangaIds.size >= 2 }
-    }
-
     private fun MigrationUiState.groupsForTrackingPreview(): List<MergeCandidateGroup> {
         val scopeIds = trackingOperationScopeIds()
         return mergeCandidateGroups.mapNotNull { group ->
@@ -2398,6 +2483,38 @@ internal fun updateMergeGroupSelection(
     selected: Boolean,
 ): Set<String> {
     return if (selected) current + groupIds else current - groupIds
+}
+
+internal fun buildSelectedMergeGroupsForExecution(
+    groups: List<MergeCandidateGroup>,
+    selectedGroupIds: Set<String>,
+    selectedItemsByGroup: Map<String, Set<Long>>,
+): List<MergeCandidateGroup> {
+    return groups
+        .filter { it.id in selectedGroupIds && it.isExecutableMergeCandidate() }
+        .mapNotNull { group ->
+            group.withMergeableSelectedItems(
+                selectedItemsByGroup[group.id]?.takeIf { it.isNotEmpty() },
+            )
+        }
+}
+
+private fun MergeCandidateGroup.withScopedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
+    val resolvedIds = selectedIds
+        ?.intersect(mangaIds)
+        ?: mangaIds
+    if (resolvedIds.isEmpty()) {
+        return null
+    }
+    return copy(
+        mangaIds = resolvedIds,
+        items = items.filter { it.mangaId in resolvedIds },
+    )
+}
+
+private fun MergeCandidateGroup.withMergeableSelectedItems(selectedIds: Set<Long>?): MergeCandidateGroup? {
+    val scoped = withScopedItems(selectedIds) ?: return null
+    return scoped.takeIf { it.mangaIds.size >= 2 }
 }
 
 internal fun previewIdsForGroups(

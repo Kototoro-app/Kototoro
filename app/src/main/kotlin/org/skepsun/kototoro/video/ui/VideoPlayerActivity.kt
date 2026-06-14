@@ -240,16 +240,16 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                             "Auto-skipping ad and loading video...", 
                             com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
                         ).show()
-                        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
-                        val state = readerState ?: intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
+                        val manga = currentMangaContent()
+                        val state = currentReaderStateOrIntent()
                         val chapters = manga?.chapters ?: emptyList()
                         val currentChapter = if (state != null) {
                             chapters.find { it.id == state.chapterId }
                         } else {
-                            val url = intent.getStringExtra(AppRouter.KEY_URL)
+                            val url = currentMediaUrl ?: manga?.url
                             chapters.find { it.url == url } ?: chapters.firstOrNull()
                         }
-                        val urlToPlay = currentChapter?.url ?: intent.getStringExtra(AppRouter.KEY_URL) ?: manga?.url ?: ""
+                        val urlToPlay = currentChapter?.url ?: currentMediaUrl ?: manga?.url ?: ""
                         if (urlToPlay.isNotEmpty()) {
                             prepareAndPlay(urlToPlay, currentVideoSource, null)
                         }
@@ -567,12 +567,8 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         // 记录初始工具栏高度，用于按方向动态调整高?
         originalToolbarHeightPx = viewBinding.toolbar.layoutParams.height
 
-        // 读取传入?ReaderState（可能来自阅读器路由，用于历史保存与初始定位?
+        // 读取传入 ReaderState（可能来自阅读器路由，用于历史保存与初始定位）
         readerState = intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-        mangaContent = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
-
-        // 使用新的统一方法设置标题和副标题
-        updateTitleAndSubtitle()
 
         // Apply default orientation: portrait when foldable unfolded in portrait; else landscape
         observeFoldableStateForOrientation()
@@ -620,6 +616,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         rearrangeBottomToolbarForOrientation()
 
         lifecycleScope.launch {
+            mangaContent = resolveLaunchContent()
+
+            // 使用新的统一方法设置标题和副标题
+            updateTitleAndSubtitle()
+
             if (androidx.preference.PreferenceManager.getDefaultSharedPreferences(this@VideoPlayerActivity)
                     .getBoolean("legacy_compat_mode_fallback", false)
             ) {
@@ -871,6 +872,19 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         // 外部控制器初始由 Activity 管理显隐；不直接改动 DockedToolbar 的可见?
     }
 
+    private suspend fun resolveLaunchContent(): Content? {
+        val mangaId = intent.getLongExtra(AppRouter.KEY_ID, -1L)
+        if (mangaId > 0L) {
+            contentDataRepository.findPreferredLocalContentById(mangaId, withChapters = true)?.let { current ->
+                return current
+            }
+            contentDataRepository.findContentById(mangaId, withChapters = true)?.let { current ->
+                return current
+            }
+        }
+        return intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
+    }
+
     override fun finishAfterTransition() {
         finish()
     }
@@ -882,7 +896,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
     
     private fun wireControllerButtons() {
-        val parcelable = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)
+        val currentContent = currentMangaContent()
         allControllers().forEach { ctl ->
             ctl.bringToFront()
 
@@ -924,7 +938,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             }
 
             ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_pages_thumbs)?.let { btn ->
-                btn.isVisible = parcelable != null
+                btn.isVisible = currentContent != null
                 btn.setOnClickListener {
                     AppRouter(this).showChapterPagesSheet()
                 }
@@ -1079,8 +1093,8 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             lowerUrl.startsWith("rtmp://") ||
             lowerUrl.startsWith("mms://")
         val isResolvedPlaybackUrl = isDirectStream || isDirectLocator || (isHttpLike && headers != null && !isHtmlPlaybackPage)
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
-        val currentState = readerState ?: intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
+        val manga = currentMangaContent()
+        val currentState = currentReaderStateOrIntent()
         val indexedLocalUrl = resolveIndexedLocalVideoUrl(normalizedUrl, currentState)
         val explicitLocalUrl = normalizedUrl.takeIf {
             it.startsWith("file://", ignoreCase = true) &&
@@ -1343,7 +1357,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             AppRouter(this@VideoPlayerActivity).openBrowser(
                 url = url,
                 source = source,
-                title = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga?.title,
+                title = currentMangaContent()?.title,
             )
             finish()
         }
@@ -1964,7 +1978,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     // ==================== Intro/Outro Skip ====================
 
     private fun loadIntroOutroSettings() {
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
+        val manga = currentMangaContent()
         currentMangaId = manga?.id ?: 0L
         if (currentMangaId != 0L) {
             introEndMs = appSettings.getIntroEndMs(currentMangaId)
@@ -2095,6 +2109,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
         val task = DownloadTask(
             mangaId = manga.id,
+            displayMangaId = manga.id,
             isPaused = false,
             isSilent = false,
             chaptersIds = longArrayOf(chapterId),
@@ -2319,10 +2334,14 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }.getOrElse { url }
     }
 
+    private fun currentReaderStateOrIntent(): ReaderState? {
+        return readerState
+    }
+
     private fun extractChapterInfo(): Pair<String, String> {
         // Extract manga and state from intent
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
-        val state = readerState ?: intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
+        val manga = currentMangaContent()
+        val state = currentReaderStateOrIntent()
         val fallbackUrl = currentMediaUrl ?: intent.getStringExtra(AppRouter.KEY_URL)
         
         // Extract title: prioritize manga.title, then KEY_TITLE, then URL-derived
@@ -3121,7 +3140,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         if (!appSettings.videoDanmakuEnabled) {
             android.util.Log.d("Danmaku", "Danmaku disabled by settings; keep loading in background")
         }
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
+        val manga = currentMangaContent()
         val title = manga?.title?.takeIf { it.isNotBlank() }
             ?: intent.getStringExtra(AppRouter.KEY_TITLE)
             ?: run {
@@ -3188,6 +3207,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private fun buildDanmakuCacheKey(mangaId: Long?, title: String): String {
         val idPart = mangaId?.takeIf { it > 0 }?.toString()
         return idPart ?: title.trim()
+    }
+
+    private fun currentMangaContent(): org.skepsun.kototoro.parsers.model.Content? {
+        return mangaContent
     }
 
     private fun buildDanmakuKeywords(
@@ -3277,12 +3300,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private suspend fun restoreInitialSeekPercentFromHistory() {
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga ?: return
+        val manga = currentMangaContent() ?: return
         val history = runCatching { historyRepository.getOne(manga) }.getOrNull() ?: return
         android.util.Log.d("VideoPlayer", "Restore history: chapterId=${history.chapterId}, percent=${history.percent}")
         
         // Get current chapter ID from ReaderState or intent
-        val currentState = readerState ?: intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
+        val currentState = currentReaderStateOrIntent()
         val currentChapterId = currentState?.chapterId
         
         android.util.Log.d("VideoPlayer", "Current chapter ID from intent/state: $currentChapterId")
@@ -3354,7 +3377,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun saveHistoryProgressAsync() {
         val exo = mpvPlayer ?: return
-        val mangaSeed = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga ?: return
+        val mangaSeed = currentMangaContent() ?: return
         val dur = exo.durationMs
         val pos = exo.positionMs
         // 当时长未知（直播或刚开始播放）时，也保存一个有效百分比以建立历史记?
@@ -3398,12 +3421,13 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         lifecycleScope.launch {
             // 先确保漫画详情含章节
             // 防御性拦截：如果 mangaSeed ?URL 是本地文件协议，绝对不能交给在线解析器，否则必定抛错
-            val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
-                if (mangaSeed.url.startsWith("file://")) {
-                    android.util.Log.w("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
-                    val dbContent = contentDataRepository.findContentById(mangaSeed.id, withChapters = true)
-                    dbContent ?: mangaSeed
-                } else {
+	            val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
+	                if (mangaSeed.url.startsWith("file://")) {
+	                    android.util.Log.w("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
+	                    val dbContent = contentDataRepository.findPreferredLocalContentById(mangaSeed.id, withChapters = true)
+	                        ?: contentDataRepository.findContentById(mangaSeed.id, withChapters = true)
+	                    dbContent ?: mangaSeed
+	                } else {
                     val repo = mangaRepositoryFactory.create(mangaSeed.source)
                     runCatching { repo.getDetails(mangaSeed) }.getOrDefault(mangaSeed)
                 }
@@ -3436,7 +3460,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             } else {
                 // ?ReaderState：优先使用已有历史，否则用首章构?
                 val history = runCatching { historyRepository.getOne(manga) }.getOrNull()
-                val fallbackState = history?.let { ReaderState(it) } ?: runCatching { ReaderState(manga, null) }.getOrNull()
+                val fallbackState = history
+                    ?.takeIf { hist -> manga.chapters?.any { it.id == hist.chapterId } == true }
+                    ?.let { ReaderState(it) }
+                    ?: runCatching { ReaderState(manga, null) }.getOrNull()
                 if (fallbackState != null) {
                     android.util.Log.d("VideoPlayer", "Using fallback ReaderState: chapterId=${fallbackState.chapterId}")
                     val overall = computeSeriesPercent(manga, fallbackState, episodePercent)
@@ -3483,7 +3510,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         allowShort: Boolean = false,
         continueFromEnd: Boolean = true,
     ) {
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga ?: return
+        val manga = currentMangaContent() ?: return
         if (readingRecordRepository.shouldSkip(manga)) return
         val startState = sessionStartState ?: currentVideoRecordState() ?: return
         val endState = currentVideoRecordState() ?: startState
@@ -3520,7 +3547,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         source: String,
         force: Boolean = false,
     ) {
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga ?: return
+        val manga = currentMangaContent() ?: return
         val from = fromState ?: return
         if (readingRecordRepository.shouldSkip(manga)) return
         if (!force && from.chapterId == toState.chapterId && kotlin.math.abs(from.page - toState.page) < 5_000) return
@@ -3604,7 +3631,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     override fun onChapterSelected(chapter: ContentChapter): Boolean {
         // Handle chapter selection from ChaptersPagesSheet
-        val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga 
+        val manga = currentMangaContent()
             ?: return false
         
         android.util.Log.d("VideoPlayer", "Chapter selected: ${chapter.title} (id=${chapter.id})")
@@ -3769,7 +3796,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun navigateChapter(offset: Int) {
         val chapters = chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
-            intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga?.chapters.orEmpty()
+            currentMangaContent()?.chapters.orEmpty()
         }
         if (chapters.isEmpty()) return
         val currentId = readerState?.chapterId ?: chapters.first().id
@@ -3794,7 +3821,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 			android.util.Log.d("VideoPlayer", "AutoNext skipped: ratio=$ratio pos=$position dur=$duration")
 			return
 		}
-		val manga = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga ?: return
+		val manga = currentMangaContent() ?: return
 		val chapters = manga.chapters ?: return
 		if (chapters.isEmpty()) return
 		val currentId = readerState?.chapterId ?: chapters.first().id

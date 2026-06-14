@@ -14,6 +14,7 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
@@ -76,20 +77,37 @@ class ExternalBackupRepository @Inject constructor(
                     val chapterId = generateChapterId(resolvedRecord, resolvedRecord.historyChapterUrl)
                     val chaptersCount = resolvedRecord.chaptersCount.coerceAtLeast(0)
                     val percent = resolvedRecord.progressPercent?.coerceIn(PROGRESS_NONE, 1f) ?: PROGRESS_NONE
-                    database.getHistoryDao().upsert(
-                        HistoryEntity(
-                            mangaId = mangaId,
-                            createdAt = resolvedRecord.historyTimestamp,
-                            updatedAt = resolvedRecord.historyTimestamp,
-                            chapterId = chapterId,
-                            page = 0,
-                            scroll = 0f,
-                            percent = percent,
-                            deletedAt = 0L,
-                            chaptersCount = chaptersCount,
-                            parentChapterId = null,
-                        ),
+                    val history = HistoryEntity(
+                        mangaId = mangaId,
+                        createdAt = resolvedRecord.historyTimestamp,
+                        updatedAt = resolvedRecord.historyTimestamp,
+                        chapterId = chapterId,
+                        page = 0,
+                        scroll = 0f,
+                        percent = percent,
+                        deletedAt = 0L,
+                        chaptersCount = chaptersCount,
+                        parentChapterId = null,
                     )
+                    database.getHistoryDao().upsert(history)
+                    database.findEntityIdByLocalMangaId(mangaId)?.let { entityId ->
+                        val anchorMangaId = database.resolveExistingLocalAnchorForEntity(entityId) ?: mangaId
+                        database.getWorkHistoryDao().upsert(
+                            WorkHistoryEntity(
+                                entityId = entityId,
+                                anchorMangaId = anchorMangaId,
+                                createdAt = history.createdAt,
+                                updatedAt = history.updatedAt,
+                                chapterId = history.chapterId,
+                                page = history.page,
+                                scroll = history.scroll,
+                                percent = history.percent,
+                                deletedAt = history.deletedAt,
+                                chaptersCount = history.chaptersCount,
+                                parentChapterId = history.parentChapterId,
+                            ),
+                        )
+                    }
                     historyImported++
                 }
             }
@@ -199,6 +217,29 @@ class ExternalBackupRepository @Inject constructor(
 
     private fun generateContentId(record: ExternalBackupContentRecord): Long {
         return "${record.sourceName}|manga|${record.url}".hashCode().toLong() and Long.MAX_VALUE
+    }
+
+    // External backup imports still materialize local projection records first. When a work/entity
+    // binding already exists for that projection anchor, imported history should also project into
+    // the work-owned tables.
+    private suspend fun MangaDatabase.findEntityIdByLocalMangaId(mangaId: Long): Long? {
+        val dao = getEntityGraphDao()
+        return dao.findActiveBinding("local_manga", mangaId.toString())?.entityId
+            ?: dao.findActiveBinding("0", mangaId.toString())?.entityId
+    }
+
+    private suspend fun MangaDatabase.resolveExistingLocalAnchorForEntity(entityId: Long): Long? {
+        getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
+            ?.takeIf { preferredId -> getMangaDao().contains(preferredId) }
+            ?.let { return it }
+        return getEntityGraphDao().findActiveBindingsByEntity(entityId)
+            .firstNotNullOfOrNull { binding ->
+                when (binding.source) {
+                    "local_manga", "0" -> binding.externalId.toLongOrNull()
+                        ?.takeIf { localId -> getMangaDao().contains(localId) }
+                    else -> null
+                }
+            }
     }
 
     private fun generateChapterId(record: ExternalBackupContentRecord, chapterUrl: String): Long {

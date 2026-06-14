@@ -2,6 +2,8 @@ package org.skepsun.kototoro.favourites.ui.migration
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.favourites.domain.MergeCandidateGroup
+import org.skepsun.kototoro.favourites.domain.MergeCandidateItem
 import org.skepsun.kototoro.favourites.domain.TrackingBindingMatchKind
 import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -56,6 +58,60 @@ class EntityOrganizeSelectionOpsTest {
         )
 
         assertEquals(setOf(1L, 3L), result)
+    }
+
+    @Test
+    fun `selected merge group with empty item selection executes whole group`() {
+        val group = mergeGroup(
+            groupId = "group-1",
+            mangaIds = setOf(101L, 102L),
+        )
+
+        val selectedGroups = buildSelectedMergeGroupsForExecution(
+            groups = listOf(group),
+            selectedGroupIds = setOf("group-1"),
+            selectedItemsByGroup = mapOf("group-1" to emptySet()),
+        )
+
+        assertEquals(listOf(group), selectedGroups)
+    }
+
+    @Test
+    fun `selected merge group with one selected item is skipped`() {
+        val group = mergeGroup(
+            groupId = "group-1",
+            mangaIds = setOf(101L, 102L),
+        )
+
+        val selectedGroups = buildSelectedMergeGroupsForExecution(
+            groups = listOf(group),
+            selectedGroupIds = setOf("group-1"),
+            selectedItemsByGroup = mapOf("group-1" to setOf(101L)),
+        )
+
+        assertEquals(emptyList<MergeCandidateGroup>(), selectedGroups)
+    }
+
+    private fun mergeGroup(groupId: String, mangaIds: Set<Long>): MergeCandidateGroup {
+        return MergeCandidateGroup(
+            id = groupId,
+            title = "Title $groupId",
+            normalizedTitle = "title$groupId",
+            contentType = ContentType.MANGA,
+            mangaIds = mangaIds,
+            items = mangaIds.map { mangaId ->
+                MergeCandidateItem(
+                    mangaId = mangaId,
+                    title = "Title $mangaId",
+                    normalizedTitle = "title$mangaId",
+                    sourceName = "SOURCE_$mangaId",
+                    coverUrl = null,
+                    score = 1f,
+                )
+            },
+            matchScore = 1f,
+            isExactMatch = true,
+        )
     }
 
     private fun trackingPreview(groupId: String, previewId: String): TrackingBindingPreview {

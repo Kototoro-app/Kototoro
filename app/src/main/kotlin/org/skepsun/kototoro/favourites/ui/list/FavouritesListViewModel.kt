@@ -345,8 +345,9 @@ class FavouritesListViewModel @AssistedInject constructor(
             return emptyList()
         }
         val resolvedEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
-        val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIdsByMangaId.values)
-        val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIdsByMangaId.values)
+        val resolvedEntityIds = resolvedEntityIdsByMangaId.values.distinct()
+        val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+        val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
         val displayTypeOrdinalByEntity = this
             .groupBy { resolvedEntityIdsByMangaId[it.id] }
             .mapNotNull { (entityId, items) ->
@@ -368,6 +369,9 @@ class FavouritesListViewModel @AssistedInject constructor(
         return grouped.map { (key, items) ->
             val entityId = resolvedEntityIdsByMangaId[items.first().id]
             val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
+            // Grouped favourites are entity-first: once a work/entity exists, the preferred
+            // local projection becomes the representative row anchor and metadata source owner.
+            // Only no-entity groups fall back to a plain local manga representative.
             val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
             FavouriteGroup(
                 uiId = key.uiId,

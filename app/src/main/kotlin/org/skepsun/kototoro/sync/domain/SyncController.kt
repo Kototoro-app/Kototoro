@@ -21,6 +21,8 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_HISTORY
+import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.logSyncFlow
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
@@ -34,7 +36,15 @@ class SyncController @Inject constructor(
 	private val syncRequestPlanner: SyncRequestPlanner,
 	private val syncGcCoordinator: SyncGcCoordinator,
 	private val syncAuthorityExecutor: SyncAuthorityExecutor,
-) : InvalidationTracker.Observer(arrayOf(TABLE_HISTORY, TABLE_FAVOURITES, TABLE_FAVOURITE_CATEGORIES)) {
+) : InvalidationTracker.Observer(
+	arrayOf(
+		TABLE_HISTORY,
+		TABLE_WORK_HISTORY,
+		TABLE_FAVOURITES,
+		TABLE_WORK_FAVOURITES,
+		TABLE_FAVOURITE_CATEGORIES,
+	),
+) {
 
 	private val authorityHistory = context.getString(R.string.sync_authority_history)
 	private val authorityFavourites = context.getString(R.string.sync_authority_favourites)
@@ -50,8 +60,10 @@ class SyncController @Inject constructor(
 		val decision = syncRequestPlanner.planInvalidation(
 			tables = tables,
 			favouritesTable = TABLE_FAVOURITES,
+			workFavouritesTable = TABLE_WORK_FAVOURITES,
 			favouriteCategoriesTable = TABLE_FAVOURITE_CATEGORIES,
 			historyTable = TABLE_HISTORY,
+			workHistoryTable = TABLE_WORK_HISTORY,
 			isFavouritesSyncActiveOrPending = isSyncActiveOrPending(authorityFavourites),
 			isHistorySyncActiveOrPending = isSyncActiveOrPending(authorityHistory),
 		)

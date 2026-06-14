@@ -143,8 +143,12 @@ enum class EntityRelationState {
 enum class EntityGraphRepairIssueKind {
 	ORPHAN_PREFERRED_LOCAL,
 	ORPHAN_METADATA_SOURCE,
+	REDUNDANT_PROJECTION_METADATA_SELECTION,
+	REDUNDANT_PROJECTION_OVERRIDE,
+	REDUNDANT_PROJECTION_READING_STATUS,
 	CONFLICTING_READING_BINDING,
 	STALE_LEGACY_RELATION,
+	STALE_TRACKING_CACHE_LINK,
 	SUSPECT_MISMERGED_LOCAL_WORK,
 	SUSPECT_TRACKING_BINDING,
 	SUSPECT_METADATA_SOURCE,
@@ -167,10 +171,18 @@ data class EntityGraphRepairReport(
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.ORPHAN_PREFERRED_LOCAL }
 	val orphanMetadataSourceCount: Int
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.ORPHAN_METADATA_SOURCE }
+	val redundantProjectionMetadataSelectionCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.REDUNDANT_PROJECTION_METADATA_SELECTION }
+	val redundantProjectionOverrideCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.REDUNDANT_PROJECTION_OVERRIDE }
+	val redundantProjectionReadingStatusCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.REDUNDANT_PROJECTION_READING_STATUS }
 	val conflictingReadingBindingCount: Int
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.CONFLICTING_READING_BINDING }
 	val staleLegacyRelationCount: Int
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.STALE_LEGACY_RELATION }
+	val staleTrackingCacheLinkCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.STALE_TRACKING_CACHE_LINK }
 	val suspectMismergedLocalWorkCount: Int
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.SUSPECT_MISMERGED_LOCAL_WORK }
 	val suspectTrackingBindingCount: Int

@@ -28,6 +28,8 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
+import org.skepsun.kototoro.entitygraph.domain.isLocalEntityBindingSource
+import org.skepsun.kototoro.entitygraph.domain.toTrackingServiceOrNull
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -93,18 +95,33 @@ class ContentDataRepository @Inject constructor(
 	}
 
 	suspend fun getOverride(mangaId: Long): ContentOverride? {
+		findEntityPrefsForMangaId(mangaId)?.getOverrideOrNull()?.let { return it }
 		return db.getPreferencesDao().find(mangaId)?.getOverrideOrNull()
 	}
 
 	suspend fun getMetadataSourceSelection(mangaId: Long): MetadataSourceSelection? {
+		findEntityPrefsForMangaId(mangaId)?.getMetadataSourceSelectionOrNull()?.let { return it }
 		val entity = db.getPreferencesDao().find(mangaId) ?: return null
 		return entity.getMetadataSourceSelectionOrNull()
 	}
 
 	suspend fun getMetadataSourceSelections(mangaIds: Collection<Long>): LongObjectMap<MetadataSourceSelection> {
 		if (mangaIds.isEmpty()) return MutableLongObjectMap(0)
-		val entities = db.getPreferencesDao().getMetadataSourceSelections(mangaIds.toList())
-		val map = MutableLongObjectMap<MetadataSourceSelection>(entities.size)
+		val map = MutableLongObjectMap<MetadataSourceSelection>(mangaIds.size)
+		val entityIdsByMangaId = mangaIds.associateWith { mangaId ->
+			db.getEntityGraphDao().findActiveBinding("local_manga", mangaId.toString())?.entityId
+				?: db.getEntityGraphDao().findActiveBinding("0", mangaId.toString())?.entityId
+		}
+		val entitySelections = getEntityMetadataSourceSelections(entityIdsByMangaId.values.filterNotNull().distinct())
+		entityIdsByMangaId.forEach { (mangaId, entityId) ->
+			val selection = entityId?.let(entitySelections::get) ?: return@forEach
+			map[mangaId] = selection
+		}
+		val remainingMangaIds = mangaIds.filterNot { map.containsKey(it) }
+		if (remainingMangaIds.isEmpty()) {
+			return map
+		}
+		val entities = db.getPreferencesDao().getLegacyMetadataSourceSelections(remainingMangaIds.toList())
 		for (entity in entities) {
 			map[entity.mangaId] = entity.getMetadataSourceSelectionOrNull() ?: continue
 		}
@@ -131,44 +148,18 @@ class ContentDataRepository @Inject constructor(
 	suspend fun setEntityMetadataSourceSelection(
 		entityId: Long,
 		selection: MetadataSourceSelection?,
-		mirrorLocalMangaIds: Collection<Long> = emptyList(),
 	) {
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
-			val now = System.currentTimeMillis()
 			if (dao.findEntity(entityId) == null) {
 				return@withTransaction
 			}
 			dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
-			dao.updateEntityMetadataSourceSelection(
+			updateEntityMetadataSourceSelection(
 				entityId = entityId,
-				metadataSourceKind = when (selection) {
-					null -> null
-					MetadataSourceSelection.Base -> "base"
-					is MetadataSourceSelection.Tracking -> "tracking"
-				},
-				metadataSourceService = (selection as? MetadataSourceSelection.Tracking)?.serviceId,
-				metadataSourceRemoteId = (selection as? MetadataSourceSelection.Tracking)?.remoteId,
-				updatedAt = now,
+				selection = selection,
+				updatedAt = System.currentTimeMillis(),
 			)
-			mirrorLocalMangaIds.distinct().forEach { mangaId ->
-				if (!db.getMangaDao().contains(mangaId)) {
-					return@forEach
-				}
-				val prefsDao = db.getPreferencesDao()
-				val entity = prefsDao.find(mangaId) ?: newEntity(mangaId)
-				prefsDao.upsert(
-					entity.copy(
-						metadataSourceKind = when (selection) {
-							null -> null
-							MetadataSourceSelection.Base -> "base"
-							is MetadataSourceSelection.Tracking -> "tracking"
-						},
-						metadataSourceService = (selection as? MetadataSourceSelection.Tracking)?.serviceId,
-						metadataSourceRemoteId = (selection as? MetadataSourceSelection.Tracking)?.remoteId,
-					),
-				)
-			}
 		}
 	}
 
@@ -200,6 +191,8 @@ class ContentDataRepository @Inject constructor(
 	}
 
 	suspend fun getIgnoredTrackingSuggestion(mangaId: Long): IgnoredTrackingSuggestion? {
+		// Tracking suggestion suppression remains projection-local on purpose.
+		// It is a hint for one local manifestation, not a work-owned user state.
 		val entity = db.getPreferencesDao().find(mangaId) ?: return null
 		val serviceId = entity.ignoredTrackingSuggestionService ?: return null
 		val remoteId = entity.ignoredTrackingSuggestionRemoteId ?: return null
@@ -210,22 +203,47 @@ class ContentDataRepository @Inject constructor(
 	}
 
 	suspend fun getOverrides(): LongObjectMap<ContentOverride> {
-		val entities = db.getPreferencesDao().getOverrides()
-		val map = MutableLongObjectMap<ContentOverride>(entities.size)
-		for (entity in entities) {
-			map[entity.mangaId] = entity.getOverrideOrNull() ?: continue
+		val map = MutableLongObjectMap<ContentOverride>()
+		val entityPrefsById = db.getEntityGraphDao().dumpPrefs()
+			.asSequence()
+			.mapNotNull { prefs ->
+				val override = prefs.getOverrideOrNull() ?: return@mapNotNull null
+				prefs.entityId to override
+			}
+			.toMap()
+		if (entityPrefsById.isNotEmpty()) {
+			db.getEntityGraphDao().dumpBindings()
+				.asSequence()
+				.filter { it.source.isLocalEntityBindingSource() }
+				.forEach { binding ->
+					val localMangaId = binding.externalId.toLongOrNull() ?: return@forEach
+					val override = entityPrefsById[binding.entityId] ?: return@forEach
+					map[localMangaId] = override
+				}
+		}
+		db.getPreferencesDao().getOverrides().forEach { entity ->
+			if (map.containsKey(entity.mangaId)) {
+				return@forEach
+			}
+			entity.getOverrideOrNull()?.let {
+				map[entity.mangaId] = it
+			}
 		}
 		return map
 	}
 
 	suspend fun getReadingStatus(mangaId: Long): ScrobblingStatus? {
-		return db.getPreferencesDao().find(mangaId)?.readingStatus
+		return findEntityPrefsForMangaId(mangaId)?.readingStatus
 			?.let(ScrobblingStatus::valueOf)
+			?: db.getPreferencesDao().find(mangaId)?.readingStatus?.let(ScrobblingStatus::valueOf)
 	}
 
 	fun observeReadingStatus(mangaId: Long): Flow<ScrobblingStatus?> {
-		return db.getPreferencesDao().observe(mangaId)
-			.map { it?.readingStatus?.let(ScrobblingStatus::valueOf) }
+		return db.invalidationTracker.createFlow(
+			tables = arrayOf(TABLE_PREFERENCES, TABLE_ENTITY_PREFERENCES),
+			emitInitialState = true,
+		)
+			.map { getReadingStatus(mangaId) }
 			.distinctUntilChanged()
 	}
 
@@ -234,31 +252,74 @@ class ContentDataRepository @Inject constructor(
 		status: ScrobblingStatus?,
 	) {
 		db.withTransaction {
-			val dao = db.getPreferencesDao()
-			val entity = dao.find(mangaId) ?: newEntity(mangaId)
-			dao.upsert(
-				entity.copy(
-					readingStatus = status?.name,
-				),
-			)
+			val entityPrefs = findEntityPrefsForMangaId(mangaId)
+			if (entityPrefs != null) {
+				db.getEntityGraphDao().upsertPrefsRecord(
+					entityPrefs.copy(
+						readingStatus = status?.name,
+						updatedAt = System.currentTimeMillis(),
+					),
+				)
+			} else {
+				val dao = db.getPreferencesDao()
+				val entity = dao.find(mangaId) ?: newEntity(mangaId)
+				dao.upsert(
+					entity.copy(
+						readingStatus = status?.name,
+					),
+				)
+			}
 		}
 	}
 
 	suspend fun setOverride(manga: Content, override: ContentOverride?) {
 		db.withTransaction {
 			storeContent(manga, replaceExisting = false)
-			val dao = db.getPreferencesDao()
-			val entity = dao.find(manga.id) ?: newEntity(manga.id)
-			dao.upsert(
-				entity.copy(
-					titleOverride = override?.title?.nullIfEmpty(),
-					coverUrlOverride = override?.coverUrl?.nullIfEmpty(),
-					contentRatingOverride = override?.contentRating?.name,
-				),
-			)
+			val normalizedOverride = override.normalized()
+			val entityPrefs = findEntityPrefsForMangaId(manga.id)
+			if (entityPrefs != null) {
+				val entityDao = db.getEntityGraphDao()
+				entityDao.upsertPrefsRecord(
+					entityPrefs.copy(
+						titleOverride = normalizedOverride?.title,
+						coverUrlOverride = normalizedOverride?.coverUrl,
+						contentRatingOverride = normalizedOverride?.contentRating?.name,
+						updatedAt = System.currentTimeMillis(),
+					),
+				)
+				// Once a work owner exists, manual overrides are authoritative there.
+				// Drop same-projection shadow overrides so runtime no longer keeps two truths.
+				val prefsDao = db.getPreferencesDao()
+				val legacyPrefs = prefsDao.find(manga.id)
+				if (legacyPrefs != null &&
+					(
+						legacyPrefs.titleOverride != null ||
+							legacyPrefs.coverUrlOverride != null ||
+							legacyPrefs.contentRatingOverride != null
+						)
+				) {
+					prefsDao.upsert(
+						legacyPrefs.copy(
+							titleOverride = null,
+							coverUrlOverride = null,
+							contentRatingOverride = null,
+						),
+					)
+				}
+			} else {
+				val dao = db.getPreferencesDao()
+				val entity = dao.find(manga.id) ?: newEntity(manga.id)
+				dao.upsert(
+					entity.copy(
+						titleOverride = normalizedOverride?.title,
+						coverUrlOverride = normalizedOverride?.coverUrl,
+						contentRatingOverride = normalizedOverride?.contentRating?.name,
+					),
+				)
+			}
 			// Sync the manga table's nsfw/content_rating columns so SQL-level filters
 			// (e.g. HistoryDao "manga.nsfw = 1") respect the manual override.
-			val effectiveRating = override?.contentRating ?: manga.contentRating
+			val effectiveRating = normalizedOverride?.contentRating ?: manga.contentRating
 			val effectiveNsfw = effectiveRating == org.skepsun.kototoro.parsers.model.ContentRating.ADULT
 			db.getMangaDao().updateContentRating(manga.id, effectiveNsfw, effectiveRating?.name)
 		}
@@ -269,18 +330,24 @@ class ContentDataRepository @Inject constructor(
 		selection: MetadataSourceSelection?,
 	) {
 		db.withTransaction {
-			val dao = db.getPreferencesDao()
-			val entity = dao.find(mangaId) ?: newEntity(mangaId)
-			dao.upsert(
-				entity.copy(
-					metadataSourceKind = when (selection) {
-						null -> null
-						MetadataSourceSelection.Base -> "base"
-						is MetadataSourceSelection.Tracking -> "tracking"
-					},
-					metadataSourceService = (selection as? MetadataSourceSelection.Tracking)?.serviceId,
-					metadataSourceRemoteId = (selection as? MetadataSourceSelection.Tracking)?.remoteId,
-				),
+			val entityPrefs = findEntityPrefsForMangaId(mangaId)
+			entityPrefs?.let {
+				updateEntityMetadataSourceSelection(
+					entityId = it.entityId,
+					selection = selection,
+					updatedAt = System.currentTimeMillis(),
+				)
+			}
+			if (entityPrefs != null) {
+				// Work-level metadata authority is now owned by entity prefs.
+				// Projection prefs should not mirror the same default selection anymore.
+				return@withTransaction
+			}
+			// Legacy fallback only: keep projection-level storage for records that have not
+			// been work/entity-bound yet. Once an entity exists, metadata authority lives there.
+			upsertLegacyMetadataSourceSelection(
+				mangaId = mangaId,
+				selection = selection,
 			)
 		}
 	}
@@ -290,6 +357,8 @@ class ContentDataRepository @Inject constructor(
 		suggestion: IgnoredTrackingSuggestion?,
 	) {
 		db.withTransaction {
+			// Keep this on projection prefs. Ignoring a suggestion for one local source
+			// should not implicitly suppress candidates for every projection in the work.
 			val dao = db.getPreferencesDao()
 			val entity = dao.find(mangaId) ?: newEntity(mangaId)
 			dao.upsert(
@@ -325,15 +394,28 @@ class ContentDataRepository @Inject constructor(
 		return db.getMangaDao().find(mangaId)?.toContent(chapters)
 	}
 
+	suspend fun findPreferredLocalContentById(mangaId: Long, withChapters: Boolean): Content? {
+		val preferredLocalId = findEntityPrefsForMangaId(mangaId)?.preferredLocalMangaId
+		return findContentById(preferredLocalId ?: mangaId, withChapters)
+	}
+
+	suspend fun findDisplayContentById(mangaId: Long, withChapters: Boolean): Content? {
+		return findPreferredLocalContentById(mangaId, withChapters)
+			?: findContentById(mangaId, withChapters)
+	}
+
 	suspend fun findContentByPublicUrl(publicUrl: String): Content? {
 		return db.getMangaDao().findByPublicUrl(publicUrl)?.toContent()
 	}
 
-	suspend fun resolveIntent(intent: ContentIntent, withChapters: Boolean): Content? = when {
-		intent.manga != null -> intent.manga.withCachedChaptersIfNeeded(withChapters)
-		intent.mangaId != 0L -> findContentById(intent.mangaId, withChapters)
-		intent.uri != null -> resolverProvider.get().resolve(intent.uri).withCachedChaptersIfNeeded(withChapters)
-		else -> null
+	suspend fun resolveIntent(intent: ContentIntent, withChapters: Boolean): Content? {
+		val mangaId = intent.mangaId
+		if (mangaId != 0L) {
+			findContentById(mangaId, withChapters)?.let { return it }
+		}
+		intent.manga?.let { return it.withCachedChaptersIfNeeded(withChapters) }
+		intent.uri?.let { return resolverProvider.get().resolve(it).withCachedChaptersIfNeeded(withChapters) }
+		return null
 	}
 
 	suspend fun storeContent(manga: Content, replaceExisting: Boolean) {
@@ -389,12 +471,16 @@ class ContentDataRepository @Inject constructor(
 		db.withTransaction {
 			gcChaptersCache()
 			val idsFromShortcuts = appShortcutManagerProvider.get().getContentShortcuts()
-			db.getMangaDao().cleanup(idsFromShortcuts)
+			val preservedLocalIds = idsFromShortcuts.mapNotNullTo(LinkedHashSet()) { shortcutId ->
+				findDisplayContentById(shortcutId, withChapters = false)?.id
+					?: findContentById(shortcutId, withChapters = false)?.id
+			}
+			db.getMangaDao().cleanup(preservedLocalIds)
 		}
 	}
 
 	fun observeOverridesTrigger(emitInitialState: Boolean) = db.invalidationTracker.createFlow(
-		tables = arrayOf(TABLE_PREFERENCES),
+		tables = arrayOf(TABLE_PREFERENCES, TABLE_ENTITY_PREFERENCES),
 		emitInitialState = emitInitialState,
 	)
 
@@ -451,13 +537,29 @@ class ContentDataRepository @Inject constructor(
 	private fun EntityPrefsRecord.getMetadataSourceSelectionOrNull(): MetadataSourceSelection? {
 		return metadataSourceSelectionOrNull(
 			metadataSourceKind = metadataSourceKind,
+			metadataBindingSource = metadataBindingSource,
+			metadataBindingExternalId = metadataBindingExternalId,
 			metadataSourceService = metadataSourceService,
 			metadataSourceRemoteId = metadataSourceRemoteId,
 		)
 	}
 
+	private fun EntityPrefsRecord.getOverrideOrNull(): ContentOverride? {
+		return if (titleOverride.isNullOrEmpty() && coverUrlOverride.isNullOrEmpty() && contentRatingOverride.isNullOrEmpty()) {
+			null
+		} else {
+			ContentOverride(
+				coverUrl = coverUrlOverride?.nullIfEmpty(),
+				title = titleOverride?.nullIfEmpty(),
+				contentRating = ContentRating(contentRatingOverride),
+			)
+		}
+	}
+
 	private fun metadataSourceSelectionOrNull(
 		metadataSourceKind: String?,
+		metadataBindingSource: String? = null,
+		metadataBindingExternalId: String? = null,
 		metadataSourceService: Int?,
 		metadataSourceRemoteId: Long?,
 	): MetadataSourceSelection? {
@@ -465,8 +567,12 @@ class ContentDataRepository @Inject constructor(
 			null -> null
 			"base" -> MetadataSourceSelection.Base
 			"tracking" -> {
-				val serviceId = metadataSourceService ?: return null
-				val remoteId = metadataSourceRemoteId ?: return null
+				val serviceId = metadataBindingSource
+					?.toTrackingServiceOrNull()
+					?.id
+					?: metadataSourceService
+					?: return null
+				val remoteId = metadataBindingExternalId?.toLongOrNull() ?: metadataSourceRemoteId ?: return null
 				MetadataSourceSelection.Tracking(
 					serviceId = serviceId,
 					remoteId = remoteId,
@@ -476,10 +582,61 @@ class ContentDataRepository @Inject constructor(
 		}
 	}
 
+	private suspend fun updateEntityMetadataSourceSelection(
+		entityId: Long,
+		selection: MetadataSourceSelection?,
+		updatedAt: Long,
+	) {
+		val trackingSelection = selection.toTrackingSelectionOrNull()
+		db.getEntityGraphDao().updateEntityMetadataSourceSelection(
+			entityId = entityId,
+			metadataSourceKind = selection.toMetadataSourceKind(),
+			metadataBindingSource = trackingSelection?.serviceId?.toString(),
+			metadataBindingExternalId = trackingSelection?.remoteId?.toString(),
+			metadataSourceService = trackingSelection?.serviceId,
+			metadataSourceRemoteId = trackingSelection?.remoteId,
+			updatedAt = updatedAt,
+		)
+	}
+
+	private suspend fun upsertLegacyMetadataSourceSelection(
+		mangaId: Long,
+		selection: MetadataSourceSelection?,
+	) {
+		val trackingSelection = selection.toTrackingSelectionOrNull()
+		val dao = db.getPreferencesDao()
+		val entity = dao.find(mangaId) ?: newEntity(mangaId)
+		dao.upsert(
+			entity.copy(
+				metadataSourceKind = selection.toMetadataSourceKind(),
+				metadataSourceService = trackingSelection?.serviceId,
+				metadataSourceRemoteId = trackingSelection?.remoteId,
+			),
+		)
+	}
+
+	private fun MetadataSourceSelection?.toMetadataSourceKind(): String? {
+		return when (this) {
+			null -> null
+			MetadataSourceSelection.Base -> "base"
+			is MetadataSourceSelection.Tracking -> "tracking"
+		}
+	}
+
+	private fun MetadataSourceSelection?.toTrackingSelectionOrNull(): MetadataSourceSelection.Tracking? {
+		return this as? MetadataSourceSelection.Tracking
+	}
+
 	private fun newEntityPrefs(entityId: Long) = EntityPrefsRecord(
 		entityId = entityId,
 		preferredLocalMangaId = null,
+		titleOverride = null,
+		coverUrlOverride = null,
+		contentRatingOverride = null,
+		readingStatus = null,
 		metadataSourceKind = null,
+		metadataBindingSource = null,
+		metadataBindingExternalId = null,
 		metadataSourceService = null,
 		metadataSourceRemoteId = null,
 		updatedAt = System.currentTimeMillis(),
@@ -503,4 +660,28 @@ class ContentDataRepository @Inject constructor(
 		ignoredTrackingSuggestionService = null,
 		ignoredTrackingSuggestionRemoteId = null,
 	)
+
+	private suspend fun findEntityPrefsForMangaId(mangaId: Long): EntityPrefsRecord? {
+		val entityId = db.getEntityGraphDao().findActiveBinding("local_manga", mangaId.toString())?.entityId
+			?: db.getEntityGraphDao().findActiveBinding("0", mangaId.toString())?.entityId
+			?: return null
+		val dao = db.getEntityGraphDao()
+		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
+		return dao.findEntityPrefs(entityId)
+	}
+
+	private fun ContentOverride?.normalized(): ContentOverride? {
+		return this?.let {
+			val normalized = ContentOverride(
+				coverUrl = it.coverUrl?.nullIfEmpty(),
+				title = it.title?.nullIfEmpty(),
+				contentRating = it.contentRating,
+			)
+			if (normalized.coverUrl == null && normalized.title == null && normalized.contentRating == null) {
+				null
+			} else {
+				normalized
+			}
+		}
+	}
 }

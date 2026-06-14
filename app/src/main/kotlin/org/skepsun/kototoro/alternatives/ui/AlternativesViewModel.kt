@@ -18,6 +18,8 @@ import org.skepsun.kototoro.alternatives.domain.MigrateUseCase
 import org.skepsun.kototoro.core.model.chaptersCount
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.ContentIntent
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.BaseViewModel
@@ -38,12 +40,15 @@ import javax.inject.Inject
 class AlternativesViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
 	private val mangaRepositoryFactory: ContentRepository.Factory,
+	private val contentDataRepository: ContentDataRepository,
 	private val alternativesUseCase: AlternativesUseCase,
 	private val migrateUseCase: MigrateUseCase,
 	private val mangaListMapper: ContentListMapper,
 ) : BaseViewModel() {
 
-	private val mangaState = MutableStateFlow(savedStateHandle.get<ParcelableContent>(AppRouter.KEY_MANGA)?.manga)
+	private val initialManga = savedStateHandle.get<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
+	private val intent = ContentIntent(savedStateHandle)
+	private val mangaState = MutableStateFlow<Content?>(initialManga)
 	val manga: Content
 		get() = checkNotNull(mangaState.value) {
 			"AlternativesViewModel is not initialized with content"
@@ -90,8 +95,11 @@ class AlternativesViewModel @Inject constructor(
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
 
 	init {
-		if (mangaState.value != null) {
-			doSearch(throughDisabledSources = false)
+		launchJob(Dispatchers.Default) {
+			val resolved = resolveCurrentContent()
+			if (resolved != null) {
+				initialize(resolved)
+			}
 		}
 	}
 
@@ -162,5 +170,13 @@ class AlternativesViewModel @Inject constructor(
 					results.append(model)
 				}
 		}
+	}
+
+	private suspend fun resolveCurrentContent(): Content? {
+		val resolved = contentDataRepository.resolveIntent(intent, withChapters = true)
+		if (resolved != null) {
+			return resolved
+		}
+		return initialManga.takeIf { intent.mangaId == 0L }
 	}
 }

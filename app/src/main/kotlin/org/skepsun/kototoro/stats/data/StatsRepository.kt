@@ -10,6 +10,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
 import org.skepsun.kototoro.stats.domain.StatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsRecord
 import java.util.NavigableMap
@@ -28,7 +29,7 @@ class StatsRepository @Inject constructor(
 		} else {
 			System.currentTimeMillis() - TimeUnit.DAYS.toMillis(period.days.toLong())
 		}
-		val stats = db.getStatsDao().getDurationStats(fromDate, null, categories)
+		val stats = db.getWorkStatsDao().getDurationStats(fromDate, null, categories)
 		val result = ArrayList<StatsRecord>(stats.size)
 		var other = StatsRecord(null, 0)
 		val total = stats.values.sum()
@@ -52,9 +53,11 @@ class StatsRepository @Inject constructor(
 
 	suspend fun getTimePerPage(mangaId: Long): Long = db.withTransaction {
 		val dao = db.getStatsDao()
-		val pages = dao.getReadPagesCount(mangaId)
+		val entityId = resolveStatsEntityId(mangaId)
+		val workPages = entityId?.let { db.getWorkStatsDao().getReadPagesCount(it) } ?: 0
+		val pages = if (workPages != 0) workPages else dao.getReadPagesCount(mangaId)
 		val time = if (pages >= 10) {
-			dao.getAverageTimePerPage(mangaId)
+			entityId?.let { db.getWorkStatsDao().getAverageTimePerPage(it) } ?: dao.getAverageTimePerPage(mangaId)
 		} else {
 			dao.getAverageTimePerPage()
 		}
@@ -62,12 +65,22 @@ class StatsRepository @Inject constructor(
 	}
 
 	suspend fun getTotalPagesRead(mangaId: Long): Int {
-		return db.getStatsDao().getReadPagesCount(mangaId)
+		val entityId = resolveStatsEntityId(mangaId)
+		return entityId?.let { db.getWorkStatsDao().getReadPagesCount(it) }
+			?: db.getStatsDao().getReadPagesCount(mangaId)
 	}
 
 	suspend fun getContentTimeline(mangaId: Long): NavigableMap<Long, Int> {
-		val entities = db.getStatsDao().findAll(mangaId)
+		val entityId = resolveStatsEntityId(mangaId)
+		val workEntities = entityId?.let { db.getWorkStatsDao().findAll(it) }.orEmpty()
 		val map = TreeMap<Long, Int>()
+		if (workEntities.isNotEmpty()) {
+			for (e in workEntities) {
+				map[e.startedAt] = e.pages
+			}
+			return map
+		}
+		val entities = db.getStatsDao().findAll(mangaId)
 		for (e in entities) {
 			map[e.startedAt] = e.pages
 		}
@@ -75,6 +88,7 @@ class StatsRepository @Inject constructor(
 	}
 
 	suspend fun clearStats() {
+		db.getWorkStatsDao().clear()
 		db.getStatsDao().clear()
 	}
 
@@ -82,9 +96,23 @@ class StatsRepository @Inject constructor(
 		isStatsEnabled
 	}.flatMapLatest { isEnabled ->
 		if (isEnabled) {
-			db.getStatsDao().observeRowCount(mangaId).map { it > 0 }
+			flowOf(hasStats(mangaId))
 		} else {
 			flowOf(false)
 		}
 	}.distinctUntilChanged()
+
+	private suspend fun hasStats(mangaId: Long): Boolean {
+		val entityId = resolveStatsEntityId(mangaId)
+		if (entityId != null && db.getWorkStatsDao().getRowCount(entityId) > 0) {
+			return true
+		}
+		return db.getStatsDao().getReadPagesCount(mangaId) > 0
+	}
+
+	// The incoming mangaId is a projection/local anchor. When a work/entity exists, stats should
+	// read from work-owned aggregates first and only fall back to legacy manga rows as needed.
+	private suspend fun resolveStatsEntityId(mangaId: Long): Long? {
+		return db.resolveWorkEntityIdByMangaId(mangaId)
+	}
 }

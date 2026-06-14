@@ -1,9 +1,9 @@
 package org.skepsun.kototoro.details.domain
 
-import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
@@ -11,13 +11,13 @@ import javax.inject.Inject
 
 class ProgressUpdateUseCase @Inject constructor(
 	private val mangaRepositoryFactory: ContentRepository.Factory,
-	private val database: MangaDatabase,
 	private val localContentRepository: LocalMangaRepository,
 	private val networkState: NetworkState,
+	private val historyRepository: HistoryRepository,
 ) {
 
 	suspend operator fun invoke(manga: Content): Float {
-		val history = database.getHistoryDao().find(manga.id) ?: return PROGRESS_NONE
+		val history = historyRepository.getOne(manga) ?: return PROGRESS_NONE
 		val seed = if (manga.isLocal) {
 			localContentRepository.getRemoteContent(manga) ?: manga
 		} else {
@@ -51,15 +51,6 @@ class ProgressUpdateUseCase @Inject constructor(
 		}
 		val pagePercent = (history.page + 1) / pagesCount.toFloat()
 		val ppc = 1f / chaptersCount
-		val result = ppc * chapterIndex + ppc * pagePercent
-		if (result != history.percent) {
-			database.getHistoryDao().update(
-				history.copy(
-					chapterId = chapter.id,
-					percent = result,
-				),
-			)
-		}
-		return result
+		return ppc * chapterIndex + ppc * pagePercent
 	}
 }

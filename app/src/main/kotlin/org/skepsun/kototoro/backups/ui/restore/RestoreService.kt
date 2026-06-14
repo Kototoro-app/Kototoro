@@ -67,11 +67,13 @@ class RestoreService : BaseBackupRestoreService() {
 			val restoreResult = ZipInputStream(contentResolver.openInputStream(source)).use { input ->
 				repository.restoreBackup(input, sections, progress)
 			}
+			val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
 			progressUpdateJob?.cancelAndJoin()
 			showResultNotification(
 				source,
 				restoreResult.result,
 				showLegacyJarReposImportedHint = restoreResult.legacyJarReposImported,
+				showWorkMigrationNormalizationHint = restoreContext.isLegacySemanticSchema,
 			)
 			if (sections.contains(BackupSection.AUTH)) {
 				withContext(Dispatchers.Main) {

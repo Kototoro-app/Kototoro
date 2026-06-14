@@ -24,6 +24,10 @@ import org.skepsun.kototoro.parsers.util.toAbsoluteUrl
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.preferredMangaMappingByTargetId
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -91,7 +95,7 @@ class ShikimoriRepository @Inject constructor(
 		}
 
 	override suspend fun unregister(mangaId: Long) {
-		return db.getScrobblingDao().delete(ScrobblerService.SHIKIMORI.id, mangaId)
+		return db.deleteScrobblingByWorkOrManga(ScrobblerService.SHIKIMORI.id, mangaId)
 	}
 
 	override fun logout() {
@@ -270,10 +274,7 @@ class ShikimoriRepository @Inject constructor(
 		val user = cachedUser ?: loadUser()
 		val oldMappings = db.getScrobblingDao()
 			.findAllByScrobbler(ScrobblerService.SHIKIMORI.id)
-			.groupBy { it.targetId }
-			.mapValues { (_, values) ->
-				values.firstOrNull { it.mangaId != 0L }?.mangaId ?: 0L
-			}
+			.preferredMangaMappingByTargetId()
 
 		val synced = ArrayList<ScrobblingEntity>()
 		var page = 1
@@ -317,7 +318,7 @@ class ShikimoriRepository @Inject constructor(
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.SHIKIMORI.id)
 			synced.forEach { entity ->
-				db.getScrobblingDao().upsert(entity)
+				db.upsertScrobbling(entity)
 			}
 		}
 		return synced.size
@@ -914,7 +915,7 @@ class ShikimoriRepository @Inject constructor(
 			comment = json.getString("text"),
 			rating = (json.getDouble("score").toFloat() / 10f).coerceIn(0f, 1f),
 		)
-		db.getScrobblingDao().upsert(entity)
+		db.upsertScrobbling(entity)
 	}
 
 	private fun ScrobblerContent(json: JSONObject, sourceTitle: String): ScrobblerContent {

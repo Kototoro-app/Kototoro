@@ -122,8 +122,18 @@ class WebDavAutoRestoreService : Service() {
         logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_check_started")
 
         try {
-            val remoteFiles = webDavUploader.listBackupFiles(RemoteNamespace.V2)
-            if (remoteFiles.isEmpty()) {
+            val remoteFiles = webDavUploader.listBackupFiles(RemoteNamespace.V3)
+	            if (remoteFiles.isEmpty()) {
+	                val v2Files = webDavUploader.listBackupFiles(RemoteNamespace.V2)
+	                if (v2Files.isNotEmpty()) {
+	                    val v2Candidate = selectPreferredCandidate(v2Files)
+	                        ?: run {
+	                            logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_compatible_backup")
+	                            return
+	                        }
+                    restoreCandidate(v2Candidate, currentTime, isLegacyMigration = false)
+                    return
+                }
                 val legacy = selectLegacyCandidate()
                 if (legacy == null) {
                     logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_remote_backups")
@@ -133,11 +143,11 @@ class WebDavAutoRestoreService : Service() {
                 return
             }
 
-            val candidate = selectPreferredCandidate(remoteFiles)
-                ?: run {
-                    logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_compatible_v2_backup")
-                    return
-                }
+	            val candidate = selectPreferredCandidate(remoteFiles)
+	                ?: run {
+	                    logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = "no_compatible_backup")
+	                    return
+	                }
             restoreCandidate(candidate, currentTime, isLegacyMigration = false)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to perform auto restore", e)
@@ -176,11 +186,16 @@ class WebDavAutoRestoreService : Service() {
             val restoreResult = zipInputStream.use { zis ->
                 backupRepository.restoreBackup(zis, allSections, null)
             }
+            val restoreContext = backupRepository.resolveRestoreSemanticContext(restoreResult.backupIndex)
 
             val changesApplied = !restoreResult.result.isEmpty
 
             val restoreResultCommit = backupWebDavRestoreCoordinator.commitAutoRestore(
                 restoredVersion = candidate.dataVersion,
+                state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
+                    semanticSchemaVersion = restoreContext.semanticSchemaVersion,
+                    transportGeneration = restoreContext.transportGeneration,
+                ),
                 now = currentTime,
             )
             logBackupFlow(
@@ -190,6 +205,9 @@ class WebDavAutoRestoreService : Service() {
                 reason = null,
                 "changesApplied" to changesApplied,
                 "version" to restoreResultCommit.restoredVersion,
+                "semanticSchemaVersion" to restoreResultCommit.semanticSchemaVersion,
+                "transportGeneration" to restoreResultCommit.transportGeneration,
+                "writeBlocked" to restoreResultCommit.writeBlocked,
                 "legacyJarReposImported" to restoreResult.legacyJarReposImported,
                 "legacyMigration" to isLegacyMigration,
             )
@@ -200,12 +218,13 @@ class WebDavAutoRestoreService : Service() {
             }
             settings.hasCompletedBackupWebDavV2Migration = true
 
-            if (isLegacyMigration) {
+            val postRestoreUploadDecision = backupFlowPolicy.autoSyncUploadDecision()
+            if (!postRestoreUploadDecision.allowed) {
                 logBackupFlow(
                     TAG,
                     flow = BackupFlow.WEBDAV_AUTO_RESTORE,
                     event = "post_restore_upload_skipped",
-                    reason = "legacy_restore_block",
+                    reason = postRestoreUploadDecision.reason,
                 )
             } else {
                 kotlin.runCatching {
@@ -214,7 +233,7 @@ class WebDavAutoRestoreService : Service() {
                         java.util.zip.ZipOutputStream(out.outputStream()).use { zos ->
                             backupRepository.createBackup(zos, null)
                         }
-                        val isSame = candidate.namespace == RemoteNamespace.V2 && areBackupsEqual(tempFile, out)
+                        val isSame = candidate.namespace == RemoteNamespace.V3 && areBackupsEqual(tempFile, out)
                         if (!isSame) {
                             val uploadResult = backupWebDavUploadCoordinator.uploadAndCommit(
                                 file = out,
@@ -263,10 +282,12 @@ class WebDavAutoRestoreService : Service() {
 
     private fun buildRestoreSections(writerGeneration: Int): Set<BackupSection> {
         val baseSections = linkedSetOf(
+            BackupSection.INDEX,
             BackupSection.HISTORY,
             BackupSection.CATEGORIES,
             BackupSection.FAVOURITES,
             BackupSection.BOOKMARKS,
+            BackupSection.STATS,
             BackupSection.SOURCES,
             BackupSection.EXTENSION_REPOS,
         )
@@ -275,6 +296,13 @@ class WebDavAutoRestoreService : Service() {
             baseSections += BackupSection.ENTITY_GRAPH_BINDINGS
             baseSections += BackupSection.ENTITY_GRAPH_RELATIONS
             baseSections += BackupSection.ENTITY_GRAPH_PREFS
+        }
+        if (writerGeneration >= RemoteNamespace.V3.writerGeneration) {
+            baseSections += BackupSection.WORK_HISTORY
+            baseSections += BackupSection.WORK_FAVOURITES
+            baseSections += BackupSection.WORK_STATS
+            baseSections += BackupSection.SETTINGS
+            baseSections += BackupSection.SETTINGS_READER_GRID
         }
         return baseSections
     }

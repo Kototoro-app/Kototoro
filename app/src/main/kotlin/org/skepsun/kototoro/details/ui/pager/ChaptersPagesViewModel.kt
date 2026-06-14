@@ -42,6 +42,7 @@ import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadTaskKind
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
+import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
@@ -333,15 +334,17 @@ abstract class ChaptersPagesViewModel(
 		val manga = mangaDetails.value?.toContent() ?: return
 		val items = chapters.value.filter { it.chapter.id in snapshot }
 
-		val task = DownloadTask(
-			mangaId = manga.id,
-			isPaused = false,
-			isSilent = false,
-			chaptersIds = items.map { it.chapter.id }.toLongArray(),
-			destination = null,
-			format = null,
-			allowMeteredNetwork = isMeteredNetworkAllowed,
-			preferredQuality = preferredQuality,
+			val task = DownloadTask.createExecutionTask(
+				executionMangaId = manga.id,
+				displayMangaId = manga.id,
+				isPaused = false,
+				isSilent = false,
+				executionChapterIds = items.map { it.chapter.id }.toLongArray(),
+				executionChapterRefs = items.map { ExecutionChapterRef.fromChapter(it.chapter) },
+				destination = null,
+				format = null,
+				allowMeteredNetwork = isMeteredNetworkAllowed,
+				preferredQuality = preferredQuality,
 		)
 		launchJob(Dispatchers.Default) {
 			downloadScheduler.schedule(setOf(manga to task))
@@ -368,15 +371,17 @@ abstract class ChaptersPagesViewModel(
 		if (items.isEmpty()) {
 			return
 		}
-		val task = DownloadTask(
-			mangaId = manga.id,
-			isPaused = false,
-			isSilent = snapshot.size == 1,
-			chaptersIds = items.map { it.chapter.id }.toLongArray(),
-			destination = null,
-			format = null,
-			allowMeteredNetwork = isMeteredNetworkAllowed,
-			kind = kind,
+			val task = DownloadTask.createExecutionTask(
+				executionMangaId = manga.id,
+				displayMangaId = manga.id,
+				isPaused = false,
+				isSilent = snapshot.size == 1,
+				executionChapterIds = items.map { it.chapter.id }.toLongArray(),
+				executionChapterRefs = items.map { ExecutionChapterRef.fromChapter(it.chapter) },
+				destination = null,
+				format = null,
+				allowMeteredNetwork = isMeteredNetworkAllowed,
+				kind = kind,
 		)
 		launchJob(Dispatchers.Default) {
 			downloadScheduler.schedule(setOf(manga to task))

@@ -184,6 +184,8 @@ abstract class EntityGraphDao {
 		"""
 		UPDATE entity_preferences
 		SET metadata_source_kind = :metadataSourceKind,
+			metadata_binding_source = :metadataBindingSource,
+			metadata_binding_external_id = :metadataBindingExternalId,
 			metadata_source_service = :metadataSourceService,
 			metadata_source_remote_id = :metadataSourceRemoteId,
 			updated_at = :updatedAt
@@ -193,6 +195,8 @@ abstract class EntityGraphDao {
 	abstract suspend fun updateEntityMetadataSourceSelection(
 		entityId: Long,
 		metadataSourceKind: String?,
+		metadataBindingSource: String?,
+		metadataBindingExternalId: String?,
 		metadataSourceService: Int?,
 		metadataSourceRemoteId: Long?,
 		updatedAt: Long,

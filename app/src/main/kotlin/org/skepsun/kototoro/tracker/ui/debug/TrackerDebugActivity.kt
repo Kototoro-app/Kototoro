@@ -52,6 +52,6 @@ class TrackerDebugActivity : BaseActivity<ActivityTrackerDebugBinding>(), OnList
 	}
 
 	override fun onItemClick(item: TrackDebugItem, view: View) {
-		router.openDetails(item.manga)
+		router.openResolvedDetails(item.manga, view)
 	}
 }

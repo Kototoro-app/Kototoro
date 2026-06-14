@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.entitygraph.data
 
+import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +45,8 @@ private const val STALE_ENTITY_DAYS = 30L
 private const val STALE_ENTITY_ACCESS_THRESHOLD = 2
 private const val MAX_BINDING_QUERY_PARAMS = 500
 private const val MAX_ENTITY_ALIASES = 50
+private const val TAG = "EntityGraphRepository"
+private const val MAX_REPAIR_DIAGNOSTIC_LOGS = 80
 
 @Singleton
 class EntityGraphRepository @Inject constructor(
@@ -194,7 +197,10 @@ class EntityGraphRepository @Inject constructor(
 		if (localMangaId == 0L) {
 			return@withContext
 		}
-		deleteLocalReadingBinding(db.getEntityGraphDao(), localMangaId.toString())
+		val dao = db.getEntityGraphDao()
+		Log.i(TAG, "removeLocalReadingBinding: mangaId=$localMangaId, before: local_manga=${dao.findBinding("local_manga", localMangaId.toString())?.let { "entityId=${it.entityId} state=${it.state}" }}, 0=${dao.findBinding("0", localMangaId.toString())?.let { "entityId=${it.entityId} state=${it.state}" }}")
+		deleteLocalReadingBinding(dao, localMangaId.toString())
+		Log.i(TAG, "removeLocalReadingBinding: mangaId=$localMangaId, after: local_manga=${dao.findBinding("local_manga", localMangaId.toString())?.let { "entityId=${it.entityId}" }}, 0=${dao.findBinding("0", localMangaId.toString())?.let { "entityId=${it.entityId}" }}")
 	}
 
 	suspend fun detachLocalWorkProjection(localMangaId: Long): Boolean = withContext(Dispatchers.Default) {
@@ -281,6 +287,15 @@ class EntityGraphRepository @Inject constructor(
 					oldSource = existingBinding.source,
 					hadLocalContent = content != null,
 				)
+			val oldEntityBindings = dao.findBindingsByEntity(existingEntity.id)
+				.filter { it.isActiveBinding() }
+			val oldEntityLocalMangaIds = oldEntityBindings
+				.filter { it.isLocalReadingSource() }
+				.mapNotNull { it.externalId.toLongOrNull() }
+			Log.i(TAG, "splitLocalWork: entityId=${existingEntity.id} name=${existingEntity.primaryName} " +
+				"nameHash=${existingEntity.nameHash} type=${existingEntity.type} " +
+				"bindings=${oldEntityBindings.size} localMangaIds=$oldEntityLocalMangaIds " +
+				"splittingMangaId=$localMangaId content=${content?.let { "${it.title}(${it.id})" }}")
 			val now = System.currentTimeMillis()
 			deleteLocalReadingBinding(dao, localMangaId.toString())
 			val entity = if (content != null) {
@@ -295,6 +310,11 @@ class EntityGraphRepository @Inject constructor(
 					now = now,
 				)
 			}
+			val newEntity = dao.findEntity(entity.id)
+			Log.i(TAG, "splitLocalWork: newEntityId=${entity.id} " +
+				"name=${newEntity?.primaryName} nameHash=${newEntity?.nameHash} " +
+				"aliases=${newEntity?.let { decodeStringList(it.aliases) }} " +
+				"oldEntityId=${existingEntity.id}")
 			resetDetachedLocalWorkPrefs(
 				dao = dao,
 				entityId = entity.id,
@@ -385,33 +405,28 @@ class EntityGraphRepository @Inject constructor(
 			return@withContext emptyMap()
 		}
 		val dao = db.getEntityGraphDao()
-		val trackingDao = db.getTrackingSiteDao()
 		val ids = mangaIds.distinct()
-		val localBindings = buildMap<Long, Long> {
+		// Owner resolution must come from confirmed local reading bindings only.
+		// tracking_site_links is cache/audit data and must not backfill entity ownership.
+		// When both local_manga and legacy "0" bindings exist for the same manga,
+		// prefer local_manga (the canonical source).
+		buildMap<Long, Long> {
+			val bestSource = mutableMapOf<Long, String>()
 			ids.map(Long::toString).chunked(MAX_BINDING_QUERY_PARAMS).forEach { chunk ->
 				dao.findActiveBindingsBySources(
 					sources = listOf("local_manga", "0"),
 					externalIds = chunk,
 				).forEach { binding ->
 					binding.externalId.toLongOrNull()?.let { localMangaId ->
-						put(localMangaId, binding.entityId)
+						val currentSource = bestSource[localMangaId]
+						if (currentSource == null || (currentSource != "local_manga" && binding.source == "local_manga")) {
+							put(localMangaId, binding.entityId)
+							bestSource[localMangaId] = binding.source
+						}
 					}
 				}
 			}
-		}.toMutableMap()
-		val unresolvedIds = ids.filterNot { it in localBindings }
-		if (unresolvedIds.isEmpty()) {
-			return@withContext localBindings
 		}
-		val serviceById = ScrobblerService.entries.associateBy { it.id }
-		for (mangaId in unresolvedIds) {
-			val link = trackingDao.findLinksByManga(mangaId).firstOrNull() ?: continue
-			val service = serviceById[link.service] ?: continue
-			findEntityByBinding(service.id.toString(), link.remoteId.toString())?.id?.let { entityId ->
-				localBindings[mangaId] = entityId
-			}
-		}
-		localBindings
 	}
 
 	suspend fun ensureLocalWorkEntities(
@@ -550,7 +565,7 @@ class EntityGraphRepository @Inject constructor(
 			.asSequence()
 			.filter { it != targetEntityId }
 			.distinct()
-			.toList()
+			.toMutableList()
 		if (distinctSourceIds.isEmpty()) {
 			return@withContext targetEntityId
 		}
@@ -558,7 +573,7 @@ class EntityGraphRepository @Inject constructor(
 			val dao = db.getEntityGraphDao()
 			val now = System.currentTimeMillis()
 			val allIds = (distinctSourceIds + targetEntityId).distinct()
-			val records = dao.findEntitiesByIds(allIds).associateBy { it.id }
+			val records = dao.findEntitiesByIds(allIds).associateBy { it.id }.toMutableMap()
 			var mergedRecord = records[targetEntityId] ?: return@withTransaction null
 			distinctSourceIds.mapNotNull { records[it] }.forEach { record ->
 				mergedRecord = mergeEntityRecord(
@@ -567,6 +582,36 @@ class EntityGraphRepository @Inject constructor(
 					aliases = decodeStringList(record.aliases),
 					now = now,
 				)
+			}
+			// Resolve name_hash conflicts: if the merged record's (type, name_hash) collides with
+			// another entity not in the merge set, absorb it into the merge.
+			val absorbedIds = mutableSetOf<Long>()
+			var absorbAttempts = 0
+			while (absorbAttempts < 5) {
+				val conflicting = dao.findEntityByTypeAndNameHash(mergedRecord.type, mergedRecord.nameHash)
+				if (conflicting == null || conflicting.id == targetEntityId) {
+					break
+				}
+				if (conflicting.id in distinctSourceIds || conflicting.id in absorbedIds) {
+					break
+				}
+				Log.w(TAG, "mergeEntities: absorbing conflicting entity ${conflicting.id} (type=${conflicting.type}, nameHash=${conflicting.nameHash})")
+				// Remap bindings/relations from conflicting entity to target, then delete it
+				remapBindingsAndRelations(dao, targetEntityId, listOf(conflicting.id))
+				dao.deleteEntitiesByIds(listOf(conflicting.id))
+				absorbedIds.add(conflicting.id)
+				// Merge the absorbed entity's names into the target record (for aliasing)
+				mergedRecord = mergeEntityRecord(
+					record = mergedRecord,
+					primaryName = conflicting.primaryName,
+					aliases = decodeStringList(conflicting.aliases),
+					now = now,
+				)
+				absorbAttempts++
+			}
+			if (absorbAttempts >= 5) {
+				Log.e(TAG, "mergeEntities: too many name_hash conflicts, giving up")
+				return@withTransaction null
 			}
 			dao.updateEntity(mergedRecord)
 			// Remap bindings and relations from source entities to target
@@ -812,20 +857,27 @@ class EntityGraphRepository @Inject constructor(
 
 	suspend fun repairSuspectMetadataSourceSelections(): Int = withContext(Dispatchers.Default) {
 		val report = inspectRepairIssues()
-		val entityIds = report.issues
+		val issues = report.issues
 			.asSequence()
 			.filter { it.kind == EntityGraphRepairIssueKind.SUSPECT_METADATA_SOURCE }
-			.map { it.entityId }
-			.distinct()
 			.toList()
-		if (entityIds.isEmpty()) {
+		if (issues.isEmpty()) {
 			return@withContext 0
 		}
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
 			val now = System.currentTimeMillis()
 			var repaired = 0
-			entityIds.forEach { entityId ->
+			val entityPrefsById = issues
+				.asSequence()
+				.map { it.entityId }
+				.distinct()
+				.associateWith { entityId -> dao.findEntityPrefs(entityId) }
+			issues
+				.asSequence()
+				.map { it.entityId }
+				.distinct()
+				.forEach { entityId ->
 				val prefs = dao.findEntityPrefs(entityId) ?: return@forEach
 				val entityBindings = dao.findActiveBindingsByEntity(entityId)
 				val localContents = entityBindings.localContents()
@@ -855,7 +907,169 @@ class EntityGraphRepository @Inject constructor(
 					dao = dao,
 					entityId = entityId,
 					selection = replacement,
-					localMangaIds = localContents.map { it.id },
+					now = now,
+				)
+				repaired++
+			}
+			issues
+				.asSequence()
+				.mapNotNull { issue ->
+					val localMangaId = issue.localMangaId ?: return@mapNotNull null
+					val entityPrefs = entityPrefsById[issue.entityId]
+					if (!entityPrefs?.metadataSourceKind.isNullOrEmpty()) {
+						return@mapNotNull null
+					}
+					val serviceId = issue.source?.toIntOrNull() ?: return@mapNotNull null
+					val remoteId = issue.externalId?.toLongOrNull() ?: return@mapNotNull null
+					Triple(localMangaId, serviceId, remoteId)
+				}
+				.distinct()
+				.forEach { (localMangaId, serviceId, remoteId) ->
+					clearMangaMetadataSourceIfSuspect(
+						localMangaId = localMangaId,
+						serviceId = serviceId,
+						remoteId = remoteId,
+					)
+					repaired++
+				}
+			repaired
+		}
+	}
+
+	suspend fun pruneRedundantProjectionMetadataSelections(): Int = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val entityDao = db.getEntityGraphDao()
+			val prefsDao = db.getPreferencesDao()
+			val bindingsByEntity = entityDao.dumpBindings()
+				.filter { it.isActiveBinding() }
+				.filter { it.isLocalReadingSource() }
+				.groupBy { it.entityId }
+			var repaired = 0
+			bindingsByEntity.forEach { (entityId, bindings) ->
+				val entityPrefs = entityDao.findEntityPrefs(entityId) ?: return@forEach
+				val entityKind = entityPrefs.metadataSourceKind ?: return@forEach
+				bindings
+					.mapNotNull { it.externalId.toLongOrNull() }
+					.distinct()
+					.forEach { mangaId ->
+						val localPrefs = prefsDao.find(mangaId) ?: return@forEach
+						if (!localPrefs.hasMatchingMetadataSelection(entityPrefs)) {
+							return@forEach
+						}
+						prefsDao.upsert(
+							localPrefs.copy(
+								metadataSourceKind = null,
+								metadataSourceService = null,
+								metadataSourceRemoteId = null,
+							),
+						)
+						repaired++
+					}
+			}
+			repaired
+		}
+	}
+
+	suspend fun pruneRedundantProjectionOverrides(): Int = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val entityDao = db.getEntityGraphDao()
+			val prefsDao = db.getPreferencesDao()
+			val bindingsByEntity = entityDao.dumpBindings()
+				.filter { it.isActiveBinding() }
+				.filter { it.isLocalReadingSource() }
+				.groupBy { it.entityId }
+			var repaired = 0
+			bindingsByEntity.forEach { (entityId, bindings) ->
+				val entityPrefs = entityDao.findEntityPrefs(entityId) ?: return@forEach
+				val entityOverrideExists = entityPrefs.hasAnyOverride()
+				if (!entityOverrideExists) {
+					return@forEach
+				}
+				bindings
+					.mapNotNull { it.externalId.toLongOrNull() }
+					.distinct()
+					.forEach { mangaId ->
+						val localPrefs = prefsDao.find(mangaId) ?: return@forEach
+						if (!localPrefs.hasMatchingOverride(entityPrefs)) {
+							return@forEach
+						}
+						prefsDao.upsert(
+							localPrefs.copy(
+								titleOverride = null,
+								coverUrlOverride = null,
+								contentRatingOverride = null,
+							),
+						)
+						repaired++
+					}
+			}
+			repaired
+		}
+	}
+
+	suspend fun pruneRedundantProjectionReadingStatuses(): Int = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val entityDao = db.getEntityGraphDao()
+			val prefsDao = db.getPreferencesDao()
+			val bindingsByEntity = entityDao.dumpBindings()
+				.filter { it.isActiveBinding() }
+				.filter { it.isLocalReadingSource() }
+				.groupBy { it.entityId }
+			var repaired = 0
+			bindingsByEntity.forEach { (entityId, bindings) ->
+				val entityPrefs = entityDao.findEntityPrefs(entityId) ?: return@forEach
+				val entityReadingStatus = entityPrefs.readingStatus ?: return@forEach
+				bindings
+					.mapNotNull { it.externalId.toLongOrNull() }
+					.distinct()
+					.forEach { mangaId ->
+						val localPrefs = prefsDao.find(mangaId) ?: return@forEach
+						if (localPrefs.readingStatus != entityReadingStatus) {
+							return@forEach
+						}
+						prefsDao.upsert(localPrefs.copy(readingStatus = null))
+						repaired++
+					}
+			}
+			repaired
+		}
+	}
+
+	suspend fun pruneStaleTrackingCacheLinks(): Int = withContext(Dispatchers.Default) {
+		val report = inspectRepairIssues()
+		val issues = report.issues
+			.asSequence()
+			.filter { it.kind == EntityGraphRepairIssueKind.STALE_TRACKING_CACHE_LINK }
+			.filter { !it.source.isNullOrBlank() && !it.externalId.isNullOrBlank() }
+			.distinctBy { "${it.entityId}:${it.source}:${it.externalId}:${it.localMangaId}" }
+			.toList()
+		if (issues.isEmpty()) {
+			return@withContext 0
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val trackingDao = db.getTrackingSiteDao()
+			val now = System.currentTimeMillis()
+			var repaired = 0
+			issues.forEach { issue ->
+				val localMangaId = issue.localMangaId ?: return@forEach
+				val serviceId = issue.source?.toIntOrNull() ?: return@forEach
+				val remoteId = issue.externalId?.toLongOrNull() ?: return@forEach
+				trackingDao.deleteLink(
+					service = serviceId,
+					remoteId = remoteId,
+					mangaId = localMangaId,
+				)
+				clearMangaMetadataSourceIfSuspect(
+					localMangaId = localMangaId,
+					serviceId = serviceId,
+					remoteId = remoteId,
+				)
+				clearEntityMetadataSourceIfSuspect(
+					dao = dao,
+					entityId = issue.entityId,
+					serviceId = serviceId,
+					remoteId = remoteId,
 					now = now,
 				)
 				repaired++
@@ -901,6 +1115,7 @@ class EntityGraphRepository @Inject constructor(
 		val activeBindingsByEntity = activeBindings.groupBy { it.entityId }
 		val issues = ArrayList<EntityGraphRepairIssue>()
 		val entitiesById = dao.dumpEntities().associateBy { it.id }
+		val trackingDiagnostics = EntityRepairDiagnosticCollector()
 
 		dao.dumpPrefs().forEach { prefs ->
 			val entityBindings = activeBindingsByEntity[prefs.entityId].orEmpty()
@@ -956,7 +1171,82 @@ class EntityGraphRepository @Inject constructor(
 							}
 						}?.id,
 					)
+					trackingDiagnostics.record(
+						branch = "entity_metadata_source",
+						entity = entitiesById[prefs.entityId],
+						localContent = localContents.firstOrNull { content ->
+							selectedTrackingNames.none { trackingName ->
+								isCompatibleTrackingTitle(content, trackingName)
+							}
+						} ?: localContents.firstOrNull(),
+						serviceId = metadataService,
+						remoteId = metadataRemoteId,
+						trackingNames = selectedTrackingNames,
+					)
 				}
+			}
+
+			if (prefs.metadataSourceKind != null) {
+				entityBindings
+					.asSequence()
+					.filter { it.isLocalReadingSource() }
+					.mapNotNull { binding -> binding.externalId.toLongOrNull() }
+					.distinct()
+					.forEach { mangaId ->
+						val localPrefs = db.getPreferencesDao().find(mangaId) ?: return@forEach
+						if (!localPrefs.hasMatchingMetadataSelection(prefs)) {
+							return@forEach
+						}
+						issues += EntityGraphRepairIssue(
+							kind = EntityGraphRepairIssueKind.REDUNDANT_PROJECTION_METADATA_SELECTION,
+							entityId = prefs.entityId,
+							source = "local_manga",
+							externalId = mangaId.toString(),
+							localMangaId = mangaId,
+						)
+					}
+			}
+
+			if (prefs.hasAnyOverride()) {
+				entityBindings
+					.asSequence()
+					.filter { it.isLocalReadingSource() }
+					.mapNotNull { binding -> binding.externalId.toLongOrNull() }
+					.distinct()
+					.forEach { mangaId ->
+						val localPrefs = db.getPreferencesDao().find(mangaId) ?: return@forEach
+						if (!localPrefs.hasMatchingOverride(prefs)) {
+							return@forEach
+						}
+						issues += EntityGraphRepairIssue(
+							kind = EntityGraphRepairIssueKind.REDUNDANT_PROJECTION_OVERRIDE,
+							entityId = prefs.entityId,
+							source = "local_manga",
+							externalId = mangaId.toString(),
+							localMangaId = mangaId,
+						)
+					}
+			}
+
+			if (!prefs.readingStatus.isNullOrEmpty()) {
+				entityBindings
+					.asSequence()
+					.filter { it.isLocalReadingSource() }
+					.mapNotNull { binding -> binding.externalId.toLongOrNull() }
+					.distinct()
+					.forEach { mangaId ->
+						val localPrefs = db.getPreferencesDao().find(mangaId) ?: return@forEach
+						if (localPrefs.readingStatus != prefs.readingStatus) {
+							return@forEach
+						}
+						issues += EntityGraphRepairIssue(
+							kind = EntityGraphRepairIssueKind.REDUNDANT_PROJECTION_READING_STATUS,
+							entityId = prefs.entityId,
+							source = "local_manga",
+							externalId = mangaId.toString(),
+							localMangaId = mangaId,
+						)
+					}
 			}
 		}
 
@@ -977,7 +1267,11 @@ class EntityGraphRepository @Inject constructor(
 		activeBindingsByEntity.forEach { (entityId, entityBindings) ->
 			val localBindings = entityBindings.filter { it.isLocalReadingSource() }
 			val hasTrackingBinding = entityBindings.any { it.source.toTrackingServiceOrNull() != null }
-			if (localBindings.isEmpty() || (localBindings.size < 2 && !hasTrackingBinding)) {
+			// Debug log for entity 1213
+			if (entityId == 1213L) {
+				Log.w(TAG, "repair suspectMismerged entity 1213: localBindings=${localBindings.map { it.externalId }} hasTracking=$hasTrackingBinding entityExists=${entitiesById[entityId] != null}")
+			}
+			if (localBindings.isEmpty()) {
 				return@forEach
 			}
 			val entity = entitiesById[entityId] ?: return@forEach
@@ -985,6 +1279,7 @@ class EntityGraphRepository @Inject constructor(
 			if (strictEntityNameKeys.isEmpty()) {
 				return@forEach
 			}
+			Log.i(TAG, "repair suspectMismerged: entityId=$entityId name=${entity.primaryName} aliases=${decodeStringList(entity.aliases)} strictKeys=$strictEntityNameKeys localBindings=${localBindings.map { it.externalId }} hasTracking=$hasTrackingBinding")
 			localBindings.forEach { binding ->
 				val localMangaId = binding.externalId.toLongOrNull()
 				val content = localMangaId?.let { db.getMangaDao().find(it)?.toContent() }
@@ -1001,6 +1296,8 @@ class EntityGraphRepository @Inject constructor(
 		}
 
 		activeBindingsByEntity.forEach { (entityId, entityBindings) ->
+			val entityPrefs = dao.findEntityPrefs(entityId)
+			val hasEntityMetadataSelection = !entityPrefs?.metadataSourceKind.isNullOrEmpty()
 			val localContents = entityBindings.mapNotNull { binding ->
 				if (!binding.isLocalReadingSource()) {
 					return@mapNotNull null
@@ -1032,8 +1329,19 @@ class EntityGraphRepository @Inject constructor(
 					externalId = remoteId.toString(),
 					localMangaId = mismatchedContent.id,
 				)
+				trackingDiagnostics.record(
+					branch = "entity_tracking_binding",
+					entity = entitiesById[entityId],
+					localContent = mismatchedContent,
+					serviceId = service.id,
+					remoteId = remoteId,
+					trackingNames = trackingNames,
+				)
 			}
 			localContents.forEach { content ->
+				if (hasEntityMetadataSelection) {
+					return@forEach
+				}
 				db.getPreferencesDao().find(content.id)
 					?.takeIf { prefs ->
 						prefs.metadataSourceKind == "tracking" &&
@@ -1041,6 +1349,14 @@ class EntityGraphRepository @Inject constructor(
 							prefs.metadataSourceRemoteId != null
 					}
 					?.let { prefs ->
+						if (
+							entityBindings.any { binding ->
+								binding.source.toTrackingServiceOrNull()?.id == prefs.metadataSourceService &&
+									binding.externalId == prefs.metadataSourceRemoteId.toString()
+							}
+						) {
+							return@let
+						}
 						val trackingNames = trackingNames(
 							serviceId = checkNotNull(prefs.metadataSourceService),
 							remoteId = checkNotNull(prefs.metadataSourceRemoteId),
@@ -1050,29 +1366,56 @@ class EntityGraphRepository @Inject constructor(
 							!trackingNames.isCompatibleWithLocalContent(content)
 						) {
 							issues += EntityGraphRepairIssue(
-								kind = EntityGraphRepairIssueKind.SUSPECT_TRACKING_BINDING,
+								kind = EntityGraphRepairIssueKind.SUSPECT_METADATA_SOURCE,
 								entityId = entityId,
 								source = prefs.metadataSourceService.toString(),
 								externalId = prefs.metadataSourceRemoteId.toString(),
 								localMangaId = content.id,
 							)
+							trackingDiagnostics.record(
+								branch = "manga_metadata_source",
+								entity = entitiesById[entityId],
+								localContent = content,
+								serviceId = checkNotNull(prefs.metadataSourceService),
+								remoteId = checkNotNull(prefs.metadataSourceRemoteId),
+								trackingNames = trackingNames,
+							)
 						}
 					}
-				db.getTrackingSiteDao().findLinksByManga(content.id).forEach { link ->
+				db.findTrackingLinksByWorkOrMangaCandidates(
+					mangaIds = resolveTrackingCandidateMangaIds(content.id),
+				)
+					.distinctBy { "${it.service}:${it.remoteId}:${it.mangaId}" }
+					.forEach { link ->
+					if (entityBindings.any { binding ->
+							binding.source.toTrackingServiceOrNull()?.id == link.service &&
+								binding.externalId == link.remoteId.toString()
+						}
+					) {
+						return@forEach
+					}
 					val trackingNames = trackingNames(link.service, link.remoteId)
 					if (
 						trackingNames.any { it.isNotBlank() } &&
 						!trackingNames.isCompatibleWithLocalContent(localContentsById[link.mangaId] ?: content)
 					) {
 						issues += EntityGraphRepairIssue(
-							kind = EntityGraphRepairIssueKind.SUSPECT_TRACKING_BINDING,
+							kind = EntityGraphRepairIssueKind.STALE_TRACKING_CACHE_LINK,
 							entityId = entityId,
 							source = link.service.toString(),
 							externalId = link.remoteId.toString(),
 							localMangaId = link.mangaId,
 						)
+						trackingDiagnostics.record(
+							branch = "tracking_site_link",
+							entity = entitiesById[entityId],
+							localContent = localContentsById[link.mangaId] ?: content,
+							serviceId = link.service,
+							remoteId = link.remoteId,
+							trackingNames = trackingNames,
+						)
 					}
-				}
+					}
 			}
 		}
 
@@ -1099,6 +1442,13 @@ class EntityGraphRepository @Inject constructor(
 					relationId = relation.id,
 				)
 			}
+
+		trackingDiagnostics.logIfNeeded(
+			totalIssues = issues.count {
+				it.kind == EntityGraphRepairIssueKind.SUSPECT_TRACKING_BINDING ||
+					it.kind == EntityGraphRepairIssueKind.SUSPECT_METADATA_SOURCE
+			},
+		)
 
 		EntityGraphRepairReport(
 			if (limit == Int.MAX_VALUE) {
@@ -1174,7 +1524,7 @@ class EntityGraphRepository @Inject constructor(
 		}
 		prefsDao.upsert(
 			prefs.copy(
-				metadataSourceKind = "base",
+				metadataSourceKind = null,
 				metadataSourceService = null,
 				metadataSourceRemoteId = null,
 			),
@@ -1208,10 +1558,40 @@ class EntityGraphRepository @Inject constructor(
 		dao.updateEntityMetadataSourceSelection(
 			entityId = entityId,
 			metadataSourceKind = "base",
+			metadataBindingSource = null,
+			metadataBindingExternalId = null,
 			metadataSourceService = null,
 			metadataSourceRemoteId = null,
 			updatedAt = now,
 		)
+	}
+
+	private fun MangaPrefsEntity.hasMatchingMetadataSelection(
+		entityPrefs: EntityPrefsRecord,
+	): Boolean {
+		if (metadataSourceKind != entityPrefs.metadataSourceKind) {
+			return false
+		}
+		return when (metadataSourceKind) {
+			"base" -> true
+			"tracking" -> metadataSourceService == entityPrefs.metadataSourceService &&
+				metadataSourceRemoteId == entityPrefs.metadataSourceRemoteId
+			else -> false
+		}
+	}
+
+	private fun MangaPrefsEntity.hasMatchingOverride(
+		entityPrefs: EntityPrefsRecord,
+	): Boolean {
+		return titleOverride == entityPrefs.titleOverride &&
+			coverUrlOverride == entityPrefs.coverUrlOverride &&
+			contentRatingOverride == entityPrefs.contentRatingOverride
+	}
+
+	private fun EntityPrefsRecord.hasAnyOverride(): Boolean {
+		return !titleOverride.isNullOrEmpty() ||
+			!coverUrlOverride.isNullOrEmpty() ||
+			!contentRatingOverride.isNullOrEmpty()
 	}
 
 	private suspend fun trackingNames(serviceId: Int, remoteId: Long): List<String> {
@@ -1279,37 +1659,30 @@ class EntityGraphRepository @Inject constructor(
 		dao: EntityGraphDao,
 		entityId: Long,
 		selection: TrackingSelection?,
-		localMangaIds: Collection<Long>,
 		now: Long,
 	) {
 		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId, now))
 		dao.updateEntityMetadataSourceSelection(
 			entityId = entityId,
 			metadataSourceKind = if (selection == null) "base" else "tracking",
+			metadataBindingSource = selection?.serviceId?.toString(),
+			metadataBindingExternalId = selection?.remoteId?.toString(),
 			metadataSourceService = selection?.serviceId,
 			metadataSourceRemoteId = selection?.remoteId,
 			updatedAt = now,
 		)
-		val prefsDao = db.getPreferencesDao()
-		localMangaIds.distinct().forEach { mangaId ->
-			if (!db.getMangaDao().contains(mangaId)) {
-				return@forEach
-			}
-			val prefs = prefsDao.find(mangaId) ?: newMangaPrefs(mangaId)
-			prefsDao.upsert(
-				prefs.copy(
-					metadataSourceKind = if (selection == null) "base" else "tracking",
-					metadataSourceService = selection?.serviceId,
-					metadataSourceRemoteId = selection?.remoteId,
-				),
-			)
-		}
 	}
 
 	private fun newEntityPrefs(entityId: Long, now: Long) = EntityPrefsRecord(
 		entityId = entityId,
 		preferredLocalMangaId = null,
+		titleOverride = null,
+		coverUrlOverride = null,
+		contentRatingOverride = null,
+		readingStatus = null,
 		metadataSourceKind = null,
+		metadataBindingSource = null,
+		metadataBindingExternalId = null,
 		metadataSourceService = null,
 		metadataSourceRemoteId = null,
 		updatedAt = now,
@@ -1351,6 +1724,23 @@ class EntityGraphRepository @Inject constructor(
 		val dao = db.getEntityGraphDao()
 		return dao.findActiveBinding("local_manga", localMangaId.toString())
 			?: dao.findActiveBinding("0", localMangaId.toString())
+	}
+
+	private suspend fun resolveTrackingCandidateMangaIds(localMangaId: Long): List<Long> {
+		val binding = findEntityByLocalMangaId(localMangaId)
+			?: return listOf(localMangaId)
+		val dao = db.getEntityGraphDao()
+		val preferredLocalMangaId = dao.findEntityPrefs(binding.entityId)?.preferredLocalMangaId
+		val localMangaIds = dao.findActiveBindingsByEntity(binding.entityId)
+			.asSequence()
+			.filter { it.source == "local_manga" || it.source == "0" }
+			.mapNotNull { it.externalId.toLongOrNull() }
+			.toList()
+		return buildList {
+			add(localMangaId)
+			preferredLocalMangaId?.let(::add)
+			addAll(localMangaIds)
+		}.distinct()
 	}
 
 	private suspend fun resolveOrCreatePerson(
@@ -1741,7 +2131,13 @@ class EntityGraphRepository @Inject constructor(
 			EntityPrefsRecord(
 				entityId = entityId,
 				preferredLocalMangaId = localMangaId,
+				titleOverride = null,
+				coverUrlOverride = null,
+				contentRatingOverride = null,
+				readingStatus = null,
 				metadataSourceKind = "base",
+				metadataBindingSource = null,
+				metadataBindingExternalId = null,
 				metadataSourceService = null,
 				metadataSourceRemoteId = null,
 				updatedAt = now,
@@ -1751,7 +2147,7 @@ class EntityGraphRepository @Inject constructor(
 		val prefs = prefsDao.find(localMangaId) ?: newMangaPrefs(localMangaId)
 		prefsDao.upsert(
 			prefs.copy(
-				metadataSourceKind = "base",
+				metadataSourceKind = null,
 				metadataSourceService = null,
 				metadataSourceRemoteId = null,
 			),
@@ -2095,6 +2491,84 @@ class EntityGraphRepository @Inject constructor(
 		val source: String,
 		val externalId: String,
 	)
+
+	private data class TrackingRepairDiagnostic(
+		val branch: String,
+		val entityId: Long?,
+		val entityName: String?,
+		val entityKeys: Set<String>,
+		val localMangaId: Long?,
+		val localTitle: String?,
+		val localSource: String?,
+		val localKeys: Set<String>,
+		val serviceId: Int,
+		val remoteId: Long,
+		val trackingNames: List<String>,
+		val trackingKeys: Set<String>,
+	)
+
+	private inner class EntityRepairDiagnosticCollector {
+		private val branchCounts = linkedMapOf<String, Int>()
+		private val samples = ArrayList<TrackingRepairDiagnostic>(MAX_REPAIR_DIAGNOSTIC_LOGS)
+
+		fun record(
+			branch: String,
+			entity: EntityRecord?,
+			localContent: Content?,
+			serviceId: Int,
+			remoteId: Long,
+			trackingNames: List<String>,
+		) {
+			branchCounts[branch] = (branchCounts[branch] ?: 0) + 1
+			if (samples.size >= MAX_REPAIR_DIAGNOSTIC_LOGS) {
+				return
+			}
+			samples += TrackingRepairDiagnostic(
+				branch = branch,
+				entityId = entity?.id,
+				entityName = entity?.primaryName,
+				entityKeys = entity?.strictRepairNameKeys().orEmpty(),
+				localMangaId = localContent?.id,
+				localTitle = localContent?.title,
+				localSource = localContent?.source?.name,
+				localKeys = localContent?.localStrictTitleKeys().orEmpty(),
+				serviceId = serviceId,
+				remoteId = remoteId,
+				trackingNames = trackingNames.filter { it.isNotBlank() }.distinct(),
+				trackingKeys = trackingNames.strictTitleKeys(),
+			)
+		}
+
+		fun logIfNeeded(totalIssues: Int) {
+			if (totalIssues == 0 && samples.isEmpty()) {
+				return
+			}
+			Log.w(
+				TAG,
+				"repair tracking suspect diagnostics: total=$totalIssues branches=${branchCounts.toLogString()} " +
+					"samples=${samples.size}/${MAX_REPAIR_DIAGNOSTIC_LOGS}",
+			)
+			samples.forEachIndexed { index, sample ->
+				Log.w(TAG, "repair tracking suspect sample #${index + 1}: ${sample.toLogString()}")
+			}
+		}
+	}
+
+	private fun TrackingRepairDiagnostic.toLogString(): String {
+		return "branch=$branch, entityId=$entityId, entityName=${entityName.orEmpty()}, " +
+			"entityKeys=${entityKeys.toLogString()}, localMangaId=$localMangaId, " +
+			"localTitle=${localTitle.orEmpty()}, localSource=${localSource.orEmpty()}, " +
+			"localKeys=${localKeys.toLogString()}, service=$serviceId, remoteId=$remoteId, " +
+			"trackingNames=${trackingNames.toLogString()}, trackingKeys=${trackingKeys.toLogString()}"
+	}
+
+	private fun Map<String, Int>.toLogString(): String {
+		return entries.joinToString(prefix = "{", postfix = "}") { (key, value) -> "$key=$value" }
+	}
+
+	private fun Iterable<String>.toLogString(): String {
+		return joinToString(prefix = "[", postfix = "]", limit = 8, truncated = "...") { it }
+	}
 
 	private companion object {
 		private val AUTO_BIND_OVERWRITE_BLOCKING_STATES = setOf(

@@ -151,10 +151,6 @@ class ReaderViewModel @Inject constructor(
     private var bookmarkJob: Job? = null
     private var stateChangeJob: Job? = null
 
-    init {
-        mangaDetails.value = intent.manga?.let { ContentDetails(it) }
-    }
-
     val readerMode = MutableStateFlow<ReaderMode?>(null)
     val onPageSaved = MutableEventFlow<Collection<Uri>>()
     val onLoadingError = MutableEventFlow<Throwable>()
@@ -264,11 +260,11 @@ class ReaderViewModel @Inject constructor(
         observeTranslationDebugLogs()
         listenToDoublePageEvents()
         loadImpl()
-        launchJob(Dispatchers.Default) {
-            val mangaId = manga.filterNotNull().first().id
-            if (!isIncognitoMode.firstNotNull()) {
-                appShortcutManager.notifyContentOpened(mangaId)
-            }
+		launchJob(Dispatchers.Default) {
+			val mangaId = manga.filterNotNull().first().id
+			if (!isIncognitoMode.firstNotNull()) {
+				appShortcutManager.notifyContentOpened(mangaId)
+			}
         }
     }
 
@@ -1113,16 +1109,20 @@ class ReaderViewModel @Inject constructor(
         // continue reading
         val history = historyRepository.getOne(manga)
         if (history != null) {
-            val chapter = manga.findChapterById(history.chapterId) ?: return null
+            val chapter = manga.findChapterById(history.chapterId)
             // specified branch is requested
             return if (ReaderIntent.EXTRA_BRANCH in savedStateHandle) {
-                if (chapter.branch == requestedBranch) {
+                if (chapter != null && chapter.branch == requestedBranch) {
                     ReaderState(history)
                 } else {
                     ReaderState(manga, requestedBranch)
                 }
             } else {
-                ReaderState(history)
+                if (chapter != null) {
+                    ReaderState(history)
+                } else {
+                    ReaderState(manga, manga.getPreferredBranch(null))
+                }
             }
         }
 

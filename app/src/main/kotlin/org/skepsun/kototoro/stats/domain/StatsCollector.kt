@@ -10,9 +10,11 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.RetainedLifecycleCoroutineScope
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.stats.data.StatsEntity
+import org.skepsun.kototoro.stats.data.WorkStatsEntity
 import javax.inject.Inject
 
 @ViewModelScoped
@@ -66,6 +68,19 @@ class StatsCollector @Inject constructor(
 		viewModelScope.launch(Dispatchers.Default) {
 			runCatchingCancellable {
 				db.getStatsDao().upsert(entity)
+				val entityId = db.resolveWorkEntityIdByMangaId(entity.mangaId)
+				if (entityId != null) {
+					val anchorMangaId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId ?: entity.mangaId
+					db.getWorkStatsDao().upsert(
+						WorkStatsEntity(
+							entityId = entityId,
+							anchorMangaId = anchorMangaId,
+							startedAt = entity.startedAt,
+							duration = entity.duration,
+							pages = entity.pages,
+						),
+					)
+				}
 			}.onFailure { e ->
 				e.printStackTraceDebug()
 			}

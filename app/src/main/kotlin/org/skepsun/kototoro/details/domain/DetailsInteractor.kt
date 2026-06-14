@@ -35,7 +35,7 @@ class DetailsInteractor @Inject constructor(
 ) {
 
 	fun observeFavourite(mangaId: Long): Flow<Set<FavouriteCategory>> {
-		return favouritesRepository.observeCategories(mangaId)
+		return favouritesRepository.observeCategoriesByWork(mangaId)
 	}
 
 	fun observeNewChapters(mangaId: Long): Flow<Int> {
@@ -51,7 +51,10 @@ class DetailsInteractor @Inject constructor(
 
 	fun observeScrobblingInfo(mangaId: Long): Flow<List<ScrobblingInfo>> {
 		val flows = scrobblers.map { scrobbler ->
-			scrobbler.observeScrobblingInfo(mangaId).catch { emit(null) }
+			val observedFlow = runCatching {
+				scrobbler.observeScrobblingInfo(mangaId)
+			}.getOrNull() ?: flowOf(null)
+			observedFlow.catch { emit(null) }
 		}
 		if (flows.isEmpty()) {
 			return flowOf(emptyList())

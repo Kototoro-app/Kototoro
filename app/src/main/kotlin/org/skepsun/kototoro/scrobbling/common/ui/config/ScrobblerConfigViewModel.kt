@@ -41,6 +41,9 @@ import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.getOriginLabel
+import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.rebindScrobblingToManga
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
 import javax.inject.Inject
 
@@ -128,21 +131,27 @@ class ScrobblerConfigViewModel @Inject constructor(
 			// 1. Insert the online Content result into MangaDatabase via ContentDataRepository
 			mangaDataRepository.storeContent(pickedContent, replaceExisting = false)
 			val mangaId = pickedContent.id
+			val boundContent = mangaDataRepository.findPreferredLocalContentById(mangaId, withChapters = true)
+				?: mangaDataRepository.findContentById(mangaId, withChapters = true)
+				?: pickedContent
 			android.util.Log.d("ScrobblerConfigVM", "bindContent: stored manga, mangaId=$mangaId")
 
 			// 2. Re-link the tracker
-			val currentEntity = db.getScrobblingDao().find(scrobbler.scrobblerService.id, info.mangaId)
+			val currentEntity = db.findScrobblingByWorkOrManga(
+				scrobbler = scrobbler.scrobblerService.id,
+				mangaId = info.mangaId,
+			)
 			android.util.Log.d("ScrobblerConfigVM", "bindContent: currentEntity=$currentEntity")
-			if (currentEntity != null) {
-				db.getScrobblingDao().delete(currentEntity)
-				val newEntity = currentEntity.copy(mangaId = mangaId)
-				android.util.Log.d("ScrobblerConfigVM", "bindContent: deleted old, upserting new entity=$newEntity")
-				db.getScrobblingDao().upsert(newEntity)
-			} else {
-				val newEntity = ScrobblingEntity(
+			val reboundEntity = db.rebindScrobblingToManga(
+				scrobbler = scrobbler.scrobblerService.id,
+				sourceMangaId = info.mangaId,
+				targetMangaId = mangaId,
+			) {
+				ScrobblingEntity(
 					scrobbler = scrobbler.scrobblerService.id,
 					id = info.targetId.toInt(),
 					targetId = info.targetId,
+					entityId = null,
 					mangaId = mangaId,
 					status = info.status?.name,
 					chapter = info.chapter,
@@ -150,10 +159,8 @@ class ScrobblerConfigViewModel @Inject constructor(
 					rating = info.rating,
 					mediaType = info.mediaType.orEmpty(),
 				)
-				android.util.Log.d("ScrobblerConfigVM", "bindContent: no existing entity, upserting new=$newEntity")
-				db.getScrobblingDao().upsert(newEntity)
 			}
-			android.util.Log.d("ScrobblerConfigVM", "bindContent: upsert done")
+			android.util.Log.d("ScrobblerConfigVM", "bindContent: rebound entity=$reboundEntity")
 			runCatching {
 				trackingSiteMatcher.confirmMatch(scrobbler.scrobblerService, mangaId, info.targetId)
 			}
@@ -161,7 +168,7 @@ class ScrobblerConfigViewModel @Inject constructor(
 			// 3. Sync Reading Progress
 			if (info.chapter > 0) {
 				try {
-					var mangaToSync = pickedContent
+					var mangaToSync = boundContent
 					if (mangaToSync.chapters.isNullOrEmpty() && !mangaToSync.isLocal) {
 						val repo = mangaRepositoryFactory.create(mangaToSync.source)
 						val details = repo.getDetails(mangaToSync)
@@ -192,7 +199,7 @@ class ScrobblerConfigViewModel @Inject constructor(
 
 			
 			android.util.Log.d("ScrobblerConfigVM", "bindContent: completed successfully")
-			onBindResult.call(pickedContent.title)
+			onBindResult.call(boundContent.title)
 		}
 	}
 

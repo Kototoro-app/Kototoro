@@ -35,7 +35,7 @@ class PagePickerViewModel @Inject constructor(
 	private var pendingTargetChapterId: Long? = null
 
 	val thumbnails = MutableStateFlow<List<ListModel>>(emptyList())
-	val manga = MutableStateFlow(intent.manga?.let { ContentDetails(it) })
+	val manga = MutableStateFlow<ContentDetails?>(null)
 
 	val isNoChapters = manga.map {
 		it != null && it.isLoaded && it.allChapters.isEmpty()

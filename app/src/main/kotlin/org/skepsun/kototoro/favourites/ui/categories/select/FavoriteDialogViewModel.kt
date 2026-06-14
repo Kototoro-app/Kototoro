@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.getOriginLabel
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
@@ -38,14 +39,15 @@ import javax.inject.Inject
 class FavoriteDialogViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
 	private val favouritesRepository: FavouritesRepository,
+	private val contentDataRepository: ContentDataRepository,
 	settings: AppSettings,
 	@LocalizedAppContext private val context: Context,
 ) : BaseViewModel() {
 
+	private val initialManga = savedStateHandle.get<List<ParcelableContent>>(AppRouter.KEY_MANGA_LIST)?.map { it.manga }.orEmpty()
+	private val initialMangaIds = savedStateHandle.get<LongArray>(AppRouter.KEY_ID)?.toList().orEmpty()
 	private val mangaState = MutableStateFlow(
-		savedStateHandle.get<List<ParcelableContent>>(AppRouter.KEY_MANGA_LIST)?.map {
-			it.manga
-		}.orEmpty(),
+		initialManga,
 	)
 
 	val manga: List<Content>
@@ -66,6 +68,20 @@ class FavoriteDialogViewModel @Inject constructor(
 		}
 	}.withErrorHandling()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+
+	init {
+		launchJob(Dispatchers.Default) {
+			if (initialMangaIds.isEmpty()) return@launchJob
+			val resolved = initialMangaIds.mapNotNull { id ->
+				contentDataRepository.findPreferredLocalContentById(id, withChapters = false)
+					?: contentDataRepository.findContentById(id, withChapters = false)
+					?: initialManga.firstOrNull { it.id == id }
+			}
+			if (resolved.isNotEmpty()) {
+				mangaState.value = resolved
+			}
+		}
+	}
 
 	fun initialize(manga: Collection<Content>) {
 		if (manga.isEmpty() || mangaState.value == manga) {
@@ -108,7 +124,7 @@ class FavoriteDialogViewModel @Inject constructor(
 		val cats = MutableLongObjectMap<MutableLongSet>(categories.size)
 		categories.forEach { cats[it.id] = MutableLongSet(manga.size) }
 		for (m in manga) {
-			val ids = favouritesRepository.getCategoriesIds(m.id)
+			val ids = favouritesRepository.getCategoriesIdsByWork(m.id)
 			ids.forEach { id -> cats[id]?.add(m.id) }
 		}
 		return categories.map { cat ->

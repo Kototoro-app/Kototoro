@@ -130,6 +130,8 @@ class ContentListMapper @Inject constructor(
 
 	suspend fun toFeedItem(logItem: TrackingLogItem) = FeedItem(
 		id = logItem.id,
+		entityId = logItem.entityId,
+		preferredLocalMangaId = logItem.preferredLocalMangaId,
 		override = resolveDisplayOverride(
 			manga = logItem.manga,
 			manualOverride = dataRepository.getOverride(logItem.manga.id),
@@ -140,6 +142,32 @@ class ContentListMapper @Inject constructor(
 		manga = logItem.manga,
 		isNew = logItem.isNew,
 	)
+
+	suspend fun toFeedItems(logItems: List<TrackingLogItem>): List<FeedItem> {
+		if (logItems.isEmpty()) {
+			return emptyList()
+		}
+		val mangaIds = logItems.map { it.manga.id }
+		val manualOverrides = dataRepository.getOverrides()
+		val metadataSelections = dataRepository.getMetadataSourceSelections(mangaIds)
+		val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
+		return logItems.map { logItem ->
+			FeedItem(
+				id = logItem.id,
+				entityId = logItem.entityId,
+				preferredLocalMangaId = logItem.preferredLocalMangaId,
+				override = resolveDisplayOverride(
+					manga = logItem.manga,
+					manualOverride = manualOverrides[logItem.manga.id],
+					metadataSelection = metadataSelections[logItem.manga.id],
+					trackingDetailsCache = trackingDetailsCache,
+				),
+				count = logItem.chapters.size,
+				manga = logItem.manga,
+				isNew = logItem.isNew,
+			)
+		}
+	}
 
 	fun mapTags(tags: Collection<ContentTag>) = tags.map {
 		ChipsView.ChipModel(
@@ -266,7 +294,7 @@ class ContentListMapper @Inject constructor(
 	}
 
 	private suspend fun isFavorite(mangaId: Long, @Options options: Int): Boolean {
-		return options.isBadgeEnabled(FAVORITE) && favouritesRepository.isFavorite(mangaId)
+		return options.isBadgeEnabled(FAVORITE) && favouritesRepository.isFavoriteByWork(mangaId)
 	}
 
 	private suspend fun isPinned(mangaId: Long, @Options options: Int, pinnedIds: Set<Long>?): Boolean {

@@ -32,12 +32,11 @@ class MangaUpdatesScrobbler @Inject constructor(
 		status: ScrobblingStatus?,
 		comment: String?,
 	) {
-		val entity = db.getScrobblingDao().find(scrobblerService.id, mangaId)
-		requireNotNull(entity) { "Scrobbling info for manga $mangaId not found" }
+		val entity = requireScrobblingEntity(mangaId)
 		
 		repository.updateRate(
 			rateId = entity.id,
-			mangaId = mangaId,
+			mangaId = entity.mangaId,
 			rating = rating, // Assuming rating internally scales to whatever, MangaUpdates supports 0.0-10.0
 			status = statuses[status],
 			comment = comment,

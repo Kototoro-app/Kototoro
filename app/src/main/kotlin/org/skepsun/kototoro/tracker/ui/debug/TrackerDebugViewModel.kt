@@ -4,35 +4,18 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
-import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.ui.BaseViewModel
-import org.skepsun.kototoro.core.util.ext.toInstantOrNull
-import org.skepsun.kototoro.tracker.data.TrackWithContent
+import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import javax.inject.Inject
 
 @HiltViewModel
 class TrackerDebugViewModel @Inject constructor(
-	db: MangaDatabase
+	repository: TrackingRepository,
 ) : BaseViewModel() {
 
-	val content = db.getTracksDao().observeAll()
-		.map { it.toUiList() }
+	val content = repository.observeTrackDebugItems()
 		.withErrorHandling()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
-
-	private fun List<TrackWithContent>.toUiList(): List<TrackDebugItem> = map {
-		TrackDebugItem(
-			manga = it.manga.toContent(emptySet(), null),
-			lastChapterId = it.track.lastChapterId,
-			newChapters = it.track.newChapters,
-			lastCheckTime = it.track.lastCheckTime.toInstantOrNull(),
-			lastChapterDate = it.track.lastChapterDate.toInstantOrNull(),
-			lastResult = it.track.lastResult,
-			lastError = it.track.lastError,
-		)
-	}
 }

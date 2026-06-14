@@ -10,6 +10,7 @@ import java.time.Instant
 
 data class DownloadState(
 	val manga: Content,
+	val displayMangaId: Long? = null,
 	val isIndeterminate: Boolean,
 	val taskKind: DownloadTaskKind = DownloadTaskKind.DOWNLOAD,
 	val isPaused: Boolean = false,
@@ -42,6 +43,7 @@ data class DownloadState(
 
 	fun toWorkData() = Data.Builder()
 		.putLong(DATA_MANGA_ID, manga.id)
+		.putLong(DATA_DISPLAY_MANGA_ID, displayMangaId ?: 0L)
 		.putString(DATA_TASK_KIND, taskKind.name)
 		.putInt(DATA_MAX, max)
 		.putInt(DATA_PROGRESS, progress)
@@ -58,6 +60,7 @@ data class DownloadState(
 	companion object {
 
 		private const val DATA_MANGA_ID = "manga_id"
+		private const val DATA_DISPLAY_MANGA_ID = "display_manga_id"
 		private const val DATA_TASK_KIND = "task_kind"
 		private const val DATA_MAX = "max"
 		private const val DATA_PROGRESS = "progress"
@@ -71,6 +74,10 @@ data class DownloadState(
 		private const val DATA_COMPLETED = "completed"
 
 		fun getContentId(data: Data): Long = data.getLong(DATA_MANGA_ID, 0L)
+
+		fun getExecutionContentId(data: Data): Long = getContentId(data)
+
+		fun getDisplayContentId(data: Data): Long? = data.getLong(DATA_DISPLAY_MANGA_ID, 0L).takeIf { it != 0L }
 
 		fun isIndeterminate(data: Data): Boolean = data.getBoolean(DATA_INDETERMINATE, false)
 

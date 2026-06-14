@@ -17,9 +17,11 @@ class SyncGcCoordinator @Inject constructor(
 		val deletedAt = System.currentTimeMillis() - defaultGcPeriod
 		if (gcHistory || history) {
 			db.getHistoryDao().gc(deletedAt)
+			db.getWorkHistoryDao().gc(deletedAt)
 		}
 		if (gcFavourites || favourites) {
 			db.getFavouritesDao().gc(deletedAt)
+			db.getWorkFavouritesDao().gc(deletedAt)
 			db.getFavouriteCategoriesDao().gc(deletedAt)
 		}
 	}

@@ -7,6 +7,7 @@ import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.entitygraph.data.decodeStringList
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.data.findTrackingLinksByWorkOrMangaCandidates
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
@@ -146,19 +147,20 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         if (contents.size < 2) return emptyList()
         val linksByTrackingKey = LinkedHashMap<TrackingGroupKey, MutableList<Content>>()
         contents.forEach { content ->
-            database.getTrackingSiteDao()
-                .findLinksByManga(content.id)
-                .forEach { link ->
-                    if (isSuspectTrackingLink(content, link)) {
-                        return@forEach
-                    }
-                    val key = TrackingGroupKey(
-                        serviceId = link.service,
-                        remoteId = link.remoteId,
-                        contentType = content.source.contentType,
-                    )
-                    linksByTrackingKey.getOrPut(key) { mutableListOf() } += content
+            val links = database.findTrackingLinksByWorkOrMangaCandidates(
+                mangaIds = resolveTrackingCandidateMangaIds(content.id),
+            )
+            links.forEach { link ->
+                if (!isUsableTrackingMergeEvidence(link) || isSuspectTrackingLink(content, link)) {
+                    return@forEach
                 }
+                val key = TrackingGroupKey(
+                    serviceId = link.service,
+                    remoteId = link.remoteId,
+                    contentType = content.source.contentType,
+                )
+                linksByTrackingKey.getOrPut(key) { mutableListOf() } += content
+            }
         }
         return linksByTrackingKey.entries.mapNotNull { (trackingKey, groupedContents) ->
             val distinctContents = groupedContents.distinctBy { it.id }
@@ -222,6 +224,10 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
             trackingNames.none { trackingName -> isCompatibleTrackingTitle(content, trackingName) }
     }
 
+    private fun isUsableTrackingMergeEvidence(link: TrackingSiteLinkEntity): Boolean {
+        return link.entityId != null || link.isManual
+    }
+
     suspend fun merge(groups: List<MergeCandidateGroup>): MergeEntitiesResult {
         var succeeded = 0
         var failed = 0
@@ -229,11 +235,16 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         for (group in groups) {
             val merged = runCatching {
                 mergeOne(group)
+            }.onFailure { e ->
+                Log.w(TAG, "mergeOne threw: group=${group.id}, title=${group.title}", e)
             }.getOrDefault(false)
             when {
                 merged -> succeeded++
                 group.mangaIds.size < 2 -> skipped++
-                else -> failed++
+                else -> {
+                    Log.w(TAG, "mergeOne returned false: group=${group.id}, title=${group.title}, mangaIds=${group.mangaIds}")
+                    failed++
+                }
             }
         }
         return MergeEntitiesResult(
@@ -291,7 +302,10 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         val protectedBindings = entityGraphRepository.findLocalReadingBindingsByMangaIds(contents.map { it.id })
             .filterValues { binding -> binding.isUserProtectedLocalBinding() }
         val trackingLinksByMangaId = group.items.associate { item ->
-            item.mangaId to database.getTrackingSiteDao().findLinksByManga(item.mangaId)
+            item.mangaId to database.findTrackingLinksByWorkOrMangaCandidates(
+                mangaIds = resolveTrackingCandidateMangaIds(item.mangaId),
+            )
+                .distinctBy { "${it.service}:${it.remoteId}" }
         }
         if (
             protectedBindings.isNotEmpty() &&
@@ -322,14 +336,19 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         val mergedEntityId = when {
             entityIds.size >= 2 -> {
                 val targetEntityId = selectTargetEntityId(entityIds)
+                val sourceIds = entityIds.filterNot { it == targetEntityId }
                 val mergedId = entityGraphRepository.mergeEntities(
                     targetEntityId = targetEntityId,
-                    sourceEntityIds = entityIds.filterNot { it == targetEntityId },
+                    sourceEntityIds = sourceIds,
                 )
-                if (mergedId != null && entityGraphRepository.attachLocalWorksToEntity(mergedId, contents)) {
-                    mergedId
-                } else {
+                if (mergedId == null) {
+                    Log.w(TAG, "mergeEntities returned null: target=$targetEntityId, sources=$sourceIds")
                     null
+                } else if (!entityGraphRepository.attachLocalWorksToEntity(mergedId, contents)) {
+                    Log.w(TAG, "attachLocalWorksToEntity failed: mergedId=$mergedId, mangaIds=${contents.map { it.id }}")
+                    null
+                } else {
+                    mergedId
                 }
             }
 
@@ -338,23 +357,23 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                 if (entityGraphRepository.attachLocalWorksToEntity(targetEntityId, contents)) {
                     targetEntityId
                 } else {
+                    Log.w(TAG, "attachLocalWorksToEntity failed: targetEntityId=$targetEntityId, mangaIds=${contents.map { it.id }}")
                     null
                 }
             }
 
-            else -> entityGraphRepository.mergeLocalWorkEntities(contents)
+            else -> {
+                val result = entityGraphRepository.mergeLocalWorkEntities(contents)
+                if (result == null) {
+                    Log.w(TAG, "mergeLocalWorkEntities returned null: mangaIds=${contents.map { it.id }}")
+                }
+                result
+            }
         } ?: return false
         selectPreferredTrackingSelection(group, trackingLinksByMangaId)?.let { selection ->
-            val localMangaIds = entityGraphRepository.getBindings(mergedEntityId)
-                .asSequence()
-                .filter { it.isLocalReadingSource() }
-                .mapNotNull { it.externalId.toLongOrNull() }
-                .distinct()
-                .toList()
             contentDataRepository.setEntityMetadataSourceSelection(
                 entityId = mergedEntityId,
                 selection = selection,
-                mirrorLocalMangaIds = localMangaIds,
             )
         }
         return true
@@ -419,6 +438,9 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         val remoteCounts = LinkedHashMap<Pair<Int, Long>, Int>()
         group.items.forEach { item ->
             trackingLinksByMangaId[item.mangaId].orEmpty().forEach { link ->
+                if (!isUsableTrackingMergeEvidence(link)) {
+                    return@forEach
+                }
                 serviceCounts[link.service] = (serviceCounts[link.service] ?: 0) + 1
                 val remoteKey = link.service to link.remoteId
                 remoteCounts[remoteKey] = (remoteCounts[remoteKey] ?: 0) + 1
@@ -460,7 +482,10 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         }
         val keys = group.items.mapNotNull { item ->
             trackingLinksByMangaId[item.mangaId].orEmpty()
-                .firstOrNull { link -> group.id == "${group.contentType.name}:tracking:${link.service}:${link.remoteId}" }
+                .firstOrNull { link ->
+                    isUsableTrackingMergeEvidence(link) &&
+                        group.id == "${group.contentType.name}:tracking:${link.service}:${link.remoteId}"
+                }
                 ?.let { link -> link.service to link.remoteId }
         }
         val key = keys.distinct().singleOrNull() ?: return null
@@ -488,6 +513,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
             val content = contentsById[item.mangaId] ?: return false
             val key = trackingLinksByMangaId[item.mangaId].orEmpty()
                 .firstOrNull { link ->
+                    isUsableTrackingMergeEvidence(link) &&
                     group.id == "${group.contentType.name}:tracking:${link.service}:${link.remoteId}" &&
                         !isSuspectTrackingLink(content, link)
                 }
@@ -500,6 +526,22 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
             expectedKey = key
         }
         return expectedKey != null
+    }
+
+    private suspend fun resolveTrackingCandidateMangaIds(mangaId: Long): List<Long> {
+        val binding = entityGraphRepository.findLocalReadingBinding(mangaId)
+            ?: return listOf(mangaId)
+        val preferredLocalMangaId = database.getEntityGraphDao().findEntityPrefs(binding.entityId)?.preferredLocalMangaId
+        val localMangaIds = entityGraphRepository.getBindings(binding.entityId)
+            .asSequence()
+            .filter { it.isLocalReadingSource() }
+            .mapNotNull { it.externalId.toLongOrNull() }
+            .toList()
+        return buildList {
+            add(mangaId)
+            preferredLocalMangaId?.let(::add)
+            addAll(localMangaIds)
+        }.distinct()
     }
 
     private fun isSafeExactTitleMergeGroup(

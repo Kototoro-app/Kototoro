@@ -1615,6 +1615,26 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE, false)
 		set(value) = prefs.edit { putBoolean(KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE, value) }
 
+	var backupWebDavLastImportedSemanticSchemaVersion: Int
+		get() = prefs.getSafeInt(KEY_BACKUP_WEBDAV_LAST_IMPORTED_SEMANTIC_SCHEMA_VERSION, 1).coerceAtLeast(1)
+		set(value) = prefs.edit {
+			putInt(KEY_BACKUP_WEBDAV_LAST_IMPORTED_SEMANTIC_SCHEMA_VERSION, value.coerceAtLeast(1))
+		}
+
+	var backupWebDavLastAuthoritativeSemanticSchemaVersion: Int
+		get() = prefs.getSafeInt(KEY_BACKUP_WEBDAV_LAST_AUTHORITATIVE_SEMANTIC_SCHEMA_VERSION, 1).coerceAtLeast(1)
+		set(value) = prefs.edit {
+			putInt(KEY_BACKUP_WEBDAV_LAST_AUTHORITATIVE_SEMANTIC_SCHEMA_VERSION, value.coerceAtLeast(1))
+		}
+
+	var isWorkMigrationSyncWriteBlocked: Boolean
+		get() = prefs.getBoolean(KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED, false)
+		set(value) = prefs.edit { putBoolean(KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED, value) }
+
+	var requiresWorkMigrationNormalization: Boolean
+		get() = prefs.getBoolean(KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION, false)
+		set(value) = prefs.edit { putBoolean(KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION, value) }
+
 	var isReadingTimeEstimationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READING_TIME, true)
 		set(value) = prefs.edit { putBoolean(KEY_READING_TIME, value) }
@@ -2257,6 +2277,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_BACKUP_WEBDAV_LAST_SEEN_LEGACY_CREATED_AT = "backup_periodic_webdav_last_seen_legacy_created_at"
 		const val KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE =
 			"backup_periodic_webdav_block_auto_upload_after_legacy_restore"
+		const val KEY_BACKUP_WEBDAV_LAST_IMPORTED_SEMANTIC_SCHEMA_VERSION =
+			"backup_periodic_webdav_last_imported_semantic_schema_version"
+		const val KEY_BACKUP_WEBDAV_LAST_AUTHORITATIVE_SEMANTIC_SCHEMA_VERSION =
+			"backup_periodic_webdav_last_authoritative_semantic_schema_version"
+		const val KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED =
+			"work_migration_sync_write_blocked"
+		const val KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION =
+			"work_migration_requires_normalization"
 		const val KEY_BACKUP_WEBDAV_LAST_ACTIONS = "backup_periodic_webdav_last_actions"
 
 		// WebDAV 自动同步与数据版本

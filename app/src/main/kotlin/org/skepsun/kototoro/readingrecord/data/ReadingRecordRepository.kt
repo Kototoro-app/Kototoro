@@ -3,10 +3,17 @@ package org.skepsun.kototoro.readingrecord.data
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.ReaderState
 import javax.inject.Inject
@@ -28,40 +35,51 @@ class ReadingRecordRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val settings: AppSettings,
 	private val mangaRepository: ContentDataRepository,
+	private val entityGraphRepository: EntityGraphRepository,
 ) {
 
 	fun observeSnapshot(mangaId: Long): Flow<ReadingRecordSnapshot> {
-		val dao = db.getReadingRecordDao()
-		val summaryFlow = combine(
-			dao.observeTotalDuration(mangaId),
-			dao.observeReadingDays(mangaId),
-			dao.observeLastReadAt(mangaId),
-		) { totalDuration, readingDays, lastReadAt ->
-			ReadingRecordSummary(
-				totalDuration = totalDuration,
-				readingDays = readingDays,
-				lastReadAt = lastReadAt,
-			)
-		}
-		return combine(
-			summaryFlow,
-			dao.observeSessions(mangaId),
-			dao.observeChapterAggregates(mangaId),
-			dao.observeJumpPoints(mangaId, DEFAULT_JUMP_LIMIT),
-		) { summary, sessions, chapters, jumpPoints ->
-			val effectiveSummary = summary.copy(
-				totalDuration = summary.totalDuration.takeIf { it > 0L }
-					?: sessions.sumOf { (it.endAt - it.startAt).coerceAtLeast(0L) },
-				readingDays = summary.readingDays.takeIf { it > 0 }
-					?: sessions.map { it.startAt / MILLIS_PER_DAY }.distinct().size,
-				lastReadAt = summary.lastReadAt ?: sessions.maxOfOrNull { it.endAt },
-			)
-			ReadingRecordSnapshot(
-				summary = effectiveSummary,
-				sessions = sessions,
-				chapters = chapters,
-				jumpPoints = jumpPoints,
-			)
+		return db.invalidationTracker.createFlow(
+			tables = arrayOf(
+				TABLE_ENTITY_GRAPH_BINDING,
+				TABLE_ENTITY_PREFERENCES,
+			),
+			emitInitialState = true,
+		).mapLatest {
+			resolveReadingRecordReadIds(mangaId)
+		}.distinctUntilChanged().flatMapLatest { anchorIds ->
+			val dao = db.getReadingRecordDao()
+			val summaryFlow = combine(
+				dao.observeTotalDuration(anchorIds),
+				dao.observeReadingDays(anchorIds),
+				dao.observeLastReadAt(anchorIds),
+			) { totalDuration, readingDays, lastReadAt ->
+				ReadingRecordSummary(
+					totalDuration = totalDuration,
+					readingDays = readingDays,
+					lastReadAt = lastReadAt,
+				)
+			}
+			combine(
+				summaryFlow,
+				dao.observeSessions(anchorIds),
+				dao.observeChapterAggregates(anchorIds),
+				dao.observeJumpPoints(anchorIds, DEFAULT_JUMP_LIMIT),
+			) { summary, sessions, chapters, jumpPoints ->
+				val effectiveSummary = summary.copy(
+					totalDuration = summary.totalDuration.takeIf { it > 0L }
+						?: sessions.sumOf { (it.endAt - it.startAt).coerceAtLeast(0L) },
+					readingDays = summary.readingDays.takeIf { it > 0 }
+						?: sessions.map { it.startAt / MILLIS_PER_DAY }.distinct().size,
+					lastReadAt = summary.lastReadAt ?: sessions.maxOfOrNull { it.endAt },
+				)
+				ReadingRecordSnapshot(
+					summary = effectiveSummary,
+					sessions = sessions,
+					chapters = chapters,
+					jumpPoints = jumpPoints,
+				)
+			}
 		}
 	}
 
@@ -79,10 +97,11 @@ class ReadingRecordRepository @Inject constructor(
 		if (!force && shouldSkip(manga)) return
 		if (!allowShort && endAt - startAt < MIN_SESSION_DURATION_MS) return
 		db.withTransaction {
-			mangaRepository.storeContent(manga, replaceExisting = true)
+			val anchorManga = resolveReadingRecordAnchorContent(manga)
+			mangaRepository.storeContent(anchorManga, replaceExisting = true)
 			db.getReadingRecordDao().insertSession(
 				ReadingRecordEntity(
-					mangaId = manga.id,
+					mangaId = anchorManga.id,
 					startAt = startAt,
 					endAt = endAt,
 					startChapterId = startState.chapterId,
@@ -109,10 +128,11 @@ class ReadingRecordRepository @Inject constructor(
 	) {
 		if (!force && shouldSkip(manga)) return
 		db.withTransaction {
-			mangaRepository.storeContent(manga, replaceExisting = true)
+			val anchorManga = resolveReadingRecordAnchorContent(manga)
+			mangaRepository.storeContent(anchorManga, replaceExisting = true)
 			db.getReadingRecordDao().insertJumpPoint(
 				ReadingJumpPointEntity(
-					mangaId = manga.id,
+					mangaId = anchorManga.id,
 					createdAt = System.currentTimeMillis(),
 					fromChapterId = fromState.chapterId,
 					fromPage = fromState.page,
@@ -130,8 +150,9 @@ class ReadingRecordRepository @Inject constructor(
 
 	suspend fun clearForContent(mangaId: Long) = db.withTransaction {
 		val dao = db.getReadingRecordDao()
-		dao.clearSessions(mangaId)
-		dao.clearJumpPoints(mangaId)
+		val anchorIds = resolveReadingRecordReadIds(mangaId)
+		dao.clearSessions(anchorIds)
+		dao.clearJumpPoints(anchorIds)
 	}
 
 	suspend fun deleteSession(id: Long) {
@@ -143,6 +164,36 @@ class ReadingRecordRepository @Inject constructor(
 	}
 
 	fun shouldSkip(manga: Content): Boolean = settings.isIncognitoModeEnabled(manga.isNsfw())
+
+	private suspend fun resolveReadingRecordReadIds(mangaId: Long): List<Long> {
+		// Reading records stay physically keyed by local manga ids, but reads aggregate across
+		// every local projection in the same work so source switching keeps one logical timeline.
+		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId] ?: return listOf(mangaId)
+		return entityGraphRepository.getBindings(entityId)
+			.asSequence()
+			.mapNotNull { binding ->
+				when (binding.source) {
+					"local_manga", "0" -> binding.externalId.toLongOrNull()
+					else -> null
+				}
+			}
+			.distinct()
+			.toList()
+			.ifEmpty { listOf(mangaId) }
+	}
+
+	private suspend fun resolveReadingRecordAnchorContent(manga: Content): Content {
+		// Writes land on the preferred local projection for the owning work. If no work exists yet,
+		// the current projection remains the anchor for compatibility with legacy storage.
+		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(manga.id))[manga.id]
+		val anchorId = entityId?.let {
+			db.getEntityGraphDao().findEntityPrefs(it)?.preferredLocalMangaId
+		} ?: manga.id
+		if (anchorId == manga.id) {
+			return manga
+		}
+		return db.getMangaDao().find(anchorId)?.toContent() ?: manga
+	}
 
 	private companion object {
 		const val DEFAULT_JUMP_LIMIT = 20

@@ -353,6 +353,9 @@ fun SourceMigrationPanel(
                     onHideStaleLegacyRelations = viewModel::hideStaleLegacyRelations,
                     onRejectSuspectTrackingBindings = viewModel::rejectSuspectTrackingBindings,
                     onRepairSuspectMetadataSourceSelections = viewModel::repairSuspectMetadataSourceSelections,
+                    onPruneRedundantProjectionMetadataSelections = viewModel::pruneRedundantProjectionMetadataSelections,
+                    onPruneRedundantProjectionOverrides = viewModel::pruneRedundantProjectionOverrides,
+                    onPruneRedundantProjectionReadingStatuses = viewModel::pruneRedundantProjectionReadingStatuses,
                     onSplitSuspectMismerged = viewModel::splitSuspectMismergedLocalWorks,
                 )
             }
@@ -484,12 +487,18 @@ private fun RepairDiagnosticsCard(
     onHideStaleLegacyRelations: () -> Unit,
     onRejectSuspectTrackingBindings: () -> Unit,
     onRepairSuspectMetadataSourceSelections: () -> Unit,
+    onPruneRedundantProjectionMetadataSelections: () -> Unit,
+    onPruneRedundantProjectionOverrides: () -> Unit,
+    onPruneRedundantProjectionReadingStatuses: () -> Unit,
     onSplitSuspectMismerged: () -> Unit,
 ) {
     val report = uiState.repairReport
     var showHideLegacyConfirm by rememberSaveable { mutableStateOf(false) }
     var showRejectTrackingConfirm by rememberSaveable { mutableStateOf(false) }
     var showRepairMetadataSourceConfirm by rememberSaveable { mutableStateOf(false) }
+    var showPruneProjectionMetadataConfirm by rememberSaveable { mutableStateOf(false) }
+    var showPruneProjectionOverrideConfirm by rememberSaveable { mutableStateOf(false) }
+    var showPruneProjectionReadingStatusConfirm by rememberSaveable { mutableStateOf(false) }
     var showSplitSuspectConfirm by rememberSaveable { mutableStateOf(false) }
     if (showHideLegacyConfirm) {
         AlertDialog(
@@ -573,6 +582,78 @@ private fun RepairDiagnosticsCard(
             },
             dismissButton = {
                 TextButton(onClick = { showRepairMetadataSourceConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (showPruneProjectionMetadataConfirm) {
+        AlertDialog(
+            onDismissRequest = { showPruneProjectionMetadataConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_prune_projection_metadata_title)) },
+            text = {
+                Text(stringResource(R.string.entity_organize_repair_prune_projection_metadata_confirm))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPruneProjectionMetadataConfirm = false
+                        onPruneRedundantProjectionMetadataSelections()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPruneProjectionMetadataConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (showPruneProjectionOverrideConfirm) {
+        AlertDialog(
+            onDismissRequest = { showPruneProjectionOverrideConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_prune_projection_override_title)) },
+            text = {
+                Text(stringResource(R.string.entity_organize_repair_prune_projection_override_confirm))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPruneProjectionOverrideConfirm = false
+                        onPruneRedundantProjectionOverrides()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPruneProjectionOverrideConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (showPruneProjectionReadingStatusConfirm) {
+        AlertDialog(
+            onDismissRequest = { showPruneProjectionReadingStatusConfirm = false },
+            title = { Text(stringResource(R.string.entity_organize_repair_prune_projection_reading_status_title)) },
+            text = {
+                Text(stringResource(R.string.entity_organize_repair_prune_projection_reading_status_confirm))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPruneProjectionReadingStatusConfirm = false
+                        onPruneRedundantProjectionReadingStatuses()
+                    },
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPruneProjectionReadingStatusConfirm = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             },
@@ -668,12 +749,33 @@ private fun RepairDiagnosticsCard(
                         value = report.orphanMetadataSourceCount.toString(),
                     )
                     WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_redundant_projection_metadata),
+                        value = report.redundantProjectionMetadataSelectionCount.toString(),
+                    )
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_redundant_projection_override),
+                        value = report.redundantProjectionOverrideCount.toString(),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_redundant_projection_reading_status),
+                        value = report.redundantProjectionReadingStatusCount.toString(),
+                    )
+                    WorkbenchMetricChip(
                         label = stringResource(R.string.entity_organize_repair_suspect_tracking),
                         value = report.suspectTrackingBindingCount.toString(),
                     )
                     WorkbenchMetricChip(
                         label = stringResource(R.string.entity_organize_repair_metadata_source),
                         value = report.suspectMetadataSourceCount.toString(),
+                    )
+                    WorkbenchMetricChip(
+                        label = stringResource(R.string.entity_organize_repair_tracking_cache),
+                        value = report.staleTrackingCacheLinkCount.toString(),
                     )
                 }
                 Row(
@@ -683,14 +785,42 @@ private fun RepairDiagnosticsCard(
                     OutlinedButton(
                         onClick = { showRejectTrackingConfirm = true },
                         enabled = !uiState.isExecuting && report.suspectTrackingBindingCount > 0,
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(text = stringResource(R.string.entity_organize_repair_reject_suspect_tracking_action))
                     }
                     OutlinedButton(
                         onClick = { showRepairMetadataSourceConfirm = true },
                         enabled = !uiState.isExecuting && report.suspectMetadataSourceCount > 0,
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(text = stringResource(R.string.entity_organize_repair_metadata_source_action))
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { showPruneProjectionMetadataConfirm = true },
+                        enabled = !uiState.isExecuting && report.redundantProjectionMetadataSelectionCount > 0,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_prune_projection_metadata_action))
+                    }
+                    OutlinedButton(
+                        onClick = { showPruneProjectionOverrideConfirm = true },
+                        enabled = !uiState.isExecuting && report.redundantProjectionOverrideCount > 0,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_prune_projection_override_action))
+                    }
+                    OutlinedButton(
+                        onClick = { showPruneProjectionReadingStatusConfirm = true },
+                        enabled = !uiState.isExecuting && report.redundantProjectionReadingStatusCount > 0,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(text = stringResource(R.string.entity_organize_repair_prune_projection_reading_status_action))
                     }
                 }
                 Row(

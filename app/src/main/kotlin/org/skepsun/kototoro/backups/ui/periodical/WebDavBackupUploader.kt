@@ -36,6 +36,7 @@ enum class RemoteNamespace(
 ) {
     V1(writerGeneration = 1),
     V2(writerGeneration = 2),
+    V3(writerGeneration = 3),
 }
 
 class WebDavBackupUploader @Inject constructor(
@@ -77,13 +78,14 @@ class WebDavBackupUploader @Inject constructor(
         return when (namespace) {
             RemoteNamespace.V1 -> "kototoro-v${version}-${ts}.zip"
             RemoteNamespace.V2 -> "kototoro-v2-data-v${version}-${ts}.zip"
+            RemoteNamespace.V3 -> "kototoro-v3-work-v${version}-${ts}.zip"
         }
     }
 
     suspend fun uploadBackup(
         file: File,
         targetVersion: Int = settings.backupWebDavDataVersion,
-        namespace: RemoteNamespace = RemoteNamespace.V2,
+        namespace: RemoteNamespace = RemoteNamespace.V3,
     ) {
         val remoteName = buildVersionedRemoteName(targetVersion, namespace)
         val url = composeUrl(remoteName, namespace)
@@ -138,7 +140,7 @@ class WebDavBackupUploader @Inject constructor(
 	suspend fun sendTestConnection() {
 		// Use PROPFIND Depth: 0 against the directory URL (with trailing slash)
 		// Many WebDAV servers do not support HEAD on directories reliably
-		val url = composeUrl(null, RemoteNamespace.V2)
+		val url = composeUrl(null, RemoteNamespace.V3)
 		val propfindBody = """
 			<?xml version="1.0" encoding="utf-8" ?>
 			<D:propfind xmlns:D="DAV:">
@@ -164,7 +166,7 @@ class WebDavBackupUploader @Inject constructor(
 		resp.close()
 	}
 
-    suspend fun listBackupFiles(namespace: RemoteNamespace = RemoteNamespace.V2): List<BackupFileInfo> {
+    suspend fun listBackupFiles(namespace: RemoteNamespace = RemoteNamespace.V3): List<BackupFileInfo> {
 		val url = composeUrl(null, namespace)
 		val propfindBody = """
 			<?xml version="1.0" encoding="utf-8" ?>
@@ -213,7 +215,7 @@ class WebDavBackupUploader @Inject constructor(
 	suspend fun downloadBackup(
 		fileName: String,
 		destinationFile: File,
-		namespace: RemoteNamespace = RemoteNamespace.V2,
+		namespace: RemoteNamespace = RemoteNamespace.V3,
 	) {
 		val url = composeUrl(fileName, namespace)
 		val builder = Request.Builder().url(url).get()
@@ -237,7 +239,7 @@ class WebDavBackupUploader @Inject constructor(
 		resp.close()
 	}
 
-    suspend fun getLatestBackup(namespace: RemoteNamespace = RemoteNamespace.V2): BackupFileInfo? {
+    suspend fun getLatestBackup(namespace: RemoteNamespace = RemoteNamespace.V3): BackupFileInfo? {
         return listBackupFiles(namespace).firstOrNull()
     }
 
@@ -302,10 +304,11 @@ class WebDavBackupUploader @Inject constructor(
         val strict = when (namespace) {
             RemoteNamespace.V1 -> Regex("^kototoro(?:-data)?-v(\\d+)-")
             RemoteNamespace.V2 -> Regex("^kototoro-v2-data-v(\\d+)-")
+            RemoteNamespace.V3 -> Regex("^kototoro-v3-work-v(\\d+)-")
         }
         val m1 = strict.find(fileName)
         if (m1 != null) return m1.groupValues.getOrNull(1)?.toIntOrNull()
-        if (namespace == RemoteNamespace.V2) {
+        if (namespace == RemoteNamespace.V2 || namespace == RemoteNamespace.V3) {
             return null
         }
         val fallback = Regex("-v(\\d+)-")
@@ -320,12 +323,13 @@ class WebDavBackupUploader @Inject constructor(
 
     private fun matchesNamespace(name: String, namespace: RemoteNamespace): Boolean {
         return when (namespace) {
-            RemoteNamespace.V1 -> !name.startsWith("kototoro-v2-data-v")
+            RemoteNamespace.V1 -> !name.startsWith("kototoro-v2-data-v") && !name.startsWith("kototoro-v3-work-v")
             RemoteNamespace.V2 -> name.startsWith("kototoro-v2-data-v")
+            RemoteNamespace.V3 -> name.startsWith("kototoro-v3-work-v")
         }
     }
 
-    suspend fun deleteRemote(fileName: String, namespace: RemoteNamespace = RemoteNamespace.V2) {
+    suspend fun deleteRemote(fileName: String, namespace: RemoteNamespace = RemoteNamespace.V3) {
         val url = composeUrl(fileName, namespace)
         val builder = Request.Builder().url(url).delete()
         basicAuthHeaderOrNull()?.let { builder.header("Authorization", it) }
@@ -339,7 +343,7 @@ class WebDavBackupUploader @Inject constructor(
         resp.close()
     }
 
-    suspend fun trimRemote(maxCount: Int, namespace: RemoteNamespace = RemoteNamespace.V2) {
+    suspend fun trimRemote(maxCount: Int, namespace: RemoteNamespace = RemoteNamespace.V3) {
         if (maxCount <= 0) return
         val files = listBackupFiles(namespace)
         if (files.size <= maxCount) return

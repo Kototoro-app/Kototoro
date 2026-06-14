@@ -66,14 +66,16 @@ class CoverRestoreInterceptor @Inject constructor(
 	}
 
 	private suspend fun restoreContentImpl(manga: Content): Boolean {
-		if (dataRepository.findContentById(manga.id, withChapters = false) == null || manga.isLocal) {
+		val currentContent = dataRepository.findPreferredLocalContentById(manga.id, withChapters = false)
+			?: dataRepository.findContentById(manga.id, withChapters = false)
+		if (currentContent == null || manga.isLocal) {
 			return false
 		}
-		val repo = repositoryFactory.create(manga.source)
-		val fixed = repo.find(manga) ?: return false
-		return if (fixed != manga) {
+		val repo = repositoryFactory.create(currentContent.source)
+		val fixed = repo.find(currentContent) ?: return false
+		return if (fixed != currentContent) {
 			dataRepository.storeContent(fixed, replaceExisting = true)
-			fixed.coverUrl != manga.coverUrl
+			fixed.coverUrl != currentContent.coverUrl
 		} else {
 			false
 		}

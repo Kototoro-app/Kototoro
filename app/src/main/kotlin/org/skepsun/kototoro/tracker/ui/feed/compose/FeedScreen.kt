@@ -51,6 +51,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
+import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +63,7 @@ fun FeedScreen(
 	onRefresh: () -> Unit,
 	onLoadMore: () -> Unit,
 	onFeedItemClick: (FeedItem, Rect?) -> Unit,
-	onUpdatedContentItemClick: (ContentListModel, Rect?) -> Unit,
+	onUpdatedContentItemClick: (UpdatedContentHeaderItem, Rect?) -> Unit,
 	onUpdatedContentMoreClick: (UpdatedContentHeader) -> Unit,
 	categories: List<FavouriteCategory>,
 	selectedCategoryId: Long,

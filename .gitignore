@@ -46,6 +46,7 @@ docs/.vitepress/dist/
 .mindfs/
 .tmp/
 .pi-esr-memory/
+.pi-loom/
 .pirc.json
 *.txt
 policy

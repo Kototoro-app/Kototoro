@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.model.DateTimeAgo
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
@@ -21,6 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ContentStatsViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
+	private val contentDataRepository: ContentDataRepository,
 	private val repository: StatsRepository,
 ) : BaseViewModel() {
 
@@ -39,7 +41,16 @@ class ContentStatsViewModel @Inject constructor(
 	val totalPagesRead = MutableStateFlow(0)
 
 	init {
-		initialManga?.let(::initialize)
+		launchJob(Dispatchers.Default) {
+			val resolved = initialManga?.id
+				?.takeIf { it != 0L }
+				?.let {
+					contentDataRepository.findPreferredLocalContentById(it, withChapters = false)
+						?: contentDataRepository.findContentById(it, withChapters = false)
+				}
+				?: initialManga
+			resolved?.let(::initialize)
+		}
 	}
 
 	fun initialize(manga: Content) {

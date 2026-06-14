@@ -58,6 +58,17 @@ import org.skepsun.kototoro.core.db.migrations.Migration45To46
 import org.skepsun.kototoro.core.db.migrations.Migration46To47
 import org.skepsun.kototoro.core.db.migrations.Migration47To48
 import org.skepsun.kototoro.core.db.migrations.Migration48To49
+import org.skepsun.kototoro.core.db.migrations.Migration54To55
+import org.skepsun.kototoro.core.db.migrations.Migration55To56
+import org.skepsun.kototoro.core.db.migrations.Migration56To57
+import org.skepsun.kototoro.core.db.migrations.Migration57To58
+import org.skepsun.kototoro.core.db.migrations.Migration58To59
+import org.skepsun.kototoro.core.db.migrations.Migration59To60
+import org.skepsun.kototoro.core.db.migrations.Migration60To61
+import org.skepsun.kototoro.core.db.migrations.Migration61To62
+import org.skepsun.kototoro.core.db.migrations.Migration62To63
+import org.skepsun.kototoro.core.db.migrations.Migration63To64
+import org.skepsun.kototoro.core.db.migrations.Migration64To65
 import org.skepsun.kototoro.core.db.migrations.Migration1To2
 import org.skepsun.kototoro.core.db.migrations.Migration20To21
 import org.skepsun.kototoro.core.db.migrations.Migration21To22
@@ -92,8 +103,12 @@ import org.skepsun.kototoro.favourites.data.FavouriteCategoriesDao
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.favourites.data.FavouritesDao
+import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.favourites.data.WorkFavouritesDao
 import org.skepsun.kototoro.history.data.HistoryDao
 import org.skepsun.kototoro.history.data.HistoryEntity
+import org.skepsun.kototoro.history.data.WorkHistoryDao
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.local.data.index.LocalContentIndexDao
 import org.skepsun.kototoro.local.data.index.LocalContentIndexEntity
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingDao
@@ -103,6 +118,8 @@ import org.skepsun.kototoro.readingrecord.data.ReadingRecordDao
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordEntity
 import org.skepsun.kototoro.stats.data.StatsDao
 import org.skepsun.kototoro.stats.data.StatsEntity
+import org.skepsun.kototoro.stats.data.WorkStatsDao
+import org.skepsun.kototoro.stats.data.WorkStatsEntity
 import org.skepsun.kototoro.suggestions.data.SuggestionDao
 import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
@@ -112,14 +129,14 @@ import org.skepsun.kototoro.tracker.data.TracksDao
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 54
+const val DATABASE_VERSION = 65
 
 @Database(
 	entities = [
-		MangaEntity::class, TagEntity::class, HistoryEntity::class, MangaTagsEntity::class, ChapterEntity::class,
-		FavouriteCategoryEntity::class, FavouriteEntity::class, MangaPrefsEntity::class, TrackEntity::class,
+		MangaEntity::class, TagEntity::class, HistoryEntity::class, WorkHistoryEntity::class, MangaTagsEntity::class, ChapterEntity::class,
+		FavouriteCategoryEntity::class, FavouriteEntity::class, WorkFavouriteEntity::class, MangaPrefsEntity::class, TrackEntity::class,
 		TrackLogEntity::class, SuggestionEntity::class, BookmarkEntity::class, ScrobblingEntity::class,
-		MangaSourceEntity::class, StatsEntity::class, LocalContentIndexEntity::class, EpubChapterMappingEntity::class,
+		MangaSourceEntity::class, StatsEntity::class, WorkStatsEntity::class, LocalContentIndexEntity::class, EpubChapterMappingEntity::class,
 		JsonSourceEntity::class, ExternalExtensionRepoEntity::class,
 		TrackingSiteItemEntity::class, TrackingSiteLinkEntity::class, SourcePresetEntity::class,
 		EntityRecord::class, EntityBindingRecord::class, RelationRecord::class, EntityPrefsRecord::class,
@@ -132,11 +149,15 @@ abstract class MangaDatabase : RoomDatabase() {
 
 	abstract fun getHistoryDao(): HistoryDao
 
+	abstract fun getWorkHistoryDao(): WorkHistoryDao
+
 	abstract fun getTagsDao(): TagsDao
 
 	abstract fun getMangaDao(): MangaDao
 
 	abstract fun getFavouritesDao(): FavouritesDao
+
+	abstract fun getWorkFavouritesDao(): WorkFavouritesDao
 
 	abstract fun getPreferencesDao(): PreferencesDao
 
@@ -155,6 +176,8 @@ abstract class MangaDatabase : RoomDatabase() {
 	abstract fun getSourcesDao(): MangaSourcesDao
 
 	abstract fun getStatsDao(): StatsDao
+
+	abstract fun getWorkStatsDao(): WorkStatsDao
 
 	abstract fun getLocalContentIndexDao(): LocalContentIndexDao
 
@@ -232,6 +255,17 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
 	org.skepsun.kototoro.core.db.migrations.Migration51To52(),
 	org.skepsun.kototoro.core.db.migrations.Migration52To53(),
 	org.skepsun.kototoro.core.db.migrations.Migration53To54(),
+	org.skepsun.kototoro.core.db.migrations.Migration54To55(),
+	org.skepsun.kototoro.core.db.migrations.Migration55To56(),
+	org.skepsun.kototoro.core.db.migrations.Migration56To57(),
+	org.skepsun.kototoro.core.db.migrations.Migration57To58(),
+	org.skepsun.kototoro.core.db.migrations.Migration58To59(),
+	org.skepsun.kototoro.core.db.migrations.Migration59To60(),
+	Migration60To61(),
+	Migration61To62(),
+	Migration62To63(),
+	Migration63To64(),
+	Migration64To65(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

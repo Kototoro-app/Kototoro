@@ -16,6 +16,8 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -32,11 +34,14 @@ import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
 import org.skepsun.kototoro.core.db.TABLE_TAGS
+import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.util.ext.buildContentValues
 import org.skepsun.kototoro.core.util.ext.map
 import org.skepsun.kototoro.core.util.ext.mapToSet
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.sync.data.SyncAuthApi
 import org.skepsun.kototoro.sync.data.SyncAuthenticator
 import org.skepsun.kototoro.sync.data.SyncInterceptor
@@ -56,6 +61,7 @@ class SyncHelper @AssistedInject constructor(
 	@Assisted private val account: Account,
 	@Assisted private val provider: ContentProviderClient,
 	private val settings: SyncSettings,
+	private val db: MangaDatabase,
 ) {
 
 	private val authorityHistory = context.getString(R.string.sync_authority_history)
@@ -138,13 +144,17 @@ class SyncHelper @AssistedInject constructor(
 	private fun upsertHistory(history: List<HistorySyncDto>): Array<ContentProviderResult> {
 		val uri = uri(authorityHistory, TABLE_HISTORY)
 		val operations = ArrayList<ContentProviderOperation>()
-		history.mapTo(operations) {
+		history.forEach {
 			operations.addAll(upsertContent(it.manga, authorityHistory))
-			ContentProviderOperation.newInsert(uri)
+			operations += ContentProviderOperation.newInsert(uri)
 				.withValues(it.toContentValues())
 				.build()
 		}
-		return provider.applyBatch(operations)
+		val result = provider.applyBatch(operations)
+		history.forEach { dto ->
+			upsertWorkHistory(dto)
+		}
+		return result
 	}
 
 	private fun upsertFavouriteCategories(categories: List<FavouriteCategorySyncDto>): Array<ContentProviderResult> {
@@ -161,13 +171,17 @@ class SyncHelper @AssistedInject constructor(
 	private fun upsertFavourites(favourites: List<FavouriteSyncDto>): Array<ContentProviderResult> {
 		val uri = uri(authorityFavourites, TABLE_FAVOURITES)
 		val operations = ArrayList<ContentProviderOperation>()
-		favourites.mapTo(operations) {
+		favourites.forEach {
 			operations.addAll(upsertContent(it.manga, authorityFavourites))
-			ContentProviderOperation.newInsert(uri)
+			operations += ContentProviderOperation.newInsert(uri)
 				.withValues(it.toContentValues())
 				.build()
 		}
-		return provider.applyBatch(operations)
+		val result = provider.applyBatch(operations)
+		favourites.forEach { dto ->
+			upsertWorkFavourite(dto)
+		}
+		return result
 	}
 
 	private fun upsertContent(manga: ContentSyncDto, authority: String): List<ContentProviderOperation> {
@@ -195,12 +209,42 @@ class SyncHelper @AssistedInject constructor(
 	}
 
 	private fun getHistory(): List<HistorySyncDto> {
+		val workHistory = runBlocking { db.getWorkHistoryDao().dump().toList() }
+		if (workHistory.isNotEmpty()) {
+			return workHistory.mapNotNull { entry: WorkHistoryEntity ->
+				val mangaId = resolveSyncMangaIdForEntity(entry.entityId, entry.anchorMangaId) ?: return@mapNotNull null
+				HistorySyncDto(
+					entityId = entry.entityId,
+					anchorMangaId = entry.anchorMangaId,
+					mangaId = mangaId,
+					createdAt = entry.createdAt,
+					updatedAt = entry.updatedAt,
+					chapterId = entry.chapterId,
+					page = entry.page,
+					scroll = entry.scroll,
+					percent = entry.percent,
+					deletedAt = entry.deletedAt,
+					chaptersCount = entry.chaptersCount,
+					manga = getContent(authorityHistory, mangaId),
+				)
+			}
+		}
 		return provider.query(authorityHistory, TABLE_HISTORY).use { cursor ->
 			val result = ArrayList<HistorySyncDto>(cursor.count)
 			if (cursor.moveToFirst()) {
 				do {
 					val mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id"))
-					result.add(HistorySyncDto(cursor, getContent(authorityHistory, mangaId)))
+					val entityId = findEntityIdByLocalMangaId(mangaId)
+					val anchorMangaId = entityId?.let {
+						runBlocking { db.getEntityGraphDao().findEntityPrefs(it)?.preferredLocalMangaId }
+					}
+					val base = HistorySyncDto(cursor, getContent(authorityHistory, mangaId))
+					result.add(
+						base.copy(
+							entityId = entityId,
+							anchorMangaId = anchorMangaId ?: mangaId,
+						),
+					)
 				} while (cursor.moveToNext())
 			}
 			result
@@ -208,9 +252,112 @@ class SyncHelper @AssistedInject constructor(
 	}
 
 	private fun getFavourites(): List<FavouriteSyncDto> {
+		val workFavourites = runBlocking { db.getWorkFavouritesDao().dump().toList() }
+		if (workFavourites.isNotEmpty()) {
+			return workFavourites.mapNotNull { entry: WorkFavouriteEntity ->
+				val mangaId = resolveSyncMangaIdForEntity(entry.entityId) ?: return@mapNotNull null
+				FavouriteSyncDto(
+					entityId = entry.entityId,
+					mangaId = mangaId,
+					manga = getContent(authorityFavourites, mangaId),
+					categoryId = entry.categoryId.toInt(),
+					sortKey = entry.sortKey,
+					pinned = entry.isPinned,
+					createdAt = entry.createdAt,
+					deletedAt = entry.deletedAt,
+					updatedAt = entry.updatedAt,
+				)
+			}
+		}
 		return provider.query(authorityFavourites, TABLE_FAVOURITES).map { cursor ->
-			val manga = getContent(authorityFavourites, cursor.getLong(cursor.getColumnIndexOrThrow("manga_id")))
-			FavouriteSyncDto(cursor, manga)
+			val mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id"))
+			val manga = getContent(authorityFavourites, mangaId)
+			FavouriteSyncDto(cursor, manga).copy(
+				entityId = findEntityIdByLocalMangaId(mangaId),
+			)
+		}
+	}
+
+	private fun upsertWorkHistory(dto: HistorySyncDto) {
+		val entityId = resolveSyncEntityId(dto.entityId, dto.mangaId) ?: return
+		val anchorMangaId = dto.anchorMangaId
+			?: resolveExistingLocalAnchorForEntity(entityId)
+			?: dto.mangaId
+		runBlocking {
+			db.getWorkHistoryDao().upsert(
+				WorkHistoryEntity(
+					entityId = entityId,
+					anchorMangaId = anchorMangaId,
+					createdAt = dto.createdAt,
+					updatedAt = dto.updatedAt,
+					chapterId = dto.chapterId,
+					page = dto.page,
+					scroll = dto.scroll,
+					percent = dto.percent,
+					deletedAt = dto.deletedAt,
+					chaptersCount = dto.chaptersCount,
+					parentChapterId = null,
+				),
+			)
+		}
+	}
+
+	private fun upsertWorkFavourite(dto: FavouriteSyncDto) {
+		val entityId = resolveSyncEntityId(dto.entityId, dto.mangaId) ?: return
+		runBlocking {
+			db.getWorkFavouritesDao().upsert(
+				WorkFavouriteEntity(
+					entityId = entityId,
+					categoryId = dto.categoryId.toLong(),
+					sortKey = dto.sortKey,
+					isPinned = dto.pinned,
+					createdAt = dto.createdAt,
+					deletedAt = dto.deletedAt,
+					updatedAt = dto.updatedAt,
+				),
+			)
+		}
+	}
+
+	private fun resolveSyncEntityId(remoteEntityId: Long?, mangaId: Long): Long? {
+		if (remoteEntityId != null && remoteEntityId > 0L) {
+			val localEntityExists = runBlocking {
+				db.getEntityGraphDao().findEntity(remoteEntityId) != null
+			}
+			if (localEntityExists) {
+				return remoteEntityId
+			}
+		}
+		return findEntityIdByLocalMangaId(mangaId)
+	}
+
+	private fun resolveSyncMangaIdForEntity(entityId: Long, fallbackMangaId: Long? = null): Long? {
+		return runBlocking {
+			resolveExistingLocalAnchorForEntity(entityId)
+				?: fallbackMangaId
+		}
+	}
+
+	private fun resolveExistingLocalAnchorForEntity(entityId: Long): Long? {
+		return runBlocking {
+			db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
+				?.takeIf { preferredId -> db.getMangaDao().contains(preferredId) }
+				?: db.getEntityGraphDao().findActiveBindingsByEntity(entityId)
+					.firstNotNullOfOrNull { binding ->
+						when (binding.source) {
+							"local_manga", "0" -> binding.externalId.toLongOrNull()
+								?.takeIf { localId -> db.getMangaDao().contains(localId) }
+							else -> null
+						}
+					}
+		}
+	}
+
+	private fun findEntityIdByLocalMangaId(mangaId: Long): Long? {
+		val dao = db.getEntityGraphDao()
+		return runBlocking {
+			dao.findActiveBinding("local_manga", mangaId.toString())?.entityId
+				?: dao.findActiveBinding("0", mangaId.toString())?.entityId
 		}
 	}
 

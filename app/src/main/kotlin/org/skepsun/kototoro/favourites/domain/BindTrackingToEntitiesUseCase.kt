@@ -146,6 +146,42 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                 )
                 return@forEach
             }
+            val existingBindingPreviews = resolveExistingBindingPreviews(
+                group = group,
+                services = services,
+            ).filter { preview ->
+                val accepted = preview.isStrictlyCompatibleWith(
+                    group = group,
+                    allowedTitleKeys = resolveAllowedTrackingTitleKeys(group),
+                )
+                if (!accepted) {
+                    Log.i(
+                        TAG,
+                        "existing binding preview rejected: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
+                            "remoteId=${preview.remoteId}, trackingKeys=${preview.strictTrackingTitleKeys()}",
+                    )
+                }
+                accepted
+            }
+            if (existingBindingPreviews.isNotEmpty()) {
+                previews += existingBindingPreviews
+                matched++
+                onProgress?.invoke(
+                    MigrationProgress(
+                        total = total,
+                        completed = matched,
+                        failed = 0,
+                        notFound = skipped,
+                        currentItem = MigrationItem(
+                            mangaId = group.items.firstOrNull()?.mangaId ?: -1L,
+                            title = group.title,
+                        ),
+                        items = emptyList(),
+                        isFinished = matched + skipped >= total,
+                    ),
+                )
+                return@forEach
+            }
             val resolvedCandidates = resolveTrackingDetails(representative, services)
             if (resolvedCandidates.isEmpty()) {
                 skipped++
@@ -237,6 +273,52 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             previews = previews,
             skipped = skipped,
         )
+    }
+
+    private suspend fun resolveExistingBindingPreviews(
+        group: MergeCandidateGroup,
+        services: List<ScrobblerService>,
+    ): List<TrackingBindingPreview> {
+        val resolvedEntityIds = buildSet {
+            group.resolvedEntityId?.let(::add)
+            addAll(entityGraphRepository.findEntityIdsByAnyMangaIds(group.mangaIds).values)
+        }
+        val entityId = resolvedEntityIds.singleOrNull() ?: return emptyList()
+        val bindings = entityGraphRepository.getBindings(entityId)
+        val candidateBindings = bindings.filter { binding ->
+            services.any { service ->
+                binding.source in service.bindingSourceKeys()
+            }
+        }
+        if (candidateBindings.isEmpty()) {
+            return emptyList()
+        }
+        val previews = mutableListOf<TrackingBindingPreview>()
+        services.forEach { service ->
+            val binding = candidateBindings.firstOrNull { it.source in service.bindingSourceKeys() }
+                ?: return@forEach
+            val remoteId = binding.externalId.toLongOrNull() ?: return@forEach
+            val details = runCatchingCancellable {
+                readOrFetchDetails(service, remoteId, null)
+            }.getOrNull() ?: return@forEach
+            previews += TrackingBindingPreview(
+                previewId = "${group.id}:${service.id}:${details.remoteId}",
+                groupId = group.id,
+                title = group.title,
+                contentTypeName = group.contentType.name,
+                service = service,
+                remoteId = details.remoteId,
+                matchedTitle = details.title,
+                matchedAltTitle = details.altTitle,
+                url = details.url,
+                confidence = 1f,
+                matchedBy = TrackingBindingMatchKind.EXISTING_BINDING,
+                year = details.year,
+                details = details,
+                aliases = emptyList(),
+            )
+        }
+        return previews
     }
 
     suspend fun bind(
@@ -347,7 +429,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                 additionalAliases = effectivePreview.aliases + effectivePreview.details.inferAdditionalAliases(effectivePreview),
             ),
         )
-        val targetEntityId = database.withTransaction {
+        val bindResolution = database.withTransaction {
             val dao = database.getEntityGraphDao()
             val entityIdsToMerge = linkedSetOf<Long>()
             group.mangaIds.forEach { mangaId ->
@@ -362,7 +444,6 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                         confidence = 1f,
                     )
                 }
-                trackingSiteMatcher.confirmMatch(effectivePreview.service, mangaId, effectivePreview.remoteId)
             }
             val conflictingEntityIds = (entityIdsToMerge + ingestedEntity.id).distinct()
             if (conflictingEntityIds.isNotEmpty()) {
@@ -384,15 +465,44 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             } else {
                 ingestedEntity.id
             }
+        }?.let { targetEntityId ->
+            BindResolution(
+                entityId = targetEntityId,
+                confirmationMangaId = group.items.firstOrNull()?.mangaId,
+            )
         } ?: return false
+        if (
+            bindResolution.confirmationMangaId != null &&
+            !hasAlignedTrackingAnchor(
+                entityId = bindResolution.entityId,
+                service = effectivePreview.service,
+                remoteId = effectivePreview.remoteId,
+            )
+        ) {
+            trackingSiteMatcher.confirmMatch(
+                service = effectivePreview.service,
+                contentId = bindResolution.confirmationMangaId,
+                remoteId = effectivePreview.remoteId,
+            )
+        }
         syncEntityMetadataSelection(
-            entityId = targetEntityId,
+            entityId = bindResolution.entityId,
             selection = ContentDataRepository.MetadataSourceSelection.Tracking(
                 serviceId = effectivePreview.service.id,
                 remoteId = effectivePreview.remoteId,
             ),
         )
         return true
+    }
+
+    private suspend fun hasAlignedTrackingAnchor(
+        entityId: Long,
+        service: ScrobblerService,
+        remoteId: Long,
+    ): Boolean {
+        return database.getTrackingSiteDao().findLinksByEntity(service.id, entityId).any { link ->
+            link.remoteId == remoteId && link.mangaId != 0L
+        }
     }
 
     private suspend fun syncEntityMetadataSelection(
@@ -408,7 +518,6 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         contentDataRepository.setEntityMetadataSourceSelection(
             entityId = entityId,
             selection = selection,
-            mirrorLocalMangaIds = localMangaIds,
         )
         localMangaIds.forEach { mangaId ->
             contentDataRepository.setIgnoredTrackingSuggestion(
@@ -847,6 +956,11 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         val matchedBy: TrackingBindingMatchKind,
         val confidence: Float,
         val aliases: List<String> = emptyList(),
+    )
+
+    private data class BindResolution(
+        val entityId: Long,
+        val confirmationMangaId: Long?,
     )
 
     private data class TrackingCandidateContext(

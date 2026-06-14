@@ -7,6 +7,8 @@ import org.skepsun.kototoro.core.util.ext.buildContentValues
 
 @Serializable
 data class HistorySyncDto(
+	@SerialName("entity_id") val entityId: Long? = null,
+	@SerialName("anchor_manga_id") val anchorMangaId: Long? = null,
 	@SerialName("manga_id") val mangaId: Long,
 	@SerialName("created_at") val createdAt: Long,
 	@SerialName("updated_at") val updatedAt: Long,
@@ -20,6 +22,8 @@ data class HistorySyncDto(
 ) {
 
 	constructor(cursor: Cursor, manga: ContentSyncDto) : this(
+		entityId = null,
+		anchorMangaId = null,
 		mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id")),
 		createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
 		updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),

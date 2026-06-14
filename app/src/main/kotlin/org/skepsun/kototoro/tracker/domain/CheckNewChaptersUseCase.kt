@@ -40,7 +40,7 @@ class CheckNewChaptersUseCase @Inject constructor(
 		invokeImpl(tracking)
 	}
 
-	suspend operator fun invoke(track: ContentTracking): MangaUpdates = mutex.withLock(track.manga.id) {
+	suspend operator fun invoke(track: ContentTracking): MangaUpdates = mutex.withLock(track.anchorMangaId) {
 		invokeImpl(track)
 	}
 
@@ -55,6 +55,9 @@ class CheckNewChaptersUseCase @Inject constructor(
 			val lastNewChapterIndex = chapters.size - track.newChapters
 			val lastChapter = chapters.lastOrNull()
 			val tracking = ContentTracking(
+				anchorMangaId = track.anchorMangaId,
+				entityId = track.entityId,
+				preferredLocalMangaId = track.preferredLocalMangaId,
 				manga = details,
 				lastChapterId = lastChapter?.id ?: 0L,
 				lastCheck = Instant.now(),
@@ -73,11 +76,12 @@ class CheckNewChaptersUseCase @Inject constructor(
 	}
 
 	private suspend fun invokeImpl(track: ContentTracking): MangaUpdates = runCatchingCancellable {
-		val details = getFullContent(track.manga)
+		val executionSeed = repository.getExecutionTrackingContent(track)
+		val details = getFullContent(executionSeed)
 		compare(track, details, getBranch(details, track.lastChapterId))
 	}.getOrElse { error ->
 		MangaUpdates.Failure(
-			manga = track.manga,
+			manga = repository.getExecutionTrackingContentOrNull(track.anchorMangaId) ?: track.manga,
 			error = error,
 		)
 	}.also { updates ->

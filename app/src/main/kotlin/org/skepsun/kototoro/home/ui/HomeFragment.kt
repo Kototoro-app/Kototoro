@@ -53,6 +53,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 		filterMenuProvider = SearchBarFilterViewController(this)
 		filterMenuProvider?.attachTo(this)
 		showHomeChrome()
+		val mainActivity = activity as? MainActivity
 
 		viewModel.onOpenContent.observeEvent(viewLifecycleOwner) { event ->
 			event.entityId?.let { entityId ->
@@ -60,7 +61,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 					entityId = entityId,
 					preferredLocalMangaId = event.preferredLocalMangaId ?: event.content.id,
 				)
-			} ?: router.openDetails(event.content, binding.root)
+			} ?: router.openResolvedDetails(event.content, binding.root)
         }
 
         binding.composeView.setContent {

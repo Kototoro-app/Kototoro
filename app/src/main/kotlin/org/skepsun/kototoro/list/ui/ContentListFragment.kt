@@ -59,6 +59,7 @@ import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ListHeader
+import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -160,7 +161,7 @@ abstract class ContentListFragment :
 							composeSelectionIds = if (item.id in composeSelectionIds) composeSelectionIds - item.id else composeSelectionIds + item.id
 						} else {
 							val manga = item.toContentWithOverride()
-							router.openDetails(manga, binding.root)
+							router.openResolvedDetails(manga, binding.root)
 						}
 					},
 					onItemLongClick = { item ->

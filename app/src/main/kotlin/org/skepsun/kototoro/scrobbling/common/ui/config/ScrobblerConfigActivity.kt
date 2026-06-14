@@ -198,6 +198,8 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 		}
 		pendingBindInfo = ScrobblingInfo(
 			scrobbler = viewModel.getScrobblerService(),
+			entityId = null,
+			preferredLocalMangaId = null,
 			mangaId = 0L,
 			targetId = remoteId,
 			status = null,

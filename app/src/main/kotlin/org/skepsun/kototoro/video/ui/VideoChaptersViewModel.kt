@@ -6,8 +6,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
@@ -58,19 +63,28 @@ class VideoChaptersViewModel @Inject constructor(
 
     private val intent = ContentIntent(savedStateHandle)
     private var loadingJob: Job? = null
-    private val mangaId = intent.mangaId
     private val requestedState = savedStateHandle.get<ReaderState>(ReaderIntent.EXTRA_STATE)
+    private val observedLocalMangaId = MutableStateFlow(intent.mangaId.takeIf { it != 0L })
 
     init {
-        mangaDetails.value = intent.manga?.let { ContentDetails(it) }
         if (requestedState != null) {
             readingState.value = requestedState
         }
 
-        historyRepository.observeOne(mangaId)
+        observedLocalMangaId
+            .flatMapLatest { mangaId ->
+                if (mangaId == null) {
+                    flowOf(null)
+                } else {
+                    historyRepository.observeOne(mangaId)
+                }
+            }
             .onEach { h ->
                 if (requestedState == null) {
-                    readingState.value = h?.let(::ReaderState)
+                    val manga = mangaDetails.value?.toContent()
+                    readingState.value = h
+                        ?.takeIf { history -> manga?.findChapterById(history.chapterId) != null }
+                        ?.let(::ReaderState)
                 }
             }
             .withErrorHandling()
@@ -80,7 +94,7 @@ class VideoChaptersViewModel @Inject constructor(
 
         videoDownloadIndex.changes
             .onEach { changedContentId ->
-                if (changedContentId == mangaId) {
+                if (changedContentId == observedLocalMangaId.value) {
                     notifyDownloadChanged()
                 }
             }
@@ -98,6 +112,7 @@ class VideoChaptersViewModel @Inject constructor(
     private fun doLoad(force: Boolean): Job = launchLoadingJob(Dispatchers.Default) {
         detailsLoadUseCase.invoke(intent, force).collect { details ->
             mangaDetails.value = details
+            observedLocalMangaId.value = details.toContent().id
             if (details.allChapters.isNotEmpty()) {
                 val manga = details.toContent()
                 val hist = historyRepository.getOne(manga)

@@ -42,7 +42,7 @@ class AlternativesSheet : BaseAdaptiveSheet<SheetAlternativesBinding>() {
 				val list by viewModel.list.collectAsState()
 				AlternativesSheetContent(
 					items = list,
-					onItemClick = { router.openDetails(it.manga) },
+					onItemClick = { router.openResolvedDetails(it.manga) },
 					onSourceClick = { router.openSearch(it.manga.source, viewModel.manga.title) },
 					onMigrateClick = { confirmMigration(it.manga) },
 					onRetry = { viewModel.retry() },
@@ -52,7 +52,7 @@ class AlternativesSheet : BaseAdaptiveSheet<SheetAlternativesBinding>() {
 		}
 		viewModel.onMigrated.observeEvent(viewLifecycleOwner) {
 			Toast.makeText(requireContext(), R.string.migration_completed, Toast.LENGTH_SHORT).show()
-			router.openDetails(it)
+			router.openResolvedDetails(it)
 			dismissAllowingStateLoss()
 		}
 	}

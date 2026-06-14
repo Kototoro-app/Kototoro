@@ -441,10 +441,7 @@ class ChaptersPagesSheet : BaseAdaptiveSheet<SheetChaptersPagesBinding>(),
                 (viewModel as org.skepsun.kototoro.video.ui.VideoChaptersViewModel).mangaDetails.value?.toContent()?.source
 
             else -> null
-        } ?: activity?.intent
-            ?.getParcelableExtra<org.skepsun.kototoro.core.model.parcelable.ParcelableContent>(AppRouter.KEY_MANGA)
-            ?.manga
-            ?.source
+        }
     }
 
     private fun resolveAvailableTabIds(contentType: ContentType?): List<Int> = buildList {

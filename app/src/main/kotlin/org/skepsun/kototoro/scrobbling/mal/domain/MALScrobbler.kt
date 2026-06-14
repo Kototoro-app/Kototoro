@@ -48,6 +48,8 @@ class MALScrobbler @Inject constructor(
 			?: "manga"
 		return ScrobblingInfo(
 			scrobbler = scrobblerService,
+			entityId = entity.entityId,
+			preferredLocalMangaId = entity.mangaId.takeIf { it != 0L },
 			mangaId = entity.mangaId,
 			targetId = entity.targetId,
 			status = resolveStatus(entity.status),
@@ -68,8 +70,7 @@ class MALScrobbler @Inject constructor(
 		status: ScrobblingStatus?,
 		comment: String?,
 	) {
-		val entity = db.getScrobblingDao().find(scrobblerService.id, mangaId)
-		requireNotNull(entity) { "Scrobbling info for manga $mangaId not found" }
+		val entity = requireScrobblingEntity(mangaId)
 		repository.updateRate(
 			rateId = entity.id,
 			mangaId = entity.mangaId,

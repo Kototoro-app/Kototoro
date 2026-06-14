@@ -1019,15 +1019,12 @@ fun KototoroApp(
                         onContentKindsChange = onSearchOverlayContentKindsChange,
                         onContentSuggestionClick = {
                             onContentSuggestionClick(it)
-                            isSearchOverlayVisible = false
                         },
                         onLocalEntitySuggestionClick = {
                             onLocalEntitySuggestionClick(it)
-                            isSearchOverlayVisible = false
                         },
                         onTrackingEntitySuggestionClick = {
                             onTrackingEntitySuggestionClick(it)
-                            isSearchOverlayVisible = false
                         },
                         onTagSuggestionClick = {
                             onTagSuggestionClick(it)

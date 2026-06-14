@@ -67,7 +67,7 @@ class AlternativesActivity : BaseActivity<ActivityAlternativesBinding>(),
 		viewModel.list.observe(this, listAdapter)
 		viewModel.onMigrated.observeEvent(this) {
 			Toast.makeText(this, R.string.migration_completed, Toast.LENGTH_SHORT).show()
-			router.openDetails(it)
+			router.openResolvedDetails(it)
 			finishAfterTransition()
 		}
 	}
@@ -93,7 +93,7 @@ class AlternativesActivity : BaseActivity<ActivityAlternativesBinding>(),
 	override fun onItemClick(item: ContentAlternativeModel, view: View) {
 		when (view.id) {
 			R.id.chip_source -> router.openSearch(item.manga.source, viewModel.manga.title)
-			else -> router.openDetails(item.manga)
+			else -> router.openResolvedDetails(item.manga, view)
 		}
 	}
 

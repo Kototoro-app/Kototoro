@@ -3,7 +3,6 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.entity.MangaEntity
-import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.parsers.util.mapToSet
@@ -27,12 +26,13 @@ class ContentBackup(
 	@SerialName("title_override") val titleOverride: String? = null,
 	@SerialName("cover_override") val coverUrlOverride: String? = null,
 	@SerialName("content_rating_override") val contentRatingOverride: String? = null,
+	@SerialName("reading_status") val readingStatus: String? = null,
 	@SerialName("metadata_source_kind") val metadataSourceKind: String? = null,
 	@SerialName("metadata_source_service") val metadataSourceService: Int? = null,
 	@SerialName("metadata_source_remote_id") val metadataSourceRemoteId: Long? = null,
 ) {
 
-	constructor(entity: MangaWithTags, prefs: MangaPrefsEntity? = null) : this(
+	constructor(entity: MangaWithTags) : this(
 		id = entity.manga.id,
 		title = entity.manga.title,
 		altTitles = entity.manga.altTitles,
@@ -47,12 +47,6 @@ class ContentBackup(
 		authors = entity.manga.authors,
 		source = entity.manga.source,
 		tags = entity.tags.mapToSet { TagBackup(it) },
-		titleOverride = prefs?.titleOverride,
-		coverUrlOverride = prefs?.coverUrlOverride,
-		contentRatingOverride = prefs?.contentRatingOverride,
-		metadataSourceKind = prefs?.metadataSourceKind,
-		metadataSourceService = prefs?.metadataSourceService,
-		metadataSourceRemoteId = prefs?.metadataSourceRemoteId,
 	)
 
 	fun toEntity() = MangaEntity(
@@ -71,10 +65,13 @@ class ContentBackup(
 		source = source,
 	)
 
-	fun hasPrefsPayload(): Boolean {
+	// Legacy compatibility only. Authoritative work/entity prefs are restored from
+	// ENTITY_GRAPH_PREFS in current schema backups, not from embedded content payloads.
+	fun hasLegacyPrefsPayload(): Boolean {
 		return titleOverride != null ||
 			coverUrlOverride != null ||
 			contentRatingOverride != null ||
+			readingStatus != null ||
 			metadataSourceKind != null ||
 			metadataSourceService != null ||
 			metadataSourceRemoteId != null

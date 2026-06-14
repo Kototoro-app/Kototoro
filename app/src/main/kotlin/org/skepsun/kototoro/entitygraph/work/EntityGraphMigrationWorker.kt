@@ -11,11 +11,14 @@ import dagger.assisted.AssistedInject
 import org.json.JSONArray
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership as attachTrackingLinkOwnership
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
+import org.skepsun.kototoro.entitygraph.data.isActiveBinding
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership as attachScrobblingOwnership
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
 @HiltWorker
@@ -60,15 +63,22 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                     workDto = workDto
                 )
 
-                // 2. Bind the local manga to this entity graph root node.
-                entityGraphRepository.attachLocalReadingBinding(
-                    entityId = entity.id,
-                    localMangaId = link.mangaId,
-                    confidence = link.confidence,
-                    createdBy = EntityBindingCreatedBy.MIGRATION,
-                )
+                // 2. Bind a real local reading projection only. entity-only tracking links must not be
+                //    reinterpreted as synthetic local manga bindings during migration.
+                if (link.mangaId != 0L) {
+                    entityGraphRepository.attachLocalReadingBinding(
+                        entityId = entity.id,
+                        localMangaId = link.mangaId,
+                        confidence = link.confidence,
+                        createdBy = EntityBindingCreatedBy.MIGRATION,
+                    )
+                }
             }
             entityGraphRepository.ensureLocalWorkEntities(favouritesRepository.getAllContent())
+            normalizeTrackingLinkOwnership()
+            normalizeScrobblingOwnership()
+            normalizeReadingRecordAnchors()
+            entityGraphRepository.pruneRedundantProjectionMetadataSelections()
 
             // 3. Backfill name_hash for entities that still use the migration placeholder (name_hash = id).
             //    After Migration50To51, existing entities had name_hash set to row-id as a temporary value.
@@ -79,6 +89,55 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
         } catch (e: Throwable) {
             e.printStackTrace()
             Result.failure()
+        }
+    }
+
+    private suspend fun normalizeTrackingLinkOwnership() {
+        val dao = db.getTrackingSiteDao()
+        val normalized = dao.findAllLinks().map { db.attachTrackingLinkOwnership(it) }
+        normalized.forEach { dao.upsertLink(it) }
+    }
+
+    private suspend fun normalizeScrobblingOwnership() {
+        val dao = db.getScrobblingDao()
+        val normalized = dao.findAllByScrobblerEntries().map { db.attachScrobblingOwnership(it) }
+        normalized.forEach { dao.upsert(it) }
+    }
+
+    private suspend fun normalizeReadingRecordAnchors() {
+        val entityDao = db.getEntityGraphDao()
+        val readingDao = db.getReadingRecordDao()
+        val bindingsByEntity = entityDao.dumpBindings()
+            .filter { it.isActiveBinding() }
+            .filter { it.source == "local_manga" || it.source == "0" }
+            .groupBy { it.entityId }
+
+        bindingsByEntity.forEach { (entityId, bindings) ->
+            val localIds = bindings.mapNotNull { it.externalId.toLongOrNull() }.distinct()
+            if (localIds.size < 2) {
+                return@forEach
+            }
+            val preferredLocalId = entityDao.findEntityPrefs(entityId)?.preferredLocalMangaId
+                ?: localIds.firstOrNull()
+                ?: return@forEach
+            val sourceIds = localIds.filter { it != preferredLocalId }
+            if (sourceIds.isEmpty()) {
+                return@forEach
+            }
+            val sessions = readingDao.findSessions(sourceIds)
+            if (sessions.isNotEmpty()) {
+                sessions.forEach { session ->
+                    readingDao.insertSession(session.copy(id = 0L, mangaId = preferredLocalId))
+                }
+                readingDao.clearSessions(sourceIds)
+            }
+            val jumpPoints = readingDao.findJumpPoints(sourceIds, Int.MAX_VALUE)
+            if (jumpPoints.isNotEmpty()) {
+                jumpPoints.forEach { jumpPoint ->
+                    readingDao.insertJumpPoint(jumpPoint.copy(id = 0L, mangaId = preferredLocalId))
+                }
+                readingDao.clearJumpPoints(sourceIds)
+            }
         }
     }
 

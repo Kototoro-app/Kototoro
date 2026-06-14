@@ -1,10 +1,13 @@
 package org.skepsun.kototoro.core.db
 
 const val TABLE_FAVOURITES = "favourites"
+const val TABLE_WORK_FAVOURITES = "work_favourites"
 const val TABLE_MANGA = "manga"
 const val TABLE_TAGS = "tags"
 const val TABLE_FAVOURITE_CATEGORIES = "favourite_categories"
 const val TABLE_HISTORY = "history"
+const val TABLE_WORK_HISTORY = "work_history"
+const val TABLE_WORK_STATS = "work_stats"
 const val TABLE_READING_SESSIONS = "reading_sessions"
 const val TABLE_READING_JUMP_POINTS = "reading_jump_points"
 const val TABLE_MANGA_TAGS = "manga_tags"

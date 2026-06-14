@@ -14,6 +14,7 @@ import coil3.transform.RoundedCornersTransformation
 import dagger.Lazy
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppWidgetConfig
@@ -86,6 +87,7 @@ class ShelfListFactory(
 		}
 		val intent = Intent()
 		intent.putExtra(AppRouter.KEY_ID, item.id)
+		intent.putExtra(AppRouter.KEY_MANGA, ParcelableContent(item))
 		views.setOnClickFillInIntent(R.id.rootLayout, intent)
 		return views
 	}

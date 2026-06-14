@@ -56,8 +56,8 @@ import org.skepsun.kototoro.list.ui.compose.ContentCardNsfwBadge
 import org.skepsun.kototoro.list.ui.compose.asBadgeModel
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
-import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
+import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
 
 @Immutable
 data class UpdatedContentCarouselPrefs(
@@ -69,7 +69,7 @@ data class UpdatedContentCarouselPrefs(
 fun UpdatedContentCarousel(
 	header: UpdatedContentHeader,
 	prefs: UpdatedContentCarouselPrefs,
-	onItemClick: (ContentListModel, Rect?) -> Unit,
+	onItemClick: (UpdatedContentHeaderItem, Rect?) -> Unit,
 	onMoreClick: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
@@ -111,11 +111,11 @@ fun UpdatedContentCarousel(
 		) {
 			itemsIndexed(
 				items = header.list,
-				key = { _, item -> "updated_${item.manga.id}" },
+				key = { _, item -> "updated_${item.groupKey}" },
 				contentType = { _, _ -> "updated_card" },
-			) { index, contentModel ->
+			) { index, headerItem ->
 				HorizontalRailAnimatedVisibility(
-					animationKey = "updated_${contentModel.id}",
+					animationKey = "updated_${headerItem.groupKey}",
 					index = index,
 					listState = listState,
 					scrollIntensity = scrollIntensity,
@@ -123,10 +123,10 @@ fun UpdatedContentCarousel(
 					enableScrollLinkedAnimation = false,
 				) { animatedModifier ->
 					FeedUpdatedPosterCard(
-						model = contentModel,
+						item = headerItem,
 						posterStyle = posterStyle,
 						badgesBottomRight = prefs.badgesBottomRight,
-						onClick = { coverBounds -> onItemClick(contentModel, coverBounds) },
+						onClick = { coverBounds -> onItemClick(headerItem, coverBounds) },
 						modifier = animatedModifier,
 					)
 				}
@@ -140,12 +140,13 @@ fun UpdatedContentCarousel(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun FeedUpdatedPosterCard(
-	model: ContentListModel,
+	item: UpdatedContentHeaderItem,
 	posterStyle: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
 	badgesBottomRight: Set<String>,
 	onClick: (Rect?) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
+	val model = item.model
 	val context = LocalContext.current
 	val imageRequest = remember(model.id, model.coverUrl) {
 		ImageRequest.Builder(context)
@@ -157,8 +158,8 @@ private fun FeedUpdatedPosterCard(
 	var coverBounds by remember(model.id) { mutableStateOf<Rect?>(null) }
 	val sharedTransitionScope = LocalSharedTransitionScope.current
 	val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-	val sharedElementKey = remember(model.id, model.coverUrl, model.manga.source.name) {
-		contentCoverSharedKey(model.manga.source.name, model.coverUrl.orEmpty(), instanceKey = "feed_updated_${model.id}")
+	val sharedElementKey = remember(item.groupKey, model.coverUrl, model.manga.source.name) {
+		contentCoverSharedKey(model.manga.source.name, model.coverUrl.orEmpty(), instanceKey = "feed_updated_${item.groupKey}")
 	}
 
 	Column(
