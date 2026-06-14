@@ -97,11 +97,10 @@ class SuggestionsViewModel @Inject constructor(
 	}
 
 	private val loadParams = quickFilter.appliedOptions.combineWithSettings()
-		.combine(limit) { filterOptions, pageLimit -> filterOptions to pageLimit }
 
 	override val content = combine(
-		loadParams.flatMapLatest { (filterOptions, pageLimit) ->
-			repository.observeAll(pageLimit * 4, filterOptions)
+		loadParams.flatMapLatest { filterOptions ->
+			repository.observeAll(0, filterOptions)
 		},
 		quickFilter.appliedOptions,
 		observeListModeWithTriggers(),

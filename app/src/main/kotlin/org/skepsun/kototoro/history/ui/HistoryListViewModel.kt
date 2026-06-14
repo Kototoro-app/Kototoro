@@ -261,10 +261,8 @@ class HistoryListViewModel @Inject constructor(
 	private fun observeHistory() = combine(
 		sortOrder,
 		quickFilter.appliedOptions.combineWithSettings(),
-		limit,
-	) { order, filters, limit ->
-		isPaginationReady.set(false)
-		repository.observeAllWithHistory(order, filters, limit)
+	) { order, filters ->
+		repository.observeAllWithHistory(order, filters, 0)
 	}.flattenLatest()
 
 	private suspend fun mapList(

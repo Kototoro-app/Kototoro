@@ -99,12 +99,11 @@ class UpdatesViewModel @Inject constructor(
 		.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
 	private val loadParams = combine(quickFilter.appliedOptions, refreshTrigger) { fo, _ -> fo }
-		.combine(limit) { filterOptions, pageLimit -> filterOptions to pageLimit }
 
 	override val content = combine(
-		loadParams.flatMapLatest { (filterOptions, pageLimit) ->
+		loadParams.flatMapLatest { filterOptions ->
 			repository.observeUpdatedContent(
-				limit = pageLimit * 4,
+				limit = 0,
 				filterOptions = filterOptions,
 			)
 		},

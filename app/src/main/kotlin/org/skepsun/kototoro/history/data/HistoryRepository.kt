@@ -484,15 +484,9 @@ class HistoryRepository @Inject constructor(
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
 	): List<ContentWithHistory> {
-		if (limit <= 0) {
-			return emptyList()
-		}
+		val oversampleLimit = if (limit > 0) limit * 4 else Int.MAX_VALUE
 		val favouriteCache = HashMap<Long, Set<Long>>()
 		val trackCache = HashMap<Long, TrackAggregate>()
-
-		// Load a window larger than the requested limit to account for post-load filtering.
-		// Multiplier 4 ensures enough items survive click-through filters without a full table scan.
-		val oversampleLimit = limit * 4
 		val contents = getAllRecentContents(oversampleLimit)
 
 		// ---- Batch entity resolution (eliminates N+1) ----
@@ -583,7 +577,7 @@ class HistoryRepository @Inject constructor(
 				trackCache = trackCache,
 			),
 		)
-			.take(limit)
+			.let { if (limit > 0) it.take(limit) else it }
 	}
 
 	private suspend fun matchesHistoryFilters(
