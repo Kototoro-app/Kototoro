@@ -36,6 +36,7 @@ import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.malsync.data.MALSyncMappingRepository
+import org.skepsun.kototoro.parsers.util.longHashCode
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -2607,14 +2608,25 @@ class EntityGraphRepository @Inject constructor(
 			dao.deleteAllPrefs()
 			dao.deleteAllEntities()
 
-			// 4. Re-create entities: one per manga_id, minimal metadata
+			// 4. Re-create entities: one per manga, using real manga titles
 			val now = System.currentTimeMillis()
-			for (mangaId in allMangaIds) {
+			val allMangaIdsList = allMangaIds.toList()
+			// Batch-read manga titles in chunks to avoid Room parameter limits
+			val mangaById = mutableMapOf<Long, org.skepsun.kototoro.core.db.entity.MangaEntity>()
+			allMangaIdsList.chunked(500).forEach { chunk ->
+				db.getMangaDao().findEntitiesByIds(chunk).forEach { manga ->
+					mangaById[manga.id] = manga
+				}
+			}
+			for (mangaId in allMangaIdsList) {
+				val manga = mangaById[mangaId]
+				val title = manga?.title?.ifBlank { null } ?: "Manga #$mangaId"
+				val nameHash = title.longHashCode()
 				val entityId = dao.insertEntityIgnore(
 					EntityRecord(
 						type = EntityType.WORK.name,
-						primaryName = "Manga #$mangaId",
-						nameHash = mangaId,
+						primaryName = title,
+						nameHash = nameHash,
 						aliases = null,
 						createdAt = now,
 						lastAccessed = now,
