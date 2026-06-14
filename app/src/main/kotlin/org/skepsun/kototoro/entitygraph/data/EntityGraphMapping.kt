@@ -14,7 +14,7 @@ import org.skepsun.kototoro.parsers.util.longHashCode
 
 internal fun EntityRecord.toModel(): Entity = Entity(
 	id = id,
-	type = EntityType.valueOf(type),
+	type = runCatching { EntityType.valueOf(type) }.getOrDefault(EntityType.WORK),
 	primaryName = primaryName,
 	aliases = decodeStringList(aliases),
 	createdAt = createdAt,
