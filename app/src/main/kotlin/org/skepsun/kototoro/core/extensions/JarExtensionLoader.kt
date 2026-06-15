@@ -87,6 +87,28 @@ data class LoadedJarPlugin(
 
 object JarExtensionLoader {
 
+    private fun findParserFactoryMethod(
+        factoryClass: Class<*>,
+        contextClass: Class<*>,
+    ): Method? {
+        return factoryClass.declaredMethods.firstOrNull { method ->
+            method.name.startsWith("newParser") &&
+                method.parameterTypes.size == 2 &&
+                method.parameterTypes[1] == contextClass
+        }
+    }
+
+    private inline fun <reified T> resolveFactorySources(
+        factoryMethod: Method?,
+        fallbackSourceClass: Class<*>? = null,
+    ): List<T> {
+        val sourceClass = factoryMethod?.parameterTypes?.firstOrNull() ?: fallbackSourceClass ?: return emptyList()
+        if (!sourceClass.isEnum) {
+            return emptyList()
+        }
+        return sourceClass.enumConstants?.filterIsInstance<T>().orEmpty()
+    }
+
     fun loadFromDirectory(context: Context, pluginDir: File): List<LoadedJarPlugin> {
         val cacheDir = context.codeCacheDir.absolutePath
         val parentClassLoader = context.classLoader
@@ -142,37 +164,30 @@ object JarExtensionLoader {
             // Try Kotatsu Parser Architecture
             try {
                 val factoryClass = dexClassLoader.loadClass("org.koitharu.kotatsu.parsers.MangaParserFactoryKt")
-                // Search for the generated enum by loading it
-                val enumPath = tryFindEnumClass(dexClassLoader, "org.koitharu.kotatsu.parsers.model.MangaParserSource")
-                if (enumPath != null) {
-                    val mangaLoaderContextClass = dexClassLoader.loadClass("org.koitharu.kotatsu.parsers.MangaLoaderContext")
-                    val newParserMethod = factoryClass.declaredMethods.first { it.name.startsWith("newParser") && it.parameterTypes.size == 2 }
-                    val enumConstants = enumPath.enumConstants?.filterIsInstance<MangaSource>() ?: emptyList()
-                    
-                    if (enumConstants.isNotEmpty()) {
-                        plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, true, newParserMethod, enumConstants, brokenSourceNames))
-                        continue // Success, move to next jar
-                    }
+                val newParserMethod = findParserFactoryMethod(factoryClass, MangaLoaderContext::class.java)
+                val fallbackSourceClass = tryFindEnumClass(dexClassLoader, "org.koitharu.kotatsu.parsers.model.MangaParserSource")
+                val sources = resolveFactorySources<MangaSource>(newParserMethod, fallbackSourceClass)
+
+                if (newParserMethod != null && sources.isNotEmpty()) {
+                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, true, newParserMethod, sources, brokenSourceNames))
+                    continue // Success, move to next jar
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 // Ignore, try Kototoro architecture
-                android.util.Log.e("KototoroInit", "Failed loading Kotatsu architecture from ${jarFile.name}: ${e.message}", e)
+                android.util.Log.d("KototoroInit", "Kotatsu architecture probe skipped for ${jarFile.name}: ${e.message}")
             }
 
             // Try Kototoro Parser Architecture
             try {
                 val factoryClass = dexClassLoader.loadClass("org.skepsun.kototoro.parsers.ContentParserFactoryKt")
-                val enumPath = tryFindEnumClass(dexClassLoader, "org.skepsun.kototoro.parsers.model.ContentParserSource")
-                if (enumPath != null) {
-                    val contentLoaderContextClass = dexClassLoader.loadClass("org.skepsun.kototoro.parsers.ContentLoaderContext")
-                    val newParserMethod = factoryClass.declaredMethods.first { it.name.startsWith("newParser") && it.parameterTypes.size == 2 }
-                    val enumConstants = enumPath.enumConstants?.filterIsInstance<ContentSource>() ?: emptyList()
-                    
-                    if (enumConstants.isNotEmpty()) {
-                        plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, false, newParserMethod, enumConstants, brokenSourceNames))
-                    }
+                val newParserMethod = findParserFactoryMethod(factoryClass, ContentLoaderContext::class.java)
+                val fallbackSourceClass = tryFindEnumClass(dexClassLoader, "org.skepsun.kototoro.parsers.model.ContentParserSource")
+                val sources = resolveFactorySources<ContentSource>(newParserMethod, fallbackSourceClass)
+
+                if (newParserMethod != null && sources.isNotEmpty()) {
+                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, false, newParserMethod, sources, brokenSourceNames))
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 android.util.Log.e("KototoroInit", "Failed loading Kototoro architecture from ${jarFile.name}: ${e.message}", e)
                 e.printStackTrace()
             }

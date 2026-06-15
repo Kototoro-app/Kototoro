@@ -149,6 +149,7 @@ class ContentSourcesRepository @Inject constructor(
 	}
 
 	suspend fun getEnabledSources(): List<ContentSource> {
+		normalizeAllEnabledFlagIfNeeded()
 		assimilateNewSources()
 		val order = settings.sourcesSortOrder
 		val disabledNames = if (!settings.isAllSourcesEnabled) dao.findAll().filter { !it.isEnabled }.mapToSet { it.source } else emptySet<String>()
@@ -362,6 +363,7 @@ class ContentSourcesRepository @Inject constructor(
 		sortOrder: SourcesSortOrder? = null,
 		sourceTypes: Set<org.skepsun.kototoro.core.jsonsource.SourceType>? = null,
 	): List<ContentSource> {
+		normalizeAllEnabledFlagIfNeeded()
 		val result = mutableListOf<ContentSource>()
 		
 		// Add native sources if requested
@@ -806,11 +808,13 @@ class ContentSourcesRepository @Inject constructor(
 			for (name in nativeSourcesToEnable) dao.setEnabled(name, true)
 			for (name in nativeSourcesToDisable) dao.setEnabled(name, false)
 		}
+		settings.isAllSourcesEnabled = false
 	}
 
 	suspend fun disableAllSources() {
 		val currentEnabled = getEnabledSources()
 		setSourcesEnabledImpl(currentEnabled, false)
+		settings.isAllSourcesEnabled = false
 	}
 
 	suspend fun setPositions(sources: List<ContentSource>) {
@@ -886,6 +890,10 @@ class ContentSourcesRepository @Inject constructor(
 	}
 
 	private suspend fun setSourcesEnabledImpl(sources: Collection<ContentSource>, isEnabled: Boolean) {
+		if (!isEnabled && settings.isAllSourcesEnabled) {
+			materializeAllEnabledState()
+		}
+
 		val nativeSources = mutableListOf<String>()
 		val jsonSources = mutableListOf<String>()
 		for (source in sources) {
@@ -906,6 +914,43 @@ class ContentSourcesRepository @Inject constructor(
 					dao.setEnabled(name, isEnabled)
 				}
 			}
+		}
+	}
+
+	private suspend fun materializeAllEnabledState() {
+		val allSources = queryAllSources()
+		val nativeSources = mutableListOf<String>()
+		val jsonSources = mutableListOf<String>()
+		for (source in allSources) {
+			if (source.name.startsWith("JSON_")) {
+				jsonSources.add(source.name)
+			} else {
+				nativeSources.add(source.name)
+			}
+		}
+
+		if (jsonSources.isNotEmpty()) {
+			jsonSourceManager.toggleSourcesBatch(jsonSources, true)
+		}
+
+		if (nativeSources.isNotEmpty()) {
+			db.withTransaction {
+				assimilateNewSources()
+				for (name in nativeSources) {
+					dao.setEnabled(name, true)
+				}
+			}
+		}
+
+		settings.isAllSourcesEnabled = false
+	}
+
+	private suspend fun normalizeAllEnabledFlagIfNeeded() {
+		if (!settings.isAllSourcesEnabled) {
+			return
+		}
+		if (dao.findAll().any { !it.isEnabled }) {
+			settings.isAllSourcesEnabled = false
 		}
 	}
 
@@ -1108,6 +1153,8 @@ class ContentSourcesRepository @Inject constructor(
 
 	private fun observeAllEnabled() = settings.observeAsFlow(AppSettings.KEY_SOURCES_ENABLED_ALL) {
 		isAllSourcesEnabled
+	}.onStart {
+		normalizeAllEnabledFlagIfNeeded()
 	}
 
 	private fun String.toContentSourceOrNull(): ContentSource? {
