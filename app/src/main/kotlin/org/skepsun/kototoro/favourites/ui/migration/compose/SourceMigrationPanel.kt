@@ -288,10 +288,37 @@ fun SourceMigrationPanel(
     viewModel: SourceMigrationViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var selectedStage by rememberSaveable { mutableStateOf(EntityOrganizeStage.MERGE) }
     var selectedDatasetBridge by rememberSaveable { mutableStateOf(EntityOrganizeDatasetBridge.ANIME_OFFLINE) }
+    val entryMode = remember(initialSelectedContentIds.size) {
+        resolveEntityOrganizeEntryMode(initialSelectedContentIds.size)
+    }
+    val workbenchDefaults = remember(entryMode) {
+        resolveEntityOrganizeWorkbenchDefaults(entryMode)
+    }
+    var workbenchViewState by rememberSaveable(entryMode, stateSaver = workbenchViewStateSaver) {
+        mutableStateOf(
+            resolveStageWorkbenchViewState(
+                selectedStage = selectedStage,
+                current = EntityOrganizeWorkbenchViewState(
+                    statusFilter = workbenchDefaults.statusFilter,
+                    sortMode = workbenchDefaults.sortMode,
+                ),
+            ),
+        )
+    }
 
     LaunchedEffect(initialSelectedContentIds) {
         viewModel.setSelectedContentIds(initialSelectedContentIds)
+    }
+
+    val workbenchRows = remember(
+        uiState.mergeCandidateGroups,
+        uiState.existingTrackingPreviews,
+        uiState.trackingPreviews,
+        uiState.readingSourcePreviews,
+    ) {
+        buildEntityWorkbenchRows(uiState)
     }
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -340,6 +367,77 @@ fun SourceMigrationPanel(
                 )
             }
 
+            if (uiState.isExecuting || uiState.migrationProgress?.isFinished == true) {
+                item {
+                    MigrationProgressSection(
+                        uiState = uiState,
+                        selectedStage = selectedStage,
+                    )
+                }
+            }
+
+            item {
+                EntityWorkbenchSection(
+                    selectedStage = selectedStage,
+                    rows = workbenchRows,
+                    uiState = uiState,
+                    viewState = workbenchViewState,
+                    workbenchDefaults = workbenchDefaults,
+                    onViewStateChange = { workbenchViewState = it },
+                    onToggleGroup = viewModel::toggleMergeGroup,
+                    onToggleReadingScopeGroup = viewModel::toggleReadingScopeGroup,
+                    onSetGroupsSelected = viewModel::setMergeGroupsSelected,
+                    onSetReadingScopeGroupsSelected = viewModel::setReadingScopeGroupsSelected,
+                    onToggleItem = viewModel::toggleMergeItem,
+                    onToggleTrackingPreview = viewModel::toggleTrackingPreview,
+                    onToggleReadingPreview = viewModel::toggleReadingPreview,
+                    onSelectRecommendedTracking = viewModel::selectRecommendedTrackingPreviews,
+                    onClearLowConfidenceTracking = viewModel::clearLowConfidenceTrackingSelections,
+                    onClearTrackingSelections = viewModel::clearTrackingSelections,
+                    onAcceptReadingPreviews = viewModel::acceptReadingPreviews,
+                    onClearReadingPreviews = viewModel::clearReadingPreviews,
+                    onSplitLocalProjection = viewModel::splitLocalWorkProjection,
+                    onDetachLocalProjection = viewModel::detachLocalWorkProjection,
+                )
+            }
+
+            item {
+                StageConfigCard(
+                    selectedStage = selectedStage,
+                    rowCount = workbenchRows.size,
+                    workbenchRows = workbenchRows,
+                    onStageSelected = { stage ->
+                        selectedStage = stage
+                    },
+                    uiState = uiState,
+                    onTrackingMetadataStrategyChange = viewModel::setTrackingMetadataSourceStrategy,
+                    onFuzzyMergeCandidatesEnabledChange = viewModel::setFuzzyMergeCandidatesEnabled,
+                    onFuzzyMergeThresholdPercentChange = viewModel::setFuzzyMergeThresholdPercent,
+                    onToggleTrackingService = viewModel::toggleTrackingService,
+                    onMoveTrackingServiceUp = viewModel::moveTrackingServiceUp,
+                    onMoveTrackingServiceDown = viewModel::moveTrackingServiceDown,
+                    onPreviewMerge = viewModel::previewMergeCandidates,
+                    onClearManualMergeSelections = viewModel::clearManualMergeSelections,
+                    onManualMergeSelected = viewModel::manualMergeSelectedWorks,
+                    onPreviewTracking = viewModel::previewSelectedTracking,
+                    onSelectFromSource = viewModel::selectFromSource,
+                    onToggleFromContentType = viewModel::toggleFromContentType,
+                    onToggleFromSourceTag = viewModel::toggleFromSourceTag,
+                    onToggleTargetSource = viewModel::toggleTargetSource,
+                    onMoveTargetSourceUp = viewModel::moveTargetSourceUp,
+                    onMoveTargetSourceDown = viewModel::moveTargetSourceDown,
+                    onRemoveTargetSource = viewModel::removeTargetSource,
+                    onToggleToContentType = viewModel::toggleToContentType,
+                    onToggleToSourceTag = viewModel::toggleToSourceTag,
+                    onPreviewReading = viewModel::previewReadingSources,
+                    onExecuteMerge = viewModel::mergeSelectedEntities,
+                    onExecuteTracking = viewModel::bindSelectedTracking,
+                    onExecuteReading = viewModel::startMigration,
+                    onCancel = viewModel::cancelMigration,
+                    concurrency = uiState.concurrency,
+                    onConcurrencyChange = viewModel::setConcurrency,
+                )
+            }
         }
     }
 }
