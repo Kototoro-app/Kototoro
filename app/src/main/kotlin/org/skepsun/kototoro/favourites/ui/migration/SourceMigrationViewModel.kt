@@ -47,6 +47,7 @@ import org.skepsun.kototoro.favourites.domain.PreviewReadingSourceMigrationUseCa
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreview
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
+import org.skepsun.kototoro.favourites.domain.TrackingBindingPreviewOptions
 import org.skepsun.kototoro.favourites.work.SourceMigrationWorker
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
@@ -136,6 +137,8 @@ data class MigrationUiState(
     val selectedManualMergeMangaIds: Set<Long> = emptySet(),
     val fuzzyMergeCandidatesEnabled: Boolean = false,
     val fuzzyMergeThresholdPercent: Int = (DEFAULT_FUZZY_MERGE_THRESHOLD * 100).toInt(),
+    val fuzzyTrackingCandidatesEnabled: Boolean = false,
+    val fuzzyTrackingThresholdPercent: Int = (DEFAULT_FUZZY_MERGE_THRESHOLD * 100).toInt(),
     val availableTrackingServices: List<ScrobblerService> = emptyList(),
     val selectedTrackingServices: List<ScrobblerService> = emptyList(),
     val trackingMetadataSourceStrategy: TrackingMetadataSourceStrategy = TrackingMetadataSourceStrategy.LOCAL_THEN_API,
@@ -493,6 +496,7 @@ class SourceMigrationViewModel @Inject constructor(
                 .without(EntityOrganizeStage.MERGE)
                 .without(EntityOrganizeStage.TRACKING),
         )
+        refreshMergeCandidates()
     }
 
     fun setFuzzyMergeThresholdPercent(percent: Int) {
@@ -514,6 +518,36 @@ class SourceMigrationViewModel @Inject constructor(
             stageFeedbacks = state.stageFeedbacks
                 .without(EntityOrganizeStage.MERGE)
                 .without(EntityOrganizeStage.TRACKING),
+        )
+        refreshMergeCandidates()
+    }
+
+    fun setFuzzyTrackingCandidatesEnabled(enabled: Boolean) {
+        val state = _uiState.value
+        if (state.fuzzyTrackingCandidatesEnabled == enabled) {
+            return
+        }
+        _uiState.value = state.copy(
+            fuzzyTrackingCandidatesEnabled = enabled,
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
+        )
+    }
+
+    fun setFuzzyTrackingThresholdPercent(percent: Int) {
+        val bounded = percent.coerceIn(80, 100)
+        val state = _uiState.value
+        if (state.fuzzyTrackingThresholdPercent == bounded) {
+            return
+        }
+        _uiState.value = state.copy(
+            fuzzyTrackingThresholdPercent = bounded,
+            trackingPreviews = emptyList(),
+            trackingPreviewReady = false,
+            selectedTrackingPreviewIds = emptySet(),
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
         )
     }
 
@@ -794,6 +828,7 @@ class SourceMigrationViewModel @Inject constructor(
             val result = bindTrackingToEntitiesUseCase.bind(
                 groups = selectedGroups,
                 previews = state.trackingPreviews.filter { it.previewId in state.selectedTrackingPreviewIds },
+                options = state.trackingPreviewOptions(),
                 onProgress = { progress ->
                     _uiState.value = _uiState.value.copy(
                         trackingProgress = progress,
@@ -866,6 +901,7 @@ class SourceMigrationViewModel @Inject constructor(
                     scopeGroups,
                     state.selectedTrackingServices,
                     representativeContents = representativeContents,
+                    options = state.trackingPreviewOptions(),
                 ) { progress ->
                     _uiState.value = _uiState.value.copy(
                         trackingProgress = progress,
@@ -2322,8 +2358,17 @@ class SourceMigrationViewModel @Inject constructor(
             selectedManualMergeMangaIds == request.selectedManualMergeMangaIds &&
             fuzzyMergeCandidatesEnabled == request.fuzzyMergeCandidatesEnabled &&
             fuzzyMergeThresholdPercent == request.fuzzyMergeThresholdPercent &&
+            fuzzyTrackingCandidatesEnabled == request.fuzzyTrackingCandidatesEnabled &&
+            fuzzyTrackingThresholdPercent == request.fuzzyTrackingThresholdPercent &&
             mergePreviewReady == request.mergePreviewReady &&
             trackingPreviewReady == request.trackingPreviewReady
+    }
+
+    private fun MigrationUiState.trackingPreviewOptions(): TrackingBindingPreviewOptions {
+        return TrackingBindingPreviewOptions(
+            fuzzyEnabled = fuzzyTrackingCandidatesEnabled,
+            fuzzyThreshold = fuzzyTrackingThresholdPercent.coerceIn(80, 100) / 100f,
+        )
     }
 
     private fun loadPreviewScopeEstimate(state: MigrationUiState): Int {
@@ -2369,7 +2414,8 @@ class SourceMigrationViewModel @Inject constructor(
                 "manualMergeIds=${state.selectedManualMergeMangaIds.size} scopeIds=${scopeIds.size} " +
                 "scopeIdSample=${scopeIds.take(20).joinToString()} groups=${scopeGroups.size} " +
                 "groupIdSample=${scopeGroups.take(20).joinToString { it.id }} " +
-                "itemCount=${scopeGroups.sumOf { it.mangaIds.size }}",
+                "itemCount=${scopeGroups.sumOf { it.mangaIds.size }} " +
+                "fuzzy=${state.fuzzyTrackingCandidatesEnabled} threshold=${state.fuzzyTrackingThresholdPercent}%",
         )
     }
 
@@ -2391,6 +2437,7 @@ class SourceMigrationViewModel @Inject constructor(
     ): Set<String> {
         val defaultSelectableGroups = groups.asSequence()
             .filter { it.isExecutableMergeCandidate() }
+            .filterNot { it.id.contains(":fuzzy:") }
         if (selectedContentIds.isEmpty()) {
             return defaultSelectableGroups.mapTo(LinkedHashSet()) { it.id }
         }

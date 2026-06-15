@@ -11,10 +11,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeFeedbackKind
 import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeStage
 import org.skepsun.kototoro.favourites.ui.migration.MigrationUiState
 
@@ -114,11 +117,24 @@ internal fun StageFeedbackText(
     uiState: MigrationUiState,
     stage: EntityOrganizeStage,
 ) {
-    uiState.stagePlan(stage).feedback?.message?.let { summary ->
-        Text(
-            text = summary,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
+    val plan = uiState.stagePlan(stage)
+    val feedback = plan.feedback ?: return
+    val summary = if (
+        stage == EntityOrganizeStage.MERGE &&
+        feedback.kind == EntityOrganizeFeedbackKind.PREVIEW &&
+        uiState.mergePreviewReady
+    ) {
+        stringResource(
+            R.string.entity_organize_merge_preview_feedback,
+            plan.previewCount,
+            plan.acceptedCount,
         )
+    } else {
+        feedback.message
     }
+    Text(
+        text = summary,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
 }

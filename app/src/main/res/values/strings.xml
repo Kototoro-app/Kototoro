@@ -1189,6 +1189,9 @@ Proceed?</string>
     <string name="entity_organize_tracking_placeholder">Generate candidate hits first, then accept only the binding results you trust.</string>
     <string name="entity_organize_tracking_priority_title">Tracking site priority</string>
     <string name="entity_organize_tracking_priority_subtitle">Sites are searched in order. The first hit becomes the tracking entity, and all local work projections in the checked group are attached to it.</string>
+    <string name="entity_organize_tracking_fuzzy_toggle">Include fuzzy tracking title matches</string>
+    <string name="entity_organize_tracking_fuzzy_hint">Allows tracking candidates when normalized titles are similar but not exactly equal. Content type still has to match.</string>
+    <string name="entity_organize_tracking_fuzzy_threshold">Tracking fuzzy threshold: %1$d%%</string>
     <string name="entity_organize_tracking_select">Select tracking sites</string>
     <string name="entity_organize_tracking_empty">Select at least one tracking site.</string>
     <string name="entity_organize_tracking_preview">Preview matches</string>

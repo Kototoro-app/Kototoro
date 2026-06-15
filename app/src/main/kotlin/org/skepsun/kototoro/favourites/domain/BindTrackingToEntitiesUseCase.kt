@@ -25,6 +25,7 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.entitygraph.domain.normalizeEntityName
 import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
+import org.skepsun.kototoro.entitygraph.domain.titleSimilarityScore
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -61,6 +62,7 @@ data class TrackingBindingPreview(
     val year: Int?,
     val details: TrackingSiteItemDetails,
     val aliases: List<String> = emptyList(),
+    val trackingTitleAliases: List<String> = emptyList(),
 )
 
 enum class TrackingBindingMatchKind {
@@ -73,6 +75,11 @@ enum class TrackingBindingMatchKind {
 data class TrackingBindingPreviewResult(
     val previews: List<TrackingBindingPreview>,
     val skipped: Int,
+)
+
+data class TrackingBindingPreviewOptions(
+    val fuzzyEnabled: Boolean = false,
+    val fuzzyThreshold: Float = DEFAULT_FUZZY_MERGE_THRESHOLD,
 )
 
 class BindTrackingToEntitiesUseCase @Inject constructor(
@@ -91,6 +98,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         groups: List<MergeCandidateGroup>,
         services: List<ScrobblerService>,
         representativeContents: Map<Long, Content> = emptyMap(),
+        options: TrackingBindingPreviewOptions = TrackingBindingPreviewOptions(),
         onProgress: ((MigrationProgress) -> Unit)? = null,
     ): TrackingBindingPreviewResult {
         if (services.isEmpty()) {
@@ -146,19 +154,35 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                 )
                 return@forEach
             }
+            val allowedTitleKeys = resolveAllowedTrackingTitleKeys(group)
             val existingBindingPreviews = resolveExistingBindingPreviews(
                 group = group,
                 services = services,
             ).filter { preview ->
                 val accepted = preview.isStrictlyCompatibleWith(
                     group = group,
-                    allowedTitleKeys = resolveAllowedTrackingTitleKeys(group),
+                    allowedTitleKeys = allowedTitleKeys,
+                    options = options,
                 )
                 if (!accepted) {
                     Log.i(
                         TAG,
                         "existing binding preview rejected: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
-                            "remoteId=${preview.remoteId}, trackingKeys=${preview.strictTrackingTitleKeys()}",
+                            "remoteId=${preview.remoteId}, trackingKeys=${preview.strictTrackingTitleKeys()}, " +
+                            preview.trackingCompatibilityLog(
+                                allowedTitleKeys = allowedTitleKeys,
+                                options = options,
+                            ),
+                    )
+                } else if (options.fuzzyEnabled && !preview.hasExactAllowedTitleKey(allowedTitleKeys)) {
+                    Log.d(
+                        TAG,
+                        "existing binding preview accepted by fuzzy: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
+                            "remoteId=${preview.remoteId}, " +
+                            preview.trackingCompatibilityLog(
+                                allowedTitleKeys = allowedTitleKeys,
+                                options = options,
+                            ),
                     )
                 }
                 accepted
@@ -201,7 +225,6 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                 )
                 return@forEach
             }
-            val allowedTitleKeys = resolveAllowedTrackingTitleKeys(group)
             val acceptedPreviews = resolvedCandidates.map { resolved ->
                 TrackingBindingPreview(
                     previewId = "${group.id}:${resolved.service.id}:${resolved.details.remoteId}",
@@ -218,18 +241,28 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                     year = resolved.details.year,
                     details = resolved.details,
                     aliases = resolved.aliases,
+                    trackingTitleAliases = resolved.trackingTitleAliases,
                 )
             }.filter { preview ->
                 val accepted = preview.isStrictlyCompatibleWith(
                     group = group,
                     allowedTitleKeys = allowedTitleKeys,
+                    options = options,
                 )
                 if (!accepted) {
                     Log.i(
                         TAG,
                         "preview rejected: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
                             "remoteId=${preview.remoteId}, trackingKeys=${preview.strictTrackingTitleKeys()}, " +
-                            "allowedKeys=$allowedTitleKeys",
+                            "allowedKeys=$allowedTitleKeys, " +
+                            preview.trackingCompatibilityLog(allowedTitleKeys, options),
+                    )
+                } else if (options.fuzzyEnabled && !preview.hasExactAllowedTitleKey(allowedTitleKeys)) {
+                    Log.d(
+                        TAG,
+                        "preview accepted by fuzzy: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
+                            "remoteId=${preview.remoteId}, " +
+                            preview.trackingCompatibilityLog(allowedTitleKeys, options),
                     )
                 }
                 accepted
@@ -316,6 +349,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
                 year = details.year,
                 details = details,
                 aliases = emptyList(),
+                trackingTitleAliases = emptyList(),
             )
         }
         return previews
@@ -324,6 +358,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     suspend fun bind(
         groups: List<MergeCandidateGroup>,
         previews: List<TrackingBindingPreview>,
+        options: TrackingBindingPreviewOptions = TrackingBindingPreviewOptions(),
         onProgress: ((MigrationProgress) -> Unit)? = null,
     ): BindTrackingResult {
         val previewByGroupId = previews.associateBy { it.groupId }
@@ -357,7 +392,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
 
                 else -> {
                     val preview = checkNotNull(previewByGroupId[group.id])
-                    val result = runCatching { bindOne(group, preview) }
+                    val result = runCatching { bindOne(group, preview, options) }
                     when {
                         result.getOrDefault(false) -> succeeded++
                         else -> {
@@ -404,6 +439,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     private suspend fun bindOne(
         group: MergeCandidateGroup,
         preview: TrackingBindingPreview,
+        options: TrackingBindingPreviewOptions,
     ): Boolean {
         val effectiveDetails = runCatchingCancellable {
             readOrFetchDetails(preview.service, preview.remoteId, preview.url)
@@ -414,12 +450,13 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             details = effectiveDetails,
         )
         val allowedTitleKeys = resolveAllowedTrackingTitleKeys(group)
-        if (!effectivePreview.isStrictlyCompatibleWith(group, allowedTitleKeys)) {
+        if (!effectivePreview.isStrictlyCompatibleWith(group, allowedTitleKeys, options)) {
             Log.i(
                 TAG,
                 "bindOne rejected: group=${group.id}, title=${group.title}, service=${preview.service.id}, " +
                     "remoteId=${preview.remoteId}, trackingKeys=${effectivePreview.strictTrackingTitleKeys()}, " +
-                    "allowedKeys=$allowedTitleKeys",
+                    "allowedKeys=$allowedTitleKeys, " +
+                    effectivePreview.trackingCompatibilityLog(allowedTitleKeys, options),
             )
             return false
         }
@@ -795,7 +832,8 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         service: ScrobblerService,
         context: TrackingCandidateContext,
     ): ResolvedTrackingPreview? {
-        val mapping = context.localCanonical?.mappings?.firstOrNull { it.service == service } ?: return null
+        val localCanonical = context.localCanonical ?: return null
+        val mapping = localCanonical.mappings.firstOrNull { it.service == service } ?: return null
         val details = readOrFetchDetails(service, mapping.remoteId, mapping.url)
         return ResolvedTrackingPreview(
             service = service,
@@ -803,6 +841,11 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             matchedBy = TrackingBindingMatchKind.ANIME_DATASET,
             confidence = 0.995f,
             aliases = context.baseAliases,
+            trackingTitleAliases = buildList {
+                localCanonical.title.takeIf { it.isNotBlank() }?.let(::add)
+                addAll(localCanonical.synonyms)
+                addAll(context.datasetAliases)
+            },
         )
     }
 
@@ -823,7 +866,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             .mapNotNull { envelope ->
                 val mapping = envelope.candidate.mappings.firstOrNull { it.service == service } ?: return@mapNotNull null
                 val confidence = envelope.candidate.aliases.maxOfOrNull { alias ->
-                    similarity(normalizeTitle(content.searchTitle()), normalizeTitle(alias))
+                    titleSimilarityScore(content.searchTitle(), alias)
                 } ?: 0f
                 AggregateResolvedCandidate(envelope.candidate, mapping, confidence, envelope.origin)
             }
@@ -833,7 +876,8 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         Log.d(
             TAG,
             "resolveTrackingDetailsForService aggregate: service=${service.id}, source=${bestCandidate.origin.logLabel}, " +
-                "remoteId=${bestCandidate.mapping.remoteId}, title=${details.title}, confidence=${bestCandidate.confidence}",
+                "remoteId=${bestCandidate.mapping.remoteId}, title=${details.title}, confidence=${bestCandidate.confidence}, " +
+                "remoteAliases=${bestCandidate.candidate.aliases.size}",
         )
         return ResolvedTrackingPreview(
             service = service,
@@ -841,6 +885,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             matchedBy = TrackingBindingMatchKind.AGGREGATE_API,
             confidence = bestCandidate.confidence.coerceAtLeast(0.93f).coerceIn(0f, 1f),
             aliases = context.allAliasesWith(apiCandidates.map(AggregateCandidateEnvelope::candidate)),
+            trackingTitleAliases = bestCandidate.candidate.aliases,
         )
     }
 
@@ -929,11 +974,57 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     private fun TrackingBindingPreview.isStrictlyCompatibleWith(
         group: MergeCandidateGroup,
         allowedTitleKeys: Set<String>,
+        options: TrackingBindingPreviewOptions = TrackingBindingPreviewOptions(),
     ): Boolean {
         if (details.contentType != null && details.contentType != group.contentType) {
             return false
         }
+        if (hasExactAllowedTitleKey(allowedTitleKeys)) {
+            return true
+        }
+        if (!options.fuzzyEnabled) {
+            return false
+        }
+        val bestMatch = bestTrackingTitleSimilarity(allowedTitleKeys)
+        return bestMatch != null && bestMatch.score >= options.fuzzyThreshold.coerceIn(0f, 1f)
+    }
+
+    private fun TrackingBindingPreview.hasExactAllowedTitleKey(allowedTitleKeys: Set<String>): Boolean {
         return strictTrackingTitleKeys().any { it in allowedTitleKeys }
+    }
+
+    private fun TrackingBindingPreview.trackingCompatibilityLog(
+        allowedTitleKeys: Set<String>,
+        options: TrackingBindingPreviewOptions,
+    ): String {
+        val bestMatch = bestTrackingTitleSimilarity(allowedTitleKeys)
+        val bestScore = bestMatch?.score?.let { "${(it * 100).toInt()}%" } ?: "n/a"
+        val bestPair = bestMatch?.let { " tracking='${it.trackingKey}', allowed='${it.allowedKey}'" }.orEmpty()
+        return "matchedBy=$matchedBy, remoteAliases=${trackingTitleAliases.size}, " +
+            "trackingKeyCount=${strictTrackingTitleKeys().size}, fuzzy=${options.fuzzyEnabled}, " +
+            "threshold=${(options.fuzzyThreshold * 100).toInt()}%, " +
+            "bestScore=$bestScore$bestPair"
+    }
+
+    private fun TrackingBindingPreview.bestTrackingTitleSimilarity(
+        allowedTitleKeys: Set<String>,
+    ): TrackingTitleSimilarity? {
+        val trackingKeys = strictTrackingTitleKeys()
+        var best: TrackingTitleSimilarity? = null
+        trackingKeys.forEach { trackingKey ->
+            allowedTitleKeys.forEach { allowedKey ->
+                val score = titleSimilarityScore(trackingKey, allowedKey)
+                val currentBest = best
+                if (currentBest == null || score > currentBest.score) {
+                    best = TrackingTitleSimilarity(
+                        trackingKey = trackingKey,
+                        allowedKey = allowedKey,
+                        score = score,
+                    )
+                }
+            }
+        }
+        return best
     }
 
     private fun TrackingBindingPreview.strictTrackingTitleKeys(): Set<String> {
@@ -942,7 +1033,9 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
             details.altTitle,
             matchedTitle,
             matchedAltTitle,
-        ).filterNotNull().toStrictTitleKeys()
+        ).filterNotNull()
+            .plus(trackingTitleAliases)
+            .toStrictTitleKeys()
     }
 
     private fun Iterable<String>.toStrictTitleKeys(): Set<String> {
@@ -956,6 +1049,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         val matchedBy: TrackingBindingMatchKind,
         val confidence: Float,
         val aliases: List<String> = emptyList(),
+        val trackingTitleAliases: List<String> = emptyList(),
     )
 
     private data class BindResolution(
@@ -995,6 +1089,12 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         }
     }
 
+    private data class TrackingTitleSimilarity(
+        val trackingKey: String,
+        val allowedKey: String,
+        val score: Float,
+    )
+
     private enum class MetadataCandidateSource {
         LOCAL_DATASET,
         AGGREGATE_API,
@@ -1022,9 +1122,10 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
         remoteTitle: String,
         remoteAltTitle: String?,
     ): Float {
-        val normalizedLocal = normalizeTitle(localTitle)
-        val candidates = listOf(remoteTitle, remoteAltTitle).filterNotNull().map(::normalizeTitle)
-        return candidates.maxOfOrNull { candidate -> similarity(normalizedLocal, candidate) } ?: 0f
+        return listOf(remoteTitle, remoteAltTitle)
+            .filterNotNull()
+            .maxOfOrNull { candidate -> titleSimilarityScore(localTitle, candidate) }
+            ?: 0f
     }
 
     private fun normalizeTitle(value: String): String = normalizeEntityName(value)
@@ -1096,36 +1197,6 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
 
     private fun containsCjk(value: String): Boolean {
         return value.any { char -> char in '\u4E00'..'\u9FFF' }
-    }
-
-    private fun similarity(left: String, right: String): Float {
-        if (left.isBlank() || right.isBlank()) return 0f
-        if (left == right) return 1f
-        val maxLength = maxOf(left.length, right.length).coerceAtLeast(1)
-        val distance = levenshtein(left, right)
-        return (1f - distance.toFloat() / maxLength.toFloat()).coerceIn(0f, 1f)
-    }
-
-    private fun levenshtein(left: String, right: String): Int {
-        if (left.isEmpty()) return right.length
-        if (right.isEmpty()) return left.length
-        val previous = IntArray(right.length + 1) { it }
-        val current = IntArray(right.length + 1)
-        for (i in left.indices) {
-            current[0] = i + 1
-            for (j in right.indices) {
-                val cost = if (left[i] == right[j]) 0 else 1
-                current[j + 1] = minOf(
-                    current[j] + 1,
-                    previous[j + 1] + 1,
-                    previous[j] + cost,
-                )
-            }
-            for (j in previous.indices) {
-                previous[j] = current[j]
-            }
-        }
-        return previous[right.length]
     }
 
     private companion object {

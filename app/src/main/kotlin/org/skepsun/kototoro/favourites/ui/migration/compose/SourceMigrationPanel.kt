@@ -2,6 +2,7 @@ package org.skepsun.kototoro.favourites.ui.migration.compose
 
 import android.content.Context
 import android.text.format.Formatter
+import android.util.Log
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -118,6 +119,7 @@ import org.skepsun.kototoro.core.prefs.TrackingMetadataSourceStrategy
 import java.util.Locale
 
 private const val TRACKING_CONFIDENCE_WARNING_THRESHOLD = 85
+private const val ENTITY_ORGANIZE_LOG_TAG = "MergeFavoriteEntities"
 private val ENTITY_ORGANIZE_PAGE_SIZES = listOf(8, 16, 24, 40)
 private val ENTITY_ORGANIZE_NON_JAR_ORIGINS = setOf(
     "Mihon",
@@ -320,6 +322,33 @@ fun SourceMigrationPanel(
     ) {
         buildEntityWorkbenchRows(uiState)
     }
+    val fuzzyMergeGroupCount = remember(uiState.mergeCandidateGroups) {
+        uiState.mergeCandidateGroups.count { it.isFuzzyMergeCandidate() }
+    }
+    LaunchedEffect(
+        selectedStage,
+        uiState.mergePreviewReady,
+        uiState.fuzzyMergeCandidatesEnabled,
+        fuzzyMergeGroupCount,
+    ) {
+        if (
+            selectedStage == EntityOrganizeStage.MERGE &&
+            uiState.mergePreviewReady &&
+            uiState.fuzzyMergeCandidatesEnabled &&
+            fuzzyMergeGroupCount > 0 &&
+            workbenchViewState.statusFilter == WorkbenchStatusFilter.SELECTED
+        ) {
+            Log.d(
+                ENTITY_ORGANIZE_LOG_TAG,
+                "EntityWorkbench: fuzzy preview visible by switching statusFilter SELECTED -> ALL, " +
+                    "fuzzyGroups=$fuzzyMergeGroupCount",
+            )
+            workbenchViewState = workbenchViewState.copy(
+                statusFilter = WorkbenchStatusFilter.ALL,
+                currentPage = 0,
+            )
+        }
+    }
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -406,6 +435,8 @@ fun SourceMigrationPanel(
                     onTrackingMetadataStrategyChange = viewModel::setTrackingMetadataSourceStrategy,
                     onFuzzyMergeCandidatesEnabledChange = viewModel::setFuzzyMergeCandidatesEnabled,
                     onFuzzyMergeThresholdPercentChange = viewModel::setFuzzyMergeThresholdPercent,
+                    onFuzzyTrackingCandidatesEnabledChange = viewModel::setFuzzyTrackingCandidatesEnabled,
+                    onFuzzyTrackingThresholdPercentChange = viewModel::setFuzzyTrackingThresholdPercent,
                     onToggleTrackingService = viewModel::toggleTrackingService,
                     onMoveTrackingServiceUp = viewModel::moveTrackingServiceUp,
                     onMoveTrackingServiceDown = viewModel::moveTrackingServiceDown,
@@ -1288,6 +1319,8 @@ private fun StageConfigCard(
     onTrackingMetadataStrategyChange: (TrackingMetadataSourceStrategy) -> Unit,
     onFuzzyMergeCandidatesEnabledChange: (Boolean) -> Unit,
     onFuzzyMergeThresholdPercentChange: (Int) -> Unit,
+    onFuzzyTrackingCandidatesEnabledChange: (Boolean) -> Unit,
+    onFuzzyTrackingThresholdPercentChange: (Int) -> Unit,
     onToggleTrackingService: (ScrobblerService) -> Unit,
     onMoveTrackingServiceUp: (ScrobblerService) -> Unit,
     onMoveTrackingServiceDown: (ScrobblerService) -> Unit,
@@ -1560,6 +1593,8 @@ private fun StageConfigCard(
                     TrackingBindingSection(
                         uiState = uiState,
                         onTrackingMetadataStrategyChange = onTrackingMetadataStrategyChange,
+                        onFuzzyTrackingCandidatesEnabledChange = onFuzzyTrackingCandidatesEnabledChange,
+                        onFuzzyTrackingThresholdPercentChange = onFuzzyTrackingThresholdPercentChange,
                         onToggle = onToggleTrackingService,
                         onMoveUp = onMoveTrackingServiceUp,
                         onMoveDown = onMoveTrackingServiceDown,
@@ -1780,14 +1815,57 @@ private fun EntityWorkbenchSection(
             onViewStateChange(viewState.copy(currentPage = page))
         },
     )
-    LaunchedEffect(
+    val pageResetKey = remember(
         normalizedQuery,
         viewState.showSelectedOnly,
         viewState.statusFilter,
         viewState.pageSize,
         viewState.stageFilters,
     ) {
-        onViewStateChange(viewState.copy(currentPage = 0))
+        listOf(
+            normalizedQuery,
+            viewState.showSelectedOnly.toString(),
+            viewState.statusFilter.name,
+            viewState.pageSize.toString(),
+            viewState.stageFilters.merge.sortedBy(WorkbenchStageState::name).joinToString(",") { it.name },
+            viewState.stageFilters.tracking.sortedBy(WorkbenchStageState::name).joinToString(",") { it.name },
+            viewState.stageFilters.reading.sortedBy(WorkbenchStageState::name).joinToString(",") { it.name },
+        ).joinToString("|")
+    }
+    var lastPageResetKey by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(
+        selectedStage,
+        rows.size,
+        filteredRows.size,
+        pagedRows.page,
+        pagedRows.items.size,
+        uiState.mergePreviewReady,
+        uiState.fuzzyMergeCandidatesEnabled,
+        uiState.fuzzyMergeThresholdPercent,
+        viewState.statusFilter,
+        viewState.sortMode,
+        viewState.showSelectedOnly,
+    ) {
+        if (selectedStage == EntityOrganizeStage.MERGE && uiState.mergePreviewReady) {
+            Log.d(
+                ENTITY_ORGANIZE_LOG_TAG,
+                "EntityWorkbench: stage=$selectedStage, rows=${rows.size}, filtered=${filteredRows.size}, " +
+                    "page=${pagedRows.page + 1}/${pagedRows.pageCount}, pageItems=${pagedRows.items.size}, " +
+                    "fuzzyRows=${rows.count { it.group.isFuzzyMergeCandidate() }}, " +
+                    "filteredFuzzy=${filteredRows.count { it.group.isFuzzyMergeCandidate() }}, " +
+                    "pageFuzzy=${pagedRows.items.count { it.group.isFuzzyMergeCandidate() }}, " +
+                    "statusFilter=${viewState.statusFilter}, sortMode=${viewState.sortMode}, " +
+                    "showSelectedOnly=${viewState.showSelectedOnly}, " +
+                    "threshold=${uiState.fuzzyMergeThresholdPercent}%",
+            )
+        }
+    }
+    LaunchedEffect(pageResetKey) {
+        val previousKey = lastPageResetKey
+        lastPageResetKey = pageResetKey
+        if (previousKey != null && previousKey != pageResetKey && viewState.currentPage != 0) {
+            onViewStateChange(viewState.copy(currentPage = 0))
+        }
     }
     OutlinedCard(
         shape = RoundedCornerShape(24.dp),
@@ -1851,20 +1929,11 @@ private fun EntityWorkbenchSection(
                 val visibleReadingIds = remember(visibleRows) {
                     visibleRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
                 }
-                // Whether all checkable visible rows are selected (for header checkbox)
-                val allVisibleSelected = when (selectedStage) {
-                    EntityOrganizeStage.MERGE -> visibleRows.isNotEmpty() && visibleRows.all {
-                        if (!uiState.mergePreviewReady) it.group.id in uiState.selectedMergeGroupIds
-                        else it.isMergeCandidate && it.group.id in uiState.selectedMergeGroupIds
-                    }
-                    EntityOrganizeStage.TRACKING -> visibleRows.isNotEmpty() && visibleRows.all {
-                        if (!uiState.trackingPreviewReady) it.group.id in uiState.selectedMergeGroupIds
-                        else it.trackingCandidates.any { tc -> tc.previewId in uiState.selectedTrackingPreviewIds }
-                    }
-                    EntityOrganizeStage.READING -> visibleRows.isNotEmpty() && visibleRows.all {
-                        it.group.id in uiState.selectedMergeGroupIds
-                    }
+                val checkableVisibleRows = remember(visibleRows, selectedStage, uiState) {
+                    visibleRows.filter { it.isRowSelectionEnabled(selectedStage, uiState) }
                 }
+                val allVisibleSelected = checkableVisibleRows.isNotEmpty() &&
+                    checkableVisibleRows.all { it.isRowSelectionChecked(selectedStage, uiState) }
                 val onToggleSelectAll: (Boolean) -> Unit = { select ->
                     if (select) {
                         when (selectedStage) {
@@ -1930,6 +1999,30 @@ internal fun EntityWorkbenchRow.hasReadingSelected(uiState: MigrationUiState): B
     return readingCandidates.any { it.mangaId in uiState.acceptedReadingPreviewIds }
 }
 
+internal fun EntityWorkbenchRow.isRowSelectionChecked(
+    selectedStage: EntityOrganizeStage,
+    uiState: MigrationUiState,
+): Boolean {
+    val operationScopeIds = uiState.selectedContentIds.ifEmpty { uiState.manualMergeMangaIds }
+    val isInOperationScope = group.mangaIds.any(operationScopeIds::contains)
+    return when (selectedStage) {
+        EntityOrganizeStage.MERGE -> if (uiState.mergePreviewReady) isMergeSelected(uiState) else isInOperationScope
+        EntityOrganizeStage.TRACKING -> if (uiState.trackingPreviewReady) hasTrackingSelected(uiState) else isInOperationScope
+        EntityOrganizeStage.READING -> isInOperationScope
+    }
+}
+
+internal fun EntityWorkbenchRow.isRowSelectionEnabled(
+    selectedStage: EntityOrganizeStage,
+    uiState: MigrationUiState,
+): Boolean {
+    return when (selectedStage) {
+        EntityOrganizeStage.MERGE -> !uiState.mergePreviewReady || isMergeCandidate
+        EntityOrganizeStage.TRACKING -> !uiState.trackingPreviewReady || trackingCandidates.isNotEmpty()
+        EntityOrganizeStage.READING -> true
+    }
+}
+
 internal fun EntityWorkbenchRow.currentProjectionItem(): org.skepsun.kototoro.favourites.domain.MergeCandidateItem? {
     if (group.resolvedEntityId == null) {
         return null
@@ -1975,6 +2068,10 @@ internal fun EntityWorkbenchRow.needsAction(uiState: MigrationUiState): Boolean 
         (readingCandidates.any() && !hasReadingSelected(uiState))
 }
 
+internal fun MergeCandidateGroup.isFuzzyMergeCandidate(): Boolean {
+    return id.contains(":fuzzy:")
+}
+
 internal fun EntityWorkbenchRow.matchesStageFilters(
     uiState: MigrationUiState,
     filters: WorkbenchStageFilters,
@@ -2002,7 +2099,7 @@ internal fun buildWorkbenchSelectionSummary(
         selectedScopeItems = operationScopeIds.size,
         selectedContents = uiState.manualMergeMangaIds.size,
         matchedGroups = filteredRows.size,
-        selectedMergeGroups = uiState.selectedMergeGroupIds.size,
+        selectedMergeGroups = rows.count { row -> row.isMergeSelected(uiState) },
         selectedTracking = uiState.selectedTrackingPreviewIds.size,
         selectedReading = uiState.acceptedReadingPreviewIds.size,
     )
@@ -2730,23 +2827,10 @@ private fun EntityWorkbenchHeader(
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .toggleable(
-                        value = allSelected,
-                        role = Role.Checkbox,
-                        onValueChange = { onToggleSelectAll(!allSelected) },
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Checkbox(
-                    checked = allSelected,
-                    onCheckedChange = null,
-                )
-            }
-            WorkbenchHeaderCell(
+            WorkbenchSelectableHeaderCell(
                 text = stringResource(R.string.entity_organize_workbench_entity_column),
+                checked = allSelected,
+                onCheckedChange = onToggleSelectAll,
                 width = widths.entity,
             )
             WorkbenchDivider()
@@ -2765,6 +2849,37 @@ private fun EntityWorkbenchHeader(
                 width = widths.reading,
             )
         }
+    }
+}
+
+@Composable
+private fun WorkbenchSelectableHeaderCell(
+    text: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    width: androidx.compose.ui.unit.Dp,
+) {
+    Row(
+        modifier = Modifier
+            .width(width)
+            .toggleable(
+                value = checked,
+                role = Role.Checkbox,
+                onValueChange = onCheckedChange,
+            )
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = null,
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -2796,18 +2911,8 @@ private fun EntityWorkbenchRowCard(
     val entityDetail = buildWorkbenchEntityDetail(row)
     val hasMergePreviewSelection = uiState.mergePreviewReady
     val hasTrackingPreviewSelection = uiState.trackingPreviewReady
-    val operationScopeIds = uiState.selectedContentIds.ifEmpty { uiState.manualMergeMangaIds }
-    val isInOperationScope = row.group.mangaIds.any(operationScopeIds::contains)
-    val rowChecked = when (selectedStage) {
-        EntityOrganizeStage.MERGE -> if (hasMergePreviewSelection) mergeSelected else isInOperationScope
-        EntityOrganizeStage.TRACKING -> if (hasTrackingPreviewSelection) selectedTrackingId != null else isInOperationScope
-        EntityOrganizeStage.READING -> isInOperationScope
-    }
-    val rowEnabled = when (selectedStage) {
-        EntityOrganizeStage.MERGE -> !hasMergePreviewSelection || row.isMergeCandidate
-        EntityOrganizeStage.TRACKING -> !hasTrackingPreviewSelection || row.trackingCandidates.isNotEmpty()
-        EntityOrganizeStage.READING -> true
-    }
+    val rowChecked = row.isRowSelectionChecked(selectedStage, uiState)
+    val rowEnabled = row.isRowSelectionEnabled(selectedStage, uiState)
     val onToggleRowSelection = {
         when (selectedStage) {
             EntityOrganizeStage.MERGE -> {
@@ -3385,7 +3490,7 @@ private fun WorkbenchDivider(
 }
 
 private fun workbenchColumnWidths(): WorkbenchColumnWidths = WorkbenchColumnWidths(
-    entity = 148.dp,
+    entity = 176.dp,
     members = 198.dp,
     tracking = 132.dp,
     reading = 144.dp,
@@ -3605,6 +3710,8 @@ private fun MergeCandidateSection(
 private fun TrackingBindingSection(
     uiState: MigrationUiState,
     onTrackingMetadataStrategyChange: (TrackingMetadataSourceStrategy) -> Unit,
+    onFuzzyTrackingCandidatesEnabledChange: (Boolean) -> Unit,
+    onFuzzyTrackingThresholdPercentChange: (Int) -> Unit,
     onToggle: (ScrobblerService) -> Unit,
     onMoveUp: (ScrobblerService) -> Unit,
     onMoveDown: (ScrobblerService) -> Unit,
@@ -3660,6 +3767,57 @@ private fun TrackingBindingSection(
                     selected = uiState.trackingMetadataSourceStrategy == TrackingMetadataSourceStrategy.API_ONLY,
                     onClick = { onTrackingMetadataStrategyChange(TrackingMetadataSourceStrategy.API_ONLY) },
                 )
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.entity_organize_tracking_fuzzy_toggle),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = stringResource(R.string.entity_organize_tracking_fuzzy_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = uiState.fuzzyTrackingCandidatesEnabled,
+                            onCheckedChange = onFuzzyTrackingCandidatesEnabledChange,
+                            enabled = !uiState.isExecuting,
+                        )
+                    }
+                    Text(
+                        text = stringResource(
+                            R.string.entity_organize_tracking_fuzzy_threshold,
+                            uiState.fuzzyTrackingThresholdPercent,
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = uiState.fuzzyTrackingThresholdPercent.toFloat(),
+                        onValueChange = {
+                            onFuzzyTrackingThresholdPercentChange(it.toInt())
+                        },
+                        valueRange = 80f..100f,
+                        steps = 19,
+                        enabled = uiState.fuzzyTrackingCandidatesEnabled && !uiState.isExecuting,
+                    )
+                }
             }
             OutlinedButton(
                 onClick = { showSelector = true },

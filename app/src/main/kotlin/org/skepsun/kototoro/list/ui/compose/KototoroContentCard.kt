@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -45,9 +46,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import coil3.compose.AsyncImage
+import coil3.network.HttpException
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
@@ -81,6 +84,8 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_READ
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.NONE
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 @Immutable
 data class ContentCardBadgeMetrics(
@@ -224,14 +229,12 @@ fun KototoroContentCardGrid(
     }
 
     val manga = item.manga
-    val coverRequest = remember(item.coverUrl, manga.id, manga.source, sharedTransitionEnabled) {
-        buildContentCoverRequest(
-            context = context,
-            coverUrl = item.coverUrl,
-            manga = manga,
-            allowCrossfade = !sharedTransitionEnabled,
-        )
-    }
+    val coverRequest = rememberContentCoverRequest(
+        context = context,
+        coverUrl = item.coverUrl,
+        manga = manga,
+        allowCrossfade = !sharedTransitionEnabled,
+    )
     val posterStyle = cardStyle ?: compactPosterCardStyle(gridScale)
     val posterAspectRatio = remember(posterStyle.itemWidth, posterStyle.posterHeight) {
         posterStyle.itemWidth.value / posterStyle.posterHeight.value
@@ -253,13 +256,13 @@ fun KototoroContentCardGrid(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 4.dp)
+            .padding(horizontal = 1.dp, vertical = 4.dp)
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
             .combinedClickable(
                 onClick = { onClick(coverBounds) },
                 onLongClick = onLongClick,
             )
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 3.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -513,14 +516,12 @@ fun KototoroContentCardList(
         rememberContentCardUiPrefs(settings)
     }
     var coverBounds by remember { mutableStateOf<Rect?>(null) }
-    val coverRequest = remember(item.coverUrl, item.manga.id, item.manga.source, sharedTransitionEnabled) {
-        buildContentCoverRequest(
-            context = context,
-            coverUrl = item.coverUrl,
-            manga = item.manga,
-            allowCrossfade = !sharedTransitionEnabled,
-        )
-    }
+    val coverRequest = rememberContentCoverRequest(
+        context = context,
+        coverUrl = item.coverUrl,
+        manga = item.manga,
+        allowCrossfade = !sharedTransitionEnabled,
+    )
     val badgeModel = remember(item) { item.asBadgeModel() }
     val badgeMetrics = remember { contentCardBadgeMetricsFor(48.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -836,14 +837,12 @@ fun KototoroContentCardDetailedList(
         rememberContentCardUiPrefs(settings)
     }
     var coverBounds by remember { mutableStateOf<Rect?>(null) }
-    val coverRequest = remember(item.coverUrl, item.manga.id, item.manga.source, sharedTransitionEnabled) {
-        buildContentCoverRequest(
-            context = context,
-            coverUrl = item.coverUrl,
-            manga = item.manga,
-            allowCrossfade = !sharedTransitionEnabled,
-        )
-    }
+    val coverRequest = rememberContentCoverRequest(
+        context = context,
+        coverUrl = item.coverUrl,
+        manga = item.manga,
+        allowCrossfade = !sharedTransitionEnabled,
+    )
     val badgeModel = remember(item) {
         item.asBadgeModel(
             isFavorite = item.isFavorite,
@@ -1057,11 +1056,31 @@ fun ContentCardNsfwBadge(
     }
 }
 
+@Composable
+private fun rememberContentCoverRequest(
+    context: android.content.Context,
+    coverUrl: String?,
+    manga: org.skepsun.kototoro.parsers.model.Content,
+    allowCrossfade: Boolean = true,
+): ImageRequest {
+    var failureVersion by remember(coverUrl, manga.id, manga.source) { mutableStateOf(0) }
+    return remember(context, coverUrl, manga.id, manga.source, allowCrossfade, failureVersion) {
+        buildContentCoverRequest(
+            context = context,
+            coverUrl = coverUrl,
+            manga = manga,
+            allowCrossfade = allowCrossfade,
+            onRecoverableFailure = { failureVersion++ },
+        )
+    }
+}
+
 private fun buildContentCoverRequest(
     context: android.content.Context,
     coverUrl: String?,
     manga: org.skepsun.kototoro.parsers.model.Content,
     allowCrossfade: Boolean = true,
+    onRecoverableFailure: () -> Unit = {},
 ): ImageRequest {
     val normalizedUrl = coverUrl?.let(::normalizeCoverUrl)
     val cacheKey = sharedCoverMemoryCacheKey(
@@ -1069,16 +1088,61 @@ private fun buildContentCoverRequest(
         ownerKey = manga.url,
         url = normalizedUrl,
     )
+    val data = normalizedUrl?.takeUnless {
+        isMissingLocalFileCover(it) || cacheKey?.let(ContentCoverFailureRegistry::isSuppressed) == true
+    }
     return ImageRequest.Builder(context)
-        .data(normalizedUrl)
+        .data(data)
         .memoryCacheKey(cacheKey)
         .diskCacheKey(cacheKey)
         .mangaExtra(manga)
         .crossfade(allowCrossfade)
+        .listener(
+            onError = { _, result ->
+                if (cacheKey != null && ContentCoverFailureRegistry.shouldSuppress(result.throwable)) {
+                    ContentCoverFailureRegistry.mark(cacheKey)
+                    onRecoverableFailure()
+                }
+            },
+        )
         .build()
 }
 
 private fun normalizeCoverUrl(url: String): String = when {
     url.startsWith("//") -> "https:$url"
     else -> url
+}
+
+private fun isMissingLocalFileCover(url: String): Boolean {
+    if (!url.startsWith("file://", ignoreCase = true)) {
+        return false
+    }
+    val path = runCatching { Uri.parse(url).path }.getOrNull() ?: return false
+    return !File(path).isFile
+}
+
+private object ContentCoverFailureRegistry {
+
+    private const val SUPPRESSION_WINDOW_MS = 10 * 60 * 1000L
+
+    private val failures = ConcurrentHashMap<String, Long>()
+
+    fun isSuppressed(key: String): Boolean {
+        val failedAt = failures[key] ?: return false
+        val isActive = System.currentTimeMillis() - failedAt < SUPPRESSION_WINDOW_MS
+        if (!isActive) {
+            failures.remove(key, failedAt)
+        }
+        return isActive
+    }
+
+    fun mark(key: String) {
+        failures[key] = System.currentTimeMillis()
+    }
+
+    fun shouldSuppress(error: Throwable): Boolean = when (error) {
+        is CloudFlareProtectedException -> true
+        is HttpException -> error.response.code == 403
+        else -> false
+    }
 }

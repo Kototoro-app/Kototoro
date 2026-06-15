@@ -15,9 +15,10 @@ import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.isLocalReadingSource
 import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
+import org.skepsun.kototoro.entitygraph.domain.titleBlockingKeys
+import org.skepsun.kototoro.entitygraph.domain.titleSimilarityScore
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import javax.inject.Inject
 
@@ -57,6 +58,18 @@ data class MergeEntitiesResult(
     val failed: Int,
     val skipped: Int,
 )
+
+internal fun mergeCandidateTitleSimilarity(left: String, right: String): Float {
+    return titleSimilarityScore(left, right)
+}
+
+private fun Float?.toPercentLog(): String {
+    return this?.let { "${(it * 100).toInt()}%" } ?: "n/a"
+}
+
+private fun Pair<String, String>?.toTitlePairLog(): String {
+    return this?.let { (left, right) -> "left='$left', right='$right'" }.orEmpty()
+}
 
 class MergeFavoriteEntitiesUseCase @Inject constructor(
     private val database: MangaDatabase,
@@ -310,6 +323,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         if (
             protectedBindings.isNotEmpty() &&
             !group.id.contains(":manual:") &&
+            !group.id.contains(":fuzzy:") &&
             !isSafeTrackingMergeGroup(group, contents, trackingLinksByMangaId) &&
             !isSafeExactTitleMergeGroup(group, contents)
         ) {
@@ -569,14 +583,27 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         threshold: Float,
         enabled: Boolean,
     ): List<MergeCandidateGroup> {
-        if (!enabled || contents.size < 2) {
+        if (!enabled) {
+            Log.d(TAG, "buildFuzzyGroups skipped: disabled, input=${contents.size}")
+            return emptyList()
+        }
+        if (contents.size < 2) {
+            Log.d(TAG, "buildFuzzyGroups skipped: insufficient input=${contents.size}")
             return emptyList()
         }
         val boundedThreshold = threshold.coerceIn(0.8f, 1f)
-        return contents
+        val filteredContents = contents
             .asSequence()
-            .filterNot { it.id in protectedLocalMangaIds }
             .filterNot { it.id in higherPriorityIds }
+            .toList()
+        Log.d(
+            TAG,
+            "buildFuzzyGroups: input=${contents.size}, filtered=${filteredContents.size}, " +
+                "protectedAllowed=${protectedLocalMangaIds.size}, higherPriority=${higherPriorityIds.size}, " +
+                "threshold=$boundedThreshold",
+        )
+        val groups = filteredContents
+            .asSequence()
             .groupBy { it.source.contentType }
             .flatMap { (contentType, typedContents) ->
                 buildFuzzyGroupsForType(
@@ -587,6 +614,8 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                 )
             }
             .distinctBy { group -> group.mangaIds.sorted().joinToString("-") }
+        Log.d(TAG, "buildFuzzyGroups: groups=${groups.size}")
+        return groups
     }
 
     private fun buildFuzzyGroupsForType(
@@ -599,25 +628,39 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
             return emptyList()
         }
         val keysById = contents.associate { content -> content.id to normalizeTitle(content) }
+        val contentsById = contents.associateBy { it.id }
+        val pairUniverse = contents.size * (contents.size - 1) / 2
+        val candidatePairs = buildFuzzyCandidatePairs(contents, keysById)
         val candidates = ArrayList<Set<Long>>()
-        for (leftIndex in 0 until contents.lastIndex) {
-            val left = contents[leftIndex]
+        var comparedPairs = 0
+        var highestRejectedScore = 0f
+        var highestRejectedTitles: Pair<String, String>? = null
+        candidatePairs.forEach { (leftId, rightId) ->
+            val left = contentsById[leftId] ?: return@forEach
             val leftKey = keysById[left.id].orEmpty()
-            if (leftKey.isBlank()) continue
-            for (rightIndex in leftIndex + 1 until contents.size) {
-                val right = contents[rightIndex]
-                val rightKey = keysById[right.id].orEmpty()
-                if (rightKey.isBlank()) continue
-                val score = titleSimilarity(leftKey, rightKey)
-                if (score >= threshold) {
-                    candidates += linkedSetOf(left.id, right.id)
-                }
+            val right = contentsById[rightId] ?: return@forEach
+            val rightKey = keysById[right.id].orEmpty()
+            if (leftKey.isBlank() || rightKey.isBlank()) {
+                return@forEach
+            }
+            comparedPairs++
+            val score = titleSimilarity(leftKey, rightKey)
+            if (score >= threshold) {
+                candidates += linkedSetOf(left.id, right.id)
+            } else if (score > highestRejectedScore) {
+                highestRejectedScore = score
+                highestRejectedTitles = left.title to right.title
             }
         }
         if (candidates.isEmpty()) {
+            Log.d(
+                TAG,
+                "buildFuzzyGroupsForType: type=$contentType, input=${contents.size}, pairs=$pairUniverse, " +
+                    "compared=$comparedPairs, blocked=${pairUniverse - comparedPairs}, candidates=0, threshold=$threshold, " +
+                    "highestRejected=${highestRejectedScore.toPercentLog()} ${highestRejectedTitles.toTitlePairLog()}",
+            )
             return emptyList()
         }
-        val contentsById = contents.associateBy { it.id }
         val groups = ArrayList<Set<Long>>()
         candidates
             .sortedWith(compareBy<Set<Long>> { it.first() }.thenBy { it.last() })
@@ -632,7 +675,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                     groups += pair
                 }
             }
-        return groups.map { groupIds ->
+        val result = groups.map { groupIds ->
             val items = groupIds.mapNotNull(contentsById::get)
             val groupScore = minPairSimilarity(items.mapNotNull { keysById[it.id] })
             val mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id }
@@ -661,13 +704,45 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                 isAlreadyMerged = mergeState.isAlreadyMerged,
             )
         }
+        Log.d(
+            TAG,
+            "buildFuzzyGroupsForType: type=$contentType, input=${contents.size}, pairs=$pairUniverse, " +
+                "compared=$comparedPairs, blocked=${pairUniverse - comparedPairs}, " +
+                "candidates=${candidates.size}, groups=${result.size}, threshold=$threshold, " +
+                "topGroup=${result.maxOfOrNull { it.matchScore }.toPercentLog()}",
+        )
+        return result
+    }
+
+    private fun buildFuzzyCandidatePairs(
+        contents: List<Content>,
+        keysById: Map<Long, String>,
+    ): List<Pair<Long, Long>> {
+        val invertedIndex = HashMap<String, MutableList<Long>>()
+        contents.forEach { content ->
+            titleBlockingKeys(keysById[content.id].orEmpty()).forEach { key ->
+                invertedIndex.getOrPut(key) { ArrayList(2) } += content.id
+            }
+        }
+        return buildSet {
+            invertedIndex.values.forEach { ids ->
+                if (ids.size < 2) {
+                    return@forEach
+                }
+                for (leftIndex in 0 until ids.lastIndex) {
+                    for (rightIndex in leftIndex + 1 until ids.size) {
+                        val left = ids[leftIndex]
+                        val right = ids[rightIndex]
+                        add(if (left < right) left to right else right to left)
+                    }
+                }
+            }
+        }
+            .sortedWith(compareBy<Pair<Long, Long>> { it.first }.thenBy { it.second })
     }
 
     private fun titleSimilarity(left: String, right: String): Float {
-        if (left == right) return 1f
-        val maxLength = maxOf(left.length, right.length)
-        if (maxLength == 0) return 0f
-        return (1f - left.levenshteinDistance(right).toFloat() / maxLength.toFloat()).coerceIn(0f, 1f)
+        return mergeCandidateTitleSimilarity(left, right)
     }
 
     private fun minPairSimilarity(keys: List<String>): Float {

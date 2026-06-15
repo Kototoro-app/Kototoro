@@ -3,6 +3,9 @@ package org.skepsun.kototoro.details.ui.model
 import org.skepsun.kototoro.core.model.ContentHistory
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.data.ReadingTime
+import org.skepsun.kototoro.parsers.model.ContentChapter
+
+private const val EPUB_HISTORY_MATCH_WINDOW = 1_000_000L
 
 data class HistoryInfo(
 	val totalChapters: Int,
@@ -40,27 +43,7 @@ fun HistoryInfo(
 		manga?.chapters?.get(branch)
 	}
 	val currentChapter = if (history != null && !chapters.isNullOrEmpty()) {
-		// First try exact match
-		var index = chapters.indexOfFirst { it.id == history.chapterId }
-		
-		// If no exact match, try fuzzy match for EPUB chapters (parent chapter ID vs internal chapter ID)
-		// Find the chapter with the smallest ID difference (closest match)
-		if (index < 0) {
-			val matchedChapter = chapters
-				.filter { chapter ->
-					val diff = kotlin.math.abs(chapter.id - history.chapterId)
-					diff in 1..1000000  // Within the range of one EPUB file's chapters
-				}
-				.minByOrNull { chapter ->
-					kotlin.math.abs(chapter.id - history.chapterId)
-				}
-			
-			if (matchedChapter != null) {
-				index = chapters.indexOf(matchedChapter)
-			}
-		}
-		
-		index
+		chapters.findChapterByHistory(history)?.let(chapters::indexOf) ?: -1
 	} else {
 		-2
 	}
@@ -68,19 +51,7 @@ fun HistoryInfo(
 	// For EPUB chapters, also check if the history chapter ID is a parent chapter ID
 	// by checking if any internal chapter ID is within 1000000 of the history chapter ID
 	val isChapterMissing = if (history != null && manga?.isLoaded == true) {
-		val directMatch = manga.allChapters.any { it.id == history.chapterId }
-		if (directMatch) {
-			false
-		} else {
-			// Check if this might be a parent chapter ID (off by 1 from internal chapter ID)
-			// Internal chapter IDs are: parentChapterId + (index * 1000000L) + 1
-			// So if history.chapterId is parentChapterId, we should find internal chapters nearby
-			val hasNearbyInternalChapter = manga.allChapters.any { chapter ->
-				val diff = kotlin.math.abs(chapter.id - history.chapterId)
-				diff in 1..1000000  // Within the range of one EPUB file's chapters
-			}
-			!hasNearbyInternalChapter
-		}
+		manga.allChapters.findChapterByHistory(history) == null
 	} else {
 		false
 	}
@@ -106,3 +77,45 @@ fun HistoryInfo(
 		estimatedTime = estimatedTime,
 	)
 }
+
+internal fun List<ContentChapter>.findChapterByHistory(history: ContentHistory?): ContentChapter? {
+	history ?: return null
+	firstOrNull { it.id == history.chapterId }?.let {
+		return it
+	}
+
+	val parentChapter = history.parentChapterId?.let { parentId ->
+		firstOrNull { it.id == parentId }
+	}
+	if (parentChapter != null) {
+		firstOrNull { chapter ->
+			chapter.id == history.chapterId &&
+				chapter.isEpubInternalChapter() &&
+				chapter.url.startsWith(parentChapter.url)
+		}?.let {
+			return it
+		}
+	}
+
+	val canUseNearbyMatch = history.parentChapterId != null || any { it.isEpubInternalChapter() }
+	if (!canUseNearbyMatch) {
+		return null
+	}
+	return asSequence()
+		.filter { history.parentChapterId != null || it.isEpubInternalChapter() }
+		.mapNotNull { chapter ->
+			val diff = kotlin.math.abs(chapter.id - history.chapterId)
+			if (diff in 1..EPUB_HISTORY_MATCH_WINDOW) {
+				chapter to diff
+			} else {
+				null
+			}
+		}
+		.minByOrNull { it.second }
+		?.first
+}
+
+private fun ContentChapter.isEpubInternalChapter(): Boolean =
+	url.startsWith("epub://") ||
+		url.startsWith("localepub://") ||
+		url.contains("#chapter/")

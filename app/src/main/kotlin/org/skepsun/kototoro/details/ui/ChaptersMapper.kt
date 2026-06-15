@@ -84,6 +84,7 @@ fun ContentDetails.mapChapters(
 	}
 	
 	val currentChapterNumber = remoteChapters.find { it.id == currentChapterId }?.number
+		?: localChapters.find { it.id == currentChapterId }?.number
 	
 	if (!isDownloadedOnly || local?.manga?.chapters == null) {
 		for ((index, chapter) in remoteChapters.withIndex()) {
@@ -104,11 +105,11 @@ fun ContentDetails.mapChapters(
 			}
 			
 			result += finalChapter.toListItem(
-				isCurrent = chapter.id == currentChapterId,
+				isCurrent = chapter.id == currentChapterId || finalChapter.id == currentChapterId,
 				isUnread = isUnread,
 				isNew = isUnread && result.size >= newFrom,
 				isDownloaded = local != null && local.url.isLocalChapterUrl(),
-				isBookmarked = chapter.id in bookmarked,
+				isBookmarked = chapter.id in bookmarked || finalChapter.id in bookmarked,
 				isGrid = isGrid,
 			)
 		}

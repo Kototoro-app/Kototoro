@@ -39,6 +39,8 @@ import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.image.AvifImageDecoder
 import org.skepsun.kototoro.core.image.CbzFetcher
 import org.skepsun.kototoro.core.image.ContentSourceHeaderInterceptor
+import org.skepsun.kototoro.core.image.ImageFailureSuppressingInterceptor
+import org.skepsun.kototoro.core.image.SuppressingCoilLogger
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.imageproxy.ImageProxyInterceptor
 import org.skepsun.kototoro.core.os.AppShortcutManager
@@ -152,10 +154,11 @@ interface AppModule {
 			return ImageLoader.Builder(context)
 				.interceptorCoroutineContext(Dispatchers.Default)
 				.diskCache(diskCacheFactory)
-				.logger(if (BuildConfig.DEBUG) DebugLogger() else null)
+				.logger(if (BuildConfig.DEBUG) SuppressingCoilLogger() else null)
 				.allowRgb565(context.isLowRamDevice())
 				.eventListener(captchaHandler)
 				.components {
+					add(ImageFailureSuppressingInterceptor())
 					// Register our custom cover fetcher before OkHttpNetworkFetcherFactory so it can intercept string URLs for Mihon sources
 					add(coverFetcherFactory)
 					add(

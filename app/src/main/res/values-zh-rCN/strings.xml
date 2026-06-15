@@ -2800,6 +2800,9 @@ SHA-256 指纹:
     <string name="entity_organize_tracking_placeholder">先生成候选命中预览，再决定接受哪些绑定结果。</string>
     <string name="entity_organize_tracking_priority_title">追踪网站优先级</string>
     <string name="entity_organize_tracking_priority_subtitle">会按顺序搜索站点标题，命中后绑定到第一个可用的 tracking 实体，并把勾选组内的本地作品投影一并挂过去。</string>
+    <string name="entity_organize_tracking_fuzzy_toggle">包含相似追踪标题匹配</string>
+    <string name="entity_organize_tracking_fuzzy_hint">标准化标题不完全一致但相似时也允许进入追踪候选；内容类型仍必须一致。</string>
+    <string name="entity_organize_tracking_fuzzy_threshold">追踪相似度阈值：%1$d%%</string>
     <string name="entity_organize_tracking_select">选择追踪网站</string>
     <string name="entity_organize_tracking_empty">请至少选择一个追踪网站。</string>
     <string name="entity_organize_tracking_preview">生成命中预览</string>

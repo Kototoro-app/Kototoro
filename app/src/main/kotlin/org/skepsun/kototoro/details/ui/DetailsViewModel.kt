@@ -83,6 +83,7 @@ import org.skepsun.kototoro.details.ui.model.ContentBranch
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.model.ChapterListItem.Companion.FLAG_DOWNLOADED
+import org.skepsun.kototoro.details.ui.model.findChapterByHistory
 import org.skepsun.kototoro.details.ui.pager.ChaptersPagesViewModel
 import org.skepsun.kototoro.details.ui.pager.EmptyContentReason
 import org.skepsun.kototoro.discover.ui.details.LocalSearchState
@@ -104,7 +105,6 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.SortOrder
-import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
@@ -2810,12 +2810,25 @@ class DetailsViewModel @Inject constructor(
 			flowOrFallback(null) { historyRepository.observeOne(mangaId) }
 		}
 	}
-		.onEach { h ->
-			val manga = mangaDetails.value?.toContent()
-			readingState.value = h
-				?.takeIf { history -> manga?.findChapterById(history.chapterId) != null }
-				?.let(::ReaderState)
-		}.withErrorHandling()
+		.withErrorHandling()
+		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
+
+	@Suppress("unused")
+	private val readingStateSync: StateFlow<ReaderState?> = combine(
+		mangaDetails,
+		history,
+	) { details, h ->
+		val chapter = details?.allChapters?.findChapterByHistory(h)
+		if (h != null && chapter != null) {
+			ReaderState(h.copy(chapterId = chapter.id))
+		} else {
+			null
+		}
+	}
+		.onEach { state ->
+			readingState.value = state
+		}
+		.withErrorHandling()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
 	@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -3093,7 +3106,7 @@ class DetailsViewModel @Inject constructor(
 		if (c.isNullOrEmpty()) {
 			return@combine emptyList()
 		}
-		val currentBranch = h?.let { m.allChapters.findById(it.chapterId) }?.branch
+		val currentBranch = m.allChapters.findChapterByHistory(h)?.branch
 		c.map { x ->
 			ContentBranch(
 				name = x.key,
@@ -5076,7 +5089,8 @@ class DetailsViewModel @Inject constructor(
 					val manga = it.toContent()
 					// find default branch
 					val hist = historyRepository.getOne(manga)
-					selectedBranch.value = manga.getPreferredBranch(hist)
+					selectedBranch.value = it.allChapters.findChapterByHistory(hist)?.branch
+						?: manga.getPreferredBranch(hist)
 					true
 				} else {
 					false

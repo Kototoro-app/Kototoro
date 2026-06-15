@@ -57,6 +57,7 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.VerticalRailAnimatedVisibility
+import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.rememberVerticalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
@@ -75,8 +76,12 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 
 private const val LoadMoreVisibleThreshold = 4
+private const val GridColumnMinFitRatio = 0.94f
+private const val GridCardStretchLimit = 1.50f
+private const val GridCardExtraSpaceFillRatio = 0.38f
 private val QuickFilterChipHeight = 36.dp
 private val QuickFilterChipIconSize = 18.dp
+private val GridCardVisualHorizontalInset = 4.dp
 
 private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,
@@ -241,20 +246,47 @@ fun KototoroContentListScreen(
                             onLoadMore = onLoadMore,
                         )
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val horizontalPadding = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) +
+                            val gridSpacing = 3.dp
+                            val innerHorizontalPadding = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) +
                                 innerPadding.calculateRightPadding(LayoutDirection.Ltr)
+                            val gridOuterWidth = (maxWidth - innerHorizontalPadding).coerceAtLeast(posterStyle.itemWidth)
+                            val horizontalPadding = innerHorizontalPadding + gridSpacing * 2
                             val availableWidth = (maxWidth - horizontalPadding).coerceAtLeast(posterStyle.itemWidth)
-                            val gridSpacing = 6.dp
                             val gridColumns = remember(availableWidth, posterStyle.itemWidth, gridSpacing) {
-                                floor(
-                                    ((availableWidth + gridSpacing) / (posterStyle.itemWidth + gridSpacing)).toDouble(),
-                                ).toInt().coerceAtLeast(1)
+                                resolveGridColumnCount(
+                                    availableWidth = availableWidth,
+                                    targetItemWidth = posterStyle.itemWidth,
+                                    spacing = gridSpacing,
+                                )
                             }
+                            val effectivePosterStyle = remember(availableWidth, gridColumns, gridSpacing, posterStyle) {
+                                resolveGridPosterCardStyle(
+                                    baseStyle = posterStyle,
+                                    availableWidth = availableWidth,
+                                    columns = gridColumns,
+                                    spacing = gridSpacing,
+                                )
+                            }
+                            val sideGridPadding = remember(gridOuterWidth, gridColumns, gridSpacing, effectivePosterStyle) {
+                                resolveGridSidePadding(
+                                    outerWidth = gridOuterWidth,
+                                    columns = gridColumns,
+                                    cardWidth = effectivePosterStyle.itemWidth,
+                                    spacing = gridSpacing,
+                                    visualCardInset = GridCardVisualHorizontalInset,
+                                )
+                            }
+                            val gridContentPadding = PaddingValues(
+                                start = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) + sideGridPadding,
+                                top = innerPadding.calculateTopPadding(),
+                                end = innerPadding.calculateRightPadding(LayoutDirection.Ltr) + sideGridPadding,
+                                bottom = innerPadding.calculateBottomPadding(),
+                            )
 
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(gridColumns),
                                 state = actualGridState,
-                                contentPadding = innerPadding,
+                                contentPadding = gridContentPadding,
                                 horizontalArrangement = Arrangement.spacedBy(gridSpacing),
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -296,9 +328,9 @@ fun KototoroContentListScreen(
                                                 sharedTransitionEnabled = sharedTransitionEnabled,
                                                 sharedElementInstanceKey = sharedElementInstanceKey,
                                                 showSourceInfo = showSourceOnCards,
-                                                gridScale = gridScale,
+                                                cardStyle = effectivePosterStyle,
                                                 uiPrefs = cardUiPrefs,
-                                                modifier = Modifier.width(posterStyle.itemWidth),
+                                                modifier = Modifier.width(effectivePosterStyle.itemWidth),
                                             )
                                         }
                                     } else {
@@ -479,6 +511,68 @@ fun KototoroContentListScreen(
             )
         }
     }
+}
+
+private fun resolveGridPosterCardStyle(
+    baseStyle: CompactPosterCardStyle,
+    availableWidth: androidx.compose.ui.unit.Dp,
+    columns: Int,
+    spacing: androidx.compose.ui.unit.Dp,
+): CompactPosterCardStyle {
+    val safeColumns = columns.coerceAtLeast(1)
+    val cellWidth = (
+        availableWidth.value -
+            spacing.value * (safeColumns - 1)
+        ).coerceAtLeast(1f) / safeColumns
+    val targetWidth = baseStyle.itemWidth.value
+    val resolvedWidth = if (cellWidth <= targetWidth) {
+        cellWidth
+    } else {
+        targetWidth + (cellWidth - targetWidth) * GridCardExtraSpaceFillRatio
+    }
+        .coerceAtMost(targetWidth * GridCardStretchLimit)
+        .coerceAtMost(cellWidth)
+        .coerceAtLeast(1f)
+    val stretchedWidth = resolvedWidth
+        .dp
+    if (stretchedWidth == baseStyle.itemWidth) {
+        return baseStyle
+    }
+    val scale = stretchedWidth.value / baseStyle.itemWidth.value
+    return baseStyle.copy(
+        itemWidth = stretchedWidth,
+        posterHeight = (baseStyle.posterHeight.value * scale).dp,
+    )
+}
+
+private fun resolveGridColumnCount(
+    availableWidth: androidx.compose.ui.unit.Dp,
+    targetItemWidth: androidx.compose.ui.unit.Dp,
+    spacing: androidx.compose.ui.unit.Dp,
+): Int {
+    val minCellWidth = targetItemWidth.value * GridColumnMinFitRatio
+    return floor(
+        ((availableWidth.value + spacing.value) / (minCellWidth + spacing.value)).toDouble(),
+    ).toInt().coerceAtLeast(1)
+}
+
+private fun resolveGridSidePadding(
+    outerWidth: androidx.compose.ui.unit.Dp,
+    columns: Int,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    spacing: androidx.compose.ui.unit.Dp,
+    visualCardInset: androidx.compose.ui.unit.Dp,
+): androidx.compose.ui.unit.Dp {
+    val safeColumns = columns.coerceAtLeast(1)
+    val solvedPadding = (
+        outerWidth.value +
+            spacing.value * (safeColumns + 1) -
+            cardWidth.value * safeColumns +
+            visualCardInset.value * 2f * safeColumns
+        ) / (2f * (safeColumns + 1))
+    return solvedPadding
+        .coerceAtLeast(spacing.value)
+        .dp
 }
 
 @Composable

@@ -15,13 +15,15 @@ import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership
 import org.skepsun.kototoro.entitygraph.data.deleteTrackingLinksByWorkOrMangaCandidates
 import org.skepsun.kototoro.entitygraph.data.findLinksByWorkOrMangaCandidates
 import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
+import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
+import org.skepsun.kototoro.entitygraph.domain.titleSimilarityScore
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteCatalog
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
+import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
 import javax.inject.Inject
@@ -75,7 +77,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 				discoveryService.search(TrackingSiteCatalog(service = service, query = query))
 			}.getOrDefault(emptyList())
 			items.forEach { item ->
-				val score = score(content, item.title, item.altTitle)
+				val score = score(content, item)
 				val candidate = remoteCandidates[item.remoteId]
 				if (candidate == null || score > candidate.confidence) {
 					remoteCandidates[item.remoteId] = RemoteCandidate(
@@ -239,14 +241,16 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 			.distinctBy(::normalizeTitle)
 	}
 
-	private fun score(content: Content, remoteTitle: String, remoteAltTitle: String?): Float {
+	private fun score(content: Content, item: TrackingSiteItem): Float {
 		val localTitles = buildList {
 			add(content.title)
 			addAll(content.altTitles)
 		}.filter { it.isNotBlank() }
 		val remoteTitles = buildList {
-			add(remoteTitle)
-			remoteAltTitle?.let { add(it) }
+			add(item.title)
+			item.altTitle?.let { add(it) }
+			item.primaryTitle?.let { add(it) }
+			item.secondaryTitle?.let { add(it) }
 		}.filter { it.isNotBlank() }
 		if (localTitles.isEmpty() || remoteTitles.isEmpty()) {
 			return 0f
@@ -259,9 +263,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 				if (normalizedLocal.isEmpty() || normalizedRemote.isEmpty()) {
 					continue
 				}
-				val maxLen = maxOf(normalizedLocal.length, normalizedRemote.length).coerceAtLeast(1)
-				val distance = normalizedLocal.levenshteinDistance(normalizedRemote)
-				val similarity = 1f - (distance.toFloat() / maxLen.toFloat())
+				val similarity = titleSimilarityScore(normalizedLocal, normalizedRemote)
 				if (similarity > best) {
 					best = similarity
 				}
@@ -271,9 +273,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 	}
 
 	private fun normalizeTitle(title: String): String {
-		return title.lowercase()
-			.replace(Regex("\\s+"), "")
-			.replace(Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]"), "")
+		return normalizeStrictTitleKey(title)
 	}
 
 	private suspend fun org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity.toMatchResult(content: Content): TrackingSiteMatchResult {
