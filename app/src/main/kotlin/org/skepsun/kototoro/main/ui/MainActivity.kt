@@ -433,7 +433,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         lifecycleScope.launch {
             val origin = withContext(Dispatchers.IO) {
                 val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
-                if (entityId != null) {
+                val canResolveProjection = entityId != null &&
+                    contentDataRepository.findContentById(content.id, withChapters = false) != null
+                if (entityId != null && canResolveProjection) {
                     android.util.Log.i("MainActivity", "resolveDetailsOrigin: mangaId=${content.id} entityId=$entityId")
                     DetailsOrigin.EntityGraph(
                         entityId = entityId,

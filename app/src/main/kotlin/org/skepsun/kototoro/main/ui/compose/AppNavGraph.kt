@@ -200,7 +200,7 @@ fun AppNavGraph(
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper? = null,
     modifier: Modifier = Modifier,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit = {},
-    onContextualMenuActionsChanged: (List<KototoroTopBarMenuAction>) -> Unit = {},
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit = {},
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
     onDetailsTransitionRequested: () -> Unit = {},
     onDetailsReturnTransitionRequested: () -> Unit = {},
@@ -542,14 +542,22 @@ fun AppNavGraph(
             }
             DisposableEffect(onContextualMenuActionsChanged) {
                 onContextualMenuActionsChanged(
-                    listOf(
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.clear_history) {
-                            showClearDialog = true
-                        },
+                    RouteScopedTopBarMenuActions(
+                        ownerRoute = TOP_BAR_OWNER_HISTORY,
+                        actions = listOf(
+                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.clear_history) {
+                                showClearDialog = true
+                            },
+                        ),
                     ),
                 )
                 onDispose {
-                    onContextualMenuActionsChanged(emptyList())
+                    onContextualMenuActionsChanged(
+                        RouteScopedTopBarMenuActions(
+                            ownerRoute = TOP_BAR_OWNER_HISTORY,
+                            actions = emptyList(),
+                        ),
+                    )
                 }
             }
 
@@ -810,23 +818,31 @@ fun AppNavGraph(
 
             DisposableEffect(appRouter, viewModel) {
                 onContextualMenuActionsChanged(
-                    listOf(
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
-                            appRouter.openFavoriteCategories()
-                        },
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.entity_organize_title) {
-                            appRouter.openEntityOrganizeSettings()
-                        },
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
-                            showImportDialog(coroutineScope)
-                        },
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
-                            showSyncDialog(coroutineScope)
-                        },
+                    RouteScopedTopBarMenuActions(
+                        ownerRoute = TOP_BAR_OWNER_FAVORITES,
+                        actions = listOf(
+                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
+                                appRouter.openFavoriteCategories()
+                            },
+                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.entity_organize_title) {
+                                appRouter.openEntityOrganizeSettings()
+                            },
+                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
+                                showImportDialog(coroutineScope)
+                            },
+                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
+                                showSyncDialog(coroutineScope)
+                            },
+                        ),
                     ),
                 )
                 onDispose {
-                    onContextualMenuActionsChanged(emptyList())
+                    onContextualMenuActionsChanged(
+                        RouteScopedTopBarMenuActions(
+                            ownerRoute = TOP_BAR_OWNER_FAVORITES,
+                            actions = emptyList(),
+                        ),
+                    )
                 }
             }
 
@@ -1151,28 +1167,36 @@ fun AppNavGraph(
             val selectedTagKeys by viewModel.filterSelectedTagKeys.collectAsStateWithLifecycle(initialValue = emptySet())
             DisposableEffect(appRouter) {
                 onContextualMenuActionsChanged(
-                    buildList {
-                        add(
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string._import) {
-                                appRouter.showImportDialog()
-                            },
-                        )
-                        if (appRouter.isFilterSupported()) {
+                    RouteScopedTopBarMenuActions(
+                        ownerRoute = TOP_BAR_OWNER_LOCAL,
+                        actions = buildList {
                             add(
-                                KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.filter) {
-                                    appRouter.showFilterSheet()
+                                KototoroTopBarMenuAction(org.skepsun.kototoro.R.string._import) {
+                                    appRouter.showImportDialog()
                                 },
                             )
-                        }
-                        add(
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.directories) {
-                                appRouter.openDirectoriesSettings()
-                            },
-                        )
-                    },
+                            if (appRouter.isFilterSupported()) {
+                                add(
+                                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.filter) {
+                                        appRouter.showFilterSheet()
+                                    },
+                                )
+                            }
+                            add(
+                                KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.directories) {
+                                    appRouter.openDirectoriesSettings()
+                                },
+                            )
+                        },
+                    ),
                 )
                 onDispose {
-                    onContextualMenuActionsChanged(emptyList())
+                    onContextualMenuActionsChanged(
+                        RouteScopedTopBarMenuActions(
+                            ownerRoute = TOP_BAR_OWNER_LOCAL,
+                            actions = emptyList(),
+                        ),
+                    )
                 }
             }
             val localFilterRailState = remember(availableTags, selectedTagKeys) {

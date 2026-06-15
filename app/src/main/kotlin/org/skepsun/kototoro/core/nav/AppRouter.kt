@@ -161,6 +161,10 @@ class AppRouter private constructor(
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).mangaRepositoryFactory
     }
 
+    private val contentDataRepository: ContentDataRepository by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).contentDataRepository
+    }
+
     private val entityGraphRepository: EntityGraphRepository by lazy {
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).entityGraphRepository
     }
@@ -1233,7 +1237,9 @@ class AppRouter private constructor(
     private suspend fun resolveDetailsOriginForContent(content: Content): DetailsOrigin {
         return withContext(Dispatchers.IO) {
             val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
-            if (entityId != null) {
+            val canResolveProjection = entityId != null &&
+                contentDataRepository.findContentById(content.id, withChapters = false) != null
+            if (entityId != null && canResolveProjection) {
                 DetailsOrigin.EntityGraph(
                     entityId = entityId,
                     initialProjectionLocalMangaId = content.id,

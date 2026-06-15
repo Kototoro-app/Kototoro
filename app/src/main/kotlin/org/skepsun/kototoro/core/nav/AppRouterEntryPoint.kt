@@ -13,6 +13,7 @@ import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 interface AppRouterEntryPoint {
 
     val settings: AppSettings
+    val contentDataRepository: ContentDataRepository
     val mangaRepositoryFactory: ContentRepository.Factory
     val entityGraphRepository: EntityGraphRepository
     val jsonSourceManager: org.skepsun.kototoro.core.jsonsource.JsonSourceManager

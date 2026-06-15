@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.os.AppShortcutManager
+import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
@@ -77,6 +78,9 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
 
     @Inject
     lateinit var entityGraphRepository: EntityGraphRepository
+
+    @Inject
+    lateinit var contentDataRepository: ContentDataRepository
 
     private lateinit var pageSaveHelper: PageSaveHelper
 
@@ -233,7 +237,9 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
         lifecycleScope.launch {
             val origin = withContext(Dispatchers.IO) {
                 val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
-                if (entityId != null) {
+                val canResolveProjection = entityId != null &&
+                    contentDataRepository.findContentById(content.id, withChapters = false) != null
+                if (entityId != null && canResolveProjection) {
                     DetailsOrigin.EntityGraph(
                         entityId = entityId,
                         initialProjectionLocalMangaId = content.id,

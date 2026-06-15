@@ -358,8 +358,8 @@ fun KototoroApp(
     var isDetailsChromeTransitionPending by rememberSaveable { mutableStateOf(false) }
     var keepTabsExpandedByScrollDirection by rememberSaveable { mutableStateOf(false) }
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
+    val routeContextualMenuActions = remember { mutableStateMapOf<String, List<KototoroTopBarMenuAction>>() }
     var globalTopBarOverrideState by remember { mutableStateOf<TopBarOverrideState?>(null) }
-    var contextualMenuActions by remember { mutableStateOf<List<KototoroTopBarMenuAction>>(emptyList()) }
     var offsetDestinationRoute by remember { mutableStateOf<String?>(null) }
 
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -476,6 +476,9 @@ fun KototoroApp(
     } else {
         null
     }
+    val contextualMenuActions = chromeTopBarOwnerKey
+        ?.let(routeContextualMenuActions::get)
+        .orEmpty()
     val shouldReserveChromeInsets = shouldShowChrome || (isDetailsRoute && isDetailsChromeTransitionPending)
     var isChromeVisible by rememberSaveable { mutableStateOf(shouldShowChrome && !isDetailsRoute) }
     var pendingChromeRestoreFromDetails by rememberSaveable { mutableStateOf(isDetailsRoute) }
@@ -785,7 +788,13 @@ fun KototoroApp(
                                     }
                                 }
                             },
-                            onContextualMenuActionsChanged = { contextualMenuActions = it },
+                            onContextualMenuActionsChanged = { state ->
+                                if (state.actions.isEmpty()) {
+                                    routeContextualMenuActions.remove(state.ownerRoute)
+                                } else {
+                                    routeContextualMenuActions[state.ownerRoute] = state.actions
+                                }
+                            },
                             onOpenSearch = { request ->
                                 val route = SearchNavigation.createRoute(request)
                                 if (isSearchRoute) {

@@ -58,6 +58,11 @@ data class RouteScopedTopBarOverrideState(
     val state: TopBarOverrideState?,
 ) : TopBarOverrideState
 
+data class RouteScopedTopBarMenuActions(
+    val ownerRoute: String,
+    val actions: List<KototoroTopBarMenuAction>,
+)
+
 data class ContentSelectionTopBarOverrideState(
     val selectedCount: Int,
     val isAllNonLocal: Boolean,
