@@ -347,13 +347,6 @@ fun SourceMigrationPanel(
             }
 
             item {
-                EntityResetCard(
-                    isExecuting = uiState.isExecuting,
-                    onReset = viewModel::resetAllEntities,
-                )
-            }
-
-            item {
                 DatasetBridgeCard(
                     selectedBridge = selectedDatasetBridge,
                     animeStatus = uiState.animeDatasetStatus,
@@ -436,6 +429,13 @@ fun SourceMigrationPanel(
                     onCancel = viewModel::cancelMigration,
                     concurrency = uiState.concurrency,
                     onConcurrencyChange = viewModel::setConcurrency,
+                )
+            }
+
+            item {
+                EntityResetCard(
+                    isExecuting = uiState.isExecuting,
+                    onReset = viewModel::resetAllEntities,
                 )
             }
         }
