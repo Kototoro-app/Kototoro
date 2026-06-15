@@ -1851,79 +1851,42 @@ private fun EntityWorkbenchSection(
                 val visibleReadingIds = remember(visibleRows) {
                     visibleRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
                 }
-                // Checkbox state: true if ALL visible rows are selected, false if none, indeterminate otherwise
-                val allSelected = remember(visibleRows, uiState) {
-                    visibleRows.isNotEmpty() && visibleRows.all { it.isMergeSelected(uiState) }
+                // Whether ALL visible rows are selected (for header checkbox)
+                val allVisibleSelected = visibleRows.isNotEmpty() && visibleRows.all { it.isMergeSelected(uiState) }
+                val onToggleSelectAll: (Boolean) -> Unit = { select ->
+                    if (select) {
+                        when (selectedStage) {
+                            EntityOrganizeStage.MERGE -> {
+                                if (!uiState.mergePreviewReady) onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                                else onSetGroupsSelected(visibleGroupIds, true)
+                            }
+                            EntityOrganizeStage.TRACKING -> {
+                                if (!uiState.trackingPreviewReady) onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                                else onSelectRecommendedTracking(visibleGroupIds)
+                            }
+                            EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                        }
+                    } else {
+                        when (selectedStage) {
+                            EntityOrganizeStage.MERGE -> {
+                                if (!uiState.mergePreviewReady) onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                                else onSetGroupsSelected(visibleGroupIds, false)
+                            }
+                            EntityOrganizeStage.TRACKING -> {
+                                if (!uiState.trackingPreviewReady) onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                                else onClearTrackingSelections(visibleGroupIds)
+                            }
+                            EntityOrganizeStage.READING -> {
+                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                                onClearReadingPreviews(visibleReadingIds)
+                            }
+                        }
+                    }
                 }
-                val someSelected = remember(visibleRows, uiState) {
-                    visibleRows.any { it.isMergeSelected(uiState) }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .toggleable(
-                            value = allSelected,
-                            role = Role.Checkbox,
-                            onValueChange = {
-                                if (allSelected) {
-                                    when (selectedStage) {
-                                        EntityOrganizeStage.MERGE -> {
-                                            if (!uiState.mergePreviewReady) {
-                                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
-                                            } else {
-                                                onSetGroupsSelected(visibleGroupIds, false)
-                                            }
-                                        }
-                                        EntityOrganizeStage.TRACKING -> {
-                                            if (!uiState.trackingPreviewReady) {
-                                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
-                                            } else {
-                                                onClearTrackingSelections(visibleGroupIds)
-                                            }
-                                        }
-                                        EntityOrganizeStage.READING -> {
-                                            onSetReadingScopeGroupsSelected(visibleGroupIds, false)
-                                            onClearReadingPreviews(visibleReadingIds)
-                                        }
-                                    }
-                                } else {
-                                    when (selectedStage) {
-                                        EntityOrganizeStage.MERGE -> {
-                                            if (!uiState.mergePreviewReady) {
-                                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
-                                            } else {
-                                                onSetGroupsSelected(visibleGroupIds, true)
-                                            }
-                                        }
-                                        EntityOrganizeStage.TRACKING -> {
-                                            if (!uiState.trackingPreviewReady) {
-                                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
-                                            } else {
-                                                onSelectRecommendedTracking(visibleGroupIds)
-                                            }
-                                        }
-                                        EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(visibleGroupIds, true)
-                                    }
-                                }
-                            },
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Checkbox(
-                        checked = allSelected,
-                        onCheckedChange = null,
-                    )
-                    Text(
-                        text = if (allSelected) {
-                            stringResource(R.string.entity_organize_workbench_deselect_current_page)
-                        } else {
-                            stringResource(R.string.entity_organize_workbench_select_current_page)
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-                EntityWorkbenchHeader()
+                EntityWorkbenchHeader(
+                    allSelected = allVisibleSelected,
+                    onToggleSelectAll = onToggleSelectAll,
+                )
                 visibleRows.forEach { row ->
                     EntityWorkbenchRowCard(
                         selectedStage = selectedStage,
@@ -2737,7 +2700,10 @@ internal fun resolveStageWorkbenchViewState(
 }
 
 @Composable
-private fun EntityWorkbenchHeader() {
+private fun EntityWorkbenchHeader(
+    allSelected: Boolean,
+    onToggleSelectAll: (Boolean) -> Unit,
+) {
     val widths = workbenchColumnWidths()
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -2752,6 +2718,21 @@ private fun EntityWorkbenchHeader() {
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Row(
+                modifier = Modifier
+                    .toggleable(
+                        value = allSelected,
+                        role = Role.Checkbox,
+                        onValueChange = { onToggleSelectAll(!allSelected) },
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Checkbox(
+                    checked = allSelected,
+                    onCheckedChange = null,
+                )
+            }
             WorkbenchHeaderCell(
                 text = stringResource(R.string.entity_organize_workbench_entity_column),
                 width = widths.entity,

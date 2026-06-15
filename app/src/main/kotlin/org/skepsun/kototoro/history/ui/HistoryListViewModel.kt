@@ -35,6 +35,7 @@ import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.flattenLatest
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
 import org.skepsun.kototoro.history.domain.MarkAsReadUseCase
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
@@ -63,6 +64,7 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.os.NetworkState
+import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
@@ -76,6 +78,7 @@ class HistoryListViewModel @Inject constructor(
 	private val repository: HistoryRepository,
 	settings: AppSettings,
 	private val mangaListMapper: ContentListMapper,
+	private val favouritesRepository: FavouritesRepository,
 	private val markAsReadUseCase: MarkAsReadUseCase,
 	private val quickFilter: HistoryListQuickFilter,
 	private val sourceGroupManager: SourceGroupManager,
@@ -328,9 +331,20 @@ class HistoryListViewModel @Inject constructor(
 			)
 		}
 		val order = sortOrder.value
+		val representativeContents = foldedItems.map { it.representative.manga }
+		val pinnedIds = favouritesRepository.getPinnedIds(representativeContents.map { it.id })
+		val representativeModels = ArrayList<ContentListModel>(foldedItems.size)
+		mangaListMapper.toListModelList(
+			destination = representativeModels,
+			manga = representativeContents,
+			mode = mode,
+			pinnedIds = pinnedIds,
+		)
 		var prevHeader: ListHeader? = null
 		var isEmpty = true
-		for (item in foldedItems) {
+		for (index in foldedItems.indices) {
+			val item = foldedItems[index]
+			val model = representativeModels[index]
 			isEmpty = false
 			if (grouped) {
 				val header = item.representative.history.header(order)
@@ -341,12 +355,7 @@ class HistoryListViewModel @Inject constructor(
 					prevHeader = header
 				}
 			}
-			result += mangaListMapper.toListModel(
-				manga = item.representative.manga,
-				mode = mode,
-				metadataSelectionOverride = item.metadataSourceSelection,
-				useMetadataSelectionOverride = item.metadataSourceSelection != null,
-			).toGroupedListModel(item)
+			result += model.toGroupedListModel(item)
 		}
 		if ((filters.isNotEmpty() || groupTab != BrowseGroupTab.All || sourceTags.isNotEmpty()) && isEmpty) {
 			result += getEmptyState(hasFilters = true)
@@ -360,7 +369,6 @@ class HistoryListViewModel @Inject constructor(
 		}
 		val resolvedEntityIds = mapNotNull(ContentWithHistory::entityId).distinct()
 		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
-		val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
 		val result = ArrayList<HistoryGroup>(size)
 		var current: MutableList<ContentWithHistory>? = null
 		var currentUiId: Long? = null
@@ -375,7 +383,6 @@ class HistoryListViewModel @Inject constructor(
 				entityId = currentEntityId,
 				preferredLocalMangaId = currentEntityId?.let(preferredLocalIdsByEntity::get)
 					?: items.firstNotNullOfOrNull(ContentWithHistory::preferredLocalMangaId),
-				metadataSourceSelection = currentEntityId?.let(metadataSelectionsByEntity::get),
 			)
 			current = null
 			currentUiId = null
@@ -393,7 +400,6 @@ class HistoryListViewModel @Inject constructor(
 						uiId = item.manga.id,
 						entityId = null,
 						preferredLocalMangaId = null,
-						metadataSourceSelection = null,
 					)
 				}
 
@@ -417,8 +423,7 @@ class HistoryListViewModel @Inject constructor(
 	private fun List<ContentWithHistory>.toHistoryGroup(
 		uiId: Long,
 		entityId: Long?,
-		preferredLocalMangaId: Long?,
-		metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
+		preferredLocalMangaId: Long?
 	): HistoryGroup {
 		return HistoryGroup(
 			uiId = uiId,
@@ -428,7 +433,6 @@ class HistoryListViewModel @Inject constructor(
 			mangaIds = mapTo(LinkedHashSet(size)) { it.manga.id },
 			entityId = entityId,
 			preferredLocalMangaId = preferredLocalMangaId ?: first().manga.id,
-			metadataSourceSelection = metadataSourceSelection,
 		)
 	}
 
@@ -538,6 +542,5 @@ class HistoryListViewModel @Inject constructor(
 		val mangaIds: Set<Long>,
 		val entityId: Long?,
 		val preferredLocalMangaId: Long?,
-		val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
 	)
 }
