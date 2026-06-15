@@ -347,17 +347,9 @@ fun SourceMigrationPanel(
             }
 
             item {
-                RepairDiagnosticsCard(
-                    uiState = uiState,
-                    onRefresh = viewModel::refreshRepairReport,
-                    onHideStaleLegacyRelations = viewModel::hideStaleLegacyRelations,
-                    onRejectSuspectTrackingBindings = viewModel::rejectSuspectTrackingBindings,
-                    onRepairSuspectMetadataSourceSelections = viewModel::repairSuspectMetadataSourceSelections,
-                    onPruneRedundantProjectionMetadataSelections = viewModel::pruneRedundantProjectionMetadataSelections,
-                    onPruneRedundantProjectionOverrides = viewModel::pruneRedundantProjectionOverrides,
-                    onPruneRedundantProjectionReadingStatuses = viewModel::pruneRedundantProjectionReadingStatuses,
-                    onSplitSuspectMismerged = viewModel::splitSuspectMismergedLocalWorks,
-                    onResetAllEntities = viewModel::resetAllEntities,
+                EntityResetCard(
+                    isExecuting = uiState.isExecuting,
+                    onReset = viewModel::resetAllEntities,
                 )
             }
 
@@ -477,6 +469,62 @@ private fun HeaderSection(
         }
         IconButton(onClick = { if (!uiState.isExecuting) onDismiss() }) {
             Icon(Icons.Default.Close, contentDescription = null)
+        }
+    }
+}
+
+@Composable
+private fun EntityResetCard(
+    isExecuting: Boolean,
+    onReset: () -> Unit,
+) {
+    var showConfirm by rememberSaveable { mutableStateOf(false) }
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text(stringResource(R.string.entity_reset_title)) },
+            text = { Text(stringResource(R.string.entity_reset_confirm)) },
+            confirmButton = {
+                TextButton(onClick = { showConfirm = false; onReset() }) {
+                    Text(stringResource(R.string.entity_reset))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    OutlinedCard(
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.entity_reset_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.entity_reset_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = { showConfirm = true },
+                enabled = !isExecuting,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = stringResource(R.string.entity_reset))
+            }
         }
     }
 }
