@@ -1820,19 +1820,15 @@ private fun EntityWorkbenchSection(
                     onSortModeChange = { onViewStateChange(viewState.copy(sortMode = it)) },
                     stageFilters = viewState.stageFilters,
                     onStageFiltersChange = { onViewStateChange(viewState.copy(stageFilters = it)) },
-                    showSelectedOnly = viewState.showSelectedOnly,
-                    onToggleSelectedOnly = {
-                        onViewStateChange(viewState.copy(showSelectedOnly = !viewState.showSelectedOnly))
-                    },
+                    showSelectedOnly = false,
+                    onToggleSelectedOnly = {},
                     hasVisibleRows = pagedRows.items.isNotEmpty(),
                 )
             EntityBrowseSection(
                 query = viewState.query,
                 onQueryChange = { onViewStateChange(viewState.copy(query = it)) },
-                showSelectedOnly = viewState.showSelectedOnly,
-                onToggleSelectedOnly = {
-                    onViewStateChange(viewState.copy(showSelectedOnly = !viewState.showSelectedOnly))
-                },
+                showSelectedOnly = false,
+                onToggleSelectedOnly = {},
                 visibleCount = filteredRows.size,
                 totalCount = rows.size,
                 pagedItems = pagedRows,
