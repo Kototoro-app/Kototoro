@@ -76,6 +76,35 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 			.build(),
 	)
 
+	// Same as observeAll but without GROUP BY — faster for deduplication-in-code
+	fun observeAllNoGroup(
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption>,
+		limit: Int
+	): Flow<List<HistoryWithContent>> = observeAllImpl(
+		MangaQueryBuilder(TABLE_HISTORY, this)
+			.join("LEFT JOIN manga ON history.manga_id = manga.manga_id")
+			.where("history.deleted_at = 0")
+			.filters(filterOptions)
+			.orderBy(
+				orderBy = when (order) {
+					ListSortOrder.LAST_READ -> "history.updated_at DESC"
+					ListSortOrder.LONG_AGO_READ -> "history.updated_at ASC"
+					ListSortOrder.NEWEST -> "history.created_at DESC"
+					ListSortOrder.OLDEST -> "history.created_at ASC"
+					ListSortOrder.PROGRESS -> "history.percent DESC"
+					ListSortOrder.UNREAD -> "history.percent ASC"
+					ListSortOrder.ALPHABETIC -> "manga.title"
+					ListSortOrder.ALPHABETIC_REVERSE -> "manga.title DESC"
+					ListSortOrder.NEW_CHAPTERS -> "${trackFieldExpr("manga.manga_id", "chapters_new")} DESC"
+					ListSortOrder.UPDATED -> "${trackFieldExpr("manga.manga_id", "last_chapter_date")} DESC"
+					else -> throw IllegalArgumentException("Sort order $order is not supported")
+				},
+			)
+			.limit(limit)
+			.build(),
+	)
+
 	@Query("SELECT manga_id FROM history WHERE deleted_at = 0")
 	abstract suspend fun findAllIds(): LongArray
 

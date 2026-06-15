@@ -151,8 +151,8 @@ class HistoryRepository @Inject constructor(
 		} else {
 			filterOptions
 		}
-		// Use simple query for fast initial load; sort/filter handled by DAO when supported
-		val flow = db.getHistoryDao().observeAll(limit)
+		// Use no-group-by variant to avoid SQL GROUP BY overhead; deduplicate in code
+		val flow = db.getHistoryDao().observeAllNoGroup(order, effectiveFilters, limit)
 			.mapLatest { items ->
 				mapToHistoryList(items)
 			}
@@ -166,7 +166,10 @@ class HistoryRepository @Inject constructor(
 
 	private suspend fun mapToHistoryList(items: List<HistoryWithContent>): List<ContentWithHistory> {
 		if (items.isEmpty()) return emptyList()
-		val mangaIds = items.map { it.manga.id }
+		// Deduplicate by manga_id (GROUP BY removed from SQL for speed)
+		val seen = HashSet<Long>(items.size)
+		val unique = items.filter { seen.add(it.manga.id) }
+		val mangaIds = unique.map { it.manga.id }
 		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(mangaIds)
 		val distinctEntityIds = entityIdsByMangaId.values.distinct()
 		val prefByEntityId = if (distinctEntityIds.isEmpty()) {
@@ -175,7 +178,7 @@ class HistoryRepository @Inject constructor(
 			db.getEntityGraphDao().findEntityPrefsByIds(distinctEntityIds)
 				.associate { it.entityId to it.preferredLocalMangaId }
 		}
-		return items.map { item ->
+		return unique.map { item ->
 			val content = item.toContent()
 			val history = item.history.toContentHistory()
 			val entityId = entityIdsByMangaId[content.id]
