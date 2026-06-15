@@ -1812,6 +1812,8 @@ private fun EntityWorkbenchSection(
                     summary = workbenchSummary,
                     hasMergePreviewSelection = uiState.mergePreviewReady,
                     hasTrackingPreviews = uiState.trackingPreviewReady,
+                    onSelectAllRows = {},
+                    onClearAllRows = {},
                     statusFilter = viewState.statusFilter,
                     onStatusFilterChange = { onViewStateChange(viewState.copy(statusFilter = it)) },
                     sortMode = viewState.sortMode,
@@ -1821,50 +1823,6 @@ private fun EntityWorkbenchSection(
                     showSelectedOnly = viewState.showSelectedOnly,
                     onToggleSelectedOnly = {
                         onViewStateChange(viewState.copy(showSelectedOnly = !viewState.showSelectedOnly))
-                    },
-                    onSelectAllRows = {
-                        val allGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
-                        when (selectedStage) {
-                            EntityOrganizeStage.MERGE -> {
-                                if (!uiState.mergePreviewReady) {
-                                    onSetReadingScopeGroupsSelected(allGroupIds, true)
-                                } else {
-                                    onSetGroupsSelected(allGroupIds, true)
-                                }
-                            }
-                            EntityOrganizeStage.TRACKING -> {
-                                if (!uiState.trackingPreviewReady) {
-                                    onSetReadingScopeGroupsSelected(allGroupIds, true)
-                                } else {
-                                    onSelectRecommendedTracking(allGroupIds)
-                                }
-                            }
-                            EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(allGroupIds, true)
-                        }
-                    },
-                    onClearAllRows = {
-                        val allGroupIds = filteredRows.mapTo(LinkedHashSet()) { it.group.id }
-                        val allReadingIds = filteredRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
-                        when (selectedStage) {
-                            EntityOrganizeStage.MERGE -> {
-                                if (!uiState.mergePreviewReady) {
-                                    onSetReadingScopeGroupsSelected(allGroupIds, false)
-                                } else {
-                                    onSetGroupsSelected(allGroupIds, false)
-                                }
-                            }
-                            EntityOrganizeStage.TRACKING -> {
-                                if (!uiState.trackingPreviewReady) {
-                                    onSetReadingScopeGroupsSelected(allGroupIds, false)
-                                } else {
-                                    onClearTrackingSelections(allGroupIds)
-                                }
-                            }
-                            EntityOrganizeStage.READING -> {
-                                onSetReadingScopeGroupsSelected(allGroupIds, false)
-                                onClearReadingPreviews(allReadingIds)
-                            }
-                        }
                     },
                     hasVisibleRows = pagedRows.items.isNotEmpty(),
                 )
@@ -1889,50 +1847,7 @@ private fun EntityWorkbenchSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
-                tableToolbar = { visibleRows ->
-                    val visibleGroupIds = visibleRows.mapTo(LinkedHashSet()) { it.group.id }
-                    val visibleReadingIds = visibleRows
-                        .flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
-                    WorkbenchTableToolbar(
-                        selectedStage = selectedStage,
-                        onSelectVisibleGroups = {
-                            if (!uiState.mergePreviewReady) {
-                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
-                            } else {
-                                onSetGroupsSelected(visibleGroupIds, true)
-                            }
-                        },
-                        onClearVisibleMergeSelections = {
-                            if (!uiState.mergePreviewReady) {
-                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
-                            } else {
-                                onSetGroupsSelected(visibleGroupIds, false)
-                            }
-                        },
-                        onSelectVisibleReadingScope = { onSetReadingScopeGroupsSelected(visibleGroupIds, true) },
-                        onClearVisibleReadingScope = { onSetReadingScopeGroupsSelected(visibleGroupIds, false) },
-                        onSelectRecommendedTracking = {
-                            if (!uiState.trackingPreviewReady) {
-                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
-                            } else {
-                                onSelectRecommendedTracking(visibleGroupIds)
-                            }
-                        },
-                        onClearLowConfidenceTracking = { onClearLowConfidenceTracking(visibleGroupIds) },
-                        onClearTrackingSelections = {
-                            if (!uiState.trackingPreviewReady) {
-                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
-                            } else {
-                                onClearTrackingSelections(visibleGroupIds)
-                            }
-                        },
-                        onAcceptReadingPreviews = { onAcceptReadingPreviews(visibleReadingIds) },
-                        onClearReadingPreviews = { onClearReadingPreviews(visibleReadingIds) },
-                        hasVisibleMerge = visibleRows.any { it.isMergeCandidate },
-                        hasVisibleTracking = visibleRows.any { it.trackingCandidates.isNotEmpty() },
-                        hasVisibleReading = visibleRows.any { it.readingCandidates.isNotEmpty() },
-                    )
-                },
+                tableToolbar = null,
             ) { visibleRows ->
                 val visibleGroupIds = remember(visibleRows) {
                     visibleRows.mapTo(LinkedHashSet()) { it.group.id }
