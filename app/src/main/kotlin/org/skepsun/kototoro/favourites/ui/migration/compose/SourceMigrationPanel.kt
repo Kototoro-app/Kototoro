@@ -4428,12 +4428,6 @@ private fun PagedBrowseToolbar(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.entity_organize_visible_count, visibleCount, totalCount),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
             Box {
                 OutlinedButton(
                     onClick = { expanded = true },
@@ -4482,6 +4476,12 @@ private fun PagedBrowseToolbar(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(16.dp))
                     }
+                    Text(
+                        text = stringResource(R.string.entity_organize_page_indicator, page + 1, pageCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                    )
                     IconButton(
                         onClick = { onPageChange(page + 1) },
                         enabled = page + 1 < pageCount,
