@@ -2105,51 +2105,6 @@ private fun WorkbenchSelectionSummaryCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_scope_items),
-                    value = summary.selectedScopeItems.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_selected_contents),
-                    value = summary.selectedContents.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_matched_groups),
-                    value = summary.matchedGroups.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_workbench_metric_selected_groups),
-                    value = summary.selectedMergeGroups.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_tracking_title),
-                    value = summary.selectedTracking.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-                WorkbenchMetricChip(
-                    label = stringResource(R.string.entity_organize_reading_title),
-                    value = summary.selectedReading.toString(),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FilterDropdown(
@@ -4527,12 +4482,6 @@ private fun PagedBrowseToolbar(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(16.dp))
                     }
-                    Text(
-                        text = stringResource(R.string.entity_organize_page_indicator, page + 1, pageCount),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 6.dp),
-                    )
                     IconButton(
                         onClick = { onPageChange(page + 1) },
                         enabled = page + 1 < pageCount,
