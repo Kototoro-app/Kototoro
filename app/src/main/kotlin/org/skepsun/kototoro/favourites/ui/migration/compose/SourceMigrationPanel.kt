@@ -1851,8 +1851,20 @@ private fun EntityWorkbenchSection(
                 val visibleReadingIds = remember(visibleRows) {
                     visibleRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
                 }
-                // Whether ALL visible rows are selected (for header checkbox)
-                val allVisibleSelected = visibleRows.isNotEmpty() && visibleRows.all { it.isMergeSelected(uiState) }
+                // Whether all checkable visible rows are selected (for header checkbox)
+                val allVisibleSelected = when (selectedStage) {
+                    EntityOrganizeStage.MERGE -> visibleRows.isNotEmpty() && visibleRows.all {
+                        if (!uiState.mergePreviewReady) it.group.id in uiState.selectedMergeGroupIds
+                        else it.isMergeCandidate && it.group.id in uiState.selectedMergeGroupIds
+                    }
+                    EntityOrganizeStage.TRACKING -> visibleRows.isNotEmpty() && visibleRows.all {
+                        if (!uiState.trackingPreviewReady) it.group.id in uiState.selectedMergeGroupIds
+                        else it.trackingCandidates.any { tc -> tc.previewId in uiState.selectedTrackingPreviewIds }
+                    }
+                    EntityOrganizeStage.READING -> visibleRows.isNotEmpty() && visibleRows.all {
+                        it.group.id in uiState.selectedMergeGroupIds
+                    }
+                }
                 val onToggleSelectAll: (Boolean) -> Unit = { select ->
                     if (select) {
                         when (selectedStage) {
