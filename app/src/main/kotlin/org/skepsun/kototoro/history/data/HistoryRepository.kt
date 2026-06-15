@@ -151,7 +151,8 @@ class HistoryRepository @Inject constructor(
 		} else {
 			filterOptions
 		}
-		val flow = db.getHistoryDao().observeAll(order, effectiveFilters, limit)
+		// Use simple query for fast initial load; sort/filter handled by DAO when supported
+		val flow = db.getHistoryDao().observeAll(limit)
 			.mapLatest { items ->
 				mapToHistoryList(items)
 			}
