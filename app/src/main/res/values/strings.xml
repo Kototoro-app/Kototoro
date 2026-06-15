@@ -1139,6 +1139,8 @@ Proceed?</string>
     <string name="entity_organize_workbench_clear_visible">Clear visible picks</string>
     <string name="entity_organize_workbench_select_all">Select all</string>
     <string name="entity_organize_workbench_clear_all">Clear all</string>
+    <string name="entity_organize_workbench_select_current_page">Select current page</string>
+    <string name="entity_organize_workbench_deselect_current_page">Deselect current page</string>
     <string name="entity_organize_workbench_select_all_merge_groups">Select candidate groups</string>
     <string name="entity_organize_workbench_clear_all_merge_groups">Clear candidate groups</string>
     <string name="entity_organize_workbench_select_all_scope">Select scope</string>

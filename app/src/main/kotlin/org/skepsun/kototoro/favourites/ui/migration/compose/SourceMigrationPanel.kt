@@ -1934,6 +1934,84 @@ private fun EntityWorkbenchSection(
                     )
                 },
             ) { visibleRows ->
+                val visibleGroupIds = remember(visibleRows) {
+                    visibleRows.mapTo(LinkedHashSet()) { it.group.id }
+                }
+                val visibleReadingIds = remember(visibleRows) {
+                    visibleRows.flatMapTo(LinkedHashSet()) { row -> row.readingCandidates.map { it.mangaId } }
+                }
+                // Checkbox state: true if ALL visible rows are selected, false if none, indeterminate otherwise
+                val allSelected = remember(visibleRows, uiState) {
+                    visibleRows.isNotEmpty() && visibleRows.all { it.isMergeSelected(uiState) }
+                }
+                val someSelected = remember(visibleRows, uiState) {
+                    visibleRows.any { it.isMergeSelected(uiState) }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = allSelected,
+                            role = Role.Checkbox,
+                            onValueChange = {
+                                if (allSelected) {
+                                    when (selectedStage) {
+                                        EntityOrganizeStage.MERGE -> {
+                                            if (!uiState.mergePreviewReady) {
+                                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                                            } else {
+                                                onSetGroupsSelected(visibleGroupIds, false)
+                                            }
+                                        }
+                                        EntityOrganizeStage.TRACKING -> {
+                                            if (!uiState.trackingPreviewReady) {
+                                                onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                                            } else {
+                                                onClearTrackingSelections(visibleGroupIds)
+                                            }
+                                        }
+                                        EntityOrganizeStage.READING -> {
+                                            onSetReadingScopeGroupsSelected(visibleGroupIds, false)
+                                            onClearReadingPreviews(visibleReadingIds)
+                                        }
+                                    }
+                                } else {
+                                    when (selectedStage) {
+                                        EntityOrganizeStage.MERGE -> {
+                                            if (!uiState.mergePreviewReady) {
+                                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                                            } else {
+                                                onSetGroupsSelected(visibleGroupIds, true)
+                                            }
+                                        }
+                                        EntityOrganizeStage.TRACKING -> {
+                                            if (!uiState.trackingPreviewReady) {
+                                                onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                                            } else {
+                                                onSelectRecommendedTracking(visibleGroupIds)
+                                            }
+                                        }
+                                        EntityOrganizeStage.READING -> onSetReadingScopeGroupsSelected(visibleGroupIds, true)
+                                    }
+                                }
+                            },
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Checkbox(
+                        checked = allSelected,
+                        onCheckedChange = null,
+                    )
+                    Text(
+                        text = if (allSelected) {
+                            stringResource(R.string.entity_organize_workbench_deselect_current_page)
+                        } else {
+                            stringResource(R.string.entity_organize_workbench_select_current_page)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
                 EntityWorkbenchHeader()
                 visibleRows.forEach { row ->
                     EntityWorkbenchRowCard(
