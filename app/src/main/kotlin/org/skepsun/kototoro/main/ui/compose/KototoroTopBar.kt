@@ -78,10 +78,10 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 
-private val CollapsedSearchBarHeight = 44.dp
+private val CollapsedSearchBarHeight = 40.dp
 private val CompactTopTabsRailHeight = 40.dp
 private val CompactTopFilterRailHeight = 36.dp
-private val CompactTopBarActionSize = 36.dp
+private val CompactTopBarActionSize = 40.dp
 private val CompactTopBarIconSize = 18.dp
 private val CompactFilterRailChipHeight = 34.dp
 data class KototoroTopBarMenuAction(

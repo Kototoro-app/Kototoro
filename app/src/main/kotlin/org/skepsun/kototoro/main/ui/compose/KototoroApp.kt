@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import androidx.compose.ui.unit.LayoutDirection
 
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -178,39 +179,6 @@ private fun Modifier.renderChromeInSharedTransitionOverlay(
     }
 }
 
-@Composable
-private fun BoxScope.ImmersiveEdgeGradient(
-    height: androidx.compose.ui.unit.Dp,
-    colors: List<Color>,
-    stops: List<Float>? = null,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .height(height)
-            .drawWithCache {
-                val brush = if (stops != null && stops.size == colors.size) {
-                    Brush.verticalGradient(
-                        colorStops = Array(colors.size) { index -> stops[index] to colors[index] },
-                        startY = 0f,
-                        endY = size.height,
-                    )
-                } else {
-                    Brush.verticalGradient(
-                        colors = colors,
-                        startY = 0f,
-                        endY = size.height,
-                    )
-                }
-                onDrawBehind {
-                    drawRect(
-                        brush = brush,
-                        topLeft = Offset.Zero,
-                    )
-                }
-            },
-    )
-}
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable

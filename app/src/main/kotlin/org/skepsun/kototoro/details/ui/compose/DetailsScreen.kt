@@ -2,6 +2,7 @@ package org.skepsun.kototoro.details.ui.compose
 
 import android.os.Build
 import android.util.Log
+import androidx.compose.foundation.isSystemInDarkTheme
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
@@ -152,7 +153,9 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
+import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
@@ -481,6 +484,11 @@ fun DetailsScreen(
         }
     }
     val compactSheetExpansionProgress = detailsPaneState.expansionProgress
+    val detailsGradientAlpha = if (scrollState.maxValue > 0) {
+        (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
     val toolbarTitle = translatedTitle ?: content?.title.orEmpty()
     val isCompactPaneFullyExpanded = !isWideAdaptiveLayout && compactPaneAnchor == CompactDetailsPaneAnchor.Full
     val visibleStatusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -718,7 +726,7 @@ fun DetailsScreen(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .height(DetailsTopBarHeight)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(horizontal = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -1204,6 +1212,34 @@ fun DetailsScreen(
                         onActionClick = handleActionClick,
                     )
                 }
+            }
+            val detailsImmersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
+            val detailsImmersiveIsDark = isSystemInDarkTheme()
+            val detailsImmersiveBase = if (detailsImmersiveIsDark) Color.Black else Color.White
+            val detailsTopImmersiveHeight = with(density) {
+                val sbPx = statusBarTopPadding.roundToPx()
+                val tbPx = DetailsTopBarHeight.roundToPx()
+                val overflowPx = 6.dp.roundToPx()
+                (sbPx + (tbPx * 0.72f).toInt() + overflowPx)
+                    .coerceAtLeast(sbPx + overflowPx)
+                    .toDp()
+            }
+            if (detailsGradientAlpha > 0.01f) {
+                ImmersiveEdgeGradient(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .graphicsLayer { alpha = detailsGradientAlpha },
+                    height = detailsTopImmersiveHeight,
+                    colors = listOf(
+                        detailsImmersiveBase.copy(alpha = (0.72f + (0.98f - 0.72f) * detailsImmersiveStrength)),
+                        detailsImmersiveBase.copy(alpha = (0.56f + (0.82f - 0.56f) * detailsImmersiveStrength)),
+                        detailsImmersiveBase.copy(alpha = (0.32f + (0.52f - 0.32f) * detailsImmersiveStrength)),
+                        detailsImmersiveBase.copy(alpha = (0.12f + (0.22f - 0.12f) * detailsImmersiveStrength)),
+                        Color.Transparent,
+                    ),
+                    stops = listOf(0f, 0.38f, 0.72f, 0.92f, 1f),
+                )
             }
                 if (compactTopBarAlpha > 0.01f) {
                 Box(
