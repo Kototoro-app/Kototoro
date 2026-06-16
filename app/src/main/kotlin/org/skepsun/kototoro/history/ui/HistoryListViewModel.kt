@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -88,6 +89,7 @@ class HistoryListViewModel @Inject constructor(
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val entityGraphRepository: EntityGraphRepository,
+	private val historyPreviewCache: HistoryPreviewCache,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	@Volatile
@@ -180,13 +182,17 @@ class HistoryListViewModel @Inject constructor(
 		val incognito = values[4] as Boolean
 		val groupTab = values[5] as BrowseGroupTab
 		val sourceTags = values[6] as Set<SourceTag>
-		val preset = values[8] as? org.skepsun.kototoro.explore.data.SourcePreset
+		val preset = values[9] as? org.skepsun.kototoro.explore.data.SourcePreset
 		mapList(list, grouped, mode, filters, incognito, groupTab, sourceTags, preset)
 	}.onEach {
 		isPaginationReady.set(true)
 	}.distinctUntilChanged().catch { e ->
 		emit(listOf(e.toErrorState(canRetry = false)))
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+	}.stateIn(
+		viewModelScope + Dispatchers.Default,
+		SharingStarted.Eagerly,
+		buildPreviewStateOrNull() ?: listOf(LoadingState),
+	)
 
 	override fun onRefresh() {
 		refreshTrigger.value = Any()
@@ -269,6 +275,42 @@ class HistoryListViewModel @Inject constructor(
 		isPaginationReady.set(false)
 		repository.observeAllWithHistory(order, filters, limit)
 	}.flattenLatest()
+
+	private fun buildPreviewStateOrNull(): List<ListModel>? {
+		val snapshot = historyPreviewCache.observe().value ?: return null
+		val currentMode = listMode.value
+		val selectedGroupTab = currentGroupTab.value
+		val selectedSourceTags = currentSourceTags.value
+		val currentSortOrder = sortOrder.value
+		val currentGroupingEnabled = settings.isHistoryGroupingEnabled && currentSortOrder.isGroupingSupported()
+		val currentPresetId = settings.activeSourcePresetId.takeIf { it != -1L }
+		val currentFilters = quickFilter.appliedOptions.value
+		if (
+			currentFilters.isNotEmpty() ||
+			snapshot.filters.isNotEmpty() ||
+			currentSortOrder != snapshot.sortOrder ||
+			currentGroupingEnabled != snapshot.isGroupingEnabled ||
+			selectedGroupTab != snapshot.groupTab ||
+			selectedSourceTags != snapshot.sourceTags ||
+			currentMode != snapshot.listMode ||
+			settings.isIncognitoModeEnabled != snapshot.isIncognito ||
+			settings.isHistoryExcludeNsfw != snapshot.isHistoryExcludeNsfw ||
+			currentPresetId != snapshot.preset?.id ||
+			limit.value > PAGE_SIZE
+		) {
+			return null
+		}
+		return mapPreviewList(
+			list = snapshot.items,
+			grouped = snapshot.isGroupingEnabled,
+			mode = snapshot.listMode,
+			isIncognito = snapshot.isIncognito,
+			groupTab = snapshot.groupTab,
+			sourceTags = snapshot.sourceTags,
+			preset = snapshot.preset,
+			order = snapshot.sortOrder,
+		)
+	}
 
 	private suspend fun mapList(
 		list: List<ContentWithHistory>,
@@ -363,6 +405,61 @@ class HistoryListViewModel @Inject constructor(
 		return result
 	}
 
+	private fun mapPreviewList(
+		list: List<ContentWithHistory>,
+		grouped: Boolean,
+		mode: ListMode,
+		isIncognito: Boolean,
+		groupTab: BrowseGroupTab,
+		sourceTags: Set<SourceTag>,
+		preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+		order: ListSortOrder,
+	): List<ListModel> {
+		val filteredList = list.filter { (manga, _) ->
+			val source = manga.source
+			if (preset != null && source.name !in preset.sources) {
+				return@filter false
+			}
+			val contentGroup = sourceGroupManager.getContentGroup(source)
+			val originGroup = sourceGroupManager.getOriginGroup(source)
+			val groupMatches = groupTab.matchesContentGroup(contentGroup) && groupTab.matchesOriginGroup(originGroup)
+			val originMatches = if (sourceTags.isEmpty()) true else sourceTags.any { it.matches(contentGroup, originGroup) }
+			groupMatches && originMatches
+		}
+		val visibleItems = if (settings.isHistoryExcludeNsfw) filteredList.filterNot { it.manga.isNsfw() } else filteredList
+		if (visibleItems.isEmpty()) {
+			return listOf(getEmptyState(hasFilters = false))
+		}
+		val foldedItems = visibleItems.foldAdjacentForPreviewByEntity()
+		groupedHistoryIds = foldedItems.associate { it.uiId to it.mangaIds }
+		groupedEntityIds = foldedItems.mapNotNull { group -> group.entityId?.let { group.uiId to it } }.toMap()
+		groupedPreferredLocalIds = foldedItems.mapNotNull { group ->
+			group.preferredLocalMangaId?.let { group.uiId to it }
+		}.toMap()
+
+		val result = ArrayList<ListModel>((if (grouped) (foldedItems.size * 1.4).toInt() else foldedItems.size) + 1)
+		if (isIncognito) {
+			result += InfoModel(
+				key = AppSettings.KEY_INCOGNITO_MODE,
+				title = R.string.incognito_mode,
+				text = R.string.incognito_mode_hint,
+				icon = R.drawable.ic_incognito,
+			)
+		}
+		var prevHeader: ListHeader? = null
+		for (item in foldedItems) {
+			if (grouped) {
+				val header = item.representative.history.header(order)
+				if (header != prevHeader) {
+					header?.let(result::add)
+					prevHeader = header
+				}
+			}
+			result += item.toPreviewModel(mode)
+		}
+		return result
+	}
+
 	private suspend fun List<ContentWithHistory>.foldAdjacentByEntity(): List<HistoryGroup> {
 		if (isEmpty()) {
 			return emptyList()
@@ -400,6 +497,60 @@ class HistoryListViewModel @Inject constructor(
 						uiId = item.manga.id,
 						entityId = null,
 						preferredLocalMangaId = null,
+					)
+				}
+
+				currentEntityId == entityId && currentContentTypeOrdinal == contentTypeOrdinal -> {
+					current?.add(item)
+				}
+
+				else -> {
+					flushCurrent()
+					currentEntityId = entityId
+					currentContentTypeOrdinal = contentTypeOrdinal
+					currentUiId = entityId.toUiGroupId(contentTypeOrdinal)
+					current = arrayListOf(item)
+				}
+			}
+		}
+		flushCurrent()
+		return result
+	}
+
+	private fun List<ContentWithHistory>.foldAdjacentForPreviewByEntity(): List<HistoryGroup> {
+		if (isEmpty()) {
+			return emptyList()
+		}
+		val result = ArrayList<HistoryGroup>(size)
+		var current: MutableList<ContentWithHistory>? = null
+		var currentUiId: Long? = null
+		var currentEntityId: Long? = null
+		var currentContentTypeOrdinal: Int? = null
+
+		fun flushCurrent() {
+			val items = current ?: return
+			val uiId = currentUiId ?: return
+			result += items.toHistoryGroup(
+				uiId = uiId,
+				entityId = currentEntityId,
+				preferredLocalMangaId = items.firstNotNullOfOrNull(ContentWithHistory::preferredLocalMangaId),
+			)
+			current = null
+			currentUiId = null
+			currentEntityId = null
+			currentContentTypeOrdinal = null
+		}
+
+		for (item in this) {
+			val entityId = item.entityId
+			val contentTypeOrdinal = item.manga.source.contentType.ordinal
+			when {
+				entityId == null -> {
+					flushCurrent()
+					result += listOf(item).toHistoryGroup(
+						uiId = item.manga.id,
+						entityId = null,
+						preferredLocalMangaId = item.preferredLocalMangaId,
 					)
 				}
 
@@ -490,6 +641,49 @@ class HistoryListViewModel @Inject constructor(
 	}
 
 	private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
+
+	private fun HistoryGroup.toPreviewModel(mode: ListMode): ListModel {
+		val manga = representative.manga
+		val subtitle = listOfNotNull(
+			manga.altTitles.firstOrNull()?.takeIf { it.isNotBlank() },
+			groupSuffix(),
+		).joinToString(" · ").ifBlank { null }
+		val progress = ReadingProgress(
+			percent = representative.history.percent,
+			totalChapters = representative.history.chaptersCount,
+			mode = settings.progressIndicatorMode,
+		).takeIf { it.isValid() }
+		return when (mode) {
+			ListMode.LIST -> ContentCompactListModel(
+				manga = manga,
+				override = null,
+				subtitle = subtitle,
+				counter = 0,
+				id = uiId,
+			)
+			ListMode.DETAILED_LIST -> ContentDetailedListModel(
+				manga = manga,
+				override = null,
+				subtitle = subtitle,
+				counter = 0,
+				id = uiId,
+				progress = progress,
+				isFavorite = false,
+				isSaved = manga.isLocal,
+				tags = emptyList(),
+			)
+			ListMode.GRID -> ContentGridModel(
+				manga = manga,
+				override = null,
+				subtitle = manga.altTitles.firstOrNull(),
+				counter = 0,
+				id = uiId,
+				progress = progress,
+				isFavorite = false,
+				isSaved = manga.isLocal,
+			)
+		}
+	}
 
 	private fun ContentHistory.header(order: ListSortOrder): ListHeader? = when (order) {
 		ListSortOrder.LAST_READ,

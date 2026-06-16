@@ -60,6 +60,7 @@ class DataSyncManager @Inject constructor(
     private var debounceJob: Job? = null
     private var settingsJob: Job? = null
     private val uploadMutex = Mutex()
+    private var lastMinIntervalSkipLogAtMs: Long = 0L
 
     private companion object {
         private const val TAG = "DataSyncManager"
@@ -130,7 +131,11 @@ class DataSyncManager @Inject constructor(
         // 收紧策略：若距离上次上传不足最小间隔，则跳过本次调度
         val lastUpload = settings.backupWebDavLastUploadTime
         if (lastUpload > 0L && System.currentTimeMillis() - lastUpload < AUTO_SYNC_MIN_INTERVAL_MS) {
-            logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "schedule_skipped", reason = "min_interval")
+            val now = System.currentTimeMillis()
+            if (now - lastMinIntervalSkipLogAtMs >= AUTO_SYNC_DEBOUNCE_MS) {
+                lastMinIntervalSkipLogAtMs = now
+                logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "schedule_skipped", reason = "min_interval")
+            }
             return
         }
 

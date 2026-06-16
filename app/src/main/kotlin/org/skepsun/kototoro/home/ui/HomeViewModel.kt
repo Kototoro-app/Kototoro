@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.home.ui
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.collection.LongObjectMap
 import androidx.compose.runtime.Immutable
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -46,6 +48,10 @@ import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.history.domain.model.ContentWithHistory
+import org.skepsun.kototoro.history.ui.HistoryPreviewCache
+import org.skepsun.kototoro.history.ui.HistoryPreviewSnapshot
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -179,7 +185,12 @@ class HomeViewModel @Inject constructor(
     private val contentDataRepository: ContentDataRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     @ApplicationContext private val appContext: Context,
+    private val historyPreviewCache: HistoryPreviewCache,
 ) : BaseViewModel() {
+
+    private companion object {
+        private const val TAG = "HomeViewModel"
+    }
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
 
@@ -191,13 +202,39 @@ class HomeViewModel @Inject constructor(
             else -> null
         }
     }
+        .onStart {
+            emit(
+                when (globalFavoritesState.selectedGroupTab.value) {
+                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
+                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel -> HomeContentTab.NOVEL
+                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video -> HomeContentTab.VIDEO
+                    else -> null
+                },
+            )
+        }
     private val selectedSourceTagsFlow = globalFavoritesState.selectedSourceTags
+        .onStart { emit(globalFavoritesState.selectedSourceTags.value) }
     private val activePresetFlow = settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
         .flatMapLatest { id ->
             if (id == -1L) flowOf(null) else sourcePresetsRepository.observe(id)
         }
-    private val recentHistoryFlow = historyRepository.observeAll()
+        .onStart {
+            val presetId = settings.activeSourcePresetId
+            emit(if (presetId == -1L) null else sourcePresetsRepository.getById(presetId))
+        }
+        .onEach { preset ->
+            Log.d(TAG, "activePresetFlow presetId=${preset?.id ?: -1L}")
+        }
+    private val recentHistoryWithMetadataFlow = historyRepository.observeAllWithHistory(
+        order = ListSortOrder.LAST_READ,
+        filterOptions = emptySet(),
+        limit = 64,
+    )
+        .onStart { emit(emptyList()) }
+    private val recentHistoryFlow = recentHistoryWithMetadataFlow
+        .map { items -> items.map(ContentWithHistory::manga) }
     private val isHistoryNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw }
+        .onStart { emit(settings.isHistoryExcludeNsfw) }
     private val resumeCandidateFlow = combine(
         recentHistoryFlow,
         selectedTabFlow,
@@ -220,49 +257,69 @@ class HomeViewModel @Inject constructor(
             if (content == null) {
                 flowOf(HomeResumeState())
             } else {
-                flow {
-                    val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
-                    val preferredLocalMangaId = if (entityId != null) {
-                        contentDataRepository.getEntityPreferredLocalMangaId(entityId)
-                    } else {
-                        null
-                    }
-                    val representativeContent = contentDataRepository.findDisplayContentById(
-                        preferredLocalMangaId ?: content.id,
-                        withChapters = false,
-                    ) ?: contentDataRepository.findPreferredLocalContentById(
-                        content.id,
-                        withChapters = false,
-                    ) ?: content
-                    emit(Triple(representativeContent, entityId, preferredLocalMangaId))
-                }.flatMapLatest { (representativeContent, entityId, preferredLocalMangaId) ->
-                    historyRepository.observeOne(preferredLocalMangaId ?: representativeContent.id).map { history ->
-                        HomeResumeState(
+                historyRepository.observeOne(content.id).mapLatest { history ->
+                    val baseState = HomeResumeState(
+                        content = content,
+                        progressPercent = history.toProgressPercent(),
+                    )
+                    runCatching {
+                        val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                        val preferredLocalMangaId = if (entityId != null) {
+                            contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                        } else {
+                            null
+                        }
+                        val representativeContent = contentDataRepository.findDisplayContentById(
+                            preferredLocalMangaId ?: content.id,
+                            withChapters = false,
+                        ) ?: contentDataRepository.findPreferredLocalContentById(
+                            content.id,
+                            withChapters = false,
+                        ) ?: content
+                        baseState.copy(
                             content = representativeContent,
-                            progressPercent = history.toProgressPercent(),
                             entityId = entityId,
                             preferredLocalMangaId = preferredLocalMangaId ?: representativeContent.id,
                         )
+                    }.getOrElse {
+                        it.printStackTraceDebug()
+                        baseState
                     }
                 }
             }
         }
+        .onEach { resumeState ->
+            Log.d(
+                TAG,
+                "resumeStateFlow contentId=${resumeState.content?.id} entityId=${resumeState.entityId} preferredLocalMangaId=${resumeState.preferredLocalMangaId} progress=${resumeState.progressPercent}",
+            )
+        }
     private val favoritesCountFlow = favouritesRepository.observeContentCount()
-    private val favoriteCategoriesCountFlow = favouritesRepository.observeCategories().map { it.size }
+        .onStart { emit(0) }
+    private val favoriteCategoriesCountFlow = favouritesRepository.observeCategories()
+        .map { it.size }
+        .onStart { emit(0) }
     private val unreadUpdatesCountFlow = trackingRepository.observeUnreadUpdatesCount()
+        .onStart { emit(0) }
     private val recentUpdatesFlow = trackingRepository.observeUpdatedContent(
         limit = Int.MAX_VALUE,
         filterOptions = emptySet(),
     )
+        .onStart { emit(emptyList()) }
     private val recommendationsFlow = suggestionRepository.observeAll()
+        .onStart { emit(emptyList()) }
     private val recentSearchesFlow = contentSearchRepository.observeRecentQueries(HOME_COVER_PREVIEW_LIMIT)
+        .onStart { emit(emptyList()) }
     private val displayChangesFlow = combine(
         contentDataRepository.observeDisplayPreferencesChanges(),
         trackingSiteCacheRepository.observeDetailsUpdates().onStart { emit(0L) },
     ) { _, _ -> Unit }.onStart { emit(Unit) }
     private val isTrackerNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_TRACKER_NO_NSFW) { isTrackerNsfwDisabled }
+        .onStart { emit(settings.isTrackerNsfwDisabled) }
     private val isSuggestionNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW) { isSuggestionsExcludeNsfw }
+        .onStart { emit(settings.isSuggestionsExcludeNsfw) }
     private val enabledSourcesCountFlow = contentSourcesRepository.observeEnabledSourcesCount()
+        .onStart { emit(0) }
     private val sourceBreakdownFlow = contentSourcesRepository.observeGroupCounts()
         .map { counts ->
             listOfNotNull(
@@ -275,6 +332,7 @@ class HomeViewModel @Inject constructor(
                 HomeSourceOrigin.IREADER.toBreakdown(counts.countOf(OriginGroup.IREADER)),
             ).sortedByDescending { it.count }.take(3)
         }
+        .onStart { emit(emptyList()) }
     private val syncStateFlow = settings.observe(
         AppSettings.KEY_BACKUP_WEBDAV_ENABLED,
         AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC,
@@ -290,10 +348,22 @@ class HomeViewModel @Inject constructor(
             isLegacyRestoreUploadBlocked = settings.isBackupWebDavAutoUploadBlockedByLegacyRestore,
         )
     }
+        .onStart {
+            emit(
+                HomeSyncState(
+                    isWebDavEnabled = settings.isBackupWebDavUploadEnabled,
+                    isAutoSyncEnabled = settings.isBackupWebDavAutoSyncEnabled,
+                    lastUploadTime = settings.backupWebDavLastUploadTime,
+                    lastUploadKind = settings.backupWebDavLastUploadKind,
+                    isLegacyRestoreUploadBlocked = settings.isBackupWebDavAutoUploadBlockedByLegacyRestore,
+                ),
+            )
+        }
 
     private val contentDataFlow = combine(
         resumeStateFlow,
         recentHistoryFlow,
+        recentHistoryWithMetadataFlow,
         recentUpdatesFlow,
         recommendationsFlow,
         isHistoryNsfwDisabledFlow,
@@ -301,14 +371,32 @@ class HomeViewModel @Inject constructor(
     ) { values ->
         val resumeState = values[0] as HomeResumeState
         val recentHistory = values[1] as List<Content>
-        val recentUpdates = values[2] as List<ContentTracking>
-        val recommendations = values[3] as List<Content>
-        val isHistoryNsfwDisabled = values[4] as Boolean
-        val isTrackerNsfwDisabled = values[5] as Boolean
+        val recentHistoryWithMetadata = values[2] as List<ContentWithHistory>
+        val recentUpdates = values[3] as List<ContentTracking>
+        val recommendations = values[4] as List<Content>
+        val isHistoryNsfwDisabled = values[5] as Boolean
+        val isTrackerNsfwDisabled = values[6] as Boolean
         val filteredHistory = if (isHistoryNsfwDisabled) recentHistory.filterNot { it.isNsfw() } else recentHistory
+        val filteredHistoryWithMetadata = if (isHistoryNsfwDisabled) {
+            recentHistoryWithMetadata.filterNot { it.manga.isNsfw() }
+        } else {
+            recentHistoryWithMetadata
+        }
         val filteredUpdates = if (isTrackerNsfwDisabled) recentUpdates.filterNot { it.manga.isNsfw() } else recentUpdates
-        ContentDataSnapshot(resumeState, filteredHistory, filteredUpdates, recommendations)
+        ContentDataSnapshot(
+            resumeState = resumeState,
+            history = filteredHistory,
+            historyWithMetadata = filteredHistoryWithMetadata,
+            updates = filteredUpdates,
+            recommendations = recommendations,
+        )
     }
+        .onEach { snapshot ->
+            Log.d(
+                TAG,
+                "contentDataFlow history=${snapshot.history.size} updates=${snapshot.updates.size} recommendations=${snapshot.recommendations.size} resumeContentId=${snapshot.resumeState.content?.id}",
+            )
+        }
 
     private val entityIdsFlow = contentDataFlow.map { snapshot ->
         buildSet {
@@ -319,6 +407,12 @@ class HomeViewModel @Inject constructor(
     }.distinctUntilChanged().map { ids ->
         entityGraphRepository.findEntityIdsByLocalMangaIds(ids)
     }
+        .onEach { entityIdsByMangaId ->
+            Log.d(
+                TAG,
+                "entityIdsFlow localIds=${entityIdsByMangaId.size} entityIds=${entityIdsByMangaId.values.toSet().size}",
+            )
+        }
 
     private val metaFlow = combine(
         favoritesCountFlow,
@@ -329,6 +423,13 @@ class HomeViewModel @Inject constructor(
     ) { favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown, syncState ->
         HomeMetaSnapshot(favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown, syncState)
     }
+        .onEach { meta ->
+            val sourceBreakdownSummary = meta.sourceBreakdown.joinToString { "${it.origin}:${it.count}" }
+            Log.d(
+                TAG,
+                "metaFlow favorites=${meta.favoritesCount} categories=${meta.favoriteCategoriesCount} enabledSources=${meta.enabledSourcesCount} sourceBreakdown=$sourceBreakdownSummary syncEnabled=${meta.syncState.isAutoSyncEnabled}",
+            )
+        }
 
     val summaryState = combine(
         selectedTabFlow,
@@ -358,65 +459,117 @@ class HomeViewModel @Inject constructor(
         val preset = tagsAndPreset.second
         val isSuggestionNsfwDisabled = extras.second
         val recentSearches = extras.first
+        val startNs = System.nanoTime()
 
-        val allRecommendations = if (isSuggestionNsfwDisabled) contentData.recommendations.filterNot { it.isNsfw() } else contentData.recommendations
-        val preferredLocalIdsByEntity = contentDataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
-        val displayContentOverrides = buildDisplayContentOverrides(
-            resumeContent = contentData.resumeState.content,
-            history = contentData.history,
-            updates = contentData.updates,
-            recommendations = allRecommendations,
-            contentDataRepository = contentDataRepository,
-            trackingSiteCacheRepository = trackingSiteCacheRepository,
-        )
-
-        val resumeState = contentData.resumeState
-            .withOverrides(displayContentOverrides)
-            .filtered(
-                tab = selectedTab,
-                sourceTags = selectedSourceTags,
-                sourceGroupManager = sourceGroupManager,
-                preset = preset,
+        runCatching {
+            Log.d(
+                TAG,
+                "summaryState start tab=$selectedTab tags=${selectedSourceTags.size} presetId=${preset?.id ?: -1L} history=${contentData.history.size} updates=${contentData.updates.size} recommendations=${contentData.recommendations.size} entities=${entityIdsByMangaId.size}",
             )
-            .filteredNsfw(false)
-            .withGroupKey(entityIdsByMangaId)
-        val recentHistory = contentData.history
-            .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-            .aggregateHomeContentByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
-            .selectHomeHistoryByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
-        val recentUpdates = contentData.updates
-            .map { tracking ->
-                val override = displayContentOverrides[tracking.manga.id]
-                if (override == null) tracking else tracking.copy(manga = tracking.manga.withOverride(override))
-            }
-            .aggregateHomeUpdatesByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
-            .selectHomeUpdatesByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
-        val recommendations = allRecommendations
-            .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-            .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
-            .selectHomeRecommendationsByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
 
-        HomeSummaryState(
-            selectedTab = selectedTab,
-            recentHistoryCount = recentHistory.size,
-            recentHistoryItems = recentHistory,
-            resumeState = resumeState,
-            favoritesCount = meta.favoritesCount,
-            favoriteCategoriesCount = meta.favoriteCategoriesCount,
-            unreadUpdatesCount = recentUpdates.size,
-            recentUpdates = recentUpdates,
-            recommendationsCount = recommendations.size,
-            recommendations = recommendations,
-            recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
-            enabledSourcesCount = meta.enabledSourcesCount,
-            sourceBreakdown = meta.sourceBreakdown,
-            syncState = meta.syncState,
-            selectedSourceTags = selectedSourceTags,
-            isInitialized = true,
-        )
+            val allRecommendations = if (isSuggestionNsfwDisabled) {
+                contentData.recommendations.filterNot { it.isNsfw() }
+            } else {
+                contentData.recommendations
+            }
+            val preferredLocalIdsByEntity = contentDataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
+            val displayContentOverrides = buildDisplayContentOverrides(
+                resumeContent = contentData.resumeState.content,
+                history = contentData.history,
+                updates = contentData.updates,
+                recommendations = allRecommendations,
+                contentDataRepository = contentDataRepository,
+                trackingSiteCacheRepository = trackingSiteCacheRepository,
+            )
+
+            val resumeState = contentData.resumeState
+                .withOverrides(displayContentOverrides)
+                .filtered(
+                    tab = selectedTab,
+                    sourceTags = selectedSourceTags,
+                    sourceGroupManager = sourceGroupManager,
+                    preset = preset,
+                )
+                .filteredNsfw(false)
+                .withGroupKey(entityIdsByMangaId)
+            val recentHistory = contentData.history
+                .map { content -> content.withOverride(displayContentOverrides[content.id]) }
+                .aggregateHomeContentByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
+                .selectHomeHistoryByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
+            val recentUpdates = contentData.updates
+                .map { tracking ->
+                    val override = displayContentOverrides[tracking.manga.id]
+                    if (override == null) tracking else tracking.copy(manga = tracking.manga.withOverride(override))
+                }
+                .aggregateHomeUpdatesByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
+                .selectHomeUpdatesByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
+            val recommendations = allRecommendations
+                .map { content -> content.withOverride(displayContentOverrides[content.id]) }
+                .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
+                .selectHomeRecommendationsByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
+
+            Pair(
+                HomeSummaryState(
+                    selectedTab = selectedTab,
+                    recentHistoryCount = recentHistory.size,
+                    recentHistoryItems = recentHistory,
+                    resumeState = resumeState,
+                    favoritesCount = meta.favoritesCount,
+                    favoriteCategoriesCount = meta.favoriteCategoriesCount,
+                    unreadUpdatesCount = recentUpdates.size,
+                    recentUpdates = recentUpdates,
+                    recommendationsCount = recommendations.size,
+                    recommendations = recommendations,
+                    recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
+                    enabledSourcesCount = meta.enabledSourcesCount,
+                    sourceBreakdown = meta.sourceBreakdown,
+                    syncState = meta.syncState,
+                    selectedSourceTags = selectedSourceTags,
+                    isInitialized = true,
+                ),
+                HistoryPreviewSnapshot(
+                    items = contentData.historyWithMetadata.map { item ->
+                        item.copy(manga = item.manga.withOverride(displayContentOverrides[item.manga.id]))
+                    },
+                    listMode = settings.listMode,
+                    sortOrder = ListSortOrder.LAST_READ,
+                    isGroupingEnabled = settings.isHistoryGroupingEnabled && ListSortOrder.LAST_READ.isGroupingSupported(),
+                    isIncognito = settings.isIncognitoModeEnabled,
+                    groupTab = selectedTab.toBrowseGroupTab(),
+                    sourceTags = selectedSourceTags,
+                    preset = preset,
+                    filters = emptySet(),
+                    isHistoryExcludeNsfw = settings.isHistoryExcludeNsfw,
+                ),
+            )
+        }.onSuccess { (summary, preview) ->
+            historyPreviewCache.update(preview)
+            Log.d(
+                TAG,
+                "summaryState success history=${summary.recentHistoryCount} updates=${summary.unreadUpdatesCount} recommendations=${summary.recommendationsCount} initialized=${summary.isInitialized} tookMs=${(System.nanoTime() - startNs) / 1_000_000}",
+            )
+        }.map { it.first }.getOrElse { error ->
+            Log.e(
+                TAG,
+                "summaryState failed tab=$selectedTab tags=${selectedSourceTags.size} presetId=${preset?.id ?: -1L} history=${contentData.history.size} updates=${contentData.updates.size} recommendations=${contentData.recommendations.size}",
+                error,
+            )
+            HomeSummaryState(
+                selectedTab = selectedTab,
+                resumeState = contentData.resumeState,
+                favoritesCount = meta.favoritesCount,
+                favoriteCategoriesCount = meta.favoriteCategoriesCount,
+                recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
+                enabledSourcesCount = meta.enabledSourcesCount,
+                sourceBreakdown = meta.sourceBreakdown,
+                syncState = meta.syncState,
+                selectedSourceTags = selectedSourceTags,
+                isInitialized = true,
+            )
+        }
     }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.Eagerly,
         initialValue = HomeSummaryState(
             selectedTab = when (globalFavoritesState.selectedGroupTab.value) {
                 org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
@@ -600,6 +753,7 @@ private data class Quadruple<A, B, C, D>(
 private data class ContentDataSnapshot(
     val resumeState: HomeResumeState,
     val history: List<Content>,
+    val historyWithMetadata: List<ContentWithHistory>,
     val updates: List<ContentTracking>,
     val recommendations: List<Content>,
 )
@@ -622,6 +776,13 @@ private fun Map<SourceGroup, Int>.countOf(key: OriginGroup): Int? {
 }
 
 private fun Content.contentTab(): HomeContentTab? = source.getContentType().toHomeTab()
+
+private fun HomeContentTab?.toBrowseGroupTab(): org.skepsun.kototoro.explore.ui.model.BrowseGroupTab = when (this) {
+    HomeContentTab.MANGA -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content
+    HomeContentTab.NOVEL -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel
+    HomeContentTab.VIDEO -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video
+    null -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.All
+}
 
 private fun List<HomeRecentItem>.selectHomeHistoryByTab(
     tab: HomeContentTab?,

@@ -143,11 +143,20 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT DISTINCT category_id FROM favourites WHERE manga_id = :mangaId AND deleted_at = 0 ORDER BY favourites.created_at ASC")
 	abstract suspend fun findCategoriesIds(mangaId: Long): List<Long>
 
+	@Query(
+		"SELECT DISTINCT manga_id AS mangaId, category_id AS categoryId FROM favourites " +
+			"WHERE manga_id IN (:mangaIds) AND deleted_at = 0 ORDER BY created_at ASC",
+	)
+	abstract suspend fun findCategoryMemberships(mangaIds: List<Long>): List<FavouriteCategoryMembership>
+
 	@Query("SELECT COUNT(category_id) FROM favourites WHERE manga_id = :mangaId AND deleted_at = 0")
 	abstract suspend fun findCategoriesCount(mangaId: Long): Int
 
 	@Query("SELECT COUNT(*) FROM favourites WHERE manga_id IN (:mangaIds) AND deleted_at = 0")
 	abstract suspend fun countByMangaIds(mangaIds: List<Long>): Int
+
+	@Query("SELECT COUNT(*) FROM favourites WHERE deleted_at = 0")
+	abstract suspend fun countActive(): Int
 
 	@Query("SELECT manga.source AS count FROM favourites LEFT JOIN manga ON manga.manga_id = favourites.manga_id GROUP BY manga.source ORDER BY COUNT(manga.source) DESC LIMIT :limit")
 	abstract suspend fun findPopularSources(limit: Int): List<String>
@@ -201,6 +210,9 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT * FROM favourites ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
 	abstract suspend fun findAllRawIncludingDeleted(offset: Int, limit: Int): List<FavouriteContent>
 
+	@Query("SELECT * FROM favourites ORDER BY created_at DESC")
+	abstract suspend fun findAllEntriesIncludingDeleted(): List<FavouriteEntity>
+
 	/** INSERT **/
 
 	@Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -231,6 +243,9 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 		setDeletedAt(mangaId = mangaId, deletedAt = 0L)
 		setUpdatedAt(mangaId = mangaId, updatedAt = currentTime)
 	}
+
+	@Query("DELETE FROM favourites")
+	abstract suspend fun clear()
 
 	suspend fun recover(categoryId: Long, mangaId: Long) {
 		val currentTime = System.currentTimeMillis()

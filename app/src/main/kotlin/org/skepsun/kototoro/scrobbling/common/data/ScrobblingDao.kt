@@ -216,6 +216,9 @@ abstract class ScrobblingDao {
 	@Query("DELETE FROM scrobblings WHERE scrobbler = :scrobbler")
 	abstract suspend fun deleteByScrobbler(scrobbler: Int)
 
+	@Query("DELETE FROM scrobblings")
+	abstract suspend fun deleteAll()
+
 	@Query("SELECT * FROM scrobblings ORDER BY scrobbler LIMIT :limit OFFSET :offset")
 	protected abstract suspend fun findAll(offset: Int, limit: Int): List<ScrobblingEntity>
 

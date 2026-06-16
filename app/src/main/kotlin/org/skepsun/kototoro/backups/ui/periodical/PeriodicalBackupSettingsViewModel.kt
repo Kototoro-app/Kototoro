@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.BackupUtils
@@ -151,10 +152,15 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_PREFS,
-					)
-					val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
-						repository.restoreBackup(zis, allSections, null)
-					}
+                    )
+                    val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
+                        repository.restoreBackup(
+                            input = zis,
+                            sections = allSections,
+                            progress = null,
+                            restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+                        )
+                    }
 					val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
 					backupWebDavRestoreCoordinator.commitManualRestore(
 						state = BackupWebDavRestoreCoordinator.RestoreSemanticState(

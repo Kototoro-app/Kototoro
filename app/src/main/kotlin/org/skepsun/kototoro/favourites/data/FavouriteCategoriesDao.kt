@@ -49,6 +49,9 @@ abstract class FavouriteCategoriesDao {
 	@Query("DELETE FROM favourite_categories WHERE deleted_at != 0 AND deleted_at < :maxDeletionTime")
 	abstract suspend fun gc(maxDeletionTime: Long)
 
+	@Query("DELETE FROM favourite_categories")
+	abstract suspend fun deleteAll()
+
 	@Query("SELECT MAX(sort_key) FROM favourite_categories WHERE deleted_at = 0")
 	protected abstract suspend fun getMaxSortKey(): Int?
 

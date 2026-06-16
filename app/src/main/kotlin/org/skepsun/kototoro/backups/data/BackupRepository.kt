@@ -99,6 +99,11 @@ class BackupRepository @Inject constructor(
     private val savedFiltersRepository: SavedFiltersRepository,
 ) {
 
+    enum class RestoreMode {
+        MERGE,
+        SNAPSHOT_REPLACE,
+    }
+
     private fun logAuth(msg: String) = runCatching { println("[BackupAuth] $msg") }
 
     private val json = Json {
@@ -289,6 +294,7 @@ class BackupRepository @Inject constructor(
         input: ZipInputStream,
         sections: Set<BackupSection>,
         progress: FlowCollector<Progress>?,
+        restoreMode: RestoreMode = RestoreMode.MERGE,
     ): RestoreBackupResult {
         val effectiveSections = sections.withImplicitRestoreSections()
         progress?.emit(Progress.INDETERMINATE)
@@ -300,6 +306,9 @@ class BackupRepository @Inject constructor(
         val entityIdMapping = LinkedHashMap<Long, Long>()
         var backupIndex: BackupIndex? = null
         var restoreContext = resolveRestoreSemanticContext(null)
+        if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
+            clearRestoreTargets(effectiveSections)
+        }
         while (entry != null) {
             val section = BackupSection.of(entry)
             if (section != null) {
@@ -479,6 +488,50 @@ class BackupRepository @Inject constructor(
                 database.getStatsDao().dumpEnabled().collect { stats ->
                     database.upsertWorkStatsFromLegacy(stats)
                 }
+            }
+        }
+    }
+
+    private suspend fun clearRestoreTargets(sections: Set<BackupSection>) {
+        database.withTransaction {
+            if (BackupSection.HISTORY in sections) {
+                database.getWorkHistoryDao().clear()
+                database.getHistoryDao().clear()
+                database.getTracksDao().clear()
+                database.getTrackLogsDao().clear()
+            }
+            if (BackupSection.FAVOURITES in sections) {
+                database.getWorkFavouritesDao().deleteAll()
+                database.getFavouritesDao().clear()
+                database.getFavouriteCategoriesDao().deleteAll()
+                database.getTracksDao().clear()
+                database.getTrackLogsDao().clear()
+            }
+            if (BackupSection.BOOKMARKS in sections) {
+                database.getBookmarksDao().deleteAll()
+            }
+            if (BackupSection.SCROBBLING in sections) {
+                database.getScrobblingDao().deleteAll()
+            }
+            if (BackupSection.STATS in sections) {
+                database.getWorkStatsDao().clear()
+                database.getStatsDao().clear()
+            }
+            if (BackupSection.SOURCES in sections) {
+                database.getSourcesDao().disableAllSources()
+            }
+            if (BackupSection.EXTENSION_REPOS in sections) {
+                database.getExternalExtensionRepoDao().deleteAll()
+            }
+            if (BackupSection.ENTITY_GRAPH_ENTITIES in sections ||
+                BackupSection.ENTITY_GRAPH_BINDINGS in sections ||
+                BackupSection.ENTITY_GRAPH_RELATIONS in sections ||
+                BackupSection.ENTITY_GRAPH_PREFS in sections
+            ) {
+                database.getEntityGraphDao().deleteAllBindings()
+                database.getEntityGraphDao().deleteAllRelations()
+                database.getEntityGraphDao().deleteAllPrefs()
+                database.getEntityGraphDao().deleteAllEntities()
             }
         }
     }

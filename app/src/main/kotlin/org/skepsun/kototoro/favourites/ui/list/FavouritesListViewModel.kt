@@ -259,6 +259,11 @@ class FavouritesListViewModel @AssistedInject constructor(
         categoryIds: Set<Long>,
         preset: org.skepsun.kototoro.explore.data.SourcePreset?,
     ): List<ListModel> {
+        val categoriesByMangaId = if (categoryIds.isEmpty()) {
+            emptyMap()
+        } else {
+            repository.getCategoriesIds(list.map(Content::id))
+        }
         val filteredList = list.filter { manga ->
             val source = manga.source
             if (preset != null && source.name !in preset.sources) {
@@ -277,7 +282,7 @@ class FavouritesListViewModel @AssistedInject constructor(
             val categoryMatches = if (categoryIds.isEmpty()) {
                 true
             } else {
-                val mangaCategories = repository.getCategoriesIds(manga.id).toSet()
+                val mangaCategories = categoriesByMangaId[manga.id].orEmpty()
                 categoryIds.any { it in mangaCategories }
             }
 
@@ -324,17 +329,22 @@ class FavouritesListViewModel @AssistedInject constructor(
 
         val result = ArrayList<ListModel>(groupedItems.size + 1)
         quickFilter.filterItem(filters)?.let(result::add)
-        for (group in groupedItems) {
-            val model = mangaListMapper.toListModel(
+        val pinnedIds = repository.getPinnedIds(groupedItems.mapNotNull { it.preferredLocalMangaId ?: it.representative.id })
+        val models = groupedItems.map { group ->
+            mangaListMapper.toListModel(
                 manga = group.representative,
                 mode = mode,
                 flags = ContentListMapper.NO_FAVORITE,
                 metadataSelectionOverride = group.metadataSourceSelection,
                 useMetadataSelectionOverride = group.metadataSourceSelection != null,
             )
+        }
+        for (index in groupedItems.indices) {
+            val group = groupedItems[index]
+            val model = models[index]
             result += model.toGroupedListModel(
                 group = group,
-                isPinned = repository.isPinned(group.mangaIds),
+                isPinned = (group.preferredLocalMangaId ?: group.representative.id) in pinnedIds,
             )
         }
         return result

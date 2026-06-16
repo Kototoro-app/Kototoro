@@ -51,6 +51,9 @@ abstract class BookmarksDao {
 	@Upsert
 	abstract suspend fun upsert(bookmarks: Collection<BookmarkEntity>)
 
+	@Query("DELETE FROM bookmarks")
+	abstract suspend fun deleteAll()
+
 	fun dump(): Flow<Pair<MangaWithTags, List<BookmarkEntity>>> = flow {
 		val window = 4
 		var offset = 0

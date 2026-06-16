@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.db.entity.toContentTagsList
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.toContentSources
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
@@ -43,7 +44,13 @@ class FavouritesRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val localObserver: LocalFavoritesObserver,
 	private val entityGraphRepository: EntityGraphRepository,
+	private val settings: AppSettings,
 ) {
+
+	private data class WorkFavouriteNormalizationKey(
+		val entityId: Long,
+		val categoryId: Long,
+	)
 
 	suspend fun getAllContent(): List<Content> {
 		val entities = db.getFavouritesDao().findAll()
@@ -195,6 +202,17 @@ class FavouritesRepository @Inject constructor(
 
 	suspend fun getCategoriesIds(mangaId: Long): Set<Long> {
 		return db.getFavouritesDao().findCategoriesIds(mangaId).toSet()
+	}
+
+	suspend fun getCategoriesIds(mangaIds: Collection<Long>): Map<Long, Set<Long>> {
+		if (mangaIds.isEmpty()) return emptyMap()
+		return db.getFavouritesDao().findCategoryMemberships(mangaIds.toList())
+			.groupBy(
+				keySelector = { it.mangaId },
+				valueTransform = { it.categoryId },
+			)
+			.mapValues { (_, categoryIds) -> categoryIds.toCollection(LinkedHashSet()) }
+			.let { grouped -> mangaIds.associateWith { grouped[it].orEmpty() } }
 	}
 
 	suspend fun isFavoriteByWork(mangaId: Long): Boolean {
@@ -398,6 +416,82 @@ class FavouritesRepository @Inject constructor(
 		}
 	}
 
+	suspend fun normalizeWorkFavouritesIfNeeded() {
+		if (!settings.requiresWorkMigrationNormalization && !hasWorkFavouriteDrift()) {
+			return
+		}
+		normalizeWorkFavourites()
+		settings.requiresWorkMigrationNormalization = false
+	}
+
+	private suspend fun hasWorkFavouriteDrift(): Boolean {
+		val localActiveCount = db.getFavouritesDao().countActive()
+		return db.getWorkFavouritesDao().countActive() != localActiveCount
+	}
+
+	private suspend fun normalizeWorkFavourites() {
+		val localFavourites = db.getFavouritesDao().findAllEntriesIncludingDeleted()
+		if (localFavourites.isEmpty()) {
+			return
+		}
+		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(localFavourites.map { it.mangaId })
+		val normalized = LinkedHashMap<WorkFavouriteNormalizationKey, WorkFavouriteEntity>()
+		for (favourite in localFavourites) {
+			val entityId = entityIdsByMangaId[favourite.mangaId] ?: continue
+			val key = WorkFavouriteNormalizationKey(
+				entityId = entityId,
+				categoryId = favourite.categoryId,
+			)
+			val candidate = WorkFavouriteEntity(
+				entityId = entityId,
+				categoryId = favourite.categoryId,
+				sortKey = favourite.sortKey,
+				isPinned = favourite.isPinned,
+				createdAt = favourite.createdAt,
+				deletedAt = favourite.deletedAt,
+				updatedAt = favourite.updatedAt,
+			)
+			val existing = normalized[key]
+			normalized[key] = if (existing == null) {
+				candidate
+			} else {
+				mergeNormalizedWorkFavourite(existing, candidate)
+			}
+		}
+		if (normalized.isEmpty()) {
+			return
+		}
+		db.withTransaction {
+			val workFavouritesDao = db.getWorkFavouritesDao()
+			workFavouritesDao.deleteAll()
+			normalized.values.forEach { workFavouritesDao.upsert(it) }
+		}
+	}
+
+	private fun mergeNormalizedWorkFavourite(
+		existing: WorkFavouriteEntity,
+		candidate: WorkFavouriteEntity,
+	): WorkFavouriteEntity {
+		return when {
+			candidate.updatedAt > existing.updatedAt -> candidate.copy(
+				createdAt = minOf(existing.createdAt, candidate.createdAt),
+				isPinned = existing.isPinned || candidate.isPinned,
+			)
+
+			candidate.updatedAt == existing.updatedAt -> existing.copy(
+				sortKey = maxOf(existing.sortKey, candidate.sortKey),
+				isPinned = existing.isPinned || candidate.isPinned,
+				createdAt = minOf(existing.createdAt, candidate.createdAt),
+				deletedAt = minOf(existing.deletedAt, candidate.deletedAt),
+			)
+
+			else -> existing.copy(
+				isPinned = existing.isPinned || candidate.isPinned,
+				createdAt = minOf(existing.createdAt, candidate.createdAt),
+			)
+		}
+	}
+
 	private suspend fun recoverToFavourites(ids: Collection<Long>, entityIds: Collection<Long>) {
 		db.withTransaction {
 			for (entityId in entityIds) {
@@ -421,14 +515,14 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	private suspend fun findWorkCategoryIds(mangaId: Long): Set<Long> {
-		val entityId = resolveFavouriteEntityId(mangaId)
-		if (entityId != null) {
-			return db.getWorkFavouritesDao().findCategoriesIds(entityId).toSet()
+		val categoryIds = LinkedHashSet<Long>()
+		resolveFavouriteEntityId(mangaId)?.let { entityId ->
+			categoryIds += db.getWorkFavouritesDao().findCategoriesIds(entityId)
 		}
-		return resolveFavouriteAnchorIds(mangaId)
-			.flatMapTo(LinkedHashSet()) { anchorId ->
-				db.getFavouritesDao().findCategoriesIds(anchorId)
-			}
+		resolveFavouriteAnchorIds(mangaId).forEach { anchorId ->
+			categoryIds += db.getFavouritesDao().findCategoriesIds(anchorId)
+		}
+		return categoryIds
 	}
 
 	private suspend fun resolveFavouriteEntityId(mangaId: Long): Long? {
@@ -438,9 +532,6 @@ class FavouritesRepository @Inject constructor(
 	private suspend fun resolveFavouriteAnchorIds(mangaId: Long): Set<Long> {
 		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId] ?: return setOf(mangaId)
 		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-		if (preferredLocalId != null) {
-			return setOf(preferredLocalId)
-		}
 		val localIds = entityGraphRepository.getBindings(entityId)
 			.asSequence()
 			.mapNotNull { binding ->
@@ -450,6 +541,7 @@ class FavouritesRepository @Inject constructor(
 				}
 			}
 			.toCollection(LinkedHashSet())
+		preferredLocalId?.let(localIds::add)
 		return if (localIds.isEmpty()) setOf(mangaId) else localIds
 	}
 

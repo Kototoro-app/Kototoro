@@ -184,7 +184,12 @@ class WebDavAutoRestoreService : Service() {
             val allSections = buildRestoreSections(candidate.writerGeneration)
 
             val restoreResult = zipInputStream.use { zis ->
-                backupRepository.restoreBackup(zis, allSections, null)
+                backupRepository.restoreBackup(
+                    input = zis,
+                    sections = allSections,
+                    progress = null,
+                    restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+                )
             }
             val restoreContext = backupRepository.resolveRestoreSemanticContext(restoreResult.backupIndex)
 

@@ -98,6 +98,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 		org.skepsun.kototoro.tracking.animeoffline.work.AnimeOfflineUpdateWorker.enqueue(this)
 		processLifecycleScope.launch(Dispatchers.Default) {
 			runCatching {
+				entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()
 				setupDatabaseObservers()
 				entryPoint.localStorageChanges().collect(entryPoint.localContentIndexProvider().get())
 			}
@@ -209,6 +210,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 		fun externalExtensionRepoRepository(): org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
 		fun extensionInstallService(): org.skepsun.kototoro.extensions.install.ExtensionInstallService
 		fun contentSourcesRepository(): org.skepsun.kototoro.explore.data.ContentSourcesRepository
+		fun favouritesRepository(): org.skepsun.kototoro.favourites.domain.FavouritesRepository
 		fun imageLoader(): ImageLoader
 	}
 }
