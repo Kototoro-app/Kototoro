@@ -1220,9 +1220,7 @@ fun DetailsScreen(
                 val sbPx = statusBarTopPadding.roundToPx()
                 val tbPx = DetailsTopBarHeight.roundToPx()
                 val overflowPx = 6.dp.roundToPx()
-                (sbPx + (tbPx * 0.72f).toInt() + overflowPx)
-                    .coerceAtLeast(sbPx + overflowPx)
-                    .toDp()
+                (sbPx + tbPx + overflowPx).coerceAtLeast(sbPx + overflowPx).toDp()
             }
             if (detailsGradientAlpha > 0.01f) {
                 ImmersiveEdgeGradient(

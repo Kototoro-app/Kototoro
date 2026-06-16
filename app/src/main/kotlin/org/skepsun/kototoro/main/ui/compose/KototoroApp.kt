@@ -798,11 +798,7 @@ fun KototoroApp(
                 }
                 val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
                 val topImmersiveHeight = with(density) {
-                    (
-                        statusBarHeightPx +
-                            (topBarHeightPx * 0.72f).toInt() +
-                            topImmersiveOverflowPx
-                        )
+                    (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
                         .coerceAtLeast(statusBarHeightPx + topImmersiveOverflowPx)
                         .toDp()
                 }

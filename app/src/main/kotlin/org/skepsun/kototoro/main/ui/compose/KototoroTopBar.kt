@@ -182,7 +182,6 @@ fun KototoroTopBar(
                 exit = shrinkHorizontally() + fadeOut(),
             ) {
                 GlassSurface(
-                    modifier = Modifier.wrapContentWidth(),
                     shape = RoundedCornerShape(28.dp),
                     style = GlassDefaults.subtleStyle(),
                 ) {
@@ -218,7 +217,6 @@ fun KototoroTopBar(
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
                 GlassSurface(
-                    modifier = Modifier.wrapContentWidth(),
                     shape = RoundedCornerShape(28.dp),
                     style = GlassDefaults.subtleStyle(),
                 ) {
