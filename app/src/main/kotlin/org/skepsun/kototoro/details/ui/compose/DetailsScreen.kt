@@ -550,6 +550,16 @@ fun DetailsScreen(
             }
         }
     }
+    val normalizedPrimaryCoverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
+    val normalizedFallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri()
+    var hasPanoramaLoadFailed by remember(normalizedPrimaryCoverUrl) { mutableStateOf(false) }
+    val currentPanoramaCoverUrl = if (hasPanoramaLoadFailed && normalizedFallbackCoverUrl != null) {
+        normalizedFallbackCoverUrl
+    } else {
+        normalizedPrimaryCoverUrl
+            ?: content?.largeCoverUrl?.takeIfUsableImageUri()
+            ?: normalizedFallbackCoverUrl
+    }
     val handleBackPress = remember(isWideAdaptiveLayout, compactPaneAnchor, detailsPaneState, clearChapterSearch, onBackClick) {
         {
             if (isWideAdaptiveLayout) {
@@ -673,25 +683,22 @@ fun DetailsScreen(
                         .background(MaterialTheme.colorScheme.surface),
                 )
                 if (panoramaPrefs.isEnabled) {
-                    val panoramaCoverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
-                        ?: content?.largeCoverUrl?.takeIfUsableImageUri()
-                        ?: content?.coverUrl?.takeIfUsableImageUri()
-                    if (panoramaCoverUrl != null || sharedElementKey != null) {
-                        val panoramaPlaceholderCacheKey = remember(content?.source?.name, content?.url, content?.coverUrl) {
+                    if (currentPanoramaCoverUrl != null || sharedElementKey != null) {
+                        val panoramaPlaceholderCacheKey = remember(content?.source?.name, content?.url, normalizedFallbackCoverUrl) {
                             sharedCoverMemoryCacheKey(
                                 sourceName = content?.source?.name,
                                 ownerKey = content?.url,
-                                url = content?.coverUrl?.takeIfUsableImageUri(),
+                                url = normalizedFallbackCoverUrl,
                             )
                         }
-                        val request = remember(content?.source?.name, content?.url, panoramaCoverUrl) {
+                        val request = remember(content?.source?.name, content?.url, currentPanoramaCoverUrl) {
                             val panoramaCacheKey = sharedCoverMemoryCacheKey(
                                 sourceName = content?.source?.name,
                                 ownerKey = content?.url,
-                                url = panoramaCoverUrl,
+                                url = currentPanoramaCoverUrl,
                             )
                             ImageRequest.Builder(context)
-                                .data(panoramaCoverUrl)
+                                .data(currentPanoramaCoverUrl)
                                 .memoryCacheKey(panoramaCacheKey)
                                 .diskCacheKey(panoramaCacheKey)
                                 .apply { content?.let { mangaExtra(it) } }
@@ -708,6 +715,11 @@ fun DetailsScreen(
                             },
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             crossfadeEnabled = false,
+                            onLoadError = {
+                                if (!hasPanoramaLoadFailed && normalizedFallbackCoverUrl != null && normalizedFallbackCoverUrl != normalizedPrimaryCoverUrl) {
+                                    hasPanoramaLoadFailed = true
+                                }
+                            },
                             modifier = Modifier,
                         )
                     }

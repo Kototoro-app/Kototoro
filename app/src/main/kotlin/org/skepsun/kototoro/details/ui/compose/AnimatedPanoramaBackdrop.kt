@@ -91,6 +91,7 @@ fun AnimatedPanoramaBackdrop(
     contentAlphaProvider: (() -> Float)? = null,
     backgroundColor: Color,
     crossfadeEnabled: Boolean = false,
+    onLoadError: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (!prefs.isEnabled) return
@@ -252,7 +253,10 @@ fun AnimatedPanoramaBackdrop(
                 hasResolvedBackground = true
             },
             onError = {
-                hasResolvedBackground = true
+                // Keep an already-resolved placeholder visible when the panorama request fails,
+                // otherwise the backdrop flashes once and then collapses to a blank surface.
+                hasResolvedBackground = stablePlaceholderImage == null
+                onLoadError?.invoke()
             },
         )
     }
