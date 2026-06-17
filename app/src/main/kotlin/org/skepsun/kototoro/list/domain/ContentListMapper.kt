@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import androidx.annotation.ColorRes
 import androidx.annotation.IntDef
+import androidx.collection.MutableLongObjectMap
 import androidx.collection.MutableScatterSet
 import androidx.collection.ScatterSet
 import dagger.Reusable
@@ -46,6 +47,12 @@ class ContentListMapper @Inject constructor(
 	private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
 ) {
 
+	data class ListModelRequest(
+		val manga: Content,
+		val metadataSelectionOverride: ContentDataRepository.MetadataSourceSelection? = null,
+		val useMetadataSelectionOverride: Boolean = false,
+	)
+
 	private val dict by lazy { readTagsDict(context) }
 
 	fun observeDisplayChanges(): Flow<Unit> = merge(
@@ -63,6 +70,21 @@ class ContentListMapper @Inject constructor(
 			manga = manga,
 			mode = mode,
 			flags = flags,
+		)
+	}
+
+	suspend fun toRequestedListModelList(
+		requests: Collection<ListModelRequest>,
+		mode: ListMode,
+		@Flags flags: Int = DEFAULTS,
+		pinnedIds: Set<Long>? = null,
+	): List<ContentListModel> = ArrayList<ContentListModel>(requests.size).apply {
+		toRequestedListModelList(
+			destination = this,
+			requests = requests,
+			mode = mode,
+			flags = flags,
+			pinnedIds = pinnedIds,
 		)
 	}
 
@@ -93,6 +115,53 @@ class ContentListMapper @Inject constructor(
 				override = resolveDisplayOverride(
 					manga = it,
 					manualOverride = manualOverrides[it.id],
+					metadataSelection = metadataSelection,
+					trackingDetailsCache = trackingDetailsCache,
+				),
+			)
+		}
+	}
+
+	suspend fun toRequestedListModelList(
+		destination: MutableCollection<in ContentListModel>,
+		requests: Collection<ListModelRequest>,
+		mode: ListMode,
+		@Flags flags: Int = DEFAULTS,
+		pinnedIds: Set<Long>? = null,
+	) {
+		val options = getOptions(flags)
+		val mangaIds = requests.map { it.manga.id }
+		val metadataIds = requests.asSequence()
+			.filterNot(ListModelRequest::useMetadataSelectionOverride)
+			.map { it.manga.id }
+			.distinct()
+			.toList()
+		val manualOverrides = dataRepository.getOverrides()
+		val metadataSelections = if (metadataIds.isEmpty()) {
+			MutableLongObjectMap<ContentDataRepository.MetadataSourceSelection>(0)
+		} else {
+			dataRepository.getMetadataSourceSelections(metadataIds)
+		}
+		val counters = getCounters(mangaIds)
+		val progress = getProgress(mangaIds, options)
+		val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
+		requests.mapTo(destination) { request ->
+			val metadataSelection = if (request.useMetadataSelectionOverride) {
+				request.metadataSelectionOverride
+			} else {
+				metadataSelections[request.manga.id]
+			}
+			toListModelImpl(
+				manga = request.manga,
+				mode = mode,
+				options = options,
+				pinnedIds = pinnedIds,
+				counters = counters,
+				progress = progress,
+				metadataTrackingService = getMetadataTrackingService(metadataSelection),
+				override = resolveDisplayOverride(
+					manga = request.manga,
+					manualOverride = manualOverrides[request.manga.id],
 					metadataSelection = metadataSelection,
 					trackingDetailsCache = trackingDetailsCache,
 				),
