@@ -377,7 +377,7 @@ fun AppNavGraph(
                         )
                     }
                 }
-                val onHomeSourceSettingsClick = remember(appRouter) { { appRouter.openSourcesSettings() } }
+                val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
                 val onHomeLibraryOpenClick = remember(navController, markReturnHomeOnBack) {
                     {
                         navController.navigate(FavoritesRoute) {
@@ -412,7 +412,7 @@ fun AppNavGraph(
                     onHomeViewAllUpdatesClick,
                     onHomeViewAllRecommendationsClick,
                     onHomeRecentSearchClick,
-                    onHomeSourceSettingsClick,
+                    onHomeManageSourcesClick,
                     onHomeLibraryOpenClick,
                     onHomeBookmarksClick,
                     onHomeLocalClick,
@@ -427,7 +427,7 @@ fun AppNavGraph(
                         onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
                         onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
                         onRecentSearchClick = onHomeRecentSearchClick,
-                        onSourceSettingsClick = onHomeSourceSettingsClick,
+                        onManageSourcesClick = onHomeManageSourcesClick,
                         onLibraryOpenClick = onHomeLibraryOpenClick,
                         onBookmarksClick = onHomeBookmarksClick,
                         onLocalClick = onHomeLocalClick,

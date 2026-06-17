@@ -79,7 +79,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 						onViewAllUpdatesClick = { /* router.openMangaUpdates(currentBrowseGroupTab()) */ },
 						onViewAllRecommendationsClick = { /* router.openSuggestions(currentBrowseGroupTab()) */ },
 						onRecentSearchClick = { query -> router.openSearch(query) },
-						onSourceSettingsClick = { router.openSourcesSettings() },
+						onManageSourcesClick = { router.openManageSources() },
 						onLibraryOpenClick = { router.openFavorites() },
 						onBookmarksClick = { /* router.openBookmarks() */ },
 						onLocalClick = { router.openList(org.skepsun.kototoro.core.model.LocalMangaSource, null, null) },

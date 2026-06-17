@@ -4190,7 +4190,7 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	fun updateMetadataSearchQuery(query: String) {
-		metadataSearchQuery.value = cleanSourceSearchQuery(query)
+		metadataSearchQuery.value = query
 	}
 
 	fun searchMetadataBindings() {
@@ -4313,7 +4313,7 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	fun updateReadingSearchQuery(query: String) {
-		readingSearchQuery.value = cleanSourceSearchQuery(query)
+		readingSearchQuery.value = query
 	}
 
 	fun toggleReadingSearchSourceType(type: SourceType) {
