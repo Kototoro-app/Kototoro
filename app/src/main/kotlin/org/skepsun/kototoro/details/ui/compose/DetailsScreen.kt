@@ -139,6 +139,7 @@ import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocalizedTitle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
@@ -220,7 +221,8 @@ import java.util.concurrent.TimeUnit
 
 private val DetailsTopBarHeight = CompactTopBarPillHeight
 private const val ReadingRecordSheetLogTag = "ReadingRecordSheet"
-private val DetailsTopActionButtonSize = CompactTopBarPillHeight
+private val DetailsTopPrimaryActionButtonSize = CompactTopBarPillHeight
+private val DetailsTopCompactActionButtonSize = CompactTopBarCompactButtonSize
 private val DetailsTopActionIconSize = CompactTopBarIconSize
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -754,11 +756,11 @@ fun DetailsScreen(
                             visualTreatment = GlassVisualTreatment.TopBarPrototype,
                         ) {
                             CompositionLocalProvider(
-                                LocalMinimumInteractiveComponentSize provides DetailsTopActionButtonSize,
+                                LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
                             ) {
                                 DetailsChromeButton(
                                     onClick = handleBackPress,
-                                    modifier = Modifier.size(DetailsTopActionButtonSize),
+                                    modifier = Modifier.size(DetailsTopPrimaryActionButtonSize),
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -793,11 +795,11 @@ fun DetailsScreen(
                             visualTreatment = GlassVisualTreatment.TopBarPrototype,
                         ) {
                             CompositionLocalProvider(
-                                LocalMinimumInteractiveComponentSize provides DetailsTopActionButtonSize,
+                                LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
                             ) {
                                 Row(
                                     modifier = Modifier
-                                        .height(DetailsTopActionButtonSize)
+                                        .height(DetailsTopPrimaryActionButtonSize)
                                         .padding(horizontal = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -805,7 +807,7 @@ fun DetailsScreen(
                                         onClick = {
                                             showShareOptions = true
                                         },
-                                        modifier = Modifier.size(DetailsTopActionButtonSize),
+                                        modifier = Modifier.size(DetailsTopCompactActionButtonSize),
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Share,
@@ -818,7 +820,7 @@ fun DetailsScreen(
                                             handleActionClick(DetailsAction.Download)
                                             showDownloadDialog = true
                                         },
-                                        modifier = Modifier.size(DetailsTopActionButtonSize),
+                                        modifier = Modifier.size(DetailsTopCompactActionButtonSize),
                                     ) {
                                         Icon(
                                             painter = rememberSafePainter(R.drawable.ic_download),
@@ -3779,7 +3781,10 @@ private fun DetailsOverflowMenu(
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        DetailsChromeButton(onClick = { expanded = true }) {
+        DetailsChromeButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(DetailsTopPrimaryActionButtonSize),
+        ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = stringResource(R.string.more),

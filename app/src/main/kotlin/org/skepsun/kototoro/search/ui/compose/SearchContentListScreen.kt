@@ -126,6 +126,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
@@ -178,7 +179,8 @@ import java.util.Locale
 import java.util.TreeSet
 
 private val SearchTopActionsHeight = CompactTopBarPillHeight
-private val SearchTopActionButtonSize = CompactTopBarPillHeight
+private val SearchTopPrimaryActionButtonSize = CompactTopBarPillHeight
+private val SearchTopCompactActionButtonSize = CompactTopBarCompactButtonSize
 private val SearchTopActionIconSize = CompactTopBarIconSize
 private val SearchPinnedChipHeight = 32.dp
 private val SearchPinnedRowVisualHeight = SearchPinnedChipHeight + 8.dp
@@ -1380,7 +1382,7 @@ private fun SourceListTopActionsRow(
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.size(SearchTopActionButtonSize),
+                    modifier = Modifier.size(SearchTopPrimaryActionButtonSize),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -1406,10 +1408,10 @@ private fun SourceListTopActionsRow(
                 style = GlassDefaults.subtleStyle(),
                 visualTreatment = GlassVisualTreatment.TopBarPrototype,
             ) {
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides SearchTopActionButtonSize) {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides SearchTopPrimaryActionButtonSize) {
                     Row(
                         modifier = Modifier
-                            .height(SearchTopActionButtonSize)
+                            .height(SearchTopPrimaryActionButtonSize)
                             .padding(horizontal = 2.dp)
                             .alpha(topBarAlpha),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1421,7 +1423,7 @@ private fun SourceListTopActionsRow(
                                 }
                             },
                         ) {
-                            IconButton(onClick = onFilterClick, modifier = Modifier.size(SearchTopActionButtonSize)) {
+                            IconButton(onClick = onFilterClick, modifier = Modifier.size(SearchTopCompactActionButtonSize)) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_filter_menu),
                                     contentDescription = currentSortLabel,
@@ -1431,7 +1433,7 @@ private fun SourceListTopActionsRow(
                             }
                         }
 
-                        IconButton(onClick = onSearchClick, modifier = Modifier.size(SearchTopActionButtonSize)) {
+                        IconButton(onClick = onSearchClick, modifier = Modifier.size(SearchTopCompactActionButtonSize)) {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = stringResource(R.string.search),
@@ -1443,7 +1445,7 @@ private fun SourceListTopActionsRow(
                             IconButton(
                                 onClick = onRandomClick,
                                 enabled = !isRandomLoading,
-                                modifier = Modifier.size(SearchTopActionButtonSize),
+                                modifier = Modifier.size(SearchTopCompactActionButtonSize),
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_dice),
@@ -1454,7 +1456,10 @@ private fun SourceListTopActionsRow(
                         }
 
                         if (showDisplayDirect) {
-                            IconButton(onClick = onShowDisplayOptionsSheet, modifier = Modifier.size(SearchTopActionButtonSize)) {
+                            IconButton(
+                                onClick = onShowDisplayOptionsSheet,
+                                modifier = Modifier.size(SearchTopCompactActionButtonSize),
+                            ) {
                                 Icon(
                                     painter = painterResource(listMode.iconRes()),
                                     contentDescription = stringResource(R.string.list_options),
@@ -1464,7 +1469,7 @@ private fun SourceListTopActionsRow(
                         }
 
                         if (showSettingsDirect) {
-                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(SearchTopActionButtonSize)) {
+                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(SearchTopCompactActionButtonSize)) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_settings),
                                     contentDescription = stringResource(R.string.settings),
@@ -1513,7 +1518,7 @@ private fun MoreActionsButton(
     var expanded by rememberSaveable { mutableStateOf(false) }
 
     Box {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(SearchTopActionButtonSize)) {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(SearchTopPrimaryActionButtonSize)) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = stringResource(R.string.more),
