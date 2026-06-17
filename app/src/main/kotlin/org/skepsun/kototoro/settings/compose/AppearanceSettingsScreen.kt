@@ -173,7 +173,6 @@ fun AppearanceSettingsScreen(
     onAppProtectionChange: (Boolean) -> Unit,
     onScreenshotsPolicyChange: (ScreenshotsPolicy) -> Unit,
 ) {
-    val isCustomGlassMaterial = state.glassMaterialPreset == GlassMaterialPreset.CUSTOM
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -246,31 +245,27 @@ fun AppearanceSettingsScreen(
                     valueText = { "%.2f".format(it / 100f) },
                     onValueChange = onGlassNoiseStrengthChange,
                 )
-                if (isCustomGlassMaterial) {
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_haze_opacity),
-                        value = state.hazeOpacityPercent,
-                        valueRange = 0..100,
-                        step = 5,
-                        summary = stringResource(R.string.pref_haze_opacity_summary),
-                        valueText = { "$it%" },
-                        onValueChange = onHazeOpacityChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_glass_immersive_strength),
-                        value = state.glassImmersiveStrengthPercent,
-                        valueRange = 0..100,
-                        step = 5,
-                        summary = stringResource(R.string.pref_glass_immersive_strength_summary),
-                        valueText = { "$it%" },
-                        onValueChange = onGlassImmersiveStrengthChange,
-                    )
-                    SettingsSectionDivider()
-                } else {
-                    SettingsSectionDivider()
-                }
+                SettingsSectionDivider()
+                SettingsSliderPreference(
+                    title = stringResource(R.string.pref_haze_opacity),
+                    value = state.hazeOpacityPercent,
+                    valueRange = 0..100,
+                    step = 5,
+                    summary = stringResource(R.string.pref_haze_opacity_summary),
+                    valueText = { "$it%" },
+                    onValueChange = onHazeOpacityChange,
+                )
+                SettingsSectionDivider()
+                SettingsSliderPreference(
+                    title = stringResource(R.string.pref_glass_immersive_strength),
+                    value = state.glassImmersiveStrengthPercent,
+                    valueRange = 0..100,
+                    step = 5,
+                    summary = stringResource(R.string.pref_glass_immersive_strength_summary),
+                    valueText = { "$it%" },
+                    onValueChange = onGlassImmersiveStrengthChange,
+                )
+                SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.tablet_ui_mode),
                     value = state.tabletUiMode,

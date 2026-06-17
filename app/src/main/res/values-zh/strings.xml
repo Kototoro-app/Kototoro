@@ -1412,7 +1412,7 @@
     <string name="port">端口</string>
     <string name="portrait">竖屏</string>
     <string name="pref_blur_mode">Haze 玻璃模糊风格</string>
-    <string name="pref_blur_mode_summary">调整 Compose 界面里 Haze 玻璃容器的模糊强度</string>
+    <string name="pref_blur_mode_summary">选择玻璃预设，用于控制模糊半径和噪点</string>
     <string name="pref_browse_panorama_blend_height">浏览页全景封面过渡高度</string>
     <string name="pref_browse_panorama_gradient_alpha">浏览页全景封面渐变强度</string>
     <string name="pref_doh_custom_ips">自定义 DoH Bootstrap IPs (逗号分隔)</string>
@@ -1434,7 +1434,7 @@
     <string name="pref_glass_effect">毛玻璃模糊</string>
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背后的内容</string>
     <string name="pref_haze_opacity">玻璃容器不透明度</string>
-    <string name="pref_haze_opacity_summary">控制玻璃风格容器的不透明度，关闭模糊后依然生效</string>
+    <string name="pref_haze_opacity_summary">独立控制玻璃容器的不透明度，不受预设影响，关闭模糊后依然生效</string>
     <string name="pref_huggingface_mirror">HuggingFace 网络加速镜像</string>
     <string name="pref_huggingface_mirror_summary">如果您身处国内导致 HuggingFace 下载模型失败，请选择加速镜像路线。</string>
     <string-array name="pref_huggingface_mirror_entries">
@@ -2588,11 +2588,11 @@ SHA-256 指纹:
 
     <!-- 玻璃效果 -->
     <string name="pref_glass_blur_strength">玻璃模糊半径</string>
-    <string name="pref_glass_blur_strength_summary">设置自定义玻璃表面的最终模糊半径，单位 dp</string>
+    <string name="pref_glass_blur_strength_summary">设置当前玻璃预设使用的最终模糊半径，单位 dp</string>
     <string name="pref_glass_noise_strength">玻璃噪点系数</string>
-    <string name="pref_glass_noise_strength_summary">设置应用于自定义玻璃表面的最终噪点量，范围 0.00 至 1.00</string>
+    <string name="pref_glass_noise_strength_summary">设置当前玻璃预设应用的最终噪点量，范围 0.00 至 1.00</string>
     <string name="pref_glass_immersive_strength">沉浸式着色强度</string>
-    <string name="pref_glass_immersive_strength_summary">控制自定义玻璃边缘顶部和底部的沉浸式着色强度</string>
+    <string name="pref_glass_immersive_strength_summary">独立控制顶部和底部的沉浸式着色强度，不受预设影响</string>
     <string name="glass_material_kototoro">Kototoro（推荐）</string>
     <string name="glass_material_haze_ultra_thin">Haze 超薄</string>
     <string name="glass_material_haze_thin">Haze 薄</string>

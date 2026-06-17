@@ -2898,17 +2898,17 @@ Proceed?</string>
     <string name="reader">Reader</string>
 
     <string name="pref_blur_mode">Glass material</string>
-    <string name="pref_blur_mode_summary">Choose an official Haze material preset, or switch to Custom for app-specific surface opacity and immersive tint controls</string>
+    <string name="pref_blur_mode_summary">Choose a glass material preset for blur radius and noise tuning</string>
     <string name="pref_glass_effect">Frosted-glass blur</string>
     <string name="pref_glass_effect_summary">Blur content behind supported Compose surfaces</string>
     <string name="pref_haze_opacity">Glass surface opacity</string>
-    <string name="pref_haze_opacity_summary">Controls the background opacity of Kototoro custom glass surfaces, even when blur is off</string>
+    <string name="pref_haze_opacity_summary">Controls glass surface opacity independently of the selected material preset, even when blur is off</string>
     <string name="pref_glass_blur_strength">Glass blur radius</string>
-    <string name="pref_glass_blur_strength_summary">Sets the final blur radius used by custom glass surfaces, in dp</string>
+    <string name="pref_glass_blur_strength_summary">Sets the final blur radius used by the current glass material preset, in dp</string>
     <string name="pref_glass_noise_strength">Glass noise factor</string>
-    <string name="pref_glass_noise_strength_summary">Sets the final noise amount applied to custom glass surfaces, from 0.00 to 1.00</string>
+    <string name="pref_glass_noise_strength_summary">Sets the final noise amount applied to the current glass material preset, from 0.00 to 1.00</string>
     <string name="pref_glass_immersive_strength">Immersive tint strength</string>
-    <string name="pref_glass_immersive_strength_summary">Controls the top and bottom immersive tint intensity used around custom glass chrome</string>
+    <string name="pref_glass_immersive_strength_summary">Controls the top and bottom immersive tint intensity independently of the selected material preset</string>
     <string name="glass_material_kototoro">Kototoro (Recommended)</string>
     <string name="glass_material_haze_ultra_thin">Haze Ultra Thin</string>
     <string name="glass_material_haze_thin">Haze Thin</string>

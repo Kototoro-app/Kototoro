@@ -163,17 +163,13 @@ private class AppearanceSettingsCoordinator(
             settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH) { glassImmersiveStrengthPercent }.value
         val glassMaterialPreset = remember(
             persistedGlassMaterialPreset,
-            hazeOpacityPercent,
             glassBlurStrengthPercent,
             glassNoiseStrengthPercent,
-            glassImmersiveStrengthPercent,
         ) {
             GlassMaterialPreset.resolve(
                 preset = persistedGlassMaterialPreset,
-                opacityPercent = hazeOpacityPercent,
                 blurStrengthPercent = glassBlurStrengthPercent,
                 noiseStrengthPercent = glassNoiseStrengthPercent,
-                immersiveStrengthPercent = glassImmersiveStrengthPercent,
             )
         }
         val tabletUiMode = settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }.value
@@ -344,10 +340,10 @@ private class AppearanceSettingsCoordinator(
             onAmoledThemeChange = { updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
             onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
             onGlassMaterialPresetChange = { preset -> applyGlassMaterialPreset(preset) },
-            onHazeOpacityChange = { updateGlassCustomSetting { settings.hazeOpacityPercent = it } },
-            onGlassBlurStrengthChange = { updateGlassCustomSetting { settings.glassBlurStrengthPercent = it } },
-            onGlassNoiseStrengthChange = { updateGlassCustomSetting { settings.glassNoiseStrengthPercent = it } },
-            onGlassImmersiveStrengthChange = { updateGlassCustomSetting { settings.glassImmersiveStrengthPercent = it } },
+            onHazeOpacityChange = { settings.hazeOpacityPercent = it },
+            onGlassBlurStrengthChange = { updateGlassPresetSetting { settings.glassBlurStrengthPercent = it } },
+            onGlassNoiseStrengthChange = { updateGlassPresetSetting { settings.glassNoiseStrengthPercent = it } },
+            onGlassImmersiveStrengthChange = { settings.glassImmersiveStrengthPercent = it },
             onTabletUiModeChange = { settings.tabletUiMode = it },
             onAppLocaleChange = ::updateAppLocale,
             onLoadingCircleStyleChange = { updateAndRestart(coroutineScope) { settings.loadingCircleStyle = it } },
@@ -425,13 +421,11 @@ private class AppearanceSettingsCoordinator(
     private fun applyGlassMaterialPreset(preset: GlassMaterialPreset) {
         settings.glassMaterialPreset = preset
         if (preset == GlassMaterialPreset.CUSTOM) return
-        settings.hazeOpacityPercent = preset.defaultOpacityPercent
         settings.glassBlurStrengthPercent = preset.defaultBlurStrengthPercent
         settings.glassNoiseStrengthPercent = preset.defaultNoiseStrengthPercent
-        settings.glassImmersiveStrengthPercent = preset.defaultImmersiveStrengthPercent
     }
 
-    private inline fun updateGlassCustomSetting(block: () -> Unit) {
+    private inline fun updateGlassPresetSetting(block: () -> Unit) {
         if (settings.glassMaterialPreset != GlassMaterialPreset.CUSTOM) {
             settings.glassMaterialPreset = GlassMaterialPreset.CUSTOM
         }

@@ -157,8 +157,8 @@ fun KototoroFavoritesHostRoute(
         bottom = contentPadding.calculateBottomPadding(),
     )
 
-    LaunchedEffect(displayCategories, initialCategoryId, initialSelectionApplied) {
-        if (initialSelectionApplied || displayCategories.isEmpty()) {
+    LaunchedEffect(uiState.isLoading, displayCategories, initialCategoryId, initialSelectionApplied) {
+        if (uiState.isLoading || initialSelectionApplied || displayCategories.isEmpty()) {
             return@LaunchedEffect
         }
         val targetPage = displayCategories.indexOfFirst { it.id == initialCategoryId }.takeIf { it >= 0 } ?: 0
