@@ -429,7 +429,7 @@ fun AppSearchContentListRoute(
             event?.consume { content ->
                 openDetailsHandler(
                     content,
-                    contentCoverSharedKey(content.source.name, content.coverUrl.orEmpty()),
+                    contentCoverSharedKey(content, content.coverUrl),
                 )
             }
         }
@@ -728,8 +728,7 @@ fun AppSearchContentListRoute(
                                 onBackToFilters = ::restoreFilterPane,
                                 onOpenDetails = {
                                     val content = requireNotNull(previewContent)
-                                    val sharedElementKey =
-                                        contentCoverSharedKey(content.source.name, content.coverUrl.orEmpty())
+                                    val sharedElementKey = contentCoverSharedKey(content, content.coverUrl)
                                     openDetailsHandler(
                                         content,
                                         sharedElementKey,
@@ -806,7 +805,7 @@ fun AppSearchContentListRoute(
                                 selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
                             } else {
                                 val content = item.toContentWithOverride()
-                                val sharedElementKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
+                                val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
                                 openDetailsHandler(
                                     content,
                                     sharedElementKey,

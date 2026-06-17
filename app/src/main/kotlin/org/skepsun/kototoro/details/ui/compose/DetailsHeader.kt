@@ -106,6 +106,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.model.iconResId
 import org.skepsun.kototoro.core.model.containsAdultTagKeyword
 import org.skepsun.kototoro.core.model.getTitle
@@ -310,19 +311,36 @@ fun DetailsHeader(
     val canExpandDescription = description.length > 200
 
     val coverModel = remember(content?.source?.name, content?.url, currentCoverUrl) {
-        currentCoverUrl?.let {
-            val cacheKey = sharedCoverMemoryCacheKey(
-                sourceName = content?.source?.name,
-                ownerKey = content?.url,
-                url = it,
-            )
-            ImageRequest.Builder(context)
-                .data(it)
-                .memoryCacheKey(cacheKey)
-                .diskCacheKey(cacheKey)
-                .crossfade(false)
-                .apply { content?.let { mangaExtra(it) } }
-                .build()
+        when {
+            currentCoverUrl != null -> {
+                val cacheKey = sharedCoverMemoryCacheKey(
+                    sourceName = content?.source?.name,
+                    ownerKey = content?.url,
+                    url = currentCoverUrl,
+                )
+                ImageRequest.Builder(context)
+                    .data(currentCoverUrl)
+                    .memoryCacheKey(cacheKey)
+                    .diskCacheKey(cacheKey)
+                    .crossfade(false)
+                    .apply { content?.let { mangaExtra(it) } }
+                    .build()
+            }
+            content?.url?.startsWith("tvbox://item/") == true -> {
+                val fallbackCacheKey = sharedCoverMemoryCacheKey(
+                    sourceName = content.source.name,
+                    ownerKey = content.url,
+                    url = "tvbox-search-cover:${content.url}",
+                )
+                ImageRequest.Builder(context)
+                    .data(tvboxSearchCoverModel(content))
+                    .memoryCacheKey(fallbackCacheKey)
+                    .diskCacheKey(fallbackCacheKey)
+                    .crossfade(false)
+                    .mangaExtra(content)
+                    .build()
+            }
+            else -> null
         }
     }
     val isNsfw = content?.isNsfw() == true

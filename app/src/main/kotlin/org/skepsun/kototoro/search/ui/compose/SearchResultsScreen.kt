@@ -72,7 +72,6 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
-import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
@@ -340,9 +339,10 @@ fun SearchResultsRoute(
                         } else if (isPickMode) {
                             onPickContent(item.toContentWithOverride())
                         } else {
+                            val content = item.toContentWithOverride()
                             onOpenContent(
-                                item.toContentWithOverride(),
-                                contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty()),
+                                content,
+                                contentCoverSharedKey(content, item.coverUrl),
                             )
                         }
                     },

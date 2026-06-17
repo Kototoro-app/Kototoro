@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.list.ui.compose
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -76,9 +77,11 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
+import org.skepsun.kototoro.core.ui.compose.contentCoverIdentity
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
+import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_READ
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.NONE
@@ -86,6 +89,8 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+
+private const val TAG = "KototoroContentCard"
 
 @Immutable
 data class ContentCardBadgeMetrics(
@@ -243,8 +248,11 @@ fun KototoroContentCardGrid(
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedKey = remember(manga.source.name, item.coverUrl, sharedElementInstanceKey) {
-        contentCoverSharedKey(manga.source.name, item.coverUrl.orEmpty(), sharedElementInstanceKey)
+    val sharedIdentity = remember(manga.id, manga.url, manga.publicUrl, item.coverUrl) {
+        contentCoverIdentity(manga, item.coverUrl)
+    }
+    val sharedKey = remember(manga.source.name, sharedIdentity, sharedElementInstanceKey) {
+        contentCoverSharedKey(manga.source.name, sharedIdentity, sharedElementInstanceKey)
     }
     
     val cardShape = MaterialTheme.shapes.medium
@@ -526,8 +534,11 @@ fun KototoroContentCardList(
     val badgeMetrics = remember { contentCardBadgeMetricsFor(48.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedKey = remember(item.manga.source.name, item.coverUrl, sharedElementInstanceKey) {
-        contentCoverSharedKey(item.manga.source.name, item.coverUrl.orEmpty(), sharedElementInstanceKey)
+    val sharedIdentity = remember(item.manga.id, item.manga.url, item.manga.publicUrl, item.coverUrl) {
+        contentCoverIdentity(item.manga, item.coverUrl)
+    }
+    val sharedKey = remember(item.manga.source.name, sharedIdentity, sharedElementInstanceKey) {
+        contentCoverSharedKey(item.manga.source.name, sharedIdentity, sharedElementInstanceKey)
     }
     val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
         buildSet {
@@ -852,8 +863,11 @@ fun KototoroContentCardDetailedList(
     val badgeMetrics = remember { contentCardBadgeMetricsFor(80.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedKey = remember(item.manga.source.name, item.coverUrl, sharedElementInstanceKey) {
-        contentCoverSharedKey(item.manga.source.name, item.coverUrl.orEmpty(), sharedElementInstanceKey)
+    val sharedIdentity = remember(item.manga.id, item.manga.url, item.manga.publicUrl, item.coverUrl) {
+        contentCoverIdentity(item.manga, item.coverUrl)
+    }
+    val sharedKey = remember(item.manga.source.name, sharedIdentity, sharedElementInstanceKey) {
+        contentCoverSharedKey(item.manga.source.name, sharedIdentity, sharedElementInstanceKey)
     }
     val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
         buildSet {
@@ -1062,7 +1076,7 @@ private fun rememberContentCoverRequest(
     coverUrl: String?,
     manga: org.skepsun.kototoro.parsers.model.Content,
     allowCrossfade: Boolean = true,
-): ImageRequest {
+): ImageRequest? {
     var failureVersion by remember(coverUrl, manga.id, manga.source) { mutableStateOf(0) }
     return remember(context, coverUrl, manga.id, manga.source, allowCrossfade, failureVersion) {
         buildContentCoverRequest(
@@ -1081,7 +1095,7 @@ private fun buildContentCoverRequest(
     manga: org.skepsun.kototoro.parsers.model.Content,
     allowCrossfade: Boolean = true,
     onRecoverableFailure: () -> Unit = {},
-): ImageRequest {
+): ImageRequest? {
     val normalizedUrl = coverUrl?.let(::normalizeCoverUrl)
     val cacheKey = sharedCoverMemoryCacheKey(
         sourceName = manga.source.name,
@@ -1091,6 +1105,38 @@ private fun buildContentCoverRequest(
     val data = normalizedUrl?.takeUnless {
         isMissingLocalFileCover(it) || cacheKey?.let(ContentCoverFailureRegistry::isSuppressed) == true
     }
+    val fallbackTvBoxSearchModel = manga.url
+        .takeIf { it.startsWith("tvbox://item/") && coverUrl.isNullOrBlank() }
+        ?.let { tvboxSearchCoverModel(manga) }
+    if (data.isNullOrBlank()) {
+        if (fallbackTvBoxSearchModel != null) {
+            val fallbackCacheKey = sharedCoverMemoryCacheKey(
+                sourceName = manga.source.name,
+                ownerKey = manga.url,
+                url = "tvbox-search-cover:${manga.url}",
+            )
+            Log.d(
+                TAG,
+                "Using deferred TVBox search cover: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} model=$fallbackTvBoxSearchModel",
+            )
+            return ImageRequest.Builder(context)
+                .data(fallbackTvBoxSearchModel)
+                .memoryCacheKey(fallbackCacheKey)
+                .diskCacheKey(fallbackCacheKey)
+                .mangaExtra(manga)
+                .crossfade(allowCrossfade)
+                .build()
+        }
+        Log.w(
+            TAG,
+            "Cover request skipped: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} inputCover=${coverUrl ?: "<null>"} normalized=${normalizedUrl ?: "<null>"} cacheKey=${cacheKey ?: "<null>"}",
+        )
+        return null
+    }
+    Log.d(
+        TAG,
+        "Cover request ready: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} data=$data",
+    )
     return ImageRequest.Builder(context)
         .data(data)
         .memoryCacheKey(cacheKey)

@@ -102,15 +102,26 @@ class TVBoxRepository(
 			TAG,
 			"getList start for ${source.name}: offset=$offset order=${order ?: defaultSortOrder} query=${filter?.query.orEmpty()} runtime=${spiderRuntime?.id ?: "none"}",
 		)
-		spiderRuntime?.getList(offset, order, filter)?.let {
-			Log.i(TAG, "getList resolved by spider runtime for ${source.name}: count=${it.size}")
-			return it
+		val shouldPreferCmsSearch = mightBeCmsSource() && !filter?.query.isNullOrBlank()
+		if (!shouldPreferCmsSearch) {
+			spiderRuntime?.getList(offset, order, filter)?.let {
+				Log.i(TAG, "getList resolved by spider runtime for ${source.name}: count=${it.size}")
+				return it
+			}
+		} else {
+			Log.d(TAG, "Skipping spider runtime search for CMS source ${source.name} to preserve CMS cover metadata")
 		}
-		Log.d(TAG, "getList spider runtime returned null for ${source.name}, trying CMS/catalog fallback")
+		Log.d(TAG, "getList spider runtime returned null or was skipped for ${source.name}, trying CMS/catalog fallback")
 		resolveCmsProvider()?.let { provider ->
 			val result = getCmsList(provider, offset, order, filter)
 			Log.i(TAG, "getList resolved by CMS provider for ${source.name}: count=${result.size}")
 			return result
+		}
+		if (shouldPreferCmsSearch) {
+			spiderRuntime?.getList(offset, order, filter)?.let {
+				Log.i(TAG, "getList fallback to spider runtime for ${source.name}: count=${it.size}")
+				return it
+			}
 		}
 		if (offset > 0) {
 			Log.d(TAG, "getList offset > 0 and no runtime/CMS data for ${source.name}, returning empty list")
@@ -335,6 +346,12 @@ class TVBoxRepository(
 			}
 			.toList()
 		filtered.forEach { cmsItems[it.token] = it }
+		Log.d(
+			TAG,
+			"CMS list result for ${source.name}: page=$page query=$query category=$selectedCategoryId total=${filtered.size} covers=${
+				filtered.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
+			}",
+		)
 		return sortItems(filtered, order ?: defaultSortOrder, query).map { it.toContent(source) }
 	}
 
@@ -543,8 +560,48 @@ class TVBoxRepository(
 		val group = node.firstNonBlank("type_name", "group")
 		val typeId = node.firstNonBlank("type_id")
 		val description = node.firstNonBlank("vod_remarks", "remark", "vod_content", "description", "desc")
-		val coverUrl = resolveUrl(candidate.url, node.firstNonBlank("vod_pic", "pic", "cover", "thumbnail"))
+		val coverUrl = resolveUrl(
+			candidate.url,
+			node.firstNonBlank(
+				"vod_pic",
+				"vod_pic_thumb",
+				"vod_pic_slide",
+				"pic",
+				"pic_url",
+				"img",
+				"image",
+				"thumb",
+				"thumbnail",
+				"thumbnail_url",
+				"cover",
+				"cover_url",
+				"poster",
+			),
+		)
 			?: firstNonBlankUrl(config.root.logo, config.root.wallpaper)
+		if (!title.isNullOrBlank()) {
+			Log.d(
+				TAG,
+				"parseCmsVodItem source=${source.name} title=$title externalId=${externalId ?: "<null>"} cover=$coverUrl rawCoverFields=${
+					listOf(
+						"vod_pic" to node.optStringOrNull("vod_pic"),
+						"vod_pic_thumb" to node.optStringOrNull("vod_pic_thumb"),
+						"vod_pic_slide" to node.optStringOrNull("vod_pic_slide"),
+						"pic" to node.optStringOrNull("pic"),
+						"pic_url" to node.optStringOrNull("pic_url"),
+						"img" to node.optStringOrNull("img"),
+						"image" to node.optStringOrNull("image"),
+						"thumb" to node.optStringOrNull("thumb"),
+						"thumbnail" to node.optStringOrNull("thumbnail"),
+						"thumbnail_url" to node.optStringOrNull("thumbnail_url"),
+						"cover" to node.optStringOrNull("cover"),
+						"cover_url" to node.optStringOrNull("cover_url"),
+						"poster" to node.optStringOrNull("poster"),
+					).filter { !it.second.isNullOrBlank() }
+						.joinToString { "${it.first}=${it.second}" }
+				}",
+			)
+		}
 		val streams = buildList {
 			val directUrl = node.firstNonBlank("playUrl", "play_url", "url", "link", "src", "video", "videoUrl", "m3u8")
 				?.let { resolveUrl(candidate.url, it) }
@@ -930,7 +987,25 @@ class TVBoxRepository(
 				val group = node.firstNonBlank("group", "groupTitle", "type_name")
 					?: path.lastOrNull()
 				val description = node.firstNonBlank("desc", "description", "remark", "vod_remarks", "vod_blurb", "vod_content")
-				val coverUrl = resolveUrl(candidate.url, node.firstNonBlank("cover", "pic", "logo", "image", "thumb", "thumbnail", "vod_pic"))
+				val coverUrl = resolveUrl(
+					candidate.url,
+					node.firstNonBlank(
+						"cover",
+						"cover_url",
+						"pic",
+						"pic_url",
+						"logo",
+						"img",
+						"image",
+						"thumb",
+						"thumbnail",
+						"thumbnail_url",
+						"poster",
+						"vod_pic",
+						"vod_pic_thumb",
+						"vod_pic_slide",
+					),
+				)
 					?: firstNonBlankUrl(config.root.logo, config.root.wallpaper)
 
 				val streams = mutableListOf<TVBoxStream>()

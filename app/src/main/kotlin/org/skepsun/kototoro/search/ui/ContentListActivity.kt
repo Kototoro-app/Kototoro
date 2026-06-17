@@ -193,7 +193,7 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                                     pendingSharedKey ?: run {
                                         val content: Content? = mangaDetails?.toContent() ?: pendingContent
                                         content?.let { c ->
-                                            contentCoverSharedKey(c.source.name, c.coverUrl.orEmpty())
+                                            contentCoverSharedKey(c, c.coverUrl)
                                         }
                                     }
                                 }

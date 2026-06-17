@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.search.ui.multi
 
 import android.net.Uri
+import android.util.Log
 import androidx.collection.ArraySet
 import androidx.collection.LongSet
 import androidx.lifecycle.SavedStateHandle
@@ -65,6 +66,7 @@ import java.util.Locale
 import javax.inject.Inject
 
 private const val MAX_PARALLELISM = 4
+private const val TAG = "SearchViewModel"
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -303,6 +305,14 @@ class SearchViewModel @Inject constructor(
 				val list = mangaListMapper.toListModelList(
 					manga = result.manga,
 					mode = ListMode.GRID,
+				)
+				Log.d(
+					TAG,
+					"searchSource result source=${source.name} rawCount=${result.manga.size} mappedCount=${list.size} rawCovers=${
+						result.manga.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
+					} mappedCovers=${
+						list.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
+					}",
 				)
 				SearchResultsListModel(
 					titleResId = 0,

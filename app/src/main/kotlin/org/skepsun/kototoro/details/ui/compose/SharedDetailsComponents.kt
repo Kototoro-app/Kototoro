@@ -100,7 +100,6 @@ fun DetailsCoverFrame(
     val sharedPlaceholder = cachedPlaceholder ?: snapshotPlaceholder
     val cachedPainter = rememberDrawablePainter(sharedPlaceholder?.asDrawable(context.resources))
     val enableSharedElement = sharedElementKey != null &&
-        sharedPlaceholder != null &&
         sharedTransitionScope != null &&
         animatedVisibilityScope != null
     var hasResolvedCover by remember(coverModel) { mutableStateOf(false) }

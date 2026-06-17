@@ -443,7 +443,14 @@ internal class TVBoxJarSpiderRuntime(
 				spider.searchContent(query, false)
 			}
 		}.orEmpty()
-		return parseVodList(raw).map { it.toContent(source) }
+		val items = parseVodList(raw)
+		Log.d(
+			TAG,
+			"TVBox jar search result for ${source.name}: query=$query page=$page total=${items.size} covers=${
+				items.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
+			}",
+		)
+		return items.map { it.toContent(source) }
 	}
 
 	private suspend fun loadDetail(spider: Spider, manga: Content): TVBoxJarDetailResult? {
@@ -697,7 +704,21 @@ internal class TVBoxJarSpiderRuntime(
 	private fun parseVodItem(node: JSONObject): TVBoxJarVodItem? {
 		val itemId = node.firstNonBlank("vod_id", "id", "vodId", "url") ?: return null
 		val title = node.firstNonBlank("vod_name", "title", "name") ?: itemId
-		val cover = node.firstNonBlank("vod_pic", "vod_pic_thumb", "pic", "thumb", "cover")
+		val cover = node.firstNonBlank(
+			"vod_pic",
+			"vod_pic_thumb",
+			"vod_pic_slide",
+			"pic",
+			"pic_url",
+			"img",
+			"image",
+			"thumb",
+			"thumbnail",
+			"thumbnail_url",
+			"cover",
+			"cover_url",
+			"poster",
+		)
 		val category = node.firstNonBlank("type_name", "vod_class", "class")
 		val remarks = node.firstNonBlank("vod_remarks", "remarks", "note")
 		val tags = buildSet {
