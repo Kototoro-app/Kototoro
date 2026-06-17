@@ -26,11 +26,10 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
-import org.skepsun.kototoro.core.ui.model.DateTimeAgo
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
-import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.core.util.ext.call
+import org.skepsun.kototoro.core.util.ext.groupByDateBucket
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
@@ -235,18 +234,16 @@ class FeedViewModel @Inject constructor(
 
 	private suspend fun List<TrackingLogItem>.mapListTo(destination: MutableList<ListModel>) {
 		val feedItems = mangaListMapper.toFeedItems(this)
-		var prevDate: DateTimeAgo? = null
-		for ((logItem, feedItem) in zip(feedItems)) {
-			val date = calculateTimeAgo(logItem.createdAt)
-			if (prevDate != date) {
-				destination += if (date != null) {
-					ListHeader(date)
-				} else {
-					ListHeader(R.string.unknown)
-				}
+		val bucketedItems = zip(feedItems).groupByDateBucket(instantOf = { it.first.createdAt })
+		for ((date, items) in bucketedItems) {
+			destination += if (date != null) {
+				ListHeader(date)
+			} else {
+				ListHeader(R.string.unknown)
 			}
-			prevDate = date
-			destination += feedItem
+			for ((_, feedItem) in items) {
+				destination += feedItem
+			}
 		}
 	}
 

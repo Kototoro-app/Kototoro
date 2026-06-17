@@ -35,6 +35,55 @@ fun calculateTimeAgo(instant: Instant, showMonths: Boolean = false): DateTimeAgo
 	}
 }
 
+fun calculateDateGroup(instant: Instant, showMonths: Boolean = false): DateTimeAgo? {
+	val localDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault()).toLocalDate()
+	val now = LocalDate.now()
+	val diffDays = localDate.until(now, ChronoUnit.DAYS)
+
+	return when {
+		diffDays < 0 -> null
+		diffDays == 0L -> {
+			if (instant.until(Instant.now(), ChronoUnit.MINUTES) < 3) DateTimeAgo.JustNow
+			else DateTimeAgo.Today
+		}
+		diffDays == 1L -> DateTimeAgo.Yesterday
+		diffDays < 6 -> DateTimeAgo.DaysAgo(diffDays.toInt())
+		else -> {
+			val diffMonths = localDate.until(now, ChronoUnit.MONTHS)
+			if (showMonths && diffMonths <= 6) {
+				DateTimeAgo.MonthsAgo(diffMonths.toInt())
+			} else {
+				DateTimeAgo.Absolute(localDate)
+			}
+		}
+	}
+}
+
+fun <T> List<T>.groupByDateBucket(
+	instantOf: (T) -> Instant?,
+	showMonths: Boolean = false,
+): List<Pair<DateTimeAgo?, List<T>>> {
+	if (isEmpty()) {
+		return emptyList()
+	}
+	val grouped = LinkedHashMap<DateTimeAgo?, MutableList<T>>()
+	val latestInstantByGroup = HashMap<DateTimeAgo?, Instant>()
+	for (item in this) {
+		val instant = instantOf(item)
+		val group = instant?.let { calculateDateGroup(it, showMonths) }
+		grouped.getOrPut(group) { ArrayList() }.add(item)
+		if (instant != null) {
+			val previous = latestInstantByGroup[group]
+			if (previous == null || instant > previous) {
+				latestInstantByGroup[group] = instant
+			}
+		}
+	}
+	return grouped.entries
+		.sortedByDescending { latestInstantByGroup[it.key] ?: Instant.MIN }
+		.map { it.key to it.value }
+}
+
 fun Long.toInstantOrNull() = if (this == 0L) null else Instant.ofEpochMilli(this)
 
 fun Resources.formatDurationShort(millis: Long): String? {

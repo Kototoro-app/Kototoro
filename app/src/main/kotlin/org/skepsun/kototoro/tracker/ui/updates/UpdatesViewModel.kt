@@ -19,8 +19,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
-import org.skepsun.kototoro.core.ui.model.DateTimeAgo
-import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
+import org.skepsun.kototoro.core.util.ext.groupByDateBucket
 import org.skepsun.kototoro.core.util.ext.onFirst
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ContentListMapper
@@ -236,23 +235,23 @@ class UpdatesViewModel @Inject constructor(
 
 		val result = ArrayList<ListModel>(if (grouped) (groupedList.size * 1.4).toInt() else groupedList.size + 1)
 		quickFilter.filterItem(filters)?.let(result::add)
-		var prevHeader: DateTimeAgo? = null
-		for (item in groupedList) {
-			if (grouped) {
-				val header = item.lastChapterDate?.let { calculateTimeAgo(it) }
-				if (header != prevHeader) {
-					if (header != null) {
-						result += ListHeader(header)
-					}
-					prevHeader = header
-				}
+		val groupedBuckets = if (grouped) {
+			groupedList.groupByDateBucket(UpdateGroup::lastChapterDate)
+		} else {
+			listOf(null to groupedList)
+		}
+		for ((header, itemsInBucket) in groupedBuckets) {
+			if (grouped && header != null) {
+				result += ListHeader(header)
 			}
-			result += mangaListMapper.toListModel(
-				manga = item.representative.manga,
-				mode = mode,
-				metadataSelectionOverride = item.metadataSourceSelection,
-				useMetadataSelectionOverride = item.metadataSourceSelection != null,
-			).toGroupedListModel(item)
+			for (item in itemsInBucket) {
+				result += mangaListMapper.toListModel(
+					manga = item.representative.manga,
+					mode = mode,
+					metadataSelectionOverride = item.metadataSourceSelection,
+					useMetadataSelectionOverride = item.metadataSourceSelection != null,
+				).toGroupedListModel(item)
+			}
 		}
 		return result
 	}
