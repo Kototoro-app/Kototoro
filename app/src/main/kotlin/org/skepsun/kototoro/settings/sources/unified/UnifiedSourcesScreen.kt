@@ -1198,7 +1198,6 @@ fun UnifiedSourcesScreen(
 							when (page) {
 								UNIFIED_SOURCES_TAB_SOURCES -> UnifiedSourceList(
 									modifier = Modifier.fillMaxSize(),
-									hiddenShadowedSourcesCount = state.hiddenShadowedSourcesCount,
 									sources = state.sources,
 									onBrowseSource = onBrowseSource,
 									onOpenSourceSettings = onOpenSourceSettings,
@@ -1396,7 +1395,6 @@ private fun UnifiedSourceSelectionBar(
 @Composable
 private fun UnifiedSourceList(
 	modifier: Modifier = Modifier,
-	hiddenShadowedSourcesCount: Int,
 	sources: List<UnifiedSourceItem>,
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
 	onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
@@ -1410,12 +1408,6 @@ private fun UnifiedSourceList(
 		modifier = modifier,
 		contentPadding = PaddingValues(vertical = 4.dp),
 	) {
-		if (hiddenShadowedSourcesCount > 0) {
-			item(key = "shadowed_notice") {
-				SourceShadowedNoticeCard(hiddenShadowedSourcesCount = hiddenShadowedSourcesCount)
-				HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
-			}
-		}
 		items(sources, key = { it.id }) { item ->
 			val isSelected = item.id in selectedSourceIds
 			UnifiedSourceRow(
@@ -1445,36 +1437,6 @@ private fun UnifiedSourceIcon(
 		modifier = modifier,
 		contentDescription = item.title,
 	)
-}
-
-@Composable
-private fun SourceShadowedNoticeCard(
-	hiddenShadowedSourcesCount: Int,
-) {
-	Surface(
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(horizontal = 12.dp, vertical = 6.dp),
-		shape = RoundedCornerShape(12.dp),
-		color = MaterialTheme.colorScheme.secondaryContainer,
-		contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-	) {
-		Row(
-			modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-			horizontalArrangement = Arrangement.spacedBy(10.dp),
-			verticalAlignment = Alignment.CenterVertically,
-		) {
-			Icon(
-				painter = painterResource(R.drawable.ic_info_outline),
-				contentDescription = null,
-				modifier = Modifier.size(18.dp),
-			)
-			Text(
-				text = stringResource(R.string.unified_sources_shadowed_notice, hiddenShadowedSourcesCount),
-				style = MaterialTheme.typography.bodySmall,
-			)
-		}
-	}
 }
 
 @OptIn(ExperimentalFoundationApi::class)

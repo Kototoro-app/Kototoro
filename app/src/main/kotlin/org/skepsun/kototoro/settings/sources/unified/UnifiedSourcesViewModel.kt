@@ -1217,7 +1217,6 @@ class UnifiedSourcesViewModel @Inject constructor(
 			allRepositories = repositories,
 			allPackages = enrichedPackages,
 			allSources = sources,
-			hiddenShadowedSourcesCount = enrichedPackages.sumOf { it.shadowedSourceCount },
 			availableKinds = (repositories.map { it.kind } + enrichedPackages.map { it.kind } + sources.map { it.kind })
 				.distinct()
 				.sortedBy { it.ordinal },
@@ -1244,9 +1243,17 @@ class UnifiedSourcesViewModel @Inject constructor(
 			.mapValues { (_, packageIds) -> packageIds.size }
 		return map { item ->
 			val declaredCount = item.sourceCount.coerceAtLeast(item.sourceNames.size)
-			val activeCount = (activeSourceCountByPackageId[item.id] ?: 0)
-				.coerceIn(0, declaredCount)
-			val shadowedCount = (declaredCount - activeCount).coerceAtLeast(0)
+			val supportsShadowedSources = item.kind == UnifiedSourceKind.JAR
+			val activeCount = if (supportsShadowedSources) {
+				(activeSourceCountByPackageId[item.id] ?: 0).coerceIn(0, declaredCount)
+			} else {
+				declaredCount
+			}
+			val shadowedCount = if (supportsShadowedSources) {
+				(declaredCount - activeCount).coerceAtLeast(0)
+			} else {
+				0
+			}
 			item.copy(
 				activeSourceCount = activeCount,
 				shadowedSourceCount = shadowedCount,
@@ -1335,7 +1342,6 @@ sealed interface UnifiedSourcesUiState {
 		val allRepositories: List<UnifiedSourceRepositoryItem>,
 		val allPackages: List<UnifiedSourcePackageItem>,
 		val allSources: List<UnifiedSourceItem>,
-		val hiddenShadowedSourcesCount: Int,
 		val availableKinds: List<UnifiedSourceKind>,
 		val availableContentTypes: List<ContentType>,
 		val availableLocationTypes: List<UnifiedRepositoryLocationType>,
