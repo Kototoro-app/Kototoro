@@ -720,6 +720,8 @@
     <string name="discover_local_unlinked">尚未連結本地作品</string>
     <string name="shared_element_transitions">平滑封面過渡動畫</string>
     <string name="shared_element_transitions_summary">在從列表點擊作品卡片進入詳情頁時啟用無縫縮放過渡特效（Hero動畫）。由於加載機制，可能會導致詳情頁面有極其微弱的延遲出現。</string>
+    <string name="pref_reduce_visual_effects">減少視覺特效</string>
+    <string name="pref_reduce_visual_effects_summary">適合低配裝置。一鍵關閉運行時 Haze、Hero 過渡動畫與全景背景動態效果，以換取更穩定的流暢度，但不會改動它們各自的獨立設定</string>
     <string name="jar_plugins_updates_available">JAR 外掛程式有可用更新！</string>
     <string name="jar_plugins_update_all">全部更新</string>
     <string name="jar_plugins_updating">正在更新 JAR 外掛程式...</string>
@@ -1612,6 +1614,10 @@
     <string name="pref_panorama_animation">全景封面動畫</string>
     <string name="pref_panorama_animation_speed">全景動畫速度</string>
     <string name="pref_panorama_animation_summary">爲全景封面背景啓用微妙的運動效果</string>
+    <string name="pref_details_panorama_scroll_linked">讓詳情頁全景封面跟隨捲動</string>
+    <string name="pref_details_panorama_scroll_linked_summary">讓詳情頁全景背景隨著頁面捲動一起移動，而不是固定在原位</string>
+    <string name="pref_details_panorama_limit_to_info_card_midpoint">讓詳情頁全景封面止於資訊卡片中部</string>
+    <string name="pref_details_panorama_limit_to_info_card_midpoint_summary">讓詳情頁全景背景平滑淡出，並在基本資訊面板中間位置完全收住</string>
     <string name="pref_panorama_blur">封面模糊度</string>
     <string name="pref_panorama_cover">全景封面</string>
     <string name="pref_panorama_cover_summary">在詳情頁頂部標題後方顯示橫幅式的封面背景圖</string>

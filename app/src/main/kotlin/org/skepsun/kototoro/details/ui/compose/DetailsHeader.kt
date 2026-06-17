@@ -185,7 +185,7 @@ fun DetailsHeader(
     coverUrl: String?,
     fallbackCoverUrl: String?,
     sharedElementKey: String? = null,
-    onInfoCardTopSync: (Float) -> Unit,
+    onInfoCardBoundsSync: (Float, Float) -> Unit,
     onCoverClick: (String?) -> Unit,
     onFavoriteClick: () -> Unit,
     onReadingRecordClick: () -> Unit,
@@ -543,7 +543,8 @@ fun DetailsHeader(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
-                        onInfoCardTopSync(coordinates.boundsInRoot().top)
+                        val bounds = coordinates.boundsInRoot()
+                        onInfoCardBoundsSync(bounds.top, bounds.bottom)
                     },
                 style = GlassDefaults.subtleStyle().copy(
                     containerAlpha = 0.76f,

@@ -274,6 +274,10 @@
     <string name="discover_local_unlinked">尚未关联本地作品</string>
     <string name="pref_panorama_animation">全景封面动画</string>
     <string name="pref_panorama_animation_summary">为启用全景封面的背景添加轻微动态效果</string>
+    <string name="pref_details_panorama_scroll_linked">让详情页全景封面跟随滚动</string>
+    <string name="pref_details_panorama_scroll_linked_summary">让详情页全景背景随着页面滚动一起移动，而不是固定在原位</string>
+    <string name="pref_details_panorama_limit_to_info_card_midpoint">让详情页全景封面止于信息卡片中部</string>
+    <string name="pref_details_panorama_limit_to_info_card_midpoint_summary">让详情页全景背景平滑淡出，并在基本信息面板中间位置完全收住</string>
     <string name="reader_translation_pipeline_mode">翻译流水线工作模式</string>
     <string name="reader_translation_pipeline_mode_two_stage">阶段式 (本地OCR + API翻译)</string>
     <string name="reader_translation_pipeline_mode_end_to_end_api">端到端 (Gemini原生多模态)</string>
@@ -1435,6 +1439,8 @@
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背后的内容</string>
     <string name="pref_haze_opacity">玻璃容器不透明度</string>
     <string name="pref_haze_opacity_summary">独立控制玻璃容器的不透明度，不受预设影响，关闭模糊后依然生效</string>
+    <string name="pref_reduce_visual_effects">减少视觉特效</string>
+    <string name="pref_reduce_visual_effects_summary">适合低配设备。一键关闭运行时 Haze、Hero 过渡动画和全景背景运动效果，以换取更稳定的流畅度，但不改动它们各自的独立设置</string>
     <string name="pref_huggingface_mirror">HuggingFace 网络加速镜像</string>
     <string name="pref_huggingface_mirror_summary">如果您身处国内导致 HuggingFace 下载模型失败，请选择加速镜像路线。</string>
     <string-array name="pref_huggingface_mirror_entries">

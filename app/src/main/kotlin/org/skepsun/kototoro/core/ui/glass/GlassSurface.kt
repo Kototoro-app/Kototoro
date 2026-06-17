@@ -58,6 +58,7 @@ data class GlassSurfaceColors(
 fun rememberGlassPrefs(settings: AppSettings): GlassPrefs {
     val prefs by settings.observeAsState(
         AppSettings.KEY_GLASS_EFFECT_ENABLED,
+        AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
         AppSettings.KEY_GLASS_MATERIAL_PRESET,
         AppSettings.KEY_HAZE_OPACITY,
         AppSettings.KEY_GLASS_BLUR_STRENGTH,
@@ -65,7 +66,8 @@ fun rememberGlassPrefs(settings: AppSettings): GlassPrefs {
         AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH,
     ) {
         GlassPrefs(
-            isGlassEffectEnabled = isGlassEffectEnabled,
+            isGlassEffectEnabled = isGlassEffectEnabled && !isReducedVisualEffectsEnabled,
+            isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
             materialPreset = glassMaterialPreset,
             hazeOpacityPercent = hazeOpacityPercent,
             blurStrengthPercent = glassBlurStrengthPercent,
@@ -172,7 +174,9 @@ fun GlassSurface(
     val surfaceColor = when {
         dialogSurface -> glassColors.containerColor
         useRuntimeHaze && !dialogSurface -> Color.Transparent
-        !useRuntimeHaze && usesOfficialHazeMaterial -> hazeStyle.backgroundColor.takeOrElse { glassColors.containerColor }
+        !useRuntimeHaze && glassPrefs.isGlassEffectEnabled && usesOfficialHazeMaterial -> {
+            hazeStyle.backgroundColor.takeOrElse { glassColors.containerColor }
+        }
         else -> glassColors.containerColor
     }
     val liquidGlassSpec = remember(
@@ -271,7 +275,8 @@ fun GlassSurface(
         ) {
             val overlayModifier = if (
                 usePrototypeChrome &&
-                !useRuntimeHaze
+                !useRuntimeHaze &&
+                glassPrefs.isGlassEffectEnabled
             ) {
                 rememberLiquidGlassPrototypeOverlayModifier(liquidGlassSpec)
             } else {
@@ -320,6 +325,7 @@ fun rememberGlassSurfaceColors(
     val isDarkTheme = colorScheme.background.luminance() < 0.5f
     return remember(glassPrefs, isDarkTheme, style, colorScheme) {
         computeGlassColors(
+            isGlassEffectEnabled = glassPrefs.isGlassEffectEnabled,
             hazeOpacityPercent = glassPrefs.hazeOpacityPercent,
             blurStrengthPercent = glassPrefs.blurStrengthPercent,
             noiseStrengthPercent = glassPrefs.noiseStrengthPercent,
@@ -361,6 +367,7 @@ fun GlassBottomBarContainer(
 }
 
 private fun computeGlassColors(
+    isGlassEffectEnabled: Boolean,
     hazeOpacityPercent: Int,
     blurStrengthPercent: Int,
     noiseStrengthPercent: Int,
@@ -368,6 +375,31 @@ private fun computeGlassColors(
     style: GlassStyle,
     colorScheme: androidx.compose.material3.ColorScheme,
 ): GlassSurfaceColors {
+    if (!isGlassEffectEnabled) {
+        val fallbackBaseColor = when {
+            style.shadowElevation >= 10.dp -> colorScheme.surfaceContainerHigh
+            style.shadowElevation >= 6.dp -> colorScheme.surfaceContainer
+            else -> colorScheme.surfaceContainerLow
+        }.let { candidate ->
+            if (isDarkTheme) lerp(candidate, colorScheme.surfaceBright, 0.08f) else candidate
+        }
+        val borderAlpha = if (isDarkTheme) {
+            style.borderAlpha.coerceIn(0.18f, 0.30f)
+        } else {
+            style.borderAlpha.coerceAtMost(0.18f)
+        }
+        return GlassSurfaceColors(
+            containerColor = fallbackBaseColor,
+            baseTintColor = fallbackBaseColor,
+            blurRadius = 0.dp,
+            noiseFactor = 0f,
+            border = BorderStroke(
+                width = 1.dp,
+                color = colorScheme.outlineVariant.copy(alpha = borderAlpha),
+            ),
+        )
+    }
+
     val preferenceAlpha = (hazeOpacityPercent.coerceIn(0, 100)) / 100f
     val effectiveContainerAlpha = (preferenceAlpha * style.containerAlpha).coerceIn(0f, 1f)
     val baseColor = when {

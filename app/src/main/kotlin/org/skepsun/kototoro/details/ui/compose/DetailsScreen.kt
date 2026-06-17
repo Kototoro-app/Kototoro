@@ -422,6 +422,7 @@ fun DetailsScreen(
     var toolbarBottomPx by remember { mutableFloatStateOf(Float.NaN) }
     var lastToolbarBottomPx by remember { mutableFloatStateOf(Float.NaN) }
     var infoCardTopPx by remember { mutableFloatStateOf(Float.NaN) }
+    var infoCardMidPx by remember { mutableFloatStateOf(Float.NaN) }
     var initialInfoCardTopPx by remember { mutableFloatStateOf(Float.NaN) }
 
     LaunchedEffect(availableTabIds) {
@@ -483,9 +484,10 @@ fun DetailsScreen(
             )
         }
     }
-    val syncInfoCardTop: (Float) -> Unit = remember {
-        { top ->
+    val syncInfoCardBounds: (Float, Float) -> Unit = remember {
+        { top, bottom ->
             infoCardTopPx = top
+            infoCardMidPx = (top + bottom) / 2f
             if (top.isFinite() && (!initialInfoCardTopPx.isFinite() || top > initialInfoCardTopPx)) {
                 initialInfoCardTopPx = top
             }
@@ -667,8 +669,32 @@ fun DetailsScreen(
         }
     }
 
+    val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-    val useBackgroundHaze = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
+    val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val panoramaFullOpacityAtY = if (panoramaPrefs.limitToInfoCardMidpoint && infoCardMidPx.isFinite()) {
+        infoCardMidPx
+    } else {
+        null
+    }
+    val panoramaFullOpacityFadeDistancePx = if (
+        panoramaPrefs.limitToInfoCardMidpoint &&
+        infoCardTopPx.isFinite() &&
+        infoCardMidPx.isFinite()
+    ) {
+        (infoCardMidPx - infoCardTopPx).coerceAtLeast(with(density) { 48.dp.toPx() })
+    } else {
+        0f
+    }
+    val panoramaScrollLinkedTranslationPx = if (panoramaPrefs.isScrollLinkedEnabled) {
+        if (isWideAdaptiveLayout) {
+            -landscapeLeftScrollState.value.toFloat()
+        } else {
+            -scrollState.value.toFloat()
+        }
+    } else {
+        0f
+    }
 
     CompositionLocalProvider(LocalHazeState provides detailsHazeState) {
         Box(
@@ -722,6 +748,9 @@ fun DetailsScreen(
                                     hasPanoramaLoadFailed = true
                                 }
                             },
+                            fullOpacityAtY = panoramaFullOpacityAtY,
+                            fullOpacityFadeDistancePx = panoramaFullOpacityFadeDistancePx,
+                            scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
                             modifier = Modifier,
                         )
                     }
@@ -960,7 +989,7 @@ fun DetailsScreen(
                                     pendingAuthorSearch = { author, source ->
                                         pendingAuthorSearch = PendingAuthorSearch(author = author, source = source)
                                     },
-                                    onInfoCardTopSync = syncInfoCardTop,
+                                    onInfoCardBoundsSync = syncInfoCardBounds,
                                     onFavoriteClick = { showFavoriteDialog = true },
                                     onCommentsClick = { showCommentsDialog = true },
                                     onReviewsClick = { showReviewsDialog = true },
@@ -1134,7 +1163,7 @@ fun DetailsScreen(
                                 pendingAuthorSearch = { author, source ->
                                     pendingAuthorSearch = PendingAuthorSearch(author = author, source = source)
                                 },
-                                onInfoCardTopSync = syncInfoCardTop,
+                                onInfoCardBoundsSync = syncInfoCardBounds,
                                 onFavoriteClick = { showFavoriteDialog = true },
                                 onCommentsClick = { showCommentsDialog = true },
                                 onReviewsClick = { showReviewsDialog = true },
@@ -2133,7 +2162,7 @@ private fun DetailsScrollableContent(
     preferLightweightFirstFrame: Boolean = false,
     pendingTagSearch: (ContentTag) -> Unit,
     pendingAuthorSearch: (String, ContentSource) -> Unit,
-    onInfoCardTopSync: (Float) -> Unit,
+    onInfoCardBoundsSync: (Float, Float) -> Unit,
     onFavoriteClick: () -> Unit,
     onCommentsClick: () -> Unit,
     onReviewsClick: () -> Unit,
@@ -2207,7 +2236,7 @@ private fun DetailsScrollableContent(
             showCommentsAction = showCommentsAction,
             showReviewsAction = showReviewsAction,
 
-            onInfoCardTopSync = onInfoCardTopSync,
+            onInfoCardBoundsSync = onInfoCardBoundsSync,
             onCoverClick = { onActionClick(DetailsAction.OpenCover) },
             onFavoriteClick = onFavoriteClick,
             onReadingRecordClick = { onActionClick(DetailsAction.OpenReadingRecord) },

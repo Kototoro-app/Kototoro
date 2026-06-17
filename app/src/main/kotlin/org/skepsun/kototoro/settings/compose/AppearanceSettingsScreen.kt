@@ -33,7 +33,10 @@ data class AppearanceSettingsUiState(
     val colorScheme: ColorScheme,
     val theme: Int,
     val isAmoledTheme: Boolean,
+    val isReducedVisualEffectsEnabled: Boolean,
     val isGlassEffectEnabled: Boolean,
+    val isGlassEffectSettingsEnabled: Boolean,
+    val isGlassEffectDetailSettingsEnabled: Boolean,
     val glassMaterialPreset: GlassMaterialPreset,
     val hazeOpacityPercent: Int,
     val glassBlurStrengthPercent: Int,
@@ -46,7 +49,6 @@ data class AppearanceSettingsUiState(
     val listMode: ListMode,
     val gridSize: Int,
     val railAnimationIntensityPercent: Int,
-    val isVerticalListRailAnimationEnabled: Boolean,
     val isQuickFilterEnabled: Boolean,
     val progressIndicatorMode: ProgressIndicatorMode,
     val badgesTopLeft: Set<String>,
@@ -58,17 +60,21 @@ data class AppearanceSettingsUiState(
     val isPanoramaCoverEnabled: Boolean,
     val panoramaCoverBlur: Int,
     val isPanoramaCoverAnimationEnabled: Boolean,
+    val isPanoramaCoverAnimationSettingsEnabled: Boolean,
     val panoramaAnimationSpeed: Int,
     val panoramaCoverExtraHeight: Int,
     val panoramaBottomGradientAlpha: Int,
     val browsePanoramaBlendHeight: Int,
     val browsePanoramaBottomGradientAlpha: Int,
     val isPanoramaDownsampleEnabled: Boolean,
+    val isDetailsPanoramaScrollLinkedEnabled: Boolean,
+    val isDetailsPanoramaLimitedToInfoCardMidpoint: Boolean,
     val isPagesTabEnabled: Boolean,
     val isDetailsTranslateButtonVisible: Boolean,
     val defaultDetailsTab: Int,
     val searchSuggestionTypes: Set<SearchSuggestionType>,
     val isSharedElementTransitionsEnabled: Boolean,
+    val isSharedElementTransitionsSettingsEnabled: Boolean,
     val isShowLanguagePresetFilter: Boolean,
     val hiddenLanguagePreset: String,
     val isShowContentTypeFilter: Boolean,
@@ -118,6 +124,7 @@ fun AppearanceSettingsScreen(
     onColorSchemeChange: (ColorScheme) -> Unit,
     onThemeChange: (Int) -> Unit,
     onAmoledThemeChange: (Boolean) -> Unit,
+    onReducedVisualEffectsChange: (Boolean) -> Unit,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onGlassMaterialPresetChange: (GlassMaterialPreset) -> Unit,
     onHazeOpacityChange: (Int) -> Unit,
@@ -131,7 +138,6 @@ fun AppearanceSettingsScreen(
     onListModeChange: (ListMode) -> Unit,
     onGridSizeChange: (Int) -> Unit,
     onRailAnimationIntensityChange: (Int) -> Unit,
-    onVerticalListRailAnimationChange: (Boolean) -> Unit,
     onQuickFilterChange: (Boolean) -> Unit,
     onProgressIndicatorModeChange: (ProgressIndicatorMode) -> Unit,
     onBadgesTopLeftChange: (Set<String>) -> Unit,
@@ -149,6 +155,8 @@ fun AppearanceSettingsScreen(
     onBrowsePanoramaBlendHeightChange: (Int) -> Unit,
     onBrowsePanoramaGradientAlphaChange: (Int) -> Unit,
     onPanoramaDownsampleEnabledChange: (Boolean) -> Unit,
+    onDetailsPanoramaScrollLinkedChange: (Boolean) -> Unit,
+    onDetailsPanoramaLimitedToInfoCardMidpointChange: (Boolean) -> Unit,
     onPagesTabEnabledChange: (Boolean) -> Unit,
     onDetailsTranslateButtonVisibleChange: (Boolean) -> Unit,
     onDefaultDetailsTabChange: (Int) -> Unit,
@@ -212,9 +220,17 @@ fun AppearanceSettingsScreen(
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
+                    title = stringResource(R.string.pref_reduce_visual_effects),
+                    checked = state.isReducedVisualEffectsEnabled,
+                    summary = stringResource(R.string.pref_reduce_visual_effects_summary),
+                    onCheckedChange = onReducedVisualEffectsChange,
+                )
+                SettingsSectionDivider()
+                SettingsSwitchPreference(
                     title = stringResource(R.string.pref_glass_effect),
                     checked = state.isGlassEffectEnabled,
                     summary = stringResource(R.string.pref_glass_effect_summary),
+                    enabled = state.isGlassEffectSettingsEnabled,
                     onCheckedChange = onGlassEffectEnabledChange,
                 )
                 SettingsSectionDivider()
@@ -223,6 +239,7 @@ fun AppearanceSettingsScreen(
                     value = state.glassMaterialPreset,
                     options = options.glassMaterialPresets,
                     summary = stringResource(R.string.pref_blur_mode_summary),
+                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onGlassMaterialPresetChange,
                 )
                 SettingsSectionDivider()
@@ -233,6 +250,7 @@ fun AppearanceSettingsScreen(
                     step = 2,
                     summary = stringResource(R.string.pref_glass_blur_strength_summary),
                     valueText = { "${it}dp" },
+                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onGlassBlurStrengthChange,
                 )
                 SettingsSectionDivider()
@@ -243,6 +261,7 @@ fun AppearanceSettingsScreen(
                     step = 1,
                     summary = stringResource(R.string.pref_glass_noise_strength_summary),
                     valueText = { "%.2f".format(it / 100f) },
+                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onGlassNoiseStrengthChange,
                 )
                 SettingsSectionDivider()
@@ -253,6 +272,7 @@ fun AppearanceSettingsScreen(
                     step = 5,
                     summary = stringResource(R.string.pref_haze_opacity_summary),
                     valueText = { "$it%" },
+                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onHazeOpacityChange,
                 )
                 SettingsSectionDivider()
@@ -263,6 +283,7 @@ fun AppearanceSettingsScreen(
                     step = 5,
                     summary = stringResource(R.string.pref_glass_immersive_strength_summary),
                     valueText = { "$it%" },
+                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onGlassImmersiveStrengthChange,
                 )
                 SettingsSectionDivider()
@@ -323,13 +344,6 @@ fun AppearanceSettingsScreen(
                     summary = stringResource(R.string.pref_rail_animation_intensity_summary),
                     valueText = { "$it%" },
                     onValueChange = onRailAnimationIntensityChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.pref_vertical_list_rail_animation),
-                    checked = state.isVerticalListRailAnimationEnabled,
-                    summary = stringResource(R.string.pref_vertical_list_rail_animation_summary),
-                    onCheckedChange = onVerticalListRailAnimationChange,
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
@@ -397,6 +411,20 @@ fun AppearanceSettingsScreen(
                 )
                 if (state.isPanoramaCoverEnabled) {
                     SettingsSectionDivider()
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_details_panorama_scroll_linked),
+                        checked = state.isDetailsPanoramaScrollLinkedEnabled,
+                        summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
+                        onCheckedChange = onDetailsPanoramaScrollLinkedChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint),
+                        checked = state.isDetailsPanoramaLimitedToInfoCardMidpoint,
+                        summary = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint_summary),
+                        onCheckedChange = onDetailsPanoramaLimitedToInfoCardMidpointChange,
+                    )
+                    SettingsSectionDivider()
                     SettingsSliderPreference(
                         title = stringResource(R.string.pref_panorama_blur),
                         value = state.panoramaCoverBlur,
@@ -410,6 +438,7 @@ fun AppearanceSettingsScreen(
                         title = stringResource(R.string.pref_panorama_animation),
                         checked = state.isPanoramaCoverAnimationEnabled,
                         summary = stringResource(R.string.pref_panorama_animation_summary),
+                        enabled = state.isPanoramaCoverAnimationSettingsEnabled,
                         onCheckedChange = onPanoramaAnimationEnabledChange,
                     )
                     if (state.isPanoramaCoverAnimationEnabled) {
@@ -513,6 +542,7 @@ fun AppearanceSettingsScreen(
                     title = stringResource(R.string.shared_element_transitions),
                     checked = state.isSharedElementTransitionsEnabled,
                     summary = stringResource(R.string.shared_element_transitions_summary),
+                    enabled = state.isSharedElementTransitionsSettingsEnabled,
                     onCheckedChange = onSharedElementTransitionsChange,
                 )
                 SettingsSectionDivider()

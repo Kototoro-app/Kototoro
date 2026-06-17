@@ -131,12 +131,15 @@ private fun rememberDiscoverHeroPanoramaPrefs(settings: AppSettings): DiscoverHe
         AppSettings.KEY_PANORAMA_ANIMATION_SPEED,
         AppSettings.KEY_BROWSE_PANORAMA_BLEND_HEIGHT,
         AppSettings.KEY_PANORAMA_DOWNSAMPLE,
+        AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
     ) {
         DiscoverHeroPanoramaPrefs(
             isEnabled = isPanoramaCoverEnabled,
             blurPercent = panoramaCoverBlur,
             bottomGradientAlphaPercent = browsePanoramaBottomGradientAlpha,
-            animationEnabled = supportsRealtimeEffects && isPanoramaCoverAnimationEnabled,
+            animationEnabled = supportsRealtimeEffects &&
+                isPanoramaCoverAnimationEnabled &&
+                !isReducedVisualEffectsEnabled,
             animationSpeedPercent = panoramaAnimationSpeed,
             blendHeight = browsePanoramaBlendHeight,
             downsampleEnabled = isPanoramaDownsampleEnabled,

@@ -85,7 +85,6 @@ private val GridCardVisualHorizontalInset = 4.dp
 
 private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,
-    val isVerticalCardListAnimationEnabled: Boolean,
     val cardUiPrefs: ContentCardUiPrefs,
 )
 
@@ -186,7 +185,6 @@ fun KototoroContentListScreen(
     val settings = androidx.compose.runtime.remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs = settings.observeAsState(
         AppSettings.KEY_SHOW_SOURCE_ON_CARDS,
-        AppSettings.KEY_VERTICAL_LIST_RAIL_ANIMATION,
         AppSettings.KEY_BADGES_TOP_LEFT,
         AppSettings.KEY_BADGES_TOP_RIGHT,
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
@@ -195,7 +193,6 @@ fun KototoroContentListScreen(
     ) {
         ContentListScreenPrefs(
             showSourceOnCards = isShowSourceOnCards,
-            isVerticalCardListAnimationEnabled = isVerticalListRailAnimationEnabled,
             cardUiPrefs = ContentCardUiPrefs(
                 badgesTopLeft = badgesTopLeft,
                 badgesTopRight = badgesTopRight,
@@ -206,8 +203,7 @@ fun KototoroContentListScreen(
         )
     }.value
     val showSourceOnCards = screenPrefs.showSourceOnCards
-    val isVerticalCardListAnimationEnabled =
-        enableItemAnimations && screenPrefs.isVerticalCardListAnimationEnabled
+    val isVerticalCardListAnimationEnabled = false
     val cardUiPrefs = screenPrefs.cardUiPrefs
 
     val topBarInset = contentPadding.calculateTopPadding()

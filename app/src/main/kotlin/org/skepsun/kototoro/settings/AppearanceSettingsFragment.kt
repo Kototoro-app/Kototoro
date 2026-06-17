@@ -150,6 +150,8 @@ private class AppearanceSettingsCoordinator(
         val colorScheme = settings.observeAsState(AppSettings.KEY_COLOR_THEME) { colorScheme }.value
         val theme = settings.observeAsState(AppSettings.KEY_THEME) { theme }.value
         val isAmoledTheme = settings.observeAsState(AppSettings.KEY_THEME_AMOLED) { isAmoledTheme }.value
+        val isReducedVisualEffectsEnabled =
+            settings.observeAsState(AppSettings.KEY_REDUCED_VISUAL_EFFECTS) { isReducedVisualEffectsEnabled }.value
         val isGlassEffectEnabled =
             settings.observeAsState(AppSettings.KEY_GLASS_EFFECT_ENABLED) { isGlassEffectEnabled }.value
         val persistedGlassMaterialPreset =
@@ -180,8 +182,6 @@ private class AppearanceSettingsCoordinator(
         val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
         val railAnimationIntensityPercent =
             settings.observeAsState(AppSettings.KEY_RAIL_ANIMATION_INTENSITY) { railAnimationIntensityPercent }.value
-        val isVerticalListRailAnimationEnabled =
-            settings.observeAsState(AppSettings.KEY_VERTICAL_LIST_RAIL_ANIMATION) { isVerticalListRailAnimationEnabled }.value
         val isQuickFilterEnabled = settings.observeAsState(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled }.value
         val progressIndicatorMode = settings.observeAsState(AppSettings.KEY_PROGRESS_INDICATORS) { progressIndicatorMode }.value
         val mangaListBadges = settings.observeAsState(AppSettings.KEY_MANGA_LIST_BADGES) { mangaListBadges }.value
@@ -204,6 +204,14 @@ private class AppearanceSettingsCoordinator(
             }.value
         val isPanoramaDownsampleEnabled =
             settings.observeAsState(AppSettings.KEY_PANORAMA_DOWNSAMPLE) { isPanoramaDownsampleEnabled }.value
+        val isDetailsPanoramaScrollLinkedEnabled =
+            settings.observeAsState(AppSettings.KEY_DETAILS_PANORAMA_SCROLL_LINKED) {
+                isDetailsPanoramaScrollLinkedEnabled
+            }.value
+        val isDetailsPanoramaLimitedToInfoCardMidpoint =
+            settings.observeAsState(AppSettings.KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT) {
+                isDetailsPanoramaLimitedToInfoCardMidpoint
+            }.value
         val isPagesTabEnabled = settings.observeAsState(AppSettings.KEY_PAGES_TAB) { isPagesTabEnabled }.value
         val isDetailsTranslateButtonVisible =
             settings.observeAsState(AppSettings.KEY_DETAILS_TRANSLATE_BUTTON) { isDetailsTranslateButtonVisible }.value
@@ -248,6 +256,11 @@ private class AppearanceSettingsCoordinator(
             .map(::buildLanguagePresetOptions)
             .collectAsStateWithLifecycle(initialValue = buildLanguagePresetOptions(emptyList()))
             .value
+        val effectiveGlassEffectEnabled = isGlassEffectEnabled && !isReducedVisualEffectsEnabled
+        val effectivePanoramaCoverAnimationEnabled =
+            isPanoramaCoverAnimationEnabled && !isReducedVisualEffectsEnabled
+        val effectiveSharedElementTransitionsEnabled =
+            isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
 
         val options = AppearanceSettingsOptions(
             colorSchemes = buildColorSchemeOptions(),
@@ -275,7 +288,10 @@ private class AppearanceSettingsCoordinator(
             colorScheme = colorScheme,
             theme = theme,
             isAmoledTheme = isAmoledTheme,
-            isGlassEffectEnabled = isGlassEffectEnabled,
+            isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
+            isGlassEffectEnabled = effectiveGlassEffectEnabled,
+            isGlassEffectSettingsEnabled = !isReducedVisualEffectsEnabled,
+            isGlassEffectDetailSettingsEnabled = effectiveGlassEffectEnabled,
             glassMaterialPreset = glassMaterialPreset,
             hazeOpacityPercent = hazeOpacityPercent,
             glassBlurStrengthPercent = glassBlurStrengthPercent,
@@ -288,7 +304,6 @@ private class AppearanceSettingsCoordinator(
             listMode = listMode,
             gridSize = gridSize,
             railAnimationIntensityPercent = railAnimationIntensityPercent,
-            isVerticalListRailAnimationEnabled = isVerticalListRailAnimationEnabled,
             isQuickFilterEnabled = isQuickFilterEnabled,
             progressIndicatorMode = progressIndicatorMode,
             badgesTopLeft = settings.observeAsState(AppSettings.KEY_BADGES_TOP_LEFT) { badgesTopLeft }.value,
@@ -299,18 +314,22 @@ private class AppearanceSettingsCoordinator(
             isDescriptionExpanded = isDescriptionExpanded,
             isPanoramaCoverEnabled = isPanoramaCoverEnabled,
             panoramaCoverBlur = panoramaCoverBlur,
-            isPanoramaCoverAnimationEnabled = isPanoramaCoverAnimationEnabled,
+            isPanoramaCoverAnimationEnabled = effectivePanoramaCoverAnimationEnabled,
+            isPanoramaCoverAnimationSettingsEnabled = !isReducedVisualEffectsEnabled,
             panoramaAnimationSpeed = panoramaAnimationSpeed,
             panoramaCoverExtraHeight = panoramaCoverExtraHeight,
             panoramaBottomGradientAlpha = panoramaBottomGradientAlpha,
             browsePanoramaBlendHeight = browsePanoramaBlendHeight,
             browsePanoramaBottomGradientAlpha = browsePanoramaBottomGradientAlpha,
             isPanoramaDownsampleEnabled = isPanoramaDownsampleEnabled,
+            isDetailsPanoramaScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled,
+            isDetailsPanoramaLimitedToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint,
             isPagesTabEnabled = isPagesTabEnabled,
             isDetailsTranslateButtonVisible = isDetailsTranslateButtonVisible,
             defaultDetailsTab = defaultDetailsTab,
             searchSuggestionTypes = searchSuggestionTypes,
-            isSharedElementTransitionsEnabled = isSharedElementTransitionsEnabled,
+            isSharedElementTransitionsEnabled = effectiveSharedElementTransitionsEnabled,
+            isSharedElementTransitionsSettingsEnabled = !isReducedVisualEffectsEnabled,
             isShowLanguagePresetFilter = isShowLanguagePresetFilter,
             hiddenLanguagePreset = hiddenLanguagePreset,
             isShowContentTypeFilter = isShowContentTypeFilter,
@@ -338,6 +357,7 @@ private class AppearanceSettingsCoordinator(
             onColorSchemeChange = { updateAndRestart(coroutineScope) { settings.colorScheme = it } },
             onThemeChange = ::updateTheme,
             onAmoledThemeChange = { updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
+            onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
             onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
             onGlassMaterialPresetChange = { preset -> applyGlassMaterialPreset(preset) },
             onHazeOpacityChange = { settings.hazeOpacityPercent = it },
@@ -351,7 +371,6 @@ private class AppearanceSettingsCoordinator(
             onListModeChange = { settings.listMode = it },
             onGridSizeChange = { settings.gridSize = it },
             onRailAnimationIntensityChange = { settings.railAnimationIntensityPercent = it },
-            onVerticalListRailAnimationChange = { settings.isVerticalListRailAnimationEnabled = it },
             onQuickFilterChange = { settings.isQuickFilterEnabled = it },
             onProgressIndicatorModeChange = { settings.progressIndicatorMode = it },
             onBadgesTopLeftChange = { settings.badgesTopLeft = it },
@@ -369,6 +388,12 @@ private class AppearanceSettingsCoordinator(
             onBrowsePanoramaBlendHeightChange = { settings.browsePanoramaBlendHeight = it },
             onBrowsePanoramaGradientAlphaChange = { settings.browsePanoramaBottomGradientAlpha = it },
             onPanoramaDownsampleEnabledChange = { settings.isPanoramaDownsampleEnabled = it },
+            onDetailsPanoramaScrollLinkedChange = {
+                settings.isDetailsPanoramaScrollLinkedEnabled = it
+            },
+            onDetailsPanoramaLimitedToInfoCardMidpointChange = {
+                settings.isDetailsPanoramaLimitedToInfoCardMidpoint = it
+            },
             onPagesTabEnabledChange = { settings.isPagesTabEnabled = it },
             onDetailsTranslateButtonVisibleChange = { settings.isDetailsTranslateButtonVisible = it },
             onDefaultDetailsTabChange = { settings.defaultDetailsTab = it },

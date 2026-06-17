@@ -298,6 +298,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_PANORAMA_DOWNSAMPLE, true)
 		set(value) = prefs.edit { putBoolean(KEY_PANORAMA_DOWNSAMPLE, value) }
 
+	var isDetailsPanoramaLimitedToInfoCardMidpoint: Boolean
+		get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, false)
+		set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, value) }
+
+	var isDetailsPanoramaScrollLinkedEnabled: Boolean
+		get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, true)
+		set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, value) }
+
 
 	var historyListMode: ListMode
 		get() = prefs.getEnumValue(KEY_LIST_MODE_HISTORY, listMode)
@@ -990,6 +998,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) {
 			prefs.edit { putBoolean(KEY_SHARED_ELEMENT_TRANSITIONS, value) }
 		}
+
+	var isReducedVisualEffectsEnabled: Boolean
+		get() = prefs.getBoolean(KEY_REDUCED_VISUAL_EFFECTS, false)
+		set(value) = prefs.edit { putBoolean(KEY_REDUCED_VISUAL_EFFECTS, value) }
 
 	var sourcesVersion: Int
 		get() = prefs.getSafeInt(KEY_SOURCES_VERSION, 0)
@@ -1749,6 +1761,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putInt(KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA, panoramaBottomGradientAlpha)
 			putInt(KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA, browsePanoramaBottomGradientAlpha)
 			putInt(KEY_BROWSE_PANORAMA_BLEND_HEIGHT, browsePanoramaBlendHeight)
+			putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, isDetailsPanoramaLimitedToInfoCardMidpoint)
+			putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, isDetailsPanoramaScrollLinkedEnabled)
 			putString(KEY_POPUP_RADIUS, popupRadius.toString())
 			putInt(KEY_HAZE_OPACITY, hazeOpacityPercent)
 			putString(KEY_GLASS_MATERIAL_PRESET, glassMaterialPreset.name)
@@ -1756,6 +1770,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putInt(KEY_GLASS_NOISE_STRENGTH, glassNoiseStrengthPercent)
 			putInt(KEY_GLASS_IMMERSIVE_STRENGTH, glassImmersiveStrengthPercent)
 			putBoolean(KEY_GLASS_EFFECT_ENABLED, isGlassEffectEnabled)
+			putBoolean(KEY_REDUCED_VISUAL_EFFECTS, isReducedVisualEffectsEnabled)
 			putStringSet(KEY_SEARCH_SUGGESTION_TYPES, sanitizedSearchSuggestionTypes.mapToSet { it.name })
 			putStringSet(KEY_MANGA_LIST_BADGES, sanitizedBadges)
 			putString(KEY_SELECTED_GROUP_TAB, sanitizedSelectedGroupTab)
@@ -2211,6 +2226,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_GLASS_NOISE_STRENGTH = "glass_noise_strength"
 		const val KEY_GLASS_IMMERSIVE_STRENGTH = "glass_immersive_strength"
 		const val KEY_GLASS_EFFECT_ENABLED = "glass_effect_enabled"
+		const val KEY_REDUCED_VISUAL_EFFECTS = "reduced_visual_effects"
+		const val KEY_DETAILS_PANORAMA_SCROLL_LINKED = "details_panorama_scroll_linked"
 		const val KEY_MAIN_FAB = "main_fab"
 		const val KEY_32BIT_COLOR = "enhanced_colors"
 		const val KEY_SOURCES_ORDER = "sources_sort_order"
@@ -2250,6 +2267,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA = "browse_panorama_bottom_gradient_alpha"
 		const val KEY_BROWSE_PANORAMA_BLEND_HEIGHT = "browse_panorama_blend_height"
 		const val KEY_PANORAMA_DOWNSAMPLE = "panorama_downsample"
+		const val KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT = "details_panorama_limit_to_info_card_midpoint"
 	
 		const val KEY_BACKUP_TG_ENABLED = "backup_periodic_tg_enabled"
 		const val KEY_BACKUP_TG_CHAT = "backup_periodic_tg_chat_id"

@@ -51,9 +51,11 @@ data class PanoramaBackdropPrefs(
     val blurPercent: Int,
     val bottomGradientAlphaPercent: Int,
     val isAnimationEnabled: Boolean,
+    val isScrollLinkedEnabled: Boolean,
     val animationSpeedPercent: Int,
     val extraHeight: Int,
     val downsampleEnabled: Boolean,
+    val limitToInfoCardMidpoint: Boolean,
 )
 
 @Composable
@@ -67,15 +69,22 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
         AppSettings.KEY_PANORAMA_ANIMATION_SPEED,
         AppSettings.KEY_PANORAMA_EXTRA_HEIGHT,
         AppSettings.KEY_PANORAMA_DOWNSAMPLE,
+        AppSettings.KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT,
+        AppSettings.KEY_DETAILS_PANORAMA_SCROLL_LINKED,
+        AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
     ) {
         PanoramaBackdropPrefs(
             isEnabled = isPanoramaCoverEnabled,
             blurPercent = panoramaCoverBlur,
             bottomGradientAlphaPercent = panoramaBottomGradientAlpha,
-            isAnimationEnabled = supportsRealtimeEffects && isPanoramaCoverAnimationEnabled,
+            isAnimationEnabled = supportsRealtimeEffects &&
+                isPanoramaCoverAnimationEnabled &&
+                !isReducedVisualEffectsEnabled,
+            isScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled,
             animationSpeedPercent = panoramaAnimationSpeed,
             extraHeight = panoramaCoverExtraHeight,
             downsampleEnabled = isPanoramaDownsampleEnabled,
+            limitToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint,
         )
     }
     return prefs
@@ -92,6 +101,9 @@ fun AnimatedPanoramaBackdrop(
     backgroundColor: Color,
     crossfadeEnabled: Boolean = false,
     onLoadError: (() -> Unit)? = null,
+    fullOpacityAtY: Float? = null,
+    fullOpacityFadeDistancePx: Float = 0f,
+    scrollLinkedTranslationYPx: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     if (!prefs.isEnabled) return
@@ -102,7 +114,6 @@ fun AnimatedPanoramaBackdrop(
     val animationMotion = panoramaAnimationMotion()
     val density = LocalDensity.current
     val horizontalPanPx = with(density) { animationMotion.horizontalPan.toPx() }
-    val verticalPanPx = with(density) { animationMotion.verticalPan.toPx() }
 
     val infiniteTransition = if (prefs.isAnimationEnabled) {
         rememberInfiniteTransition(label = "details_panorama_background")
@@ -135,20 +146,6 @@ fun AnimatedPanoramaBackdrop(
     } else {
         null
     }
-    val backgroundTranslationYState = if (infiniteTransition != null) {
-        infiniteTransition.animateFloat(
-            initialValue = -verticalPanPx,
-            targetValue = verticalPanPx,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = animationDurations.verticalPanMillis, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "details_panorama_background_translation_y",
-        )
-    } else {
-        null
-    }
-
     val context = LocalContext.current
     val useRealtimeBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && prefs.blurPercent > 0
     val realtimeBlurRadius = ((prefs.blurPercent.coerceIn(0, 100) / 100f) * 18f).dp
@@ -229,7 +226,7 @@ fun AnimatedPanoramaBackdrop(
             scaleX = backgroundScale
             scaleY = backgroundScale
             translationX = backgroundTranslationXState?.value ?: 0f
-            translationY = backgroundTranslationYState?.value ?: 0f
+            translationY = scrollLinkedTranslationYPx
             alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
         }
 
@@ -264,12 +261,25 @@ fun AnimatedPanoramaBackdrop(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        backgroundColor.copy(alpha = panoramaGradientAlphaFactor),
-                    ),
-                ),
+                if (fullOpacityAtY != null && fullOpacityAtY.isFinite()) {
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            0.55f to backgroundColor.copy(alpha = (panoramaGradientAlphaFactor * 0.45f).coerceIn(0f, 1f)),
+                            0.82f to backgroundColor.copy(alpha = (0.72f + (panoramaGradientAlphaFactor * 0.28f)).coerceIn(0f, 1f)),
+                            1f to backgroundColor,
+                        ),
+                        startY = (fullOpacityAtY - fullOpacityFadeDistancePx).coerceAtLeast(0f),
+                        endY = fullOpacityAtY.coerceAtLeast(0f),
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            backgroundColor.copy(alpha = panoramaGradientAlphaFactor),
+                        ),
+                    )
+                },
             ),
     )
 }

@@ -2106,6 +2106,8 @@
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背后的内容</string>
     <string name="pref_haze_opacity">玻璃容器不透明度</string>
     <string name="pref_haze_opacity_summary">独立控制玻璃容器的不透明度，不受预设影响，关闭模糊后依然生效</string>
+    <string name="pref_reduce_visual_effects">减少视觉特效</string>
+    <string name="pref_reduce_visual_effects_summary">适合低配设备。一键关闭运行时 Haze、Hero 过渡动画和全景背景运动效果，以换取更稳定的流畅度，但不改动它们各自的独立设置</string>
     <string name="mark_as_safe">标记为非 NSFW</string>
     <string name="mark_as_nsfw">标记为 NSFW</string>
     <string name="video_mpv_conf_guide"><![CDATA[<b>常用配置:</b><br/>• <tt>deband=yes</tt> (减少色带)<br/>• <tt>interpolation=yes</tt> (平滑播放)<br/>• <tt>hwdec=mediacodec</tt> (硬件解码)<br/><br/><a href="https://mpv.io/manual/master/#options">查看详细的 MPV 配置手册</a>]]></string>
@@ -2410,6 +2412,10 @@
     <string name="pref_panorama_animation">全景封面动画</string>
     <string name="pref_panorama_animation_speed">全景动画速度</string>
     <string name="pref_panorama_animation_summary">为全景封面背景启用微妙的运动效果</string>
+    <string name="pref_details_panorama_scroll_linked">让详情页全景封面跟随滚动</string>
+    <string name="pref_details_panorama_scroll_linked_summary">让详情页全景背景随着页面滚动一起移动，而不是固定在原位</string>
+    <string name="pref_details_panorama_limit_to_info_card_midpoint">让详情页全景封面止于信息卡片中部</string>
+    <string name="pref_details_panorama_limit_to_info_card_midpoint_summary">让详情页全景背景平滑淡出，并在基本信息面板中间位置完全收住</string>
     <string name="pref_panorama_downsample">降低全景封面分辨率</string>
     <string name="pref_panorama_downsample_summary">在模糊处理前降低背景图片分辨率，以减少 GPU 和内存开销</string>
     <string name="prepare_super_resolution">准备超分辨率</string>

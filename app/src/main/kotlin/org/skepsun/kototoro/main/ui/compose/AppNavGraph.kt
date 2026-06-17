@@ -26,7 +26,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
@@ -249,14 +248,8 @@ fun AppNavGraph(
         composable<HomeRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
             val viewModel = hiltViewModel<HomeViewModel>()
-            val state by viewModel.summaryState.collectAsStateWithLifecycle(
-                lifecycle = activity.lifecycle,
-                minActiveState = Lifecycle.State.CREATED,
-            )
-            val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle(
-                lifecycle = activity.lifecycle,
-                minActiveState = Lifecycle.State.CREATED,
-            )
+            val state by viewModel.summaryState.collectAsStateWithLifecycle()
+            val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
 
             androidx.compose.runtime.LaunchedEffect(viewModel.onOpenContent, navigateToDetailsWithContent) {
                 viewModel.onOpenContent.collect { event ->
