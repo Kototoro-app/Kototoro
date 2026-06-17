@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
@@ -281,7 +281,7 @@ fun KototoroFavoritesHostRoute(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (useBackgroundHaze) Modifier.haze(hazeState) else Modifier),
+                    .then(if (useBackgroundHaze) Modifier.hazeSource(hazeState) else Modifier),
             ) {
                 HorizontalPager(
                     state = pagerState,

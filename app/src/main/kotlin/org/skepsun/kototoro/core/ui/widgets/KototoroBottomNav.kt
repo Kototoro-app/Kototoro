@@ -32,6 +32,7 @@ import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 
@@ -260,6 +261,7 @@ fun KototoroBottomNav(
             modifier = navBarModifier,
             style = navContainerStyle,
             shape = RoundedCornerShape(0.dp),
+            visualTreatment = GlassVisualTreatment.TopBarPrototype,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 NavigationBar(

@@ -138,6 +138,11 @@ import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocalizedTitle
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.model.isBroken
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
@@ -153,6 +158,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
@@ -199,8 +205,9 @@ import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -211,11 +218,10 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-private val DetailsTopBarHeight = 56.dp
+private val DetailsTopBarHeight = CompactTopBarPillHeight
 private const val ReadingRecordSheetLogTag = "ReadingRecordSheet"
-private val DetailsTopButtonContainerHeight = 44.dp
-private val DetailsTopActionButtonSize = 40.dp
-private val DetailsTopActionIconSize = 18.dp
+private val DetailsTopActionButtonSize = CompactTopBarPillHeight
+private val DetailsTopActionIconSize = CompactTopBarIconSize
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -516,7 +522,7 @@ fun DetailsScreen(
             0.dp
         } else {
             // Keep the content start position stable when returning from fullscreen surfaces that briefly report zero insets.
-            stableStatusBarTopPadding + 64.dp
+            stableStatusBarTopPadding + DetailsTopBarHeight + 8.dp
         }
     }
     val panoramaExtraHeightDp = panoramaPrefs.extraHeight.coerceAtLeast(0).dp
@@ -649,7 +655,7 @@ fun DetailsScreen(
         }
     }
 
-    val detailsHazeState = remember { HazeState() }
+    val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
     val useBackgroundHaze = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
 
     CompositionLocalProvider(LocalHazeState provides detailsHazeState) {
@@ -659,7 +665,7 @@ fun DetailsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (useBackgroundHaze) Modifier.haze(detailsHazeState) else Modifier),
+                    .then(if (useBackgroundHaze) Modifier.hazeSource(detailsHazeState) else Modifier),
             ) {
                 Box(
                     modifier = Modifier
@@ -726,13 +732,14 @@ fun DetailsScreen(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .height(DetailsTopBarHeight)
-                            .padding(horizontal = 10.dp),
+                            .padding(horizontal = CompactTopBarHorizontalPadding),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     ) {
                         GlassSurface(
-                            shape = RoundedCornerShape(28.dp),
+                            shape = CompactTopBarPillShape,
                             style = GlassDefaults.subtleStyle(),
+                            visualTreatment = GlassVisualTreatment.TopBarPrototype,
                         ) {
                             CompositionLocalProvider(
                                 LocalMinimumInteractiveComponentSize provides DetailsTopActionButtonSize,
@@ -769,15 +776,16 @@ fun DetailsScreen(
                         }
 
                         GlassSurface(
-                            shape = RoundedCornerShape(28.dp),
+                            shape = CompactTopBarPillShape,
                             style = GlassDefaults.subtleStyle(),
+                            visualTreatment = GlassVisualTreatment.TopBarPrototype,
                         ) {
                             CompositionLocalProvider(
                                 LocalMinimumInteractiveComponentSize provides DetailsTopActionButtonSize,
                             ) {
                                 Row(
                                     modifier = Modifier
-                                        .height(DetailsTopButtonContainerHeight)
+                                        .height(DetailsTopActionButtonSize)
                                         .padding(horizontal = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -4055,7 +4063,7 @@ fun DetailsChromeButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = modifier.padding(horizontal = 2.dp),
+        modifier = modifier,
     ) {
         content()
     }

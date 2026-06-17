@@ -154,6 +154,8 @@ android {
 		jvmTarget = JavaVersion.VERSION_11.toString()
 		freeCompilerArgs += [
 			'-opt-in=kotlin.ExperimentalStdlibApi',
+			'-opt-in=dev.chrisbanes.haze.ExperimentalHazeApi',
+			'-opt-in=dev.chrisbanes.haze.InternalHazeApi',
 			'-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi',
 			'-opt-in=kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi',
 			'-opt-in=kotlinx.coroutines.InternalForInheritanceCoroutinesApi',
@@ -324,7 +326,9 @@ configurations.all {
 	debugImplementation libs.androidx.compose.ui.tooling
 	implementation libs.lifecycle.runtime.compose
 	implementation libs.haze
-	implementation libs.haze.materials
+	implementation libs.haze.blur
+	implementation libs.haze.blur.materials
+	implementation libs.haze.utils
 
 	coreLibraryDesugaring libs.desugar.jdk.libs
 	implementation libs.kotlin.stdlib

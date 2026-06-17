@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -125,6 +126,11 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
@@ -132,6 +138,7 @@ import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
@@ -164,18 +171,16 @@ import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.SortOrder
+import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeDefaults as HazeBlurDefaults
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 import java.util.TreeSet
 
-private val SearchTopActionsHeight = 56.dp
-private val SearchTopButtonContainerHeight = 44.dp
-private val SearchTopActionButtonSize = 40.dp
-private val SearchTopActionIconSize = 18.dp
-private val SearchPinnedChipHeight = 34.dp
+private val SearchTopActionsHeight = CompactTopBarPillHeight
+private val SearchTopActionButtonSize = CompactTopBarPillHeight
+private val SearchTopActionIconSize = CompactTopBarIconSize
+private val SearchPinnedChipHeight = 32.dp
 private val SearchPinnedRowVisualHeight = SearchPinnedChipHeight + 8.dp
 private val SearchFilterSheetLightMinAlpha = 0.88f
 private val SearchFilterSheetLightMaxAlpha = 0.92f
@@ -478,7 +483,7 @@ fun AppSearchContentListRoute(
     val wideGridState = remember { LazyGridState() }
     val wideListState = remember { LazyListState() }
     val wideDetailedListState = remember { LazyListState() }
-    val hazeState = remember { HazeState() }
+    val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
     val useRuntimeHaze = remember { supportsRuntimeHaze() }
 
     fun restoreFilterPane() {
@@ -554,19 +559,18 @@ fun AppSearchContentListRoute(
                 },
             )
         } else {
-            SearchContentTopBar(
-                searchMode = searchMode,
-                searchQuery = searchQuery,
+                SearchContentTopBar(
+                    searchMode = searchMode,
+                    searchQuery = searchQuery,
                 onSearchQueryChange = { searchQuery = it },
                 onSearchOpen = { searchMode = true },
-                onSearchClose = { searchMode = false },
-                onSearchSubmit = {
-                    viewModel.filterCoordinator.setQuery(searchQuery.takeIf { it.isNotBlank() })
-                    searchMode = false
-                },
-                focusRequester = focusRequester,
-                source = source,
-                sourceTitle = resolvedSourceTitle,
+                    onSearchClose = { searchMode = false },
+                    onSearchSubmit = {
+                        viewModel.filterCoordinator.setQuery(searchQuery.takeIf { it.isNotBlank() })
+                        searchMode = false
+                    },
+                    focusRequester = focusRequester,
+                    sourceTitle = resolvedSourceTitle,
                 activeQuery = filterSnapshot.listFilter.query,
                 currentSortLabel = stringResource(filterSnapshot.sortOrder.titleRes),
                 isFilterApplied = viewModel.filterCoordinator.isFilterApplied,
@@ -634,7 +638,7 @@ fun AppSearchContentListRoute(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (useRuntimeHaze) Modifier.haze(hazeState) else Modifier),
+                                .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
                         ) {
                             KototoroContentListScreen(
                                 items = contentItems,
@@ -716,7 +720,7 @@ fun AppSearchContentListRoute(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .then(if (useRuntimeHaze) Modifier.haze(hazeState) else Modifier),
+                            .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
                     ) {
                         if (sidePaneMode == SearchSidePaneMode.Preview && previewContent != null) {
                             SearchPreviewPane(
@@ -786,7 +790,7 @@ fun AppSearchContentListRoute(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (useRuntimeHaze) Modifier.haze(hazeState) else Modifier),
+                        .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
                 ) {
                     KototoroContentListScreen(
                         items = contentItems,
@@ -1074,7 +1078,6 @@ private fun SearchContentTopBar(
     onSearchClose: () -> Unit,
     onSearchSubmit: () -> Unit,
     focusRequester: FocusRequester,
-    source: ContentSource,
     sourceTitle: String,
     activeQuery: String?,
     currentSortLabel: String,
@@ -1150,7 +1153,7 @@ private fun SearchContentTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clipToBounds()
-                .padding(top = statusBarTopPadding + 4.dp)
+                .padding(top = statusBarTopPadding)
                 .alpha(0.998f),
         ) {
             if (searchMode) {
@@ -1169,6 +1172,7 @@ private fun SearchContentTopBar(
                     var showDisplayOptionsSheet by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
                     SourceListTopActionsRow(
+                        sourceTitle = sourceTitle,
                         currentSortLabel = currentSortLabel,
                         topBarAlpha = compactTopBarAlpha,
                         listMode = listMode,
@@ -1203,8 +1207,6 @@ private fun SearchContentTopBar(
             if (!searchMode) {
                 if (quickFilter != null) {
                     QuickFilterPinnedRow(
-                        source = source,
-                        sourceTitle = sourceTitle,
                         quickFilter = quickFilter,
                         activeQuery = activeQuery,
                         onClearActiveQuery = onClearActiveQuery,
@@ -1212,8 +1214,6 @@ private fun SearchContentTopBar(
                     )
                 } else {
                     SourceTagsPinnedRow(
-                        source = source,
-                        sourceTitle = sourceTitle,
                         tags = extractedTags,
                         selectedTags = selectedTags,
                         activeQuery = activeQuery,
@@ -1339,6 +1339,7 @@ private fun SearchInputRow(
 
 @Composable
 private fun SourceListTopActionsRow(
+    sourceTitle: String,
     currentSortLabel: String,
     topBarAlpha: Float,
     listMode: ListMode,
@@ -1368,18 +1369,19 @@ private fun SourceListTopActionsRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(SearchTopActionsHeight)
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = CompactTopBarHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
         ) {
             GlassSurface(
                 modifier = Modifier.wrapContentWidth(),
-                shape = RoundedCornerShape(28.dp),
+                shape = CompactTopBarPillShape,
                 style = GlassDefaults.subtleStyle(),
+                visualTreatment = GlassVisualTreatment.TopBarPrototype,
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.size(SearchTopButtonContainerHeight),
+                    modifier = Modifier.size(SearchTopActionButtonSize),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -1388,18 +1390,27 @@ private fun SourceListTopActionsRow(
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = sourceTitle,
+                modifier = Modifier
+                    .weight(1f)
+                    .alpha(topBarAlpha),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
 
             GlassSurface(
                 modifier = Modifier.wrapContentWidth(),
-                shape = RoundedCornerShape(28.dp),
+                shape = CompactTopBarPillShape,
                 style = GlassDefaults.subtleStyle(),
+                visualTreatment = GlassVisualTreatment.TopBarPrototype,
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides SearchTopActionButtonSize) {
                     Row(
                         modifier = Modifier
-                            .height(SearchTopButtonContainerHeight)
+                            .height(SearchTopActionButtonSize)
                             .padding(horizontal = 2.dp)
                             .alpha(topBarAlpha),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1612,16 +1623,14 @@ private fun CollapsingBarSlot(
 
 @Composable
 private fun QuickFilterPinnedRow(
-    source: ContentSource,
-    sourceTitle: String,
     quickFilter: QuickFilter,
     activeQuery: String?,
     onClearActiveQuery: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 ) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(horizontal = CompactTopBarHorizontalPadding, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
         modifier = Modifier.fillMaxWidth(),
     ) {
         activeQuery?.takeIf { it.isNotBlank() }?.let { query ->
@@ -1629,52 +1638,40 @@ private fun QuickFilterPinnedRow(
                 ActiveQueryChip(query = query, onClear = onClearActiveQuery)
             }
         }
-        item(key = "source_identity") {
-            SourceIdentityChip(source = source, sourceTitle = sourceTitle)
-        }
         items(quickFilter.items) { chip ->
+            val isSelected = chip.isChecked
             val option = chip.data as? ListFilterOption
-            GlassSurface(
-                shape = RoundedCornerShape(22.dp),
-                style = GlassDefaults.subtleStyle(),
-            ) {
-                FilterChip(
-                    selected = chip.isChecked,
-                    onClick = {
-                        if (option != null) {
-                            onQuickFilterOptionClick(option)
-                        }
-                    },
-                    modifier = Modifier.height(SearchPinnedChipHeight),
-                    enabled = option != null,
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = Color.Transparent,
-                        selectedContainerColor = Color.Transparent,
-                    ),
-                    border = null,
-                    leadingIcon = if (chip.icon != 0) {
-                        {
-                            Icon(
-                                painter = painterResource(chip.icon),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                    label = {
-                        Text(
-                            text = when {
-                                chip.titleResId != 0 -> stringResource(chip.titleResId)
-                                chip.title != null -> chip.title.toString()
-                                else -> ""
-                            }.let { title ->
-                                if (chip.counter > 0) "$title ${chip.counter}" else title
-                            },
-                            maxLines = 1,
+            PinnedRowPill(
+                selected = isSelected,
+                enabled = option != null,
+                onClick = {
+                    if (option != null) {
+                        onQuickFilterOptionClick(option)
+                    }
+                },
+                leading = if (chip.icon != 0) {
+                    {
+                        Icon(
+                            painter = painterResource(chip.icon),
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp),
                         )
+                    }
+                } else {
+                    null
+                },
+            ) {
+                Text(
+                    text = when {
+                        chip.titleResId != 0 -> stringResource(chip.titleResId)
+                        chip.title != null -> chip.title.toString()
+                        else -> ""
+                    }.let { title ->
+                        if (chip.counter > 0) "$title ${chip.counter}" else title
                     },
+                    maxLines = 1,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
         }
@@ -1683,8 +1680,6 @@ private fun QuickFilterPinnedRow(
 
 @Composable
 private fun SourceTagsPinnedRow(
-    source: ContentSource,
-    sourceTitle: String,
     tags: List<ContentTag>,
     selectedTags: Set<ContentTag>,
     activeQuery: String?,
@@ -1693,8 +1688,8 @@ private fun SourceTagsPinnedRow(
 ) {
     if (tags.isEmpty() && activeQuery.isNullOrBlank()) return
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(horizontal = CompactTopBarHorizontalPadding, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
         modifier = Modifier.fillMaxWidth(),
     ) {
         activeQuery?.takeIf { it.isNotBlank() }?.let { query ->
@@ -1702,65 +1697,22 @@ private fun SourceTagsPinnedRow(
                 ActiveQueryChip(query = query, onClear = onClearActiveQuery)
             }
         }
-        item(key = "source_identity") {
-            SourceIdentityChip(source = source, sourceTitle = sourceTitle)
-        }
         itemsIndexed(
             items = tags,
             key = { index, tag -> sourceTagChipKey(tag, index) },
         ) { _, tag ->
-            GlassSurface(
-                shape = RoundedCornerShape(22.dp),
-                style = GlassDefaults.subtleStyle(),
+            val isSelected = tag in selectedTags
+            PinnedRowPill(
+                selected = isSelected,
+                onClick = { onToggleTag(tag, !isSelected) },
             ) {
-                FilterChip(
-                    selected = tag in selectedTags,
-                    onClick = { onToggleTag(tag, tag !in selectedTags) },
-                    modifier = Modifier.height(SearchPinnedChipHeight),
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = Color.Transparent,
-                        selectedContainerColor = Color.Transparent,
-                    ),
-                    border = null,
-                    label = {
-                        Text(
-                            text = tag.title,
-                            maxLines = 1,
-                        )
-                    },
+                Text(
+                    text = tag.title,
+                    maxLines = 1,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SourceIdentityChip(
-    source: ContentSource,
-    sourceTitle: String,
-) {
-    GlassSurface(
-        shape = RoundedCornerShape(22.dp),
-        style = GlassDefaults.subtleStyle(),
-    ) {
-        Row(
-            modifier = Modifier
-                .height(SearchPinnedChipHeight)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ContentSourceIcon(
-                source = source,
-                modifier = Modifier.size(16.dp),
-                contentDescription = null,
-            )
-            Text(
-                text = sourceTitle,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
         }
     }
 }
@@ -1770,40 +1722,83 @@ private fun ActiveQueryChip(
     query: String,
     onClear: () -> Unit,
 ) {
-    GlassSurface(
-        shape = RoundedCornerShape(22.dp),
-        style = GlassDefaults.subtleStyle(),
+    PinnedRowPill(
+        selected = true,
+        onClick = onClear,
+        leading = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(13.dp),
+            )
+        },
+        trailing = {
+            Icon(
+                imageVector = Icons.Default.Clear,
+                contentDescription = stringResource(R.string.clear),
+                modifier = Modifier.size(13.dp),
+            )
+        },
     ) {
-        FilterChip(
-            selected = true,
-            onClick = onClear,
-            modifier = Modifier.height(SearchPinnedChipHeight),
-            colors = FilterChipDefaults.filterChipColors(
-                containerColor = Color.Transparent,
-                selectedContainerColor = Color.Transparent,
-            ),
-            border = null,
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-            trailingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Clear,
-                    contentDescription = stringResource(R.string.clear),
-                    modifier = Modifier.size(16.dp),
-                )
-            },
-            label = {
-                Text(
-                    text = query,
-                    maxLines = 1,
-                )
-            },
+        Text(
+            text = query,
+            maxLines = 1,
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.labelMedium,
         )
+    }
+}
+
+@Composable
+private fun PinnedRowPill(
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    val contentColor = (
+        if (selected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    ).copy(alpha = if (enabled) 1f else 0.56f)
+    val selectedOverlayColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f)
+    } else {
+        Color.Transparent
+    }
+
+    GlassSurface(
+        modifier = modifier
+            .height(SearchPinnedChipHeight)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        style = GlassDefaults.subtleStyle(),
+        shape = CircleShape,
+        visualTreatment = GlassVisualTreatment.TopBarPrototype,
+    ) {
+        Row(
+            modifier = Modifier
+                .height(SearchPinnedChipHeight)
+                .background(selectedOverlayColor, CircleShape)
+                .padding(horizontal = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelMedium) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides contentColor,
+                ) {
+                    leading?.invoke()
+                    content()
+                    trailing?.invoke()
+                }
+            }
+        }
     }
 }
 

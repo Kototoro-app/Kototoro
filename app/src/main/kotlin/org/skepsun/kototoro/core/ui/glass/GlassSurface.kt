@@ -28,19 +28,20 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.materials.CupertinoMaterials
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.FluentMaterials
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInputScale
+import dev.chrisbanes.haze.blur.HazeBlurDefaults
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.CupertinoMaterials
+import dev.chrisbanes.haze.blur.materials.FluentMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
-import dev.chrisbanes.haze.HazeDefaults as HazeBlurDefaults
-import dev.chrisbanes.haze.hazeChild
 
 private const val GLASS_SURFACE_TAG = "GlassSurface"
 
@@ -136,12 +137,14 @@ fun GlassSurface(
     shape: Shape = GlassDefaults.shape,
     allowRuntimeHaze: Boolean = true,
     dialogSurface: Boolean = false,
+    visualTreatment: GlassVisualTreatment = GlassVisualTreatment.Standard,
     debugLabel: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val glassPrefs = rememberGlassPrefsOrFallback()
     val hazeState = LocalHazeState.current
     val colorScheme = MaterialTheme.colorScheme
+    val isDarkTheme = colorScheme.background.luminance() < 0.5f
     val usesOfficialHazeMaterial = glassPrefs.materialPreset.usesOfficialHazeMaterial()
     val effectiveStyle = if (dialogSurface) {
         style.copy(
@@ -154,6 +157,7 @@ fun GlassSurface(
     val glassColors = rememberGlassSurfaceColors(style = effectiveStyle, glassPrefs = glassPrefs)
 
     val useRuntimeHaze = glassPrefs.isGlassEffectEnabled && allowRuntimeHaze && supportsRuntimeHaze()
+    val usePrototypeChrome = visualTreatment == GlassVisualTreatment.TopBarPrototype
     val hazeStyle = rememberGlassHazeStyle(
         glassPrefs = glassPrefs,
         glassColors = glassColors,
@@ -171,6 +175,45 @@ fun GlassSurface(
         !useRuntimeHaze && usesOfficialHazeMaterial -> hazeStyle.backgroundColor.takeOrElse { glassColors.containerColor }
         else -> glassColors.containerColor
     }
+    val liquidGlassSpec = remember(
+        effectiveStyle,
+        glassColors,
+        hazeStyle,
+        hazeBackgroundColor,
+        surfaceColor,
+        usesOfficialHazeMaterial,
+        isDarkTheme,
+    ) {
+        val resolvedBaseColor = hazeBackgroundColor.takeOrElse {
+            hazeStyle.backgroundColor.takeOrElse {
+                surfaceColor.takeOrElse { glassColors.containerColor }
+            }
+        }
+        val baseLuminance = resolvedBaseColor.luminance()
+        val lightThemeBoost = if (isDarkTheme) {
+            1f
+        } else {
+            (1f + ((baseLuminance - 0.58f).coerceAtLeast(0f) * 0.9f)).coerceAtMost(1.28f)
+        }
+        val materialSoftnessBoost = when {
+            usesOfficialHazeMaterial -> 1.04f + ((1f - effectiveStyle.containerAlpha) * 0.45f)
+            else -> 1f + ((1f - effectiveStyle.containerAlpha) * 0.20f)
+        }.coerceAtMost(1.22f)
+        val edgeBoost = (lightThemeBoost * materialSoftnessBoost).coerceIn(1f, 1.36f)
+        val widthBoost = (1f + ((edgeBoost - 1f) * 0.72f)).coerceIn(1f, 1.26f)
+        val innerWidthBoost = (1f + ((edgeBoost - 1f) * 0.48f)).coerceIn(1f, 1.18f)
+
+        LiquidGlassPrototypeSpec(
+            glowAlpha = (0.12f * edgeBoost).coerceAtMost(0.22f),
+            edgeAlpha = (when {
+                effectiveStyle.containerAlpha >= 0.86f -> 0.28f
+                else -> 0.24f
+            } * edgeBoost).coerceAtMost(0.42f),
+            innerEdgeAlpha = (0.12f * edgeBoost).coerceAtMost(0.22f),
+            edgeWidthMultiplier = (widthBoost * 0.94f).coerceIn(0.94f, 1.18f),
+            innerEdgeWidthMultiplier = (innerWidthBoost * 0.92f).coerceIn(0.92f, 1.10f),
+        )
+    }
     var lastDebugBounds by remember(debugLabel) { mutableStateOf<String?>(null) }
     var lastDebugConfig by remember(debugLabel) { mutableStateOf<String?>(null) }
     if (BuildConfig.DEBUG && debugLabel != null) {
@@ -182,7 +225,7 @@ fun GlassSurface(
                 "tonalElevation=${effectiveStyle.tonalElevation} shadowElevation=${effectiveStyle.shadowElevation} " +
                 "surfaceAlpha=${surfaceColor.alpha} hazeBgAlpha=${hazeBackgroundColor.alpha} " +
                 "blurRadius=${glassColors.blurRadius} noise=${glassColors.noiseFactor} " +
-                "styleBgAlpha=${hazeStyle.backgroundColor.alpha} fallbackTint=${hazeStyle.fallbackTint}"
+                "styleBgAlpha=${hazeStyle.backgroundColor.alpha} fallbackTint=${hazeStyle.fallbackColorEffect}"
         if (debugConfig != lastDebugConfig) {
             lastDebugConfig = debugConfig
             Log.d(GLASS_SURFACE_TAG, debugConfig)
@@ -195,9 +238,23 @@ fun GlassSurface(
                 modifier
                     .debugGlassBounds(debugLabel, lastDebugBounds) { lastDebugBounds = it }
                     .clip(shape)
-                    .hazeChild(hazeState, hazeStyle) {
-                        backgroundColor = hazeBackgroundColor
-                        blurredEdgeTreatment = BlurredEdgeTreatment(shape)
+                    .hazeEffect(hazeState) {
+                        inputScale = HazeInputScale.Auto
+                        if (usePrototypeChrome) {
+                            liquidGlassPrototypeEffect {
+                                blurStyle = hazeStyle
+                                backgroundColor = hazeBackgroundColor
+                                blurredEdgeTreatment = BlurredEdgeTreatment(shape)
+                                this.shape = shape
+                                spec = liquidGlassSpec
+                            }
+                        } else {
+                            blurEffect {
+                                this.style = hazeStyle
+                                backgroundColor = hazeBackgroundColor
+                                blurredEdgeTreatment = BlurredEdgeTreatment(shape)
+                            }
+                        }
                         clipToAreasBounds = true
                         expandLayerBounds = !dialogSurface
                         forceInvalidateOnPreDraw = true
@@ -212,7 +269,18 @@ fun GlassSurface(
             shadowElevation = effectiveStyle.shadowElevation,
             border = glassColors.border,
         ) {
-            Box(content = content)
+            val overlayModifier = if (
+                usePrototypeChrome &&
+                !useRuntimeHaze
+            ) {
+                rememberLiquidGlassPrototypeOverlayModifier(liquidGlassSpec)
+            } else {
+                Modifier
+            }
+            Box(
+                modifier = overlayModifier,
+                content = content,
+            )
         }
     }
 }
@@ -272,6 +340,7 @@ fun GlassTopBarContainer(
         modifier = modifier,
         style = style,
         shape = RoundedCornerShape(30.dp),
+        visualTreatment = GlassVisualTreatment.TopBarPrototype,
         content = content,
     )
 }
@@ -286,6 +355,7 @@ fun GlassBottomBarContainer(
         modifier = modifier,
         style = style,
         shape = RoundedCornerShape(32.dp),
+        visualTreatment = GlassVisualTreatment.TopBarPrototype,
         content = content,
     )
 }
@@ -335,13 +405,12 @@ private fun computeGlassColors(
     )
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun rememberGlassHazeStyle(
     glassPrefs: GlassPrefs,
     glassColors: GlassSurfaceColors,
     dialogSurface: Boolean = false,
-): HazeStyle {
+): HazeBlurStyle {
     val usesOfficialHazeMaterial = glassPrefs.materialPreset.usesOfficialHazeMaterial()
     val officialContainerColor = rememberOfficialMaterialContainerColor(
         preset = glassPrefs.materialPreset,
@@ -407,7 +476,9 @@ fun rememberGlassHazeStyle(
                 backgroundColor = if (dialogSurface) Color.Transparent else glassColors.containerColor,
                 blurRadius = glassColors.blurRadius,
                 noiseFactor = glassColors.noiseFactor,
-                fallbackTint = HazeTint(if (dialogSurface) Color.Transparent else glassColors.baseTintColor),
+                fallbackColorEffect = HazeColorEffect.tint(
+                    if (dialogSurface) Color.Transparent else glassColors.baseTintColor,
+                ),
             )
         }
     }
@@ -452,7 +523,7 @@ private fun rememberOfficialMaterialContainerColor(
 fun rememberGlassHazeBackgroundColor(
     glassPrefs: GlassPrefs,
     glassColors: GlassSurfaceColors,
-    hazeStyle: HazeStyle,
+    hazeStyle: HazeBlurStyle,
     dialogSurface: Boolean = false,
 ): Color {
     val colorScheme = MaterialTheme.colorScheme

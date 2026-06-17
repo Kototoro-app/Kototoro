@@ -6,7 +6,7 @@ appcompat = "1.7.1"
 avifDecoder = "1.1.1.14d8e3c4"
 biometric = "1.4.0-alpha04"
 coil = "3.4.0"
-haze = "1.7.2"
+haze = "2.0.0-alpha03"
 collections = "1.5.0"
 # https://github.com/google/conscrypt/issues/1268
 #noinspection NewerVersionAvailable,GradleDependency - 2.5.3 cause crashes
@@ -201,7 +201,9 @@ djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djlT
 djl-sentencepiece = { module = "ai.djl.sentencepiece:sentencepiece", version.ref = "djlSentencepiece" }
 ireader-source-api = { module = "io.github.ireaderorg:source-api", version.ref = "ireaderSourceApi" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
-haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
+haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
+haze-blur-materials = { module = "dev.chrisbanes.haze:haze-blur-materials", version.ref = "haze" }
+haze-utils = { module = "dev.chrisbanes.haze:haze-utils", version.ref = "haze" }
 
 [plugins]
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

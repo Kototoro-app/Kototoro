@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 
 @Composable
 fun GlassDropdownMenu(
@@ -53,7 +54,9 @@ fun GlassDropdownMenu(
                 .wrapContentWidth(),
             shape = shape,
             style = style,
+            allowRuntimeHaze = true,
             dialogSurface = true,
+            visualTreatment = GlassVisualTreatment.Standard,
         ) {
             Column(
                 modifier = Modifier

@@ -67,9 +67,15 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.Content
@@ -78,11 +84,8 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 
-private val CollapsedSearchBarHeight = 40.dp
 private val CompactTopTabsRailHeight = 40.dp
 private val CompactTopFilterRailHeight = 36.dp
-private val CompactTopBarActionSize = 40.dp
-private val CompactTopBarIconSize = 18.dp
 private val CompactFilterRailChipHeight = 34.dp
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
@@ -171,9 +174,9 @@ fun KototoroTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp)
+                .padding(horizontal = CompactTopBarHorizontalPadding)
                 .graphicsLayer { alpha = collapsedAlpha },
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AnimatedVisibility(
@@ -182,12 +185,13 @@ fun KototoroTopBar(
                 exit = shrinkHorizontally() + fadeOut(),
             ) {
                 GlassSurface(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = CompactTopBarPillShape,
                     style = GlassDefaults.subtleStyle(),
+                    visualTreatment = GlassVisualTreatment.TopBarPrototype,
                 ) {
                     IconButton(
                         onClick = onSearchClick,
-                        modifier = Modifier.size(CollapsedSearchBarHeight),
+                        modifier = Modifier.size(CompactTopBarPillHeight),
                     ) {
                         Box(
                             modifier = Modifier.size(CompactTopBarIconSize),
@@ -217,14 +221,15 @@ fun KototoroTopBar(
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
                 GlassSurface(
-                    shape = RoundedCornerShape(28.dp),
+                    shape = CompactTopBarPillShape,
                     style = GlassDefaults.subtleStyle(),
+                    visualTreatment = GlassVisualTreatment.TopBarPrototype,
                 ) {
-                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarActionSize) {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
                         Row(
                             modifier = Modifier
-                                .widthIn(min = CompactTopBarActionSize)
-                                .height(CollapsedSearchBarHeight)
+                                .widthIn(min = CompactTopBarPillHeight)
+                                .height(CompactTopBarPillHeight)
                                 .padding(start = 2.dp, end = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -249,7 +254,7 @@ fun KototoroTopBar(
                                 Box {
                                     IconButton(
                                         onClick = { isMoreMenuExpanded = true },
-                                        modifier = Modifier.size(CompactTopBarActionSize),
+                                        modifier = Modifier.size(CompactTopBarPillHeight),
                                     ) {
                                         Icon(
                                             painterResource(R.drawable.ic_more_vert),
@@ -261,7 +266,7 @@ fun KototoroTopBar(
                                         expanded = isMoreMenuExpanded,
                                         onDismissRequest = { isMoreMenuExpanded = false },
                                         offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
-                                        shape = RoundedCornerShape(28.dp),
+                                        shape = CompactTopBarPillShape,
                                         style = GlassDefaults.subtleStyle(),
                                     ) {
                                     if (supportsDisplayModeMenu || supportsGridSizeSlider) {
@@ -347,7 +352,7 @@ fun KototoroTopBar(
                                     expanded = isLanguagePresetMenuExpanded,
                                     onDismissRequest = { isLanguagePresetMenuExpanded = false },
                                     offset = DpOffset(x = 0.dp, y = 4.dp),
-                                    shape = RoundedCornerShape(28.dp),
+                                    shape = CompactTopBarPillShape,
                                     style = GlassDefaults.subtleStyle(),
                                 ) {
                                     DropdownMenuItem(
@@ -458,8 +463,9 @@ fun CompactTopBarTabsRail(
     EnsureItemFullyVisible(listState = listState, targetIndex = state.items.indexOfFirst { it.id == state.selectedItemId })
     GlassSurface(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
+        shape = CompactTopBarPillShape,
         style = GlassDefaults.subtleStyle(),
+        visualTreatment = GlassVisualTreatment.TopBarPrototype,
     ) {
         LazyRow(
             state = listState,
@@ -541,14 +547,15 @@ private fun InlineCompactTopBarTabsRail(
     }
     GlassSurface(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
+        shape = CompactTopBarPillShape,
         style = GlassDefaults.subtleStyle(),
+        visualTreatment = GlassVisualTreatment.TopBarPrototype,
     ) {
         LazyRow(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(CollapsedSearchBarHeight)
+                .height(CompactTopBarPillHeight)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -615,6 +622,7 @@ fun CompactTopBarFilterRail(
             GlassSurface(
                 shape = RoundedCornerShape(22.dp),
                 style = GlassDefaults.subtleStyle(),
+                visualTreatment = GlassVisualTreatment.TopBarPrototype,
             ) {
                 Row(
                     modifier = Modifier

@@ -57,8 +57,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,7 +114,7 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
             settings.observeAsState(AppSettings.KEY_SHARED_ELEMENT_TRANSITIONS) {
                 isSharedElementTransitionsEnabled
             }.value
-        val hazeState = remember { HazeState() }
+        val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
         val useRuntimeHaze = remember { supportsRuntimeHaze() }
 
         CompositionLocalProvider(LocalHazeState provides hazeState) {
@@ -121,7 +122,7 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
-                    .then(if (useRuntimeHaze) Modifier.haze(hazeState) else Modifier),
+                    .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
             ) {
                 SharedTransitionLayout {
                     CompositionLocalProvider(

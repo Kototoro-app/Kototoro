@@ -77,6 +77,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hasRoute
+import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import org.skepsun.kototoro.core.jsonsource.SourceType
@@ -687,8 +688,8 @@ fun KototoroApp(
 
 
     KototoroTheme(cornerRadius = cornerRadius) {
-        val hazeState = remember { HazeState() }
-        val transitionHazeState = remember { HazeState() }
+        val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
+        val transitionHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
         val useRuntimeHaze = remember { supportsRuntimeHaze() }
