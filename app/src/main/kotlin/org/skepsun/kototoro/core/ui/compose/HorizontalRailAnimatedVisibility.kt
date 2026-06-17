@@ -82,10 +82,18 @@ fun rememberRailAnimationFactor(settings: AppSettings? = null): Float {
     val context = LocalContext.current
     val fallbackSettings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val resolvedSettings = settings ?: fallbackSettings
-    val animationIntensityPercent by resolvedSettings.observeAsState(AppSettings.KEY_RAIL_ANIMATION_INTENSITY) {
-        railAnimationIntensityPercent
+    val animationPrefs by resolvedSettings.observeAsState(
+        AppSettings.KEY_RAIL_ANIMATION_INTENSITY,
+        AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
+    ) {
+        railAnimationIntensityPercent to isReducedVisualEffectsEnabled
     }
-    return (animationIntensityPercent / 100f).coerceIn(0f, 3f)
+    val (animationIntensityPercent, isReducedVisualEffectsEnabled) = animationPrefs
+    return if (isReducedVisualEffectsEnabled) {
+        0f
+    } else {
+        (animationIntensityPercent / 100f).coerceIn(0f, 3f)
+    }
 }
 
 @Composable

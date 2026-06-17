@@ -94,6 +94,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -1117,6 +1118,7 @@ private fun SearchContentTopBar(
     val compactTopBarAlpha = if (topActionsHeightPx == 0f) 1f else {
         ((topActionsHeightPx - topActionsCollapsedPx) / topActionsHeightPx).coerceIn(0f, 1f)
     }
+    val topGradientAlpha = (1f - compactTopBarAlpha).coerceIn(0f, 1f)
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
     val statusBarTopPadding = statusBarPadding.calculateTopPadding()
     val glassPrefs = rememberGlassPrefsOrFallback()
@@ -1138,6 +1140,7 @@ private fun SearchContentTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(statusBarTopPadding + topActionsHeight + 6.dp)
+                .graphicsLayer { alpha = topGradientAlpha }
                 .background(
                     brush = Brush.verticalGradient(
                         colorStops = arrayOf(

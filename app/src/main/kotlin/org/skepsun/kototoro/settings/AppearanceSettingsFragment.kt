@@ -304,6 +304,7 @@ private class AppearanceSettingsCoordinator(
             listMode = listMode,
             gridSize = gridSize,
             railAnimationIntensityPercent = railAnimationIntensityPercent,
+            isRailAnimationSettingsEnabled = !isReducedVisualEffectsEnabled,
             isQuickFilterEnabled = isQuickFilterEnabled,
             progressIndicatorMode = progressIndicatorMode,
             badgesTopLeft = settings.observeAsState(AppSettings.KEY_BADGES_TOP_LEFT) { badgesTopLeft }.value,

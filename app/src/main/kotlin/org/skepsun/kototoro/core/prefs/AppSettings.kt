@@ -112,6 +112,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 	private val mangaListBadgesDefault = ArraySet(context.resources.getStringArray(R.array.values_list_badges))
 
+	init {
+		clearDeprecatedAllSourcesEnabledFlag()
+	}
+
 	var hasSeenPluginWelcome: Boolean
 		get() = prefs.getBoolean("has_seen_plugin_welcome", false)
 		set(value) = prefs.edit { putBoolean("has_seen_plugin_welcome", value) }
@@ -1008,8 +1012,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putInt(KEY_SOURCES_VERSION, value) }
 
 	var isAllSourcesEnabled: Boolean
-		get() = prefs.getBoolean(KEY_SOURCES_ENABLED_ALL, false)
-		set(value) = prefs.edit { putBoolean(KEY_SOURCES_ENABLED_ALL, value) }
+		get() = false
+		set(@Suppress("UNUSED_PARAMETER") value) {
+			clearDeprecatedAllSourcesEnabledFlag()
+		}
 
 	var jarPriorityOrder: String
 		get() = prefs.getString(KEY_JAR_PRIORITY_ORDER, DEFAULT_JAR_PRIORITY_ORDER).orEmpty()
@@ -1894,6 +1900,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	 */
 	fun setSelectedAdultFilter(filterId: String) {
 		prefs.edit { putString(KEY_SELECTED_ADULT_FILTER, filterId) }
+	}
+
+	private fun clearDeprecatedAllSourcesEnabledFlag() {
+		if (prefs.contains(KEY_SOURCES_ENABLED_ALL)) {
+			prefs.edit { remove(KEY_SOURCES_ENABLED_ALL) }
+		}
 	}
 
 	private fun isBackgroundNetworkRestricted(): Boolean {

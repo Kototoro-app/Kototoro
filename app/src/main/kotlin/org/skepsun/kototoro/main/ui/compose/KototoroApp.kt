@@ -326,6 +326,7 @@ fun KototoroApp(
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavOffset by remember { mutableFloatStateOf(0f) }
+    var totalContentScrollOffset by remember { mutableFloatStateOf(0f) }
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
     var isSearchOverlayVisible by rememberSaveable { mutableStateOf(false) }
     var isSearchOverlayMounted by rememberSaveable { mutableStateOf(false) }
@@ -365,6 +366,7 @@ fun KototoroApp(
     ) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                totalContentScrollOffset = (totalContentScrollOffset + available.y).coerceAtMost(0f)
                 if (isSearchOverlayMounted || isLandscapeRailInteracting) {
                     return androidx.compose.ui.geometry.Offset.Zero
                 }
@@ -388,6 +390,7 @@ fun KototoroApp(
         if (isSearchOverlayMounted) {
             topAppBarState.heightOffset = 0f
             bottomNavOffset = 0f
+            totalContentScrollOffset = 0f
             keepTabsExpandedByScrollDirection = false
         }
     }
@@ -571,6 +574,7 @@ fun KototoroApp(
         if (currentDestinationRoute != null && !isDetailsRoute && !isSearchRoute) {
             topAppBarState.heightOffset = 0f
             bottomNavOffset = 0f
+            totalContentScrollOffset = 0f
             keepTabsExpandedByScrollDirection = false
             offsetDestinationRoute = currentDestinationRoute
         }
@@ -735,11 +739,9 @@ fun KototoroApp(
                             bottomBarHeightPx = bottomNavHeightPx,
                             pageSaveHelper = pageSaveHelper,
                             onDetailsTransitionRequested = {
-                                if (effectiveSharedElementTransitionsEnabled) {
-                                    isDetailsChromeTransitionPending = true
-                                    heroTransitionPhase = HeroTransitionPhase.EnteringDetails
-                                    lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                }
+                                isDetailsChromeTransitionPending = true
+                                heroTransitionPhase = HeroTransitionPhase.EnteringDetails
+                                lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
                             },
                             onDetailsReturnTransitionRequested = {
                                 if (effectiveSharedElementTransitionsEnabled) {
@@ -799,6 +801,11 @@ fun KototoroApp(
                 val isDarkTheme = isSystemInDarkTheme()
                 val immersiveBaseColor = if (isDarkTheme) Color.Black else Color.White
                 val immersiveTransparent = Color.Transparent
+                val topGradientAlpha = if (topBarHeightPx > 0) {
+                    (-totalContentScrollOffset / topBarHeightPx.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
                 val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
                 val topImmersiveHeight = with(density) {
                     (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
@@ -818,7 +825,8 @@ fun KototoroApp(
                     ImmersiveEdgeGradient(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .graphicsLayer { alpha = topGradientAlpha },
                         height = topImmersiveHeight,
                         colors = listOf(
                             immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),

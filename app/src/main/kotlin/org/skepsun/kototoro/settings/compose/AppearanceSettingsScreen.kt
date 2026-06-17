@@ -49,6 +49,7 @@ data class AppearanceSettingsUiState(
     val listMode: ListMode,
     val gridSize: Int,
     val railAnimationIntensityPercent: Int,
+    val isRailAnimationSettingsEnabled: Boolean,
     val isQuickFilterEnabled: Boolean,
     val progressIndicatorMode: ProgressIndicatorMode,
     val badgesTopLeft: Set<String>,
@@ -343,6 +344,7 @@ fun AppearanceSettingsScreen(
                     step = 10,
                     summary = stringResource(R.string.pref_rail_animation_intensity_summary),
                     valueText = { "$it%" },
+                    enabled = state.isRailAnimationSettingsEnabled,
                     onValueChange = onRailAnimationIntensityChange,
                 )
                 SettingsSectionDivider()
