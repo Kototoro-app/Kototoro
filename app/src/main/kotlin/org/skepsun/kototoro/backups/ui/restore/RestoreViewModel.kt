@@ -29,6 +29,11 @@ class RestoreViewModel @Inject constructor(
 	@ApplicationContext context: Context,
 ) : BaseViewModel() {
 
+	private val backupIndexJson = Json {
+		coerceInputValues = true
+		ignoreUnknownKeys = true
+	}
+
 	val uri = savedStateHandle.get<String>(AppRouter.KEY_FILE)?.toUriOrNull()
 	private val contentResolver = context.contentResolver
 
@@ -109,7 +114,7 @@ class RestoreViewModel @Inject constructor(
 	}
 
 	private fun InputStream.readDate(): Date? = runCatching {
-		val index = Json.decodeFromStream<List<BackupIndex>>(this)
+		val index = backupIndexJson.decodeFromStream<List<BackupIndex>>(this)
 		Date(index.single().createdAt)
 	}.onFailure { e ->
 		e.printStackTraceDebug()

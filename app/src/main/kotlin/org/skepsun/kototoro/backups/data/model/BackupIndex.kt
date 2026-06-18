@@ -8,8 +8,8 @@ import org.skepsun.kototoro.BuildConfig
 class BackupIndex(
 	@SerialName("app_id") val appId: String,
 	@SerialName("app_version") val appVersion: Int,
-	@SerialName("transport_generation") val transportGeneration: Int,
-	@SerialName("semantic_schema_version") val semanticSchemaVersion: Int,
+	@SerialName("transport_generation") val transportGeneration: Int = WRITER_GENERATION_V1,
+	@SerialName("semantic_schema_version") val semanticSchemaVersion: Int = 1,
 	@SerialName("created_at") val createdAt: Long,
 ) {
 
