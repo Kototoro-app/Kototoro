@@ -47,6 +47,8 @@ class MainNavState internal constructor(
         return true
     }
 
+    fun stackFor(key: TopLevelNavKey): NavBackStack<MainNavKey> = stacks.getValue(key)
+
     fun currentStack(): NavBackStack<MainNavKey> = stacks.getValue(selectedTopLevel)
 }
 

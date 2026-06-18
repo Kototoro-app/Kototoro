@@ -42,6 +42,17 @@ import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 
+private fun bookmarkListModelKey(model: Any): String = when (model) {
+    is Bookmark -> "bookmark:${model.pageId}"
+    is ListHeader -> {
+        val contentId = (model.payload as? Content)?.id
+        "header:${contentId ?: model.hashCode()}"
+    }
+    is EmptyState -> "empty_state"
+    is LoadingState -> "loading_state"
+    else -> "bookmark_item:${model.hashCode()}"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppBookmarksRoute(
@@ -50,9 +61,12 @@ fun AppBookmarksRoute(
     appRouter: AppRouter,
     pageSaveHelper: PageSaveHelper
 ) {
-    val items by viewModel.content.collectAsStateWithLifecycle(initialValue = emptyList())
-    val gridScale by viewModel.gridScale.collectAsStateWithLifecycle(initialValue = 1f)
+    val items by viewModel.content.collectAsStateWithLifecycle()
+    val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    val gridState = rememberSaveable(viewModel, saver = LazyGridState.Saver) {
+        LazyGridState()
+    }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val mainActivity = activity as? MainActivity
@@ -100,6 +114,7 @@ fun AppBookmarksRoute(
                 }
 
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Fixed(gridColumns),
                     contentPadding = contentPadding,
                     horizontalArrangement = Arrangement.spacedBy(gridSpacing),
@@ -107,6 +122,7 @@ fun AppBookmarksRoute(
                 ) {
                     items(
                         items = items,
+                        key = ::bookmarkListModelKey,
                         span = { item ->
                             if (item is ListHeader || item is EmptyState || item is LoadingState) {
                                 GridItemSpan(maxLineSpan)

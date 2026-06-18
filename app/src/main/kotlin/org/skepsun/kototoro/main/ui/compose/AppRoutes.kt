@@ -37,7 +37,6 @@ object AppRouteNames {
     const val DETAILS = "details"
 }
 
-internal const val RETURN_HOME_ON_BACK_KEY = "return_home_on_back"
 internal const val ENTITY_ORGANIZE_RESULT_REFRESH_KEY = "entity_organize_result_refresh"
 internal const val ENTITY_ORGANIZE_RESULT_MESSAGE_KEY = "entity_organize_result_message"
 

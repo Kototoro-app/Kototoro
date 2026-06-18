@@ -7,13 +7,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.toChipModel
-import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -75,15 +71,6 @@ class LocalListViewModel @Inject constructor(
 ), SharedPreferences.OnSharedPreferenceChangeListener, QuickFilterListener {
 
 	val onContentRemoved = MutableEventFlow<Unit>()
-	private val showInlineFilter: Boolean = savedStateHandle[AppRouter.KEY_IS_BOTTOMTAB] ?: false
-
-	/** 当前可用的内容标签（来自本地目录索引） */
-	private val _filterAvailableTags = MutableStateFlow<Set<ContentTag>>(emptySet())
-	val filterAvailableTags: StateFlow<Set<ContentTag>> get() = _filterAvailableTags
-
-	/** 当前已选中的标签 key */
-	private val _filterSelectedTagKeys = MutableStateFlow<Set<String>>(emptySet())
-	val filterSelectedTagKeys: StateFlow<Set<String>> get() = _filterSelectedTagKeys
 
 	override val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab
 
@@ -94,22 +81,13 @@ class LocalListViewModel @Inject constructor(
 					loadList(filterCoordinator.snapshot(), append = false).join()
 				}
 		}
-		launchJob(Dispatchers.Default) {
-			_filterAvailableTags.value = repository.getFilterOptions().availableTags
-		}
-		filterCoordinator.observe()
-			.map { it.listFilter.tags.mapTo(HashSet()) { tag -> tag.key } }
-			.onEach { _filterSelectedTagKeys.value = it }
-			.launchIn(viewModelScope)
 		settings.subscribe(this)
 	}
 
 	override suspend fun onBuildList(list: MutableList<ListModel>) {
 		super.onBuildList(list)
-		if (showInlineFilter) {
-			createFilterHeader(maxCount = 16)?.let {
-				list.add(0, it)
-			}
+		createFilterHeader()?.let {
+			list.add(0, it)
 		}
 		if (!localStorageManager.hasExternalStoragePermission(isReadOnly = true)) {
 			for (item in list) {
@@ -141,15 +119,9 @@ class LocalListViewModel @Inject constructor(
 
 	override fun toggleFilterOption(option: ListFilterOption) {
 		if (option is ListFilterOption.Tag) {
-			val tag = option.tag
-			val isSelected = tag in filterCoordinator.snapshot().listFilter.tags
+			val isSelected = option.tag in filterCoordinator.snapshot().listFilter.tags
 			filterCoordinator.toggleTag(option.tag, !isSelected)
 		}
-	}
-
-	fun toggleFilterTag(tag: ContentTag) {
-		val isSelected = tag.key in _filterSelectedTagKeys.value
-		filterCoordinator.toggleTag(tag, !isSelected)
 	}
 
 	override fun clearFilter() = filterCoordinator.reset()
@@ -220,20 +192,19 @@ class LocalListViewModel @Inject constructor(
 		return LocalMangaSource
 	}
 
-	private suspend fun createFilterHeader(maxCount: Int): QuickFilter? {
+	private suspend fun createFilterHeader(): QuickFilter? {
 		val appliedTags = filterCoordinator.snapshot().listFilter.tags
+			.sortedBy(ContentTag::title)
 		val availableTags = repository.getFilterOptions().availableTags
-		if (appliedTags.isEmpty() && availableTags.size < 3) {
+			.sortedBy(ContentTag::title)
+		if (appliedTags.isEmpty() && availableTags.isEmpty()) {
 			return null
 		}
-		val result = ArrayList<ChipsView.ChipModel>(minOf(availableTags.size, maxCount))
+		val result = ArrayList<ChipsView.ChipModel>(appliedTags.size + availableTags.size)
 		appliedTags.mapTo(result) { tag ->
 			ListFilterOption.Tag(tag).toChipModel(isChecked = true)
 		}
 		for (tag in availableTags) {
-			if (result.size >= maxCount) {
-				break
-			}
 			if (tag in appliedTags) {
 				continue
 			}

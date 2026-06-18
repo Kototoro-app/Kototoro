@@ -11,6 +11,7 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.ui.model.QuickFilter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -41,5 +42,6 @@ data class HistoryPreviewSnapshot(
     val sourceTags: Set<SourceTag>,
     val preset: SourcePreset?,
     val filters: Set<ListFilterOption>,
+    val quickFilter: QuickFilter?,
     val isHistoryExcludeNsfw: Boolean,
 )

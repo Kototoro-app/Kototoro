@@ -12,8 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.NavEntry
-import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.SceneDecoratorStrategy
 import androidx.navigation3.scene.SceneStrategy
@@ -34,24 +34,36 @@ fun MainTopLevelNavDisplay(
         "MainTopLevelNavDisplay requires a ViewModelStoreOwner"
     }
     val saveableStateHolder = rememberSaveableStateHolder()
-    val backStack = navState.currentStack().mapNotNull { it as? TopLevelNavKey }
-    val entryDecorators: List<NavEntryDecorator<TopLevelNavKey>> = buildList {
-        add(rememberSaveableStateHolderNavEntryDecorator(saveableStateHolder))
-        add(rememberViewModelStoreNavEntryDecorator(viewModelStoreOwner))
+    // Decorate each top-level stack independently so switching tabs does not clear its state.
+    val decoratedEntriesByTopLevel: Map<TopLevelNavKey, List<NavEntry<TopLevelNavKey>>> = allTopLevelNavKeys.associateWith { key ->
+        val backStack: List<TopLevelNavKey> = navState.stackFor(key).mapNotNull { it as? TopLevelNavKey }
+        val entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator<TopLevelNavKey>(saveableStateHolder),
+            rememberViewModelStoreNavEntryDecorator<TopLevelNavKey>(viewModelStoreOwner),
+        )
+        rememberDecoratedNavEntries(
+            backStack = backStack,
+            entryDecorators = entryDecorators,
+            entryProvider = { entryKey ->
+                topLevelNavEntry(
+                    key = entryKey,
+                    animatedVisibilityScopeOverride = animatedVisibilityScopeOverride,
+                    renderEntry = renderEntry,
+                )
+            },
+        )
     }
     val sceneStrategies: List<SceneStrategy<TopLevelNavKey>> = listOf(
         remember { SinglePaneSceneStrategy<TopLevelNavKey>() },
     )
     NavDisplay(
-        backStack = backStack,
+        entries = decoratedEntriesByTopLevel.getValue(navState.selectedTopLevel),
         modifier = modifier,
         contentAlignment = Alignment.TopStart,
-        entryDecorators = entryDecorators,
         sceneStrategies = sceneStrategies,
         sceneDecoratorStrategies = emptyList<SceneDecoratorStrategy<TopLevelNavKey>>(),
         sharedTransitionScope = sharedTransitionScope,
         onBack = { navState.pop() },
-        entryProvider = { key -> topLevelNavEntry(key, animatedVisibilityScopeOverride, renderEntry) },
     )
 }
 

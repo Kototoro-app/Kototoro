@@ -364,28 +364,33 @@ class HistoryRepository @Inject constructor(
 		if (limit <= 0) {
 			return emptyList()
 		}
-		return getAllRecentContents()
-			.asSequence()
-			.flatMap { it.tags.asSequence() }
-			.groupingBy { it }
-			.eachCount()
-			.entries
-			.sortedByDescending { it.value }
-			.take(limit)
-			.map { it.key }
+		return db.getHistoryDao().findPopularTags(limit).toContentTagsList()
 	}
 
 	suspend fun getPopularSources(limit: Int): List<ContentSource> {
 		if (limit <= 0) {
 			return emptyList()
 		}
-		return getAllRecentContents()
-			.groupingBy { it.source }
-			.eachCount()
-			.entries
-			.sortedByDescending { it.value }
-			.take(limit)
-			.map { it.key }
+		return db.getHistoryDao().findPopularSources(limit).toContentSources()
+	}
+
+	suspend fun filterPreviewItems(
+		items: List<ContentWithHistory>,
+		filterOptions: Set<ListFilterOption>,
+	): List<ContentWithHistory> {
+		if (filterOptions.isEmpty()) {
+			return items
+		}
+		val favouriteCache = HashMap<Long, Set<Long>>()
+		val trackCache = HashMap<Long, TrackAggregate>()
+		return items.filter { item ->
+			matchesHistoryFilters(
+				item = item,
+				filterOptions = filterOptions,
+				favouriteCache = favouriteCache,
+				trackCache = trackCache,
+			)
+		}
 	}
 
 	fun shouldSkip(manga: Content): Boolean = settings.isIncognitoModeEnabled(manga.isNsfw())

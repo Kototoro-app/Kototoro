@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -34,7 +36,6 @@ import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.core.util.ext.call
-import org.skepsun.kototoro.core.util.ext.flattenLatest
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
@@ -70,8 +71,21 @@ import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.list.ui.model.QuickFilter
 
 private const val PAGE_SIZE = 32
+
+private data class HistoryUiParams(
+	val order: ListSortOrder,
+	val filters: Set<ListFilterOption>,
+	val effectiveFilters: Set<ListFilterOption>,
+	val grouped: Boolean,
+	val mode: ListMode,
+	val incognito: Boolean,
+	val groupTab: BrowseGroupTab,
+	val sourceTags: Set<SourceTag>,
+	val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+)
 
 @HiltViewModel
 class HistoryListViewModel @Inject constructor(
@@ -90,7 +104,7 @@ class HistoryListViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val entityGraphRepository: EntityGraphRepository,
 	private val historyPreviewCache: HistoryPreviewCache,
-) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
 
 	@Volatile
 	private var groupedHistoryIds: Map<Long, Set<Long>> = emptyMap()
@@ -159,39 +173,105 @@ class HistoryListViewModel @Inject constructor(
 			(isOnline || last.isLocal)
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5000), false)
 
-	override val content = combine(
+	val headerQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions
+		.flatMapLatest { selectedOptions ->
+			flow {
+				if (!settings.isQuickFilterEnabled) {
+					emit(null)
+					return@flow
+				}
+				historyPreviewCache.observe().value?.quickFilter
+					?.syncSelection(selectedOptions)
+					?.let { emit(it) }
+				emit(quickFilter.filterItem(selectedOptions))
+			}
+		}
+		.distinctUntilChanged()
+		.stateIn(
+			viewModelScope + Dispatchers.Default,
+			SharingStarted.Eagerly,
+			historyPreviewCache.observe().value?.quickFilter,
+		)
+
+	private val uiParams = combine(
+		sortOrder,
 		quickFilter.appliedOptions,
-		observeHistory(),
 		isGroupingEnabled,
 		observeListModeWithTriggers(),
 		settings.observeAsFlow(AppSettings.KEY_INCOGNITO_MODE) { isIncognitoModeEnabled },
 		this.currentGroupTab,
 		this.currentSourceTags,
 		mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
-			refreshTrigger,
+		refreshTrigger,
 		settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
 			.flatMapLatest { id ->
 				if (id == -1L) flowOf(null)
 				else sourcePresetsRepository.observe(id)
-			}
+			},
+		settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
 	) { values: Array<Any?> ->
-		val filters = values[0] as Set<ListFilterOption>
-		val list = values[1] as List<ContentWithHistory>
+		val order = values[0] as ListSortOrder
+		val filters = values[1] as Set<ListFilterOption>
 		val grouped = values[2] as Boolean
 		val mode = values[3] as ListMode
 		val incognito = values[4] as Boolean
 		val groupTab = values[5] as BrowseGroupTab
 		val sourceTags = values[6] as Set<SourceTag>
 		val preset = values[9] as? org.skepsun.kototoro.explore.data.SourcePreset
-		mapList(list, grouped, mode, filters, incognito, groupTab, sourceTags, preset)
-	}.onEach {
-		isPaginationReady.set(true)
+		val skipNsfw = values[10] as Boolean
+		HistoryUiParams(
+			order = order,
+			filters = filters,
+			effectiveFilters = if (skipNsfw) filters + ListFilterOption.SFW else filters,
+			grouped = grouped,
+			mode = mode,
+			incognito = incognito,
+			groupTab = groupTab,
+			sourceTags = sourceTags,
+			preset = preset,
+		)
+	}.distinctUntilChanged()
+
+	override val content = uiParams.flatMapLatest { params ->
+		flow {
+			isPaginationReady.set(false)
+			buildPreviewStateOrNull(params)?.let { emit(it) } ?: emit(listOf(LoadingState))
+			emitAll(
+				observeHistory(params.order, params.effectiveFilters).onEach {
+					isPaginationReady.set(true)
+				}.mapLatest { list ->
+					mapList(
+						list = list,
+						grouped = params.grouped,
+						mode = params.mode,
+						filters = params.filters,
+						isIncognito = params.incognito,
+						groupTab = params.groupTab,
+						sourceTags = params.sourceTags,
+						preset = params.preset,
+					)
+				},
+			)
+		}
 	}.distinctUntilChanged().catch { e ->
 		emit(listOf(e.toErrorState(canRetry = false)))
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.Eagerly,
-		buildPreviewStateOrNull() ?: listOf(LoadingState),
+		buildInitialPreviewStateOrNull(
+			HistoryUiParams(
+				order = sortOrder.value,
+				filters = quickFilter.appliedOptions.value,
+				effectiveFilters = if (settings.isNsfwContentDisabled) quickFilter.appliedOptions.value + ListFilterOption.SFW
+				else quickFilter.appliedOptions.value,
+				grouped = settings.isHistoryGroupingEnabled && sortOrder.value.isGroupingSupported(),
+				mode = listMode.value,
+				incognito = settings.isIncognitoModeEnabled,
+				groupTab = currentGroupTab.value,
+				sourceTags = currentSourceTags.value,
+				preset = historyPreviewCache.observe().value?.preset,
+			),
+		) ?: listOf(LoadingState),
 	)
 
 	override fun onRefresh() {
@@ -199,6 +279,18 @@ class HistoryListViewModel @Inject constructor(
 	}
 
 	override fun onRetry() = Unit
+
+	override fun setFilterOption(option: ListFilterOption, isApplied: Boolean) {
+		quickFilter.setFilterOption(option, isApplied)
+	}
+
+	override fun toggleFilterOption(option: ListFilterOption) {
+		quickFilter.toggleFilterOption(option)
+	}
+
+	override fun clearFilter() {
+		quickFilter.clearFilter()
+	}
 
 	fun clearHistory(minDate: Instant?) {
 		launchJob(Dispatchers.Default) {
@@ -267,47 +359,85 @@ class HistoryListViewModel @Inject constructor(
 		}
 	}
 
-	private fun observeHistory() = combine(
-		sortOrder,
-		quickFilter.appliedOptions.combineWithSettings(),
-		limit,
-	) { order, filters, limit ->
-		isPaginationReady.set(false)
-		repository.observeAllWithHistory(order, filters, limit)
-	}.flattenLatest()
+	private fun observeHistory(
+		order: ListSortOrder,
+		effectiveFilters: Set<ListFilterOption>,
+	) = limit.flatMapLatest { currentLimit ->
+		repository.observeAllWithHistory(order, effectiveFilters, currentLimit)
+	}
 
-	private fun buildPreviewStateOrNull(): List<ListModel>? {
+	private suspend fun buildPreviewStateOrNull(
+		params: HistoryUiParams,
+	): List<ListModel>? {
 		val snapshot = historyPreviewCache.observe().value ?: return null
-		val currentMode = listMode.value
-		val selectedGroupTab = currentGroupTab.value
-		val selectedSourceTags = currentSourceTags.value
-		val currentSortOrder = sortOrder.value
-		val currentGroupingEnabled = settings.isHistoryGroupingEnabled && currentSortOrder.isGroupingSupported()
 		val currentPresetId = settings.activeSourcePresetId.takeIf { it != -1L }
-		val currentFilters = quickFilter.appliedOptions.value
 		if (
-			currentFilters.isNotEmpty() ||
 			snapshot.filters.isNotEmpty() ||
-			currentSortOrder != snapshot.sortOrder ||
-			currentGroupingEnabled != snapshot.isGroupingEnabled ||
-			selectedGroupTab != snapshot.groupTab ||
-			selectedSourceTags != snapshot.sourceTags ||
-			currentMode != snapshot.listMode ||
-			settings.isIncognitoModeEnabled != snapshot.isIncognito ||
+			params.order != snapshot.sortOrder ||
+			params.grouped != snapshot.isGroupingEnabled ||
+			params.groupTab != snapshot.groupTab ||
+			params.sourceTags != snapshot.sourceTags ||
+			params.mode != snapshot.listMode ||
+			params.incognito != snapshot.isIncognito ||
 			settings.isHistoryExcludeNsfw != snapshot.isHistoryExcludeNsfw ||
 			currentPresetId != snapshot.preset?.id ||
 			limit.value > PAGE_SIZE
 		) {
 			return null
 		}
+		if (ListFilterOption.Downloaded in params.effectiveFilters) {
+			return null
+		}
+		val previewItems = repository.filterPreviewItems(snapshot.items, params.effectiveFilters)
 		return mapPreviewList(
-			list = snapshot.items,
+			list = previewItems,
 			grouped = snapshot.isGroupingEnabled,
 			mode = snapshot.listMode,
 			isIncognito = snapshot.isIncognito,
 			groupTab = snapshot.groupTab,
 			sourceTags = snapshot.sourceTags,
 			preset = snapshot.preset,
+			quickFilter = snapshot.quickFilter?.syncSelection(params.filters),
+			order = snapshot.sortOrder,
+		)
+	}
+
+	private fun buildInitialPreviewStateOrNull(
+		params: HistoryUiParams,
+	): List<ListModel>? {
+		if (params.filters.isNotEmpty()) {
+			return null
+		}
+		val snapshot = historyPreviewCache.observe().value ?: return null
+		val currentPresetId = settings.activeSourcePresetId.takeIf { it != -1L }
+		if (
+			snapshot.filters.isNotEmpty() ||
+			params.order != snapshot.sortOrder ||
+			params.grouped != snapshot.isGroupingEnabled ||
+			params.groupTab != snapshot.groupTab ||
+			params.sourceTags != snapshot.sourceTags ||
+			params.mode != snapshot.listMode ||
+			params.incognito != snapshot.isIncognito ||
+			settings.isHistoryExcludeNsfw != snapshot.isHistoryExcludeNsfw ||
+			currentPresetId != snapshot.preset?.id ||
+			limit.value > PAGE_SIZE
+		) {
+			return null
+		}
+		val previewItems = if (ListFilterOption.SFW in params.effectiveFilters) {
+			snapshot.items.filterNot { it.manga.isNsfw() }
+		} else {
+			snapshot.items
+		}
+		return mapPreviewList(
+			list = previewItems,
+			grouped = snapshot.isGroupingEnabled,
+			mode = snapshot.listMode,
+			isIncognito = snapshot.isIncognito,
+			groupTab = snapshot.groupTab,
+			sourceTags = snapshot.sourceTags,
+			preset = snapshot.preset,
+			quickFilter = snapshot.quickFilter,
 			order = snapshot.sortOrder,
 		)
 	}
@@ -413,6 +543,7 @@ class HistoryListViewModel @Inject constructor(
 		groupTab: BrowseGroupTab,
 		sourceTags: Set<SourceTag>,
 		preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+		quickFilter: org.skepsun.kototoro.list.ui.model.QuickFilter?,
 		order: ListSortOrder,
 	): List<ListModel> {
 		val filteredList = list.filter { (manga, _) ->
@@ -438,6 +569,7 @@ class HistoryListViewModel @Inject constructor(
 		}.toMap()
 
 		val result = ArrayList<ListModel>((if (grouped) (foldedItems.size * 1.4).toInt() else foldedItems.size) + 1)
+		quickFilter?.let(result::add)
 		if (isIncognito) {
 			result += InfoModel(
 				key = AppSettings.KEY_INCOGNITO_MODE,
@@ -458,6 +590,15 @@ class HistoryListViewModel @Inject constructor(
 			result += item.toPreviewModel(mode)
 		}
 		return result
+	}
+
+	private fun QuickFilter.syncSelection(selectedOptions: Set<ListFilterOption>): QuickFilter {
+		return copy(
+			items = items.map { chip ->
+				val option = chip.data as? ListFilterOption
+				chip.copy(isChecked = option != null && option in selectedOptions)
+			},
+		)
 	}
 
 	private suspend fun List<ContentWithHistory>.foldAdjacentByEntity(): List<HistoryGroup> {

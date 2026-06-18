@@ -48,6 +48,7 @@ import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.history.ui.HistoryPreviewCache
 import org.skepsun.kototoro.history.ui.HistoryPreviewSnapshot
@@ -186,6 +187,7 @@ class HomeViewModel @Inject constructor(
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     @ApplicationContext private val appContext: Context,
     private val historyPreviewCache: HistoryPreviewCache,
+    private val historyQuickFilter: HistoryListQuickFilter,
 ) : BaseViewModel() {
 
     private companion object {
@@ -539,6 +541,7 @@ class HomeViewModel @Inject constructor(
                     sourceTags = selectedSourceTags,
                     preset = preset,
                     filters = emptySet(),
+                    quickFilter = historyQuickFilter.previewFilterItem(emptySet()),
                     isHistoryExcludeNsfw = settings.isHistoryExcludeNsfw,
                 ),
             )

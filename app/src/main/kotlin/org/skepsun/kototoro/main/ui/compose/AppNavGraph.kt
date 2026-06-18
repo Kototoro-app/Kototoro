@@ -83,7 +83,6 @@ import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
-import org.skepsun.kototoro.main.ui.compose.CompactFilterRailItem
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
@@ -970,32 +969,21 @@ internal fun HomeTopLevelRouteContent(
                 navigateToDetailsWithContent(content, sharedElementKey)
             }
         }
-        val markReturnHomeOnBack = remember(navController) {
-            {
-                navController.currentBackStackEntry
-                    ?.savedStateHandle
-                    ?.set(RETURN_HOME_ON_BACK_KEY, true)
-                Unit
-            }
-        }
         val onHomeSettingsClick = remember(appRouter) { { appRouter.openSettings() } }
         val onHomeReaderSettingsClick = remember(appRouter) { { appRouter.openReaderSettings() } }
-        val onHomeViewAllRecentClick = remember(mainNavigator, markReturnHomeOnBack) {
+        val onHomeViewAllRecentClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(HistoryNavKey)
-                markReturnHomeOnBack()
             }
         }
-        val onHomeViewAllUpdatesClick = remember(mainNavigator, markReturnHomeOnBack) {
+        val onHomeViewAllUpdatesClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(UpdatedNavKey)
-                markReturnHomeOnBack()
             }
         }
-        val onHomeViewAllRecommendationsClick = remember(mainNavigator, markReturnHomeOnBack) {
+        val onHomeViewAllRecommendationsClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(SuggestionsNavKey)
-                markReturnHomeOnBack()
             }
         }
         val onHomeRecentSearchClick = remember(onOpenSearch) {
@@ -1015,22 +1003,19 @@ internal fun HomeTopLevelRouteContent(
             }
         }
         val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
-        val onHomeLibraryOpenClick = remember(mainNavigator, markReturnHomeOnBack) {
+        val onHomeLibraryOpenClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(FavoritesNavKey)
-                markReturnHomeOnBack()
             }
         }
-        val onHomeBookmarksClick = remember(mainNavigator, markReturnHomeOnBack) {
+        val onHomeBookmarksClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(BookmarksNavKey)
-                markReturnHomeOnBack()
             }
         }
-        val onHomeLocalClick = remember(mainNavigator, markReturnHomeOnBack) {
+        val onHomeLocalClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(LocalNavKey)
-                markReturnHomeOnBack()
             }
         }
         val onHomeDownloadsClick = remember(appRouter) { { appRouter.openDownloads() } }
@@ -1313,8 +1298,6 @@ internal fun LocalTopLevelRouteContent(
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
-    val availableTags by viewModel.filterAvailableTags.collectAsStateWithLifecycle(initialValue = emptySet())
-    val selectedTagKeys by viewModel.filterSelectedTagKeys.collectAsStateWithLifecycle(initialValue = emptySet())
 
     DisposableEffect(appRouter) {
         onContextualMenuActionsChanged(
@@ -1351,18 +1334,6 @@ internal fun LocalTopLevelRouteContent(
         }
     }
 
-    val localFilterRailState = remember(availableTags, selectedTagKeys) {
-        val items = availableTags.map { tag ->
-            CompactFilterRailItem(
-                id = "local_tag_${tag.key}",
-                title = tag.title,
-                isSelected = tag.key in selectedTagKeys,
-                onClick = { viewModel.toggleFilterTag(tag) },
-            )
-        }.selectedFirst()
-        CompactFilterRailOverrideState(items = items)
-    }
-
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
         org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
             viewModel = viewModel,
@@ -1373,10 +1344,7 @@ internal fun LocalTopLevelRouteContent(
                 onExploreSourceSelectionTopBarChanged(
                     RouteScopedTopBarOverrideState(
                         TOP_BAR_OWNER_LOCAL,
-                        LayeredTopBarOverrideState(
-                            filterRailState = localFilterRailState,
-                            contextualOverrideState = it,
-                        ),
+                        LayeredTopBarOverrideState(contextualOverrideState = it),
                     ),
                 )
             },
@@ -1653,40 +1621,13 @@ internal fun HistoryTopLevelRouteContent(
         }.getOrNull()
     }
     val items by viewModel.content.collectAsStateWithLifecycle()
+    val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
     val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
-    val historyFilterRailState = remember(items, context, entryPoint, viewModel) {
-        val quickFilter = items.firstOrNull { it is QuickFilter } as? QuickFilter
-        quickFilter?.let { filter ->
-            CompactFilterRailOverrideState(
-                items = filter.items.mapIndexedNotNull { index, chip ->
-                    val option = chip.data as? ListFilterOption ?: return@mapIndexedNotNull null
-                    val sourceOption = option as? ListFilterOption.Source
-                    val title = when {
-                        sourceOption != null -> resolveSourceTitleForUi(
-                            context = context,
-                            source = sourceOption.mangaSource,
-                            entryPoint = entryPoint,
-                        )
-                        chip.titleResId != 0 -> context.getString(chip.titleResId)
-                        !chip.title.isNullOrBlank() -> chip.title.toString()
-                        else -> return@mapIndexedNotNull null
-                    }
-                    CompactFilterRailItem(
-                        id = "${option::class.qualifiedName}:${option.hashCode()}:$index",
-                        title = title,
-                        isSelected = chip.isChecked,
-                        source = sourceOption?.mangaSource,
-                        onClick = { viewModel.toggleFilterOption(option) },
-                    )
-                }.selectedFirst(),
-            )
-        }
-    }
     var selectedItemsIds by remember { mutableStateOf(emptySet<Long>()) }
     var showClearDialog by remember { mutableStateOf(false) }
     val selectedModels = remember(items, selectedItemsIds) {
@@ -1726,7 +1667,6 @@ internal fun HistoryTopLevelRouteContent(
                 RouteScopedTopBarOverrideState(
                     TOP_BAR_OWNER_HISTORY,
                     LayeredTopBarOverrideState(
-                        filterRailState = historyFilterRailState,
                         contextualOverrideState = ContentSelectionTopBarOverrideState(
                             selectedCount = selectedItemsIds.size,
                             isAllNonLocal = selectedModels.none { it.manga.isLocal },
@@ -1759,9 +1699,7 @@ internal fun HistoryTopLevelRouteContent(
             onExploreSourceSelectionTopBarChanged(
                 RouteScopedTopBarOverrideState(
                     TOP_BAR_OWNER_HISTORY,
-                    LayeredTopBarOverrideState(
-                        filterRailState = historyFilterRailState,
-                    ),
+                    LayeredTopBarOverrideState(),
                 ),
             )
         }
@@ -1821,6 +1759,7 @@ internal fun HistoryTopLevelRouteContent(
         org.skepsun.kototoro.history.ui.compose.HistoryScreen(
             contentPadding = contentPadding,
             items = items,
+            headerQuickFilter = headerQuickFilter,
             listMode = listMode,
             isRefreshing = false,
             pullRefreshEnabled = false,

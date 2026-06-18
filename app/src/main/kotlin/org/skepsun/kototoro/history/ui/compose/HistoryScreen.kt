@@ -47,6 +47,7 @@ private fun List<ListModel>.contentAtVisibleIndex(index: Int): String {
 fun HistoryScreen(
     contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(0.dp),
     items: List<ListModel>,
+    headerQuickFilter: QuickFilter? = null,
     listMode: ListMode,
     isRefreshing: Boolean,
     pullRefreshEnabled: Boolean = true,
@@ -70,8 +71,8 @@ fun HistoryScreen(
     showInlineSelectionTopBar: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val quickFilter = remember(items) {
-        items.firstOrNull { it is QuickFilter } as? QuickFilter
+    val quickFilter = remember(items, headerQuickFilter) {
+        headerQuickFilter ?: (items.firstOrNull { it is QuickFilter } as? QuickFilter)
     }
     val contentItems = remember(items) {
         items.filterNot { it is QuickFilter }

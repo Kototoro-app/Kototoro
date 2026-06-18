@@ -478,17 +478,7 @@ fun KototoroApp(
             }
         }
     }
-    fun navigateFromBottomNav(itemId: Int) {
-        val shouldReturnHome = navController.currentBackStackEntry
-            ?.savedStateHandle
-            ?.get<Boolean>(RETURN_HOME_ON_BACK_KEY) == true
-        if (itemId == org.skepsun.kototoro.R.id.nav_home && shouldReturnHome) {
-            navController.currentBackStackEntry?.savedStateHandle?.set(RETURN_HOME_ON_BACK_KEY, false)
-            navigateToBottomNavItem(itemId, restoreState = false)
-        } else {
-            navigateToBottomNavItem(itemId)
-        }
-    }
+    fun navigateFromBottomNav(itemId: Int) = navigateToBottomNavItem(itemId)
     val startDestination = remember(initialTopLevel) {
         routeForTopLevelKey(initialTopLevel)
     }
@@ -1091,14 +1081,7 @@ fun KototoroApp(
     val primaryNavItemId = mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home
 
     BackHandler(enabled = !isSearchRoute && !isImmersiveRoute && !isSearchOverlayMounted) {
-        val shouldReturnHome = navBackStackEntry
-            ?.savedStateHandle
-            ?.get<Boolean>(RETURN_HOME_ON_BACK_KEY) == true
-        if (shouldReturnHome) {
-            navBackStackEntry?.savedStateHandle?.set(RETURN_HOME_ON_BACK_KEY, false)
-            navigateToBottomNavItem(org.skepsun.kototoro.R.id.nav_home, restoreState = false)
-            lastBackTime = 0L
-        } else if (currentTopLevelKey != topLevelKeyForBottomNavItem(primaryNavItemId)) {
+        if (currentTopLevelKey != topLevelKeyForBottomNavItem(primaryNavItemId)) {
             navigateToBottomNavItem(primaryNavItemId)
             lastBackTime = 0L
         } else {
