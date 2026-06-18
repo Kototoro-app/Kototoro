@@ -13,6 +13,9 @@ abstract class ChaptersDao {
 	@Query("SELECT * FROM chapters WHERE manga_id = :mangaId ORDER BY `index` ASC")
 	abstract suspend fun findAll(mangaId: Long): List<ChapterEntity>
 
+	@Query("SELECT * FROM chapters WHERE manga_id IN (:mangaIds) ORDER BY manga_id ASC, `index` ASC")
+	abstract suspend fun findAllByMangaIds(mangaIds: Collection<Long>): List<ChapterEntity>
+
 	@Query("DELETE FROM chapters WHERE manga_id = :mangaId")
 	abstract suspend fun deleteAll(mangaId: Long)
 

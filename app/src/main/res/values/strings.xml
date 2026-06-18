@@ -828,6 +828,14 @@
     <string name="sync_settings_summary">Configure WebDAV sync, backup, and restore.</string>
     <string name="import_backup_from_other_apps">Import backup from other apps</string>
     <string name="import_backup_from_other_apps_summary">Import favorites and history from Mihon-family, Aniyomi-family, or Venera backup files.</string>
+    <string name="export_mihon_backup">Export Mihon backup</string>
+    <string name="export_mihon_backup_summary">Export favorites, categories, and reading progress for Mihon-source entries only.</string>
+    <string name="export_mihon_backup_saved">Mihon backup saved (%1$d entries)</string>
+    <string name="export_mihon_backup_empty">No Mihon-source favorites or history available to export</string>
+    <string name="export_aniyomi_backup">Export Aniyomi backup</string>
+    <string name="export_aniyomi_backup_summary">Export favorites, categories, and reading progress for Mihon manga sources and Aniyomi anime sources.</string>
+    <string name="export_aniyomi_backup_saved">Aniyomi backup saved (%1$d entries)</string>
+    <string name="export_aniyomi_backup_empty">No compatible Mihon or Aniyomi source favorites or history available to export</string>
     <string name="import_backup_choose_source_app">Choose source app</string>
     <string name="supported_apps">Supported apps</string>
     <string name="import_backup_supported_apps_summary">Mihon, Komikku, Aniyomi, Anikku, Animiru, Venera</string>

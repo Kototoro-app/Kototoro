@@ -5,9 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoBuf
-import kotlinx.serialization.protobuf.ProtoNumber
 import okio.buffer
 import okio.gzip
 import okio.source
@@ -334,113 +332,6 @@ class ExternalBackupDecoder @Inject constructor(
         val safeCompletedCount = completedCount.coerceIn(0, totalCount)
         return max(0f, safeCompletedCount.toFloat() / totalCount.toFloat())
     }
-
-    @Serializable
-    private data class MihonBackup(
-        @ProtoNumber(1) val backupManga: List<MihonBackupManga> = emptyList(),
-        @ProtoNumber(2) val backupCategories: List<MihonBackupCategory> = emptyList(),
-    )
-
-    @Serializable
-    private data class MihonBackupManga(
-        @ProtoNumber(1) val source: Long,
-        @ProtoNumber(2) val url: String,
-        @ProtoNumber(3) val title: String = "",
-        @ProtoNumber(4) val artist: String? = null,
-        @ProtoNumber(5) val author: String? = null,
-        @ProtoNumber(6) val description: String? = null,
-        @ProtoNumber(7) val genre: List<String> = emptyList(),
-        @ProtoNumber(8) val status: Int = 0,
-        @ProtoNumber(9) val thumbnailUrl: String? = null,
-        @ProtoNumber(13) val dateAdded: Long = 0,
-        @ProtoNumber(100) val favorite: Boolean = true,
-        @ProtoNumber(16) val chapters: List<MihonBackupChapter> = emptyList(),
-        @ProtoNumber(17) val categories: List<Long> = emptyList(),
-        @ProtoNumber(104) val history: List<MihonBackupHistory> = emptyList(),
-        @ProtoNumber(106) val lastModifiedAt: Long = 0,
-        @ProtoNumber(107) val favoriteModifiedAt: Long? = null,
-    )
-
-    @Serializable
-    private data class MihonBackupCategory(
-        @ProtoNumber(1) val name: String,
-        @ProtoNumber(2) val order: Long = 0,
-        @ProtoNumber(3) val id: Long = 0,
-        @ProtoNumber(100) val flags: Long = 0,
-    )
-
-    @Serializable
-    private data class MihonBackupChapter(
-        @ProtoNumber(1) val url: String,
-        @ProtoNumber(2) val name: String = "",
-        @ProtoNumber(4) val read: Boolean = false,
-    )
-
-    @Serializable
-    private data class MihonBackupHistory(
-        @ProtoNumber(1) val url: String,
-        @ProtoNumber(2) val lastRead: Long,
-    )
-
-    @Serializable
-    private data class AniyomiBackup(
-        @ProtoNumber(1) val backupManga: List<AniyomiBackupManga> = emptyList(),
-        @ProtoNumber(2) val backupCategories: List<MihonBackupCategory> = emptyList(),
-        @ProtoNumber(501) val backupAnime: List<AniyomiBackupAnime> = emptyList(),
-    )
-
-    @Serializable
-    private data class AniyomiBackupManga(
-        @ProtoNumber(1) val source: Long,
-        @ProtoNumber(2) val url: String,
-        @ProtoNumber(3) val title: String = "",
-        @ProtoNumber(4) val artist: String? = null,
-        @ProtoNumber(5) val author: String? = null,
-        @ProtoNumber(6) val description: String? = null,
-        @ProtoNumber(7) val genre: List<String> = emptyList(),
-        @ProtoNumber(8) val status: Int = 0,
-        @ProtoNumber(9) val thumbnailUrl: String? = null,
-        @ProtoNumber(13) val dateAdded: Long = 0,
-        @ProtoNumber(100) val favorite: Boolean = true,
-        @ProtoNumber(16) val chapters: List<MihonBackupChapter> = emptyList(),
-        @ProtoNumber(17) val categories: List<Long> = emptyList(),
-        @ProtoNumber(104) val history: List<MihonBackupHistory> = emptyList(),
-        @ProtoNumber(106) val lastModifiedAt: Long = 0,
-        @ProtoNumber(107) val favoriteModifiedAt: Long? = null,
-    )
-
-    @Serializable
-    private data class AniyomiBackupAnime(
-        @ProtoNumber(1) val source: Long,
-        @ProtoNumber(2) val url: String,
-        @ProtoNumber(3) val title: String = "",
-        @ProtoNumber(4) val artist: String? = null,
-        @ProtoNumber(5) val author: String? = null,
-        @ProtoNumber(6) val description: String? = null,
-        @ProtoNumber(7) val genre: List<String> = emptyList(),
-        @ProtoNumber(8) val status: Int = 0,
-        @ProtoNumber(9) val thumbnailUrl: String? = null,
-        @ProtoNumber(13) val dateAdded: Long = 0,
-        @ProtoNumber(100) val favorite: Boolean = true,
-        @ProtoNumber(16) val episodes: List<AniyomiBackupEpisode> = emptyList(),
-        @ProtoNumber(17) val categories: List<Long> = emptyList(),
-        @ProtoNumber(104) val history: List<AniyomiBackupHistory> = emptyList(),
-        @ProtoNumber(106) val lastModifiedAt: Long = 0,
-        @ProtoNumber(107) val favoriteModifiedAt: Long? = null,
-    )
-
-    @Serializable
-    private data class AniyomiBackupEpisode(
-        @ProtoNumber(1) val url: String,
-        @ProtoNumber(2) val name: String = "",
-        @ProtoNumber(4) val seen: Boolean = false,
-    )
-
-    @Serializable
-    private data class AniyomiBackupHistory(
-        @ProtoNumber(1) val url: String,
-        @ProtoNumber(2) val lastRead: Long,
-    )
 
     private companion object {
         private const val MAGIC_JSON_SIGNATURE1 = 0x7b7d

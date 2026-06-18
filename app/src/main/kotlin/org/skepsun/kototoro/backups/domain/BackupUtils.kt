@@ -39,4 +39,18 @@ object BackupUtils {
 		append(dateTimeFormat.format(Date()))
 		append(".bk.zip")
 	}
+
+	fun generateMihonBackupFileName(context: Context) = buildString {
+		append(context.getString(R.string.app_name).replace(' ', '_').lowercase(Locale.ROOT))
+		append("_mihon_")
+		append(dateTimeFormat.format(Date()))
+		append(".tachibk")
+	}
+
+	fun generateAniyomiBackupFileName(context: Context) = buildString {
+		append(context.getString(R.string.app_name).replace(' ', '_').lowercase(Locale.ROOT))
+		append("_aniyomi_")
+		append(dateTimeFormat.format(Date()))
+		append(".aniyomibk")
+	}
 }

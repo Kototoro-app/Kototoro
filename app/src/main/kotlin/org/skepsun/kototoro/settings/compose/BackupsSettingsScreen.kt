@@ -47,6 +47,8 @@ fun BackupsSettingsScreen(
     onPeriodicalBackupCountChange: (Int) -> Unit,
     onCreateBackupClick: () -> Unit,
     onRestoreBackupClick: () -> Unit,
+    onExportMihonBackupClick: () -> Unit,
+    onExportAniyomiBackupClick: () -> Unit,
     onImportExternalBackupClick: () -> Unit,
     onDismissExternalImportDialog: () -> Unit,
     onImportExternalBackupAppClick: (ExternalBackupApp) -> Unit,
@@ -127,6 +129,18 @@ fun BackupsSettingsScreen(
             }
             item(key = "external_backup_import") {
                 SettingsPreferenceSection(title = stringResource(R.string.import_backup_from_other_apps)) {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.export_mihon_backup),
+                        summary = stringResource(R.string.export_mihon_backup_summary),
+                        onClick = onExportMihonBackupClick,
+                    )
+                    SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.export_aniyomi_backup),
+                        summary = stringResource(R.string.export_aniyomi_backup_summary),
+                        onClick = onExportAniyomiBackupClick,
+                    )
+                    SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.import_backup_from_other_apps),
                         summary = stringResource(R.string.import_backup_from_other_apps_summary),

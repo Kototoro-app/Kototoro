@@ -26,7 +26,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
+import org.skepsun.kototoro.backups.ui.backup.AniyomiBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.BackupService
+import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
 import org.skepsun.kototoro.core.nav.router
@@ -82,6 +84,22 @@ class BackupsSettingsFragment : Fragment() {
         }
     }
 
+    private val mihonBackupExportCall = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null && !MihonBackupExportService.start(requireContext(), uri)) {
+            showOperationNotSupported()
+        }
+    }
+
+    private val aniyomiBackupExportCall = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null && !AniyomiBackupExportService.start(requireContext(), uri)) {
+            showOperationNotSupported()
+        }
+    }
+
     private val outputSelectCall = OpenDocumentTreeHelper(this) { uri ->
         if (uri != null) {
             val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -116,6 +134,16 @@ class BackupsSettingsFragment : Fragment() {
                     },
                     onCreateBackupClick = {
                         if (!backupCreateCall.tryLaunch(BackupUtils.generateFileName(requireContext()))) {
+                            showOperationNotSupported()
+                        }
+                    },
+                    onExportMihonBackupClick = {
+                        if (!mihonBackupExportCall.tryLaunch(BackupUtils.generateMihonBackupFileName(requireContext()))) {
+                            showOperationNotSupported()
+                        }
+                    },
+                    onExportAniyomiBackupClick = {
+                        if (!aniyomiBackupExportCall.tryLaunch(BackupUtils.generateAniyomiBackupFileName(requireContext()))) {
                             showOperationNotSupported()
                         }
                     },
@@ -154,6 +182,8 @@ fun BackupsSettingsRoute(
     onBackupOutputClick: () -> Unit,
     onCreateBackupClick: () -> Unit,
     onRestoreBackupClick: () -> Unit,
+    onExportMihonBackupClick: () -> Unit,
+    onExportAniyomiBackupClick: () -> Unit,
     onImportExternalBackupFilePick: (ExternalBackupApp) -> Unit,
 ) {
     val context = LocalContext.current
@@ -220,6 +250,8 @@ fun BackupsSettingsRoute(
         onPeriodicalBackupCountChange = { settings.periodicalBackupCount = it },
         onCreateBackupClick = onCreateBackupClick,
         onRestoreBackupClick = onRestoreBackupClick,
+        onExportMihonBackupClick = onExportMihonBackupClick,
+        onExportAniyomiBackupClick = onExportAniyomiBackupClick,
         onImportExternalBackupClick = { isExternalImportDialogVisible = true },
         onDismissExternalImportDialog = { isExternalImportDialogVisible = false },
         onImportExternalBackupAppClick = { app ->

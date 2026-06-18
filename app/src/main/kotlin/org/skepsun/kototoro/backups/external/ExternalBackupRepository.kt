@@ -192,7 +192,7 @@ class ExternalBackupRepository @Inject constructor(
                         deletedAt = 0L,
                     ),
                 )
-            importedIds[category.id] = localCategoryId
+            ExternalBackupCategoryMapper.putImportedCategoryKeys(importedIds, category, localCategoryId)
         }
         return importedIds
     }
@@ -441,6 +441,22 @@ class ExternalBackupRepository @Inject constructor(
             targets: List<FixedSourceTarget>,
         ): Pair<List<String>, List<FixedSourceTarget>> {
             return aliases to targets
+        }
+    }
+}
+
+internal object ExternalBackupCategoryMapper {
+
+    fun putImportedCategoryKeys(
+        target: MutableMap<Long, Long>,
+        category: ExternalBackupFavoriteCategoryRecord,
+        localCategoryId: Long,
+    ) {
+        // Mihon manga.category values reference category order during restore.
+        target[category.order] = localCategoryId
+        // Keep id mapping as a fallback for previously exported or non-standard backups.
+        if (category.id != category.order) {
+            target[category.id] = localCategoryId
         }
     }
 }

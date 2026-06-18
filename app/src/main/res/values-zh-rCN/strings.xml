@@ -518,6 +518,14 @@
     <string name="sync_settings_summary">配置 WebDAV 多设备同步、备份与恢复</string>
     <string name="import_backup_from_other_apps">从其他应用导入备份</string>
     <string name="import_backup_from_other_apps_summary">从 Mihon 系、Aniyomi 系或 Venera 备份文件导入收藏和历史记录。</string>
+    <string name="export_mihon_backup">导出 Mihon 备份</string>
+    <string name="export_mihon_backup_summary">仅导出 Mihon 图源条目的收藏、分类和阅读进度。</string>
+    <string name="export_mihon_backup_saved">Mihon 备份已保存（%1$d 条）</string>
+    <string name="export_mihon_backup_empty">没有可导出的 Mihon 图源收藏或历史记录</string>
+    <string name="export_aniyomi_backup">导出 Aniyomi 备份</string>
+    <string name="export_aniyomi_backup_summary">导出 Mihon 漫画源与 Aniyomi 动画源的收藏、分类和阅读进度。</string>
+    <string name="export_aniyomi_backup_saved">Aniyomi 备份已保存（%1$d 条）</string>
+    <string name="export_aniyomi_backup_empty">没有可导出的 Mihon 或 Aniyomi 兼容源收藏或历史记录</string>
     <string name="import_backup_choose_source_app">选择来源应用</string>
     <string name="supported_apps">支持的应用</string>
     <string name="import_backup_supported_apps_summary">Mihon、Komikku、Aniyomi、Anikku、Animiru、Venera</string>

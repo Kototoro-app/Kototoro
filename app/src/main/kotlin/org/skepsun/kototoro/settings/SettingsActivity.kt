@@ -65,7 +65,9 @@ import okhttp3.Request
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
+import org.skepsun.kototoro.backups.ui.backup.AniyomiBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.BackupService
+import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
 import org.skepsun.kototoro.core.github.AppVersion
@@ -302,6 +304,22 @@ class SettingsActivity :
 		ActivityResultContracts.CreateDocument("application/zip"),
 	) { uri ->
 		if (uri != null && !BackupService.start(this, uri)) {
+			Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+		}
+	}
+
+	private val mihonBackupExportCall = registerForActivityResult(
+		ActivityResultContracts.CreateDocument("application/octet-stream"),
+	) { uri ->
+		if (uri != null && !MihonBackupExportService.start(this, uri)) {
+			Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+		}
+	}
+
+	private val aniyomiBackupExportCall = registerForActivityResult(
+		ActivityResultContracts.CreateDocument("application/octet-stream"),
+	) { uri ->
+		if (uri != null && !AniyomiBackupExportService.start(this, uri)) {
 			Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
 		}
 	}
@@ -1308,6 +1326,16 @@ class SettingsActivity :
 					},
 					onCreateBackupClick = {
 						if (!backupCreateCall.tryLaunch(BackupUtils.generateFileName(this))) {
+							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+						}
+					},
+					onExportMihonBackupClick = {
+						if (!mihonBackupExportCall.tryLaunch(BackupUtils.generateMihonBackupFileName(this))) {
+							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+						}
+					},
+					onExportAniyomiBackupClick = {
+						if (!aniyomiBackupExportCall.tryLaunch(BackupUtils.generateAniyomiBackupFileName(this))) {
 							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
 						}
 					},
