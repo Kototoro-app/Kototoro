@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
@@ -61,10 +62,15 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
+import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
+import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
+import org.skepsun.kototoro.core.ui.glass.LocalHazeState
+import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.handleDetailsAction
@@ -82,7 +88,22 @@ import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
+import org.skepsun.kototoro.main.ui.navigation3.MainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.MainNavState
+import org.skepsun.kototoro.main.ui.navigation3.MainTopLevelNavDisplay
+import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
+import org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey
+import org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey
+import org.skepsun.kototoro.main.ui.navigation3.LocalNavKey
+import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
+import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
+import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
+import org.skepsun.kototoro.parsers.model.ContentListFilter
+import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
+import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
+import dev.chrisbanes.haze.hazeSource
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
@@ -92,7 +113,12 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.isMainRouteTransit
     return initialState.destination.isMainRoute() && targetState.destination.isMainRoute()
 }
 
+private fun NavDestination.isImmersiveRoute(): Boolean {
+    return hasRoute<DetailsRoute>() || hasRoute<ContentListRoute>()
+}
+
 private fun NavDestination.mainRouteOrder(): Int = when {
+    hasRoute<MainShellRoute>() -> 0
     hasRoute<HomeRoute>() -> 0
     hasRoute<HistoryRoute>() -> 1
     hasRoute<FavoritesRoute>() -> 2
@@ -107,10 +133,22 @@ private fun NavDestination.mainRouteOrder(): Int = when {
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition {
+    if (initialState.destination.isImmersiveRoute() && targetState.destination.isMainRoute()) {
+        return slideIntoContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+        ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing))
+    }
     return EnterTransition.None
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeOut(): ExitTransition {
+    if (initialState.destination.isMainRoute() && targetState.destination.isImmersiveRoute()) {
+        return slideOutOfContainer(
+            towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+        ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
+    }
     return ExitTransition.None
 }
 
@@ -169,6 +207,29 @@ private fun buildFavoriteCategoryTabsState(
     )
 }
 
+internal interface FavoritesEntityOrganizeResultSource {
+    val refreshSignals: kotlinx.coroutines.flow.StateFlow<Boolean>
+    val messageSignals: kotlinx.coroutines.flow.StateFlow<String?>
+
+    fun consumeRefresh(): Boolean
+
+    fun consumeMessage(): String?
+}
+
+internal class SavedStateHandleFavoritesEntityOrganizeResultSource(
+    private val savedStateHandle: androidx.lifecycle.SavedStateHandle,
+) : FavoritesEntityOrganizeResultSource {
+    override val refreshSignals: kotlinx.coroutines.flow.StateFlow<Boolean> =
+        savedStateHandle.getStateFlow(ENTITY_ORGANIZE_RESULT_REFRESH_KEY, false)
+
+    override val messageSignals: kotlinx.coroutines.flow.StateFlow<String?> =
+        savedStateHandle.getStateFlow(ENTITY_ORGANIZE_RESULT_MESSAGE_KEY, null)
+
+    override fun consumeRefresh(): Boolean = consumeEntityOrganizeRefreshResult(savedStateHandle)
+
+    override fun consumeMessage(): String? = consumeEntityOrganizeMessageResult(savedStateHandle)
+}
+
 private const val TOP_BAR_OWNER_DISCOVER = "discover"
 private const val TOP_BAR_OWNER_HISTORY = "history"
 private const val TOP_BAR_OWNER_FAVORITES = "favorites"
@@ -178,7 +239,8 @@ private const val TOP_BAR_OWNER_LOCAL = "local"
 private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
 private fun NavDestination.isMainRoute(): Boolean =
-    hasRoute<HomeRoute>() ||
+    hasRoute<MainShellRoute>() ||
+        hasRoute<HomeRoute>() ||
         hasRoute<DiscoverRoute>() ||
         hasRoute<HistoryRoute>() ||
         hasRoute<FavoritesRoute>() ||
@@ -205,6 +267,8 @@ fun AppNavGraph(
     onDetailsTransitionRequested: () -> Unit = {},
     onDetailsReturnTransitionRequested: () -> Unit = {},
     isLandscapeNavigation: Boolean = false,
+    mainNavState: MainNavState? = null,
+    mainShellChrome: @Composable (BoxScope.() -> Unit) = {},
 ) {
     val activity = LocalContext.current as FragmentActivity
     val appRouter = activity.router
@@ -216,23 +280,22 @@ fun AppNavGraph(
     } else {
         0.dp
     }
-    val navigateToDetailsWithContent = remember(navController) {
+    val mainNavigator: MainNavigator = remember(navController, mainActivity, mainNavState, onDetailsTransitionRequested) {
+        NavControllerMainNavigator(
+            navController = navController,
+            mainActivity = mainActivity,
+            mainNavState = mainNavState,
+            onDetailsTransitionRequested = onDetailsTransitionRequested,
+        )
+    }
+    val navigateToDetailsWithContent = remember(mainNavigator) {
         { content: Content, sharedElementKey: String? ->
-            onDetailsTransitionRequested()
-            mainActivity?.resolveDetailsOriginForContent(content) { origin ->
-                PendingDetailsNavigation.set(origin, sharedElementKey)
-                navController.navigate(DetailsRoute)
-            } ?: run {
-                PendingDetailsNavigation.set(content, sharedElementKey)
-                navController.navigate(DetailsRoute)
-            }
+            mainNavigator.openDetails(content, sharedElementKey)
         }
     }
-    val navigateToDetailsWithOrigin = remember(navController) {
+    val navigateToDetailsWithOrigin = remember(mainNavigator) {
         { origin: org.skepsun.kototoro.details.ui.model.DetailsOrigin, sharedElementKey: String? ->
-            onDetailsTransitionRequested()
-            PendingDetailsNavigation.set(origin, sharedElementKey)
-            navController.navigate(DetailsRoute)
+            mainNavigator.openDetails(origin, sharedElementKey)
         }
     }
 
@@ -245,691 +308,98 @@ fun AppNavGraph(
         popEnterTransition = { mainRouteFadeIn() },
         popExitTransition = { mainRouteFadeOut() },
     ) {
+        composable<MainShellRoute> { backStackEntry ->
+            MainShellRouteContent(
+                animatedVisibilityScope = this@composable,
+                backStackEntry = backStackEntry,
+                navController = navController,
+                activity = activity,
+                mainActivity = mainActivity,
+                appRouter = appRouter,
+                rootView = rootView,
+                contentPadding = contentPadding,
+                landscapeStartPadding = landscapeStartPadding,
+                bottomBarOffsetPx = bottomBarOffsetPx,
+                bottomBarHeightPx = bottomBarHeightPx,
+                pageSaveHelper = pageSaveHelper,
+                isLandscapeNavigation = isLandscapeNavigation,
+                mainNavigator = mainNavigator,
+                mainNavState = checkNotNull(mainNavState) {
+                    "MainShellRoute requires MainNavState"
+                },
+                mainShellChrome = mainShellChrome,
+                onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                onOpenSearch = onOpenSearch,
+                navigateToDetailsWithContent = navigateToDetailsWithContent,
+                navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+            )
+        }
         composable<HomeRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<HomeViewModel>()
-            val state by viewModel.summaryState.collectAsStateWithLifecycle()
-            val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onOpenContent, navigateToDetailsWithContent) {
-                viewModel.onOpenContent.collect { event ->
-                    event?.consume { contentEvent ->
-                        navigateToDetailsWithContent(contentEvent.content, null)
-                    }
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onActionDone) {
-                val observer = org.skepsun.kototoro.core.ui.util.ReversibleActionObserver(rootView)
-                viewModel.onActionDone.collect { event ->
-                    event?.consume(observer)
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onError) {
-                val host = activity.window.decorView.rootView
-                val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
-                val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
-                viewModel.onError.collect { event ->
-                    event?.consume(observer)
-                }
-            }
-
-            DisposableEffect(mainActivity, viewModel, state.selectedTab, state.selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun getSelectedContentType(): BrowseGroupTab = when (state.selectedTab) {
-                        org.skepsun.kototoro.home.ui.HomeContentTab.MANGA -> BrowseGroupTab.Content
-                        org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL -> BrowseGroupTab.Novel
-                        org.skepsun.kototoro.home.ui.HomeContentTab.VIDEO -> BrowseGroupTab.Video
-                        null -> BrowseGroupTab.All
-                    }
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        viewModel.setSelectedTab(
-                            when (if (getSelectedContentType() == tab) BrowseGroupTab.All else tab) {
-                                BrowseGroupTab.Content -> org.skepsun.kototoro.home.ui.HomeContentTab.MANGA
-                                BrowseGroupTab.Novel -> org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL
-                                BrowseGroupTab.Video -> org.skepsun.kototoro.home.ui.HomeContentTab.VIDEO
-                                else -> null
-                            }
-                        )
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = state.selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        val current = state.selectedSourceTags
-                        viewModel.setSelectedSourceTags(
-                            when {
-                                tag == null -> emptySet()
-                                tag in current -> current - tag
-                                else -> current + tag
-                            }
-                        )
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                val onHomeContentClick = remember(navigateToDetailsWithContent) {
-                    { content: Content, _: Rect?, sharedElementKey: String? ->
-                        navigateToDetailsWithContent(content, sharedElementKey)
-                    }
-                }
-                val markReturnHomeOnBack = remember(navController) {
-                    {
-                        navController.currentBackStackEntry
-                            ?.savedStateHandle
-                            ?.set(RETURN_HOME_ON_BACK_KEY, true)
-                        Unit
-                    }
-                }
-                val onHomeSettingsClick = remember(appRouter) { { appRouter.openSettings() } }
-                val onHomeReaderSettingsClick = remember(appRouter) { { appRouter.openReaderSettings() } }
-                val onHomeViewAllRecentClick = remember(navController, markReturnHomeOnBack) {
-                    {
-                        navController.navigate(HistoryRoute) {
-                            launchSingleTop = true
-                        }
-                        markReturnHomeOnBack()
-                    }
-                }
-                val onHomeViewAllUpdatesClick = remember(navController, markReturnHomeOnBack) {
-                    {
-                        navController.navigate(UpdatedRoute) {
-                            launchSingleTop = true
-                        }
-                        markReturnHomeOnBack()
-                    }
-                }
-                val onHomeViewAllRecommendationsClick = remember(navController, markReturnHomeOnBack) {
-                    {
-                        navController.navigate(SuggestionsRoute) {
-                            launchSingleTop = true
-                        }
-                        markReturnHomeOnBack()
-                    }
-                }
-                val onHomeRecentSearchClick = remember(onOpenSearch) {
-                    { query: String ->
-                        onOpenSearch(
-                            SearchNavigationRequest(
-                                query = query,
-                                kind = org.skepsun.kototoro.search.domain.SearchKind.SIMPLE,
-                                sourceTypes = org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES,
-                                contentKinds = org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS,
-                                advancedQuery = null,
-                                pinnedOnly = false,
-                                hideEmpty = false,
-                                requestId = System.nanoTime(),
-                            ),
-                        )
-                    }
-                }
-                val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
-                val onHomeLibraryOpenClick = remember(navController, markReturnHomeOnBack) {
-                    {
-                        navController.navigate(FavoritesRoute) {
-                            launchSingleTop = true
-                        }
-                        markReturnHomeOnBack()
-                    }
-                }
-                val onHomeBookmarksClick = remember(navController, markReturnHomeOnBack) {
-                    {
-                        navController.navigate(BookmarksRoute) {
-                            launchSingleTop = true
-                        }
-                        markReturnHomeOnBack()
-                    }
-                }
-                val onHomeLocalClick = remember(navController, markReturnHomeOnBack) {
-                    {
-                        navController.navigate(LocalRoute) {
-                            launchSingleTop = true
-                        }
-                        markReturnHomeOnBack()
-                    }
-                }
-                val onHomeDownloadsClick = remember(appRouter) { { appRouter.openDownloads() } }
-                val onHomeRandomClick = remember(viewModel) { { viewModel.openRandom() } }
-                val onHomeAutoTranslateClick = remember(appRouter) { { appRouter.openTranslationSettings() } }
-                val homeActions = remember(
-                    onHomeSettingsClick,
-                    onHomeReaderSettingsClick,
-                    onHomeViewAllRecentClick,
-                    onHomeViewAllUpdatesClick,
-                    onHomeViewAllRecommendationsClick,
-                    onHomeRecentSearchClick,
-                    onHomeManageSourcesClick,
-                    onHomeLibraryOpenClick,
-                    onHomeBookmarksClick,
-                    onHomeLocalClick,
-                    onHomeDownloadsClick,
-                    onHomeRandomClick,
-                    onHomeAutoTranslateClick,
-                ) {
-                    HomeScreenActions(
-                        onSettingsClick = onHomeSettingsClick,
-                        onReaderSettingsClick = onHomeReaderSettingsClick,
-                        onViewAllRecentClick = onHomeViewAllRecentClick,
-                        onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
-                        onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
-                        onRecentSearchClick = onHomeRecentSearchClick,
-                        onManageSourcesClick = onHomeManageSourcesClick,
-                        onLibraryOpenClick = onHomeLibraryOpenClick,
-                        onBookmarksClick = onHomeBookmarksClick,
-                        onLocalClick = onHomeLocalClick,
-                        onDownloadsClick = onHomeDownloadsClick,
-                        onRandomClick = onHomeRandomClick,
-                        onAutoTranslateClick = onHomeAutoTranslateClick,
-                    )
-                }
-                HomeScreen(
+                HomeTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    navController = navController,
+                    activity = activity,
+                    mainActivity = mainActivity,
+                    appRouter = appRouter,
+                    rootView = rootView,
                     contentPadding = contentPadding,
-                    state = state,
-                    onContentClick = onHomeContentClick,
-                    actions = homeActions,
-                    isRandomLoading = isRandomLoading,
+                    mainNavigator = mainNavigator,
+                    onOpenSearch = onOpenSearch,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
                 )
-            }
             }
         }
         composable<DiscoverRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
-            val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
-            val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
-
-            DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        exploreViewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        exploreViewModel.setSelectedSourceTags(
-                            when {
-                                tag == null -> emptySet()
-                                tag in selectedSourceTags -> selectedSourceTags - tag
-                                else -> selectedSourceTags + tag
-                            }
-                        )
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute(
+                BrowseTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    mainActivity = mainActivity,
                     appRouter = appRouter,
                     contentPadding = contentPadding,
-                    exploreViewModel = exploreViewModel,
-                    onSourceSelectionTopBarChanged = {
-                        onExploreSourceSelectionTopBarChanged(
-                            RouteScopedTopBarOverrideState(TOP_BAR_OWNER_DISCOVER, it),
-                        )
-                    },
-                    onNavigateToDetails = navigateToDetailsWithOrigin,
+                    mainNavigator = mainNavigator,
+                    ownerRoute = TOP_BAR_OWNER_DISCOVER,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
-            }
             }
         }
         composable<HistoryRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.history.ui.HistoryListViewModel>()
-            val context = LocalContext.current
-            val entryPoint = remember(context.applicationContext) {
-                runCatching {
-                    EntryPointAccessors.fromApplication(
-                        context.applicationContext,
-                        BaseApp.BaseAppEntryPoint::class.java,
-                    )
-                }.getOrNull()
-            }
-            val items by viewModel.content.collectAsStateWithLifecycle()
-            val listMode by viewModel.listMode.collectAsStateWithLifecycle()
-            val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
-            val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
-            val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
-            val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
-            val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
-            val historyFilterRailState = remember(items, context, entryPoint, viewModel) {
-                val quickFilter = items.firstOrNull { it is org.skepsun.kototoro.list.ui.model.QuickFilter } as? org.skepsun.kototoro.list.ui.model.QuickFilter
-                quickFilter?.let { filter ->
-                    CompactFilterRailOverrideState(
-                        items = filter.items.mapIndexedNotNull { index, chip ->
-                            val option = chip.data as? ListFilterOption ?: return@mapIndexedNotNull null
-                            val sourceOption = option as? ListFilterOption.Source
-                            val title = when {
-                                sourceOption != null -> resolveSourceTitleForUi(
-                                    context = context,
-                                    source = sourceOption.mangaSource,
-                                    entryPoint = entryPoint,
-                                )
-                                chip.titleResId != 0 -> context.getString(chip.titleResId)
-                                !chip.title.isNullOrBlank() -> chip.title.toString()
-                                else -> return@mapIndexedNotNull null
-                            }
-                            CompactFilterRailItem(
-                                id = "${option::class.qualifiedName}:${option.hashCode()}:$index",
-                                title = title,
-                                isSelected = chip.isChecked,
-                                source = sourceOption?.mangaSource,
-                                onClick = { viewModel.toggleFilterOption(option) },
-                            )
-                        }.selectedFirst(),
-                    )
-                }
-            }
-            var selectedItemsIds by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<Long>()) }
-            var showClearDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-            val selectedModels = remember(items, selectedItemsIds) {
-                items
-                    .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
-                    .filter { it.id in selectedItemsIds }
-            }
-            DisposableEffect(onContextualMenuActionsChanged) {
-                onContextualMenuActionsChanged(
-                    RouteScopedTopBarMenuActions(
-                        ownerRoute = TOP_BAR_OWNER_HISTORY,
-                        actions = listOf(
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.clear_history) {
-                                showClearDialog = true
-                            },
-                        ),
-                    ),
-                )
-                onDispose {
-                    onContextualMenuActionsChanged(
-                        RouteScopedTopBarMenuActions(
-                            ownerRoute = TOP_BAR_OWNER_HISTORY,
-                            actions = emptyList(),
-                        ),
-                    )
-                }
-            }
-
-            BackHandler(enabled = selectedItemsIds.isNotEmpty()) {
-                selectedItemsIds = emptySet()
-            }
-
-            SideEffect {
-                if (selectedItemsIds.isNotEmpty()) {
-                    onExploreSourceSelectionTopBarChanged(
-                        RouteScopedTopBarOverrideState(
-                            TOP_BAR_OWNER_HISTORY,
-                            LayeredTopBarOverrideState(
-                                filterRailState = null,
-                                contextualOverrideState = ContentSelectionTopBarOverrideState(
-                                    selectedCount = selectedItemsIds.size,
-                                    isAllNonLocal = selectedModels.none { it.manga.isLocal },
-                                    isSingleSelection = selectedItemsIds.size == 1,
-                                    showRemoveOption = true,
-                                    supportedActions = setOf(
-                                        org.skepsun.kototoro.list.ui.compose.SelectionAction.SELECT_ALL,
-                                        org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE,
-                                    ),
-                                    onClearSelection = { selectedItemsIds = emptySet() },
-                                    onActionClick = { action ->
-                                        when (action) {
-                                            org.skepsun.kototoro.list.ui.compose.SelectionAction.SELECT_ALL -> {
-                                                selectedItemsIds = items
-                                                    .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
-                                                    .mapTo(linkedSetOf()) { it.id }
-                                            }
-
-                                            org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE -> {
-                                                viewModel.removeFromHistory(selectedItemsIds)
-                                                selectedItemsIds = emptySet()
-                                            }
-
-                                            else -> Unit
-                                        }
-                                    },
-                                ),
-                            ),
-                        ),
-                    )
-                } else {
-                    onExploreSourceSelectionTopBarChanged(
-                        RouteScopedTopBarOverrideState(
-                            TOP_BAR_OWNER_HISTORY,
-                            LayeredTopBarOverrideState(),
-                        ),
-                    )
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onOpenReader, appRouter) {
-                viewModel.onOpenReader.collect { event ->
-                    event?.consume { content ->
-                        appRouter.openReader(content)
-                    }
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onActionDone) {
-                val observer = org.skepsun.kototoro.core.ui.util.ReversibleActionObserver(rootView)
-                viewModel.onActionDone.collect { event ->
-                    event?.consume(observer)
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onError) {
-                val host = activity.window.decorView.rootView
-                val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
-                val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
-                viewModel.onError.collect { event ->
-                    event?.consume(observer)
-                }
-            }
-
-            DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        viewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        viewModel.setSelectedSourceTags(
-                            when {
-                                tag == null -> emptySet()
-                                tag in selectedSourceTags -> selectedSourceTags - tag
-                                else -> selectedSourceTags + tag
-                            }
-                        )
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.history.ui.compose.HistoryScreen(
+                HistoryTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    activity = activity,
+                    mainActivity = mainActivity,
+                    appRouter = appRouter,
+                    rootView = rootView,
                     contentPadding = contentPadding,
-                    items = items,
-                    listMode = listMode,
-                    isRefreshing = false,
-                    pullRefreshEnabled = false,
-                    isStatsEnabled = isStatsEnabled,
-                    gridScale = gridScale,
-                    selectedItemsIds = selectedItemsIds,
-                    onRefresh = { viewModel.onRefresh() },
-                    onLoadMore = { viewModel.requestMoreItems() },
-                    onPrepareItemTransition = { item, coverBounds ->
-                    },
-                    onItemClick = { item ->
-                        if (selectedItemsIds.isNotEmpty()) {
-                            selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                        } else {
-                            val content = item.toContentWithOverride()
-                            val sharedKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
-                            val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
-                            val preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id)
-                            if (entityId != null) {
-                                navigateToDetailsWithOrigin(
-                                    org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                                        entityId = entityId,
-                                        preferredLocalMangaId = preferredLocalMangaId ?: content.id,
-                                        initialProjectionLocalMangaId = content.id,
-                                    ),
-                                    sharedKey,
-                                )
-                            } else {
-                                navigateToDetailsWithContent(content, sharedKey)
-                            }
-                        }
-                    },
-                    onItemLongClick = { item ->
-                        selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                    },
-                    onClearSelection = { selectedItemsIds = emptySet() },
-                    onSelectionAction = { action ->
-                        if (action == org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE) {
-                            viewModel.removeFromHistory(selectedItemsIds)
-                            selectedItemsIds = emptySet()
-                        }
-                    },
-                    onStatsClick = { appRouter.openStatistic() },
-                    onContinueReadingClick = { viewModel.openLastReader() },
-                    onQuickFilterOptionClick = viewModel::toggleFilterOption,
-                    showContinueReadingButton = isResumeEnabled && !isLandscapeNavigation,
-                    showQuickFilterInline = true,
                     bottomBarOffsetPx = bottomBarOffsetPx,
                     bottomBarHeightPx = bottomBarHeightPx,
-                    showInlineSelectionTopBar = false,
+                    isLandscapeNavigation = isLandscapeNavigation,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
-
-                if (showClearDialog) {
-                    org.skepsun.kototoro.history.ui.compose.ClearHistoryDialog(
-                        onDismissRequest = { showClearDialog = false },
-                        onConfirm = { option ->
-                            when(option) {
-                                org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.LAST_2_HOURS -> viewModel.clearHistory(java.time.Instant.now().minus(2, java.time.temporal.ChronoUnit.HOURS))
-                                org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.TODAY -> viewModel.clearHistory(java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant())
-                                org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.NOT_IN_FAVORITES -> viewModel.removeNotFavorite()
-                                org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.CLEAR_ALL -> viewModel.clearHistory(null)
-                            }
-                        }
-                    )
-                }
-            }
             }
         }
         composable<FavoritesRoute> { backStackEntry ->
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>()
-            val selectedGroupTab by viewModel.globalFavoritesState.selectedGroupTab.collectAsStateWithLifecycle()
-            val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
-            var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
-            val coroutineScope = rememberCoroutineScope()
-            val context = LocalContext.current
-            fun showToast(messageRes: Int) {
-                android.widget.Toast.makeText(context, messageRes, android.widget.Toast.LENGTH_SHORT).show()
-            }
-
-            fun showToast(message: String) {
-                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-            }
-
-            fun showImportDialog(scope: CoroutineScope) {
-                scope.launch {
-                    val candidates = viewModel.loadImportCandidates()
-                    if (candidates.isEmpty()) {
-                        showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
-                        return@launch
-                    }
-                    val checked = BooleanArray(candidates.size) { true }
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-                        .setTitle(org.skepsun.kototoro.R.string.import_favourites_title)
-                        .setMultiChoiceItems(candidates.map { it.title }.toTypedArray(), checked) { _, which, isChecked ->
-                            checked[which] = isChecked
-                        }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton(android.R.string.ok) { _, _ ->
-                            viewModel.importFavorites(candidates.filterIndexed { index, _ -> checked[index] })
-                        }
-                        .show()
+                val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
+                    SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
                 }
-            }
-
-            LaunchedEffect(backStackEntry) {
-                backStackEntry.savedStateHandle
-                    .getStateFlow(ENTITY_ORGANIZE_RESULT_REFRESH_KEY, false)
-                    .collect {
-                        if (!consumeEntityOrganizeRefreshResult(backStackEntry.savedStateHandle)) {
-                            return@collect
-                        }
-                        entityOrganizeRefreshGeneration += 1
-                    }
-            }
-
-            LaunchedEffect(backStackEntry) {
-                backStackEntry.savedStateHandle
-                    .getStateFlow<String?>(ENTITY_ORGANIZE_RESULT_MESSAGE_KEY, null)
-                    .collect {
-                        val message = consumeEntityOrganizeMessageResult(backStackEntry.savedStateHandle)
-                        if (message == null) {
-                            return@collect
-                        }
-                        viewModel.notifyEntityOrganizeResult(message)
-                    }
-            }
-
-            fun showSyncDialog(scope: CoroutineScope) {
-                scope.launch {
-                    val candidates = viewModel.loadSyncCandidates()
-                    if (candidates.isEmpty()) {
-                        showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
-                        return@launch
-                    }
-                    val checked = BooleanArray(candidates.size) { true }
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-                        .setTitle(org.skepsun.kototoro.R.string.sync_favourites_title)
-                        .setMessage(org.skepsun.kototoro.R.string.sync_favourites_warning)
-                        .setMultiChoiceItems(candidates.map { it.title }.toTypedArray(), checked) { _, which, isChecked ->
-                            checked[which] = isChecked
-                        }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton(android.R.string.ok) { _, _ ->
-                            viewModel.syncFavorites(candidates.filterIndexed { index, _ -> checked[index] })
-                        }
-                        .show()
-                }
-            }
-
-            DisposableEffect(appRouter, viewModel) {
-                onContextualMenuActionsChanged(
-                    RouteScopedTopBarMenuActions(
-                        ownerRoute = TOP_BAR_OWNER_FAVORITES,
-                        actions = listOf(
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
-                                appRouter.openFavoriteCategories()
-                            },
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.entity_organize_title) {
-                                appRouter.openEntityOrganizeSettings()
-                            },
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
-                                showImportDialog(coroutineScope)
-                            },
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
-                                showSyncDialog(coroutineScope)
-                            },
-                        ),
-                    ),
-                )
-                onDispose {
-                    onContextualMenuActionsChanged(
-                        RouteScopedTopBarMenuActions(
-                            ownerRoute = TOP_BAR_OWNER_FAVORITES,
-                            actions = emptyList(),
-                        ),
-                    )
-                }
-            }
-
-            LaunchedEffect(viewModel.importMessages) {
-                viewModel.importMessages.collect { event ->
-                    event?.consume(eventCollector { message ->
-                        showToast(message)
-                    })
-                }
-            }
-
-            LaunchedEffect(viewModel.syncMessages) {
-                viewModel.syncMessages.collect { event ->
-                    event?.consume(eventCollector { message ->
-                        showToast(message)
-                    })
-                }
-            }
-
-            LaunchedEffect(viewModel.organizeMessages) {
-                viewModel.organizeMessages.collect { event ->
-                    event?.consume(eventCollector { message ->
-                        showToast(message)
-                    })
-                }
-            }
-
-            DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun isSourceTagFilterVisible(): Boolean = true
-
-                    override fun getSourceTagEntries(): List<org.skepsun.kototoro.explore.ui.model.SourceTag> =
-                        org.skepsun.kototoro.explore.ui.model.SourceTag.quickFilterEntries
-
-                    override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        viewModel.globalFavoritesState.setSelectedGroupTab(
-                            if (selectedGroupTab == tab) BrowseGroupTab.All else tab,
-                        )
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
-                        selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        when {
-                            tag == null -> viewModel.globalFavoritesState.clearSourceTags()
-                            tag in selectedSourceTags -> {
-                                viewModel.globalFavoritesState.setSelectedSourceTags(selectedSourceTags - tag)
-                            }
-                            else -> {
-                                viewModel.globalFavoritesState.setSelectedSourceTags(selectedSourceTags + tag)
-                            }
-                        }
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                KototoroFavoritesHostRoute(
+                FavoritesTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    entityOrganizeResultSource = entityOrganizeResultSource,
+                    mainActivity = mainActivity,
                     appRouter = appRouter,
                     contentPadding = contentPadding,
-                    refreshGeneration = entityOrganizeRefreshGeneration,
-                    consumeOrganizeMessages = false,
-                    onOpenEntityOrganize = { selectedIds ->
-                        appRouter.openEntityOrganizeSettings(selectedIds)
-                    },
-                    onNavigateToDetails = { content, sharedKey ->
-                        navigateToDetailsWithContent(content, sharedKey)
-                    },
-                    onNavigateToEntityDetails = { origin, sharedKey ->
-                        navigateToDetailsWithOrigin(origin, sharedKey)
-                    },
-                    registerFilterCallback = false,
-                    onTopBarOverrideChanged = {
-                        onExploreSourceSelectionTopBarChanged(
-                            RouteScopedTopBarOverrideState(TOP_BAR_OWNER_FAVORITES, it),
-                        )
-                    },
-                    viewModel = viewModel,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
-            }
             }
         }
         composable<EntityOrganizeRoute> { backStackEntry ->
@@ -954,490 +424,77 @@ fun AppNavGraph(
         }
         composable<ExploreRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
-            val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
-            val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
-
-            DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        exploreViewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        exploreViewModel.setSelectedSourceTags(
-                            when {
-                                tag == null -> emptySet()
-                                tag in selectedSourceTags -> selectedSourceTags - tag
-                                else -> selectedSourceTags + tag
-                            }
-                        )
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute(
+                BrowseTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    mainActivity = mainActivity,
                     appRouter = appRouter,
                     contentPadding = contentPadding,
-                    exploreViewModel = exploreViewModel,
-                    onSourceSelectionTopBarChanged = {
-                        onExploreSourceSelectionTopBarChanged(
-                            RouteScopedTopBarOverrideState(TOP_BAR_OWNER_EXPLORE, it),
-                        )
-                    },
-                    onNavigateToDetails = navigateToDetailsWithOrigin,
+                    mainNavigator = mainNavigator,
+                    ownerRoute = TOP_BAR_OWNER_EXPLORE,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
-            }
             }
         }
         composable<FeedRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>()
-            val context = LocalContext.current
-            val items by viewModel.content.collectAsStateWithLifecycle()
-            val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-            val categories by viewModel.categories.collectAsStateWithLifecycle()
-            val selectedCategoryId by viewModel.currentCategoryId.collectAsStateWithLifecycle()
-            val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
-            val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
-
-            val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-            val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-
-            DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        viewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        viewModel.setSelectedSourceTags(
-                            when {
-                                tag == null -> emptySet()
-                                tag in selectedSourceTags -> selectedSourceTags - tag
-                                else -> selectedSourceTags + tag
-                            }
-                        )
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            androidx.compose.runtime.DisposableEffect(viewModel, activity, lifecycleOwner) {
-                val menuProvider = org.skepsun.kototoro.tracker.ui.feed.FeedMenuProvider(
-                    snackbarHost = activity?.window?.decorView?.rootView ?: android.view.View(activity),
-                    viewModel = viewModel
-                )
-                activity?.addMenuProvider(menuProvider, lifecycleOwner, androidx.lifecycle.Lifecycle.State.RESUMED)
-                onDispose {
-                    activity?.removeMenuProvider(menuProvider)
-                }
-            }
-
-            androidx.compose.runtime.LaunchedEffect(viewModel.onError) {
-                val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
-                val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
-                val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver) { resolved ->
-                    if (resolved) viewModel.update()
-                }
-                viewModel.onError.collect { event: org.skepsun.kototoro.core.util.Event<Throwable>? ->
-                    event?.consume(observer)
-                }
-            }
-
-            val feedCategoryTabsState = remember(categories, selectedCategoryId) {
-                CompactTabsTopBarOverrideState(
-                    items = categories.map { category ->
-                        CompactTopBarTabItem(
-                            id = category.id,
-                            title = if (category.id == NO_ID) {
-                                context.getString(org.skepsun.kototoro.R.string.all_favourites)
-                            } else {
-                                category.title
-                            },
-                        )
-                    },
-                    selectedItemId = selectedCategoryId,
-                    onItemSelected = { categoryId ->
-                        viewModel.selectCategory(if (selectedCategoryId == categoryId) NO_ID else categoryId)
-                    },
-                )
-            }
-
-            SideEffect {
-                onExploreSourceSelectionTopBarChanged(
-                    RouteScopedTopBarOverrideState(
-                        TOP_BAR_OWNER_FEED,
-                        LayeredTopBarOverrideState(
-                            tabsState = feedCategoryTabsState,
-                        ),
-                    ),
-                )
-            }
-
-            DisposableEffect(Unit) {
-                onDispose {
-                    onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(TOP_BAR_OWNER_FEED, null))
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.tracker.ui.feed.compose.FeedScreen(
+                FeedTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    mainActivity = mainActivity,
+                    appRouter = appRouter,
                     contentPadding = contentPadding,
-                    items = items,
-                    isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.update() },
-                    onLoadMore = { viewModel.requestMoreItems() },
-                    onFeedItemClick = { item, coverBounds ->
-                        viewModel.onItemClick(item)
-                        val content = item.toContentWithOverride()
-                        val sharedElementKey = contentCoverSharedKey(
-                            item.manga.source.name,
-                            item.imageUrl.orEmpty(),
-                            instanceKey = "feed_${item.id}",
-                        )
-                        if (item.entityId != null) {
-                            navigateToDetailsWithOrigin(
-                                org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                                    entityId = item.entityId,
-                                    preferredLocalMangaId = item.preferredLocalMangaId ?: content.id,
-                                    initialProjectionLocalMangaId = content.id,
-                                ),
-                                sharedElementKey,
-                            )
-                        } else {
-                            navigateToDetailsWithContent(content, sharedElementKey)
-                        }
-                    },
-                    onUpdatedContentItemClick = { contentItem, coverBounds ->
-                        val content = contentItem.model.toContentWithOverride()
-                        val sharedElementKey = contentCoverSharedKey(
-                            contentItem.model.manga.source.name,
-                            contentItem.model.coverUrl.orEmpty(),
-                            instanceKey = "feed_updated_${contentItem.groupKey}",
-                        )
-                        when {
-                            contentItem.entityId != null -> navigateToDetailsWithOrigin(
-                                org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                                    entityId = contentItem.entityId,
-                                    preferredLocalMangaId = contentItem.preferredLocalMangaId ?: content.id,
-                                    initialProjectionLocalMangaId = content.id,
-                                ),
-                                sharedElementKey,
-                            )
-                            else -> navigateToDetailsWithContent(content, sharedElementKey)
-                        }
-                    },
-                    onUpdatedContentMoreClick = {
-                        navController.navigate(UpdatedRoute) {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    categories = categories,
-                    selectedCategoryId = selectedCategoryId,
-                    onCategorySelected = viewModel::selectCategory,
-                    showCategoryFilterInline = false,
+                    mainNavigator = mainNavigator,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
-            }
             }
         }
         composable<LocalRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
-            val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.activity.ComponentActivity
-            val availableTags by viewModel.filterAvailableTags.collectAsStateWithLifecycle(initialValue = emptySet())
-            val selectedTagKeys by viewModel.filterSelectedTagKeys.collectAsStateWithLifecycle(initialValue = emptySet())
-            DisposableEffect(appRouter) {
-                onContextualMenuActionsChanged(
-                    RouteScopedTopBarMenuActions(
-                        ownerRoute = TOP_BAR_OWNER_LOCAL,
-                        actions = buildList {
-                            add(
-                                KototoroTopBarMenuAction(org.skepsun.kototoro.R.string._import) {
-                                    appRouter.showImportDialog()
-                                },
-                            )
-                            if (appRouter.isFilterSupported()) {
-                                add(
-                                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.filter) {
-                                        appRouter.showFilterSheet()
-                                    },
-                                )
-                            }
-                            add(
-                                KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.directories) {
-                                    appRouter.openDirectoriesSettings()
-                                },
-                            )
-                        },
-                    ),
-                )
-                onDispose {
-                    onContextualMenuActionsChanged(
-                        RouteScopedTopBarMenuActions(
-                            ownerRoute = TOP_BAR_OWNER_LOCAL,
-                            actions = emptyList(),
-                        ),
-                    )
-                }
-            }
-            val localFilterRailState = remember(availableTags, selectedTagKeys) {
-                val items = availableTags.map { tag ->
-                    CompactFilterRailItem(
-                        id = "local_tag_${tag.key}",
-                        title = tag.title,
-                        isSelected = tag.key in selectedTagKeys,
-                        onClick = { viewModel.toggleFilterTag(tag) },
-                    )
-                }.selectedFirst()
-                CompactFilterRailOverrideState(items = items)
-            }
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
-                    viewModel = viewModel,
-                    contentPadding = contentPadding,
+                LocalTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
                     appRouter = appRouter,
-                    pullRefreshEnabled = false,
-                    onTopBarOverrideChanged = {
-                        onExploreSourceSelectionTopBarChanged(
-                            RouteScopedTopBarOverrideState(
-                                TOP_BAR_OWNER_LOCAL,
-                                LayeredTopBarOverrideState(
-                                    filterRailState = localFilterRailState,
-                                    contextualOverrideState = it,
-                                ),
-                            ),
-                        )
-                    },
-                    showRemoveOption = true,
-                    sharedElementInstanceKey = "main_local",
-                    isContentTypeFilterVisible = true,
-                    onNavigateToDetails = { _, content, sharedKey ->
-                        navigateToDetailsWithContent(content, sharedKey)
-                    },
-                    isSourceTagFilterVisible = false,
-                    onRemoveSelection = { ids ->
-                        if (activity != null) {
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                                .setTitle(org.skepsun.kototoro.R.string.delete_manga)
-                                .setMessage(org.skepsun.kototoro.R.string.text_delete_local_manga_batch)
-                                .setPositiveButton(org.skepsun.kototoro.R.string.delete) { _, _ -> viewModel.delete(ids) }
-                                .setNegativeButton(android.R.string.cancel, null)
-                                .show()
-                        }
-                    },
-                    onShareSelection = { ids ->
-                        if (activity != null) {
-                            val files = viewModel.content.value.filter { it is org.skepsun.kototoro.list.ui.model.ContentListModel && it.id in ids }.mapNotNull { (it as? org.skepsun.kototoro.list.ui.model.ContentListModel)?.manga?.url?.let { url -> java.io.File(android.net.Uri.parse(url).path ?: "") } }
-                            org.skepsun.kototoro.core.util.ShareHelper(activity).shareCbz(files)
-                        }
-                    },
-                    onEmptyActionClick = { appRouter.showImportDialog() },
-                    listHeader = null,
+                    contentPadding = contentPadding,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
                 )
-            }
             }
         }
         composable<SuggestionsRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>()
-            var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
-            var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
-
-            SideEffect {
-                onExploreSourceSelectionTopBarChanged(
-                    RouteScopedTopBarOverrideState(
-                        TOP_BAR_OWNER_SUGGESTIONS,
-                        LayeredTopBarOverrideState(
-                            filterRailState = suggestionsFilterRailOverride,
-                            contextualOverrideState = suggestionsContextualTopBarOverride,
-                        ),
-                    ),
-                )
-            }
-
-            DisposableEffect(Unit) {
-                onDispose {
-                    onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(TOP_BAR_OWNER_SUGGESTIONS, null))
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
-                    viewModel = viewModel,
-                    contentPadding = contentPadding,
+                SuggestionsTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
                     appRouter = appRouter,
-                    onTopBarOverrideChanged = { suggestionsContextualTopBarOverride = it },
-                    showRemoveOption = false,
-                    sharedElementInstanceKey = "main_suggestions",
-                    isContentTypeFilterVisible = true,
-                    isSourceTagFilterVisible = true,
-                    onNavigateToDetails = { _, content, sharedKey ->
-                        navigateToDetailsWithContent(content, sharedKey)
-                    },
-                    onFilterRailOverrideChanged = { suggestionsFilterRailOverride = it },
-                    onAddMenuProvider = { act, _, _ ->
-                        object : androidx.core.view.MenuProvider {
-                            override fun onCreateMenu(menu: android.view.Menu, menuInflater: android.view.MenuInflater) {
-                                menuInflater.inflate(org.skepsun.kototoro.R.menu.opt_suggestions, menu)
-                                menuInflater.inflate(org.skepsun.kototoro.R.menu.opt_list, menu)
-                            }
-                            override fun onPrepareMenu(menu: android.view.Menu) {
-                                menu.findItem(org.skepsun.kototoro.R.id.action_settings_suggestions)?.isVisible = true
-                            }
-                            override fun onMenuItemSelected(menuItem: android.view.MenuItem): Boolean = when (menuItem.itemId) {
-                                org.skepsun.kototoro.R.id.action_update -> {
-                                    viewModel.updateSuggestions()
-                                    com.google.android.material.snackbar.Snackbar.make(act.window.decorView.rootView, org.skepsun.kototoro.R.string.suggestions_updating, com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
-                                    true
-                                }
-                                org.skepsun.kototoro.R.id.action_list_mode -> {
-                                    appRouter.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.Suggestions)
-                                    true
-                                }
-                                org.skepsun.kototoro.R.id.action_settings_suggestions -> {
-                                    appRouter.openSuggestionsSettings()
-                                    true
-                                }
-                                else -> false
-                            }
-                        }
-                    }
+                    contentPadding = contentPadding,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
                 )
-            }
             }
         }
         composable<BookmarksRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel>()
-            val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
-            val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
-
-            DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-                val callback = object : SearchBarFilterViewController.Callback {
-                    override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
-
-                    override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                        viewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
-                    }
-
-                    override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = selectedSourceTags
-
-                    override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                        viewModel.setSelectedSourceTags(
-                            when {
-                                tag == null -> emptySet()
-                                tag in selectedSourceTags -> selectedSourceTags - tag
-                                else -> selectedSourceTags + tag
-                            },
-                        )
-                    }
-                }
-                mainActivity?.setActiveFilterCallback(callback)
-                onDispose {
-                    mainActivity?.clearActiveFilterCallback(callback)
-                }
-            }
-
-            org.skepsun.kototoro.bookmarks.ui.compose.AppBookmarksRoute(
-                viewModel = viewModel,
-                contentPadding = contentPadding,
-                appRouter = appRouter,
-                pageSaveHelper = requireNotNull(pageSaveHelper) {
-                    "BookmarksRoute requires a pre-registered PageSaveHelper"
-                },
-            )
+                BookmarksTopLevelRouteContent(
+                    mainActivity = mainActivity,
+                    appRouter = appRouter,
+                    contentPadding = contentPadding,
+                    pageSaveHelper = requireNotNull(pageSaveHelper) {
+                        "BookmarksRoute requires a pre-registered PageSaveHelper"
+                    },
+                )
             }
         }
         composable<UpdatedRoute> {
             MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-            val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>()
-            val items by viewModel.content.collectAsStateWithLifecycle()
-            val updatedCategoryTabsState = remember(items, activity) {
-                buildFavoriteCategoryTabsState(
-                    items = items,
-                    allTitle = activity.getString(org.skepsun.kototoro.R.string.all_favourites),
-                    onClearSelection = { viewModel.clearFilter() },
-                    onCategorySelected = { option ->
-                        viewModel.clearFilter()
-                        viewModel.setFilterOption(option, true)
-                    },
-                )
-            }
-            var updatedContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
-
-            SideEffect {
-                onExploreSourceSelectionTopBarChanged(
-                    RouteScopedTopBarOverrideState(
-                        TOP_BAR_OWNER_UPDATED,
-                        LayeredTopBarOverrideState(
-                            tabsState = updatedCategoryTabsState,
-                            contextualOverrideState = updatedContextualTopBarOverride,
-                        ),
-                    ),
-                )
-            }
-
-            DisposableEffect(Unit) {
-                onDispose {
-                    onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(TOP_BAR_OWNER_UPDATED, null))
-                }
-            }
-
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
-                    viewModel = viewModel,
-                    contentPadding = contentPadding,
+                UpdatedTopLevelRouteContent(
+                    animatedVisibilityScope = this@composable,
+                    activity = activity,
                     appRouter = appRouter,
-                    onTopBarOverrideChanged = { updatedContextualTopBarOverride = it },
-                    showRemoveOption = true,
-                    sharedElementInstanceKey = "main_updated",
-                    isContentTypeFilterVisible = true,
-                    isSourceTagFilterVisible = true,
-                    onRemoveSelection = { ids -> viewModel.remove(ids) },
-                    onNavigateToDetails = { _, content, sharedKey ->
-                        navigateToDetailsWithContent(content, sharedKey)
-                    },
-                    onFilterRailOverrideChanged = {},
-                    onAddMenuProvider = { _, _, _ ->
-                        object : androidx.core.view.MenuProvider {
-                            override fun onCreateMenu(menu: android.view.Menu, menuInflater: android.view.MenuInflater) {
-                                menuInflater.inflate(org.skepsun.kototoro.R.menu.opt_list, menu)
-                            }
-                            override fun onMenuItemSelected(menuItem: android.view.MenuItem): Boolean = when (menuItem.itemId) {
-                                org.skepsun.kototoro.R.id.action_refresh -> {
-                                    viewModel.onRefresh()
-                                    true
-                                }
-                                org.skepsun.kototoro.R.id.action_list_mode -> {
-                                    appRouter.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.Updated)
-                                    true
-                                }
-                                else -> false
-                            }
-                        }
-                    },
-                    showQuickFilterInline = false,
+                    contentPadding = contentPadding,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
                 )
-            }
             }
         }
         composable<SearchRoute> {
@@ -1451,9 +508,13 @@ fun AppNavGraph(
                 onPickContent = { },
                 onOpenSourceResults = { item ->
                     if (item.listFilter == null) {
-                        appRouter.openSearch(item.source, viewModel.query)
+                        mainNavigator.openContentList(
+                            source = item.source,
+                            filter = ContentListFilter(query = viewModel.query),
+                            sortOrder = null,
+                        )
                     } else {
-                        appRouter.openList(item.source, item.listFilter, item.sortOrder)
+                        mainNavigator.openContentList(item.source, item.listFilter, item.sortOrder)
                     }
                 },
                 onManageLanguagePresets = appRouter::openSourcePresets,
@@ -1482,6 +543,52 @@ fun AppNavGraph(
                 },
                 isPickMode = false,
             )
+        }
+
+        composable<ContentListRoute>(
+            enterTransition = {
+                slideIntoContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing))
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
+            },
+            popEnterTransition = {
+                slideIntoContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
+            },
+        ) { backStackEntry ->
+            val route = backStackEntry.toRoute<ContentListRoute>()
+            val pendingFilter = remember(route.sourceName) { PendingContentListNavigation.consumeFilter() }
+            val pendingSortOrder = remember(route.sourceName) { PendingContentListNavigation.consumeSortOrder() }
+            val viewModel = hiltViewModel<RemoteListViewModel>()
+            LaunchedEffect(viewModel, pendingFilter, pendingSortOrder) {
+                pendingSortOrder?.let(viewModel.filterCoordinator::setSortOrder)
+                pendingFilter?.let(viewModel.filterCoordinator::setAdjusted)
+            }
+            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                AppSearchContentListRoute(
+                    appRouter = appRouter,
+                    onBackClick = { mainNavigator.pop() },
+                    onOpenDetails = { content, sharedElementKey ->
+                        navigateToDetailsWithContent(content, sharedElementKey)
+                    },
+                    viewModel = viewModel,
+                )
+            }
         }
 
         composable<DetailsRoute>(
@@ -1545,7 +652,7 @@ fun AppNavGraph(
                     }
                 }
                 BackHandler {
-                    navController.popBackStack()
+                    mainNavigator.pop()
                 }
                 DetailsScreen(
                     viewModel = detailsViewModel,
@@ -1555,7 +662,7 @@ fun AppNavGraph(
                     appRouter = appRouter,
                     pageSaveHelper = effectivePageSaveHelper,
                     onBackClick = {
-                        navController.popBackStack()
+                        mainNavigator.pop()
                     },
                     sharedElementKey = sharedKey,
                     onActionClick = { action ->
@@ -1567,11 +674,1441 @@ fun AppNavGraph(
                             coroutineScope = detailsCoroutineScope,
                             snackbarHost = rootView,
                             overrideEditLauncher = overrideEditLauncher,
+                            onOpenSourceList = { source, filter, sortOrder ->
+                                mainNavigator.openContentList(source, filter, sortOrder)
+                            },
                             onFinish = { navController.popBackStack() },
                         )
                     },
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun MainShellRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    backStackEntry: NavBackStackEntry,
+    navController: NavHostController,
+    activity: FragmentActivity,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    rootView: android.view.View,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    landscapeStartPadding: androidx.compose.ui.unit.Dp,
+    bottomBarOffsetPx: Float,
+    bottomBarHeightPx: Int,
+    pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper?,
+    isLandscapeNavigation: Boolean,
+    mainNavigator: MainNavigator,
+    mainNavState: MainNavState,
+    mainShellChrome: @Composable (BoxScope.() -> Unit),
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
+    onOpenSearch: (SearchNavigationRequest) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val hazeState = LocalHazeState.current
+    val useRuntimeHaze = (LocalGlassPrefs.current?.isGlassEffectEnabled == true) && supportsRuntimeHaze()
+    val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
+        SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
+    }
+    MainTopLevelNavDisplay(
+        navState = mainNavState,
+        modifier = Modifier.fillMaxSize(),
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScopeOverride = animatedVisibilityScope,
+    ) { key ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+            ) {
+                MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
+                    MainShellTopLevelEntryContent(
+                        key = key,
+                        navController = navController,
+                        activity = activity,
+                        mainActivity = mainActivity,
+                        appRouter = appRouter,
+                        rootView = rootView,
+                        contentPadding = contentPadding,
+                        bottomBarOffsetPx = bottomBarOffsetPx,
+                        bottomBarHeightPx = bottomBarHeightPx,
+                        pageSaveHelper = pageSaveHelper,
+                        isLandscapeNavigation = isLandscapeNavigation,
+                        mainNavigator = mainNavigator,
+                        entityOrganizeResultSource = entityOrganizeResultSource,
+                        onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                        onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                        onOpenSearch = onOpenSearch,
+                        navigateToDetailsWithContent = navigateToDetailsWithContent,
+                        navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                    )
+                }
+            }
+            mainShellChrome()
+        }
+    }
+}
+
+@Composable
+private fun MainShellTopLevelEntryContent(
+    key: TopLevelNavKey,
+    navController: NavHostController,
+    activity: FragmentActivity,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    rootView: android.view.View,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    bottomBarOffsetPx: Float,
+    bottomBarHeightPx: Int,
+    pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper?,
+    isLandscapeNavigation: Boolean,
+    mainNavigator: MainNavigator,
+    entityOrganizeResultSource: FavoritesEntityOrganizeResultSource,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
+    onOpenSearch: (SearchNavigationRequest) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    val animatedVisibilityScope = checkNotNull(LocalNavAnimatedVisibilityScope.current) {
+        "MainShellTopLevelEntryContent requires LocalNavAnimatedVisibilityScope"
+    }
+    when (key) {
+        org.skepsun.kototoro.main.ui.navigation3.HomeNavKey -> HomeTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            navController = navController,
+            activity = activity,
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            rootView = rootView,
+            contentPadding = contentPadding,
+            mainNavigator = mainNavigator,
+            onOpenSearch = onOpenSearch,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey -> BrowseTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            mainNavigator = mainNavigator,
+            ownerRoute = TOP_BAR_OWNER_DISCOVER,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey -> HistoryTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            activity = activity,
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            rootView = rootView,
+            contentPadding = contentPadding,
+            bottomBarOffsetPx = bottomBarOffsetPx,
+            bottomBarHeightPx = bottomBarHeightPx,
+            isLandscapeNavigation = isLandscapeNavigation,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey -> FavoritesTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            entityOrganizeResultSource = entityOrganizeResultSource,
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.ExploreNavKey -> BrowseTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            mainNavigator = mainNavigator,
+            ownerRoute = TOP_BAR_OWNER_EXPLORE,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.FeedNavKey -> FeedTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            mainNavigator = mainNavigator,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.LocalNavKey -> LocalTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey -> SuggestionsTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+        )
+        org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey -> BookmarksTopLevelRouteContent(
+            mainActivity = mainActivity,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            pageSaveHelper = requireNotNull(pageSaveHelper) {
+                "BookmarksRoute requires a pre-registered PageSaveHelper"
+            },
+        )
+        org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey -> UpdatedTopLevelRouteContent(
+            animatedVisibilityScope = animatedVisibilityScope,
+            activity = activity,
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            navigateToDetailsWithContent = navigateToDetailsWithContent,
+        )
+    }
+}
+
+@Composable
+internal fun HomeTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    navController: NavHostController,
+    activity: FragmentActivity,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    rootView: android.view.View,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    mainNavigator: MainNavigator,
+    onOpenSearch: (SearchNavigationRequest) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<HomeViewModel>()
+    val state by viewModel.summaryState.collectAsStateWithLifecycle()
+    val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel.onOpenContent, navigateToDetailsWithContent) {
+        viewModel.onOpenContent.collect { event ->
+            event?.consume { contentEvent ->
+                navigateToDetailsWithContent(contentEvent.content, null)
+            }
+        }
+    }
+
+    LaunchedEffect(viewModel.onActionDone) {
+        val observer = org.skepsun.kototoro.core.ui.util.ReversibleActionObserver(rootView)
+        viewModel.onActionDone.collect { event ->
+            event?.consume(observer)
+        }
+    }
+
+    LaunchedEffect(viewModel.onError, activity) {
+        val host = activity.window.decorView.rootView
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
+        viewModel.onError.collect { event ->
+            event?.consume(observer)
+        }
+    }
+
+    DisposableEffect(mainActivity, viewModel, state.selectedTab, state.selectedSourceTags) {
+        val callback = object : SearchBarFilterViewController.Callback {
+            override fun getSelectedContentType(): BrowseGroupTab = when (state.selectedTab) {
+                org.skepsun.kototoro.home.ui.HomeContentTab.MANGA -> BrowseGroupTab.Content
+                org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL -> BrowseGroupTab.Novel
+                org.skepsun.kototoro.home.ui.HomeContentTab.VIDEO -> BrowseGroupTab.Video
+                null -> BrowseGroupTab.All
+            }
+
+            override fun onContentTypeSelected(tab: BrowseGroupTab) {
+                viewModel.setSelectedTab(
+                    when (if (getSelectedContentType() == tab) BrowseGroupTab.All else tab) {
+                        BrowseGroupTab.Content -> org.skepsun.kototoro.home.ui.HomeContentTab.MANGA
+                        BrowseGroupTab.Novel -> org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL
+                        BrowseGroupTab.Video -> org.skepsun.kototoro.home.ui.HomeContentTab.VIDEO
+                        else -> null
+                    },
+                )
+            }
+
+            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
+                state.selectedSourceTags
+
+            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
+                val current = state.selectedSourceTags
+                viewModel.setSelectedSourceTags(
+                    when {
+                        tag == null -> emptySet()
+                        tag in current -> current - tag
+                        else -> current + tag
+                    },
+                )
+            }
+        }
+        mainActivity?.setActiveFilterCallback(callback)
+        onDispose {
+            mainActivity?.clearActiveFilterCallback(callback)
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        val onHomeContentClick = remember(navigateToDetailsWithContent) {
+            { content: Content, _: Rect?, sharedElementKey: String? ->
+                navigateToDetailsWithContent(content, sharedElementKey)
+            }
+        }
+        val markReturnHomeOnBack = remember(navController) {
+            {
+                navController.currentBackStackEntry
+                    ?.savedStateHandle
+                    ?.set(RETURN_HOME_ON_BACK_KEY, true)
+                Unit
+            }
+        }
+        val onHomeSettingsClick = remember(appRouter) { { appRouter.openSettings() } }
+        val onHomeReaderSettingsClick = remember(appRouter) { { appRouter.openReaderSettings() } }
+        val onHomeViewAllRecentClick = remember(mainNavigator, markReturnHomeOnBack) {
+            {
+                mainNavigator.openTopLevel(HistoryNavKey)
+                markReturnHomeOnBack()
+            }
+        }
+        val onHomeViewAllUpdatesClick = remember(mainNavigator, markReturnHomeOnBack) {
+            {
+                mainNavigator.openTopLevel(UpdatedNavKey)
+                markReturnHomeOnBack()
+            }
+        }
+        val onHomeViewAllRecommendationsClick = remember(mainNavigator, markReturnHomeOnBack) {
+            {
+                mainNavigator.openTopLevel(SuggestionsNavKey)
+                markReturnHomeOnBack()
+            }
+        }
+        val onHomeRecentSearchClick = remember(onOpenSearch) {
+            { query: String ->
+                onOpenSearch(
+                    SearchNavigationRequest(
+                        query = query,
+                        kind = org.skepsun.kototoro.search.domain.SearchKind.SIMPLE,
+                        sourceTypes = org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES,
+                        contentKinds = org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS,
+                        advancedQuery = null,
+                        pinnedOnly = false,
+                        hideEmpty = false,
+                        requestId = System.nanoTime(),
+                    ),
+                )
+            }
+        }
+        val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
+        val onHomeLibraryOpenClick = remember(mainNavigator, markReturnHomeOnBack) {
+            {
+                mainNavigator.openTopLevel(FavoritesNavKey)
+                markReturnHomeOnBack()
+            }
+        }
+        val onHomeBookmarksClick = remember(mainNavigator, markReturnHomeOnBack) {
+            {
+                mainNavigator.openTopLevel(BookmarksNavKey)
+                markReturnHomeOnBack()
+            }
+        }
+        val onHomeLocalClick = remember(mainNavigator, markReturnHomeOnBack) {
+            {
+                mainNavigator.openTopLevel(LocalNavKey)
+                markReturnHomeOnBack()
+            }
+        }
+        val onHomeDownloadsClick = remember(appRouter) { { appRouter.openDownloads() } }
+        val onHomeRandomClick = remember(viewModel) { { viewModel.openRandom() } }
+        val onHomeAutoTranslateClick = remember(appRouter) { { appRouter.openTranslationSettings() } }
+        val homeActions = remember(
+            onHomeSettingsClick,
+            onHomeReaderSettingsClick,
+            onHomeViewAllRecentClick,
+            onHomeViewAllUpdatesClick,
+            onHomeViewAllRecommendationsClick,
+            onHomeRecentSearchClick,
+            onHomeManageSourcesClick,
+            onHomeLibraryOpenClick,
+            onHomeBookmarksClick,
+            onHomeLocalClick,
+            onHomeDownloadsClick,
+            onHomeRandomClick,
+            onHomeAutoTranslateClick,
+        ) {
+            HomeScreenActions(
+                onSettingsClick = onHomeSettingsClick,
+                onReaderSettingsClick = onHomeReaderSettingsClick,
+                onViewAllRecentClick = onHomeViewAllRecentClick,
+                onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
+                onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
+                onRecentSearchClick = onHomeRecentSearchClick,
+                onManageSourcesClick = onHomeManageSourcesClick,
+                onLibraryOpenClick = onHomeLibraryOpenClick,
+                onBookmarksClick = onHomeBookmarksClick,
+                onLocalClick = onHomeLocalClick,
+                onDownloadsClick = onHomeDownloadsClick,
+                onRandomClick = onHomeRandomClick,
+                onAutoTranslateClick = onHomeAutoTranslateClick,
+            )
+        }
+        HomeScreen(
+            contentPadding = contentPadding,
+            state = state,
+            onContentClick = onHomeContentClick,
+            actions = homeActions,
+            isRandomLoading = isRandomLoading,
+        )
+    }
+}
+
+@Composable
+internal fun BrowseTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    mainNavigator: MainNavigator,
+    ownerRoute: String,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
+    val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
+    val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
+
+    DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
+        val callback = object : SearchBarFilterViewController.Callback {
+            override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
+
+            override fun onContentTypeSelected(tab: BrowseGroupTab) {
+                exploreViewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
+            }
+
+            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
+                selectedSourceTags
+
+            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
+                exploreViewModel.setSelectedSourceTags(
+                    when {
+                        tag == null -> emptySet()
+                        tag in selectedSourceTags -> selectedSourceTags - tag
+                        else -> selectedSourceTags + tag
+                    },
+                )
+            }
+        }
+        mainActivity?.setActiveFilterCallback(callback)
+        onDispose {
+            mainActivity?.clearActiveFilterCallback(callback)
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        KototoroExploreHostRoute(
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            exploreViewModel = exploreViewModel,
+            onSourceSelectionTopBarChanged = {
+                onExploreSourceSelectionTopBarChanged(
+                    RouteScopedTopBarOverrideState(ownerRoute, it),
+                )
+            },
+            onNavigateToDetails = navigateToDetailsWithOrigin,
+            onOpenSourceList = { source ->
+                mainNavigator.openContentList(source, null, null)
+            },
+        )
+    }
+}
+
+@Composable
+internal fun FeedTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    mainNavigator: MainNavigator,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>()
+    val context = LocalContext.current
+    val items by viewModel.content.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val selectedCategoryId by viewModel.currentCategoryId.collectAsStateWithLifecycle()
+    val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
+    val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
+    val activity = LocalContext.current as? androidx.activity.ComponentActivity
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+        val callback = object : SearchBarFilterViewController.Callback {
+            override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
+
+            override fun onContentTypeSelected(tab: BrowseGroupTab) {
+                viewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
+            }
+
+            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
+                selectedSourceTags
+
+            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
+                viewModel.setSelectedSourceTags(
+                    when {
+                        tag == null -> emptySet()
+                        tag in selectedSourceTags -> selectedSourceTags - tag
+                        else -> selectedSourceTags + tag
+                    },
+                )
+            }
+        }
+        mainActivity?.setActiveFilterCallback(callback)
+        onDispose {
+            mainActivity?.clearActiveFilterCallback(callback)
+        }
+    }
+
+    DisposableEffect(viewModel, activity, lifecycleOwner) {
+        val menuProvider = org.skepsun.kototoro.tracker.ui.feed.FeedMenuProvider(
+            snackbarHost = activity?.window?.decorView?.rootView ?: android.view.View(activity),
+            viewModel = viewModel,
+        )
+        activity?.addMenuProvider(menuProvider, lifecycleOwner, androidx.lifecycle.Lifecycle.State.RESUMED)
+        onDispose {
+            activity?.removeMenuProvider(menuProvider)
+        }
+    }
+
+    LaunchedEffect(viewModel.onError, activity) {
+        val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver) {
+            resolved -> if (resolved) viewModel.update()
+        }
+        viewModel.onError.collect { event: org.skepsun.kototoro.core.util.Event<Throwable>? ->
+            event?.consume(observer)
+        }
+    }
+
+    val feedCategoryTabsState = remember(categories, selectedCategoryId) {
+        CompactTabsTopBarOverrideState(
+            items = categories.map { category ->
+                CompactTopBarTabItem(
+                    id = category.id,
+                    title = if (category.id == NO_ID) {
+                        context.getString(org.skepsun.kototoro.R.string.all_favourites)
+                    } else {
+                        category.title
+                    },
+                )
+            },
+            selectedItemId = selectedCategoryId,
+            onItemSelected = { categoryId ->
+                viewModel.selectCategory(if (selectedCategoryId == categoryId) NO_ID else categoryId)
+            },
+        )
+    }
+
+    SideEffect {
+        onExploreSourceSelectionTopBarChanged(
+            RouteScopedTopBarOverrideState(
+                TOP_BAR_OWNER_FEED,
+                LayeredTopBarOverrideState(
+                    tabsState = feedCategoryTabsState,
+                ),
+            ),
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(TOP_BAR_OWNER_FEED, null))
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        org.skepsun.kototoro.tracker.ui.feed.compose.FeedScreen(
+            contentPadding = contentPadding,
+            items = items,
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.update() },
+            onLoadMore = { viewModel.requestMoreItems() },
+            onFeedItemClick = { item, _ ->
+                viewModel.onItemClick(item)
+                val content = item.toContentWithOverride()
+                val sharedElementKey = contentCoverSharedKey(
+                    item.manga.source.name,
+                    item.imageUrl.orEmpty(),
+                    instanceKey = "feed_${item.id}",
+                )
+                if (item.entityId != null) {
+                    navigateToDetailsWithOrigin(
+                        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                            entityId = item.entityId,
+                            preferredLocalMangaId = item.preferredLocalMangaId ?: content.id,
+                            initialProjectionLocalMangaId = content.id,
+                        ),
+                        sharedElementKey,
+                    )
+                } else {
+                    navigateToDetailsWithContent(content, sharedElementKey)
+                }
+            },
+            onUpdatedContentItemClick = { contentItem, _ ->
+                val content = contentItem.model.toContentWithOverride()
+                val sharedElementKey = contentCoverSharedKey(
+                    contentItem.model.manga.source.name,
+                    contentItem.model.coverUrl.orEmpty(),
+                    instanceKey = "feed_updated_${contentItem.groupKey}",
+                )
+                when {
+                    contentItem.entityId != null -> navigateToDetailsWithOrigin(
+                        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                            entityId = contentItem.entityId,
+                            preferredLocalMangaId = contentItem.preferredLocalMangaId ?: content.id,
+                            initialProjectionLocalMangaId = content.id,
+                        ),
+                        sharedElementKey,
+                    )
+                    else -> navigateToDetailsWithContent(content, sharedElementKey)
+                }
+            },
+            onUpdatedContentMoreClick = {
+                mainNavigator.openTopLevel(UpdatedNavKey)
+            },
+            categories = categories,
+            selectedCategoryId = selectedCategoryId,
+            onCategorySelected = viewModel::selectCategory,
+            showCategoryFilterInline = false,
+        )
+    }
+}
+
+@Composable
+internal fun LocalTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
+    val activity = LocalContext.current as? androidx.activity.ComponentActivity
+    val availableTags by viewModel.filterAvailableTags.collectAsStateWithLifecycle(initialValue = emptySet())
+    val selectedTagKeys by viewModel.filterSelectedTagKeys.collectAsStateWithLifecycle(initialValue = emptySet())
+
+    DisposableEffect(appRouter) {
+        onContextualMenuActionsChanged(
+            RouteScopedTopBarMenuActions(
+                ownerRoute = TOP_BAR_OWNER_LOCAL,
+                actions = buildList {
+                    add(
+                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string._import) {
+                            appRouter.showImportDialog()
+                        },
+                    )
+                    if (appRouter.isFilterSupported()) {
+                        add(
+                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.filter) {
+                                appRouter.showFilterSheet()
+                            },
+                        )
+                    }
+                    add(
+                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.directories) {
+                            appRouter.openDirectoriesSettings()
+                        },
+                    )
+                },
+            ),
+        )
+        onDispose {
+            onContextualMenuActionsChanged(
+                RouteScopedTopBarMenuActions(
+                    ownerRoute = TOP_BAR_OWNER_LOCAL,
+                    actions = emptyList(),
+                ),
+            )
+        }
+    }
+
+    val localFilterRailState = remember(availableTags, selectedTagKeys) {
+        val items = availableTags.map { tag ->
+            CompactFilterRailItem(
+                id = "local_tag_${tag.key}",
+                title = tag.title,
+                isSelected = tag.key in selectedTagKeys,
+                onClick = { viewModel.toggleFilterTag(tag) },
+            )
+        }.selectedFirst()
+        CompactFilterRailOverrideState(items = items)
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
+            viewModel = viewModel,
+            contentPadding = contentPadding,
+            appRouter = appRouter,
+            pullRefreshEnabled = false,
+            onTopBarOverrideChanged = {
+                onExploreSourceSelectionTopBarChanged(
+                    RouteScopedTopBarOverrideState(
+                        TOP_BAR_OWNER_LOCAL,
+                        LayeredTopBarOverrideState(
+                            filterRailState = localFilterRailState,
+                            contextualOverrideState = it,
+                        ),
+                    ),
+                )
+            },
+            showRemoveOption = true,
+            sharedElementInstanceKey = "main_local",
+            isContentTypeFilterVisible = true,
+            onNavigateToDetails = { _, content, sharedKey ->
+                navigateToDetailsWithContent(content, sharedKey)
+            },
+            isSourceTagFilterVisible = false,
+            onRemoveSelection = { ids ->
+                if (activity != null) {
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                        .setTitle(org.skepsun.kototoro.R.string.delete_manga)
+                        .setMessage(org.skepsun.kototoro.R.string.text_delete_local_manga_batch)
+                        .setPositiveButton(org.skepsun.kototoro.R.string.delete) { _, _ -> viewModel.delete(ids) }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+            },
+            onShareSelection = { ids ->
+                if (activity != null) {
+                    val files = viewModel.content.value
+                        .filter {
+                            it is org.skepsun.kototoro.list.ui.model.ContentListModel && it.id in ids
+                        }
+                        .mapNotNull {
+                            (it as? org.skepsun.kototoro.list.ui.model.ContentListModel)
+                                ?.manga
+                                ?.url
+                                ?.let { url -> java.io.File(android.net.Uri.parse(url).path ?: "") }
+                        }
+                    org.skepsun.kototoro.core.util.ShareHelper(activity).shareCbz(files)
+                }
+            },
+            onEmptyActionClick = { appRouter.showImportDialog() },
+            listHeader = null,
+        )
+    }
+}
+
+@Composable
+internal fun SuggestionsTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>()
+    var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
+    var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
+
+    SideEffect {
+        onExploreSourceSelectionTopBarChanged(
+            RouteScopedTopBarOverrideState(
+                TOP_BAR_OWNER_SUGGESTIONS,
+                LayeredTopBarOverrideState(
+                    filterRailState = suggestionsFilterRailOverride,
+                    contextualOverrideState = suggestionsContextualTopBarOverride,
+                ),
+            ),
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(TOP_BAR_OWNER_SUGGESTIONS, null))
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
+            viewModel = viewModel,
+            contentPadding = contentPadding,
+            appRouter = appRouter,
+            onTopBarOverrideChanged = { suggestionsContextualTopBarOverride = it },
+            showRemoveOption = false,
+            sharedElementInstanceKey = "main_suggestions",
+            isContentTypeFilterVisible = true,
+            isSourceTagFilterVisible = true,
+            onNavigateToDetails = { _, content, sharedKey ->
+                navigateToDetailsWithContent(content, sharedKey)
+            },
+            onFilterRailOverrideChanged = { suggestionsFilterRailOverride = it },
+            onAddMenuProvider = { act, _, _ ->
+                object : androidx.core.view.MenuProvider {
+                    override fun onCreateMenu(menu: android.view.Menu, menuInflater: android.view.MenuInflater) {
+                        menuInflater.inflate(org.skepsun.kototoro.R.menu.opt_suggestions, menu)
+                        menuInflater.inflate(org.skepsun.kototoro.R.menu.opt_list, menu)
+                    }
+
+                    override fun onPrepareMenu(menu: android.view.Menu) {
+                        menu.findItem(org.skepsun.kototoro.R.id.action_settings_suggestions)?.isVisible = true
+                    }
+
+                    override fun onMenuItemSelected(menuItem: android.view.MenuItem): Boolean = when (menuItem.itemId) {
+                        org.skepsun.kototoro.R.id.action_update -> {
+                            viewModel.updateSuggestions()
+                            com.google.android.material.snackbar.Snackbar.make(
+                                act.window.decorView.rootView,
+                                org.skepsun.kototoro.R.string.suggestions_updating,
+                                com.google.android.material.snackbar.Snackbar.LENGTH_LONG,
+                            ).show()
+                            true
+                        }
+                        org.skepsun.kototoro.R.id.action_list_mode -> {
+                            appRouter.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.Suggestions)
+                            true
+                        }
+                        org.skepsun.kototoro.R.id.action_settings_suggestions -> {
+                            appRouter.openSuggestionsSettings()
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            },
+        )
+    }
+}
+
+@Composable
+internal fun BookmarksTopLevelRouteContent(
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel>()
+    val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
+    val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
+
+    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+        val callback = object : SearchBarFilterViewController.Callback {
+            override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
+
+            override fun onContentTypeSelected(tab: BrowseGroupTab) {
+                viewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
+            }
+
+            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
+                selectedSourceTags
+
+            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
+                viewModel.setSelectedSourceTags(
+                    when {
+                        tag == null -> emptySet()
+                        tag in selectedSourceTags -> selectedSourceTags - tag
+                        else -> selectedSourceTags + tag
+                    },
+                )
+            }
+        }
+        mainActivity?.setActiveFilterCallback(callback)
+        onDispose {
+            mainActivity?.clearActiveFilterCallback(callback)
+        }
+    }
+
+    org.skepsun.kototoro.bookmarks.ui.compose.AppBookmarksRoute(
+        viewModel = viewModel,
+        contentPadding = contentPadding,
+        appRouter = appRouter,
+        pageSaveHelper = pageSaveHelper,
+    )
+}
+
+@Composable
+internal fun UpdatedTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    activity: FragmentActivity,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>()
+    val items by viewModel.content.collectAsStateWithLifecycle()
+    val updatedCategoryTabsState = remember(items, activity) {
+        buildFavoriteCategoryTabsState(
+            items = items,
+            allTitle = activity.getString(org.skepsun.kototoro.R.string.all_favourites),
+            onClearSelection = { viewModel.clearFilter() },
+            onCategorySelected = { option ->
+                viewModel.clearFilter()
+                viewModel.setFilterOption(option, true)
+            },
+        )
+    }
+    var updatedContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
+
+    SideEffect {
+        onExploreSourceSelectionTopBarChanged(
+            RouteScopedTopBarOverrideState(
+                TOP_BAR_OWNER_UPDATED,
+                LayeredTopBarOverrideState(
+                    tabsState = updatedCategoryTabsState,
+                    contextualOverrideState = updatedContextualTopBarOverride,
+                ),
+            ),
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onExploreSourceSelectionTopBarChanged(RouteScopedTopBarOverrideState(TOP_BAR_OWNER_UPDATED, null))
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        org.skepsun.kototoro.list.ui.compose.AppContentListRoute(
+            viewModel = viewModel,
+            contentPadding = contentPadding,
+            appRouter = appRouter,
+            onTopBarOverrideChanged = { updatedContextualTopBarOverride = it },
+            showRemoveOption = true,
+            sharedElementInstanceKey = "main_updated",
+            isContentTypeFilterVisible = true,
+            isSourceTagFilterVisible = true,
+            onRemoveSelection = { ids -> viewModel.remove(ids) },
+            onNavigateToDetails = { _, content, sharedKey ->
+                navigateToDetailsWithContent(content, sharedKey)
+            },
+            onFilterRailOverrideChanged = {},
+            onAddMenuProvider = { _, _, _ ->
+                object : androidx.core.view.MenuProvider {
+                    override fun onCreateMenu(menu: android.view.Menu, menuInflater: android.view.MenuInflater) {
+                        menuInflater.inflate(org.skepsun.kototoro.R.menu.opt_list, menu)
+                    }
+
+                    override fun onMenuItemSelected(menuItem: android.view.MenuItem): Boolean = when (menuItem.itemId) {
+                        org.skepsun.kototoro.R.id.action_refresh -> {
+                            viewModel.onRefresh()
+                            true
+                        }
+                        org.skepsun.kototoro.R.id.action_list_mode -> {
+                            appRouter.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.Updated)
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            },
+            showQuickFilterInline = false,
+        )
+    }
+}
+
+@Composable
+internal fun HistoryTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    activity: FragmentActivity,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    rootView: android.view.View,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    bottomBarOffsetPx: Float,
+    bottomBarHeightPx: Int,
+    isLandscapeNavigation: Boolean,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.history.ui.HistoryListViewModel>()
+    val context = LocalContext.current
+    val entryPoint = remember(context.applicationContext) {
+        runCatching {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                BaseApp.BaseAppEntryPoint::class.java,
+            )
+        }.getOrNull()
+    }
+    val items by viewModel.content.collectAsStateWithLifecycle()
+    val listMode by viewModel.listMode.collectAsStateWithLifecycle()
+    val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
+    val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
+    val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
+    val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
+    val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
+    val historyFilterRailState = remember(items, context, entryPoint, viewModel) {
+        val quickFilter = items.firstOrNull { it is QuickFilter } as? QuickFilter
+        quickFilter?.let { filter ->
+            CompactFilterRailOverrideState(
+                items = filter.items.mapIndexedNotNull { index, chip ->
+                    val option = chip.data as? ListFilterOption ?: return@mapIndexedNotNull null
+                    val sourceOption = option as? ListFilterOption.Source
+                    val title = when {
+                        sourceOption != null -> resolveSourceTitleForUi(
+                            context = context,
+                            source = sourceOption.mangaSource,
+                            entryPoint = entryPoint,
+                        )
+                        chip.titleResId != 0 -> context.getString(chip.titleResId)
+                        !chip.title.isNullOrBlank() -> chip.title.toString()
+                        else -> return@mapIndexedNotNull null
+                    }
+                    CompactFilterRailItem(
+                        id = "${option::class.qualifiedName}:${option.hashCode()}:$index",
+                        title = title,
+                        isSelected = chip.isChecked,
+                        source = sourceOption?.mangaSource,
+                        onClick = { viewModel.toggleFilterOption(option) },
+                    )
+                }.selectedFirst(),
+            )
+        }
+    }
+    var selectedItemsIds by remember { mutableStateOf(emptySet<Long>()) }
+    var showClearDialog by remember { mutableStateOf(false) }
+    val selectedModels = remember(items, selectedItemsIds) {
+        items
+            .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
+            .filter { it.id in selectedItemsIds }
+    }
+
+    DisposableEffect(onContextualMenuActionsChanged) {
+        onContextualMenuActionsChanged(
+            RouteScopedTopBarMenuActions(
+                ownerRoute = TOP_BAR_OWNER_HISTORY,
+                actions = listOf(
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.clear_history) {
+                        showClearDialog = true
+                    },
+                ),
+            ),
+        )
+        onDispose {
+            onContextualMenuActionsChanged(
+                RouteScopedTopBarMenuActions(
+                    ownerRoute = TOP_BAR_OWNER_HISTORY,
+                    actions = emptyList(),
+                ),
+            )
+        }
+    }
+
+    BackHandler(enabled = selectedItemsIds.isNotEmpty()) {
+        selectedItemsIds = emptySet()
+    }
+
+    SideEffect {
+        if (selectedItemsIds.isNotEmpty()) {
+            onExploreSourceSelectionTopBarChanged(
+                RouteScopedTopBarOverrideState(
+                    TOP_BAR_OWNER_HISTORY,
+                    LayeredTopBarOverrideState(
+                        filterRailState = historyFilterRailState,
+                        contextualOverrideState = ContentSelectionTopBarOverrideState(
+                            selectedCount = selectedItemsIds.size,
+                            isAllNonLocal = selectedModels.none { it.manga.isLocal },
+                            isSingleSelection = selectedItemsIds.size == 1,
+                            showRemoveOption = true,
+                            supportedActions = setOf(
+                                org.skepsun.kototoro.list.ui.compose.SelectionAction.SELECT_ALL,
+                                org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE,
+                            ),
+                            onClearSelection = { selectedItemsIds = emptySet() },
+                            onActionClick = { action ->
+                                when (action) {
+                                    org.skepsun.kototoro.list.ui.compose.SelectionAction.SELECT_ALL -> {
+                                        selectedItemsIds = items
+                                            .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
+                                            .mapTo(linkedSetOf()) { it.id }
+                                    }
+                                    org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE -> {
+                                        viewModel.removeFromHistory(selectedItemsIds)
+                                        selectedItemsIds = emptySet()
+                                    }
+                                    else -> Unit
+                                }
+                            },
+                        ),
+                    ),
+                ),
+            )
+        } else {
+            onExploreSourceSelectionTopBarChanged(
+                RouteScopedTopBarOverrideState(
+                    TOP_BAR_OWNER_HISTORY,
+                    LayeredTopBarOverrideState(
+                        filterRailState = historyFilterRailState,
+                    ),
+                ),
+            )
+        }
+    }
+
+    LaunchedEffect(viewModel.onOpenReader, appRouter) {
+        viewModel.onOpenReader.collect { event ->
+            event?.consume { content ->
+                appRouter.openReader(content)
+            }
+        }
+    }
+
+    LaunchedEffect(viewModel.onActionDone) {
+        val observer = org.skepsun.kototoro.core.ui.util.ReversibleActionObserver(rootView)
+        viewModel.onActionDone.collect { event ->
+            event?.consume(observer)
+        }
+    }
+
+    LaunchedEffect(viewModel.onError, activity) {
+        val host = activity.window.decorView.rootView
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
+        viewModel.onError.collect { event ->
+            event?.consume(observer)
+        }
+    }
+
+    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+        val callback = object : SearchBarFilterViewController.Callback {
+            override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
+
+            override fun onContentTypeSelected(tab: BrowseGroupTab) {
+                viewModel.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
+            }
+
+            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = selectedSourceTags
+
+            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
+                viewModel.setSelectedSourceTags(
+                    when {
+                        tag == null -> emptySet()
+                        tag in selectedSourceTags -> selectedSourceTags - tag
+                        else -> selectedSourceTags + tag
+                    },
+                )
+            }
+        }
+        mainActivity?.setActiveFilterCallback(callback)
+        onDispose {
+            mainActivity?.clearActiveFilterCallback(callback)
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        org.skepsun.kototoro.history.ui.compose.HistoryScreen(
+            contentPadding = contentPadding,
+            items = items,
+            listMode = listMode,
+            isRefreshing = false,
+            pullRefreshEnabled = false,
+            isStatsEnabled = isStatsEnabled,
+            gridScale = gridScale,
+            selectedItemsIds = selectedItemsIds,
+            onRefresh = { viewModel.onRefresh() },
+            onLoadMore = { viewModel.requestMoreItems() },
+            onPrepareItemTransition = { _, _ -> },
+            onItemClick = { item ->
+                if (selectedItemsIds.isNotEmpty()) {
+                    selectedItemsIds = if (item.id in selectedItemsIds) {
+                        selectedItemsIds - item.id
+                    } else {
+                        selectedItemsIds + item.id
+                    }
+                } else {
+                    val content = item.toContentWithOverride()
+                    val sharedKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
+                    val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
+                    val preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id)
+                    if (entityId != null) {
+                        navigateToDetailsWithOrigin(
+                            org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                                entityId = entityId,
+                                preferredLocalMangaId = preferredLocalMangaId ?: content.id,
+                                initialProjectionLocalMangaId = content.id,
+                            ),
+                            sharedKey,
+                        )
+                    } else {
+                        navigateToDetailsWithContent(content, sharedKey)
+                    }
+                }
+            },
+            onItemLongClick = { item ->
+                selectedItemsIds = if (item.id in selectedItemsIds) {
+                    selectedItemsIds - item.id
+                } else {
+                    selectedItemsIds + item.id
+                }
+            },
+            onClearSelection = { selectedItemsIds = emptySet() },
+            onSelectionAction = { action ->
+                if (action == org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE) {
+                    viewModel.removeFromHistory(selectedItemsIds)
+                    selectedItemsIds = emptySet()
+                }
+            },
+            onStatsClick = { appRouter.openStatistic() },
+            onContinueReadingClick = { viewModel.openLastReader() },
+            onQuickFilterOptionClick = viewModel::toggleFilterOption,
+            showContinueReadingButton = isResumeEnabled && !isLandscapeNavigation,
+            showQuickFilterInline = true,
+            bottomBarOffsetPx = bottomBarOffsetPx,
+            bottomBarHeightPx = bottomBarHeightPx,
+            showInlineSelectionTopBar = false,
+        )
+
+        if (showClearDialog) {
+            org.skepsun.kototoro.history.ui.compose.ClearHistoryDialog(
+                onDismissRequest = { showClearDialog = false },
+                onConfirm = { option ->
+                    when (option) {
+                        org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.LAST_2_HOURS -> {
+                            viewModel.clearHistory(java.time.Instant.now().minus(2, java.time.temporal.ChronoUnit.HOURS))
+                        }
+                        org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.TODAY -> {
+                            viewModel.clearHistory(
+                                java.time.LocalDate.now()
+                                    .atStartOfDay(java.time.ZoneId.systemDefault())
+                                    .toInstant(),
+                            )
+                        }
+                        org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.NOT_IN_FAVORITES -> {
+                            viewModel.removeNotFavorite()
+                        }
+                        org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.CLEAR_ALL -> {
+                            viewModel.clearHistory(null)
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun FavoritesTopLevelRouteContent(
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
+    entityOrganizeResultSource: FavoritesEntityOrganizeResultSource,
+    mainActivity: MainActivity?,
+    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
+    navigateToDetailsWithContent: (Content, String?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    val viewModel = hiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>()
+    val selectedGroupTab by viewModel.globalFavoritesState.selectedGroupTab.collectAsStateWithLifecycle()
+    val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
+    var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    fun showToast(messageRes: Int) {
+        android.widget.Toast.makeText(context, messageRes, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun showToast(message: String) {
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun showImportDialog(scope: CoroutineScope) {
+        scope.launch {
+            val candidates = viewModel.loadImportCandidates()
+            if (candidates.isEmpty()) {
+                showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
+                return@launch
+            }
+            val checked = BooleanArray(candidates.size) { true }
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                .setTitle(org.skepsun.kototoro.R.string.import_favourites_title)
+                .setMultiChoiceItems(candidates.map { it.title }.toTypedArray(), checked) { _, which, isChecked ->
+                    checked[which] = isChecked
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    viewModel.importFavorites(candidates.filterIndexed { index, _ -> checked[index] })
+                }
+                .show()
+        }
+    }
+
+    LaunchedEffect(entityOrganizeResultSource) {
+        entityOrganizeResultSource.refreshSignals.collect {
+            if (!entityOrganizeResultSource.consumeRefresh()) {
+                return@collect
+            }
+            entityOrganizeRefreshGeneration += 1
+        }
+    }
+
+    LaunchedEffect(entityOrganizeResultSource) {
+        entityOrganizeResultSource.messageSignals.collect {
+            val message = entityOrganizeResultSource.consumeMessage()
+            if (message == null) {
+                return@collect
+            }
+            viewModel.notifyEntityOrganizeResult(message)
+        }
+    }
+
+    fun showSyncDialog(scope: CoroutineScope) {
+        scope.launch {
+            val candidates = viewModel.loadSyncCandidates()
+            if (candidates.isEmpty()) {
+                showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
+                return@launch
+            }
+            val checked = BooleanArray(candidates.size) { true }
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                .setTitle(org.skepsun.kototoro.R.string.sync_favourites_title)
+                .setMessage(org.skepsun.kototoro.R.string.sync_favourites_warning)
+                .setMultiChoiceItems(candidates.map { it.title }.toTypedArray(), checked) { _, which, isChecked ->
+                    checked[which] = isChecked
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    viewModel.syncFavorites(candidates.filterIndexed { index, _ -> checked[index] })
+                }
+                .show()
+        }
+    }
+
+    DisposableEffect(appRouter, viewModel) {
+        onContextualMenuActionsChanged(
+            RouteScopedTopBarMenuActions(
+                ownerRoute = TOP_BAR_OWNER_FAVORITES,
+                actions = listOf(
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
+                        appRouter.openFavoriteCategories()
+                    },
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.entity_organize_title) {
+                        appRouter.openEntityOrganizeSettings()
+                    },
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
+                        showImportDialog(coroutineScope)
+                    },
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
+                        showSyncDialog(coroutineScope)
+                    },
+                ),
+            ),
+        )
+        onDispose {
+            onContextualMenuActionsChanged(
+                RouteScopedTopBarMenuActions(
+                    ownerRoute = TOP_BAR_OWNER_FAVORITES,
+                    actions = emptyList(),
+                ),
+            )
+        }
+    }
+
+    LaunchedEffect(viewModel.importMessages) {
+        viewModel.importMessages.collect { event ->
+            event?.consume(eventCollector { message ->
+                showToast(message)
+            })
+        }
+    }
+
+    LaunchedEffect(viewModel.syncMessages) {
+        viewModel.syncMessages.collect { event ->
+            event?.consume(eventCollector { message ->
+                showToast(message)
+            })
+        }
+    }
+
+    LaunchedEffect(viewModel.organizeMessages) {
+        viewModel.organizeMessages.collect { event ->
+            event?.consume(eventCollector { message ->
+                showToast(message)
+            })
+        }
+    }
+
+    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+        val callback = object : SearchBarFilterViewController.Callback {
+            override fun isSourceTagFilterVisible(): Boolean = true
+
+            override fun getSourceTagEntries(): List<org.skepsun.kototoro.explore.ui.model.SourceTag> =
+                org.skepsun.kototoro.explore.ui.model.SourceTag.quickFilterEntries
+
+            override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
+
+            override fun onContentTypeSelected(tab: BrowseGroupTab) {
+                viewModel.globalFavoritesState.setSelectedGroupTab(
+                    if (selectedGroupTab == tab) BrowseGroupTab.All else tab,
+                )
+            }
+
+            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
+                selectedSourceTags
+
+            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
+                when {
+                    tag == null -> viewModel.globalFavoritesState.clearSourceTags()
+                    tag in selectedSourceTags -> {
+                        viewModel.globalFavoritesState.setSelectedSourceTags(selectedSourceTags - tag)
+                    }
+                    else -> {
+                        viewModel.globalFavoritesState.setSelectedSourceTags(selectedSourceTags + tag)
+                    }
+                }
+            }
+        }
+        mainActivity?.setActiveFilterCallback(callback)
+        onDispose {
+            mainActivity?.clearActiveFilterCallback(callback)
+        }
+    }
+
+    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+        KototoroFavoritesHostRoute(
+            appRouter = appRouter,
+            contentPadding = contentPadding,
+            refreshGeneration = entityOrganizeRefreshGeneration,
+            consumeOrganizeMessages = false,
+            onOpenEntityOrganize = { selectedIds ->
+                appRouter.openEntityOrganizeSettings(selectedIds)
+            },
+            onNavigateToDetails = { content, sharedKey ->
+                navigateToDetailsWithContent(content, sharedKey)
+            },
+            onNavigateToEntityDetails = { origin, sharedKey ->
+                navigateToDetailsWithOrigin(origin, sharedKey)
+            },
+            registerFilterCallback = false,
+            onTopBarOverrideChanged = {
+                onExploreSourceSelectionTopBarChanged(
+                    RouteScopedTopBarOverrideState(TOP_BAR_OWNER_FAVORITES, it),
+                )
+            },
+            viewModel = viewModel,
+        )
     }
 }

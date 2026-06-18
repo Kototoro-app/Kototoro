@@ -41,6 +41,8 @@ import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.prefs.resolvePreset
+import org.skepsun.kototoro.core.prefs.toFamily
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 
 private const val GLASS_SURFACE_TAG = "GlassSurface"
@@ -86,6 +88,15 @@ data class GlassStyle(
     val shadowElevation: Dp,
 )
 
+enum class GlassComponentRole {
+    Surface,
+    TopBar,
+    BottomBar,
+    Menu,
+    Dialog,
+    Sheet,
+}
+
 object GlassDefaults {
     val shape: Shape = RoundedCornerShape(28.dp)
 
@@ -111,6 +122,22 @@ object GlassDefaults {
         borderAlpha = 0.30f,
         tonalElevation = 0.dp,
         shadowElevation = 10.dp,
+    )
+
+    @Composable
+    fun topBarChromeStyle(): GlassStyle = GlassStyle(
+        containerAlpha = 0.88f,
+        borderAlpha = 0.20f,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    )
+
+    @Composable
+    fun bottomBarChromeStyle(): GlassStyle = GlassStyle(
+        containerAlpha = 0.84f,
+        borderAlpha = 0.10f,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     )
 
     @Composable
@@ -140,6 +167,10 @@ fun GlassSurface(
     allowRuntimeHaze: Boolean = true,
     dialogSurface: Boolean = false,
     visualTreatment: GlassVisualTreatment = GlassVisualTreatment.Standard,
+    componentRole: GlassComponentRole = defaultGlassComponentRole(
+        dialogSurface = dialogSurface,
+        visualTreatment = visualTreatment,
+    ),
     debugLabel: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -148,6 +179,7 @@ fun GlassSurface(
     val colorScheme = MaterialTheme.colorScheme
     val isDarkTheme = colorScheme.background.luminance() < 0.5f
     val usesOfficialHazeMaterial = glassPrefs.materialPreset.usesOfficialHazeMaterial()
+    val usePrototypeChrome = visualTreatment == GlassVisualTreatment.TopBarPrototype && !usesOfficialHazeMaterial
     val effectiveStyle = if (dialogSurface) {
         style.copy(
             tonalElevation = 0.dp,
@@ -159,20 +191,45 @@ fun GlassSurface(
     val glassColors = rememberGlassSurfaceColors(style = effectiveStyle, glassPrefs = glassPrefs)
 
     val useRuntimeHaze = glassPrefs.isGlassEffectEnabled && allowRuntimeHaze && supportsRuntimeHaze()
-    val usePrototypeChrome = visualTreatment == GlassVisualTreatment.TopBarPrototype
+    val shouldUsePrototypeSurfaceFill = useRuntimeHaze &&
+        usePrototypeChrome &&
+        !dialogSurface &&
+        !usesOfficialHazeMaterial
     val hazeStyle = rememberGlassHazeStyle(
         glassPrefs = glassPrefs,
         glassColors = glassColors,
+        componentRole = componentRole,
         dialogSurface = dialogSurface,
     )
     val hazeBackgroundColor = rememberGlassHazeBackgroundColor(
         glassPrefs = glassPrefs,
         glassColors = glassColors,
         hazeStyle = hazeStyle,
+        componentRole = componentRole,
         dialogSurface = dialogSurface,
     )
+    val runtimeChromeFillColor = remember(
+        useRuntimeHaze,
+        usePrototypeChrome,
+        dialogSurface,
+        hazeBackgroundColor,
+        hazeStyle,
+        glassColors,
+        shouldUsePrototypeSurfaceFill,
+    ) {
+        if (!shouldUsePrototypeSurfaceFill) {
+            Color.Unspecified
+        } else {
+            hazeBackgroundColor.takeOrElse {
+                hazeStyle.backgroundColor.takeOrElse {
+                    glassColors.containerColor
+                }
+            }
+        }
+    }
     val surfaceColor = when {
         dialogSurface -> glassColors.containerColor
+        shouldUsePrototypeSurfaceFill -> runtimeChromeFillColor
         useRuntimeHaze && !dialogSurface -> Color.Transparent
         !useRuntimeHaze && glassPrefs.isGlassEffectEnabled && usesOfficialHazeMaterial -> {
             hazeStyle.backgroundColor.takeOrElse { glassColors.containerColor }
@@ -224,6 +281,7 @@ fun GlassSurface(
         val debugConfig =
             "$debugLabel config useRuntimeHaze=$useRuntimeHaze allowRuntimeHaze=$allowRuntimeHaze " +
                 "dialogSurface=$dialogSurface material=${glassPrefs.materialPreset} " +
+                "componentRole=$componentRole " +
                 "opacity=${glassPrefs.hazeOpacityPercent} blurPref=${glassPrefs.blurStrengthPercent} " +
                 "noisePref=${glassPrefs.noiseStrengthPercent} " +
                 "tonalElevation=${effectiveStyle.tonalElevation} shadowElevation=${effectiveStyle.shadowElevation} " +
@@ -339,7 +397,7 @@ fun rememberGlassSurfaceColors(
 @Composable
 fun GlassTopBarContainer(
     modifier: Modifier = Modifier,
-    style: GlassStyle = GlassDefaults.prominentStyle(),
+    style: GlassStyle = GlassDefaults.topBarChromeStyle(),
     content: @Composable BoxScope.() -> Unit,
 ) {
     GlassSurface(
@@ -347,6 +405,7 @@ fun GlassTopBarContainer(
         style = style,
         shape = RoundedCornerShape(30.dp),
         visualTreatment = GlassVisualTreatment.TopBarPrototype,
+        componentRole = GlassComponentRole.TopBar,
         content = content,
     )
 }
@@ -354,7 +413,7 @@ fun GlassTopBarContainer(
 @Composable
 fun GlassBottomBarContainer(
     modifier: Modifier = Modifier,
-    style: GlassStyle = GlassDefaults.prominentStyle(),
+    style: GlassStyle = GlassDefaults.bottomBarChromeStyle(),
     content: @Composable BoxScope.() -> Unit,
 ) {
     GlassSurface(
@@ -362,6 +421,7 @@ fun GlassBottomBarContainer(
         style = style,
         shape = RoundedCornerShape(32.dp),
         visualTreatment = GlassVisualTreatment.TopBarPrototype,
+        componentRole = GlassComponentRole.BottomBar,
         content = content,
     )
 }
@@ -441,14 +501,18 @@ private fun computeGlassColors(
 fun rememberGlassHazeStyle(
     glassPrefs: GlassPrefs,
     glassColors: GlassSurfaceColors,
+    componentRole: GlassComponentRole,
     dialogSurface: Boolean = false,
 ): HazeBlurStyle {
-    val usesOfficialHazeMaterial = glassPrefs.materialPreset.usesOfficialHazeMaterial()
+    val effectivePreset = remember(glassPrefs.materialPreset, componentRole) {
+        glassPrefs.materialPreset.toFamily().resolvePreset(componentRole)
+    }
+    val usesOfficialHazeMaterial = effectivePreset.usesOfficialHazeMaterial()
     val officialContainerColor = rememberOfficialMaterialContainerColor(
-        preset = glassPrefs.materialPreset,
+        preset = effectivePreset,
         fallbackColor = glassColors.containerColor,
     )
-    val baseStyle = when (glassPrefs.materialPreset) {
+    val baseStyle = when (effectivePreset) {
         AppSettings.GlassMaterialPreset.KOTOTORO,
         AppSettings.GlassMaterialPreset.CUSTOM -> if (dialogSurface) {
             HazeBlurDefaults.style(
@@ -465,19 +529,13 @@ fun rememberGlassHazeStyle(
                 glassColors.noiseFactor,
             )
         }
-        AppSettings.GlassMaterialPreset.HAZE_ULTRA_THIN -> HazeMaterials.ultraThin(
-            containerColor = officialContainerColor,
-        )
-        AppSettings.GlassMaterialPreset.HAZE_THIN -> HazeMaterials.thin(
-            containerColor = officialContainerColor,
-        )
-        AppSettings.GlassMaterialPreset.HAZE_REGULAR -> HazeMaterials.regular(
-            containerColor = officialContainerColor,
-        )
-        AppSettings.GlassMaterialPreset.HAZE_THICK -> HazeMaterials.thick(
-            containerColor = officialContainerColor,
-        )
-        AppSettings.GlassMaterialPreset.HAZE_ULTRA_THICK -> HazeMaterials.ultraThick(
+        AppSettings.GlassMaterialPreset.HAZE_ULTRA_THIN,
+        AppSettings.GlassMaterialPreset.HAZE_THIN,
+        AppSettings.GlassMaterialPreset.HAZE_REGULAR,
+        AppSettings.GlassMaterialPreset.HAZE_THICK,
+        AppSettings.GlassMaterialPreset.HAZE_ULTRA_THICK -> resolveOfficialHazeMaterialStyle(
+            preset = effectivePreset,
+            componentRole = componentRole,
             containerColor = officialContainerColor,
         )
         AppSettings.GlassMaterialPreset.CUPERTINO_ULTRA_THIN -> CupertinoMaterials.ultraThin(
@@ -500,7 +558,14 @@ fun rememberGlassHazeStyle(
         AppSettings.GlassMaterialPreset.FLUENT_MICA -> FluentMaterials.mica()
         AppSettings.GlassMaterialPreset.FLUENT_MICA_ALT -> FluentMaterials.micaAlt()
     }
-    return remember(baseStyle, glassColors, glassPrefs.materialPreset, dialogSurface, usesOfficialHazeMaterial) {
+    return remember(
+        baseStyle,
+        glassColors,
+        effectivePreset,
+        componentRole,
+        dialogSurface,
+        usesOfficialHazeMaterial,
+    ) {
         if (usesOfficialHazeMaterial) {
             baseStyle
         } else {
@@ -516,6 +581,60 @@ fun rememberGlassHazeStyle(
     }
 }
 
+private fun defaultGlassComponentRole(
+    dialogSurface: Boolean,
+    visualTreatment: GlassVisualTreatment,
+): GlassComponentRole {
+    return when {
+        dialogSurface -> GlassComponentRole.Dialog
+        visualTreatment == GlassVisualTreatment.TopBarPrototype -> GlassComponentRole.TopBar
+        else -> GlassComponentRole.Surface
+    }
+}
+
+@Composable
+private fun resolveOfficialHazeMaterialStyle(
+    preset: AppSettings.GlassMaterialPreset,
+    componentRole: GlassComponentRole,
+    containerColor: Color,
+): HazeBlurStyle {
+    return when (componentRole) {
+        GlassComponentRole.TopBar,
+        GlassComponentRole.BottomBar -> HazeMaterials.thin(
+            containerColor = containerColor,
+        )
+        GlassComponentRole.Menu -> HazeMaterials.regular(
+            containerColor = containerColor,
+        )
+        GlassComponentRole.Sheet -> HazeMaterials.thick(
+            containerColor = containerColor,
+        )
+        GlassComponentRole.Dialog -> HazeMaterials.regular(
+            containerColor = containerColor,
+        )
+        GlassComponentRole.Surface -> when (preset) {
+            AppSettings.GlassMaterialPreset.HAZE_ULTRA_THIN -> HazeMaterials.ultraThin(
+                containerColor = containerColor,
+            )
+            AppSettings.GlassMaterialPreset.HAZE_THIN -> HazeMaterials.thin(
+                containerColor = containerColor,
+            )
+            AppSettings.GlassMaterialPreset.HAZE_REGULAR -> HazeMaterials.regular(
+                containerColor = containerColor,
+            )
+            AppSettings.GlassMaterialPreset.HAZE_THICK -> HazeMaterials.thick(
+                containerColor = containerColor,
+            )
+            AppSettings.GlassMaterialPreset.HAZE_ULTRA_THICK -> HazeMaterials.ultraThick(
+                containerColor = containerColor,
+            )
+            else -> HazeMaterials.regular(
+                containerColor = containerColor,
+            )
+        }
+    }
+}
+
 @Composable
 private fun rememberOfficialMaterialContainerColor(
     preset: AppSettings.GlassMaterialPreset,
@@ -524,26 +643,27 @@ private fun rememberOfficialMaterialContainerColor(
     val colorScheme = MaterialTheme.colorScheme
     val isDarkTheme = colorScheme.background.luminance() < 0.5f
     return remember(preset, fallbackColor, colorScheme, isDarkTheme) {
+        val resolvedAlpha = fallbackColor.alpha.coerceIn(0f, 1f)
         when {
             preset.isCupertinoMaterial() -> {
                 if (isDarkTheme) {
-                    colorScheme.surfaceBright.copy(alpha = 0.92f)
+                    colorScheme.surfaceBright.copy(alpha = resolvedAlpha)
                 } else {
-                    colorScheme.surface.copy(alpha = 0.84f)
+                    colorScheme.surface.copy(alpha = resolvedAlpha)
                 }
             }
             preset.isFluentMaterial() -> {
                 if (isDarkTheme) {
-                    lerp(colorScheme.surfaceContainerHigh, colorScheme.surfaceBright, 0.22f).copy(alpha = 0.90f)
+                    lerp(colorScheme.surfaceContainerHigh, colorScheme.surfaceBright, 0.22f).copy(alpha = resolvedAlpha)
                 } else {
-                    lerp(colorScheme.surfaceContainerLow, colorScheme.surface, 0.35f).copy(alpha = 0.86f)
+                    lerp(colorScheme.surfaceContainerLow, colorScheme.surface, 0.35f).copy(alpha = resolvedAlpha)
                 }
             }
             preset.isHazeMaterial() -> {
                 if (isDarkTheme) {
-                    colorScheme.surfaceContainer.copy(alpha = 0.88f)
+                    colorScheme.surfaceContainer.copy(alpha = resolvedAlpha)
                 } else {
-                    colorScheme.surface.copy(alpha = 0.82f)
+                    colorScheme.surface.copy(alpha = resolvedAlpha)
                 }
             }
             else -> fallbackColor
@@ -556,15 +676,19 @@ fun rememberGlassHazeBackgroundColor(
     glassPrefs: GlassPrefs,
     glassColors: GlassSurfaceColors,
     hazeStyle: HazeBlurStyle,
+    componentRole: GlassComponentRole = GlassComponentRole.Surface,
     dialogSurface: Boolean = false,
 ): Color {
     val colorScheme = MaterialTheme.colorScheme
     val isDarkTheme = colorScheme.background.luminance() < 0.5f
-    return remember(glassPrefs.materialPreset, glassColors, hazeStyle, dialogSurface, isDarkTheme, colorScheme) {
+    val effectivePreset = remember(glassPrefs.materialPreset, componentRole) {
+        glassPrefs.materialPreset.toFamily().resolvePreset(componentRole)
+    }
+    return remember(effectivePreset, glassColors, hazeStyle, dialogSurface, isDarkTheme, colorScheme) {
         if (dialogSurface) {
             return@remember Color.Transparent
         }
-        when (glassPrefs.materialPreset) {
+        when (effectivePreset) {
             AppSettings.GlassMaterialPreset.KOTOTORO,
             AppSettings.GlassMaterialPreset.CUSTOM -> glassColors.containerColor
             AppSettings.GlassMaterialPreset.HAZE_ULTRA_THIN,

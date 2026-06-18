@@ -68,7 +68,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -138,6 +137,7 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
@@ -233,6 +233,7 @@ private fun SearchFilterSheetSurface(
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(28.dp),
     allowRuntimeHaze: Boolean = true,
+    componentRole: GlassComponentRole = GlassComponentRole.Sheet,
     content: @Composable () -> Unit,
 ) {
     GlassSurface(
@@ -241,6 +242,7 @@ private fun SearchFilterSheetSurface(
         style = GlassDefaults.prominentStyle(),
         allowRuntimeHaze = allowRuntimeHaze,
         dialogSurface = true,
+        componentRole = componentRole,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             content()
@@ -280,6 +282,7 @@ private fun SearchInputDialogSurface(
                         onClick = {},
                     ),
                 shape = RoundedCornerShape(24.dp),
+                componentRole = GlassComponentRole.Dialog,
             ) {
                 Column(
                     modifier = Modifier
@@ -482,7 +485,7 @@ fun AppSearchContentListRoute(
         )
     }
     val showPinnedRow = !searchMode && (quickFilter != null || extractedPinnedTags.isNotEmpty() || !filterSnapshot.listFilter.query.isNullOrBlank())
-    val wideTopOverlayHeight = statusBarTopPadding + SearchTopActionsHeight + if (showPinnedRow) SearchPinnedRowVisualHeight else 0.dp
+    val topOverlayHeight = statusBarTopPadding + SearchTopActionsHeight + if (showPinnedRow) SearchPinnedRowVisualHeight else 0.dp
     val wideGridState = remember { LazyGridState() }
     val wideListState = remember { LazyListState() }
     val wideDetailedListState = remember { LazyListState() }
@@ -619,14 +622,7 @@ fun AppSearchContentListRoute(
     }
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Scaffold(
-            contentWindowInsets = WindowInsets.navigationBars,
-            topBar = {
-                if (!isWideSplitLayout) {
-                    topBarContent()
-                }
-            },
-        ) { paddingValues ->
+        androidx.compose.material3.Scaffold(contentWindowInsets = WindowInsets.navigationBars) { paddingValues ->
             if (isWideSplitLayout) {
                 Row(
                     modifier = Modifier
@@ -648,7 +644,7 @@ fun AppSearchContentListRoute(
                                 gridScale = gridScale,
                                 listMode = listMode,
                                 isRefreshing = false,
-                                contentPadding = PaddingValues(0.dp, wideTopOverlayHeight, 0.dp, 0.dp),
+                                contentPadding = PaddingValues(0.dp, topOverlayHeight, 0.dp, 0.dp),
                                 sharedTransitionEnabled = sharedTransitionEnabled,
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -791,68 +787,82 @@ fun AppSearchContentListRoute(
             } else {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+                        .fillMaxSize(),
                 ) {
-                    KototoroContentListScreen(
-                        items = contentItems,
-                        gridScale = gridScale,
-                        listMode = listMode,
-                        isRefreshing = false,
-                        contentPadding = paddingValues,
-                        sharedTransitionEnabled = sharedTransitionEnabled,
-                        modifier = Modifier.nestedScroll(nestedScrollConnection),
-                        onPrepareItemTransition = { _, _ -> },
-                        onItemClick = { item ->
-                            if (selectedItemsIds.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+                    ) {
+                        KototoroContentListScreen(
+                            items = contentItems,
+                            gridScale = gridScale,
+                            listMode = listMode,
+                            isRefreshing = false,
+                            contentPadding = PaddingValues(
+                                top = topOverlayHeight,
+                                bottom = paddingValues.calculateBottomPadding(),
+                            ),
+                            sharedTransitionEnabled = sharedTransitionEnabled,
+                            modifier = Modifier.nestedScroll(nestedScrollConnection),
+                            onPrepareItemTransition = { _, _ -> },
+                            onItemClick = { item ->
+                                if (selectedItemsIds.isNotEmpty()) {
+                                    selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
+                                } else {
+                                    val content = item.toContentWithOverride()
+                                    val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
+                                    openDetailsHandler(
+                                        content,
+                                        sharedElementKey,
+                                    )
+                                }
+                            },
+                            onItemLongClick = { item ->
                                 selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                            } else {
-                                val content = item.toContentWithOverride()
-                                val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
-                                openDetailsHandler(
-                                    content,
-                                    sharedElementKey,
-                                )
-                            }
-                        },
-                        onItemLongClick = { item ->
-                            selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
-                        },
-                        onLoadMore = { viewModel.loadNextPage() },
-                        onRefresh = { viewModel.onRefresh() },
-                        onClearSelection = { selectedItemsIds = emptySet() },
-                        onSelectionAction = { action ->
-                            when (action) {
-                                SelectionAction.SHARE -> {
-                                    ShareHelper(context).shareContentLinks(selectedItems)
-                                    selectedItemsIds = emptySet()
-                                    true
-                                }
-
-                                SelectionAction.FAVOURITE -> {
-                                    appRouter.showFavoriteDialog(selectedItems)
-                                    selectedItemsIds = emptySet()
-                                    true
-                                }
-
-                                SelectionAction.SAVE -> {
-                                    if (isAllNonLocal) {
-                                        appRouter.showDownloadDialog(selectedItems)
+                            },
+                            onLoadMore = { viewModel.loadNextPage() },
+                            onRefresh = { viewModel.onRefresh() },
+                            onClearSelection = { selectedItemsIds = emptySet() },
+                            onSelectionAction = { action ->
+                                when (action) {
+                                    SelectionAction.SHARE -> {
+                                        ShareHelper(context).shareContentLinks(selectedItems)
                                         selectedItemsIds = emptySet()
                                         true
-                                    } else {
-                                        false
                                     }
+
+                                    SelectionAction.FAVOURITE -> {
+                                        appRouter.showFavoriteDialog(selectedItems)
+                                        selectedItemsIds = emptySet()
+                                        true
+                                    }
+
+                                    SelectionAction.SAVE -> {
+                                        if (isAllNonLocal) {
+                                            appRouter.showDownloadDialog(selectedItems)
+                                            selectedItemsIds = emptySet()
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+
+                                    else -> false
                                 }
-
-                                else -> false
-                            }
-                        },
-                        selectedItemsIds = selectedItemsIds,
-                        showInlineSelectionTopBar = false,
-                        onRetry = ::resolveErrorAndRetry,
-                    )
-
+                            },
+                            selectedItemsIds = selectedItemsIds,
+                            showInlineSelectionTopBar = false,
+                            onRetry = ::resolveErrorAndRetry,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopStart),
+                    ) {
+                        topBarContent()
+                    }
                 }
             }
 
@@ -1382,6 +1392,7 @@ private fun SourceListTopActionsRow(
                 shape = CompactTopBarPillShape,
                 style = GlassDefaults.subtleStyle(),
                 visualTreatment = GlassVisualTreatment.TopBarPrototype,
+                componentRole = GlassComponentRole.TopBar,
             ) {
                 IconButton(
                     onClick = onBackClick,
@@ -1410,6 +1421,7 @@ private fun SourceListTopActionsRow(
                 shape = CompactTopBarPillShape,
                 style = GlassDefaults.subtleStyle(),
                 visualTreatment = GlassVisualTreatment.TopBarPrototype,
+                componentRole = GlassComponentRole.TopBar,
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides SearchTopPrimaryActionButtonSize) {
                     Row(
@@ -1787,6 +1799,7 @@ private fun PinnedRowPill(
         style = GlassDefaults.subtleStyle(),
         shape = CircleShape,
         visualTreatment = GlassVisualTreatment.TopBarPrototype,
+        componentRole = GlassComponentRole.TopBar,
     ) {
         Row(
             modifier = Modifier

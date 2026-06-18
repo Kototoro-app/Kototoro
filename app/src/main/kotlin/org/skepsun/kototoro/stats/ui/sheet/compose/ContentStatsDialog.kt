@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.model.DateTimeAgo
@@ -131,6 +132,7 @@ fun ContentStatsDialog(
                 shape = RoundedCornerShape(28.dp),
                 style = GlassDefaults.prominentStyle(),
                 dialogSurface = true,
+                componentRole = GlassComponentRole.Dialog,
             ) {
                 Column(
                     modifier = Modifier

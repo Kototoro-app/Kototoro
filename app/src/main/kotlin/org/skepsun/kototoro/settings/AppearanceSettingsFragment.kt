@@ -28,12 +28,15 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavItem
+import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialFamily
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialPreset
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletUiMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.prefs.resolvePreset
+import org.skepsun.kototoro.core.prefs.toFamily
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.util.LocaleComparator
@@ -174,6 +177,9 @@ private class AppearanceSettingsCoordinator(
                 noiseStrengthPercent = glassNoiseStrengthPercent,
             )
         }
+        val glassMaterialFamily = remember(glassMaterialPreset) {
+            glassMaterialPreset.toFamily()
+        }
         val tabletUiMode = settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }.value
         val appLocale = settings.observeAsState(AppSettings.KEY_APP_LOCALE) { appLocales.toLanguageTags() }.value
         val loadingCircleStyle = settings.observeAsState(AppSettings.KEY_LOADING_CIRCLE_STYLE) { loadingCircleStyle }.value
@@ -265,7 +271,7 @@ private class AppearanceSettingsCoordinator(
         val options = AppearanceSettingsOptions(
             colorSchemes = buildColorSchemeOptions(),
             themes = buildThemeOptions(),
-            glassMaterialPresets = buildGlassMaterialPresetOptions(),
+            glassMaterialFamilies = buildGlassMaterialFamilyOptions(),
             tabletUiModes = buildTabletUiModeOptions(),
             appLocales = buildLocaleOptions(),
             loadingCircleStyles = buildLoadingCircleStyleOptions(),
@@ -292,7 +298,7 @@ private class AppearanceSettingsCoordinator(
             isGlassEffectEnabled = effectiveGlassEffectEnabled,
             isGlassEffectSettingsEnabled = !isReducedVisualEffectsEnabled,
             isGlassEffectDetailSettingsEnabled = effectiveGlassEffectEnabled,
-            glassMaterialPreset = glassMaterialPreset,
+            glassMaterialFamily = glassMaterialFamily,
             hazeOpacityPercent = hazeOpacityPercent,
             glassBlurStrengthPercent = glassBlurStrengthPercent,
             glassNoiseStrengthPercent = glassNoiseStrengthPercent,
@@ -360,7 +366,7 @@ private class AppearanceSettingsCoordinator(
             onAmoledThemeChange = { updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
             onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
             onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
-            onGlassMaterialPresetChange = { preset -> applyGlassMaterialPreset(preset) },
+            onGlassMaterialFamilyChange = { family -> applyGlassMaterialFamily(family) },
             onHazeOpacityChange = { settings.hazeOpacityPercent = it },
             onGlassBlurStrengthChange = { updateGlassPresetSetting { settings.glassBlurStrengthPercent = it } },
             onGlassNoiseStrengthChange = { updateGlassPresetSetting { settings.glassNoiseStrengthPercent = it } },
@@ -451,6 +457,11 @@ private class AppearanceSettingsCoordinator(
         settings.glassNoiseStrengthPercent = preset.defaultNoiseStrengthPercent
     }
 
+    private fun applyGlassMaterialFamily(family: GlassMaterialFamily) {
+        val preset = family.resolvePreset(componentRole = org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface)
+        applyGlassMaterialPreset(preset)
+    }
+
     private inline fun updateGlassPresetSetting(block: () -> Unit) {
         if (settings.glassMaterialPreset != GlassMaterialPreset.CUSTOM) {
             settings.glassMaterialPreset = GlassMaterialPreset.CUSTOM
@@ -485,26 +496,13 @@ private class AppearanceSettingsCoordinator(
         return labels.zip(values).map { (label, value) -> SettingsChoiceOption(value, label) }
     }
 
-    private fun buildGlassMaterialPresetOptions(): List<SettingsChoiceOption<GlassMaterialPreset>> {
+    private fun buildGlassMaterialFamilyOptions(): List<SettingsChoiceOption<GlassMaterialFamily>> {
         return listOf(
-            SettingsChoiceOption(GlassMaterialPreset.KOTOTORO, context.getString(R.string.glass_material_kototoro)),
-            SettingsChoiceOption(GlassMaterialPreset.HAZE_ULTRA_THIN, context.getString(R.string.glass_material_haze_ultra_thin)),
-            SettingsChoiceOption(GlassMaterialPreset.HAZE_THIN, context.getString(R.string.glass_material_haze_thin)),
-            SettingsChoiceOption(GlassMaterialPreset.HAZE_REGULAR, context.getString(R.string.glass_material_haze_regular)),
-            SettingsChoiceOption(GlassMaterialPreset.HAZE_THICK, context.getString(R.string.glass_material_haze_thick)),
-            SettingsChoiceOption(GlassMaterialPreset.HAZE_ULTRA_THICK, context.getString(R.string.glass_material_haze_ultra_thick)),
-            SettingsChoiceOption(GlassMaterialPreset.CUPERTINO_ULTRA_THIN, context.getString(R.string.glass_material_cupertino_ultra_thin)),
-            SettingsChoiceOption(GlassMaterialPreset.CUPERTINO_THIN, context.getString(R.string.glass_material_cupertino_thin)),
-            SettingsChoiceOption(GlassMaterialPreset.CUPERTINO_REGULAR, context.getString(R.string.glass_material_cupertino_regular)),
-            SettingsChoiceOption(GlassMaterialPreset.CUPERTINO_THICK, context.getString(R.string.glass_material_cupertino_thick)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_ACCENT_ACRYLIC_BASE, context.getString(R.string.glass_material_fluent_accent_acrylic_base)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_ACCENT_ACRYLIC_DEFAULT, context.getString(R.string.glass_material_fluent_accent_acrylic_default)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_THIN_ACRYLIC, context.getString(R.string.glass_material_fluent_thin_acrylic)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_ACRYLIC_BASE, context.getString(R.string.glass_material_fluent_acrylic_base)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT, context.getString(R.string.glass_material_fluent_acrylic_default)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_MICA, context.getString(R.string.glass_material_fluent_mica)),
-            SettingsChoiceOption(GlassMaterialPreset.FLUENT_MICA_ALT, context.getString(R.string.glass_material_fluent_mica_alt)),
-            SettingsChoiceOption(GlassMaterialPreset.CUSTOM, context.getString(R.string.custom)),
+            SettingsChoiceOption(GlassMaterialFamily.KOTOTORO, context.getString(R.string.glass_material_family_kototoro)),
+            SettingsChoiceOption(GlassMaterialFamily.HAZE, context.getString(R.string.glass_material_family_haze)),
+            SettingsChoiceOption(GlassMaterialFamily.CUPERTINO, context.getString(R.string.glass_material_family_cupertino)),
+            SettingsChoiceOption(GlassMaterialFamily.FLUENT, context.getString(R.string.glass_material_family_fluent)),
+            SettingsChoiceOption(GlassMaterialFamily.CUSTOM, context.getString(R.string.custom)),
         )
     }
 

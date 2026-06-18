@@ -2,11 +2,25 @@ package org.skepsun.kototoro.main.ui.compose
 
 import androidx.annotation.IdRes
 import androidx.lifecycle.SavedStateHandle
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
+import org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey
+import org.skepsun.kototoro.main.ui.navigation3.ExploreNavKey
+import org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey
+import org.skepsun.kototoro.main.ui.navigation3.FeedNavKey
+import org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey
+import org.skepsun.kototoro.main.ui.navigation3.HomeNavKey
+import org.skepsun.kototoro.main.ui.navigation3.LocalNavKey
+import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
+import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
+import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 
 object AppRouteNames {
+    const val MAIN_SHELL = "main_shell"
     const val HOME = "home"
     const val DISCOVER = "discover"
     const val HISTORY = "history"
@@ -19,6 +33,7 @@ object AppRouteNames {
     const val BOOKMARKS = "bookmarks"
     const val UPDATED = "updated"
     const val SEARCH = "search"
+    const val CONTENT_LIST = "content_list"
     const val DETAILS = "details"
 }
 
@@ -42,6 +57,10 @@ internal fun consumeEntityOrganizeMessageResult(savedStateHandle: SavedStateHand
     }
     return message
 }
+
+@Serializable
+@SerialName(AppRouteNames.MAIN_SHELL)
+data object MainShellRoute
 
 @Serializable
 @SerialName(AppRouteNames.HOME)
@@ -104,6 +123,12 @@ data object BookmarksRoute
 data object UpdatedRoute
 
 @Serializable
+@SerialName(AppRouteNames.CONTENT_LIST)
+data class ContentListRoute(
+    val sourceName: String,
+)
+
+@Serializable
 @SerialName(AppRouteNames.DETAILS)
 data object DetailsRoute
 
@@ -119,4 +144,59 @@ fun routeForBottomNavItem(@IdRes itemId: Int): Any = when (itemId) {
     R.id.nav_bookmarks -> BookmarksRoute
     R.id.nav_updated -> UpdatedRoute
     else -> HomeRoute
+}
+
+fun topLevelKeyForBottomNavItem(@IdRes itemId: Int): TopLevelNavKey = when (itemId) {
+    R.id.nav_home -> HomeNavKey
+    R.id.nav_history -> HistoryNavKey
+    R.id.nav_favorites -> FavoritesNavKey
+    R.id.nav_explore -> ExploreNavKey
+    R.id.nav_discover -> DiscoverNavKey
+    R.id.nav_feed -> FeedNavKey
+    R.id.nav_local -> LocalNavKey
+    R.id.nav_suggestions -> SuggestionsNavKey
+    R.id.nav_bookmarks -> BookmarksNavKey
+    R.id.nav_updated -> UpdatedNavKey
+    else -> HomeNavKey
+}
+
+fun routeForTopLevelKey(key: TopLevelNavKey): Any = when (key) {
+    HomeNavKey,
+    HistoryNavKey,
+    FavoritesNavKey,
+    ExploreNavKey,
+    DiscoverNavKey,
+    FeedNavKey,
+    LocalNavKey,
+    SuggestionsNavKey,
+    BookmarksNavKey,
+    UpdatedNavKey,
+    -> MainShellRoute
+}
+
+fun bottomNavItemIdForTopLevelKey(key: TopLevelNavKey): Int = when (key) {
+    HomeNavKey -> R.id.nav_home
+    HistoryNavKey -> R.id.nav_history
+    FavoritesNavKey -> R.id.nav_favorites
+    ExploreNavKey -> R.id.nav_explore
+    DiscoverNavKey -> R.id.nav_discover
+    FeedNavKey -> R.id.nav_feed
+    LocalNavKey -> R.id.nav_local
+    SuggestionsNavKey -> R.id.nav_suggestions
+    BookmarksNavKey -> R.id.nav_bookmarks
+    UpdatedNavKey -> R.id.nav_updated
+}
+
+fun topLevelKeyForDestination(destination: NavDestination?): TopLevelNavKey? = when {
+    destination?.hasRoute<HomeRoute>() == true -> HomeNavKey
+    destination?.hasRoute<HistoryRoute>() == true -> HistoryNavKey
+    destination?.hasRoute<FavoritesRoute>() == true -> FavoritesNavKey
+    destination?.hasRoute<ExploreRoute>() == true -> ExploreNavKey
+    destination?.hasRoute<DiscoverRoute>() == true -> DiscoverNavKey
+    destination?.hasRoute<FeedRoute>() == true -> FeedNavKey
+    destination?.hasRoute<LocalRoute>() == true -> LocalNavKey
+    destination?.hasRoute<SuggestionsRoute>() == true -> SuggestionsNavKey
+    destination?.hasRoute<BookmarksRoute>() == true -> BookmarksNavKey
+    destination?.hasRoute<UpdatedRoute>() == true -> UpdatedNavKey
+    else -> null
 }

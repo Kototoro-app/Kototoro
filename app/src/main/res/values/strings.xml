@@ -2915,6 +2915,10 @@ Proceed?</string>
     <string name="pref_glass_noise_strength_summary">Sets the final noise amount applied to the current glass material preset, from 0.00 to 1.00</string>
     <string name="pref_glass_immersive_strength">Immersive tint strength</string>
     <string name="pref_glass_immersive_strength_summary">Controls the top and bottom immersive tint intensity independently of the selected material preset</string>
+    <string name="glass_material_family_kototoro">Kototoro (Recommended)</string>
+    <string name="glass_material_family_haze">Haze</string>
+    <string name="glass_material_family_cupertino">Cupertino</string>
+    <string name="glass_material_family_fluent">Fluent</string>
     <string name="glass_material_kototoro">Kototoro (Recommended)</string>
     <string name="glass_material_haze_ultra_thin">Haze Ultra Thin</string>
     <string name="glass_material_haze_thin">Haze Thin</string>

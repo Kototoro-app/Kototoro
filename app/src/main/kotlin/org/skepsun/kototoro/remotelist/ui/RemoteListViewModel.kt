@@ -261,7 +261,9 @@ open class RemoteListViewModel @Inject constructor(
 	)
 
 	protected open fun resolveInitialSource(savedStateHandle: SavedStateHandle): ParserContentSource {
-		return ContentSource(savedStateHandle[org.skepsun.kototoro.core.nav.AppRouter.KEY_SOURCE])
+		val sourceName = savedStateHandle.get<String>(org.skepsun.kototoro.core.nav.AppRouter.KEY_SOURCE)
+			?: savedStateHandle.get<String>("sourceName")
+		return ContentSource(sourceName)
 	}
 
 	protected open suspend fun onBuildList(list: MutableList<ListModel>) = Unit

@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
@@ -144,13 +145,13 @@ fun KototoroBottomNav(
     }
 
     val navContainerStyle = if (isFloating) {
-        GlassDefaults.prominentStyle().copy(
+        GlassDefaults.bottomBarChromeStyle().copy(
             containerAlpha = targetAlpha,
             borderAlpha = 0.10f,
             shadowElevation = 0.dp,
         )
     } else {
-        GlassDefaults.regularStyle().copy(
+        GlassDefaults.bottomBarChromeStyle().copy(
             containerAlpha = (targetAlpha - 0.06f).coerceAtLeast(0.70f),
             borderAlpha = 0f,
             shadowElevation = 0.dp,
@@ -262,6 +263,7 @@ fun KototoroBottomNav(
             style = navContainerStyle,
             shape = RoundedCornerShape(0.dp),
             visualTreatment = GlassVisualTreatment.TopBarPrototype,
+            componentRole = GlassComponentRole.BottomBar,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 NavigationBar(

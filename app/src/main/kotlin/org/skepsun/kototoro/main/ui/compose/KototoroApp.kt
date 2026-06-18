@@ -111,6 +111,18 @@ import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarFilterRail
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.RouteScopedTopBarOverrideState
+import org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey
+import org.skepsun.kototoro.main.ui.navigation3.ExploreNavKey
+import org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey
+import org.skepsun.kototoro.main.ui.navigation3.FeedNavKey
+import org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey
+import org.skepsun.kototoro.main.ui.navigation3.HomeNavKey
+import org.skepsun.kototoro.main.ui.navigation3.LocalNavKey
+import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
+import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
+import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
+import org.skepsun.kototoro.main.ui.navigation3.rememberMainNavState
 
 @Immutable
 private data class KototoroNavigationPrefs(
@@ -135,18 +147,45 @@ private data class KototoroFilterVisibilityPrefs(
     val isSourceTagFilterVisible: Boolean,
 )
 
-private fun routeOwnerKeyForDestination(
-    destination: androidx.navigation.NavDestination?,
-): String? = when {
-    destination?.hasRoute<DiscoverRoute>() == true -> "discover"
-    destination?.hasRoute<HistoryRoute>() == true -> "history"
-    destination?.hasRoute<FavoritesRoute>() == true -> "favorites"
-    destination?.hasRoute<ExploreRoute>() == true -> "explore"
-    destination?.hasRoute<FeedRoute>() == true -> "feed"
-    destination?.hasRoute<LocalRoute>() == true -> "local"
-    destination?.hasRoute<SuggestionsRoute>() == true -> "suggestions"
-    destination?.hasRoute<UpdatedRoute>() == true -> "updated"
+private fun routeOwnerKeyForTopLevelKey(
+    key: TopLevelNavKey?,
+): String? = when (key) {
+    DiscoverNavKey -> "discover"
+    HistoryNavKey -> "history"
+    FavoritesNavKey -> "favorites"
+    ExploreNavKey -> "explore"
+    FeedNavKey -> "feed"
+    LocalNavKey -> "local"
+    SuggestionsNavKey -> "suggestions"
+    UpdatedNavKey -> "updated"
     else -> null
+}
+
+private fun TopLevelNavKey?.supportsDisplayModeMenu(): Boolean = when (this) {
+    ExploreNavKey,
+    DiscoverNavKey,
+    HomeNavKey,
+    HistoryNavKey,
+    FavoritesNavKey,
+    LocalNavKey,
+    SuggestionsNavKey,
+    UpdatedNavKey,
+    -> true
+    else -> false
+}
+
+private fun TopLevelNavKey?.supportsGridSizeSlider(): Boolean = when (this) {
+    HomeNavKey,
+    DiscoverNavKey,
+    ExploreNavKey,
+    FeedNavKey,
+    HistoryNavKey,
+    FavoritesNavKey,
+    LocalNavKey,
+    SuggestionsNavKey,
+    UpdatedNavKey,
+    -> true
+    else -> false
 }
 
 private fun lerpFloat(
@@ -405,20 +444,37 @@ fun KototoroApp(
         topAppBarState.heightOffsetLimit = -topBarHeightPx.toFloat()
     }
 
+    val mainNavItems by appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
+    val initialTopLevel = remember(mainNavItems) {
+        topLevelKeyForBottomNavItem(mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home)
+    }
+    val mainNavState = rememberMainNavState(initialTopLevel = initialTopLevel)
     val navController = rememberNavController()
+    val topLevelNavigator = remember(navController, mainNavState) {
+        NavControllerMainNavigator(
+            navController = navController,
+            mainActivity = null,
+            mainNavState = mainNavState,
+        )
+    }
     fun navigateToBottomNavItem(
         itemId: Int,
         restoreState: Boolean = true,
     ) {
-        val route = routeForBottomNavItem(itemId)
-        if (!navController.currentDestination.isBottomNavRoute(itemId)) {
-            navController.navigate(route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    inclusive = false
-                    saveState = restoreState
+        val topLevelKey = topLevelKeyForBottomNavItem(itemId)
+        if (mainNavState.selectedTopLevel != topLevelKey) {
+            if (restoreState) {
+                topLevelNavigator.openTopLevel(topLevelKey)
+            } else {
+                mainNavState.navigateTopLevel(topLevelKey)
+                navController.navigate(routeForTopLevelKey(topLevelKey)) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        inclusive = false
+                        saveState = false
+                    }
+                    launchSingleTop = true
+                    this.restoreState = false
                 }
-                launchSingleTop = true
-                this.restoreState = restoreState
             }
         }
     }
@@ -433,24 +489,30 @@ fun KototoroApp(
             navigateToBottomNavItem(itemId)
         }
     }
-    val mainNavItems by appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
-    val startDestination = remember(mainNavItems) {
-        mainNavItems.firstOrNull()?.let { routeForBottomNavItem(it.id) } ?: HomeRoute
+    val startDestination = remember(initialTopLevel) {
+        routeForTopLevelKey(initialTopLevel)
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val currentDestinationRoute = currentDestination?.route
     val isSearchRoute = currentDestination?.hasRoute<SearchRoute>() == true
     val isDetailsRoute = currentDestination?.hasRoute<DetailsRoute>() == true
-    val shouldShowChrome = !isSearchRoute && !isDetailsRoute
-    val currentTopBarOwnerKey = routeOwnerKeyForDestination(currentDestination)
+    val isContentListRoute = currentDestination?.hasRoute<ContentListRoute>() == true
+    val isImmersiveRoute = isDetailsRoute || isContentListRoute
+    val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
+    val currentTopLevelKey = topLevelKeyForDestination(currentDestination)
+        ?: if (shouldShowChrome) mainNavState.selectedTopLevel else null
+    val currentTopBarOwnerKey = routeOwnerKeyForTopLevelKey(currentTopLevelKey)
+    LaunchedEffect(currentDestination) {
+        topLevelKeyForDestination(currentDestination)?.let(mainNavState::navigateTopLevel)
+    }
     var lastChromeTopBarOwnerKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(currentTopBarOwnerKey) {
         if (currentTopBarOwnerKey != null) {
             lastChromeTopBarOwnerKey = currentTopBarOwnerKey
         }
     }
-    val chromeTopBarOwnerKey = currentTopBarOwnerKey ?: if (isDetailsRoute && isDetailsChromeTransitionPending) {
+    val chromeTopBarOwnerKey = currentTopBarOwnerKey ?: if (isImmersiveRoute && isDetailsChromeTransitionPending) {
         lastChromeTopBarOwnerKey
     } else {
         null
@@ -458,16 +520,16 @@ fun KototoroApp(
     val contextualMenuActions = chromeTopBarOwnerKey
         ?.let(routeContextualMenuActions::get)
         .orEmpty()
-    val shouldReserveChromeInsets = shouldShowChrome || (isDetailsRoute && isDetailsChromeTransitionPending)
-    var isChromeVisible by rememberSaveable { mutableStateOf(shouldShowChrome && !isDetailsRoute) }
-    var pendingChromeRestoreFromDetails by rememberSaveable { mutableStateOf(isDetailsRoute) }
+    val shouldReserveChromeInsets = shouldShowChrome || (isImmersiveRoute && isDetailsChromeTransitionPending)
+    var isChromeVisible by rememberSaveable { mutableStateOf(shouldShowChrome && !isImmersiveRoute) }
+    var pendingChromeRestoreFromDetails by rememberSaveable { mutableStateOf(isImmersiveRoute) }
     var lastHeroTransitionStartedAtMs by remember { mutableLongStateOf(0L) }
     var heroTransitionPhase by rememberSaveable { mutableStateOf(HeroTransitionPhase.Idle) }
     val shouldHideChromeForEnteringDetails =
         isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
     val shouldDelayChromeRestoreFromDetails =
-        pendingChromeRestoreFromDetails && shouldShowChrome && !isDetailsRoute
-    LaunchedEffect(currentDestination, shouldShowChrome, isDetailsRoute, isDetailsChromeTransitionPending) {
+        pendingChromeRestoreFromDetails && shouldShowChrome && !isImmersiveRoute
+    LaunchedEffect(currentDestination, shouldShowChrome, isImmersiveRoute, isDetailsChromeTransitionPending) {
         if (currentDestination == null) {
             return@LaunchedEffect
         }
@@ -478,7 +540,7 @@ fun KototoroApp(
             isDetailsChromeTransitionPending = false
         }
         when {
-            isDetailsRoute -> {
+            isImmersiveRoute -> {
                 pendingChromeRestoreFromDetails = true
                 if (!isDetailsChromeTransitionPending) {
                     isChromeVisible = false
@@ -513,10 +575,10 @@ fun KototoroApp(
     val heroTransitionInProgress by produceState(
         initialValue = false,
         isDetailsChromeTransitionPending,
-        isDetailsRoute,
+        isImmersiveRoute,
         lastHeroTransitionStartedAtMs,
     ) {
-        if (!isDetailsRoute && !isDetailsChromeTransitionPending) {
+        if (!isImmersiveRoute && !isDetailsChromeTransitionPending) {
             value = false
             return@produceState
         }
@@ -524,7 +586,7 @@ fun KototoroApp(
             value = isDetailsChromeTransitionPending
             return@produceState
         }
-        value = isDetailsChromeTransitionPending || isDetailsRoute
+        value = isDetailsChromeTransitionPending || isImmersiveRoute
         val elapsed = heroTransitionTimestampMs() - lastHeroTransitionStartedAtMs
         if (elapsed < MainNavigationMotion.HeroProtectionMillis) {
             value = true
@@ -539,9 +601,7 @@ fun KototoroApp(
             heroTransitionPhase = HeroTransitionPhase.Idle
         }
     }
-    val showBrowseSourceSettingsEntry = currentDestination?.let {
-        it.hasRoute<ExploreRoute>() || it.hasRoute<DiscoverRoute>()
-    } == true
+    val showBrowseSourceSettingsEntry = currentTopLevelKey == ExploreNavKey || currentTopLevelKey == DiscoverNavKey
     val resolvedTopBarOverrideState = chromeTopBarOwnerKey
         ?.let(routeTopBarOverrideStates::get)
         ?: globalTopBarOverrideState
@@ -571,7 +631,7 @@ fun KototoroApp(
         }
     }
     LaunchedEffect(currentDestinationRoute, currentTopBarOwnerKey) {
-        if (currentDestinationRoute != null && !isDetailsRoute && !isSearchRoute) {
+        if (currentDestinationRoute != null && !isImmersiveRoute && !isSearchRoute) {
             topAppBarState.heightOffset = 0f
             bottomNavOffset = 0f
             totalContentScrollOffset = 0f
@@ -607,43 +667,12 @@ fun KototoroApp(
         label = "chrome_alpha",
     )
     val chromeAlpha = animatedChromeAlpha
-    val isHomeRoute = currentDestination?.hasRoute<HomeRoute>() == true
-    val supportsDisplayModeMenu = currentDestination?.let {
-        it.hasRoute<ExploreRoute>() ||
-            it.hasRoute<DiscoverRoute>() ||
-            it.hasRoute<HomeRoute>() ||
-            it.hasRoute<HistoryRoute>() ||
-            it.hasRoute<FavoritesRoute>() ||
-            it.hasRoute<LocalRoute>() ||
-            it.hasRoute<SuggestionsRoute>() ||
-            it.hasRoute<UpdatedRoute>()
-    } == true
-    val supportsGridSizeSlider = currentDestination?.let {
-        it.hasRoute<HomeRoute>() ||
-            it.hasRoute<DiscoverRoute>() ||
-            it.hasRoute<ExploreRoute>() ||
-            it.hasRoute<FeedRoute>() ||
-            it.hasRoute<HistoryRoute>() ||
-            it.hasRoute<FavoritesRoute>() ||
-            it.hasRoute<LocalRoute>() ||
-            it.hasRoute<SuggestionsRoute>() ||
-            it.hasRoute<UpdatedRoute>()
-    } == true
+    val isHomeRoute = currentTopLevelKey == HomeNavKey
+    val supportsDisplayModeMenu = currentTopLevelKey.supportsDisplayModeMenu()
+    val supportsGridSizeSlider = currentTopLevelKey.supportsGridSizeSlider()
 
-    LaunchedEffect(currentDestination) {
-        val mappedId = when {
-            currentDestination?.hasRoute<HomeRoute>() == true -> org.skepsun.kototoro.R.id.nav_home
-            currentDestination?.hasRoute<HistoryRoute>() == true -> org.skepsun.kototoro.R.id.nav_history
-            currentDestination?.hasRoute<FavoritesRoute>() == true -> org.skepsun.kototoro.R.id.nav_favorites
-            currentDestination?.hasRoute<ExploreRoute>() == true -> org.skepsun.kototoro.R.id.nav_explore
-            currentDestination?.hasRoute<DiscoverRoute>() == true -> org.skepsun.kototoro.R.id.nav_discover
-            currentDestination?.hasRoute<FeedRoute>() == true -> org.skepsun.kototoro.R.id.nav_feed
-            currentDestination?.hasRoute<LocalRoute>() == true -> org.skepsun.kototoro.R.id.nav_local
-            currentDestination?.hasRoute<SuggestionsRoute>() == true -> org.skepsun.kototoro.R.id.nav_suggestions
-            currentDestination?.hasRoute<BookmarksRoute>() == true -> org.skepsun.kototoro.R.id.nav_bookmarks
-            currentDestination?.hasRoute<UpdatedRoute>() == true -> org.skepsun.kototoro.R.id.nav_updated
-            else -> -1
-        }
+    LaunchedEffect(currentTopLevelKey) {
+        val mappedId = currentTopLevelKey?.let(::bottomNavItemIdForTopLevelKey) ?: -1
         if (mappedId != -1) {
             onNavDestinationChanged(mappedId)
         }
@@ -696,7 +725,6 @@ fun KototoroApp(
 
     KototoroTheme(cornerRadius = cornerRadius) {
         val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-        val transitionHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
         val useRuntimeHaze = glassPrefs.isGlassEffectEnabled && supportsRuntimeHaze()
@@ -705,155 +733,63 @@ fun KototoroApp(
             LocalGlassPrefs provides glassPrefs,
             LocalRailAnimationFactor provides railAnimationFactor,
         ) {
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .then(if (useRuntimeHaze) Modifier.hazeSource(transitionHazeState) else Modifier)
-                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                .nestedScroll(nestedScrollConnection)
-                .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
-                SharedTransitionLayout {
-                    SideEffect {
-                        chromeSharedTransitionScope = if (effectiveSharedElementTransitionsEnabled) {
-                            this@SharedTransitionLayout
-                        } else {
-                            null
-                        }
-                    }
-                    CompositionLocalProvider(
-                        LocalHeroTransitionInProgress provides false,
-                        LocalHeroReturnTransitionInProgress provides false,
-                        LocalHeroTransitionPhase provides HeroTransitionPhase.Idle,
-                        LocalSharedTransitionScope provides if (effectiveSharedElementTransitionsEnabled) {
-                            this@SharedTransitionLayout
-                        } else {
-                            null
-                        },
-                    ) {
-                        AppNavGraph(
-                            navController = navController,
-                            isLandscapeNavigation = isLandscapeNavigation,
-                            startDestination = startDestination,
-                            contentPadding = contentPadding,
-                            bottomBarOffsetPx = effectiveBottomNavOffset,
-                            bottomBarHeightPx = bottomNavHeightPx,
-                            pageSaveHelper = pageSaveHelper,
-                            onDetailsTransitionRequested = {
-                                isDetailsChromeTransitionPending = true
-                                heroTransitionPhase = HeroTransitionPhase.EnteringDetails
-                                lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                            },
-                            onDetailsReturnTransitionRequested = {
-                                if (effectiveSharedElementTransitionsEnabled) {
-                                    isDetailsChromeTransitionPending = true
-                                    heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
-                                    lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                }
-                            },
-                            onExploreSourceSelectionTopBarChanged = { overrideState ->
-                                when (overrideState) {
-                                    is RouteScopedTopBarOverrideState -> {
-                                        val ownerRoute = overrideState.ownerRoute
-                                        val state = overrideState.state
-                                        if (state == null) {
-                                            if (ownerRoute in routeTopBarOverrideStates) {
-                                                routeTopBarOverrideStates.remove(ownerRoute)
-                                            }
-                                        } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
-                                            routeTopBarOverrideStates[ownerRoute] = state
-                                        }
-                                    }
-                                    else -> {
-                                        if (globalTopBarOverrideState !== overrideState) {
-                                            globalTopBarOverrideState = overrideState
-                                        }
-                                    }
-                                }
-                            },
-                            onContextualMenuActionsChanged = { state ->
-                                if (state.actions.isEmpty()) {
-                                    routeContextualMenuActions.remove(state.ownerRoute)
-                                } else {
-                                    routeContextualMenuActions[state.ownerRoute] = state.actions
-                                }
-                            },
-                            onOpenSearch = { request ->
-                                val route = SearchNavigation.createRoute(request)
-                                if (isSearchRoute) {
-                                    navController.navigate(route) {
-                                        popUpTo<SearchRoute> { inclusive = true }
-                                        launchSingleTop = true
-                                    }
-                                } else {
-                                    navController.navigate(route) {
-                                        launchSingleTop = true
-                                    }
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier)
-                        )
-                    }
-                }
-
-                val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
-                val isDarkTheme = isSystemInDarkTheme()
-                val immersiveBaseColor = if (isDarkTheme) Color.Black else Color.White
-                val immersiveTransparent = Color.Transparent
-                val topGradientAlpha = if (topBarHeightPx > 0) {
-                    (-totalContentScrollOffset / topBarHeightPx.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-                val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
-                val topImmersiveHeight = with(density) {
-                    (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
-                        .coerceAtLeast(statusBarHeightPx + topImmersiveOverflowPx)
-                        .toDp()
-                }
-                val bottomImmersiveHeight = with(density) {
-                    (
-                        (navigationBarHeightPx / 2) +
-                            if (!isLandscapeNavigation && shouldShowChrome) bottomNavHeightPx else 0
-                        )
-                        .coerceAtLeast(if (!isLandscapeNavigation && shouldShowChrome) bottomNavHeightPx else navigationBarHeightPx / 2)
-                        .toDp()
-                }
-
-                if (!isDetailsRoute) {
-                    ImmersiveEdgeGradient(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .graphicsLayer { alpha = topGradientAlpha },
-                        height = topImmersiveHeight,
-                        colors = listOf(
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
-                            immersiveTransparent,
-                        ),
-                        stops = listOf(0f, 0.38f, 0.72f, 0.92f, 1f),
+            val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
+            val isDarkTheme = isSystemInDarkTheme()
+            val immersiveBaseColor = if (isDarkTheme) Color.Black else Color.White
+            val immersiveTransparent = Color.Transparent
+            val topGradientAlpha = if (topBarHeightPx > 0) {
+                (-totalContentScrollOffset / topBarHeightPx.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
+            val topImmersiveHeight = with(density) {
+                (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
+                    .coerceAtLeast(statusBarHeightPx + topImmersiveOverflowPx)
+                    .toDp()
+            }
+            val bottomImmersiveHeight = with(density) {
+                (
+                    (navigationBarHeightPx / 2) +
+                        if (!isLandscapeNavigation && shouldShowChrome) bottomNavHeightPx else 0
                     )
-
-                    ImmersiveEdgeGradient(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth(),
-                        height = bottomImmersiveHeight,
-                        colors = listOf(
-                            immersiveTransparent,
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
-                            immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
-                        ),
-                        stops = listOf(0f, 0.22f, 0.62f, 1f),
-                    )
-                }
-
+                    .coerceAtLeast(if (!isLandscapeNavigation && shouldShowChrome) bottomNavHeightPx else navigationBarHeightPx / 2)
+                    .toDp()
+            }
+            val mainShellChrome: @Composable BoxScope.() -> Unit = {
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
+                    if (!isImmersiveRoute) {
+                        ImmersiveEdgeGradient(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .graphicsLayer { alpha = topGradientAlpha },
+                            height = topImmersiveHeight,
+                            colors = listOf(
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
+                                immersiveTransparent,
+                            ),
+                            stops = listOf(0f, 0.38f, 0.72f, 0.92f, 1f),
+                        )
+
+                        ImmersiveEdgeGradient(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth(),
+                            height = bottomImmersiveHeight,
+                            colors = listOf(
+                                immersiveTransparent,
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
+                                immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
+                            ),
+                            stops = listOf(0f, 0.22f, 0.62f, 1f),
+                        )
+                    }
+
                     MainTopChrome(
                         effectiveTopBarOverrideState = effectiveTopBarOverrideState,
                         isLandscapeNavigation = isLandscapeNavigation,
@@ -966,6 +902,98 @@ fun KototoroApp(
                         onResumeClick = onResumeClick,
                     )
                 }
+            }
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                .nestedScroll(nestedScrollConnection)
+                .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
+                SharedTransitionLayout {
+                    SideEffect {
+                        chromeSharedTransitionScope = if (effectiveSharedElementTransitionsEnabled) {
+                            this@SharedTransitionLayout
+                        } else {
+                            null
+                        }
+                    }
+                    CompositionLocalProvider(
+                        LocalHeroTransitionInProgress provides false,
+                        LocalHeroReturnTransitionInProgress provides false,
+                        LocalHeroTransitionPhase provides HeroTransitionPhase.Idle,
+                        LocalSharedTransitionScope provides if (effectiveSharedElementTransitionsEnabled) {
+                            this@SharedTransitionLayout
+                        } else {
+                            null
+                        },
+                    ) {
+                        AppNavGraph(
+                            navController = navController,
+                            mainNavState = mainNavState,
+                            isLandscapeNavigation = isLandscapeNavigation,
+                            startDestination = startDestination,
+                            contentPadding = contentPadding,
+                            bottomBarOffsetPx = effectiveBottomNavOffset,
+                            bottomBarHeightPx = bottomNavHeightPx,
+                            pageSaveHelper = pageSaveHelper,
+                            onDetailsTransitionRequested = {
+                                isDetailsChromeTransitionPending = true
+                                heroTransitionPhase = HeroTransitionPhase.EnteringDetails
+                                lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
+                            },
+                            onDetailsReturnTransitionRequested = {
+                                if (effectiveSharedElementTransitionsEnabled) {
+                                    isDetailsChromeTransitionPending = true
+                                    heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
+                                    lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
+                                }
+                            },
+                            onExploreSourceSelectionTopBarChanged = { overrideState ->
+                                when (overrideState) {
+                                    is RouteScopedTopBarOverrideState -> {
+                                        val ownerRoute = overrideState.ownerRoute
+                                        val state = overrideState.state
+                                        if (state == null) {
+                                            if (ownerRoute in routeTopBarOverrideStates) {
+                                                routeTopBarOverrideStates.remove(ownerRoute)
+                                            }
+                                        } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
+                                            routeTopBarOverrideStates[ownerRoute] = state
+                                        }
+                                    }
+                                    else -> {
+                                        if (globalTopBarOverrideState !== overrideState) {
+                                            globalTopBarOverrideState = overrideState
+                                        }
+                                    }
+                                }
+                            },
+                            onContextualMenuActionsChanged = { state ->
+                                if (state.actions.isEmpty()) {
+                                    routeContextualMenuActions.remove(state.ownerRoute)
+                                } else {
+                                    routeContextualMenuActions[state.ownerRoute] = state.actions
+                                }
+                            },
+                            onOpenSearch = { request ->
+                                val route = SearchNavigation.createRoute(request)
+                                if (isSearchRoute) {
+                                    navController.navigate(route) {
+                                        popUpTo<SearchRoute> { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                } else {
+                                    navController.navigate(route) {
+                                        launchSingleTop = true
+                                    }
+                                }
+                            },
+                            mainShellChrome = mainShellChrome,
+                            modifier = Modifier
+                                .fillMaxSize()
+                        )
+                    }
+                }
 
                 if (isSearchOverlayMounted) {
                     KototoroSearchOverlay(
@@ -1062,7 +1090,7 @@ fun KototoroApp(
     var lastBackTime by remember { mutableLongStateOf(0L) }
     val primaryNavItemId = mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home
 
-    BackHandler(enabled = !isSearchRoute && !isDetailsRoute && !isSearchOverlayMounted) {
+    BackHandler(enabled = !isSearchRoute && !isImmersiveRoute && !isSearchOverlayMounted) {
         val shouldReturnHome = navBackStackEntry
             ?.savedStateHandle
             ?.get<Boolean>(RETURN_HOME_ON_BACK_KEY) == true
@@ -1070,7 +1098,7 @@ fun KototoroApp(
             navBackStackEntry?.savedStateHandle?.set(RETURN_HOME_ON_BACK_KEY, false)
             navigateToBottomNavItem(org.skepsun.kototoro.R.id.nav_home, restoreState = false)
             lastBackTime = 0L
-        } else if (!currentDestination.matchesBottomNavItem(primaryNavItemId)) {
+        } else if (currentTopLevelKey != topLevelKeyForBottomNavItem(primaryNavItemId)) {
             navigateToBottomNavItem(primaryNavItemId)
             lastBackTime = 0L
         } else {
@@ -1325,25 +1353,5 @@ private fun BoxScope.MainBottomChrome(
             showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
             onContinueReadingClick = onResumeClick,
         )
-    }
-}
-
-private fun androidx.navigation.NavDestination?.isBottomNavRoute(itemId: Int): Boolean {
-    return matchesBottomNavItem(itemId)
-}
-
-private fun androidx.navigation.NavDestination?.matchesBottomNavItem(itemId: Int): Boolean {
-    return when (itemId) {
-        org.skepsun.kototoro.R.id.nav_home -> this?.hasRoute<HomeRoute>() == true
-        org.skepsun.kototoro.R.id.nav_history -> this?.hasRoute<HistoryRoute>() == true
-        org.skepsun.kototoro.R.id.nav_favorites -> this?.hasRoute<FavoritesRoute>() == true
-        org.skepsun.kototoro.R.id.nav_explore -> this?.hasRoute<ExploreRoute>() == true
-        org.skepsun.kototoro.R.id.nav_discover -> this?.hasRoute<DiscoverRoute>() == true
-        org.skepsun.kototoro.R.id.nav_feed -> this?.hasRoute<FeedRoute>() == true
-        org.skepsun.kototoro.R.id.nav_local -> this?.hasRoute<LocalRoute>() == true
-        org.skepsun.kototoro.R.id.nav_suggestions -> this?.hasRoute<SuggestionsRoute>() == true
-        org.skepsun.kototoro.R.id.nav_bookmarks -> this?.hasRoute<BookmarksRoute>() == true
-        org.skepsun.kototoro.R.id.nav_updated -> this?.hasRoute<UpdatedRoute>() == true
-        else -> false
     }
 }

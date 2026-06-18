@@ -41,6 +41,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -112,6 +113,7 @@ fun DisplayOptionsSheet(
                 shape = RoundedCornerShape(28.dp),
                 style = GlassDefaults.prominentStyle(),
                 dialogSurface = true,
+                componentRole = GlassComponentRole.Sheet,
                 debugLabel = "display_options_glass",
             ) {
                 Column(

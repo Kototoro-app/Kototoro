@@ -71,6 +71,7 @@ import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
 import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.applyHorizontalRouteCloseTransition
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.os.AppShortcutManager
@@ -246,6 +247,7 @@ class SettingsActivity :
 	private val proxyIsTestRunningFlow = MutableStateFlow(false)
 	private val suggestionsExcludeTagsFlow = MutableStateFlow("")
 	private val suggestionsPreferredTagsFlow = MutableStateFlow("")
+	private var hasAppliedCloseRouteTransition = false
 	private var pendingExternalBackupApp: ExternalBackupApp? = null
 	private var pendingUnifiedSourcesFileImportKind: UnifiedSourceKind? = null
 	private var unifiedSourcesSearchActive by mutableStateOf(false)
@@ -471,6 +473,16 @@ class SettingsActivity :
 			return true
 		}
 		return super.onSupportNavigateUp()
+	}
+
+	override fun finish() {
+		super.finish()
+		applyCloseRouteTransitionIfNeeded()
+	}
+
+	override fun finishAfterTransition() {
+		super.finishAfterTransition()
+		applyCloseRouteTransitionIfNeeded()
 	}
 
 	override fun onSaveInstanceState(outState: Bundle) {
@@ -2148,6 +2160,7 @@ class SettingsActivity :
 		private const val HOST_ADD_REPO = "add-repo"
 		private const val DISCORD_ORIGIN = "https://discord.com"
 		private const val DISCORD_WWW_ORIGIN = "https://www.discord.com"
+		const val EXTRA_USE_HORIZONTAL_ROUTE_TRANSITION = "use_horizontal_route_transition"
 		const val ARG_PREF_KEY = "pref_key"
 		private const val EXTRA_UNIFIED_SOURCES_KIND = "extra_unified_sources_kind"
 		private const val EXTRA_UNIFIED_SOURCES_URL = "extra_unified_sources_url"
@@ -2217,6 +2230,17 @@ class SettingsActivity :
 					encodeEntityOrganizeSelection(selectedContentIds),
 				)
 		}
+	}
+
+	private fun applyCloseRouteTransitionIfNeeded() {
+		if (hasAppliedCloseRouteTransition) {
+			return
+		}
+		if (!intent.getBooleanExtra(EXTRA_USE_HORIZONTAL_ROUTE_TRANSITION, false)) {
+			return
+		}
+		hasAppliedCloseRouteTransition = true
+		applyHorizontalRouteCloseTransition()
 	}
 
 	private fun Bundle.toComposeDestination(): SettingsDestination? {

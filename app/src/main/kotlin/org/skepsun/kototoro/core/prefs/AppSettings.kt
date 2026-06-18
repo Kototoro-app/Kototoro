@@ -2531,4 +2531,76 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			}
 		}
 	}
+
+	enum class GlassMaterialFamily(
+		val defaultPreset: GlassMaterialPreset,
+	) {
+		KOTOTORO(GlassMaterialPreset.KOTOTORO),
+		HAZE(GlassMaterialPreset.HAZE_THIN),
+		CUPERTINO(GlassMaterialPreset.CUPERTINO_THIN),
+		FLUENT(GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT),
+		CUSTOM(GlassMaterialPreset.CUSTOM),
+	}
+
+	fun resolveGlassMaterialFamily(
+		preset: GlassMaterialPreset = glassMaterialPreset,
+	): GlassMaterialFamily {
+		return preset.toFamily()
+	}
+}
+
+fun AppSettings.GlassMaterialPreset.toFamily(): AppSettings.GlassMaterialFamily {
+	return when (this) {
+		AppSettings.GlassMaterialPreset.KOTOTORO -> AppSettings.GlassMaterialFamily.KOTOTORO
+		AppSettings.GlassMaterialPreset.HAZE_ULTRA_THIN,
+		AppSettings.GlassMaterialPreset.HAZE_THIN,
+		AppSettings.GlassMaterialPreset.HAZE_REGULAR,
+		AppSettings.GlassMaterialPreset.HAZE_THICK,
+		AppSettings.GlassMaterialPreset.HAZE_ULTRA_THICK -> AppSettings.GlassMaterialFamily.HAZE
+		AppSettings.GlassMaterialPreset.CUPERTINO_ULTRA_THIN,
+		AppSettings.GlassMaterialPreset.CUPERTINO_THIN,
+		AppSettings.GlassMaterialPreset.CUPERTINO_REGULAR,
+		AppSettings.GlassMaterialPreset.CUPERTINO_THICK -> AppSettings.GlassMaterialFamily.CUPERTINO
+		AppSettings.GlassMaterialPreset.FLUENT_THIN_ACRYLIC,
+		AppSettings.GlassMaterialPreset.FLUENT_ACCENT_ACRYLIC_BASE,
+		AppSettings.GlassMaterialPreset.FLUENT_ACCENT_ACRYLIC_DEFAULT,
+		AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_BASE,
+		AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT,
+		AppSettings.GlassMaterialPreset.FLUENT_MICA,
+		AppSettings.GlassMaterialPreset.FLUENT_MICA_ALT -> AppSettings.GlassMaterialFamily.FLUENT
+		AppSettings.GlassMaterialPreset.CUSTOM -> AppSettings.GlassMaterialFamily.CUSTOM
+	}
+}
+
+fun AppSettings.GlassMaterialFamily.resolvePreset(
+	componentRole: org.skepsun.kototoro.core.ui.glass.GlassComponentRole,
+): AppSettings.GlassMaterialPreset {
+	return when (this) {
+		AppSettings.GlassMaterialFamily.KOTOTORO -> AppSettings.GlassMaterialPreset.KOTOTORO
+		AppSettings.GlassMaterialFamily.HAZE -> when (componentRole) {
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.TopBar,
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.BottomBar -> AppSettings.GlassMaterialPreset.HAZE_THIN
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Menu,
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Dialog -> AppSettings.GlassMaterialPreset.HAZE_REGULAR
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Sheet -> AppSettings.GlassMaterialPreset.HAZE_THICK
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface -> AppSettings.GlassMaterialPreset.HAZE_THIN
+		}
+		AppSettings.GlassMaterialFamily.CUPERTINO -> when (componentRole) {
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.TopBar,
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.BottomBar -> AppSettings.GlassMaterialPreset.CUPERTINO_THIN
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Menu,
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Dialog -> AppSettings.GlassMaterialPreset.CUPERTINO_REGULAR
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Sheet -> AppSettings.GlassMaterialPreset.CUPERTINO_THICK
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface -> AppSettings.GlassMaterialPreset.CUPERTINO_THIN
+		}
+		AppSettings.GlassMaterialFamily.FLUENT -> when (componentRole) {
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.TopBar,
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.BottomBar -> AppSettings.GlassMaterialPreset.FLUENT_MICA
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Menu,
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Dialog -> AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Sheet -> AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_BASE
+			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface -> AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT
+		}
+		AppSettings.GlassMaterialFamily.CUSTOM -> AppSettings.GlassMaterialPreset.CUSTOM
+	}
 }

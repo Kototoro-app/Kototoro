@@ -2916,6 +2916,10 @@ SHA-256 指纹:
     <string name="pref_glass_noise_strength_summary">设置当前玻璃预设应用的最终噪点量，范围 0.00 至 1.00</string>
     <string name="pref_glass_immersive_strength">沉浸式着色强度</string>
     <string name="pref_glass_immersive_strength_summary">独立控制顶部和底部的沉浸式着色强度，不受预设影响</string>
+    <string name="glass_material_family_kototoro">Kototoro（推荐）</string>
+    <string name="glass_material_family_haze">Haze 风格</string>
+    <string name="glass_material_family_cupertino">Cupertino 风格</string>
+    <string name="glass_material_family_fluent">Fluent 风格</string>
     <string name="glass_material_kototoro">Kototoro（推荐）</string>
     <string name="glass_material_haze_ultra_thin">Haze 超薄</string>
     <string name="glass_material_haze_thin">Haze 薄</string>

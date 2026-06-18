@@ -11,6 +11,9 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.openDetailsReader
+import org.skepsun.kototoro.parsers.model.ContentListFilter
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.search.domain.SearchKind
 
 internal fun handleDetailsAction(
@@ -21,6 +24,7 @@ internal fun handleDetailsAction(
     coroutineScope: CoroutineScope,
     snackbarHost: View,
     overrideEditLauncher: ActivityResultLauncher<Intent>,
+    onOpenSourceList: ((source: ContentSource, filter: ContentListFilter?, sortOrder: SortOrder?) -> Unit)? = null,
     onFinish: () -> Unit,
 ) {
     when (action) {
@@ -53,7 +57,8 @@ internal fun handleDetailsAction(
         DetailsAction.Share -> viewModel.getContentOrNull()?.let(appRouter::showShareDialog)
         DetailsAction.ForgetHistory -> viewModel.removeFromHistory()
         DetailsAction.ManageCategories -> appRouter.openFavoriteCategories()
-        is DetailsAction.OpenSource -> appRouter.openList(action.source, null, null)
+        is DetailsAction.OpenSource -> onOpenSourceList?.invoke(action.source, null, null)
+            ?: appRouter.openList(action.source, null, null)
         is DetailsAction.OpenTrackingDiscover -> appRouter.openTrackingDiscover(action.service, action.forceLoad)
         is DetailsAction.SearchAuthorOnSource -> appRouter.openSearch(action.source, action.author)
         is DetailsAction.SearchAuthorEverywhere -> appRouter.openSearch(action.author, SearchKind.AUTHOR)

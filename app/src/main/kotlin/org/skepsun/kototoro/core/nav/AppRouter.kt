@@ -704,9 +704,10 @@ class AppRouter private constructor(
     fun openSettings() {
         val hostActivity = activity
         startActivity(
-            Intent(contextOrNull() ?: return, SettingsActivity::class.java),
-            hostActivity?.let(::activityTransitionOptionsOf),
+            Intent(contextOrNull() ?: return, SettingsActivity::class.java)
+                .putExtra(SettingsActivity.EXTRA_USE_HORIZONTAL_ROUTE_TRANSITION, true),
         )
+        hostActivity?.applyHorizontalRouteOpenTransition()
     }
 
     fun openEntityOrganizeSettings(selectedContentIds: Set<Long> = emptySet()) {

@@ -74,6 +74,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -186,8 +187,9 @@ fun KototoroTopBar(
             ) {
                 GlassSurface(
                     shape = CompactTopBarPillShape,
-                    style = GlassDefaults.subtleStyle(),
+                    style = GlassDefaults.topBarChromeStyle(),
                     visualTreatment = GlassVisualTreatment.TopBarPrototype,
+                    componentRole = GlassComponentRole.TopBar,
                 ) {
                     IconButton(
                         onClick = onSearchClick,
@@ -222,8 +224,9 @@ fun KototoroTopBar(
             ) {
                 GlassSurface(
                     shape = CompactTopBarPillShape,
-                    style = GlassDefaults.subtleStyle(),
+                    style = GlassDefaults.topBarChromeStyle(),
                     visualTreatment = GlassVisualTreatment.TopBarPrototype,
+                    componentRole = GlassComponentRole.TopBar,
                 ) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
                         Row(
@@ -464,8 +467,9 @@ fun CompactTopBarTabsRail(
     GlassSurface(
         modifier = modifier,
         shape = CompactTopBarPillShape,
-        style = GlassDefaults.subtleStyle(),
+        style = GlassDefaults.topBarChromeStyle(),
         visualTreatment = GlassVisualTreatment.TopBarPrototype,
+        componentRole = GlassComponentRole.TopBar,
     ) {
         LazyRow(
             state = listState,
@@ -548,8 +552,9 @@ private fun InlineCompactTopBarTabsRail(
     GlassSurface(
         modifier = modifier,
         shape = CompactTopBarPillShape,
-        style = GlassDefaults.subtleStyle(),
+        style = GlassDefaults.topBarChromeStyle(),
         visualTreatment = GlassVisualTreatment.TopBarPrototype,
+        componentRole = GlassComponentRole.TopBar,
     ) {
         LazyRow(
             state = listState,
@@ -621,8 +626,9 @@ fun CompactTopBarFilterRail(
             val shouldLoadIcon = itemIndex in visibleItemRange
             GlassSurface(
                 shape = RoundedCornerShape(22.dp),
-                style = GlassDefaults.subtleStyle(),
+                style = GlassDefaults.topBarChromeStyle(),
                 visualTreatment = GlassVisualTreatment.TopBarPrototype,
+                componentRole = GlassComponentRole.TopBar,
             ) {
                 Row(
                     modifier = Modifier

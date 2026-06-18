@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
@@ -56,6 +57,7 @@ fun GlassDropdownMenu(
             style = style,
             allowRuntimeHaze = true,
             dialogSurface = true,
+            componentRole = GlassComponentRole.Menu,
             visualTreatment = GlassVisualTreatment.Standard,
         ) {
             Column(

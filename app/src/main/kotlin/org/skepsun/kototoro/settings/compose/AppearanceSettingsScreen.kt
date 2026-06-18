@@ -20,6 +20,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialFamily
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialPreset
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -37,7 +38,7 @@ data class AppearanceSettingsUiState(
     val isGlassEffectEnabled: Boolean,
     val isGlassEffectSettingsEnabled: Boolean,
     val isGlassEffectDetailSettingsEnabled: Boolean,
-    val glassMaterialPreset: GlassMaterialPreset,
+    val glassMaterialFamily: GlassMaterialFamily,
     val hazeOpacityPercent: Int,
     val glassBlurStrengthPercent: Int,
     val glassNoiseStrengthPercent: Int,
@@ -99,7 +100,7 @@ data class AppearanceSettingsUiState(
 data class AppearanceSettingsOptions(
     val colorSchemes: List<SettingsChoiceOption<ColorScheme>>,
     val themes: List<SettingsChoiceOption<Int>>,
-    val glassMaterialPresets: List<SettingsChoiceOption<GlassMaterialPreset>>,
+    val glassMaterialFamilies: List<SettingsChoiceOption<GlassMaterialFamily>>,
     val tabletUiModes: List<SettingsChoiceOption<TabletUiMode>>,
     val appLocales: List<SettingsChoiceOption<String>>,
     val loadingCircleStyles: List<SettingsChoiceOption<AppSettings.LoadingCircleStyle>>,
@@ -127,7 +128,7 @@ fun AppearanceSettingsScreen(
     onAmoledThemeChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
-    onGlassMaterialPresetChange: (GlassMaterialPreset) -> Unit,
+    onGlassMaterialFamilyChange: (GlassMaterialFamily) -> Unit,
     onHazeOpacityChange: (Int) -> Unit,
     onGlassBlurStrengthChange: (Int) -> Unit,
     onGlassNoiseStrengthChange: (Int) -> Unit,
@@ -237,11 +238,11 @@ fun AppearanceSettingsScreen(
                 SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.pref_blur_mode),
-                    value = state.glassMaterialPreset,
-                    options = options.glassMaterialPresets,
+                    value = state.glassMaterialFamily,
+                    options = options.glassMaterialFamilies,
                     summary = stringResource(R.string.pref_blur_mode_summary),
                     enabled = state.isGlassEffectDetailSettingsEnabled,
-                    onValueChange = onGlassMaterialPresetChange,
+                    onValueChange = onGlassMaterialFamilyChange,
                 )
                 SettingsSectionDivider()
                 SettingsSliderPreference(

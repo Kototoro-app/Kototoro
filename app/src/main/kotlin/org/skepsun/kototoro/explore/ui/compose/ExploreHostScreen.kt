@@ -277,6 +277,7 @@ fun KototoroExploreHostRoute(
     discoverViewModel: DiscoverViewModel = hiltViewModel(),
     onSourceSelectionTopBarChanged: (ExploreSourceSelectionTopBarState?) -> Unit = {},
     onNavigateToDetails: ((DetailsOrigin, String?) -> Unit)? = null,
+    onOpenSourceList: ((org.skepsun.kototoro.parsers.model.ContentSource) -> Unit)? = null,
 ) {
     val sourceItems by exploreViewModel.content.collectAsStateWithLifecycle()
     val discoverItems by discoverViewModel.content.collectAsStateWithLifecycle()
@@ -739,7 +740,7 @@ fun KototoroExploreHostRoute(
                                 if (selectedSourceIds.isNotEmpty()) {
                                     selectedSourceIds = selectedSourceIds.toggle(source.id)
                                 } else {
-                                    appRouter.openList(source.source, null, null)
+                                    onOpenSourceList?.invoke(source.source) ?: appRouter.openList(source.source, null, null)
                                 }
                             },
                             onSourceLongClick = { source ->
@@ -767,7 +768,7 @@ fun KototoroExploreHostRoute(
                             if (selectedSourceIds.isNotEmpty()) {
                                 selectedSourceIds = selectedSourceIds.toggle(source.id)
                             } else {
-                                appRouter.openList(source.source, null, null)
+                                onOpenSourceList?.invoke(source.source) ?: appRouter.openList(source.source, null, null)
                             }
                         },
                         onSourceLongClick = { source ->

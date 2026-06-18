@@ -1,12 +1,15 @@
 package org.skepsun.kototoro.core.nav
-import org.skepsun.kototoro.core.util.ext.findActivity
 
+import android.app.Activity
 import android.app.ActivityOptions
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.core.util.ext.isOnScreen
 
@@ -54,4 +57,36 @@ fun activityTransitionOptionsOf(activity: FragmentActivity): Bundle? {
 		return null
 	}
 	return androidx.core.app.ActivityOptionsCompat.makeSceneTransitionAnimation(activity).toBundle()
+}
+
+fun Activity.applyHorizontalRouteOpenTransition() {
+	if (!isAnimationsEnabled) {
+		return
+	}
+	if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+		overrideActivityTransition(
+			Activity.OVERRIDE_TRANSITION_OPEN,
+			R.anim.route_slide_in_right,
+			R.anim.route_slide_out_left,
+		)
+	} else {
+		@Suppress("DEPRECATION")
+		overridePendingTransition(R.anim.route_slide_in_right, R.anim.route_slide_out_left)
+	}
+}
+
+fun Activity.applyHorizontalRouteCloseTransition() {
+	if (!isAnimationsEnabled) {
+		return
+	}
+	if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+		overrideActivityTransition(
+			Activity.OVERRIDE_TRANSITION_CLOSE,
+			R.anim.route_slide_in_left,
+			R.anim.route_slide_out_right,
+		)
+	} else {
+		@Suppress("DEPRECATION")
+		overridePendingTransition(R.anim.route_slide_in_left, R.anim.route_slide_out_right)
+	}
 }

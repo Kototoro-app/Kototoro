@@ -157,6 +157,7 @@ import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
@@ -2440,6 +2441,7 @@ private fun DetailsPaneContent(
             shape = paneShape,
             style = paneGlassStyle,
             dialogSurface = true,
+            componentRole = GlassComponentRole.Dialog,
         ) {
             Box(
                 modifier = Modifier
