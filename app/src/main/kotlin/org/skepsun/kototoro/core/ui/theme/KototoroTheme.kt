@@ -3,20 +3,30 @@ package org.skepsun.kototoro.core.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
+
+val LocalMaterialExpressiveComponentsEnabled = staticCompositionLocalOf { false }
 
 @Composable
 fun KototoroTheme(
@@ -26,23 +36,52 @@ fun KototoroTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val appContext = context.applicationContext
+    val settings = remember(appContext) { AppSettings(appContext) }
+    val expressiveComponents by settings.observeAsState(AppSettings.KEY_MATERIAL_EXPRESSIVE_COMPONENTS) {
+        isMaterialExpressiveComponentsEnabled
+    }
     val colorScheme = remember(context, darkTheme, dynamicColor) {
         context.resolveComposeColorScheme(darkTheme)
     }
     
-    val radius = if (cornerRadius == -1) 12.dp else cornerRadius.dp
+    val radius = when {
+        cornerRadius != -1 -> cornerRadius.dp
+        expressiveComponents -> 18.dp
+        else -> 12.dp
+    }
     val shapes = Shapes(
-        extraSmall = RoundedCornerShape(radius.coerceAtMost(14.dp)),
-        small = RoundedCornerShape(radius.coerceAtMost(18.dp)),
+        extraSmall = RoundedCornerShape(if (expressiveComponents) 12.dp else radius.coerceAtMost(14.dp)),
+        small = RoundedCornerShape(if (expressiveComponents) 18.dp else radius.coerceAtMost(18.dp)),
         medium = RoundedCornerShape(radius),
         large = RoundedCornerShape(radius * 1.5f),
         extraLarge = RoundedCornerShape(radius * 2f),
     )
+    val typography = remember(expressiveComponents) {
+        if (expressiveComponents) expressiveTypography() else Typography()
+    }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        shapes = shapes,
-        content = content,
+    CompositionLocalProvider(LocalMaterialExpressiveComponentsEnabled provides expressiveComponents) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            shapes = shapes,
+            typography = typography,
+            content = content,
+        )
+    }
+}
+
+private fun expressiveTypography(): Typography {
+    val base = Typography()
+    return base.copy(
+        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
+        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
+        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, letterSpacing = 0.sp),
+        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.sp),
+        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
+        bodyMedium = base.bodyMedium.copy(letterSpacing = 0.sp),
+        bodySmall = base.bodySmall.copy(letterSpacing = 0.sp),
     )
 }
 

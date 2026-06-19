@@ -85,6 +85,34 @@
 	<!-- Monet theme only support S+ -->
 	<style name="ThemeOverlay.Kototoro.Monet" parent="ThemeOverlay.Material3.DynamicColors.Light" />
 
+	<style name="ThemeOverlay.Kototoro.ExpressiveComponents" parent="">
+		<item name="materialSearchBarStyle">@style/Widget.Material3Expressive.SearchBar</item>
+		<item name="floatingActionButtonStyle">@style/Widget.Material3Expressive.FloatingActionButton</item>
+		<item name="floatingActionButtonMediumStyle">@style/Widget.Material3Expressive.FloatingActionButton.Medium</item>
+		<item name="floatingActionButtonLargeStyle">@style/Widget.Material3Expressive.FloatingActionButton.Large</item>
+		<item name="extendedFloatingActionButtonSmallStyle">@style/Widget.Material3Expressive.ExtendedFloatingActionButton.Small</item>
+		<item name="extendedFloatingActionButtonMediumStyle">@style/Widget.Material3Expressive.ExtendedFloatingActionButton.Medium</item>
+		<item name="extendedFloatingActionButtonLargeStyle">@style/Widget.Material3Expressive.ExtendedFloatingActionButton.Large</item>
+		<item name="materialButtonStyle">@style/Widget.Material3Expressive.Button</item>
+		<item name="materialButtonTonalStyle">@style/Widget.Material3Expressive.Button.TonalButton</item>
+		<item name="materialButtonOutlinedStyle">@style/Widget.Material3Expressive.Button.OutlinedButton</item>
+		<item name="materialButtonElevatedStyle">@style/Widget.Material3Expressive.Button.ElevatedButton</item>
+		<item name="borderlessButtonStyle">@style/Widget.Material3Expressive.Button.TextButton</item>
+		<item name="buttonBarButtonStyle">@style/Widget.Material3Expressive.Button.TextButton.Dialog</item>
+		<item name="snackbarButtonStyle">@style/Widget.Material3Expressive.Button.TextButton.Snackbar</item>
+		<item name="materialIconButtonStyle">@style/Widget.Material3Expressive.Button.IconButton.Standard</item>
+		<item name="materialIconButtonOutlinedStyle">@style/Widget.Material3Expressive.Button.IconButton.Outlined</item>
+		<item name="materialIconButtonFilledStyle">@style/Widget.Material3Expressive.Button.IconButton.Filled</item>
+		<item name="materialIconButtonFilledTonalStyle">@style/Widget.Material3Expressive.Button.IconButton.Tonal</item>
+		<item name="materialButtonGroupStyle">@style/Widget.Material3Expressive.MaterialButtonGroup</item>
+		<item name="materialButtonToggleGroupStyle">@style/Widget.Material3Expressive.MaterialButtonToggleGroup</item>
+		<item name="bottomNavigationStyle">@style/Widget.Material3Expressive.BottomNavigationView</item>
+		<item name="navigationRailStyle">@style/Widget.Material3Expressive.NavigationRailView</item>
+		<item name="toolbarStyle">@style/Widget.Material3Expressive.Toolbar</item>
+		<item name="toolbarSurfaceStyle">@style/Widget.Material3Expressive.Toolbar.Surface</item>
+		<item name="sliderStyle">@style/Widget.Material3Expressive.Slider.Xsmall</item>
+	</style>
+
 	<!-- Expressive Monet theme -->
 	<style name="ThemeOverlay.Kototoro.Expressive" parent="ThemeOverlay.Material3Expressive.DynamicColors.DayNight">
 		<item name="alertDialogTheme">@style/ThemeOverlay.Material3Expressive.Dialog.Alert</item>

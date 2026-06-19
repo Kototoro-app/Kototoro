@@ -1,10 +1,18 @@
 package org.skepsun.kototoro.core.ui.widgets
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +48,7 @@ import dagger.hilt.android.EntryPointAccessors
 @Immutable
 private data class BottomNavPrefs(
     val isFloating: Boolean,
+    val isExpressivePillEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
 )
@@ -63,16 +72,19 @@ fun KototoroBottomNav(
 
     val prefs by appSettings.observeAsState(
         AppSettings.KEY_NAV_FLOATING,
+        AppSettings.KEY_NAV_EXPRESSIVE_PILL,
         AppSettings.KEY_NAV_HEIGHT,
         AppSettings.KEY_NAV_FLOATING_HEIGHT,
     ) {
         BottomNavPrefs(
             isFloating = isNavFloating,
+            isExpressivePillEnabled = isNavExpressivePillEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
         )
     }
     val isFloating = prefs.isFloating
+    val isExpressivePillEnabled = prefs.isExpressivePillEnabled
     val navHeight = prefs.navHeight
     val navFloatingHeight = prefs.navFloatingHeight
     val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
@@ -130,14 +142,12 @@ fun KototoroBottomNav(
     val floatingNavItemMinWidth = 48.dp
     val floatingNavItemSpacing = 5.8.dp
     val floatingNavHorizontalPadding = 6.2.dp
-    val floatingAdaptiveWidth = remember(activeItems.size) {
+    val floatingMinWidth = remember(activeItems.size) {
         val itemCount = activeItems.size.coerceAtLeast(1)
-        (
-            (floatingNavItemMinWidth * itemCount) +
-                (floatingNavItemSpacing * (itemCount - 1)) +
-                (floatingNavHorizontalPadding * 2)
-            ).coerceIn(168.dp, 520.dp)
-    }
+        (floatingNavItemMinWidth * itemCount) +
+            (floatingNavItemSpacing * (itemCount - 1)) +
+            (floatingNavHorizontalPadding * 2)
+    }.coerceAtLeast(168.dp)
     val railWidth = if (isFloating) {
         (navFloatingHeight + 4).dp.coerceIn(60.dp, 160.dp)
     } else {
@@ -238,7 +248,9 @@ fun KototoroBottomNav(
             contentAlignment = Alignment.Center,
         ) {
             GlassBottomBarContainer(
-                modifier = Modifier.width(floatingAdaptiveWidth),
+                modifier = Modifier
+                    .widthIn(min = floatingMinWidth, max = 520.dp)
+                    .wrapContentWidth(),
                 style = navContainerStyle,
             ) {
                 FloatingBottomNavRow(
@@ -247,11 +259,12 @@ fun KototoroBottomNav(
                     badges = navState.badges,
                     clickPulses = clickPulses,
                     showSelectedLabels = showSelectedLabels,
+                    useExpressivePill = isExpressivePillEnabled,
                     itemSpacing = floatingNavItemSpacing,
                     onItemSelected = onItemSelected,
                     onItemReselected = onItemReselected,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .wrapContentWidth()
                         .height(currentExplicitHeight)
                         .padding(horizontal = floatingNavHorizontalPadding),
                 )
@@ -356,13 +369,14 @@ private fun FloatingBottomNavRow(
     badges: Map<Int, BadgeInfo>,
     clickPulses: MutableMap<Int, Int>,
     showSelectedLabels: Boolean,
+    useExpressivePill: Boolean,
     itemSpacing: Dp,
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.animateContentSize(),
         horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -370,30 +384,75 @@ private fun FloatingBottomNavRow(
             val isSelected = selectedItemId == item.id
             val interactionSource = remember(item.id) { MutableInteractionSource() }
             val iconOffsetY by androidx.compose.animation.core.animateDpAsState(
-                targetValue = if (isSelected) (-3).dp else 0.dp,
+                targetValue = if (isSelected && !useExpressivePill) (-3).dp else 0.dp,
             )
             val contentColor = if (isSelected) {
                 MaterialTheme.colorScheme.onSecondaryContainer
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
+            val selectedContainerColor = if (isSelected && useExpressivePill) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                Color.Transparent
+            }
             CompositionLocalProvider(LocalContentColor provides contentColor) {
-                Column(
+                val itemModifier = Modifier
+                    .widthIn(min = 48.dp)
+                    .fillMaxHeight()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = {
+                            if (isSelected) {
+                                onItemReselected(item.id)
+                            } else {
+                                clickPulses[item.id] = (clickPulses[item.id] ?: 0) + 1
+                                onItemSelected(item.id)
+                            }
+                        },
+                    )
+                if (useExpressivePill) {
+                    Box(
+                        modifier = itemModifier
+                            .wrapContentWidth()
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .height(40.dp)
+                                .widthIn(min = 40.dp)
+                                .background(selectedContainerColor, CircleShape)
+                                .padding(horizontal = if (isSelected) 8.dp else 0.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PremiumNavigationIcon(
+                                itemId = item.id,
+                                isSelected = isSelected,
+                                clickPulse = clickPulses[item.id] ?: 0,
+                                badge = badges[item.id],
+                                contentDescription = stringResource(item.title),
+                            )
+                            AnimatedVisibility(
+                                visible = isSelected && showSelectedLabels,
+                                enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
+                                exit = shrinkHorizontally(shrinkTowards = Alignment.Start) + fadeOut(),
+                            ) {
+                                Text(
+                                    text = stringResource(item.title),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Column(
                     modifier = Modifier
-                        .widthIn(min = 48.dp)
-                        .fillMaxHeight()
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = {
-                                if (isSelected) {
-                                    onItemReselected(item.id)
-                                } else {
-                                    clickPulses[item.id] = (clickPulses[item.id] ?: 0) + 1
-                                    onItemSelected(item.id)
-                                }
-                            },
-                        )
+                        .then(itemModifier)
                         .padding(horizontal = 1.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
@@ -415,6 +474,7 @@ private fun FloatingBottomNavRow(
                             maxLines = 1,
                         )
                     }
+                }
                 }
             }
         }

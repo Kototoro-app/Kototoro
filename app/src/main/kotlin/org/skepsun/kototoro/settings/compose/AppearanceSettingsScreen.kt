@@ -34,6 +34,7 @@ data class AppearanceSettingsUiState(
     val colorScheme: ColorScheme,
     val theme: Int,
     val isAmoledTheme: Boolean,
+    val isMaterialExpressiveComponentsEnabled: Boolean,
     val isReducedVisualEffectsEnabled: Boolean,
     val isGlassEffectEnabled: Boolean,
     val isGlassEffectSettingsEnabled: Boolean,
@@ -87,6 +88,7 @@ data class AppearanceSettingsUiState(
     val isNavBarPinned: Boolean,
     val isNavLabelsVisible: Boolean,
     val isNavFloating: Boolean,
+    val isNavExpressivePillEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
     val isReaderToolbarFloating: Boolean,
@@ -126,6 +128,7 @@ fun AppearanceSettingsScreen(
     onColorSchemeChange: (ColorScheme) -> Unit,
     onThemeChange: (Int) -> Unit,
     onAmoledThemeChange: (Boolean) -> Unit,
+    onMaterialExpressiveComponentsChange: (Boolean) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onGlassMaterialFamilyChange: (GlassMaterialFamily) -> Unit,
@@ -175,6 +178,7 @@ fun AppearanceSettingsScreen(
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
+    onNavExpressivePillChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
     onReaderToolbarFloatingChange: (Boolean) -> Unit,
@@ -219,6 +223,13 @@ fun AppearanceSettingsScreen(
                     checked = state.isAmoledTheme,
                     summary = stringResource(R.string.black_dark_theme_summary),
                     onCheckedChange = onAmoledThemeChange,
+                )
+                SettingsSectionDivider()
+                SettingsSwitchPreference(
+                    title = stringResource(R.string.pref_material_expressive_components),
+                    checked = state.isMaterialExpressiveComponentsEnabled,
+                    summary = stringResource(R.string.pref_material_expressive_components_summary),
+                    onCheckedChange = onMaterialExpressiveComponentsChange,
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
@@ -586,6 +597,14 @@ fun AppearanceSettingsScreen(
                     checked = state.isNavFloating,
                     summary = stringResource(R.string.pref_nav_floating_summary),
                     onCheckedChange = onNavFloatingChange,
+                )
+                SettingsSectionDivider()
+                SettingsSwitchPreference(
+                    title = stringResource(R.string.pref_nav_expressive_pill),
+                    checked = state.isNavExpressivePillEnabled,
+                    summary = stringResource(R.string.pref_nav_expressive_pill_summary),
+                    enabled = state.isNavFloating,
+                    onCheckedChange = onNavExpressivePillChange,
                 )
                 SettingsSectionDivider()
                 SettingsSliderPreference(

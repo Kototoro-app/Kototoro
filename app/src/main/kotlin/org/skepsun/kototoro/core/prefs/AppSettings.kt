@@ -192,6 +192,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, true)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, value) }
 
+	var isNavExpressivePillEnabled: Boolean
+		get() = prefs.getBoolean(KEY_NAV_EXPRESSIVE_PILL, false)
+		set(value) = prefs.edit { putBoolean(KEY_NAV_EXPRESSIVE_PILL, value) }
+
+	var isMaterialExpressiveComponentsEnabled: Boolean
+		get() = prefs.getBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, false)
+		set(value) = prefs.edit { putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value) }
+
 	var navHeight: Int
 		get() = prefs.getSafeInt(KEY_NAV_HEIGHT, 80).coerceIn(48, 88)
 		set(value) = prefs.edit { putInt(KEY_NAV_HEIGHT, value.coerceIn(48, 88)) }
@@ -1943,6 +1951,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_THEME = "theme"
 		const val KEY_COLOR_THEME = "color_theme"
 		const val KEY_THEME_AMOLED = "amoled_theme"
+		const val KEY_MATERIAL_EXPRESSIVE_COMPONENTS = "material_expressive_components"
 		const val KEY_TABLET_UI_MODE = "tablet_ui_mode"
 		const val KEY_OFFLINE_DISABLED = "no_offline"
 		const val KEY_PAGES_CACHE_CLEAR = "pages_cache_clear"
@@ -2227,6 +2236,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NAV_PINNED = "nav_pinned"
 		const val KEY_NAV_FLOATING = "nav_floating"
 		const val KEY_NAV_FLOATING_ADAPTIVE_WIDTH = "nav_floating_adaptive_width"
+		const val KEY_NAV_EXPRESSIVE_PILL = "nav_expressive_pill"
 		const val KEY_NAV_HEIGHT = "nav_height"
 		const val KEY_NAV_FLOATING_HEIGHT = "nav_floating_height"
 		const val KEY_READER_TOOLBAR_FLOATING = "reader_toolbar_floating"

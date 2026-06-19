@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
@@ -268,7 +267,6 @@ fun AppNavGraph(
     onDetailsReturnTransitionRequested: () -> Unit = {},
     isLandscapeNavigation: Boolean = false,
     mainNavState: MainNavState? = null,
-    mainShellChrome: @Composable (BoxScope.() -> Unit) = {},
 ) {
     val activity = LocalContext.current as FragmentActivity
     val appRouter = activity.router
@@ -330,7 +328,6 @@ fun AppNavGraph(
                 mainNavState = checkNotNull(mainNavState) {
                     "MainShellRoute requires MainNavState"
                 },
-                mainShellChrome = mainShellChrome,
                 isRouteVisible = isMainShellRouteVisible,
                 onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
                 onContextualMenuActionsChanged = onContextualMenuActionsChanged,
@@ -707,7 +704,6 @@ internal fun MainShellRouteContent(
     isLandscapeNavigation: Boolean,
     mainNavigator: MainNavigator,
     mainNavState: MainNavState,
-    mainShellChrome: @Composable (BoxScope.() -> Unit),
     isRouteVisible: Boolean,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
@@ -727,38 +723,35 @@ internal fun MainShellRouteContent(
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScopeOverride = animatedVisibilityScope,
     ) { key ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
-            ) {
-                MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                    MainShellTopLevelEntryContent(
-                        key = key,
-                        navController = navController,
-                        activity = activity,
-                        mainActivity = mainActivity,
-                        appRouter = appRouter,
-                        rootView = rootView,
-                        contentPadding = contentPadding,
-                        bottomBarOffsetPx = bottomBarOffsetPx,
-                        bottomBarHeightPx = bottomBarHeightPx,
-                        pageSaveHelper = pageSaveHelper,
-                        isLandscapeNavigation = isLandscapeNavigation,
-                        mainNavigator = mainNavigator,
-                        isRouteVisible = isRouteVisible &&
-                            mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
-                        entityOrganizeResultSource = entityOrganizeResultSource,
-                        onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                        onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                        onOpenSearch = onOpenSearch,
-                        navigateToDetailsWithContent = navigateToDetailsWithContent,
-                        navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                    )
-                }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+        ) {
+            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
+                MainShellTopLevelEntryContent(
+                    key = key,
+                    navController = navController,
+                    activity = activity,
+                    mainActivity = mainActivity,
+                    appRouter = appRouter,
+                    rootView = rootView,
+                    contentPadding = contentPadding,
+                    bottomBarOffsetPx = bottomBarOffsetPx,
+                    bottomBarHeightPx = bottomBarHeightPx,
+                    pageSaveHelper = pageSaveHelper,
+                    isLandscapeNavigation = isLandscapeNavigation,
+                    mainNavigator = mainNavigator,
+                    isRouteVisible = isRouteVisible &&
+                        mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
+                    entityOrganizeResultSource = entityOrganizeResultSource,
+                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                    onOpenSearch = onOpenSearch,
+                    navigateToDetailsWithContent = navigateToDetailsWithContent,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                )
             }
-            mainShellChrome()
         }
     }
 }

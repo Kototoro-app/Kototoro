@@ -132,6 +132,9 @@ abstract class BaseComposeActivity :
         if (isAmoledTheme) {
             setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
         }
+        if (settings.isMaterialExpressiveComponentsEnabled) {
+            setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)
+        }
         when (settings.loadingCircleStyle) {
             AppSettings.LoadingCircleStyle.THICK_STRAIGHT -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickStraight)
             AppSettings.LoadingCircleStyle.THICK_WAVY -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickWavy)

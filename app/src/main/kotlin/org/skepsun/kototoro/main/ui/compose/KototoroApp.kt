@@ -978,12 +978,12 @@ fun KototoroApp(
                                     }
                                 }
                             },
-                            mainShellChrome = mainShellChrome,
                             modifier = Modifier
                                 .fillMaxSize()
                         )
                     }
                 }
+                mainShellChrome()
 
                 if (isSearchOverlayMounted) {
                     KototoroSearchOverlay(

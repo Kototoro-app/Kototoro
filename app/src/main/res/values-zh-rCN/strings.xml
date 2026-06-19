@@ -2086,6 +2086,8 @@
     <string name="reader_super_resolution_anime4k_mode">Anime4K 模式</string>
     <string name="pref_nav_floating">悬浮导航栏</string>
     <string name="pref_nav_floating_summary">在底部导航栏周围添加边距，使其呈现悬浮效果</string>
+    <string name="pref_nav_expressive_pill">Expressive 导航选中项</string>
+    <string name="pref_nav_expressive_pill_summary">在悬浮导航栏中使用胶囊形选中项和横向展开标签</string>
     <string name="pref_nav_floating_adaptive_width">悬浮导航栏自适应宽度</string>
     <string name="pref_nav_floating_adaptive_width_summary">导航按钮较少时自动收窄悬浮导航栏</string>
     <string name="pref_reader_toolbar_floating">悬浮阅读器工具栏</string>
@@ -2112,6 +2114,8 @@
     <string name="pref_bangumi_mirror_custom_base_summary">输入 Web 基础 URL，例如 https://bangumi.one。API 主机名将自动推断为 api.&lt;host&gt;。</string>
     <string name="pref_glass_effect">毛玻璃模糊</string>
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背后的内容</string>
+    <string name="pref_material_expressive_components">Material 3 Expressive 组件</string>
+    <string name="pref_material_expressive_components_summary">为 View 按钮、工具栏、搜索栏、滑块和导航组件使用 Expressive 样式。会重启当前界面</string>
     <string name="pref_haze_opacity">玻璃容器不透明度</string>
     <string name="pref_haze_opacity_summary">独立控制玻璃容器的不透明度，不受预设影响，关闭模糊后依然生效</string>
     <string name="pref_reduce_visual_effects">减少视觉特效</string>

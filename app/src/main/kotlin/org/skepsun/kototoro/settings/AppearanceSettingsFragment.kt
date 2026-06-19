@@ -153,6 +153,10 @@ private class AppearanceSettingsCoordinator(
         val colorScheme = settings.observeAsState(AppSettings.KEY_COLOR_THEME) { colorScheme }.value
         val theme = settings.observeAsState(AppSettings.KEY_THEME) { theme }.value
         val isAmoledTheme = settings.observeAsState(AppSettings.KEY_THEME_AMOLED) { isAmoledTheme }.value
+        val isMaterialExpressiveComponentsEnabled =
+            settings.observeAsState(AppSettings.KEY_MATERIAL_EXPRESSIVE_COMPONENTS) {
+                isMaterialExpressiveComponentsEnabled
+            }.value
         val isReducedVisualEffectsEnabled =
             settings.observeAsState(AppSettings.KEY_REDUCED_VISUAL_EFFECTS) { isReducedVisualEffectsEnabled }.value
         val isGlassEffectEnabled =
@@ -246,6 +250,8 @@ private class AppearanceSettingsCoordinator(
         val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
         val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
         val isNavFloating = settings.observeAsState(AppSettings.KEY_NAV_FLOATING) { isNavFloating }.value
+        val isNavExpressivePillEnabled =
+            settings.observeAsState(AppSettings.KEY_NAV_EXPRESSIVE_PILL) { isNavExpressivePillEnabled }.value
         val navHeight = settings.observeAsState(AppSettings.KEY_NAV_HEIGHT) { navHeight }.value
         val navFloatingHeight = settings.observeAsState(AppSettings.KEY_NAV_FLOATING_HEIGHT) { navFloatingHeight }.value
         val isReaderToolbarFloating =
@@ -294,6 +300,7 @@ private class AppearanceSettingsCoordinator(
             colorScheme = colorScheme,
             theme = theme,
             isAmoledTheme = isAmoledTheme,
+            isMaterialExpressiveComponentsEnabled = isMaterialExpressiveComponentsEnabled,
             isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
             isGlassEffectEnabled = effectiveGlassEffectEnabled,
             isGlassEffectSettingsEnabled = !isReducedVisualEffectsEnabled,
@@ -347,6 +354,7 @@ private class AppearanceSettingsCoordinator(
             isNavBarPinned = isNavBarPinned,
             isNavLabelsVisible = isNavLabelsVisible,
             isNavFloating = isNavFloating,
+            isNavExpressivePillEnabled = isNavExpressivePillEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
             isReaderToolbarFloating = isReaderToolbarFloating,
@@ -364,6 +372,9 @@ private class AppearanceSettingsCoordinator(
             onColorSchemeChange = { updateAndRestart(coroutineScope) { settings.colorScheme = it } },
             onThemeChange = ::updateTheme,
             onAmoledThemeChange = { updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
+            onMaterialExpressiveComponentsChange = {
+                updateAndRestart(coroutineScope) { settings.isMaterialExpressiveComponentsEnabled = it }
+            },
             onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
             onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
             onGlassMaterialFamilyChange = { family -> applyGlassMaterialFamily(family) },
@@ -421,6 +432,7 @@ private class AppearanceSettingsCoordinator(
             onNavPinnedChange = { settings.isNavBarPinned = it },
             onNavLabelsVisibleChange = { settings.isNavLabelsVisible = it },
             onNavFloatingChange = { settings.isNavFloating = it },
+            onNavExpressivePillChange = { settings.isNavExpressivePillEnabled = it },
             onNavHeightChange = { settings.navHeight = it },
             onNavFloatingHeightChange = { settings.navFloatingHeight = it },
             onReaderToolbarFloatingChange = { settings.isReaderToolbarFloating = it },

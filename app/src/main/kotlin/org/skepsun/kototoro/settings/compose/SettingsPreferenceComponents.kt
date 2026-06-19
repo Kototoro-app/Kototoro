@@ -1,10 +1,12 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +52,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import kotlin.math.roundToInt
 
 data class SettingsChoiceOption<T>(
@@ -63,12 +66,17 @@ fun SettingsPreferenceSection(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
-        style = GlassDefaults.subtleStyle(),
+        shape = RoundedCornerShape(if (expressive) 30.dp else 24.dp),
+        style = if (expressive) {
+            GlassDefaults.regularStyle().copy(shadowElevation = 0.dp)
+        } else {
+            GlassDefaults.subtleStyle()
+        },
         allowRuntimeHaze = false,
     ) {
         Column(
@@ -113,8 +121,7 @@ fun SettingsActionPreference(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (iconRes != null) {
@@ -165,9 +172,7 @@ fun SettingsSplitSwitchPreference(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -224,8 +229,7 @@ fun SettingsInfoPreference(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled = true),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (iconRes != null) {
@@ -263,9 +267,7 @@ fun SettingsSwitchPreference(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -311,8 +313,7 @@ fun <T> SettingsChoicePreference(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled) { isDialogVisible = true }
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -415,8 +416,7 @@ fun <T> SettingsMultiChoicePreference(
                 pendingValues = values
                 isDialogVisible = true
             }
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -525,9 +525,7 @@ fun SettingsSliderPreference(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
@@ -868,8 +866,32 @@ fun SettingsReorderPreference(
 
 @Composable
 fun SettingsSectionDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
-    )
+    if (LocalMaterialExpressiveComponentsEnabled.current) {
+        Spacer(modifier = Modifier.height(2.dp))
+    } else {
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
+        )
+    }
+}
+
+@Composable
+private fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    return fillMaxWidth()
+        .alpha(if (enabled) 1f else 0.5f)
+        .then(
+            if (expressive) {
+                Modifier
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(18.dp),
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            } else {
+                Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
+            },
+        )
 }

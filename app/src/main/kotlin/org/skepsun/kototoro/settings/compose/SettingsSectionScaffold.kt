@@ -3,34 +3,33 @@ package org.skepsun.kototoro.settings.compose
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.background
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSectionScaffold(
 	title: String,
@@ -48,40 +47,39 @@ fun SettingsSectionScaffold(
 			.windowInsetsPadding(WindowInsets.navigationBars),
 	) {
 		if (showTopBar) {
-			Row(
-				modifier = Modifier
-					.fillMaxWidth()
-					.background(MaterialTheme.colorScheme.background)
-					.windowInsetsPadding(WindowInsets.statusBars)
-					.height(56.dp)
-					.padding(horizontal = 4.dp),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				IconButton(onClick = onNavigateUp) {
-					Icon(
-						imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-						contentDescription = null,
-						tint = MaterialTheme.colorScheme.onSurface,
+			TopAppBar(
+				title = {
+					Text(
+						text = title,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
 					)
-				}
-				Text(
-					text = title,
-					modifier = Modifier.weight(1f),
-					style = MaterialTheme.typography.titleLarge,
-					color = MaterialTheme.colorScheme.onSurface,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-				)
-				if (actions != null) {
-					Box(
-						modifier = Modifier.fillMaxHeight(),
-						contentAlignment = Alignment.CenterEnd,
-						content = actions,
-					)
-				} else {
-					Spacer(modifier = Modifier.width(48.dp))
-				}
-			}
+				},
+				navigationIcon = {
+					IconButton(onClick = onNavigateUp) {
+						Icon(
+							imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+							contentDescription = null,
+						)
+					}
+				},
+				actions = {
+					if (actions != null) {
+						Box(
+							modifier = Modifier.fillMaxHeight(),
+							contentAlignment = Alignment.CenterEnd,
+							content = actions,
+						)
+					}
+				},
+				colors = TopAppBarDefaults.topAppBarColors(
+					containerColor = MaterialTheme.colorScheme.background,
+					titleContentColor = MaterialTheme.colorScheme.onSurface,
+					navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+					actionIconContentColor = MaterialTheme.colorScheme.onSurface,
+				),
+				windowInsets = WindowInsets.statusBars,
+			)
 		}
 		Box(
 			modifier = Modifier

@@ -2889,6 +2889,8 @@ Proceed?</string>
 
     <string name="pref_nav_floating">Floating navigation bar</string>
     <string name="pref_nav_floating_summary">Add a margin around the bottom navigation bar so it appears floating</string>
+    <string name="pref_nav_expressive_pill">Expressive selected navigation item</string>
+    <string name="pref_nav_expressive_pill_summary">Use a pill-shaped selected item with an expanding label in the floating navigation bar</string>
     <string name="pref_nav_floating_adaptive_width">Adaptive floating navigation width</string>
     <string name="pref_nav_floating_adaptive_width_summary">Reduce the floating navigation bar width when fewer navigation items are shown</string>
     <string name="pref_nav_height">Navigation bar height</string>
@@ -2913,6 +2915,8 @@ Proceed?</string>
     <string name="pref_blur_mode_summary">Choose a glass material preset for blur radius and noise tuning</string>
     <string name="pref_glass_effect">Frosted-glass blur</string>
     <string name="pref_glass_effect_summary">Blur content behind supported Compose surfaces</string>
+    <string name="pref_material_expressive_components">Material 3 Expressive components</string>
+    <string name="pref_material_expressive_components_summary">Use Expressive styles for View-based buttons, toolbars, search bars, sliders, and navigation components. Restarts the current screen</string>
     <string name="pref_reduce_visual_effects">Reduce visual effects</string>
     <string name="pref_reduce_visual_effects_summary">Recommended for lower-end devices. Disable runtime Haze, Hero transitions, and panorama background motion with one switch without changing their individual settings</string>
     <string name="pref_haze_opacity">Glass surface opacity</string>

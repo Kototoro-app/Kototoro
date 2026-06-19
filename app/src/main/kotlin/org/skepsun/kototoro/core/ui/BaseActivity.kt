@@ -69,6 +69,9 @@ abstract class BaseActivity<B : ViewBinding> :
 		if (isAmoledTheme) {
 			setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
 		}
+		if (settings.isMaterialExpressiveComponentsEnabled) {
+			setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)
+		}
 		when(settings.loadingCircleStyle) {
 			org.skepsun.kototoro.core.prefs.AppSettings.LoadingCircleStyle.THICK_STRAIGHT -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickStraight)
 			org.skepsun.kototoro.core.prefs.AppSettings.LoadingCircleStyle.THICK_WAVY -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickWavy)
