@@ -14,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
@@ -273,6 +274,9 @@ fun AppNavGraph(
     val appRouter = activity.router
     val mainActivity = activity as? MainActivity
     val rootView = LocalView.current
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = currentBackStackEntry?.destination
+    val isMainShellRouteVisible = currentDestination?.hasRoute<MainShellRoute>() == true
     val density = LocalDensity.current
     val landscapeStartPadding = if (isLandscapeNavigation) {
         with(density) { bottomBarHeightPx.toDp() }
@@ -327,6 +331,7 @@ fun AppNavGraph(
                     "MainShellRoute requires MainNavState"
                 },
                 mainShellChrome = mainShellChrome,
+                isRouteVisible = isMainShellRouteVisible,
                 onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
                 onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                 onOpenSearch = onOpenSearch,
@@ -703,6 +708,7 @@ internal fun MainShellRouteContent(
     mainNavigator: MainNavigator,
     mainNavState: MainNavState,
     mainShellChrome: @Composable (BoxScope.() -> Unit),
+    isRouteVisible: Boolean,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     onOpenSearch: (SearchNavigationRequest) -> Unit,
@@ -741,6 +747,8 @@ internal fun MainShellRouteContent(
                         pageSaveHelper = pageSaveHelper,
                         isLandscapeNavigation = isLandscapeNavigation,
                         mainNavigator = mainNavigator,
+                        isRouteVisible = isRouteVisible &&
+                            mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
                         entityOrganizeResultSource = entityOrganizeResultSource,
                         onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
                         onContextualMenuActionsChanged = onContextualMenuActionsChanged,
@@ -769,6 +777,7 @@ private fun MainShellTopLevelEntryContent(
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper?,
     isLandscapeNavigation: Boolean,
     mainNavigator: MainNavigator,
+    isRouteVisible: Boolean,
     entityOrganizeResultSource: FavoritesEntityOrganizeResultSource,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
@@ -791,6 +800,7 @@ private fun MainShellTopLevelEntryContent(
             mainNavigator = mainNavigator,
             onOpenSearch = onOpenSearch,
             navigateToDetailsWithContent = navigateToDetailsWithContent,
+            isRouteVisible = isRouteVisible,
         )
         org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey -> BrowseTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
@@ -894,6 +904,7 @@ internal fun HomeTopLevelRouteContent(
     mainNavigator: MainNavigator,
     onOpenSearch: (SearchNavigationRequest) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
+    isRouteVisible: Boolean = true,
 ) {
     val viewModel = hiltViewModel<HomeViewModel>()
     val state by viewModel.summaryState.collectAsStateWithLifecycle()
@@ -1058,6 +1069,7 @@ internal fun HomeTopLevelRouteContent(
             onContentClick = onHomeContentClick,
             actions = homeActions,
             isRandomLoading = isRandomLoading,
+            autoAdvanceHero = isRouteVisible,
         )
     }
 }

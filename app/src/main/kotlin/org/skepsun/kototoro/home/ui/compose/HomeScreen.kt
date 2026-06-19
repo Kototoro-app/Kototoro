@@ -164,6 +164,7 @@ fun HomeScreen(
     actions: HomeScreenActions,
     isRandomLoading: Boolean,
     modifier: Modifier = Modifier,
+    autoAdvanceHero: Boolean = true,
 ) {
     val recompositionCounter = remember { intArrayOf(0) }
     val scrollState = rememberScrollState()
@@ -299,6 +300,7 @@ fun HomeScreen(
                 panoramaPrefs = homeHeroPanoramaPrefs,
                 onClick = onContentClick,
                 topContentInset = topInset + 8.dp,
+                autoAdvance = autoAdvanceHero,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .graphicsLayer { translationY = heroScrollOffsetPx }
@@ -450,6 +452,7 @@ private fun HomeHeroSection(
     onClick: (Content, Rect?, String?) -> Unit,
     topContentInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
+    autoAdvance: Boolean = true,
 ) {
     if (entries.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { entries.size })
@@ -461,6 +464,7 @@ private fun HomeHeroSection(
         pagerState = pagerState,
         pageCount = entries.size,
         intervalMillis = 5200L,
+        enabled = autoAdvance,
     )
     LaunchedEffect(entries, pagerState) {
         snapshotFlow { pagerState.settledPage.coerceIn(0, entries.lastIndex) }
@@ -763,7 +767,10 @@ private fun HomeHeroCoverImage(
     var stableImage by remember(cacheKey, snapshotKey) { mutableStateOf<CoilImage?>(cachedImage) }
     val stablePainter = rememberDrawablePainter(stableImage?.asDrawable(context.resources))
 
-    LaunchedEffect(imageLoader, request) {
+    LaunchedEffect(imageLoader, request, cacheKey, snapshotKey) {
+        if (stableImage != null) {
+            return@LaunchedEffect
+        }
         when (val result = imageLoader.execute(request)) {
             is SuccessResult -> {
                 stableImage = result.image

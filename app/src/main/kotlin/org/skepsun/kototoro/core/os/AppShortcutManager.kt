@@ -65,6 +65,10 @@ class AppShortcutManager @Inject constructor(
 		Size(ShortcutManagerCompat.getIconMaxWidth(context), ShortcutManagerCompat.getIconMaxHeight(context))
 	}
 	private var shortcutsUpdateJob: Job? = null
+	@Volatile
+	private var isUpdatingShortcuts = false
+	@Volatile
+	private var hasPendingShortcutsUpdate = false
 
 	init {
 		settings.subscribe(this)
@@ -72,6 +76,10 @@ class AppShortcutManager @Inject constructor(
 
 	override fun onInvalidated(tables: Set<String>) {
 		if (!settings.isDynamicShortcutsEnabled) {
+			return
+		}
+		if (isUpdatingShortcuts) {
+			hasPendingShortcutsUpdate = true
 			return
 		}
 		val prevJob = shortcutsUpdateJob
@@ -131,13 +139,20 @@ class AppShortcutManager @Inject constructor(
 	}
 
 	private suspend fun updateShortcutsImpl() = runCatchingCancellable {
-		val maxShortcuts = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context).coerceAtLeast(5)
-		val shortcuts = historyRepository.getList(0, maxShortcuts)
-			.filter { x -> x.title.isNotEmpty() }
-			.map { buildShortcutInfo(it) }
-		ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+		do {
+			hasPendingShortcutsUpdate = false
+			isUpdatingShortcuts = true
+			val maxShortcuts = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context).coerceAtLeast(5)
+			val shortcuts = historyRepository.getList(0, maxShortcuts)
+				.filter { x -> x.title.isNotEmpty() }
+				.map { buildShortcutInfo(it) }
+			ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+			isUpdatingShortcuts = false
+		} while (hasPendingShortcutsUpdate)
 	}.onFailure {
 		it.printStackTraceDebug()
+	}.also {
+		isUpdatingShortcuts = false
 	}
 
 	private fun clearShortcuts() {
@@ -169,7 +184,6 @@ class AppShortcutManager @Inject constructor(
 			onSuccess = { IconCompat.createWithAdaptiveBitmap(it) },
 			onFailure = { IconCompat.createWithResource(context, R.drawable.ic_shortcut_default) },
 		)
-		mangaRepository.storeContent(currentManga, replaceExisting = true)
 		val title = currentManga.title.ifEmpty {
 			currentManga.altTitles.firstOrNull()
 		}.ifNullOrEmpty {

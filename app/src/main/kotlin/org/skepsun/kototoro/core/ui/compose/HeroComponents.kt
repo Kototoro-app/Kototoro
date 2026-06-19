@@ -108,10 +108,11 @@ fun HeroAutoAdvanceEffect(
     pagerState: PagerState,
     pageCount: Int,
     intervalMillis: Long = 4500L,
+    enabled: Boolean = true,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner, pagerState, pageCount, intervalMillis) {
-        if (pageCount <= 1) {
+    LaunchedEffect(lifecycleOwner, pagerState, pageCount, intervalMillis, enabled) {
+        if (!enabled || pageCount <= 1) {
             return@LaunchedEffect
         }
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
