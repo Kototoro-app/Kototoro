@@ -149,7 +149,7 @@ class FavouritesContainerViewModel @Inject constructor(
 		activeCategoryCounts,
 		observeAllFavouritesVisibility(),
 	) { list, countsState, showAll ->
-		if (list == null) {
+		if (list == null || countsState is ActiveCategoryCountsState.Loading) {
 			return@combine FavoritesHostUiState()
 		}
 
@@ -178,6 +178,12 @@ class FavouritesContainerViewModel @Inject constructor(
 			categories = result,
 			isEmpty = isEmpty,
 		)
+	}.runningFold(FavoritesHostUiState()) { previous, next ->
+		if (next.isLoading && previous.categories.isNotEmpty()) {
+			next.copy(categories = previous.categories)
+		} else {
+			next
+		}
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, FavoritesHostUiState())
 
 	val isCategoriesLoaded = uiState

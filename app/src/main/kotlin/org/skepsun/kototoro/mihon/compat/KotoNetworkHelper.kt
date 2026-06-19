@@ -55,6 +55,7 @@ class KotoNetworkHelper(
         builder.connectTimeout(baseClient.connectTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
         builder.readTimeout(baseClient.readTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
         builder.writeTimeout(baseClient.writeTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+        builder.callTimeout(baseClient.callTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
         builder.cookieJar(baseClient.cookieJar)
         builder.dns(baseClient.dns)
         builder.cache(baseClient.cache)

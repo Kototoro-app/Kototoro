@@ -95,7 +95,6 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 			WorkManager.getInstance(this).enqueue(request)
 			entryPoint.settings().isEntityGraphMigrated = true
 		}
-		org.skepsun.kototoro.tracking.animeoffline.work.AnimeOfflineUpdateWorker.enqueue(this)
 		processLifecycleScope.launch(Dispatchers.Default) {
 			runCatching {
 				entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()

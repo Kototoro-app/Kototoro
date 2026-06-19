@@ -288,9 +288,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
 
         override fun onPositionChanged(positionMs: Long) {
-            // Poll sub-text every ~5th position update (~every 500ms if updates come at ~100ms intervals)
+            // Poll sub-text every ~10th position update (~every 1s if updates come at ~100ms intervals)
             subtitlePollCounter++
-            if (subtitlePollCounter % 5 == 0) {
+            if (subtitlePollCounter % 10 == 0) {
                 val text = mpvPlayer?.getPropertyString("sub-text")
                 if (text != lastSubtitleTextFromPoll) {
                     lastSubtitleTextFromPoll = text
@@ -324,7 +324,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private val autoHideDelayMs = 3500
     private val hideUiRunnable = Runnable { setUiIsVisible(false) }
-    private val progressUpdateIntervalMs = 500
+    private val progressUpdateIntervalMs = 1000
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
             updateToolbarProgress()
@@ -332,7 +332,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
     }
     // 底部控制条（PlayerControlView）进度与已播放时长的定时更新
-    private val controllerProgressIntervalMs = 500
+    private val controllerProgressIntervalMs = 1000
     private var lastSubtitleText: String? = null
     private val controllerProgressRunnable = object : Runnable {
         override fun run() {
@@ -2420,7 +2420,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     /**
      * Poll MPV's sub-text property and update the subtitle overlay.
-     * Called every 500ms from the controller progress runnable.
+     * Called every 1s from the controller progress runnable while controls are visible.
      * This is a reliable fallback since property observation may not work
      * for string properties in some mpv-android-lib versions.
      */

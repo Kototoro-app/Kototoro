@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.image
 
+import android.util.Log
 import android.net.Uri
 import androidx.core.net.toUri
 import coil3.intercept.Interceptor
@@ -7,8 +8,10 @@ import coil3.network.HttpException
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.ImageResult
+import coil3.request.SuccessResult
 import coil3.util.DebugLogger
 import coil3.util.Logger
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.util.ext.mangaKey
 import java.io.File
@@ -18,6 +21,13 @@ class ImageFailureSuppressingInterceptor : Interceptor {
 
 	override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
 		val request = chain.request
+		if (request.hasBlankStringData()) {
+			return ErrorResult(
+				image = request.error(),
+				request = request,
+				throwable = SuppressedImageRequestException("blank image data"),
+			)
+		}
 		val identity = request.imageIdentity()
 		if (request.shouldShortCircuit(identity)) {
 			return ErrorResult(
@@ -37,6 +47,7 @@ class ImageFailureSuppressingInterceptor : Interceptor {
 		}
 		return try {
 			val result = chain.proceed()
+			logResult(request, result)
 			if (identity != null && result is ErrorResult && request.shouldRememberFailure(identity, result.throwable)) {
 				ImageFailureRegistry.mark(identity)
 			}
@@ -58,7 +69,7 @@ class ImageFailureSuppressingInterceptor : Interceptor {
 			return false
 		}
 		return error is CloudFlareProtectedException ||
-			(error is HttpException && error.response.code == HTTP_FORBIDDEN)
+			(error is HttpException && (error.response.code == HTTP_FORBIDDEN || error.response.code >= HTTP_SERVER_ERROR_MIN))
 	}
 
 	private fun ImageRequest.isCoverRequest(identity: String): Boolean {
@@ -82,16 +93,79 @@ class ImageFailureSuppressingInterceptor : Interceptor {
 		return !file.isFile
 	}
 
+	private fun ImageRequest.hasBlankStringData(): Boolean = data is String && (data as String).isBlank()
+
 	private fun ImageRequest.imageIdentity(): String? = when (val value = data) {
 		is String -> value.takeIf { it.isNotBlank() }
 		is Uri -> value.toString()
 		is File -> value.toUri().toString()
-		else -> null
+		else -> memoryCacheKey ?: diskCacheKey
+	}
+
+	private fun logResult(request: ImageRequest, result: ImageResult) {
+		if (!BuildConfig.DEBUG) {
+			return
+		}
+		when (result) {
+			is ErrorResult -> {
+				if (result.throwable is SuppressedImageRequestException) {
+					return
+				}
+				Log.e(
+					IMAGE_DIAG_TAG,
+					buildString {
+						append("error ")
+						append(request.debugSignature())
+						append(" throwable=")
+						append(result.throwable::class.java.simpleName)
+						append(':')
+						append(result.throwable.message.orEmpty())
+					},
+				)
+			}
+			is SuccessResult -> {
+				if (!request.isHomeSharedCoverRequest()) {
+					return
+				}
+				Log.d(
+					IMAGE_DIAG_TAG,
+					"home_success ${request.debugSignature()} source=${result.dataSource}",
+				)
+			}
+		}
+	}
+
+	private fun ImageRequest.isHomeSharedCoverRequest(): Boolean {
+		return memoryCacheKey?.contains("#home_shared_", ignoreCase = false) == true ||
+			diskCacheKey?.contains("#home_shared_", ignoreCase = false) == true
+	}
+
+	private fun ImageRequest.debugSignature(): String {
+		return buildString {
+			append("dataType=").append(data?.javaClass?.name ?: "null")
+			append(" data=").append(data.debugDataValue())
+			append(" memoryKey=").append(memoryCacheKey.orEmpty())
+			append(" diskKey=").append(diskCacheKey.orEmpty())
+			append(" hasManga=").append(extras[mangaKey] != null)
+		}
+	}
+
+	private fun Any?.debugDataValue(): String {
+		val raw = when (this) {
+			null -> "null"
+			is String -> this
+			is Uri -> toString()
+			is File -> toUri().toString()
+			else -> toString()
+		}
+		return raw.replace('\n', ' ').take(240)
 	}
 
 	private companion object {
 		private const val HTTP_FORBIDDEN = 403
+		private const val HTTP_SERVER_ERROR_MIN = 500
 		private const val SHARED_COVER_KEY_PREFIX = "shared-cover#"
+		private const val IMAGE_DIAG_TAG = "ImageRequestDiag"
 		private val COVER_URL_MARKERS = listOf("/cover", "/covers", "/poster", "/posters", "cover.", "poster.")
 	}
 }

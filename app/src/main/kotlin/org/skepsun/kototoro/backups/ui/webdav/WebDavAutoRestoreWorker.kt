@@ -14,7 +14,6 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.await
@@ -81,7 +80,6 @@ class WebDavAutoRestoreWorker @AssistedInject constructor(
                 .setConstraints(constraints)
                 .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
             WorkManager.getInstance(context)

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.home.ui.compose
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,10 +81,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import coil3.Image as CoilImage
+import coil3.asDrawable
 import coil3.compose.AsyncImage
+import coil3.memory.MemoryCache
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import coil3.request.crossfade
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapNotNull
@@ -91,8 +97,10 @@ import java.util.Locale
 import kotlin.math.absoluteValue
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
 import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
+import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -498,39 +506,46 @@ private fun HomeHeroSection(
                 pageSpacing = pageSpacing,
                 beyondViewportPageCount = 2,
                 contentPadding = PaddingValues(horizontal = contentPadding),
+                key = { page ->
+                    entries.getOrNull(page)?.let { entry ->
+                        "home_hero_${entry.kind.name}_${entry.groupKey}_${entry.content.id}"
+                    } ?: "home_hero_pending_$page"
+                },
                 modifier = Modifier.width(pagerWidth),
             ) { page ->
-                HomeHeroCard(
-                    entry = entries[page],
-                    bottomInset = 10.dp,
-                    posterWidth = 82.dp,
-                    posterHeight = 114.dp,
-                    panoramaPrefs = panoramaPrefs,
-                    onClick = onClick,
-                    modifier = Modifier
-                        .zIndex(if (page == selectedIndex) 1f else 0f)
-                        .graphicsLayer {
-                            val rawOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                            val signedOffset = rawOffset.coerceIn(-1f, 1f)
-                            val visualLeft = contentPadPx - rawOffset * stepPx
-                            val visualRight = visualLeft + cardWidthPx
-                            val focus = when {
-                                visualRight <= 0f || visualLeft >= pagerWidthPx -> 0f
-                                visualLeft >= 0f && visualRight <= pagerWidthPx -> 1f
-                                visualLeft < 0f -> (visualRight / cardWidthPx).coerceIn(0f, 1f)
-                                else -> ((pagerWidthPx - visualLeft) / cardWidthPx).coerceIn(0f, 1f)
-                            }
-                            val hOrigin = when {
-                                signedOffset < -0.02f -> 0f
-                                signedOffset > 0.02f -> 1f
-                                else -> 0.5f
-                            }
-                            scaleX = 0.9f + (0.1f * focus)
-                            scaleY = 0.9f + (0.1f * focus)
-                            alpha = 0.64f + (0.36f * focus)
-                            transformOrigin = TransformOrigin(hOrigin, 0.5f)
-                        },
-                )
+                entries.getOrNull(page)?.let { entry ->
+                    HomeHeroCard(
+                        entry = entry,
+                        bottomInset = 10.dp,
+                        posterWidth = 82.dp,
+                        posterHeight = 114.dp,
+                        panoramaPrefs = panoramaPrefs,
+                        onClick = onClick,
+                        modifier = Modifier
+                            .zIndex(if (page == selectedIndex) 1f else 0f)
+                            .graphicsLayer {
+                                val rawOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                                val signedOffset = rawOffset.coerceIn(-1f, 1f)
+                                val visualLeft = contentPadPx - rawOffset * stepPx
+                                val visualRight = visualLeft + cardWidthPx
+                                val focus = when {
+                                    visualRight <= 0f || visualLeft >= pagerWidthPx -> 0f
+                                    visualLeft >= 0f && visualRight <= pagerWidthPx -> 1f
+                                    visualLeft < 0f -> (visualRight / cardWidthPx).coerceIn(0f, 1f)
+                                    else -> ((pagerWidthPx - visualLeft) / cardWidthPx).coerceIn(0f, 1f)
+                                }
+                                val hOrigin = when {
+                                    signedOffset < -0.02f -> 0f
+                                    signedOffset > 0.02f -> 1f
+                                    else -> 0.5f
+                                }
+                                scaleX = 0.9f + (0.1f * focus)
+                                scaleY = 0.9f + (0.1f * focus)
+                                alpha = 0.64f + (0.36f * focus)
+                                transformOrigin = TransformOrigin(hOrigin, 0.5f)
+                            },
+                    )
+                }
             }
         }
 
@@ -573,22 +588,28 @@ private fun HomeHeroCard(
     val content = entry.content
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val shouldCrossfade = sharedTransitionScope == null || animatedVisibilityScope == null
-    val imageRequest = rememberHomeCoverRequest(
+    val backdropRequest = rememberHomeCoverRequest(
         context = context,
         content = content,
-        allowCrossfade = shouldCrossfade,
+        allowCrossfade = true,
+        memoryCacheVariant = "home_hero_backdrop",
     )
-    val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
+    val coverRequest = rememberHomeCoverRequest(
+        context = context,
+        content = content,
+        allowCrossfade = true,
+        memoryCacheVariant = "home_hero_cover",
+    )
+    val coverData = remember(content.coverUrl, content.largeCoverUrl, coverRequest) {
         content.coverUrl?.takeIfUsableImageUri()
             ?: content.largeCoverUrl?.takeIfUsableImageUri()
-            ?: (imageRequest?.data as? String)
+            ?: (coverRequest?.data as? String)
     }
     LogHomeImageRequestEffect(
         slot = "hero_cover_request",
         stableKey = entry.groupKey,
         url = coverData,
-        imageRequest = imageRequest,
+        imageRequest = coverRequest,
     )
     var coverBounds by remember(entry.kind, entry.groupKey) { mutableStateOf<Rect?>(null) }
     val sharedElementKey = remember(entry.kind, entry.groupKey, content.coverUrl, content.source.name) {
@@ -607,18 +628,18 @@ private fun HomeHeroCard(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick(content, coverBounds, sharedElementKey) },
     ) {
-        if (panoramaPrefs.isEnabled && imageRequest != null) {
+        if (panoramaPrefs.isEnabled && backdropRequest != null) {
             AnimatedPanoramaBackdrop(
                 prefs = panoramaPrefs,
-                model = imageRequest,
-                placeholderMemoryCacheKey = imageRequest.memoryCacheKey,
+                model = backdropRequest,
+                placeholderMemoryCacheKey = coverRequest?.memoryCacheKey,
                 snapshotKey = sharedElementKey,
                 contentAlpha = 0.94f,
                 backgroundColor = MaterialTheme.colorScheme.surface,
             )
-        } else if (imageRequest != null) {
+        } else if (backdropRequest != null) {
             AsyncImage(
-                model = imageRequest,
+                model = backdropRequest,
                 contentDescription = content.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
@@ -682,40 +703,31 @@ private fun HomeHeroCard(
                     .onGloballyPositioned { coordinates ->
                         coverBounds = coordinates.unclippedBoundsInWindow()
                     }
-                    .then(
-                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    rememberSharedContentState(key = sharedElementKey),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                )
-                            }
-                        } else Modifier
-                    )
                     .clip(MaterialTheme.shapes.medium)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.28f)),
             ) {
-                if (imageRequest != null) {
-                    AsyncImage(
-                        model = imageRequest,
+                if (coverRequest != null) {
+                    HomeHeroCoverImage(
+                        request = coverRequest,
+                        cacheKey = coverRequest.memoryCacheKey,
+                        snapshotKey = sharedElementKey,
                         contentDescription = content.title,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onSuccess = { state ->
-                            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+                        onSuccess = { result ->
+                            HeroCoverSnapshotStore.put(sharedElementKey, result.image)
                             logHomeImageDiag(
                                 slot = "hero_cover",
                                 stableKey = entry.groupKey,
                                 url = coverData,
-                                detail = "source=${state.result.dataSource}",
+                                detail = "source=${result.dataSource}",
                             )
                         },
-                        onError = { state ->
+                        onError = { throwable ->
                             logHomeImageDiag(
                                 slot = "hero_cover_error",
                                 stableKey = entry.groupKey,
                                 url = coverData,
-                                detail = state.result.throwable.message.orEmpty(),
+                                detail = throwable.message.orEmpty(),
                             )
                         },
                     )
@@ -764,6 +776,52 @@ private fun HomeHeroCard(
             }
         }
 
+    }
+}
+
+@Composable
+private fun HomeHeroCoverImage(
+    request: ImageRequest,
+    cacheKey: String?,
+    snapshotKey: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    onSuccess: (SuccessResult) -> Unit,
+    onError: (Throwable) -> Unit,
+) {
+    val context = LocalContext.current
+    val imageLoader = remember(context.applicationContext) {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            BaseApp.BaseAppEntryPoint::class.java,
+        ).imageLoader()
+    }
+    val cachedImage = remember(imageLoader, cacheKey, snapshotKey) {
+        cacheKey?.let { key ->
+            imageLoader.memoryCache?.get(MemoryCache.Key(key))?.image
+        } ?: HeroCoverSnapshotStore.get(snapshotKey)
+    }
+    var stableImage by remember(cacheKey, snapshotKey) { mutableStateOf<CoilImage?>(cachedImage) }
+    val stablePainter = rememberDrawablePainter(stableImage?.asDrawable(context.resources))
+
+    LaunchedEffect(imageLoader, request) {
+        when (val result = imageLoader.execute(request)) {
+            is SuccessResult -> {
+                stableImage = result.image
+                onSuccess(result)
+            }
+            is ErrorResult -> {
+                onError(result.throwable)
+            }
+        }
+    }
+    if (stableImage != null) {
+        Image(
+            painter = stablePainter,
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
     }
 }
 
@@ -1032,6 +1090,7 @@ private fun HomeListRailRowItem(
         context = context,
         content = content,
         allowCrossfade = shouldCrossfadeCover,
+        memoryCacheVariant = "home_list_cover",
     )
     val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
         content.coverUrl?.takeIfUsableImageUri()
@@ -1183,6 +1242,7 @@ private fun HomeCoverRowItem(
         context = context,
         content = content,
         allowCrossfade = shouldCrossfadeCover,
+        memoryCacheVariant = "home_grid_cover",
     )
     val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
         content.coverUrl?.takeIfUsableImageUri()
@@ -1746,6 +1806,7 @@ private fun rememberHomeCoverRequest(
     context: android.content.Context,
     content: Content,
     allowCrossfade: Boolean,
+    memoryCacheVariant: String,
 ): ImageRequest? {
     val primaryCoverUrl = content.coverUrl?.takeIfUsableImageUri()
     val fallbackCoverUrl = content.largeCoverUrl?.takeIfUsableImageUri()
@@ -1762,6 +1823,7 @@ private fun rememberHomeCoverRequest(
         primaryCoverUrl,
         fallbackCoverUrl,
         allowCrossfade,
+        memoryCacheVariant,
     ) {
         val resolvedCoverUrl = primaryCoverUrl ?: fallbackCoverUrl
         if (resolvedCoverUrl != null) {
@@ -1772,7 +1834,7 @@ private fun rememberHomeCoverRequest(
             )
             return@remember ImageRequest.Builder(context)
                 .data(resolvedCoverUrl)
-                .memoryCacheKey(cacheKey)
+                .memoryCacheKey(cacheKey.withMemoryCacheVariant(memoryCacheVariant))
                 .diskCacheKey(cacheKey)
                 .crossfade(allowCrossfade)
                 .apply { mangaExtra(content) }
@@ -1786,7 +1848,7 @@ private fun rememberHomeCoverRequest(
             )
             return@remember ImageRequest.Builder(context)
                 .data(tvboxSearchCoverModel(content))
-                .memoryCacheKey(fallbackCacheKey)
+                .memoryCacheKey(fallbackCacheKey.withMemoryCacheVariant(memoryCacheVariant))
                 .diskCacheKey(fallbackCacheKey)
                 .crossfade(allowCrossfade)
                 .mangaExtra(content)
@@ -1794,6 +1856,10 @@ private fun rememberHomeCoverRequest(
         }
         null
     }
+}
+
+private fun String?.withMemoryCacheVariant(variant: String): String? {
+    return this?.let { "$it#$variant" }
 }
 
 private fun logHomeImageDiag(

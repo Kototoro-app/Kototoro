@@ -27,6 +27,7 @@ import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import org.skepsun.kototoro.main.ui.MainActivity
 
@@ -68,7 +69,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
             val state by viewModel.summaryState.collectAsStateWithLifecycle()
             val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
 
-            syncSelectedTab(state.selectedTab)
+            LaunchedEffect(state.selectedTab, state.selectedSourceTags) {
+                syncSelectedTab(state.selectedTab)
+            }
 			
 			KototoroTheme {
 				val actions = remember(router, viewModel) {

@@ -166,7 +166,6 @@ class WebDavAutoRestoreRunner @Inject constructor(
             BackupSection.FAVOURITES,
             BackupSection.BOOKMARKS,
             BackupSection.STATS,
-            BackupSection.SOURCES,
             BackupSection.EXTENSION_REPOS,
         )
         if (writerGeneration >= RemoteNamespace.V2.writerGeneration) {

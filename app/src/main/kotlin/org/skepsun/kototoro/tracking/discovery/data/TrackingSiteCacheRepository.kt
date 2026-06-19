@@ -104,13 +104,20 @@ class TrackingSiteCacheRepository @Inject constructor(
 
 	suspend fun saveDetails(details: TrackingSiteItemDetails) {
 		val now = System.currentTimeMillis()
+		val payload = details.toPersistedPayload().toString()
+		var shouldNotify = false
 		db.withTransaction {
 			val dao = db.getTrackingSiteDao()
 			val existing = dao.findItem(details.service.id, details.remoteId)
-			dao.upsertItem(existing.mergeWith(details, cachedAt = now, updatedAt = now))
+			val merged = existing.mergeWith(details, cachedAt = now, updatedAt = now)
+			shouldNotify = existing.isMeaningfullyDifferentFrom(merged) ||
+				readPersistedPayloadRaw(detailsPayloadKey(details.service, details.remoteId)) != payload
+			dao.upsertItem(merged)
 		}
-		persistDetailsPayload(details)
-		detailsUpdates.tryEmit(now)
+		persistDetailsPayload(details, payload)
+		if (shouldNotify) {
+			detailsUpdates.tryEmit(now)
+		}
 	}
 
 	fun readEntityDetails(
@@ -127,8 +134,13 @@ class TrackingSiteCacheRepository @Inject constructor(
 		entityType: EntityType,
 		details: TrackingSiteItemDetails,
 	) {
-		persistEntityDetailsPayload(service, entityType, details)
-		detailsUpdates.tryEmit(System.currentTimeMillis())
+		val payload = details.toPersistedPayload().toString()
+		val key = entityDetailsPayloadKey(service, entityType, details.remoteId)
+		val changed = readPersistedPayloadRaw(key) != payload
+		persistEntityDetailsPayload(service, entityType, details.remoteId, payload)
+		if (changed) {
+			detailsUpdates.tryEmit(System.currentTimeMillis())
+		}
 	}
 
 	fun observeDetailsUpdates(): Flow<Long> = detailsUpdates.asSharedFlow()
@@ -192,6 +204,19 @@ class TrackingSiteCacheRepository @Inject constructor(
 			siteUrl = details.url ?: existing?.siteUrl,
 			cachedAt = cachedAt,
 			updatedAt = updatedAt,
+		)
+	}
+
+	private fun TrackingSiteItemEntity?.isMeaningfullyDifferentFrom(other: TrackingSiteItemEntity): Boolean {
+		if (this == null) {
+			return true
+		}
+		return copy(
+			cachedAt = 0L,
+			updatedAt = 0L,
+		) != other.copy(
+			cachedAt = 0L,
+			updatedAt = 0L,
 		)
 	}
 
@@ -304,125 +329,7 @@ class TrackingSiteCacheRepository @Inject constructor(
 		}.getOrElse { emptyList() }
 	}
 
-	private fun persistDetailsPayload(details: TrackingSiteItemDetails) {
-		val payload = JSONObject().apply {
-			details.contentType?.let { put("contentType", it.name) }
-			put("infoboxProperties", JSONArray().apply {
-				details.infoboxProperties.forEach { (key, value) ->
-					put(
-						JSONObject().apply {
-							put("key", key)
-							put("value", value)
-						},
-					)
-				}
-			})
-			put("episodes", JSONArray().apply {
-				details.episodes.forEach { episode ->
-					put(
-						JSONObject().apply {
-							put("number", episode.number)
-							put("title", episode.title)
-							put("url", episode.url)
-						},
-					)
-				}
-			})
-			put("characters", JSONArray().apply {
-				details.characters.forEach { character ->
-					put(
-						JSONObject().apply {
-							put("id", character.id)
-							put("name", character.name)
-							put("coverUrl", character.coverUrl)
-							put("role", character.role)
-							put("url", character.url)
-							put("voiceActors", JSONArray().apply {
-								character.voiceActors.forEach { actor ->
-									put(
-										JSONObject().apply {
-											actor.id?.let { put("id", it) }
-											put("name", actor.name)
-											put("avatarUrl", actor.avatarUrl)
-											put("url", actor.url)
-										},
-									)
-								}
-							})
-						},
-					)
-				}
-			})
-			put("commentThreads", JSONArray().apply {
-				details.commentThreads.forEach { thread ->
-					put(
-						JSONObject().apply {
-							put("id", thread.id)
-							put("userName", thread.userName)
-							put("userUrl", thread.userUrl)
-							put("avatarUrl", thread.avatarUrl)
-							thread.rating?.let { put("rating", it.toDouble()) }
-							put("status", thread.status)
-							put("postedAt", thread.postedAt)
-							put("content", thread.content)
-							put("replies", JSONArray().apply {
-								thread.replies.forEach { reply ->
-									put(
-										JSONObject().apply {
-											put("id", reply.id)
-											put("userName", reply.userName)
-											put("userUrl", reply.userUrl)
-											put("avatarUrl", reply.avatarUrl)
-											put("postedAt", reply.postedAt)
-											put("content", reply.content)
-										},
-									)
-								}
-							})
-						},
-					)
-				}
-			})
-			put("reviews", JSONArray().apply {
-				details.reviews.forEach { review ->
-					put(
-						JSONObject().apply {
-							put("id", review.id)
-							put("title", review.title)
-							put("authorName", review.authorName)
-							put("authorUrl", review.authorUrl)
-							put("avatarUrl", review.avatarUrl)
-							put("postedAt", review.postedAt)
-							put("excerpt", review.excerpt)
-							put("url", review.url)
-							review.repliesCount?.let { put("repliesCount", it) }
-						},
-					)
-				}
-			})
-			put("relatedWorks", details.relatedWorks.toJsonArray())
-			put("recommendations", details.recommendations.toJsonArray())
-			put("extraSections", JSONArray().apply {
-				details.extraSections.forEach { section ->
-					put(
-						JSONObject().apply {
-							put("title", section.title)
-							put("items", section.items.toJsonArray())
-						},
-					)
-				}
-			})
-			put("actions", JSONArray().apply {
-				details.actions.forEach { action ->
-					put(
-						JSONObject().apply {
-							put("title", action.title)
-							put("url", action.url)
-						},
-					)
-				}
-			})
-		}.toString()
+	private fun persistDetailsPayload(details: TrackingSiteItemDetails, payload: String = details.toPersistedPayload().toString()) {
 		prefs.edit()
 			.putString(detailsPayloadKey(details.service, details.remoteId), payload)
 			.apply()
@@ -436,12 +343,16 @@ class TrackingSiteCacheRepository @Inject constructor(
 	private fun persistEntityDetailsPayload(
 		service: ScrobblerService,
 		entityType: EntityType,
-		details: TrackingSiteItemDetails,
+		remoteId: Long,
+		payload: String,
 	) {
-		val payload = details.toPersistedPayload().toString()
 		prefs.edit()
-			.putString(entityDetailsPayloadKey(service, entityType, details.remoteId), payload)
+			.putString(entityDetailsPayloadKey(service, entityType, remoteId), payload)
 			.apply()
+	}
+
+	private fun readPersistedPayloadRaw(key: String): String? {
+		return prefs.getString(key, null)?.takeIf { it.isNotBlank() }
 	}
 
 	private fun readPersistedEntityDetailsPayload(

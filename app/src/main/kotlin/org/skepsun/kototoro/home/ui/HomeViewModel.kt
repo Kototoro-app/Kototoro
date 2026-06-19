@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
@@ -136,15 +137,6 @@ data class HomeSourceBreakdown(
 )
 
 @Immutable
-data class HomeSyncState(
-    val isWebDavEnabled: Boolean = false,
-    val isAutoSyncEnabled: Boolean = false,
-    val lastUploadTime: Long = 0L,
-    val lastUploadKind: String? = null,
-    val isLegacyRestoreUploadBlocked: Boolean = false,
-)
-
-@Immutable
 data class HomeSummaryState(
     val selectedTab: HomeContentTab? = null,
     val recentHistoryCount: Int = 0,
@@ -159,7 +151,6 @@ data class HomeSummaryState(
     val recentSearches: List<HomeRecentSearchItem> = emptyList(),
     val enabledSourcesCount: Int = 0,
     val sourceBreakdown: List<HomeSourceBreakdown> = emptyList(),
-    val syncState: HomeSyncState = HomeSyncState(),
     val selectedSourceTags: Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = emptySet(),
     val isInitialized: Boolean = false,
 )
@@ -192,6 +183,14 @@ class HomeViewModel @Inject constructor(
 
     private companion object {
         private const val TAG = "HomeViewModel"
+        private const val HOME_UPDATES_LIMIT = 64
+        private const val HOME_SUBSCRIPTION_TIMEOUT_MS = 5_000L
+    }
+
+    private fun logHomeDiag(stage: String, message: String) {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "[diag] $stage $message")
+        }
     }
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
@@ -214,8 +213,16 @@ class HomeViewModel @Inject constructor(
                 },
             )
         }
+        .distinctUntilChanged()
+        .onEach { tab ->
+            logHomeDiag("selectedTabFlow", "tab=$tab")
+        }
     private val selectedSourceTagsFlow = globalFavoritesState.selectedSourceTags
         .onStart { emit(globalFavoritesState.selectedSourceTags.value) }
+        .distinctUntilChanged()
+        .onEach { tags ->
+            logHomeDiag("selectedSourceTagsFlow", "tags=${tags.homeTagSignature()}")
+        }
     private val activePresetFlow = settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
         .flatMapLatest { id ->
             if (id == -1L) flowOf(null) else sourcePresetsRepository.observe(id)
@@ -224,8 +231,13 @@ class HomeViewModel @Inject constructor(
             val presetId = settings.activeSourcePresetId
             emit(if (presetId == -1L) null else sourcePresetsRepository.getById(presetId))
         }
+        .distinctUntilChanged()
         .onEach { preset ->
             Log.d(TAG, "activePresetFlow presetId=${preset?.id ?: -1L}")
+            logHomeDiag(
+                "activePresetFlow",
+                "presetId=${preset?.id ?: -1L} sourceCount=${preset?.sources?.size ?: 0}",
+            )
         }
     private val recentHistoryWithMetadataFlow = historyRepository.observeAllWithHistory(
         order = ListSortOrder.LAST_READ,
@@ -233,10 +245,16 @@ class HomeViewModel @Inject constructor(
         limit = 64,
     )
         .onStart { emit(emptyList()) }
+        .distinctUntilChanged()
     private val recentHistoryFlow = recentHistoryWithMetadataFlow
         .map { items -> items.map(ContentWithHistory::manga) }
+        .distinctUntilChanged()
+        .onEach { items ->
+            logHomeDiag("recentHistoryFlow", "items=${items.homeContentSignature()}")
+        }
     private val isHistoryNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw }
         .onStart { emit(settings.isHistoryExcludeNsfw) }
+        .distinctUntilChanged()
     private val resumeCandidateFlow = combine(
         recentHistoryFlow,
         selectedTabFlow,
@@ -295,33 +313,61 @@ class HomeViewModel @Inject constructor(
                 TAG,
                 "resumeStateFlow contentId=${resumeState.content?.id} entityId=${resumeState.entityId} preferredLocalMangaId=${resumeState.preferredLocalMangaId} progress=${resumeState.progressPercent}",
             )
+            logHomeDiag("resumeStateFlow", resumeState.homeDiagSignature())
         }
+        .distinctUntilChanged()
     private val favoritesCountFlow = favouritesRepository.observeContentCount()
         .onStart { emit(0) }
+        .distinctUntilChanged()
     private val favoriteCategoriesCountFlow = favouritesRepository.observeCategories()
         .map { it.size }
         .onStart { emit(0) }
-    private val unreadUpdatesCountFlow = trackingRepository.observeUnreadUpdatesCount()
-        .onStart { emit(0) }
+        .distinctUntilChanged()
     private val recentUpdatesFlow = trackingRepository.observeUpdatedContent(
-        limit = Int.MAX_VALUE,
+        limit = HOME_UPDATES_LIMIT,
         filterOptions = emptySet(),
     )
+        .distinctUntilChanged { old, new -> old.isSameForHomeUpdates(new) }
+        .onEach { items ->
+            logHomeDiag("recentUpdatesFlow", "items=${items.homeUpdateSignature()}")
+        }
         .onStart { emit(emptyList()) }
     private val recommendationsFlow = suggestionRepository.observeAll()
+        .distinctUntilChanged()
+        .onEach { items ->
+            logHomeDiag("recommendationsFlow", "items=${items.homeContentSignature()}")
+        }
         .onStart { emit(emptyList()) }
     private val recentSearchesFlow = contentSearchRepository.observeRecentQueries(HOME_COVER_PREVIEW_LIMIT)
+        .distinctUntilChanged()
+        .onEach { items ->
+            logHomeDiag("recentSearchesFlow", "queries=${items.joinToString(limit = 6)}")
+        }
         .onStart { emit(emptyList()) }
     private val displayChangesFlow = combine(
         contentDataRepository.observeDisplayPreferencesChanges(),
         trackingSiteCacheRepository.observeDetailsUpdates().onStart { emit(0L) },
-    ) { _, _ -> Unit }.onStart { emit(Unit) }
+    ) { displayPrefsHash, detailsUpdateTick ->
+        displayPrefsHash to detailsUpdateTick
+    }
+        .distinctUntilChanged()
+        .onEach { (displayPrefsHash, detailsUpdateTick) ->
+            logHomeDiag(
+                "displayChangesFlow",
+                "prefsHash=$displayPrefsHash detailsTick=$detailsUpdateTick",
+            )
+        }
+        .map { Unit }
+        .onStart { emit(Unit) }
     private val isTrackerNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_TRACKER_NO_NSFW) { isTrackerNsfwDisabled }
         .onStart { emit(settings.isTrackerNsfwDisabled) }
+        .distinctUntilChanged()
     private val isSuggestionNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW) { isSuggestionsExcludeNsfw }
         .onStart { emit(settings.isSuggestionsExcludeNsfw) }
+        .distinctUntilChanged()
     private val enabledSourcesCountFlow = contentSourcesRepository.observeEnabledSourcesCount()
         .onStart { emit(0) }
+        .distinctUntilChanged()
     private val sourceBreakdownFlow = contentSourcesRepository.observeGroupCounts()
         .map { counts ->
             listOfNotNull(
@@ -335,33 +381,7 @@ class HomeViewModel @Inject constructor(
             ).sortedByDescending { it.count }.take(3)
         }
         .onStart { emit(emptyList()) }
-    private val syncStateFlow = settings.observe(
-        AppSettings.KEY_BACKUP_WEBDAV_ENABLED,
-        AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC,
-        AppSettings.KEY_BACKUP_WEBDAV_LAST_UPLOAD_TIME,
-        AppSettings.KEY_BACKUP_WEBDAV_LAST_UPLOAD_KIND,
-        AppSettings.KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
-    ).map {
-        HomeSyncState(
-            isWebDavEnabled = settings.isBackupWebDavUploadEnabled,
-            isAutoSyncEnabled = settings.isBackupWebDavAutoSyncEnabled,
-            lastUploadTime = settings.backupWebDavLastUploadTime,
-            lastUploadKind = settings.backupWebDavLastUploadKind,
-            isLegacyRestoreUploadBlocked = settings.isBackupWebDavAutoUploadBlockedByLegacyRestore,
-        )
-    }
-        .onStart {
-            emit(
-                HomeSyncState(
-                    isWebDavEnabled = settings.isBackupWebDavUploadEnabled,
-                    isAutoSyncEnabled = settings.isBackupWebDavAutoSyncEnabled,
-                    lastUploadTime = settings.backupWebDavLastUploadTime,
-                    lastUploadKind = settings.backupWebDavLastUploadKind,
-                    isLegacyRestoreUploadBlocked = settings.isBackupWebDavAutoUploadBlockedByLegacyRestore,
-                ),
-            )
-        }
-
+        .distinctUntilChanged()
     private val contentDataFlow = combine(
         resumeStateFlow,
         recentHistoryFlow,
@@ -393,12 +413,24 @@ class HomeViewModel @Inject constructor(
             recommendations = recommendations,
         )
     }
+        .distinctUntilChanged()
         .onEach { snapshot ->
             Log.d(
                 TAG,
                 "contentDataFlow history=${snapshot.history.size} updates=${snapshot.updates.size} recommendations=${snapshot.recommendations.size} resumeContentId=${snapshot.resumeState.content?.id}",
             )
         }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(HOME_SUBSCRIPTION_TIMEOUT_MS),
+            initialValue = ContentDataSnapshot(
+                resumeState = HomeResumeState(),
+                history = emptyList(),
+                historyWithMetadata = emptyList(),
+                updates = emptyList(),
+                recommendations = emptyList(),
+            ),
+        )
 
     private val entityIdsFlow = contentDataFlow.map { snapshot ->
         buildSet {
@@ -409,6 +441,7 @@ class HomeViewModel @Inject constructor(
     }.distinctUntilChanged().map { ids ->
         entityGraphRepository.findEntityIdsByLocalMangaIds(ids)
     }
+        .distinctUntilChanged()
         .onEach { entityIdsByMangaId ->
             Log.d(
                 TAG,
@@ -421,15 +454,15 @@ class HomeViewModel @Inject constructor(
         favoriteCategoriesCountFlow,
         enabledSourcesCountFlow,
         sourceBreakdownFlow,
-        syncStateFlow,
-    ) { favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown, syncState ->
-        HomeMetaSnapshot(favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown, syncState)
+    ) { favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown ->
+        HomeMetaSnapshot(favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown)
     }
+        .distinctUntilChanged()
         .onEach { meta ->
             val sourceBreakdownSummary = meta.sourceBreakdown.joinToString { "${it.origin}:${it.count}" }
             Log.d(
                 TAG,
-                "metaFlow favorites=${meta.favoritesCount} categories=${meta.favoriteCategoriesCount} enabledSources=${meta.enabledSourcesCount} sourceBreakdown=$sourceBreakdownSummary syncEnabled=${meta.syncState.isAutoSyncEnabled}",
+                "metaFlow favorites=${meta.favoritesCount} categories=${meta.favoriteCategoriesCount} enabledSources=${meta.enabledSourcesCount} sourceBreakdown=$sourceBreakdownSummary",
             )
         }
 
@@ -440,11 +473,10 @@ class HomeViewModel @Inject constructor(
         entityIdsFlow,
         metaFlow,
         combine(
-            unreadUpdatesCountFlow,
             recentSearchesFlow,
             isSuggestionNsfwDisabledFlow,
             displayChangesFlow,
-        ) { _, recentSearches, isSuggestionNsfwDisabled, _ ->
+        ) { recentSearches, isSuggestionNsfwDisabled, _ ->
             Pair(recentSearches, isSuggestionNsfwDisabled)
         },
     ) { values ->
@@ -525,7 +557,6 @@ class HomeViewModel @Inject constructor(
                     recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
                     enabledSourcesCount = meta.enabledSourcesCount,
                     sourceBreakdown = meta.sourceBreakdown,
-                    syncState = meta.syncState,
                     selectedSourceTags = selectedSourceTags,
                     isInitialized = true,
                 ),
@@ -551,6 +582,7 @@ class HomeViewModel @Inject constructor(
                 TAG,
                 "summaryState success history=${summary.recentHistoryCount} updates=${summary.unreadUpdatesCount} recommendations=${summary.recommendationsCount} initialized=${summary.isInitialized} tookMs=${(System.nanoTime() - startNs) / 1_000_000}",
             )
+            logHomeDiag("summaryState.emit", summary.homeDiagSignature())
         }.map { it.first }.getOrElse { error ->
             Log.e(
                 TAG,
@@ -565,14 +597,16 @@ class HomeViewModel @Inject constructor(
                 recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
                 enabledSourcesCount = meta.enabledSourcesCount,
                 sourceBreakdown = meta.sourceBreakdown,
-                syncState = meta.syncState,
                 selectedSourceTags = selectedSourceTags,
                 isInitialized = true,
             )
         }
-    }.flowOn(Dispatchers.Default).stateIn(
+    }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(
         scope = viewModelScope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(HOME_SUBSCRIPTION_TIMEOUT_MS),
         initialValue = HomeSummaryState(
             selectedTab = when (globalFavoritesState.selectedGroupTab.value) {
                 org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
@@ -682,16 +716,18 @@ class HomeViewModel @Inject constructor(
     fun restoreWebDavNow() {
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                val latest = webDavUploader.getLatestBackup(RemoteNamespace.V3)
-                    ?: webDavUploader.getLatestBackup(RemoteNamespace.V2)
-                    ?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
-                    ?: run {
-                        errorEvent.call(IllegalStateException("No WebDAV backups found"))
-                        return@launch
-                    }
+                Log.d(TAG, "restoreWebDavNow: listing backups once...")
+                val latest = webDavUploader.getLatestBackup() ?: run {
+                    Log.w(TAG, "restoreWebDavNow: no backups found in any namespace")
+                    errorEvent.call(IllegalStateException("No WebDAV backups found"))
+                    return@launch
+                }
+                Log.d(TAG, "restoreWebDavNow: found ${latest.name} (ns=${latest.namespace}, ${latest.size}b)")
                 val tempFile = java.io.File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
                 try {
+                    Log.d(TAG, "restoreWebDavNow: downloading ${latest.name}...")
                     webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
+                    Log.d(TAG, "restoreWebDavNow: downloaded, starting restore from zip...")
                     val allSections = setOf(
                         org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
                         org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
@@ -702,7 +738,6 @@ class HomeViewModel @Inject constructor(
                         org.skepsun.kototoro.backups.domain.BackupSection.WORK_HISTORY,
                         org.skepsun.kototoro.backups.domain.BackupSection.WORK_FAVOURITES,
                         org.skepsun.kototoro.backups.domain.BackupSection.WORK_STATS,
-                        org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
                         org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
                         org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS_READER_GRID,
@@ -714,6 +749,7 @@ class HomeViewModel @Inject constructor(
                     val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
                         repository.restoreBackup(zis, allSections, null)
                     }
+                    Log.d(TAG, "restoreWebDavNow: restore complete, committing...")
                     val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
                     backupWebDavRestoreCoordinator.commitManualRestore(
                         state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
@@ -735,11 +771,13 @@ class HomeViewModel @Inject constructor(
                             null,
                         ),
                     )
+                    Log.d(TAG, "restoreWebDavNow: committed, done")
                 } finally {
                     if (tempFile.exists()) tempFile.delete()
                 }
             } catch (e: Exception) {
                 e.printStackTraceDebug()
+                Log.e(TAG, "restoreWebDavNow: failed", e)
                 errorEvent.call(e)
             }
         }
@@ -766,7 +804,6 @@ private data class HomeMetaSnapshot(
     val favoriteCategoriesCount: Int,
     val enabledSourcesCount: Int,
     val sourceBreakdown: List<HomeSourceBreakdown>,
-    val syncState: HomeSyncState,
 )
 
 private fun HomeSourceOrigin.toBreakdown(count: Int?): HomeSourceBreakdown? {
@@ -969,6 +1006,66 @@ private fun List<Content>.aggregateHomeRecommendationsByEntity(
         result += HomeRecommendationItem(content = representative, groupKey = groupKey)
     }
     return result
+}
+
+private fun List<ContentTracking>.isSameForHomeUpdates(other: List<ContentTracking>): Boolean {
+    if (size != other.size) {
+        return false
+    }
+    return indices.all { index ->
+        this[index].toHomeUpdateSignature() == other[index].toHomeUpdateSignature()
+    }
+}
+
+private fun ContentTracking.toHomeUpdateSignature(): HomeUpdateSignature {
+    return HomeUpdateSignature(
+        anchorMangaId = anchorMangaId,
+        entityId = entityId,
+        preferredLocalMangaId = preferredLocalMangaId,
+        manga = manga,
+        newChapters = newChapters,
+    )
+}
+
+private data class HomeUpdateSignature(
+    val anchorMangaId: Long,
+    val entityId: Long?,
+    val preferredLocalMangaId: Long?,
+    val manga: Content,
+    val newChapters: Int,
+)
+
+private fun HomeResumeState.homeDiagSignature(): String {
+    return "contentId=${content?.id} groupKey=$groupKey progress=$progressPercent entityId=$entityId preferredLocal=$preferredLocalMangaId cover=${content?.coverUrl}"
+}
+
+private fun HomeSummaryState.homeDiagSignature(): String {
+    return buildString {
+        append("tab=").append(selectedTab)
+        append(" initialized=").append(isInitialized)
+        append(" resume=").append(resumeState.content?.id).append('@').append(resumeState.groupKey)
+        append(" history=").append(recentHistoryItems.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
+        append(" updates=").append(recentUpdates.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.newChapters}" })
+        append(" recommendations=").append(recommendations.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
+        append(" searches=").append(recentSearches.joinToString(limit = 4) { it.query })
+        append(" tags=").append(selectedSourceTags.homeTagSignature())
+    }
+}
+
+private fun List<Content>.homeContentSignature(): String {
+    return joinToString(limit = 6) { "${it.id}:${it.coverUrl}" }
+}
+
+private fun List<ContentTracking>.homeUpdateSignature(): String {
+    return joinToString(limit = 6) {
+        "${it.anchorMangaId}:${it.entityId}:${it.preferredLocalMangaId}:${it.manga.id}:${it.newChapters}:${it.manga.coverUrl}"
+    }
+}
+
+private fun Set<org.skepsun.kototoro.explore.ui.model.SourceTag>.homeTagSignature(): String {
+    return map { it.id }
+        .sorted()
+        .joinToString()
 }
 
 private suspend fun buildDisplayContentOverrides(

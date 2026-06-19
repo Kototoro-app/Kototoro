@@ -38,10 +38,6 @@ class AnimeOfflineUpdateWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         trySetForeground()
-        val force = inputData.getBoolean(INPUT_FORCE, false)
-        if (!force && !repository.shouldCheckForUpdates()) {
-            return Result.success()
-        }
         repository.recordCheck()
         val latest = repository.fetchLatestRelease() ?: return Result.success()
         if (!repository.isUpdateRequired(latest)) {
@@ -132,16 +128,11 @@ class AnimeOfflineUpdateWorker @AssistedInject constructor(
         const val UNIQUE_WORK_NAME = "anime_offline_database_update"
         private const val CHANNEL_ID = "anime_offline_database_update"
         private const val NOTIFICATION_ID = 44231
-        private const val INPUT_FORCE = "force"
         const val KEY_DOWNLOADED_BYTES = "downloaded_bytes"
         const val KEY_TOTAL_BYTES = "total_bytes"
 
-        fun enqueue(
-            context: Context,
-            force: Boolean = false,
-        ) {
+        fun enqueue(context: Context) {
             val request = OneTimeWorkRequestBuilder<AnimeOfflineUpdateWorker>()
-                .setInputData(workDataOf(INPUT_FORCE to force))
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -152,7 +143,7 @@ class AnimeOfflineUpdateWorker @AssistedInject constructor(
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
-                if (force) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,
                 request,
             )
         }

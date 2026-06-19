@@ -244,7 +244,7 @@ fun Context.restartApplication() {
 internal inline fun <R> PowerManager?.withPartialWakeLock(tag: String, body: (PowerManager.WakeLock?) -> R): R {
 	val wakeLock = newPartialWakeLock(tag)
 	return try {
-		wakeLock?.acquire(TimeUnit.HOURS.toMillis(1))
+		wakeLock?.acquire(TimeUnit.MINUTES.toMillis(10))
 		body(wakeLock)
 	} finally {
 		wakeLock?.release()

@@ -533,9 +533,6 @@ class BackupRepository @Inject constructor(
                 database.getWorkStatsDao().clear()
                 database.getStatsDao().clear()
             }
-            if (BackupSection.SOURCES in sections) {
-                database.getSourcesDao().disableAllSources()
-            }
             if (BackupSection.EXTENSION_REPOS in sections) {
                 database.getExternalExtensionRepoDao().deleteAll()
             }

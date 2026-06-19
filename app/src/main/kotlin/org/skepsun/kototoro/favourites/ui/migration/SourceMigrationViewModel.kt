@@ -7,7 +7,6 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
-import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -623,7 +622,7 @@ class SourceMigrationViewModel @Inject constructor(
     }
 
     fun updateAnimeDataset() {
-        AnimeOfflineUpdateWorker.enqueue(appContext.applicationContext, force = true)
+        AnimeOfflineUpdateWorker.enqueue(appContext.applicationContext)
         _uiState.value = _uiState.value.copy(
             animeDatasetStatus = _uiState.value.animeDatasetStatus.copy(
                 isLoading = true,

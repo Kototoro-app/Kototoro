@@ -43,6 +43,7 @@ class CloudFlareInterceptClient(
                 .cookieJar(cookieJar)
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
+                .callTimeout(30, TimeUnit.SECONDS)
                 .build()
             val builder = Request.Builder()
                 .url(request.url.toString())

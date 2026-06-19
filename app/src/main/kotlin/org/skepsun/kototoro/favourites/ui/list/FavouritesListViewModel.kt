@@ -150,8 +150,8 @@ class FavouritesListViewModel @AssistedInject constructor(
     ) { list, categoryIds, preset ->
         Triple(list, categoryIds, preset)
     }.mapLatest { (list, categoryIds, preset) ->
-        prepareGroups(list, categoryIds, preset)
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+        preparedGroupsReady(prepareGroups(list, categoryIds, preset))
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, PreparedGroupsState.Loading)
 
     private val listContext = combine(
         preparedGroups,
@@ -186,7 +186,16 @@ class FavouritesListViewModel @AssistedInject constructor(
         listParams,
         mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
     ) { params, _ ->
-        mapList(params.groups, params.filters, params.mode, params.groupTab, params.sourceTags)
+        when (val groups = params.groups) {
+            PreparedGroupsState.Loading -> listOf(LoadingState)
+            is PreparedGroupsState.Ready -> mapList(
+                groups = groups.groups,
+                filters = params.filters,
+                mode = params.mode,
+                groupTab = params.groupTab,
+                sourceTags = params.sourceTags,
+            )
+        }
     }.onEach {
         isPaginationReady.set(true)
     }.distinctUntilChanged().catch {
@@ -522,12 +531,21 @@ class FavouritesListViewModel @AssistedInject constructor(
     )
 
     private data class ListParams(
-        val groups: List<PreparedFavouriteGroup>,
+        val groups: PreparedGroupsState,
         val filters: Set<ListFilterOption>,
         val mode: ListMode,
         val groupTab: BrowseGroupTab,
         val sourceTags: Set<SourceTag>,
     )
+
+    private sealed class PreparedGroupsState {
+        object Loading : PreparedGroupsState()
+        data class Ready(val groups: List<PreparedFavouriteGroup>) : PreparedGroupsState()
+    }
+
+    private fun preparedGroupsReady(groups: List<PreparedFavouriteGroup>): PreparedGroupsState {
+        return PreparedGroupsState.Ready(groups)
+    }
 
     private fun PreparedFavouriteGroup.toVisibleGroup(items: List<PreparedFavouriteItem>): VisibleFavouriteGroup? {
         if (items.isEmpty()) {
