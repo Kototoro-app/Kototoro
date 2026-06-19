@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.backups.data
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import android.webkit.CookieManager
 import androidx.collection.ArrayMap
@@ -83,6 +84,7 @@ import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 
 private const val TAG = "BackupRepo"
+private const val RESTORE_TRANSACTION_BATCH_SIZE = 100
 private val RESTORE_PROTECTED_BINDING_STATES = setOf(
     EntityBindingState.MANUAL,
     EntityBindingState.CANDIDATE,
@@ -296,7 +298,9 @@ class BackupRepository @Inject constructor(
         progress: FlowCollector<Progress>?,
         restoreMode: RestoreMode = RestoreMode.MERGE,
     ): RestoreBackupResult {
+        val restoreStartedAt = SystemClock.elapsedRealtime()
         val effectiveSections = sections.withImplicitRestoreSections()
+        Log.d(TAG, "restoreBackup: start mode=$restoreMode sections=${effectiveSections.joinToString()}")
         progress?.emit(Progress.INDETERMINATE)
         var commonProgress = Progress(0, effectiveSections.size)
         var entry = input.nextEntry
@@ -307,7 +311,9 @@ class BackupRepository @Inject constructor(
         var backupIndex: BackupIndex? = null
         var restoreContext = resolveRestoreSemanticContext(null)
         if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
+            val clearStartedAt = SystemClock.elapsedRealtime()
             clearRestoreTargets(effectiveSections)
+            Log.d(TAG, "restoreBackup: clearRestoreTargets elapsedMs=${SystemClock.elapsedRealtime() - clearStartedAt}")
         }
         while (entry != null) {
             val section = BackupSection.of(entry)
@@ -318,13 +324,14 @@ class BackupRepository @Inject constructor(
                 if (section != null) {
                     restoredSections.add(section)
                 }
+                val sectionStartedAt = SystemClock.elapsedRealtime()
                 result += when (section) {
                     BackupSection.INDEX -> {
                         backupIndex = input.readBackupIndex()
                         restoreContext = resolveRestoreSemanticContext(backupIndex)
                         CompositeResult.EMPTY
                     }
-                    BackupSection.HISTORY -> input.readJsonArray<HistoryBackup>(serializer()).restoreToDb {
+                    BackupSection.HISTORY -> input.readJsonArray<HistoryBackup>(serializer()).restoreToDb("HISTORY") {
                         // Legacy history sections restore the projection snapshot first, then
                         // normalize the record into work-owned history when entity bindings exist.
                         upsertContent(it.manga, restoreContext)
@@ -333,11 +340,11 @@ class BackupRepository @Inject constructor(
                         upsertWorkHistoryFromLegacy(legacy)
                     }
 
-                    BackupSection.CATEGORIES -> input.readJsonArray<CategoryBackup>(serializer()).restoreToDb {
+                    BackupSection.CATEGORIES -> input.readJsonArray<CategoryBackup>(serializer()).restoreToDb("CATEGORIES") {
                         getFavouriteCategoriesDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.FAVOURITES -> input.readJsonArray<FavouriteBackup>(serializer()).restoreToDb {
+                    BackupSection.FAVOURITES -> input.readJsonArray<FavouriteBackup>(serializer()).restoreToDb("FAVOURITES") {
                         // Legacy favourites sections restore the projection snapshot first, then
                         // project collection state into work-owned favourites.
                         upsertContent(it.manga, restoreContext)
@@ -356,45 +363,45 @@ class BackupRepository @Inject constructor(
                         CompositeResult.success()
                     }
 
-                    BackupSection.BOOKMARKS -> input.readJsonArray<BookmarkBackup>(serializer()).restoreToDb {
+                    BackupSection.BOOKMARKS -> input.readJsonArray<BookmarkBackup>(serializer()).restoreToDb("BOOKMARKS") {
                         // Bookmarks remain projection-anchored content data. Entity/work state
                         // comes from graph/work sections and is not embedded here.
                         upsertContent(it.manga, restoreContext)
                         getBookmarksDao().upsert(it.bookmarks.map { b -> b.toEntity() })
                     }
 
-                    BackupSection.SOURCES -> input.readJsonArray<SourceBackup>(serializer()).restoreToDb {
+                    BackupSection.SOURCES -> input.readJsonArray<SourceBackup>(serializer()).restoreToDb("SOURCES") {
                         getSourcesDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.EXTENSION_REPOS -> input.readJsonArray<ExtensionRepoBackup>(serializer()).restoreToDb {
+                    BackupSection.EXTENSION_REPOS -> input.readJsonArray<ExtensionRepoBackup>(serializer()).restoreToDb("EXTENSION_REPOS") {
                         getExternalExtensionRepoDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.SCROBBLING -> input.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb {
+                    BackupSection.SCROBBLING -> input.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb("SCROBBLING") {
                         upsertScrobbling(it.toEntity())
                     }
 
-                    BackupSection.STATS -> input.readJsonArray<StatisticBackup>(serializer()).restoreToDb {
+                    BackupSection.STATS -> input.readJsonArray<StatisticBackup>(serializer()).restoreToDb("STATS") {
                         val legacy = it.toEntity()
                         getStatsDao().upsert(legacy)
                         upsertWorkStatsFromLegacy(legacy)
                     }
 
-                    BackupSection.WORK_HISTORY -> input.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb {
+                    BackupSection.WORK_HISTORY -> input.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
                         getWorkHistoryDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.WORK_FAVOURITES -> input.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb {
+                    BackupSection.WORK_FAVOURITES -> input.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb("WORK_FAVOURITES") {
                         getWorkFavouritesDao().upsert(it.toEntity())
                     }
 
-                    BackupSection.WORK_STATS -> input.readJsonArray<WorkStatisticBackup>(serializer()).restoreToDb {
+                    BackupSection.WORK_STATS -> input.readJsonArray<WorkStatisticBackup>(serializer()).restoreToDb("WORK_STATS") {
                         getWorkStatsDao().upsert(it.toEntity())
                     }
 
                     BackupSection.SAVED_FILTERS -> input.readJsonArray<PersistableFilter>(serializer())
-                        .restoreWithoutTransaction {
+                        .restoreWithoutTransaction("SAVED_FILTERS") {
                             savedFiltersRepository.save(it)
                         }
 
@@ -403,23 +410,26 @@ class BackupRepository @Inject constructor(
                         CompositeResult.success()
                     }
 
-                    BackupSection.ENTITY_GRAPH_ENTITIES -> input.readJsonArray<EntityRecord>(serializer()).restoreToDb {
+                    BackupSection.ENTITY_GRAPH_ENTITIES -> input.readJsonArray<EntityRecord>(serializer()).restoreToDb("ENTITY_GRAPH_ENTITIES") {
                         restoreEntityRecord(it, entityIdMapping)
                     }
 
-                    BackupSection.ENTITY_GRAPH_BINDINGS -> input.readJsonArray<EntityBindingRecord>(serializer()).restoreToDb {
+                    BackupSection.ENTITY_GRAPH_BINDINGS -> input.readJsonArray<EntityBindingRecord>(serializer()).restoreToDb("ENTITY_GRAPH_BINDINGS") {
                         restoreEntityBinding(it, entityIdMapping, restoreContext)
                     }
 
-                    BackupSection.ENTITY_GRAPH_RELATIONS -> input.readJsonArray<RelationRecord>(serializer()).restoreToDb {
+                    BackupSection.ENTITY_GRAPH_RELATIONS -> input.readJsonArray<RelationRecord>(serializer()).restoreToDb("ENTITY_GRAPH_RELATIONS") {
                         restoreEntityRelation(it, entityIdMapping)
                     }
 
-                    BackupSection.ENTITY_GRAPH_PREFS -> input.readJsonArray<EntityPrefsRecord>(serializer()).restoreToDb {
+                    BackupSection.ENTITY_GRAPH_PREFS -> input.readJsonArray<EntityPrefsRecord>(serializer()).restoreToDb("ENTITY_GRAPH_PREFS") {
                         restoreEntityPrefs(it, entityIdMapping, restoreContext)
                     }
 
                     null -> CompositeResult.EMPTY // skip unknown entries
+                }
+                if (section != null) {
+                    Log.d(TAG, "restoreBackup: section=$section elapsedMs=${SystemClock.elapsedRealtime() - sectionStartedAt}")
                 }
                 progress?.emit(commonProgress)
                 commonProgress++
@@ -427,13 +437,18 @@ class BackupRepository @Inject constructor(
             input.closeEntry()
             entry = input.nextEntry
         }
+        val legacyRepoStartedAt = SystemClock.elapsedRealtime()
         val legacyJarReposImported = restoreLegacyJarRepositoriesIfNeeded(effectiveSections, archiveSections, restoredSections)
+        Log.d(TAG, "restoreBackup: restoreLegacyJarRepositoriesIfNeeded elapsedMs=${SystemClock.elapsedRealtime() - legacyRepoStartedAt}")
+        val normalizeStartedAt = SystemClock.elapsedRealtime()
         normalizeRestoredWorkState(
             requestedSections = effectiveSections,
             archiveSections = archiveSections,
             restoreContext = restoreContext,
         )
+        Log.d(TAG, "restoreBackup: normalizeRestoredWorkState elapsedMs=${SystemClock.elapsedRealtime() - normalizeStartedAt}")
         progress?.emit(commonProgress)
+        Log.d(TAG, "restoreBackup: complete totalMs=${SystemClock.elapsedRealtime() - restoreStartedAt}")
         return RestoreBackupResult(
             result = result,
             legacyJarReposImported = legacyJarReposImported,
@@ -493,6 +508,7 @@ class BackupRepository @Inject constructor(
     }
 
     private suspend fun clearRestoreTargets(sections: Set<BackupSection>) {
+        val startedAt = SystemClock.elapsedRealtime()
         database.withTransaction {
             if (BackupSection.HISTORY in sections) {
                 database.getWorkHistoryDao().clear()
@@ -534,6 +550,7 @@ class BackupRepository @Inject constructor(
                 database.getEntityGraphDao().deleteAllEntities()
             }
         }
+        Log.d(TAG, "clearRestoreTargets: sections=${sections.joinToString()} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
     }
 
     private fun Set<BackupSection>.withImplicitRestoreSections(): Set<BackupSection> {
@@ -1049,22 +1066,63 @@ class BackupRepository @Inject constructor(
         }
     }
 
-    private suspend inline fun <T> Sequence<T>.restoreToDb(crossinline block: suspend MangaDatabase.(T) -> Unit): CompositeResult {
-        return fold(CompositeResult.EMPTY) { result, item ->
-            result + runCatchingCancellable {
-                database.withTransaction {
-                    database.block(item)
+    private suspend fun <T> Sequence<T>.restoreToDb(
+        label: String,
+        batchSize: Int = RESTORE_TRANSACTION_BATCH_SIZE,
+        block: suspend MangaDatabase.(T) -> Unit,
+    ): CompositeResult {
+        val startedAt = SystemClock.elapsedRealtime()
+        var processed = 0
+        var result = CompositeResult.EMPTY
+        val batch = ArrayList<T>(batchSize)
+
+        suspend fun flushBatch() {
+            if (batch.isEmpty()) return
+            val batchStartedAt = SystemClock.elapsedRealtime()
+            var batchResult = CompositeResult.EMPTY
+            database.withTransaction {
+                batch.forEach { item ->
+                    batchResult += runCatchingCancellable {
+                        database.block(item)
+                    }
                 }
             }
+            processed += batch.size
+            result += batchResult
+            Log.d(
+                TAG,
+                "restoreToDb: label=$label processed=$processed batchSize=${batch.size} " +
+                    "batchElapsedMs=${SystemClock.elapsedRealtime() - batchStartedAt} " +
+                    "totalElapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+            )
+            batch.clear()
         }
+
+        for (item in this) {
+            batch += item
+            if (batch.size >= batchSize) {
+                flushBatch()
+            }
+        }
+        flushBatch()
+        Log.d(TAG, "restoreToDb: label=$label complete count=$processed totalMs=${SystemClock.elapsedRealtime() - startedAt}")
+        return result
     }
 
-    private suspend inline fun <T> Sequence<T>.restoreWithoutTransaction(crossinline block: suspend (T) -> Unit): CompositeResult {
-        return fold(CompositeResult.EMPTY) { result, item ->
+    private suspend fun <T> Sequence<T>.restoreWithoutTransaction(
+        label: String,
+        block: suspend (T) -> Unit,
+    ): CompositeResult {
+        val startedAt = SystemClock.elapsedRealtime()
+        var processed = 0
+        val result = fold(CompositeResult.EMPTY) { result, item ->
+            processed++
             result + runCatchingCancellable {
                 block(item)
             }
         }
+        Log.d(TAG, "restoreWithoutTransaction: label=$label complete count=$processed totalMs=${SystemClock.elapsedRealtime() - startedAt}")
+        return result
     }
 }
 

@@ -38,16 +38,10 @@ fun SyncSettingsRoute(
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_PASSWORD) { backupWebDavPassword.orEmpty() }.value
     val webDavRemotePath =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_PATH) { backupWebDavRemotePath.orEmpty() }.value
-    val isWebDavAutoSyncEnabled =
-        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC) { isBackupWebDavAutoSyncEnabled }.value
     val isWebDavAutoRestoreEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_AUTO_RESTORE) { isBackupWebDavAutoRestoreEnabled }.value
     val isWebDavKeepLocalCopyEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_KEEP_LOCAL_COPY) { isBackupWebDavKeepLocalCopyEnabled }.value
-    val isLegacyRestoreUploadBlocked =
-        settings.observeAsState(
-            AppSettings.KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
-        ) { isBackupWebDavAutoUploadBlockedByLegacyRestore }.value
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(backupSettingsViewModel.onError, context, snackbarHostState) {
@@ -78,16 +72,11 @@ fun SyncSettingsRoute(
             webDavPassword = webDavPassword,
             webDavRemotePath = webDavRemotePath,
             isWebDavCheckLoading = isWebDavCheckLoading,
-            isWebDavAutoSyncEnabled = isWebDavAutoSyncEnabled,
             isWebDavAutoRestoreEnabled = isWebDavAutoRestoreEnabled,
             isWebDavKeepLocalCopyEnabled = isWebDavKeepLocalCopyEnabled,
             webDavLastActionSummary = webDavLastActionSummary,
             isPolicyNoteVisible = !isWebDavKeepLocalCopyEnabled && isWebDavEnabled,
-            legacyRestoreBlockSummary = if (isLegacyRestoreUploadBlocked) {
-                context.getString(R.string.webdav_legacy_restore_block_summary)
-            } else {
-                null
-            },
+            legacyRestoreBlockSummary = null,
             webDavUploadBusySummary = webDavUploadBusyMessageRes?.let(context::getString),
             webDavRestoreBusySummary = webDavRestoreBusyMessageRes?.let(context::getString),
             isAnyBusy = isAnyBusy,
@@ -101,7 +90,6 @@ fun SyncSettingsRoute(
         onWebDavTestClick = { backupSettingsViewModel.checkWebDav() },
         onWebDavUploadNowClick = { backupSettingsViewModel.uploadWebDavNow() },
         onWebDavRestoreNowClick = { backupSettingsViewModel.restoreWebDavNow() },
-        onWebDavAutoSyncChange = { settings.isBackupWebDavAutoSyncEnabled = it },
         onWebDavAutoRestoreChange = { settings.isBackupWebDavAutoRestoreEnabled = it },
         onWebDavKeepLocalCopyChange = { settings.isBackupWebDavKeepLocalCopyEnabled = it },
         modifier = modifier,

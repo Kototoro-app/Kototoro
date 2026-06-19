@@ -4,12 +4,9 @@ import android.content.Context
 import android.content.Intent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupService
-import org.skepsun.kototoro.backups.ui.webdav.DataSyncManager
-import org.skepsun.kototoro.backups.ui.webdav.WebDavAutoRestoreService
+import org.skepsun.kototoro.backups.ui.webdav.WebDavAutoRestoreWorker
 import org.skepsun.kototoro.core.util.BackupFlow
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.logBackupFlow
@@ -20,12 +17,10 @@ import javax.inject.Singleton
 class BackupStartupCoordinator @Inject constructor(
 	@ApplicationContext private val appContext: Context,
 	private val backupFlowPolicy: BackupFlowPolicy,
-	private val dataSyncManager: DataSyncManager,
 ) {
 
 	fun startOnFirstLaunch(scope: CoroutineScope) {
 		startPeriodicalBackupService()
-		startAutoSyncObserver(scope)
 		scheduleAutoRestore(scope)
 	}
 
@@ -36,23 +31,6 @@ class BackupStartupCoordinator @Inject constructor(
 		}.onFailure {
 			logBackupFlow(TAG, flow = BackupFlow.PERIODICAL_BACKUP, event = "startup_failed", reason = it::class.java.simpleName)
 			it.printStackTraceDebug()
-		}
-	}
-
-	private fun startAutoSyncObserver(scope: CoroutineScope) {
-		logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_start_requested")
-		scope.launch(Dispatchers.IO) {
-			runCatching {
-				dataSyncManager.start()
-			}.onFailure {
-				logBackupFlow(
-					TAG,
-					flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD,
-					event = "observer_start_failed",
-					reason = it::class.java.simpleName,
-				)
-				it.printStackTraceDebug()
-			}
 		}
 	}
 
@@ -75,9 +53,8 @@ class BackupStartupCoordinator @Inject constructor(
 			"delayMs" to AUTO_RESTORE_START_DELAY_MS,
 		)
 		scope.launch {
-			delay(AUTO_RESTORE_START_DELAY_MS)
 			runCatching {
-				WebDavAutoRestoreService.start(appContext)
+				WebDavAutoRestoreWorker.enqueue(appContext, delayMs = AUTO_RESTORE_START_DELAY_MS)
 				logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "startup_requested")
 			}.onFailure {
 				logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "startup_failed", reason = it::class.java.simpleName)

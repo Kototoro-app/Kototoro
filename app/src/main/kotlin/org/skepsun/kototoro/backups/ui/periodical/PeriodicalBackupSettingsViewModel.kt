@@ -2,6 +2,7 @@ package org.skepsun.kototoro.backups.ui.periodical
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -34,6 +35,10 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	private val repository: org.skepsun.kototoro.backups.data.BackupRepository,
 	@ApplicationContext private val appContext: Context,
 ) : BaseViewModel() {
+
+	companion object {
+		private const val TAG = "PeriodicalBackupVM"
+	}
 
 	val isTelegramAvailable
 		get() = telegramUploader.isAvailable
@@ -125,15 +130,18 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			try {
 				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
-				val latest = webDavUploader.getLatestBackup(RemoteNamespace.V3)
-					?: webDavUploader.getLatestBackup(RemoteNamespace.V2)
-					?: webDavUploader.getLatestBackup(RemoteNamespace.V1)
+				Log.d(TAG, "restoreWebDavNow: listing backups once...")
+				val latest = webDavUploader.getLatestBackup()
 				if (latest == null) {
+					Log.w(TAG, "restoreWebDavNow: no backups found in any namespace")
 					throw IllegalStateException("No WebDAV backups found")
 				}
+				Log.d(TAG, "restoreWebDavNow: found ${latest.name} (ns=${latest.namespace}, ${latest.size}b)")
 				val tempFile = java.io.File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
 				try {
+					Log.d(TAG, "restoreWebDavNow: downloading ${latest.name}...")
 					webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
+					Log.d(TAG, "restoreWebDavNow: downloaded, starting restore from zip...")
 					val allSections = setOf(
 						org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
 						org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
@@ -152,25 +160,27 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
 						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_PREFS,
-                    )
-                    val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
-                        repository.restoreBackup(
-                            input = zis,
-                            sections = allSections,
-                            progress = null,
-                            restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
-                        )
-                    }
-					val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
-					backupWebDavRestoreCoordinator.commitManualRestore(
-						state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
-							semanticSchemaVersion = restoreContext.semanticSchemaVersion,
-							transportGeneration = restoreContext.transportGeneration,
-						),
 					)
-					onActionDone.call(
-						ReversibleAction(
-							if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
+					val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
+						repository.restoreBackup(
+							input = zis,
+							sections = allSections,
+							progress = null,
+							restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+						)
+					}
+					Log.d(TAG, "restoreWebDavNow: restore complete, committing...")
+					val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
+						backupWebDavRestoreCoordinator.commitManualRestore(
+							state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
+								semanticSchemaVersion = restoreContext.semanticSchemaVersion,
+								transportGeneration = restoreContext.transportGeneration,
+							),
+						)
+						Log.d(TAG, "restoreWebDavNow: committed, done")
+						onActionDone.call(
+							ReversibleAction(
+								if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
 								R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
 							} else if (restoreContext.isLegacySemanticSchema) {
 								R.string.webdav_restore_success_legacy_requires_normalization
@@ -187,6 +197,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 					if (tempFile.exists()) tempFile.delete()
 				}
 			} catch (e: Exception) {
+				Log.e(TAG, "restoreWebDavNow: failed", e)
 				errorEvent.call(e)
 			} finally {
 				webDavRestoreBusyMessageRes.value = null

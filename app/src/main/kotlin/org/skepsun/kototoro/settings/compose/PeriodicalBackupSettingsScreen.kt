@@ -195,14 +195,6 @@ fun PeriodicalBackupSettingsScreen(
                         settings.prefs.edit().putBoolean(AppSettings.KEY_BACKUP_WEBDAV_AUTO_RESTORE, checked).apply()
                     },
                 )
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.webdav_auto_sync),
-                    summary = stringResource(R.string.webdav_auto_sync_summary),
-                    checked = settings.prefs.getBoolean(AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC, false),
-                    onCheckedChange = { checked ->
-                        settings.prefs.edit().putBoolean(AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC, checked).apply()
-                    },
-                )
                 if (webDavLastActionText != null) {
                     SettingsInfoPreference(
                         title = "${stringResource(R.string.recent_webdav_action)}\n$webDavLastActionText",

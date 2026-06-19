@@ -10,28 +10,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.flow.collect
 import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.BackupFlowPolicy
 import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.ExternalBackupStorage
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.db.TABLE_CHAPTERS
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_ENTITY
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_HISTORY
-import org.skepsun.kototoro.core.db.TABLE_MANGA
-import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
-import org.skepsun.kototoro.core.db.TABLE_SOURCES
-import org.skepsun.kototoro.core.db.TABLE_TAGS
+import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.BackupFlow
 import org.skepsun.kototoro.core.util.logBackupFlow
@@ -42,8 +37,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 监听数据库关键表的变更，按需进行 WebDAV 自动同步上传。
- * 使用去抖动策略聚合短时间内的多次变更，避免频繁写入与上传。
+ * 监听代表用户跨设备状态的关键表变更，按需进行 WebDAV 自动同步上传。
+ * 避免监听元数据类高频表，减少使用过程中的无意义调度。
  */
 @Singleton
 class DataSyncManager @Inject constructor(
@@ -61,6 +56,8 @@ class DataSyncManager @Inject constructor(
     private var settingsJob: Job? = null
     private val uploadMutex = Mutex()
     private var lastMinIntervalSkipLogAtMs: Long = 0L
+    @Volatile
+    private var isObserverRegistered = false
 
     private companion object {
         private const val TAG = "DataSyncManager"
@@ -72,15 +69,10 @@ class DataSyncManager @Inject constructor(
 
     private val tablesToObserve = arrayOf(
         TABLE_HISTORY,
+        TABLE_WORK_HISTORY,
         TABLE_FAVOURITES,
+        TABLE_WORK_FAVOURITES,
         TABLE_FAVOURITE_CATEGORIES,
-        TABLE_MANGA,
-        TABLE_TAGS,
-        TABLE_MANGA_TAGS,
-        TABLE_SOURCES,
-        TABLE_CHAPTERS,
-        TABLE_ENTITY_GRAPH_ENTITY,
-        TABLE_ENTITY_GRAPH_BINDING,
         TABLE_ENTITY_GRAPH_RELATION,
         TABLE_ENTITY_PREFERENCES,
     )
@@ -93,32 +85,58 @@ class DataSyncManager @Inject constructor(
 
     /** 启动监听（幂等） */
     fun start() {
-        logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_started")
-        runCatching {
-            database.invalidationTracker.addObserver(observer)
-        }.onFailure { it.printStackTraceDebug() }
-
-        // 监听数据版本变化：发生变化时跳过节流，立即执行一次上传
-        settingsJob?.cancel()
+        if (settingsJob != null) {
+            syncObserverRegistration(trigger = "start_reused")
+            return
+        }
+        logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_manager_started")
         settingsJob = scope.launch {
-            settings.observe(AppSettings.KEY_BACKUP_WEBDAV_DATA_VERSION).collect { key ->
-                if (key == AppSettings.KEY_BACKUP_WEBDAV_DATA_VERSION) {
-                    // 数据版本变化时立即上传，忽略最小间隔限制
-                    logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "version_changed_force_upload")
-                    runCatching { uploadNow(force = true) }.onFailure { it.printStackTraceDebug() }
-                }
+            settings.observe(
+                AppSettings.KEY_BACKUP_WEBDAV_ENABLED,
+                AppSettings.KEY_BACKUP_WEBDAV_AUTO_SYNC,
+                AppSettings.KEY_BACKUP_WEBDAV_URL,
+                AppSettings.KEY_BACKUP_WEBDAV_USERNAME,
+                AppSettings.KEY_BACKUP_WEBDAV_PASSWORD,
+                AppSettings.KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
+                AppSettings.KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED,
+            ).collect { changedKey ->
+                syncObserverRegistration(trigger = changedKey ?: "initial")
             }
         }
     }
 
     /** 停止监听并取消任务 */
     fun stop() {
-        logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_stopped")
-        runCatching {
-            database.invalidationTracker.removeObserver(observer)
-        }.onFailure { it.printStackTraceDebug() }
-        debounceJob?.cancel()
+        logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD, event = "observer_manager_stopped")
         settingsJob?.cancel()
+        settingsJob = null
+        unregisterObserver(reason = "stop")
+        debounceJob?.cancel()
+    }
+
+    fun requestImmediateUpload(reason: String) {
+        val decision = backupFlowPolicy.autoSyncUploadDecision()
+        if (!decision.allowed) {
+            logBackupFlow(
+                TAG,
+                flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD,
+                event = "force_request_skipped",
+                reason = decision.reason,
+                "trigger" to reason,
+            )
+            return
+        }
+        debounceJob?.cancel()
+        logBackupFlow(
+            TAG,
+            flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD,
+            event = "force_requested",
+            reason = null,
+            "trigger" to reason,
+        )
+        scope.launch {
+            runCatching { uploadNow(force = true) }.onFailure { it.printStackTraceDebug() }
+        }
     }
 
     private fun scheduleUpload() {
@@ -146,6 +164,47 @@ class DataSyncManager @Inject constructor(
             delay(AUTO_SYNC_DEBOUNCE_MS)
             runCatching { uploadNow(force = false) }.onFailure { it.printStackTraceDebug() }
         }
+    }
+
+    private fun syncObserverRegistration(trigger: String) {
+        val decision = backupFlowPolicy.autoSyncUploadDecision()
+        if (decision.allowed) {
+            if (isObserverRegistered) {
+                return
+            }
+            runCatching {
+                database.invalidationTracker.addObserver(observer)
+                isObserverRegistered = true
+                logBackupFlow(
+                    TAG,
+                    flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD,
+                    event = "observer_registered",
+                    reason = null,
+                    "trigger" to trigger,
+                )
+            }.onFailure { it.printStackTraceDebug() }
+            return
+        }
+        unregisterObserver(reason = decision.reason ?: "policy_block", trigger = trigger)
+    }
+
+    private fun unregisterObserver(reason: String, trigger: String? = null) {
+        debounceJob?.cancel()
+        debounceJob = null
+        if (!isObserverRegistered) {
+            return
+        }
+        runCatching {
+            database.invalidationTracker.removeObserver(observer)
+            isObserverRegistered = false
+            logBackupFlow(
+                TAG,
+                flow = BackupFlow.WEBDAV_AUTO_SYNC_UPLOAD,
+                event = "observer_unregistered",
+                reason = reason,
+                "trigger" to trigger,
+            )
+        }.onFailure { it.printStackTraceDebug() }
     }
 
     private suspend fun uploadNow(force: Boolean = false) {

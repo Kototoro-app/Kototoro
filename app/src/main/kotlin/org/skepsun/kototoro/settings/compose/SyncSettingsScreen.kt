@@ -27,7 +27,6 @@ data class SyncSettingsUiState(
     val webDavPassword: String,
     val webDavRemotePath: String,
     val isWebDavCheckLoading: Boolean,
-    val isWebDavAutoSyncEnabled: Boolean,
     val isWebDavAutoRestoreEnabled: Boolean,
     val isWebDavKeepLocalCopyEnabled: Boolean,
     val webDavLastActionSummary: String?,
@@ -51,7 +50,6 @@ fun SyncSettingsScreen(
     onWebDavTestClick: () -> Unit,
     onWebDavUploadNowClick: () -> Unit,
     onWebDavRestoreNowClick: () -> Unit,
-    onWebDavAutoSyncChange: (Boolean) -> Unit,
     onWebDavAutoRestoreChange: (Boolean) -> Unit,
     onWebDavKeepLocalCopyChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -137,14 +135,6 @@ fun SyncSettingsScreen(
                         summary = state.webDavRestoreBusySummary ?: stringResource(R.string.restore_backup),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isAnyBusy,
                         onClick = onWebDavRestoreNowClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.webdav_auto_sync),
-                        checked = state.isWebDavAutoSyncEnabled,
-                        summary = stringResource(R.string.webdav_auto_sync_summary),
-                        enabled = state.isWebDavEnabled,
-                        onCheckedChange = onWebDavAutoSyncChange,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(

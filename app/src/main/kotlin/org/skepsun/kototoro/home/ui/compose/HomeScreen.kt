@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.home.ui.compose
 
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,6 +44,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -51,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,10 +81,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import coil3.compose.AsyncImage
+import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapNotNull
 import java.util.Locale
 import kotlin.math.absoluteValue
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
 import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
@@ -88,6 +97,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
@@ -99,6 +109,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensit
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.details.ui.compose.AnimatedPanoramaBackdrop
 import org.skepsun.kototoro.details.ui.compose.PanoramaBackdropPrefs
@@ -146,6 +157,7 @@ fun HomeScreen(
     isRandomLoading: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val recompositionCounter = remember { intArrayOf(0) }
     val scrollState = rememberScrollState()
     val layoutDirection = LocalLayoutDirection.current
     val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
@@ -211,6 +223,16 @@ fun HomeScreen(
     val heroScrollOffsetPx by remember(scrollState, heroPx) {
         derivedStateOf {
             (-scrollState.value.toFloat()).coerceIn(-heroPx.toFloat(), 0f)
+        }
+    }
+
+    SideEffect {
+        if (BuildConfig.DEBUG) {
+            recompositionCounter[0] += 1
+            Log.d(
+                "HomeScreenDiag",
+                "recompose#${recompositionCounter[0]} state=${state.homeDiagSignature()} hero=${heroEntries.homeHeroSignature()} listMode=$listMode gridScale=$gridScale scroll=${scrollState.value} heroPx=$heroPx heroOffset=$heroScrollOffsetPx",
+            )
         }
     }
 
@@ -306,6 +328,7 @@ private fun HomeHighlightsSections(
             HomeCoverDisplayItem(
                 content = it.content,
                 sectionKey = "recent_history",
+                stableKey = it.groupKey,
             )
         }
     }
@@ -314,6 +337,7 @@ private fun HomeHighlightsSections(
             HomeCoverDisplayItem(
                 content = it.content,
                 sectionKey = "recent_updates",
+                stableKey = it.groupKey,
                 supportingText = if (it.newChapters > 0) {
                     HomeCoverSupportingText.Text(
                         itemNewChaptersText(newChaptersLabel, it.newChapters),
@@ -329,6 +353,7 @@ private fun HomeHighlightsSections(
             HomeCoverDisplayItem(
                 content = it.content,
                 sectionKey = "recommendations",
+                stableKey = it.groupKey,
             )
         }
     }
@@ -338,27 +363,6 @@ private fun HomeHighlightsSections(
             .padding(horizontal = 0.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (historyItems.isNotEmpty()) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.64f),
-                tonalElevation = 0.dp,
-            ) {
-                HomeContentRowSection(
-                    title = stringResource(R.string.recent_history),
-                    sectionKey = "recent_history",
-                    iconRes = R.drawable.ic_history,
-                    items = historyDisplayItems,
-                    count = recentHistoryCount,
-                    posterStyle = posterStyle,
-                    listMode = listMode,
-                    onItemClick = onItemClick,
-                    onMoreClick = onViewAllRecentClick,
-                    addTopSpacing = false,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-                )
-            }
-        }
         if (updateItems.isNotEmpty()) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -375,6 +379,27 @@ private fun HomeHighlightsSections(
                     listMode = listMode,
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllUpdatesClick,
+                    addTopSpacing = false,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                )
+            }
+        }
+        if (historyItems.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.64f),
+                tonalElevation = 0.dp,
+            ) {
+                HomeContentRowSection(
+                    title = stringResource(R.string.recent_history),
+                    sectionKey = "recent_history",
+                    iconRes = R.drawable.ic_history,
+                    items = historyDisplayItems,
+                    count = recentHistoryCount,
+                    posterStyle = posterStyle,
+                    listMode = listMode,
+                    onItemClick = onItemClick,
+                    onMoreClick = onViewAllRecentClick,
                     addTopSpacing = false,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                 )
@@ -429,6 +454,21 @@ private fun HomeHeroSection(
         pageCount = entries.size,
         intervalMillis = 5200L,
     )
+    LaunchedEffect(entries, pagerState) {
+        snapshotFlow { pagerState.settledPage.coerceIn(0, entries.lastIndex) }
+            .distinctUntilChanged()
+            .mapNotNull { index ->
+                entries.getOrNull(index)?.let { entry -> index to entry }
+            }
+            .collectLatest { (index, entry) ->
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "HomeScreenDiag",
+                        "heroPage index=$index kind=${entry.kind.name} groupKey=${entry.groupKey} contentId=${entry.content.id}",
+                    )
+                }
+            }
+    }
 
     BoxWithConstraints(
         modifier = modifier
@@ -534,26 +574,28 @@ private fun HomeHeroCard(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfade = sharedTransitionScope == null || animatedVisibilityScope == null
-    val imageRequest = remember(content.coverUrl, content.id, content.source.name, shouldCrossfade) {
-        val cacheKey = sharedCoverMemoryCacheKey(
-            sourceName = content.source.name,
-            ownerKey = content.url,
-            url = content.coverUrl,
-        )
-        ImageRequest.Builder(context)
-            .data(content.coverUrl)
-            .memoryCacheKey(cacheKey)
-            .diskCacheKey(cacheKey)
-            .crossfade(shouldCrossfade)
-            .apply { mangaExtra(content) }
-            .build()
+    val imageRequest = rememberHomeCoverRequest(
+        context = context,
+        content = content,
+        allowCrossfade = shouldCrossfade,
+    )
+    val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
+        content.coverUrl?.takeIfUsableImageUri()
+            ?: content.largeCoverUrl?.takeIfUsableImageUri()
+            ?: (imageRequest?.data as? String)
     }
-    var coverBounds by remember(entry.kind, content.id) { mutableStateOf<Rect?>(null) }
-    val sharedElementKey = remember(entry.kind, content.id, content.coverUrl) {
+    LogHomeImageRequestEffect(
+        slot = "hero_cover_request",
+        stableKey = entry.groupKey,
+        url = coverData,
+        imageRequest = imageRequest,
+    )
+    var coverBounds by remember(entry.kind, entry.groupKey) { mutableStateOf<Rect?>(null) }
+    val sharedElementKey = remember(entry.kind, entry.groupKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
             sourceName = content.source.name,
             url = content.coverUrl.orEmpty(),
-            instanceKey = "home_hero_${entry.kind.name.lowercase(Locale.ROOT)}_${content.id}",
+            instanceKey = "home_hero_${entry.kind.name.lowercase(Locale.ROOT)}_${entry.groupKey}",
         )
     }
 
@@ -565,19 +607,37 @@ private fun HomeHeroCard(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick(content, coverBounds, sharedElementKey) },
     ) {
-        if (panoramaPrefs.isEnabled) {
+        if (panoramaPrefs.isEnabled && imageRequest != null) {
             AnimatedPanoramaBackdrop(
                 prefs = panoramaPrefs,
                 model = imageRequest,
+                placeholderMemoryCacheKey = imageRequest.memoryCacheKey,
+                snapshotKey = sharedElementKey,
                 contentAlpha = 0.94f,
                 backgroundColor = MaterialTheme.colorScheme.surface,
             )
-        } else {
+        } else if (imageRequest != null) {
             AsyncImage(
                 model = imageRequest,
                 contentDescription = content.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
+                onSuccess = { state ->
+                    logHomeImageDiag(
+                        slot = "hero_backdrop",
+                        stableKey = entry.groupKey,
+                        url = coverData,
+                        detail = "source=${state.result.dataSource}",
+                    )
+                },
+                onError = { state ->
+                    logHomeImageDiag(
+                        slot = "hero_backdrop_error",
+                        stableKey = entry.groupKey,
+                        url = coverData,
+                        detail = state.result.throwable.message.orEmpty(),
+                    )
+                },
             )
         }
         Box(
@@ -635,15 +695,31 @@ private fun HomeHeroCard(
                     .clip(MaterialTheme.shapes.medium)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.28f)),
             ) {
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = content.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    onSuccess = { state ->
-                        HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                    },
-                )
+                if (imageRequest != null) {
+                    AsyncImage(
+                        model = imageRequest,
+                        contentDescription = content.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onSuccess = { state ->
+                            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+                            logHomeImageDiag(
+                                slot = "hero_cover",
+                                stableKey = entry.groupKey,
+                                url = coverData,
+                                detail = "source=${state.result.dataSource}",
+                            )
+                        },
+                        onError = { state ->
+                            logHomeImageDiag(
+                                slot = "hero_cover_error",
+                                stableKey = entry.groupKey,
+                                url = coverData,
+                                detail = state.result.throwable.message.orEmpty(),
+                            )
+                        },
+                    )
+                }
                 if (content.isNsfw()) {
                     ContentCardNsfwBadge(
                         metrics = contentCardBadgeMetricsFor(posterWidth),
@@ -826,11 +902,11 @@ private fun HomeContentRowSection(
                 ) {
                     itemsIndexed(
                         items = items,
-                        key = { _, item -> "${item.sectionKey}:${item.content.id}" },
+                        key = { _, item -> "${item.sectionKey}:${item.stableKey}" },
                         contentType = { _, _ -> "home_content_card" },
                     ) { index, item ->
                         HorizontalRailAnimatedVisibility(
-                            animationKey = "home_row_${title}_${item.content.id}",
+                            animationKey = "home_row_${title}_${item.stableKey}",
                             index = index,
                             listState = rowState,
                             scrollIntensity = scrollIntensity,
@@ -872,11 +948,11 @@ private fun HomeContentRowSection(
                             items = railPages,
                             key = { index, page ->
                                 val first = page.firstOrNull()
-                                "${sectionKey}:${first?.content?.id ?: index}:page"
+                                "${sectionKey}:${first?.stableKey ?: index}:page"
                             },
                             contentType = { _, _ -> "home_content_page" },
                         ) { index, pageItems ->
-                            val pageKey = pageItems.firstOrNull()?.content?.id ?: index.toLong()
+                            val pageKey = pageItems.firstOrNull()?.stableKey ?: index.toLong()
                             HorizontalRailAnimatedVisibility(
                                 animationKey = "home_page_${title}_$pageKey",
                                 index = index,
@@ -951,27 +1027,29 @@ private fun HomeListRailRowItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
-    var coverBounds by remember(content.id, item.sectionKey) { mutableStateOf<Rect?>(null) }
-    val imageRequest = remember(content.coverUrl, content.id, content.source.name, shouldCrossfadeCover) {
-        val cacheKey = sharedCoverMemoryCacheKey(
-            sourceName = content.source.name,
-            ownerKey = content.url,
-            url = content.coverUrl,
-        )
-        ImageRequest.Builder(context)
-            .data(content.coverUrl)
-            .memoryCacheKey(cacheKey)
-            .diskCacheKey(cacheKey)
-            .crossfade(shouldCrossfadeCover)
-            .apply { mangaExtra(content) }
-            .build()
+    var coverBounds by remember(item.sectionKey, item.stableKey) { mutableStateOf<Rect?>(null) }
+    val imageRequest = rememberHomeCoverRequest(
+        context = context,
+        content = content,
+        allowCrossfade = shouldCrossfadeCover,
+    )
+    val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
+        content.coverUrl?.takeIfUsableImageUri()
+            ?: content.largeCoverUrl?.takeIfUsableImageUri()
+            ?: (imageRequest?.data as? String)
     }
+    LogHomeImageRequestEffect(
+        slot = "list_row_cover_request",
+        stableKey = item.stableKey,
+        url = coverData,
+        imageRequest = imageRequest,
+    )
     val badgeMetrics = remember(coverSize.width) { contentCardBadgeMetricsFor(coverSize.width) }
-    val sharedElementKey = remember(item.sectionKey, content.id, content.coverUrl, content.source.name) {
+    val sharedElementKey = remember(item.sectionKey, item.stableKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
             content.source.name,
             content.coverUrl.orEmpty(),
-            instanceKey = "home_list_${item.sectionKey}_${content.id}",
+            instanceKey = "home_list_${item.sectionKey}_${item.stableKey}",
         )
     }
 
@@ -1002,15 +1080,31 @@ private fun HomeListRailRowItem(
                 .clip(if (listMode == ListMode.DETAILED_LIST) MaterialTheme.shapes.medium else MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            AsyncImage(
-                model = imageRequest,
-                contentDescription = content.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                },
-            )
+            if (imageRequest != null) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = content.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { state ->
+                        HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+                        logHomeImageDiag(
+                            slot = "list_row_cover",
+                            stableKey = item.stableKey,
+                            url = coverData,
+                            detail = "source=${state.result.dataSource}",
+                        )
+                    },
+                    onError = { state ->
+                        logHomeImageDiag(
+                            slot = "list_row_cover_error",
+                            stableKey = item.stableKey,
+                            url = coverData,
+                            detail = state.result.throwable.message.orEmpty(),
+                        )
+                    },
+                )
+            }
             if (content.isNsfw()) {
                 ContentCardNsfwBadge(
                     metrics = badgeMetrics,
@@ -1081,30 +1175,32 @@ private fun HomeCoverRowItem(
     val context = LocalContext.current
     val cardShape = MaterialTheme.shapes.medium
     val content = item.content
-    var coverBounds by remember(content.id) { mutableStateOf<Rect?>(null) }
+    var coverBounds by remember(item.sectionKey, item.stableKey) { mutableStateOf<Rect?>(null) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
-    val imageRequest = remember(content.coverUrl, content.id, content.source.name, shouldCrossfadeCover) {
-        val cacheKey = sharedCoverMemoryCacheKey(
-            sourceName = content.source.name,
-            ownerKey = content.url,
-            url = content.coverUrl,
-        )
-        ImageRequest.Builder(context)
-            .data(content.coverUrl)
-            .memoryCacheKey(cacheKey)
-            .diskCacheKey(cacheKey)
-            .crossfade(shouldCrossfadeCover)
-            .apply { mangaExtra(content) }
-            .build()
+    val imageRequest = rememberHomeCoverRequest(
+        context = context,
+        content = content,
+        allowCrossfade = shouldCrossfadeCover,
+    )
+    val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
+        content.coverUrl?.takeIfUsableImageUri()
+            ?: content.largeCoverUrl?.takeIfUsableImageUri()
+            ?: (imageRequest?.data as? String)
     }
+    LogHomeImageRequestEffect(
+        slot = "grid_row_cover_request",
+        stableKey = item.stableKey,
+        url = coverData,
+        imageRequest = imageRequest,
+    )
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
-    val sharedElementKey = remember(item.sectionKey, content.id, content.coverUrl, content.source.name) {
+    val sharedElementKey = remember(item.sectionKey, item.stableKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
             content.source.name,
             content.coverUrl.orEmpty(),
-            instanceKey = "home_row_${item.sectionKey}_${content.id}",
+            instanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
         )
     }
 
@@ -1134,15 +1230,31 @@ private fun HomeCoverRowItem(
                 .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            AsyncImage(
-                model = imageRequest,
-                contentDescription = content.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                },
-            )
+            if (imageRequest != null) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = content.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { state ->
+                        HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+                        logHomeImageDiag(
+                            slot = "grid_row_cover",
+                            stableKey = item.stableKey,
+                            url = coverData,
+                            detail = "source=${state.result.dataSource}",
+                        )
+                    },
+                    onError = { state ->
+                        logHomeImageDiag(
+                            slot = "grid_row_cover_error",
+                            stableKey = item.stableKey,
+                            url = coverData,
+                            detail = state.result.throwable.message.orEmpty(),
+                        )
+                    },
+                )
+            }
             if (content.isNsfw()) {
                 ContentCardNsfwBadge(
                     metrics = badgeMetrics,
@@ -1208,6 +1320,7 @@ private fun homeListRailPlaceholderHeight(listMode: ListMode): Dp = when (listMo
 private data class HomeCoverDisplayItem(
     val content: Content,
     val sectionKey: String,
+    val stableKey: Long,
     val supportingText: HomeCoverSupportingText? = null,
 )
 
@@ -1566,20 +1679,6 @@ private fun buildHomeHeroEntries(
             )
         }
 
-    historyItems
-        .asSequence()
-        .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_SECTION_LIMIT)
-        .forEach { item ->
-            addEntry(
-                HomeHeroEntry(
-                    kind = HomeHeroKind.HISTORY,
-                    content = item.content,
-                    groupKey = item.groupKey,
-                ),
-            )
-        }
-
     updateItems
         .asSequence()
         .filterNot { it.groupKey == resumeGroupKey }
@@ -1609,5 +1708,123 @@ private fun buildHomeHeroEntries(
             )
         }
 
+    historyItems
+        .asSequence()
+        .filterNot { it.groupKey == resumeGroupKey }
+        .take(HOME_HERO_SECTION_LIMIT)
+        .forEach { item ->
+            addEntry(
+                HomeHeroEntry(
+                    kind = HomeHeroKind.HISTORY,
+                    content = item.content,
+                    groupKey = item.groupKey,
+                ),
+            )
+        }
+
     return entries
+}
+
+private fun HomeSummaryState.homeDiagSignature(): String {
+    return buildString {
+        append("tab=").append(selectedTab)
+        append(" initialized=").append(isInitialized)
+        append(" resume=").append(resumeState.content?.id).append('@').append(resumeState.groupKey)
+        append(" history=").append(recentHistoryItems.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
+        append(" updates=").append(recentUpdates.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.newChapters}" })
+        append(" recommendations=").append(recommendations.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
+        append(" searches=").append(recentSearches.joinToString(limit = 4) { it.query })
+    }
+}
+
+private fun List<HomeHeroEntry>.homeHeroSignature(): String {
+    return joinToString(limit = 6) { "${it.kind.name}:${it.groupKey}:${it.content.id}" }
+}
+
+@Composable
+private fun rememberHomeCoverRequest(
+    context: android.content.Context,
+    content: Content,
+    allowCrossfade: Boolean,
+): ImageRequest? {
+    val primaryCoverUrl = content.coverUrl?.takeIfUsableImageUri()
+    val fallbackCoverUrl = content.largeCoverUrl?.takeIfUsableImageUri()
+    val ownerKey = remember(content.id, content.url, content.publicUrl) {
+        content.url.takeIf { it.isNotBlank() }
+            ?: content.publicUrl.takeIf { it.isNotBlank() }
+            ?: content.id.toString()
+    }
+    return remember(
+        context,
+        content.id,
+        content.source.name,
+        ownerKey,
+        primaryCoverUrl,
+        fallbackCoverUrl,
+        allowCrossfade,
+    ) {
+        val resolvedCoverUrl = primaryCoverUrl ?: fallbackCoverUrl
+        if (resolvedCoverUrl != null) {
+            val cacheKey = sharedCoverMemoryCacheKey(
+                sourceName = content.source.name,
+                ownerKey = ownerKey,
+                url = resolvedCoverUrl,
+            )
+            return@remember ImageRequest.Builder(context)
+                .data(resolvedCoverUrl)
+                .memoryCacheKey(cacheKey)
+                .diskCacheKey(cacheKey)
+                .crossfade(allowCrossfade)
+                .apply { mangaExtra(content) }
+                .build()
+        }
+        if (content.url.startsWith("tvbox://item/")) {
+            val fallbackCacheKey = sharedCoverMemoryCacheKey(
+                sourceName = content.source.name,
+                ownerKey = ownerKey,
+                url = "tvbox-search-cover:${content.url}",
+            )
+            return@remember ImageRequest.Builder(context)
+                .data(tvboxSearchCoverModel(content))
+                .memoryCacheKey(fallbackCacheKey)
+                .diskCacheKey(fallbackCacheKey)
+                .crossfade(allowCrossfade)
+                .mangaExtra(content)
+                .build()
+        }
+        null
+    }
+}
+
+private fun logHomeImageDiag(
+    slot: String,
+    stableKey: Long,
+    url: String?,
+    detail: String,
+) {
+    if (BuildConfig.DEBUG) {
+        Log.d(
+            "HomeScreenImageDiag",
+            "$slot key=$stableKey url=${url.orEmpty()} $detail",
+        )
+    }
+}
+
+@Composable
+private fun LogHomeImageRequestEffect(
+    slot: String,
+    stableKey: Long,
+    url: String?,
+    imageRequest: ImageRequest?,
+) {
+    LaunchedEffect(imageRequest) {
+        if (imageRequest != null) {
+            logHomeImageDiag(
+                slot = slot,
+                stableKey = stableKey,
+                url = url,
+                detail = "memoryKey=${imageRequest.memoryCacheKey.orEmpty()} diskKey=${imageRequest.diskCacheKey.orEmpty()}",
+            )
+        }
+    }
 }

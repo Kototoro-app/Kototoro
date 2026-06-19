@@ -362,7 +362,6 @@ class SettingsSearchHelper @Inject constructor(
 			"backup_periodic_webdav_test" to R.string.test_connection,
 			"backup_periodic_webdav_upload_now" to R.string.webdav_upload_now,
 			"backup_periodic_webdav_restore_now" to R.string.webdav_restore_now,
-			"backup_periodic_webdav_auto_sync" to R.string.webdav_auto_sync,
 			"backup_periodic_webdav_auto_restore" to R.string.webdav_auto_restore,
 			"backup_periodic_webdav_keep_local_copy" to R.string.webdav_keep_local_copy,
 			"backup" to R.string.create_backup,
@@ -392,7 +391,6 @@ class SettingsSearchHelper @Inject constructor(
 			"sync_webdav_test" to R.string.test_connection,
 			"sync_webdav_upload_now" to R.string.webdav_upload_now,
 			"sync_webdav_restore_now" to R.string.webdav_restore_now,
-			"sync_webdav_auto_sync" to R.string.webdav_auto_sync,
 			"sync_webdav_auto_restore" to R.string.webdav_auto_restore,
 			"sync_webdav_keep_local_copy" to R.string.webdav_keep_local_copy,
 		)
