@@ -33,6 +33,10 @@ class SuggestionRepository @Inject constructor(
 		}
 	}
 
+	fun observeCount(): Flow<Int> {
+		return db.getSuggestionDao().observeCount()
+	}
+
 	suspend fun getRandomList(limit: Int): List<Content> {
 		return db.getSuggestionDao().getRandom(limit).map {
 			it.toContent()

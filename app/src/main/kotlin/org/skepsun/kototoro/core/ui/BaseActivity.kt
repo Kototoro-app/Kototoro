@@ -17,6 +17,7 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.app.ActivityCompat
 import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentManager
 import androidx.viewbinding.ViewBinding
 import dagger.hilt.android.EntryPointAccessors
@@ -27,6 +28,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.util.ActionModeDelegate
+import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.core.util.ext.isWebViewUnavailable
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 import androidx.appcompat.R as appcompatR
@@ -81,8 +83,10 @@ abstract class BaseActivity<B : ViewBinding> :
 		}
 		putDataToExtras(intent)
 		exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
-		enableEdgeToEdge()
 		super.onCreate(savedInstanceState)
+		enableEdgeToEdge()
+		WindowCompat.setDecorFitsSystemWindows(window, false)
+		configureSafeAreaWindow()
 	}
 
 	override fun onPostCreate(savedInstanceState: Bundle?) {

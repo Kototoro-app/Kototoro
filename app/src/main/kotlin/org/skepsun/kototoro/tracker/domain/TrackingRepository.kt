@@ -87,10 +87,8 @@ class TrackingRepository @Inject constructor(
 		}
 	}
 
-	@Deprecated("")
 	fun observeUpdatedContentCount(): Flow<Int> {
-		return observeUpdatedContent(limit = 0, filterOptions = emptySet())
-			.mapLatest { items -> items.count { it.newChapters > 0 } }
+		return db.getTracksDao().observeUpdateContentCount()
 			.distinctUntilChanged()
 			.onStart { gcIfNotCalled() }
 	}

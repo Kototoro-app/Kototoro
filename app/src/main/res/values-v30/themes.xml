@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+	<style name="Base.V30.Kototoro" parent="Base.V28.Kototoro">
+		<item name="android:windowLayoutInDisplayCutoutMode">always</item>
+	</style>
+
+	<style name="Theme.Kototoro" parent="Base.V30.Kototoro" />
+
+</resources>

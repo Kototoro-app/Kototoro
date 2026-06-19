@@ -184,6 +184,7 @@ class HomeViewModel @Inject constructor(
     private companion object {
         private const val TAG = "HomeViewModel"
         private const val HOME_UPDATES_LIMIT = 64
+        private const val HOME_RECOMMENDATIONS_LIMIT = 64
         private const val HOME_SUBSCRIPTION_TIMEOUT_MS = 5_000L
     }
 
@@ -323,6 +324,15 @@ class HomeViewModel @Inject constructor(
         .map { it.size }
         .onStart { emit(0) }
         .distinctUntilChanged()
+    private val recentHistoryCountFlow = historyRepository.observeCount()
+        .onStart { emit(0) }
+        .distinctUntilChanged()
+    private val unreadUpdatesCountFlow = trackingRepository.observeUpdatedContentCount()
+        .onStart { emit(0) }
+        .distinctUntilChanged()
+    private val recommendationsCountFlow = suggestionRepository.observeCount()
+        .onStart { emit(0) }
+        .distinctUntilChanged()
     private val recentUpdatesFlow = trackingRepository.observeUpdatedContent(
         limit = HOME_UPDATES_LIMIT,
         filterOptions = emptySet(),
@@ -332,7 +342,7 @@ class HomeViewModel @Inject constructor(
             logHomeDiag("recentUpdatesFlow", "items=${items.homeUpdateSignature()}")
         }
         .onStart { emit(emptyList()) }
-    private val recommendationsFlow = suggestionRepository.observeAll()
+    private val recommendationsFlow = suggestionRepository.observeAll(HOME_RECOMMENDATIONS_LIMIT, emptySet())
         .distinctUntilChanged()
         .onEach { items ->
             logHomeDiag("recommendationsFlow", "items=${items.homeContentSignature()}")
@@ -449,20 +459,43 @@ class HomeViewModel @Inject constructor(
             )
         }
 
-    private val metaFlow = combine(
+    private val primaryCountsFlow = combine(
         favoritesCountFlow,
         favoriteCategoriesCountFlow,
+        recentHistoryCountFlow,
+        unreadUpdatesCountFlow,
+        recommendationsCountFlow,
+    ) { favoritesCount, favoriteCategoriesCount, recentHistoryCount, unreadUpdatesCount, recommendationsCount ->
+        HomePrimaryCountsSnapshot(
+            favoritesCount = favoritesCount,
+            favoriteCategoriesCount = favoriteCategoriesCount,
+            recentHistoryCount = recentHistoryCount,
+            unreadUpdatesCount = unreadUpdatesCount,
+            recommendationsCount = recommendationsCount,
+        )
+    }.distinctUntilChanged()
+
+    private val metaFlow = combine(
+        primaryCountsFlow,
         enabledSourcesCountFlow,
         sourceBreakdownFlow,
-    ) { favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown ->
-        HomeMetaSnapshot(favoritesCount, favoriteCategoriesCount, enabledSourcesCount, sourceBreakdown)
+    ) { primaryCounts, enabledSourcesCount, sourceBreakdown ->
+        HomeMetaSnapshot(
+            favoritesCount = primaryCounts.favoritesCount,
+            favoriteCategoriesCount = primaryCounts.favoriteCategoriesCount,
+            recentHistoryCount = primaryCounts.recentHistoryCount,
+            unreadUpdatesCount = primaryCounts.unreadUpdatesCount,
+            recommendationsCount = primaryCounts.recommendationsCount,
+            enabledSourcesCount = enabledSourcesCount,
+            sourceBreakdown = sourceBreakdown,
+        )
     }
         .distinctUntilChanged()
         .onEach { meta ->
             val sourceBreakdownSummary = meta.sourceBreakdown.joinToString { "${it.origin}:${it.count}" }
             Log.d(
                 TAG,
-                "metaFlow favorites=${meta.favoritesCount} categories=${meta.favoriteCategoriesCount} enabledSources=${meta.enabledSourcesCount} sourceBreakdown=$sourceBreakdownSummary",
+                "metaFlow favorites=${meta.favoritesCount} categories=${meta.favoriteCategoriesCount} history=${meta.recentHistoryCount} updates=${meta.unreadUpdatesCount} recommendations=${meta.recommendationsCount} enabledSources=${meta.enabledSourcesCount} sourceBreakdown=$sourceBreakdownSummary",
             )
         }
 
@@ -545,14 +578,14 @@ class HomeViewModel @Inject constructor(
             Pair(
                 HomeSummaryState(
                     selectedTab = selectedTab,
-                    recentHistoryCount = recentHistory.size,
+                    recentHistoryCount = meta.recentHistoryCount,
                     recentHistoryItems = recentHistory,
                     resumeState = resumeState,
                     favoritesCount = meta.favoritesCount,
                     favoriteCategoriesCount = meta.favoriteCategoriesCount,
-                    unreadUpdatesCount = recentUpdates.size,
+                    unreadUpdatesCount = meta.unreadUpdatesCount,
                     recentUpdates = recentUpdates,
-                    recommendationsCount = recommendations.size,
+                    recommendationsCount = meta.recommendationsCount,
                     recommendations = recommendations,
                     recentSearches = recentSearches.map { HomeRecentSearchItem(it) },
                     enabledSourcesCount = meta.enabledSourcesCount,
@@ -799,9 +832,20 @@ private data class ContentDataSnapshot(
     val recommendations: List<Content>,
 )
 
+private data class HomePrimaryCountsSnapshot(
+    val favoritesCount: Int,
+    val favoriteCategoriesCount: Int,
+    val recentHistoryCount: Int,
+    val unreadUpdatesCount: Int,
+    val recommendationsCount: Int,
+)
+
 private data class HomeMetaSnapshot(
     val favoritesCount: Int,
     val favoriteCategoriesCount: Int,
+    val recentHistoryCount: Int,
+    val unreadUpdatesCount: Int,
+    val recommendationsCount: Int,
     val enabledSourcesCount: Int,
     val sourceBreakdown: List<HomeSourceBreakdown>,
 )

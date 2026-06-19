@@ -332,7 +332,7 @@ private fun HomeHighlightsSections(
 ) {
     val newChaptersLabel = stringResource(R.string.new_chapters)
     val historyDisplayItems = remember(historyItems) {
-        historyItems.map {
+        historyItems.take(HOME_CONTENT_RAIL_PREVIEW_LIMIT).map {
             HomeCoverDisplayItem(
                 content = it.content,
                 sectionKey = "recent_history",
@@ -341,7 +341,7 @@ private fun HomeHighlightsSections(
         }
     }
     val updateDisplayItems = remember(updateItems, newChaptersLabel) {
-        updateItems.map {
+        updateItems.take(HOME_CONTENT_RAIL_PREVIEW_LIMIT).map {
             HomeCoverDisplayItem(
                 content = it.content,
                 sectionKey = "recent_updates",
@@ -357,7 +357,7 @@ private fun HomeHighlightsSections(
         }
     }
     val recommendationDisplayItems = remember(recommendationItems) {
-        recommendationItems.map {
+        recommendationItems.take(HOME_CONTENT_RAIL_PREVIEW_LIMIT).map {
             HomeCoverDisplayItem(
                 content = it.content,
                 sectionKey = "recommendations",
@@ -600,17 +600,6 @@ private fun HomeHeroCard(
         allowCrossfade = true,
         memoryCacheVariant = "home_hero_cover",
     )
-    val coverData = remember(content.coverUrl, content.largeCoverUrl, coverRequest) {
-        content.coverUrl?.takeIfUsableImageUri()
-            ?: content.largeCoverUrl?.takeIfUsableImageUri()
-            ?: (coverRequest?.data as? String)
-    }
-    LogHomeImageRequestEffect(
-        slot = "hero_cover_request",
-        stableKey = entry.groupKey,
-        url = coverData,
-        imageRequest = coverRequest,
-    )
     var coverBounds by remember(entry.kind, entry.groupKey) { mutableStateOf<Rect?>(null) }
     val sharedElementKey = remember(entry.kind, entry.groupKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
@@ -643,22 +632,6 @@ private fun HomeHeroCard(
                 contentDescription = content.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                onSuccess = { state ->
-                    logHomeImageDiag(
-                        slot = "hero_backdrop",
-                        stableKey = entry.groupKey,
-                        url = coverData,
-                        detail = "source=${state.result.dataSource}",
-                    )
-                },
-                onError = { state ->
-                    logHomeImageDiag(
-                        slot = "hero_backdrop_error",
-                        stableKey = entry.groupKey,
-                        url = coverData,
-                        detail = state.result.throwable.message.orEmpty(),
-                    )
-                },
             )
         }
         Box(
@@ -715,20 +688,6 @@ private fun HomeHeroCard(
                         modifier = Modifier.fillMaxSize(),
                         onSuccess = { result ->
                             HeroCoverSnapshotStore.put(sharedElementKey, result.image)
-                            logHomeImageDiag(
-                                slot = "hero_cover",
-                                stableKey = entry.groupKey,
-                                url = coverData,
-                                detail = "source=${result.dataSource}",
-                            )
-                        },
-                        onError = { throwable ->
-                            logHomeImageDiag(
-                                slot = "hero_cover_error",
-                                stableKey = entry.groupKey,
-                                url = coverData,
-                                detail = throwable.message.orEmpty(),
-                            )
                         },
                     )
                 }
@@ -787,7 +746,7 @@ private fun HomeHeroCoverImage(
     contentDescription: String,
     modifier: Modifier = Modifier,
     onSuccess: (SuccessResult) -> Unit,
-    onError: (Throwable) -> Unit,
+    onError: (Throwable) -> Unit = {},
 ) {
     val context = LocalContext.current
     val imageLoader = remember(context.applicationContext) {
@@ -1092,17 +1051,6 @@ private fun HomeListRailRowItem(
         allowCrossfade = shouldCrossfadeCover,
         memoryCacheVariant = "home_list_cover",
     )
-    val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
-        content.coverUrl?.takeIfUsableImageUri()
-            ?: content.largeCoverUrl?.takeIfUsableImageUri()
-            ?: (imageRequest?.data as? String)
-    }
-    LogHomeImageRequestEffect(
-        slot = "list_row_cover_request",
-        stableKey = item.stableKey,
-        url = coverData,
-        imageRequest = imageRequest,
-    )
     val badgeMetrics = remember(coverSize.width) { contentCardBadgeMetricsFor(coverSize.width) }
     val sharedElementKey = remember(item.sectionKey, item.stableKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
@@ -1147,20 +1095,6 @@ private fun HomeListRailRowItem(
                     contentScale = ContentScale.Crop,
                     onSuccess = { state ->
                         HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                        logHomeImageDiag(
-                            slot = "list_row_cover",
-                            stableKey = item.stableKey,
-                            url = coverData,
-                            detail = "source=${state.result.dataSource}",
-                        )
-                    },
-                    onError = { state ->
-                        logHomeImageDiag(
-                            slot = "list_row_cover_error",
-                            stableKey = item.stableKey,
-                            url = coverData,
-                            detail = state.result.throwable.message.orEmpty(),
-                        )
                     },
                 )
             }
@@ -1244,17 +1178,6 @@ private fun HomeCoverRowItem(
         allowCrossfade = shouldCrossfadeCover,
         memoryCacheVariant = "home_grid_cover",
     )
-    val coverData = remember(content.coverUrl, content.largeCoverUrl, imageRequest) {
-        content.coverUrl?.takeIfUsableImageUri()
-            ?: content.largeCoverUrl?.takeIfUsableImageUri()
-            ?: (imageRequest?.data as? String)
-    }
-    LogHomeImageRequestEffect(
-        slot = "grid_row_cover_request",
-        stableKey = item.stableKey,
-        url = coverData,
-        imageRequest = imageRequest,
-    )
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val sharedElementKey = remember(item.sectionKey, item.stableKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
@@ -1298,20 +1221,6 @@ private fun HomeCoverRowItem(
                     contentScale = ContentScale.Crop,
                     onSuccess = { state ->
                         HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                        logHomeImageDiag(
-                            slot = "grid_row_cover",
-                            stableKey = item.stableKey,
-                            url = coverData,
-                            detail = "source=${state.result.dataSource}",
-                        )
-                    },
-                    onError = { state ->
-                        logHomeImageDiag(
-                            slot = "grid_row_cover_error",
-                            stableKey = item.stableKey,
-                            url = coverData,
-                            detail = state.result.throwable.message.orEmpty(),
-                        )
                     },
                 )
             }
@@ -1400,6 +1309,7 @@ private data class HomeCoverSupportingText(
 }
 
 private const val HOME_LIST_RAIL_PAGE_SIZE = 3
+private const val HOME_CONTENT_RAIL_PREVIEW_LIMIT = 24
 private val HOME_HERO_CARD_MIN_WIDTH = 264.dp
 private val HOME_HERO_CARD_MAX_WIDTH = 360.dp
 private val HOME_HERO_PAGER_MAX_WIDTH = 1240.dp
@@ -1860,37 +1770,4 @@ private fun rememberHomeCoverRequest(
 
 private fun String?.withMemoryCacheVariant(variant: String): String? {
     return this?.let { "$it#$variant" }
-}
-
-private fun logHomeImageDiag(
-    slot: String,
-    stableKey: Long,
-    url: String?,
-    detail: String,
-) {
-    if (BuildConfig.DEBUG) {
-        Log.d(
-            "HomeScreenImageDiag",
-            "$slot key=$stableKey url=${url.orEmpty()} $detail",
-        )
-    }
-}
-
-@Composable
-private fun LogHomeImageRequestEffect(
-    slot: String,
-    stableKey: Long,
-    url: String?,
-    imageRequest: ImageRequest?,
-) {
-    LaunchedEffect(imageRequest) {
-        if (imageRequest != null) {
-            logHomeImageDiag(
-                slot = slot,
-                stableKey = stableKey,
-                url = url,
-                detail = "memoryKey=${imageRequest.memoryCacheKey.orEmpty()} diskKey=${imageRequest.diskCacheKey.orEmpty()}",
-            )
-        }
-    }
 }

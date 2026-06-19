@@ -35,9 +35,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -532,6 +534,11 @@ fun DetailsScreen(
     }
     val panoramaExtraHeightDp = panoramaPrefs.extraHeight.coerceAtLeast(0).dp
     val detailsHeaderTopSpacing = overlayTopBarInset + if (panoramaPrefs.isEnabled) panoramaExtraHeightDp else 0.dp
+    val landscapeHeaderTopSpacing = if (panoramaPrefs.isEnabled) {
+        DetailsTopBarHeight + 12.dp + panoramaExtraHeightDp
+    } else {
+        0.dp
+    }
     val compactTopBarAlpha by animateFloatAsState(
         targetValue = if (isWideAdaptiveLayout) 1f else (1f - compactSheetExpansionProgress).coerceIn(0f, 1f),
         animationSpec = tween(durationMillis = 180),
@@ -721,17 +728,19 @@ fun DetailsScreen(
                             )
                         }
                         val request = remember(content?.source?.name, content?.url, currentPanoramaCoverUrl) {
-                            val panoramaCacheKey = sharedCoverMemoryCacheKey(
-                                sourceName = content?.source?.name,
-                                ownerKey = content?.url,
-                                url = currentPanoramaCoverUrl,
-                            )
-                            ImageRequest.Builder(context)
-                                .data(currentPanoramaCoverUrl)
-                                .memoryCacheKey(panoramaCacheKey)
-                                .diskCacheKey(panoramaCacheKey)
-                                .apply { content?.let { mangaExtra(it) } }
-                                .build()
+                            currentPanoramaCoverUrl?.let { coverUrl ->
+                                val panoramaCacheKey = sharedCoverMemoryCacheKey(
+                                    sourceName = content?.source?.name,
+                                    ownerKey = content?.url,
+                                    url = coverUrl,
+                                )
+                                ImageRequest.Builder(context)
+                                    .data(coverUrl)
+                                    .memoryCacheKey(panoramaCacheKey)
+                                    .diskCacheKey(panoramaCacheKey)
+                                    .apply { content?.let { mangaExtra(it) } }
+                                    .build()
+                            }
                         }
                         AnimatedPanoramaBackdrop(
                             prefs = panoramaPrefs,
@@ -739,9 +748,6 @@ fun DetailsScreen(
                             placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
                             snapshotKey = sharedElementKey,
                             contentAlpha = 0.6f,
-                            contentAlphaProvider = {
-                                0.6f * (1f - compactCollapseProgressProvider())
-                            },
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             crossfadeEnabled = false,
                             onLoadError = {
@@ -926,6 +932,7 @@ fun DetailsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.displayCutout)
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
@@ -947,7 +954,7 @@ fun DetailsScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     scrollState = landscapeLeftScrollState,
                                     contentPadding = paddingValues,
-                                    headerTopSpacing = if (panoramaPrefs.isEnabled) panoramaExtraHeightDp else 0.dp,
+                                    headerTopSpacing = landscapeHeaderTopSpacing,
                                     bottomSpacerHeight = 40.dp,
                                     preferLightweightFirstFrame = false,
                                     mangaDetails = mangaDetails,

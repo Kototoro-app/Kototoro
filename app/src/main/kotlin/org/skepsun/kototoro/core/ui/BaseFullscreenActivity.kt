@@ -25,8 +25,11 @@ abstract class BaseFullscreenActivity<B : ViewBinding> :
 				Color.TRANSPARENT
 			}
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-				attributes.layoutInDisplayCutoutMode =
+				attributes.layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+					WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+				} else {
 					WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+				}
 			}
 		}
 		systemUiController.setSystemUiVisible(true)

@@ -215,7 +215,7 @@ fun AnimatedPanoramaBackdrop(
             if (useRealtimeBlur) {
                 Modifier.blur(
                     radius = realtimeBlurRadius,
-                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                    edgeTreatment = BlurredEdgeTreatment.Rectangle,
                 )
             } else {
                 Modifier

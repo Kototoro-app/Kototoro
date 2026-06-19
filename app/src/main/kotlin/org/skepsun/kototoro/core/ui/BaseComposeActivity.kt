@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
 abstract class BaseComposeActivity :
@@ -69,9 +70,10 @@ abstract class BaseComposeActivity :
         applyConfiguredTheme(settings)
         putDataToExtras(intent)
         exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
+        super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        super.onCreate(savedInstanceState)
+        configureSafeAreaWindow()
     }
 
     override fun onNewIntent(intent: Intent) {
