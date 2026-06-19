@@ -2425,7 +2425,7 @@
     <string name="pref_panorama_animation_speed">全景动画速度</string>
     <string name="pref_panorama_animation_summary">为全景封面背景启用微妙的运动效果</string>
     <string name="pref_details_panorama_scroll_linked">让详情页全景封面跟随滚动</string>
-    <string name="pref_details_panorama_scroll_linked_summary">让详情页全景背景随着页面滚动一起移动，而不是固定在原位</string>
+    <string name="pref_details_panorama_scroll_linked_summary">让详情页全景背景随着页面滚动一起移动，而不是固定在原位。开启后会关闭常规的滚动淡出效果</string>
     <string name="pref_details_panorama_limit_to_info_card_midpoint">让详情页全景封面止于信息卡片中部</string>
     <string name="pref_details_panorama_limit_to_info_card_midpoint_summary">让详情页全景背景平滑淡出，并在基本信息面板中间位置完全收住</string>
     <string name="pref_panorama_downsample">降低全景封面分辨率</string>

@@ -680,13 +680,14 @@ fun DetailsScreen(
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
     val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val panoramaFullOpacityAtY = if (panoramaPrefs.limitToInfoCardMidpoint && infoCardMidPx.isFinite()) {
+    val shouldApplyPanoramaScrollFade = panoramaPrefs.limitToInfoCardMidpoint && !panoramaPrefs.isScrollLinkedEnabled
+    val panoramaFullOpacityAtY = if (shouldApplyPanoramaScrollFade && infoCardMidPx.isFinite()) {
         infoCardMidPx
     } else {
         null
     }
     val panoramaFullOpacityFadeDistancePx = if (
-        panoramaPrefs.limitToInfoCardMidpoint &&
+        shouldApplyPanoramaScrollFade &&
         infoCardTopPx.isFinite() &&
         infoCardMidPx.isFinite()
     ) {
@@ -702,6 +703,34 @@ fun DetailsScreen(
         }
     } else {
         0f
+    }
+    val panoramaFadeDistancePx = remember(density, isWideAdaptiveLayout, initialInfoCardTopPx) {
+        when {
+            initialInfoCardTopPx.isFinite() -> initialInfoCardTopPx.coerceAtLeast(with(density) { 180.dp.toPx() })
+            isWideAdaptiveLayout -> with(density) { 260.dp.toPx() }
+            else -> with(density) { 180.dp.toPx() }
+        }
+    }
+    val panoramaContentAlphaProvider = remember(
+        panoramaPrefs.isScrollLinkedEnabled,
+        isWideAdaptiveLayout,
+        scrollState,
+        landscapeLeftScrollState,
+        panoramaFadeDistancePx,
+    ) {
+        if (panoramaPrefs.isScrollLinkedEnabled) {
+            null
+        } else {
+            {
+                val scrollValue = if (isWideAdaptiveLayout) {
+                    landscapeLeftScrollState.value
+                } else {
+                    scrollState.value
+                }
+                val fadeProgress = easedOpacityProgress(scrollValue / panoramaFadeDistancePx)
+                (0.6f * (1f - fadeProgress)).coerceIn(0f, 0.6f)
+            }
+        }
     }
 
     CompositionLocalProvider(LocalHazeState provides detailsHazeState) {
@@ -748,6 +777,7 @@ fun DetailsScreen(
                             placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
                             snapshotKey = sharedElementKey,
                             contentAlpha = 0.6f,
+                            contentAlphaProvider = panoramaContentAlphaProvider,
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             crossfadeEnabled = false,
                             onLoadError = {

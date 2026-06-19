@@ -2604,7 +2604,7 @@ Proceed?</string>
     <string name="pref_panorama_cover">Panorama cover</string>
     <string name="pref_panorama_cover_summary">Show the item cover as a background banner spanning the top of the screen</string>
     <string name="pref_details_panorama_scroll_linked">Scroll details panorama with content</string>
-    <string name="pref_details_panorama_scroll_linked_summary">Make the details panorama move together with page scrolling instead of staying fixed in place</string>
+    <string name="pref_details_panorama_scroll_linked_summary">Make the details panorama move together with page scrolling instead of staying fixed in place. This disables the normal scroll fade-out.</string>
     <string name="pref_details_panorama_limit_to_info_card_midpoint">Stop details panorama at info card midpoint</string>
     <string name="pref_details_panorama_limit_to_info_card_midpoint_summary">Fade the details panorama out so it fully settles by the middle of the basic info panel</string>
     <string name="pref_panorama_blur">Cover blur intensity</string>

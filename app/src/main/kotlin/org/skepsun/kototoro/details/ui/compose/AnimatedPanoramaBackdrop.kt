@@ -73,6 +73,7 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
         AppSettings.KEY_DETAILS_PANORAMA_SCROLL_LINKED,
         AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
     ) {
+        val limitToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint
         PanoramaBackdropPrefs(
             isEnabled = isPanoramaCoverEnabled,
             blurPercent = panoramaCoverBlur,
@@ -80,11 +81,11 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
             isAnimationEnabled = supportsRealtimeEffects &&
                 isPanoramaCoverAnimationEnabled &&
                 !isReducedVisualEffectsEnabled,
-            isScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled,
+            isScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled && limitToInfoCardMidpoint,
             animationSpeedPercent = panoramaAnimationSpeed,
             extraHeight = panoramaCoverExtraHeight,
             downsampleEnabled = isPanoramaDownsampleEnabled,
-            limitToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint,
+            limitToInfoCardMidpoint = limitToInfoCardMidpoint,
         )
     }
     return prefs

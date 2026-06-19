@@ -312,11 +312,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	var isDetailsPanoramaLimitedToInfoCardMidpoint: Boolean
 		get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, false)
-		set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, value) }
+		set(value) = prefs.edit {
+			putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, value)
+			if (!value) {
+				putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, false)
+			}
+		}
 
 	var isDetailsPanoramaScrollLinkedEnabled: Boolean
 		get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, true)
-		set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, value) }
+		set(value) = prefs.edit {
+			putBoolean(
+				KEY_DETAILS_PANORAMA_SCROLL_LINKED,
+				value && isDetailsPanoramaLimitedToInfoCardMidpoint,
+			)
+		}
 
 
 	var historyListMode: ListMode

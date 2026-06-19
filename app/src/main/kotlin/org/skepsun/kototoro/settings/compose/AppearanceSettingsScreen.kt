@@ -426,17 +426,19 @@ fun AppearanceSettingsScreen(
                 if (state.isPanoramaCoverEnabled) {
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_details_panorama_scroll_linked),
-                        checked = state.isDetailsPanoramaScrollLinkedEnabled,
-                        summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
-                        onCheckedChange = onDetailsPanoramaScrollLinkedChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
                         title = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint),
                         checked = state.isDetailsPanoramaLimitedToInfoCardMidpoint,
                         summary = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint_summary),
                         onCheckedChange = onDetailsPanoramaLimitedToInfoCardMidpointChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_details_panorama_scroll_linked),
+                        checked = state.isDetailsPanoramaScrollLinkedEnabled &&
+                            state.isDetailsPanoramaLimitedToInfoCardMidpoint,
+                        summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
+                        enabled = state.isDetailsPanoramaLimitedToInfoCardMidpoint,
+                        onCheckedChange = onDetailsPanoramaScrollLinkedChange,
                     )
                     SettingsSectionDivider()
                     SettingsSliderPreference(
