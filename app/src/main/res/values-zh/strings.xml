@@ -20,14 +20,14 @@
     <string name="details_reading_chapters">阅读章节</string>
     <string name="details_playback_chapters">播放章节</string>
 
-    <string name="webdav_integration">WebDAV 集成</string>
+    <string name="webdav_integration">WebDAV 备份</string>
     <string name="send_backups_webdav">上传备份到 WebDAV</string>
     <string name="webdav_server_url">WebDAV 服务器 URL</string>
     <string name="webdav_username">WebDAV 用户名</string>
     <string name="webdav_password">WebDAV 密码</string>
     <string name="webdav_remote_path">远端路径</string>
 <string name="webdav_auto_restore">启动时自动恢复</string>
-<string name="webdav_auto_restore_summary">应用每天首次启动时检查并恢复 WebDAV 上最新备份；恢复完成后仅在内容不一致时可能上传一次以保持远端同步</string>
+<string name="webdav_auto_restore_summary">应用每天首次启动时检查并恢复 WebDAV 上最新备份；这是整包恢复，不是实时合并同步。</string>
     <string name="webdav_upload_now">立即上传备份</string>
     <string name="webdav_restore_now">恢复最新备份</string>
 
@@ -45,8 +45,8 @@
     <string name="webdav_keep_local_copy_summary">上传到 WebDAV 时保留本地备份。关闭后仅上传，不保留本地文件。</string>
 
     <!-- 新增：自动同步到 WebDAV（自动上传） -->
-    <string name="webdav_auto_sync">自动同步到 WebDAV</string>
-<string name="webdav_auto_sync_summary">仅在非计量网络下，监听历史/收藏等变更并在短暂聚合后自动上传到 WebDAV；触发间隔至少 12 小时。</string>
+    <string name="webdav_auto_sync">自动备份到 WebDAV</string>
+<string name="webdav_auto_sync_summary">仅在非计量网络下自动上传整包备份到 WebDAV，每天最多一次。</string>
 
     <string name="backup_periodic_explain_keep_local_copy_off">关闭“保留本地副本”时，周期性任务仅上传到远端；“最近本地备份时间”可能为空</string>
     <string name="backup_periodic_last_local_empty">已关闭保留本地副本；无本地备份时间</string>
@@ -415,7 +415,7 @@
     <string name="background">阅读背景颜色</string>
     <string name="backup_date_">备份日期：%s</string>
     <string name="backup_frequency">备份频率</string>
-    <string name="backup_information">可对历史和收藏进行备份与恢复</string>
+    <string name="backup_information">创建整包备份，用于本地保存或 WebDAV 恢复。</string>
     <string name="backup_restore">备份与恢复</string>
     <string name="backup_restored_background">将在后台恢复备份</string>
     <string name="backup_saved">备份已保存</string>
@@ -1008,7 +1008,7 @@
     <string name="home_sync_last_upload">上次上传 %1$s</string>
     <string name="home_sync_status_auto">WebDAV 自动同步</string>
     <string name="home_sync_status_not_configured">未配置</string>
-    <string name="home_sync_status_ready">WebDAV 同步已配置</string>
+    <string name="home_sync_status_ready">WebDAV 备份已配置</string>
     <string name="home_sync_subtitle_configure"></string>
     <string name="home_sync_subtitle_ready">已就绪</string>
     <string name="home_updates_empty_subtitle">有新章节的订阅内容会显示在这里</string>
@@ -2146,7 +2146,7 @@
     <string name="sync_auth">网络同步</string>
     <string name="sync_auth_hint">可登陆已有账号或创建新账号</string>
     <string name="sync_auto_backup_enable">启用自动备份</string>
-    <string name="sync_auto_backup_enable_summary">按计划生成本地备份；开启保留本地副本后，WebDAV 同步也会复用这些备份。</string>
+    <string name="sync_auto_backup_enable_summary">按计划生成本地备份；开启保留本地副本后，WebDAV 备份也会复用这些文件。</string>
     <string name="sync_complete">已同步 %1$d 项</string>
     <string name="sync_favourites">同步站点收藏</string>
     <string name="sync_favourites_done">同步完成</string>
@@ -2160,11 +2160,11 @@
     <string name="sync_local_backup_section">本地备份</string>
     <string name="sync_not_supported">此服务不支持同步</string>
     <string name="sync_settings">同步设定</string>
-    <string name="sync_settings_summary">配置 WebDAV 多设备同步、备份与恢复</string>
+    <string name="sync_settings_summary">在多设备间合并收藏、历史、订阅和更新记录</string>
     <string name="sync_status">同步</string>
     <string name="sync_title">开始同步网络数据</string>
-    <string name="sync_webdav_enable">启用 WebDAV 同步</string>
-    <string name="sync_webdav_enable_summary">通过 WebDAV 在多设备间同步阅读数据</string>
+    <string name="sync_webdav_enable">启用 WebDAV 备份</string>
+    <string name="sync_webdav_enable_summary">手动或通过每日备份任务上传、恢复整包备份。</string>
     <string name="google_drive_sync">Google Drive 同步</string>
     <string name="sync_sign_in">准备 Google Drive 同步</string>
     <string name="sync_sign_in_summary">使用 Google Drive 应用数据空间和最小 drive.appdata 权限同步订阅与更新记录；Kototoro 无法访问你的网盘文件。</string>

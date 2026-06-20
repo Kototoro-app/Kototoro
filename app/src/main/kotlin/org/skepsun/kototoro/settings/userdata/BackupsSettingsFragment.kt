@@ -189,12 +189,30 @@ fun BackupsSettingsRoute(
     val context = LocalContext.current
     val lastBackupDate = viewModel.lastBackupDate.collectAsStateWithLifecycle().value
     val backupDirectory = viewModel.backupsDirectory.collectAsStateWithLifecycle().value
+    val webDavLastAction = viewModel.webDavLastAction.collectAsStateWithLifecycle().value
+    val isWebDavCheckLoading = viewModel.isWebDavCheckLoading.collectAsStateWithLifecycle().value
+    val webDavUploadBusyMessageRes = viewModel.webDavUploadBusyMessageRes.collectAsStateWithLifecycle().value
+    val webDavRestoreBusyMessageRes = viewModel.webDavRestoreBusyMessageRes.collectAsStateWithLifecycle().value
     val backupFrequency =
         settings.observeAsState(AppSettings.KEY_BACKUP_PERIODICAL_FREQUENCY) { periodicalBackupFrequency }.value
     val isPeriodicalTrimEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_PERIODICAL_TRIM) { isPeriodicalBackupTrimEnabled }.value
     val periodicalBackupCount =
         settings.observeAsState(AppSettings.KEY_BACKUP_PERIODICAL_COUNT) { periodicalBackupCount }.value
+    val isWebDavEnabled =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_ENABLED) { isBackupWebDavUploadEnabled }.value
+    val webDavServerUrl =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_URL) { backupWebDavServerUrl.orEmpty() }.value
+    val webDavUsername =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_USERNAME) { backupWebDavUsername.orEmpty() }.value
+    val webDavPassword =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_PASSWORD) { backupWebDavPassword.orEmpty() }.value
+    val webDavRemotePath =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_PATH) { backupWebDavRemotePath.orEmpty() }.value
+    val isWebDavAutoRestoreEnabled =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_AUTO_RESTORE) { isBackupWebDavAutoRestoreEnabled }.value
+    val isWebDavKeepLocalCopyEnabled =
+        settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_KEEP_LOCAL_COPY) { isBackupWebDavKeepLocalCopyEnabled }.value
     val snackbarHostState = remember { SnackbarHostState() }
     val backupFrequencyLabels = context.resources.getStringArray(R.array.backup_frequency)
     val backupFrequencyValues = context.resources.getStringArray(R.array.values_backup_frequency)
@@ -225,6 +243,10 @@ fun BackupsSettingsRoute(
         )
         else -> null
     }
+    val webDavLastActionSummary = webDavLastAction?.let {
+        context.getString(it.first) + " - " + DateUtils.getRelativeTimeSpanString(it.second)
+    }
+    val isWebDavBusy = webDavUploadBusyMessageRes != null || webDavRestoreBusyMessageRes != null
     val state = BackupsSettingsUiState(
         backupOutputSummary = when (backupDirectory) {
             null -> context.getString(R.string.invalid_value_message)
@@ -237,6 +259,19 @@ fun BackupsSettingsRoute(
         periodicalBackupCount = periodicalBackupCount,
         lastBackupSummary = lastBackupSummary,
         isExternalImportDialogVisible = isExternalImportDialogVisible,
+        isWebDavEnabled = isWebDavEnabled,
+        webDavServerUrl = webDavServerUrl,
+        webDavUsername = webDavUsername,
+        webDavPassword = webDavPassword,
+        webDavRemotePath = webDavRemotePath,
+        isWebDavCheckLoading = isWebDavCheckLoading,
+        isWebDavAutoRestoreEnabled = isWebDavAutoRestoreEnabled,
+        isWebDavKeepLocalCopyEnabled = isWebDavKeepLocalCopyEnabled,
+        webDavLastActionSummary = webDavLastActionSummary,
+        isWebDavPolicyNoteVisible = !isWebDavKeepLocalCopyEnabled && isWebDavEnabled,
+        webDavUploadBusySummary = webDavUploadBusyMessageRes?.let(context::getString),
+        webDavRestoreBusySummary = webDavRestoreBusyMessageRes?.let(context::getString),
+        isWebDavBusy = isWebDavBusy,
     )
 
     BackupsSettingsScreen(
@@ -258,5 +293,15 @@ fun BackupsSettingsRoute(
             isExternalImportDialogVisible = false
             onImportExternalBackupFilePick(app)
         },
+        onWebDavEnabledChange = { settings.isBackupWebDavUploadEnabled = it },
+        onWebDavServerUrlChange = { settings.backupWebDavServerUrl = it },
+        onWebDavUsernameChange = { settings.backupWebDavUsername = it },
+        onWebDavPasswordChange = { settings.backupWebDavPassword = it },
+        onWebDavRemotePathChange = { settings.backupWebDavRemotePath = it },
+        onWebDavTestClick = { viewModel.checkWebDav() },
+        onWebDavUploadNowClick = { viewModel.uploadWebDavNow() },
+        onWebDavRestoreNowClick = { viewModel.restoreWebDavNow() },
+        onWebDavAutoRestoreChange = { settings.isBackupWebDavAutoRestoreEnabled = it },
+        onWebDavKeepLocalCopyChange = { settings.isBackupWebDavKeepLocalCopyEnabled = it },
     )
 }

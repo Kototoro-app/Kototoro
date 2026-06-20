@@ -91,7 +91,7 @@ fun buildSettingsRootSections(
 				key = "backups_settings",
 				iconRes = R.drawable.ic_backup_restore,
 				title = context.getString(R.string.backup_restore),
-				summary = context.summaryOf(R.string.create_backup, R.string.restore_backup, R.string.backups_output_directory),
+				summary = context.summaryOf(R.string.create_backup, R.string.restore_backup, R.string.webdav_integration),
 				onClick = { onOpenDestination(SettingsDestination.BackupsSettings) },
 			),
 			settingsRootItem(

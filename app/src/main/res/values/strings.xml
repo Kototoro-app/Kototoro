@@ -200,7 +200,7 @@
     <string name="data_restored_with_errors_legacy_jar_hint">The data was restored, but there are errors. Compatible JAR repositories were added for a legacy backup.</string>
     <string name="data_restored_with_errors_legacy_requires_normalization">Data restored from a legacy backup, but there are errors. Work migration normalization is required before sync write-back resumes.</string>
     <string name="data_restored_with_errors_legacy_requires_normalization_with_jar_hint">Data restored from a legacy backup, but there are errors. Work migration normalization is required before sync write-back resumes. Compatible JAR repositories were added.</string>
-    <string name="backup_information">You can create backup of your history and favorites and restore it</string>
+    <string name="backup_information">Create a full backup for local storage or WebDAV restore.</string>
     <string name="just_now">Just now</string>
     <string name="yesterday">Yesterday</string>
     <string name="long_ago">Long ago</string>
@@ -825,7 +825,7 @@
     <string name="sync_auth_hint">You can sign in into an existing account or create a new one</string>
     <string name="find_similar">Find similar</string>
     <string name="sync_settings">Synchronization settings</string>
-    <string name="sync_settings_summary">Configure WebDAV sync, backup, and restore.</string>
+    <string name="sync_settings_summary">Merge favorites, history, subscriptions, and update records across devices.</string>
     <string name="import_backup_from_other_apps">Import backup from other apps</string>
     <string name="import_backup_from_other_apps_summary">Import favorites and history from Mihon-family, Aniyomi-family, or Venera backup files.</string>
     <string name="export_mihon_backup">Export Mihon backup</string>
@@ -1360,7 +1360,7 @@ Proceed?</string>
     <string name="frequency_once_per_month">Once per month</string>
     <string name="periodic_backups_enable">Enable periodic backups</string>
     <string name="sync_auto_backup_enable">Enable automatic backups</string>
-    <string name="sync_auto_backup_enable_summary">Create local backups on a schedule. WebDAV sync can reuse them when keeping a local copy.</string>
+    <string name="sync_auto_backup_enable_summary">Create local backups on a schedule. WebDAV backup can reuse them when keeping a local copy.</string>
     <string name="backups_output_directory">Backups output directory</string>
     <string name="last_successful_backup">Last successful backup: %s</string>
     <string name="speed_value">x%.1f</string>
@@ -2110,9 +2110,9 @@ Proceed?</string>
     <string name="chapters_load_failed">Failed to load chapter list</string>
     <string name="telegram_integration">Telegram integration</string>
     <!-- WebDAV -->
-    <string name="webdav_integration">WebDAV integration</string>
-    <string name="sync_webdav_enable">Enable WebDAV sync</string>
-    <string name="sync_webdav_enable_summary">Keep reading data available across devices through WebDAV.</string>
+    <string name="webdav_integration">WebDAV backup</string>
+    <string name="sync_webdav_enable">Enable WebDAV backup</string>
+    <string name="sync_webdav_enable_summary">Upload and restore full backup packages manually or during the daily backup task.</string>
     <string name="google_drive_sync">Google Drive sync</string>
     <string name="sync_sign_in">Prepare Google Drive sync</string>
     <string name="sync_sign_in_summary">Uses Google Drive app data with the minimum Drive appdata permission to sync subscriptions and update records. Kototoro cannot access your Drive files.</string>
@@ -2137,9 +2137,9 @@ Proceed?</string>
     <string name="webdav_password">WebDAV password</string>
     <string name="webdav_remote_path">Remote path</string>
     <string name="webdav_auto_restore">Auto restore on startup</string>
-    <string name="webdav_auto_restore_summary">On the first app startup of each day, restores the latest backup once; may upload once post-restore if content differs</string>
-    <string name="webdav_auto_sync">Auto sync to WebDAV</string>
-    <string name="webdav_auto_sync_summary">Monitors changes and uploads backups to WebDAV on unmetered networks after a short delay, with a minimum interval of 12 hours</string>
+    <string name="webdav_auto_restore_summary">On the first app startup of each day, restores the latest WebDAV backup once; this is package restore, not live merge sync.</string>
+    <string name="webdav_auto_sync">Auto backup to WebDAV</string>
+    <string name="webdav_auto_sync_summary">Uploads a backup package to WebDAV on unmetered networks, at most once per day.</string>
     <string name="webdav_sync_attention_title">Sync attention</string>
     <string name="webdav_legacy_restore_block_summary">This device was restored from an older backup format. Automatic WebDAV upload is temporarily blocked to avoid overwriting newer remote data. Review the restored data, then use \"Upload now\" to establish a new baseline.</string>
     <string name="webdav_upload_now">Upload backup now</string>

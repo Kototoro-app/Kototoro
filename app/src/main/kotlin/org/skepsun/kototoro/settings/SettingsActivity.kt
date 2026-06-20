@@ -1311,7 +1311,6 @@ class SettingsActivity :
 			SettingsDestination.SyncSettings -> RenderComposeSection(title = getString(R.string.sync_settings)) {
 				SyncSettingsRoute(
 					settings = kototoroAppSettings,
-					backupSettingsViewModel = periodicalBackupSettingsViewModel,
 					modifier = Modifier.fillMaxSize(),
 				)
 			}

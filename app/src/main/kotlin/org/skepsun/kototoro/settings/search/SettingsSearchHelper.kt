@@ -382,17 +382,6 @@ class SettingsSearchHelper @Inject constructor(
 		val syncKeys = listOf(
 			"sync_settings" to R.string.sync_settings,
 			"sync_server_address" to R.string.server_address,
-			"sync_webdav_integration" to R.string.webdav_integration,
-			"sync_webdav_enable" to R.string.sync_webdav_enable,
-			"sync_webdav_server_url" to R.string.webdav_server_url,
-			"sync_webdav_username" to R.string.webdav_username,
-			"sync_webdav_password" to R.string.webdav_password,
-			"sync_webdav_remote_path" to R.string.webdav_remote_path,
-			"sync_webdav_test" to R.string.test_connection,
-			"sync_webdav_upload_now" to R.string.webdav_upload_now,
-			"sync_webdav_restore_now" to R.string.webdav_restore_now,
-			"sync_webdav_auto_restore" to R.string.webdav_auto_restore,
-			"sync_webdav_keep_local_copy" to R.string.webdav_keep_local_copy,
 		)
 		syncKeys.forEach { (key, titleRes) ->
 			result.add(
