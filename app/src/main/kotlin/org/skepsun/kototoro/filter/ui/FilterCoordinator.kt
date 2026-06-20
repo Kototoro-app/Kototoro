@@ -64,7 +64,7 @@ class FilterCoordinator @Inject constructor(
 ) {
 
     private val coroutineScope = lifecycle.lifecycleScope + Dispatchers.Default
-    private val repository = mangaRepositoryFactory.create(ContentSource(savedStateHandle[org.skepsun.kototoro.core.nav.AppRouter.KEY_SOURCE]))
+    private val repository = mangaRepositoryFactory.create(ContentSource(savedStateHandle.resolveSourceName()))
     private val sourceLocale = repository.source.getLocale()?.language
 
     private val currentListFilter = MutableStateFlow(ContentListFilter.EMPTY)
@@ -706,6 +706,11 @@ class FilterCoordinator @Inject constructor(
             return find(fragment) ?: throw IllegalStateException("FilterCoordinator cannot be found")
         }
     }
+}
+
+private fun SavedStateHandle.resolveSourceName(): String? {
+    return get<String>(org.skepsun.kototoro.core.nav.AppRouter.KEY_SOURCE)
+        ?: get<String>("sourceName")
 }
 
 // 当前 parser 模型不再暴露 tag group 的独占元信息，过�?UI 统一回退为非独占�?
