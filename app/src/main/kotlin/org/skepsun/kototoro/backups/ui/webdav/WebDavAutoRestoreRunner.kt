@@ -167,6 +167,8 @@ class WebDavAutoRestoreRunner @Inject constructor(
             BackupSection.BOOKMARKS,
             BackupSection.STATS,
             BackupSection.EXTENSION_REPOS,
+            BackupSection.TRACKS,
+            BackupSection.TRACK_LOGS,
         )
         if (writerGeneration >= RemoteNamespace.V2.writerGeneration) {
             baseSections += BackupSection.ENTITY_GRAPH_ENTITIES

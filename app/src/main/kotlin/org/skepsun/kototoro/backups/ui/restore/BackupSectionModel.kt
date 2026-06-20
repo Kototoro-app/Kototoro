@@ -25,6 +25,8 @@ data class BackupSectionModel(
 				BackupSection.SOURCES -> R.string.remote_sources
 				BackupSection.EXTENSION_REPOS -> R.string.manage_extension_repositories
 				BackupSection.SCROBBLING -> R.string.tracking
+				BackupSection.TRACKS -> R.string.feed
+				BackupSection.TRACK_LOGS -> R.string.updates
 				BackupSection.STATS -> R.string.statistics
 				BackupSection.SAVED_FILTERS -> R.string.saved_filters
 				BackupSection.AUTH -> R.string.auth_title

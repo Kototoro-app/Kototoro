@@ -7,6 +7,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 
+const val TRACK_LOG_RETAINED_SIZE = 120
+
 @Entity(
 	tableName = "track_logs",
 	indices = [

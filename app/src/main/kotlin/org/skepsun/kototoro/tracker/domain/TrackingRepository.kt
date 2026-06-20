@@ -29,6 +29,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
 import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
@@ -38,7 +39,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 private const val NO_ID = 0L
-private const val MAX_LOG_SIZE = 120
 
 @Reusable
 class TrackingRepository @Inject constructor(
@@ -195,7 +195,7 @@ class TrackingRepository @Inject constructor(
 		syncTrackAnchors()
 		db.getTrackLogsDao().run {
 			gc()
-			trim(MAX_LOG_SIZE)
+			trim(TRACK_LOG_RETAINED_SIZE)
 		}
 	}
 

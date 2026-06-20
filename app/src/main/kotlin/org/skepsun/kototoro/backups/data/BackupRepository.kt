@@ -35,6 +35,8 @@ import org.skepsun.kototoro.backups.data.model.ExtensionRepoBackup
 import org.skepsun.kototoro.backups.data.model.ScrobblingBackup
 import org.skepsun.kototoro.backups.data.model.SourceBackup
 import org.skepsun.kototoro.backups.data.model.StatisticBackup
+import org.skepsun.kototoro.backups.data.model.TrackBackup
+import org.skepsun.kototoro.backups.data.model.TrackLogBackup
 import org.skepsun.kototoro.backups.data.model.WorkFavouriteBackup
 import org.skepsun.kototoro.backups.data.model.WorkHistoryBackup
 import org.skepsun.kototoro.backups.data.model.WorkStatisticBackup
@@ -74,6 +76,9 @@ import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepository
 import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepositories
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
+import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -218,6 +223,18 @@ class BackupRepository @Inject constructor(
                 BackupSection.SCROBBLING -> output.writeJsonArray(
                     section = BackupSection.SCROBBLING,
                     data = database.getScrobblingDao().dumpEnabled().map { ScrobblingBackup(it) },
+                    serializer = serializer(),
+                )
+
+                BackupSection.TRACKS -> output.writeJsonArray(
+                    section = BackupSection.TRACKS,
+                    data = database.getTracksDao().dump().asFlow().map { TrackBackup(it) },
+                    serializer = serializer(),
+                )
+
+                BackupSection.TRACK_LOGS -> output.writeJsonArray(
+                    section = BackupSection.TRACK_LOGS,
+                    data = database.getTrackLogsDao().dump().asFlow().map { TrackLogBackup(it) },
                     serializer = serializer(),
                 )
 
@@ -382,6 +399,14 @@ class BackupRepository @Inject constructor(
                         upsertScrobbling(it.toEntity())
                     }
 
+                    BackupSection.TRACKS -> input.readJsonArray<TrackBackup>(serializer()).restoreToDb("TRACKS") {
+                        mergeTrack(it.toEntity(entityIdMapping))
+                    }
+
+                    BackupSection.TRACK_LOGS -> input.readJsonArray<TrackLogBackup>(serializer()).restoreToDb("TRACK_LOGS") {
+                        mergeTrackLog(it.toEntity(entityIdMapping))
+                    }
+
                     BackupSection.STATS -> input.readJsonArray<StatisticBackup>(serializer()).restoreToDb("STATS") {
                         val legacy = it.toEntity()
                         getStatsDao().upsert(legacy)
@@ -447,6 +472,9 @@ class BackupRepository @Inject constructor(
             restoreContext = restoreContext,
         )
         Log.d(TAG, "restoreBackup: normalizeRestoredWorkState elapsedMs=${SystemClock.elapsedRealtime() - normalizeStartedAt}")
+        val trimStartedAt = SystemClock.elapsedRealtime()
+        trimRestoredTrackLogs(effectiveSections)
+        Log.d(TAG, "restoreBackup: trimRestoredTrackLogs elapsedMs=${SystemClock.elapsedRealtime() - trimStartedAt}")
         progress?.emit(commonProgress)
         Log.d(TAG, "restoreBackup: complete totalMs=${SystemClock.elapsedRealtime() - restoreStartedAt}")
         return RestoreBackupResult(
@@ -546,6 +574,18 @@ class BackupRepository @Inject constructor(
         Log.d(TAG, "clearRestoreTargets: sections=${sections.joinToString()} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
     }
 
+    private suspend fun trimRestoredTrackLogs(sections: Set<BackupSection>) {
+        if (BackupSection.TRACK_LOGS !in sections) {
+            return
+        }
+        database.withTransaction {
+            database.getTrackLogsDao().run {
+                gc()
+                trim(TRACK_LOG_RETAINED_SIZE)
+            }
+        }
+    }
+
     private fun Set<BackupSection>.withImplicitRestoreSections(): Set<BackupSection> {
         val expanded = LinkedHashSet(this)
         if (BackupSection.HISTORY in this) {
@@ -561,6 +601,8 @@ class BackupRepository @Inject constructor(
             BackupSection.HISTORY in expanded ||
             BackupSection.FAVOURITES in expanded ||
             BackupSection.BOOKMARKS in expanded ||
+            BackupSection.TRACKS in expanded ||
+            BackupSection.TRACK_LOGS in expanded ||
             BackupSection.WORK_HISTORY in expanded ||
             BackupSection.WORK_FAVOURITES in expanded ||
             BackupSection.WORK_STATS in expanded
@@ -890,6 +932,72 @@ class BackupRepository @Inject constructor(
         val targetId: Long,
         val mediaType: String,
     )
+
+    private suspend fun MangaDatabase.mergeTrack(remote: TrackEntity) {
+        val dao = getTracksDao()
+        val local = dao.findByOwnerId(remote.ownerId)
+        if (local == null) {
+            dao.upsert(remote)
+            return
+        }
+        dao.upsert(local.mergeWithRestored(remote))
+    }
+
+    private fun TrackEntity.mergeWithRestored(remote: TrackEntity): TrackEntity {
+        val remoteIsNewer = remote.isNewerThan(this)
+        val newer = if (remoteIsNewer) remote else this
+        val mergedLastError = when {
+            newer.lastResult == TrackEntity.RESULT_FAILED -> newer.lastError
+            lastResult == TrackEntity.RESULT_FAILED && remote.lastResult != TrackEntity.RESULT_FAILED -> remote.lastError
+            else -> null
+        }
+        return TrackEntity(
+            ownerId = ownerId,
+            mangaId = mangaId,
+            entityId = entityId ?: remote.entityId,
+            lastChapterId = newer.lastChapterId,
+            newChapters = mergeRestoredNewChapters(remote),
+            lastCheckTime = maxOf(lastCheckTime, remote.lastCheckTime),
+            lastChapterDate = maxOf(lastChapterDate, remote.lastChapterDate),
+            lastResult = newer.lastResult,
+            lastError = mergedLastError,
+        )
+    }
+
+    private fun TrackEntity.mergeRestoredNewChapters(remote: TrackEntity): Int {
+        return if (newChapters == 0 || remote.newChapters == 0) {
+            0
+        } else {
+            maxOf(newChapters, remote.newChapters)
+        }
+    }
+
+    private fun TrackEntity.isNewerThan(other: TrackEntity): Boolean {
+        return when {
+            lastChapterDate != other.lastChapterDate -> lastChapterDate > other.lastChapterDate
+            lastCheckTime != other.lastCheckTime -> lastCheckTime > other.lastCheckTime
+            else -> lastChapterId > other.lastChapterId
+        }
+    }
+
+    private suspend fun MangaDatabase.mergeTrackLog(remote: TrackLogEntity) {
+        val dao = getTrackLogsDao()
+        val existing = dao.findDuplicate(
+            ownerId = remote.ownerId,
+            mangaId = remote.mangaId,
+            entityId = remote.entityId,
+            chapters = remote.chapters,
+            createdAt = remote.createdAt,
+        )
+        if (existing == null) {
+            dao.insert(remote)
+        } else if (existing.isUnread && !remote.isUnread) {
+            dao.markAsRead(existing.id)
+            getTracksDao().clearCounter(existing.mangaId)
+        } else if (!existing.isUnread) {
+            getTracksDao().clearCounter(existing.mangaId)
+        }
+    }
 
     private suspend fun MangaDatabase.restoreEntityRecord(
         remote: EntityRecord,

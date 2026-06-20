@@ -28,6 +28,29 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT COUNT(*) FROM track_logs WHERE unread = 1")
 	abstract fun observeUnreadCount(): Flow<Int>
 
+	@Query("SELECT * FROM track_logs ORDER BY created_at DESC")
+	abstract suspend fun dump(): List<TrackLogEntity>
+
+	@Query(
+		"""
+		SELECT *
+		FROM track_logs
+		WHERE owner_id = :ownerId
+			AND manga_id = :mangaId
+			AND IFNULL(entity_id, 0) = IFNULL(:entityId, 0)
+			AND chapters = :chapters
+			AND created_at = :createdAt
+		LIMIT 1
+		""",
+	)
+	abstract suspend fun findDuplicate(
+		ownerId: Long,
+		mangaId: Long,
+		entityId: Long?,
+		chapters: String,
+		createdAt: Long,
+	): TrackLogEntity?
+
 	@Query("DELETE FROM track_logs")
 	abstract suspend fun clear()
 
