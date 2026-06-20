@@ -452,8 +452,12 @@ class EntityGraphRepository @Inject constructor(
 					}
 				}
 			}
-			val entityRecords = dao.findEntitiesByIds(existingBindings.values.map { it.entityId }.distinct())
-				.associateByTo(LinkedHashMap()) { it.id }
+			val existingEntityIds = existingBindings.values.map { it.entityId }.distinct()
+			val entityRecords = if (existingEntityIds.isEmpty()) {
+				LinkedHashMap()
+			} else {
+				dao.findEntitiesByIds(existingEntityIds).associateByTo(LinkedHashMap()) { it.id }
+			}
 			buildMap(distinctContents.size) {
 				for (content in distinctContents) {
 					val existingBinding = existingBindings[content.id]
@@ -2038,13 +2042,13 @@ class EntityGraphRepository @Inject constructor(
 		now: Long,
 	): Entity {
 		val dao = db.getEntityGraphDao()
-		val trimmedName = primaryName.trim()
+		val trimmedName = resolveEntityPrimaryName(primaryName, aliases, source, externalId)
 		val nameHash = computeNameHash(trimmedName)
 		val record = EntityRecord(
 			type = type.name,
 			primaryName = trimmedName,
 			nameHash = nameHash,
-			aliases = encodeStringList(mergeAliases(primaryName, aliases).drop(1)),
+			aliases = encodeStringList(mergeAliases(trimmedName, aliases + primaryName).drop(1)),
 			createdAt = now,
 			lastAccessed = now,
 			accessCount = 1,
@@ -2381,17 +2385,39 @@ class EntityGraphRepository @Inject constructor(
 		aliases: List<String>,
 		now: Long,
 	): EntityRecord {
+		val fallbackName = resolveEntityPrimaryName(
+			record.primaryName,
+			decodeStringList(record.aliases) + aliases,
+			source = null,
+			externalId = record.id.takeIf { it > 0L }?.toString(),
+		)
 		val mergedNames = mergeAliases(
-			primaryName = record.primaryName,
+			primaryName = fallbackName,
 			aliases = decodeStringList(record.aliases) + listOf(primaryName) + aliases,
 		)
-		val newPrimaryName = mergedNames.first()
+		val newPrimaryName = mergedNames.firstOrNull() ?: fallbackName
 		return record.copy(
 			primaryName = newPrimaryName,
 			nameHash = computeNameHash(newPrimaryName),
 			aliases = encodeStringList(mergedNames.drop(1).take(MAX_ENTITY_ALIASES)),
 			lastAccessed = now,
 		)
+	}
+
+	private fun resolveEntityPrimaryName(
+		primaryName: String,
+		aliases: List<String>,
+		source: String?,
+		externalId: String?,
+	): String {
+		return sequenceOf(primaryName)
+			.plus(aliases.asSequence())
+			.map { it.trim() }
+			.firstOrNull { it.isNotEmpty() }
+			?: listOfNotNull(source?.trim()?.takeIf { it.isNotEmpty() }, externalId?.trim()?.takeIf { it.isNotEmpty() })
+				.joinToString(":")
+				.takeIf { it.isNotEmpty() }
+			?: "Untitled"
 	}
 
 	/**

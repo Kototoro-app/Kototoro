@@ -424,6 +424,10 @@ class FavouritesRepository @Inject constructor(
 		settings.requiresWorkMigrationNormalization = false
 	}
 
+	suspend fun normalizeWorkFavouritesForSync() {
+		normalizeWorkFavourites()
+	}
+
 	private suspend fun hasWorkFavouriteDrift(): Boolean {
 		val localActiveCount = db.getFavouritesDao().countActive()
 		return db.getWorkFavouritesDao().countActive() != localActiveCount
@@ -434,7 +438,13 @@ class FavouritesRepository @Inject constructor(
 		if (localFavourites.isEmpty()) {
 			return
 		}
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(localFavourites.map { it.mangaId })
+		val mangaById = db.getMangaDao()
+			.findEntitiesByIds(localFavourites.map { it.mangaId }.distinct())
+			.associateBy { it.id }
+		val contentById = mangaById.mapValues { (_, manga) -> manga.toContent(tags = emptySet(), chapters = null) }
+		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(contentById.values)
+		val existingEntityIds = entityGraphRepository.findEntityIdsByAnyMangaIds(localFavourites.map { it.mangaId })
+		val entityIdsByMangaId = existingEntityIds + ensuredEntityIds
 		val normalized = LinkedHashMap<WorkFavouriteNormalizationKey, WorkFavouriteEntity>()
 		for (favourite in localFavourites) {
 			val entityId = entityIdsByMangaId[favourite.mangaId] ?: continue
@@ -463,8 +473,16 @@ class FavouritesRepository @Inject constructor(
 		}
 		db.withTransaction {
 			val workFavouritesDao = db.getWorkFavouritesDao()
-			workFavouritesDao.deleteAll()
-			normalized.values.forEach { workFavouritesDao.upsert(it) }
+			normalized.values.forEach { candidate ->
+				val local = workFavouritesDao.find(candidate.entityId, candidate.categoryId)
+				workFavouritesDao.upsert(
+					if (local == null) {
+						candidate
+					} else {
+						mergeNormalizedWorkFavourite(local, candidate)
+					},
+				)
+			}
 		}
 	}
 

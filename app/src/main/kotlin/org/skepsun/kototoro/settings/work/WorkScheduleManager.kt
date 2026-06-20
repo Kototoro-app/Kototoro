@@ -6,6 +6,8 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.suggestions.ui.SuggestionsWorker
+import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
+import org.skepsun.kototoro.sync.google.work.GoogleDriveSyncWorker
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,8 +15,10 @@ import javax.inject.Singleton
 @Singleton
 class WorkScheduleManager @Inject constructor(
 	private val settings: AppSettings,
+	private val googleDriveSyncSettings: GoogleDriveSyncSettings,
 	private val suggestionScheduler: SuggestionsWorker.Scheduler,
 	private val trackerScheduler: TrackWorker.Scheduler,
+	private val googleDriveSyncScheduler: GoogleDriveSyncWorker.Scheduler,
 ) : SharedPreferences.OnSharedPreferenceChangeListener {
 
 	override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
@@ -41,6 +45,12 @@ class WorkScheduleManager @Inject constructor(
 		processLifecycleScope.launch(Dispatchers.Default) {
 			updateWorkerImpl(trackerScheduler, settings.isTrackerEnabled, true) // always force due to adaptive interval
 			updateWorkerImpl(suggestionScheduler, settings.isSuggestionsEnabled, false)
+			updateWorkerImpl(
+				scheduler = googleDriveSyncScheduler,
+				isEnabled = googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.intervalMinutes > 0,
+				force = false,
+			)
+			googleDriveSyncScheduler.enqueueStartSyncIfAllowed()
 		}
 	}
 

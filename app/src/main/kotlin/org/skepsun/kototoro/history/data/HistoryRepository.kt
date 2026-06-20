@@ -309,6 +309,10 @@ class HistoryRepository @Inject constructor(
 		db.getHistoryDao().clear()
 	}
 
+	suspend fun normalizeWorkHistoryForSync() {
+		normalizeWorkHistory()
+	}
+
 	suspend fun delete(manga: Content) = db.withTransaction {
 		val ownerRef = resolveHistoryOwnerRef(manga.id)
 		ownerRef.entityId?.let { entityId ->
@@ -914,6 +918,53 @@ class HistoryRepository @Inject constructor(
 			return false
 		}
 		return db.getFavouritesDao().countByMangaIds(localIds) > 0
+	}
+
+	private suspend fun normalizeWorkHistory() {
+		val localHistory = db.getHistoryDao().findAllEntriesIncludingDeleted()
+		if (localHistory.isEmpty()) {
+			return
+		}
+		val mangaById = db.getMangaDao()
+			.findEntitiesByIds(localHistory.map { it.mangaId }.distinct())
+			.associateBy { it.id }
+		val contentById = mangaById.mapValues { (_, manga) -> manga.toContent(tags = emptySet(), chapters = null) }
+		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(contentById.values)
+		val existingEntityIds = entityGraphRepository.findEntityIdsByAnyMangaIds(localHistory.map { it.mangaId })
+		val entityIdsByMangaId = existingEntityIds + ensuredEntityIds
+		val normalized = LinkedHashMap<Long, WorkHistoryEntity>()
+		for (history in localHistory) {
+			val entityId = entityIdsByMangaId[history.mangaId] ?: continue
+			val candidate = WorkHistoryEntity(
+				entityId = entityId,
+				anchorMangaId = history.mangaId,
+				createdAt = history.createdAt,
+				updatedAt = history.updatedAt,
+				chapterId = history.chapterId,
+				page = history.page,
+				scroll = history.scroll,
+				percent = history.percent,
+				deletedAt = history.deletedAt,
+				chaptersCount = history.chaptersCount,
+				parentChapterId = history.parentChapterId,
+			)
+			val existing = normalized[entityId]
+			normalized[entityId] = if (existing == null || candidate.updatedAt >= existing.updatedAt) {
+				candidate.copy(createdAt = minOf(existing?.createdAt ?: candidate.createdAt, candidate.createdAt))
+			} else {
+				existing
+			}
+		}
+		db.withTransaction {
+			normalized.values.forEach { candidate ->
+				val local = db.getWorkHistoryDao().find(candidate.entityId)
+				if (local == null || candidate.updatedAt >= local.updatedAt) {
+					db.getWorkHistoryDao().upsert(
+						candidate.copy(createdAt = minOf(local?.createdAt ?: candidate.createdAt, candidate.createdAt)),
+					)
+				}
+			}
+		}
 	}
 
 	private fun WorkHistoryEntity.toLegacyHistoryEntity() = HistoryEntity(

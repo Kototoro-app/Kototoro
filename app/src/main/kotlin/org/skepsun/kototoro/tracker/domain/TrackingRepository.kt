@@ -199,6 +199,12 @@ class TrackingRepository @Inject constructor(
 		}
 	}
 
+	suspend fun normalizeTracksForSync() {
+		db.withTransaction {
+			syncTrackAnchors()
+		}
+	}
+
 	suspend fun saveUpdates(updates: MangaUpdates) {
 		db.withTransaction {
 			val anchorMangaId = resolvePersistableTrackAnchorMangaId(updates.manga.id) ?: return@withTransaction

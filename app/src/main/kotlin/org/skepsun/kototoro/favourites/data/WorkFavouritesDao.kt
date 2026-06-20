@@ -14,6 +14,9 @@ abstract class WorkFavouritesDao {
 	@Query("SELECT DISTINCT category_id FROM work_favourites WHERE entity_id = :entityId AND deleted_at = 0 ORDER BY created_at ASC")
 	abstract suspend fun findCategoriesIds(entityId: Long): List<Long>
 
+	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId AND category_id = :categoryId LIMIT 1")
+	abstract suspend fun find(entityId: Long, categoryId: Long): WorkFavouriteEntity?
+
 	@Query("SELECT COUNT(category_id) FROM work_favourites WHERE entity_id = :entityId AND deleted_at = 0")
 	abstract suspend fun findCategoriesCount(entityId: Long): Int
 

@@ -17,6 +17,9 @@ abstract class FavouriteCategoriesDao {
 	@Query("SELECT * FROM favourite_categories WHERE deleted_at = 0 ORDER BY sort_key")
 	abstract suspend fun findAll(): List<FavouriteCategoryEntity>
 
+	@Query("SELECT * FROM favourite_categories ORDER BY category_id ASC")
+	abstract suspend fun dump(): List<FavouriteCategoryEntity>
+
 	@Query("SELECT * FROM favourite_categories WHERE deleted_at = 0 ORDER BY sort_key")
 	abstract fun observeAll(): Flow<List<FavouriteCategoryEntity>>
 
@@ -25,6 +28,9 @@ abstract class FavouriteCategoriesDao {
 
 	@Query("SELECT * FROM favourite_categories WHERE category_id = :id AND deleted_at = 0")
 	abstract fun observe(id: Long): Flow<FavouriteCategoryEntity?>
+
+	@Query("SELECT * FROM favourite_categories WHERE category_id = :id LIMIT 1")
+	abstract suspend fun findIncludingDeleted(id: Long): FavouriteCategoryEntity?
 
 	@Insert(onConflict = OnConflictStrategy.ABORT)
 	abstract suspend fun insert(category: FavouriteCategoryEntity): Long

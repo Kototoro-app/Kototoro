@@ -362,6 +362,7 @@ configurations.all {
 	implementation libs.androidx.work.runtime
 	implementation libs.guava
 	implementation libs.gson
+	implementation libs.google.play.services.auth
 
 	// Foldable/Window layout
 	implementation libs.androidx.window

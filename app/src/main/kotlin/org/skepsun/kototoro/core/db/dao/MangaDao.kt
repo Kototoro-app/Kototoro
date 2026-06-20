@@ -23,6 +23,9 @@ abstract class MangaDao {
 	@Query("SELECT EXISTS(SELECT * FROM manga WHERE manga_id = :id)")
 	abstract suspend operator fun contains(id: Long): Boolean
 
+	@Query("SELECT MIN(manga_id) FROM manga")
+	abstract suspend fun findMinId(): Long?
+
 	@Transaction
 	@Query("SELECT * FROM manga WHERE public_url = :publicUrl")
 	abstract suspend fun findByPublicUrl(publicUrl: String): MangaWithTags?

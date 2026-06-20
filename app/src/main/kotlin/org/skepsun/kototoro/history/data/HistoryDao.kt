@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Transaction
+import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -125,6 +126,9 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT * FROM history WHERE manga_id = :id AND deleted_at = 0")
 	abstract suspend fun find(id: Long): HistoryEntity?
 
+	@Query("SELECT * FROM history WHERE manga_id = :id LIMIT 1")
+	abstract suspend fun findIncludingDeleted(id: Long): HistoryEntity?
+
 	@Query("SELECT * FROM history WHERE manga_id IN (:ids) AND deleted_at = 0")
 	abstract suspend fun findByIds(ids: Collection<Long>): List<HistoryEntity>
 
@@ -156,8 +160,14 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 		}
 	}
 
+	@Query("SELECT * FROM history ORDER BY updated_at DESC")
+	abstract suspend fun findAllEntriesIncludingDeleted(): List<HistoryEntity>
+
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
 	abstract suspend fun insert(entity: HistoryEntity): Long
+
+	@Upsert
+	abstract suspend fun upsertIncludingDeleted(entity: HistoryEntity)
 
 	@Query(
 		"UPDATE history SET page = :page, chapter_id = :chapterId, scroll = :scroll, percent = :percent, updated_at = :updatedAt, chapters = :chapters, parent_chapter_id = :parentChapterId, deleted_at = 0 WHERE manga_id = :mangaId",
