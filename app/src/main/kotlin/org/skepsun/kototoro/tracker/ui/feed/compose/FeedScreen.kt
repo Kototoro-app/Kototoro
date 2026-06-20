@@ -4,11 +4,14 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +22,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +31,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
@@ -43,6 +48,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -214,9 +220,65 @@ fun FeedScreen(
 								.padding(horizontal = 16.dp, vertical = 12.dp)
 						)
 					}
-					// loading and empty states could be mapped to existing Compose components
+					LoadingState -> {
+						FeedLoadingState()
+					}
+					is EmptyState -> {
+						FeedEmptyState(item)
+					}
 				}
 			}
+		}
+	}
+}
+
+@Composable
+private fun FeedLoadingState(
+	modifier: Modifier = Modifier,
+) {
+	Box(
+		modifier = modifier
+			.fillMaxWidth()
+			.padding(horizontal = 24.dp, vertical = 32.dp),
+		contentAlignment = Alignment.Center,
+	) {
+		KototoroLoadingIndicator()
+	}
+}
+
+@Composable
+private fun FeedEmptyState(
+	item: EmptyState,
+	modifier: Modifier = Modifier,
+) {
+	Column(
+		modifier = modifier
+			.fillMaxWidth()
+			.padding(horizontal = 24.dp, vertical = 32.dp),
+		horizontalAlignment = Alignment.CenterHorizontally,
+	) {
+		if (item.icon != 0) {
+			Icon(
+				painter = painterResource(item.icon),
+				contentDescription = null,
+				tint = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+			Spacer(modifier = Modifier.height(12.dp))
+		}
+		val titleText = item.textPrimaryText?.toString()
+		Text(
+			text = titleText ?: stringResource(item.textPrimary),
+			style = MaterialTheme.typography.titleMedium,
+			color = MaterialTheme.colorScheme.onSurface,
+		)
+		val subtitleText = item.textSecondaryText?.toString()
+		if (item.textSecondary != 0 || !subtitleText.isNullOrBlank()) {
+			Spacer(modifier = Modifier.height(8.dp))
+			Text(
+				text = subtitleText ?: stringResource(item.textSecondary),
+				style = MaterialTheme.typography.bodyMedium,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
 		}
 	}
 }

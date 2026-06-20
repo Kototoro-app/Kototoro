@@ -513,15 +513,11 @@ class BackupRepository @Inject constructor(
             if (BackupSection.HISTORY in sections) {
                 database.getWorkHistoryDao().clear()
                 database.getHistoryDao().clear()
-                database.getTracksDao().clear()
-                database.getTrackLogsDao().clear()
             }
             if (BackupSection.FAVOURITES in sections) {
                 database.getWorkFavouritesDao().deleteAll()
                 database.getFavouritesDao().clear()
                 database.getFavouriteCategoriesDao().deleteAll()
-                database.getTracksDao().clear()
-                database.getTrackLogsDao().clear()
             }
             if (BackupSection.BOOKMARKS in sections) {
                 database.getBookmarksDao().deleteAll()
