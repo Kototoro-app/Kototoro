@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
@@ -260,6 +261,7 @@ fun AppNavGraph(
     bottomBarHeightPx: Int = 0,
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper? = null,
     modifier: Modifier = Modifier,
+    mainShellChrome: @Composable BoxScope.() -> Unit = {},
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit = {},
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit = {},
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
@@ -334,6 +336,7 @@ fun AppNavGraph(
                 onOpenSearch = onOpenSearch,
                 navigateToDetailsWithContent = navigateToDetailsWithContent,
                 navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                mainShellChrome = mainShellChrome,
             )
         }
         composable<HomeRoute> {
@@ -710,6 +713,7 @@ internal fun MainShellRouteContent(
     onOpenSearch: (SearchNavigationRequest) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+    mainShellChrome: @Composable BoxScope.() -> Unit,
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val hazeState = LocalHazeState.current
@@ -717,42 +721,45 @@ internal fun MainShellRouteContent(
     val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
         SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
     }
-    MainTopLevelNavDisplay(
-        navState = mainNavState,
-        modifier = Modifier.fillMaxSize(),
-        sharedTransitionScope = sharedTransitionScope,
-        animatedVisibilityScopeOverride = animatedVisibilityScope,
-    ) { key ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
-        ) {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                MainShellTopLevelEntryContent(
-                    key = key,
-                    navController = navController,
-                    activity = activity,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    rootView = rootView,
-                    contentPadding = contentPadding,
-                    bottomBarOffsetPx = bottomBarOffsetPx,
-                    bottomBarHeightPx = bottomBarHeightPx,
-                    pageSaveHelper = pageSaveHelper,
-                    isLandscapeNavigation = isLandscapeNavigation,
-                    mainNavigator = mainNavigator,
-                    isRouteVisible = isRouteVisible &&
-                        mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
-                    entityOrganizeResultSource = entityOrganizeResultSource,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                    onOpenSearch = onOpenSearch,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        MainTopLevelNavDisplay(
+            navState = mainNavState,
+            modifier = Modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScopeOverride = animatedVisibilityScope,
+        ) { key ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+            ) {
+                MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
+                    MainShellTopLevelEntryContent(
+                        key = key,
+                        navController = navController,
+                        activity = activity,
+                        mainActivity = mainActivity,
+                        appRouter = appRouter,
+                        rootView = rootView,
+                        contentPadding = contentPadding,
+                        bottomBarOffsetPx = bottomBarOffsetPx,
+                        bottomBarHeightPx = bottomBarHeightPx,
+                        pageSaveHelper = pageSaveHelper,
+                        isLandscapeNavigation = isLandscapeNavigation,
+                        mainNavigator = mainNavigator,
+                        isRouteVisible = isRouteVisible &&
+                            mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
+                        entityOrganizeResultSource = entityOrganizeResultSource,
+                        onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                        onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                        onOpenSearch = onOpenSearch,
+                        navigateToDetailsWithContent = navigateToDetailsWithContent,
+                        navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                    )
+                }
             }
         }
+        mainShellChrome()
     }
 }
 
