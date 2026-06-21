@@ -16,9 +16,14 @@ import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 
@@ -41,6 +46,12 @@ fun KototoroTheme(
     val expressiveComponents by settings.observeAsState(AppSettings.KEY_MATERIAL_EXPRESSIVE_COMPONENTS) {
         isMaterialExpressiveComponentsEnabled
     }
+    val appFontPreset by settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) {
+        appFontPreset
+    }
+    val expressiveAppFontPreset by settings.observeAsState(AppSettings.KEY_EXPRESSIVE_APP_FONT_PRESET) {
+        expressiveAppFontPreset
+    }
     val colorScheme = remember(context, darkTheme, dynamicColor) {
         context.resolveComposeColorScheme(darkTheme)
     }
@@ -57,8 +68,22 @@ fun KototoroTheme(
         large = RoundedCornerShape(radius * 1.5f),
         extraLarge = RoundedCornerShape(radius * 2f),
     )
-    val typography = remember(expressiveComponents) {
-        if (expressiveComponents) expressiveTypography() else Typography()
+    val activeFontPreset = if (expressiveComponents) expressiveAppFontPreset else appFontPreset
+    val googleFontProvider = remember {
+        GoogleFont.Provider(
+            providerAuthority = "com.google.android.gms.fonts",
+            providerPackage = "com.google.android.gms",
+            certificates = R.array.com_google_android_gms_fonts_certs,
+        )
+    }
+    val fontFamily = remember(activeFontPreset, googleFontProvider) {
+        activeFontPreset.toFontFamily(provider = googleFontProvider)
+    }
+    val typography = remember(expressiveComponents, fontFamily) {
+        kototoroTypography(
+            expressive = expressiveComponents,
+            defaultFontFamily = fontFamily,
+        )
     }
 
     CompositionLocalProvider(LocalMaterialExpressiveComponentsEnabled provides expressiveComponents) {
@@ -71,17 +96,59 @@ fun KototoroTheme(
     }
 }
 
-private fun expressiveTypography(): Typography {
+private fun AppFontPreset.toFontFamily(provider: GoogleFont.Provider): FontFamily? {
+    val fontName = when (this) {
+        AppFontPreset.SYSTEM -> return null
+        AppFontPreset.ROBOTO -> "Roboto"
+        AppFontPreset.ROBOTO_FLEX -> "Roboto Flex"
+        AppFontPreset.GOOGLE_SANS -> "Google Sans"
+    }
+    return FontFamily(Font(googleFont = GoogleFont(fontName), fontProvider = provider))
+}
+
+private fun kototoroTypography(
+    expressive: Boolean,
+    defaultFontFamily: FontFamily?,
+): Typography {
     val base = Typography()
+    fun androidx.compose.ui.text.TextStyle.withDefaultFont(): androidx.compose.ui.text.TextStyle {
+        return if (defaultFontFamily == null) this else copy(fontFamily = defaultFontFamily)
+    }
+    if (!expressive) {
+        return base.copy(
+            displayLarge = base.displayLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
+            displayMedium = base.displayMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
+            displaySmall = base.displaySmall.copy(letterSpacing = 0.sp).withDefaultFont(),
+            headlineLarge = base.headlineLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
+            headlineMedium = base.headlineMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
+            headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+            titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+            titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+            titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+            bodyLarge = base.bodyLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
+            bodyMedium = base.bodyMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
+            bodySmall = base.bodySmall.copy(letterSpacing = 0.sp).withDefaultFont(),
+            labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+            labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+            labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+        )
+    }
     return base.copy(
-        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, letterSpacing = 0.sp),
-        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
-        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.sp),
-        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
-        bodyMedium = base.bodyMedium.copy(letterSpacing = 0.sp),
-        bodySmall = base.bodySmall.copy(letterSpacing = 0.sp),
+        displayLarge = base.displayLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+        displayMedium = base.displayMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+        displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
+        headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
+        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
+        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
+        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 23.sp, lineHeight = 30.sp, letterSpacing = 0.sp).withDefaultFont(),
+        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 24.sp, letterSpacing = 0.sp).withDefaultFont(),
+        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, letterSpacing = 0.sp).withDefaultFont(),
+        bodyLarge = base.bodyLarge.copy(fontSize = 16.sp, lineHeight = 25.sp, letterSpacing = 0.sp).withDefaultFont(),
+        bodyMedium = base.bodyMedium.copy(fontSize = 14.sp, lineHeight = 21.sp, letterSpacing = 0.sp).withDefaultFont(),
+        bodySmall = base.bodySmall.copy(fontSize = 12.sp, lineHeight = 18.sp, letterSpacing = 0.sp).withDefaultFont(),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp).withDefaultFont(),
+        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp, letterSpacing = 0.sp).withDefaultFont(),
+        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 15.sp, letterSpacing = 0.sp).withDefaultFont(),
     )
 }
 

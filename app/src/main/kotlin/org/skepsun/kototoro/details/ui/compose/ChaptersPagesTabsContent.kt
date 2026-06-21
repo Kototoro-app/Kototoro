@@ -1,25 +1,29 @@
 package org.skepsun.kototoro.details.ui.compose
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +50,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.model.toListItem
@@ -174,30 +179,15 @@ fun ChaptersPagesTabsContent(
 			}
 
 			if (showTabStrip && tabsList.size > 1) {
-				TabRow(
+				DetailsTabsRow(
 					selectedTabIndex = safeCurrentPage,
-					containerColor = Color.Transparent,
-					modifier = Modifier
-						.fillMaxWidth()
-						.padding(horizontal = 12.dp, vertical = 8.dp),
-				) {
-					tabsList.forEachIndexed { index, tab ->
-						Tab(
-							selected = pagerState.currentPage == index,
-							onClick = {
-								coroutineScope.launch {
-									pagerState.animateScrollToPage(index)
-								}
-							},
-							icon = {
-								Icon(
-									painter = painterResource(tab.iconResId),
-									contentDescription = stringResource(tab.titleResId),
-								)
-							},
-						)
-					}
-				}
+					tabs = tabsList,
+					onTabClick = { index ->
+						coroutineScope.launch {
+							pagerState.animateScrollToPage(index)
+						}
+					},
+				)
 			}
 
 			ChaptersPagesToolbar(
@@ -302,33 +292,12 @@ private fun DetailsChapterPanels(
 
 	Column(modifier = Modifier.fillMaxSize()) {
 		if (availableModes.size > 1) {
-			TabRow(
-				selectedTabIndex = availableModes.indexOf(selectedMode),
-				containerColor = Color.Transparent,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = 12.dp, vertical = 8.dp),
-			) {
-				availableModes.forEachIndexed { index, mode ->
-					Tab(
-						selected = mode == selectedMode,
-						onClick = { selectedModeName = mode.name },
-						text = {
-							Text(
-								stringResource(
-									if (index == 0 && mode == ChapterPanelMode.METADATA) {
-										R.string.details_metadata_chapters
-									} else if (mode == ChapterPanelMode.READING) {
-										readingChapterTitleRes
-									} else {
-										R.string.details_metadata_chapters
-									},
-								),
-							)
-						},
-					)
-				}
-			}
+			ChapterModeTabsRow(
+				availableModes = availableModes,
+				selectedMode = selectedMode,
+				readingChapterTitleRes = readingChapterTitleRes,
+				onSelectMode = { selectedModeName = it.name },
+			)
 		}
 
 		when (selectedMode) {
@@ -359,6 +328,84 @@ private fun DetailsChapterPanels(
                     onSelectionStateChange = onChapterSelectionStateChange,
 				)
 			}
+		}
+	}
+}
+
+@Composable
+private fun DetailsTabsRow(
+	selectedTabIndex: Int,
+	tabs: List<DetailsTabSpec>,
+	onTabClick: (Int) -> Unit,
+) {
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	val shape = RoundedCornerShape(if (expressive) 24.dp else 0.dp)
+	val modifier = Modifier
+		.fillMaxWidth()
+		.padding(horizontal = 12.dp, vertical = 8.dp)
+		.then(
+			if (expressive) {
+				Modifier
+					.background(MaterialTheme.colorScheme.surfaceContainerLow, shape)
+					.padding(4.dp)
+			} else {
+				Modifier
+			},
+		)
+	SecondaryTabRow(
+		selectedTabIndex = selectedTabIndex,
+		containerColor = Color.Transparent,
+		contentColor = MaterialTheme.colorScheme.primary,
+		modifier = modifier,
+	) {
+		tabs.forEachIndexed { index, tab ->
+			Tab(
+				selected = selectedTabIndex == index,
+				onClick = { onTabClick(index) },
+				icon = {
+					Icon(
+						painter = painterResource(tab.iconResId),
+						contentDescription = stringResource(tab.titleResId),
+					)
+				},
+			)
+		}
+	}
+}
+
+@Composable
+private fun ChapterModeTabsRow(
+	availableModes: List<ChapterPanelMode>,
+	selectedMode: ChapterPanelMode,
+	readingChapterTitleRes: Int,
+	onSelectMode: (ChapterPanelMode) -> Unit,
+) {
+	SecondaryTabRow(
+		selectedTabIndex = availableModes.indexOf(selectedMode),
+		containerColor = Color.Transparent,
+		contentColor = MaterialTheme.colorScheme.primary,
+		modifier = Modifier
+			.fillMaxWidth()
+			.padding(horizontal = 12.dp, vertical = 8.dp),
+	) {
+		availableModes.forEachIndexed { index, mode ->
+			Tab(
+				selected = mode == selectedMode,
+				onClick = { onSelectMode(mode) },
+				text = {
+					Text(
+						stringResource(
+							if (index == 0 && mode == ChapterPanelMode.METADATA) {
+								R.string.details_metadata_chapters
+							} else if (mode == ChapterPanelMode.READING) {
+								readingChapterTitleRes
+							} else {
+								R.string.details_metadata_chapters
+							},
+						),
+					)
+				},
+			)
 		}
 	}
 }
@@ -444,10 +491,14 @@ private fun ChapterSourceTabsRow(
 	tabs: List<DetailsChapterSourceTab>,
 	onSelectTab: (DetailsChapterSourceTab) -> Unit,
 ) {
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
 	LazyRow(
 		modifier = Modifier.fillMaxWidth(),
-		contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-		horizontalArrangement = Arrangement.spacedBy(8.dp),
+		contentPadding = PaddingValues(
+			horizontal = if (expressive) 12.dp else 16.dp,
+			vertical = if (expressive) 8.dp else 10.dp,
+		),
+		horizontalArrangement = Arrangement.spacedBy(if (expressive) 6.dp else 8.dp),
 	) {
 		items(tabs, key = { it.key }) { tab ->
 			val labelText = when {
@@ -458,6 +509,19 @@ private fun ChapterSourceTabsRow(
 			FilterChip(
 				selected = tab.isSelected,
 				onClick = { onSelectTab(tab) },
+				shape = RoundedCornerShape(if (expressive) 18.dp else 8.dp),
+				colors = if (expressive) {
+					FilterChipDefaults.filterChipColors(
+						containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+						selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+						labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+						selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+						iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+						selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+					)
+				} else {
+					FilterChipDefaults.filterChipColors()
+				},
 				label = {
 					Text(text = labelText)
 				},

@@ -6,6 +6,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,6 +33,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.iconResForUi
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.explore.ui.ExploreViewModel
 import org.skepsun.kototoro.explore.ui.model.ContentSourceItem
@@ -127,7 +129,7 @@ fun KototoroExploreSourcesScreen(
                             )
                             if (listModel.buttonTextRes != 0) {
                                 Icon(
-                                    imageVector = Icons.Default.KeyboardArrowRight,
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = "More",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -327,21 +329,41 @@ fun KototoroSourceCard(
     val context = LocalContext.current
     val title = item.source.getTitle(context)
     val summary = item.source.getSummary(context)
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val cardShape = RoundedCornerShape(if (expressive) 20.dp else 12.dp)
+    val listShape = RoundedCornerShape(if (expressive) 22.dp else 0.dp)
+    val iconShape = RoundedCornerShape(if (expressive) 14.dp else 8.dp)
+    val containerColor = when {
+        isSelected -> MaterialTheme.colorScheme.secondaryContainer
+        expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+        else -> MaterialTheme.colorScheme.surface
+    }
 
     if (isGrid) {
         Card(
-            modifier = modifier.padding(4.dp),
+            modifier = modifier.padding(if (expressive) 6.dp else 4.dp),
+            shape = cardShape,
             colors = CardDefaults.cardColors(
-                containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+                containerColor = containerColor
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = if (expressive) 0.dp else 2.dp),
+            border = if (expressive) {
+                CardDefaults.outlinedCardBorder()
+            } else {
+                null
+            },
         ) {
             Column(
-                modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                modifier = Modifier.padding(if (expressive) 14.dp else 12.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = iconShape,
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -364,16 +386,17 @@ fun KototoroSourceCard(
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-                .padding(vertical = 12.dp, horizontal = 16.dp),
+                .padding(horizontal = if (expressive) 8.dp else 0.dp, vertical = if (expressive) 3.dp else 0.dp)
+                .background(containerColor, listShape)
+                .padding(vertical = if (expressive) 10.dp else 12.dp, horizontal = if (expressive) 14.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(48.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp)
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = iconShape
                     ),
                 contentAlignment = Alignment.Center
             ) {

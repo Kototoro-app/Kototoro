@@ -37,6 +37,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -116,6 +117,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -332,6 +334,13 @@ private fun HomeHighlightsSections(
     onRecentSearchClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val sectionShape = RoundedCornerShape(if (expressive) 28.dp else 20.dp)
+    val sectionColor = if (expressive) {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.64f)
+    }
     val newChaptersLabel = stringResource(R.string.new_chapters)
     val historyDisplayItems = remember(historyItems) {
         historyItems.take(HOME_CONTENT_RAIL_PREVIEW_LIMIT).map {
@@ -375,8 +384,8 @@ private fun HomeHighlightsSections(
     ) {
         if (updateItems.isNotEmpty()) {
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.64f),
+                shape = sectionShape,
+                color = sectionColor,
                 tonalElevation = 0.dp,
             ) {
                 HomeContentRowSection(
@@ -396,8 +405,8 @@ private fun HomeHighlightsSections(
         }
         if (historyItems.isNotEmpty()) {
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.64f),
+                shape = sectionShape,
+                color = sectionColor,
                 tonalElevation = 0.dp,
             ) {
                 HomeContentRowSection(
@@ -417,8 +426,8 @@ private fun HomeHighlightsSections(
         }
         if (recommendationItems.isNotEmpty()) {
             Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.64f),
+                shape = sectionShape,
+                color = sectionColor,
                 tonalElevation = 0.dp,
             ) {
                 HomeContentRowSection(
@@ -797,6 +806,17 @@ private fun HomeRecentSearchSection(
     onQueryClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val chipShape = RoundedCornerShape(if (expressive) 18.dp else 8.dp)
+    val chipColors = AssistChipDefaults.assistChipColors(
+        containerColor = if (expressive) {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        labelColor = MaterialTheme.colorScheme.onSurface,
+        trailingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -826,6 +846,8 @@ private fun HomeRecentSearchSection(
             queries.forEach { query ->
                 AssistChip(
                     onClick = { onQueryClick(query) },
+                    shape = chipShape,
+                    colors = chipColors,
                     trailingIcon = {
                         Icon(
                             painter = painterResource(R.drawable.ic_history),
@@ -862,6 +884,7 @@ private fun HomeContentRowSection(
 ) {
     if (items.isEmpty()) return
     val rowState = rememberLazyListState()
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
     val showMoreButton = true
     val railPages = remember(items, listMode) {
@@ -902,14 +925,29 @@ private fun HomeContentRowSection(
                 )
             }
             if (showMoreButton) {
-                TextButton(
-                    onClick = onMoreClick,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.more),
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+                if (expressive) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.clickable(onClick = onMoreClick),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.more),
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                } else {
+                    TextButton(
+                        onClick = onMoreClick,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.more),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                 }
             }
         }
@@ -1025,9 +1063,6 @@ private fun HomeListRailPage(
                     listMode = listMode,
                     onClick = onItemClick,
                 )
-            }
-            repeat((HOME_LIST_RAIL_PAGE_SIZE - items.size).coerceAtLeast(0)) {
-                Spacer(modifier = Modifier.height(homeListRailPlaceholderHeight(listMode)))
             }
         }
     }
@@ -1286,12 +1321,6 @@ private fun calculateHomeListRailPageWidth(maxWidth: Dp, listMode: ListMode): Dp
     return targetWidth.coerceAtMost(maxPageWidth).coerceAtLeast(HOME_LIST_RAIL_PAGE_MIN_WIDTH)
 }
 
-private fun homeListRailPlaceholderHeight(listMode: ListMode): Dp = when (listMode) {
-    ListMode.LIST -> 78.dp
-    ListMode.DETAILED_LIST -> 108.dp
-    ListMode.GRID -> 0.dp
-}
-
 @Immutable
 private data class HomeCoverDisplayItem(
     val content: Content,
@@ -1384,11 +1413,21 @@ private fun QuickAccessButton(
     compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
+        shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+        color = if (expressive) {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        tonalElevation = if (expressive) 0.dp else 1.dp,
+        border = if (expressive) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f))
+        } else {
+            null
+        },
     ) {
         if (compact) {
             Column(
@@ -1399,11 +1438,11 @@ private fun QuickAccessButton(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(
-                    painter = painterResource(action.iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = if (action.enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                HomeQuickActionIcon(
+                    iconRes = action.iconRes,
+                    enabled = action.enabled,
+                    expressive = expressive,
+                    modifier = Modifier.size(if (expressive) 36.dp else 18.dp),
                 )
                 Text(
                     text = action.label,
@@ -1423,11 +1462,11 @@ private fun QuickAccessButton(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter = painterResource(action.iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (action.enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                HomeQuickActionIcon(
+                    iconRes = action.iconRes,
+                    enabled = action.enabled,
+                    expressive = expressive,
+                    modifier = Modifier.size(if (expressive) 38.dp else 20.dp),
                 )
                 Text(
                     text = action.label,
@@ -1439,6 +1478,47 @@ private fun QuickAccessButton(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HomeQuickActionIcon(
+    iconRes: Int,
+    enabled: Boolean,
+    expressive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val tint = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
+    if (expressive) {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (enabled) 0.88f else 0.36f),
+            contentColor = tint,
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = tint,
+                )
+            }
+        }
+    } else {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            modifier = modifier,
+            tint = tint,
+        )
     }
 }
 

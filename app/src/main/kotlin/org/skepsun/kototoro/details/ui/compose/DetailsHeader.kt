@@ -128,6 +128,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
@@ -156,6 +157,14 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.parsers.model.ContentType
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
+    return copy(alpha = alpha.coerceAtLeast(minAlpha))
+}
+
+private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70f)
+
+private fun Color.detailsButtonContainerColor(): Color = withDetailsMinAlpha(0.80f)
 
 private const val DetailsSourceOverlayMinOpacityPercent = 80
 
@@ -542,18 +551,13 @@ fun DetailsHeader(
 
         val showInfoCard = metadataSourceOptions.isNotEmpty() || readingSourceOptions.isNotEmpty() || infoItems.isNotEmpty()
         if (showInfoCard) {
-            GlassSurface(
+            DetailsInfoPanelSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
                         val bounds = coordinates.boundsInRoot()
                         onInfoCardBoundsSync(bounds.top, bounds.bottom)
                     },
-                style = GlassDefaults.subtleStyle().copy(
-                    containerAlpha = 0.76f,
-                    borderAlpha = 0.20f,
-                ),
-                shape = RoundedCornerShape(24.dp),
             ) {
                 Column(
                     modifier = Modifier
@@ -701,6 +705,8 @@ fun DetailsHeader(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            val expressive = LocalMaterialExpressiveComponentsEnabled.current
+            val expressiveContainerColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -712,27 +718,69 @@ fun DetailsHeader(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (canExpandDescription) {
+                    if (expressive) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = expressiveContainerColors.containerColor.detailsButtonContainerColor(),
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp,
+                            border = expressiveContainerColors.border,
+                        ) {
+                            Text(
+                                text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier
+                                    .clickable { isDescriptionExpanded = !isDescriptionExpanded }
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded },
+                        )
+                    }
+                }
+            }
+            val descriptionContent: @Composable () -> Unit = {
+                SelectionContainer {
                     Text(
-                        text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded }
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            SelectionContainer {
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
-                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (expressive) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    color = expressiveContainerColors.containerColor.detailsPanelContainerColor(),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    border = expressiveContainerColors.border,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                ) {
+                    Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                        descriptionContent()
+                    }
+                }
+            } else {
+                descriptionContent()
             }
         }
 
         if (!content?.tags.isNullOrEmpty()) {
+            val expressive = LocalMaterialExpressiveComponentsEnabled.current
+            val expressiveChipColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 24.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     FlowRow(
@@ -745,6 +793,7 @@ fun DetailsHeader(
                             SuggestionChip(
                                 onClick = { onTagClick(tag) },
                                 modifier = Modifier.heightIn(min = 24.dp),
+                                shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
                                 label = {
                                     Text(
                                         text = tag.title,
@@ -756,6 +805,8 @@ fun DetailsHeader(
                                 colors = SuggestionChipDefaults.suggestionChipColors(
                                     containerColor = if (isSensitiveTag) {
                                         Color(0xFFE3B341).copy(alpha = 0.22f)
+                                    } else if (expressive) {
+                                        expressiveChipColors.containerColor.detailsButtonContainerColor()
                                     } else {
                                         MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
                                     },
@@ -769,6 +820,10 @@ fun DetailsHeader(
                                     enabled = true,
                                     borderColor = if (isSensitiveTag) {
                                         Color(0xFFE3B341).copy(alpha = 0.68f)
+                                    } else if (expressive) {
+                                        MaterialTheme.colorScheme.outlineVariant.copy(
+                                            alpha = expressiveChipColors.containerColor.alpha.coerceAtMost(0.42f),
+                                        )
                                     } else {
                                         MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
                                     },
@@ -783,22 +838,34 @@ fun DetailsHeader(
 }
 
 @Composable
+private fun DetailsInfoPanelSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    GlassSurface(
+        modifier = modifier,
+        style = GlassDefaults.subtleStyle().copy(
+            containerAlpha = if (expressive) 0.78f else 0.76f,
+            borderAlpha = if (expressive) 0.24f else 0.20f,
+        ),
+        shape = RoundedCornerShape(if (expressive) 28.dp else 24.dp),
+    ) {
+        content()
+    }
+}
+
+@Composable
 private fun TrackingSuggestionCard(
     match: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult,
     onBindClick: () -> Unit,
     onOpenClick: () -> Unit,
     onIgnoreClick: () -> Unit,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val defaultLocale = Locale.getDefault()
     val confidenceLabel = String.format(defaultLocale, "%.0f%%", match.confidence * 100f)
-    GlassSurface(
-        modifier = Modifier.fillMaxWidth(),
-        style = GlassDefaults.subtleStyle().copy(
-            containerAlpha = 0.78f,
-            borderAlpha = 0.22f,
-        ),
-        shape = RoundedCornerShape(22.dp),
-    ) {
+    val cardContent: @Composable () -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -857,6 +924,7 @@ private fun TrackingSuggestionCard(
             ) {
                 SuggestionChip(
                     onClick = onBindClick,
+                    shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
                     label = { Text(stringResource(R.string.tracking_bind_suggestion_action)) },
                     icon = {
                         Icon(
@@ -871,6 +939,7 @@ private fun TrackingSuggestionCard(
                 )
                 SuggestionChip(
                     onClick = onOpenClick,
+                    shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
                     label = { Text(stringResource(R.string.details_tracking_suggestion_view)) },
                     colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
@@ -882,6 +951,7 @@ private fun TrackingSuggestionCard(
                 )
                 SuggestionChip(
                     onClick = onIgnoreClick,
+                    shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
                     label = { Text(stringResource(R.string.details_tracking_suggestion_ignore)) },
                     colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
@@ -893,6 +963,16 @@ private fun TrackingSuggestionCard(
                 )
             }
         }
+    }
+    GlassSurface(
+        modifier = Modifier.fillMaxWidth(),
+        style = GlassDefaults.subtleStyle().copy(
+            containerAlpha = 0.78f,
+            borderAlpha = if (expressive) 0.26f else 0.22f,
+        ),
+        shape = RoundedCornerShape(if (expressive) 28.dp else 22.dp),
+    ) {
+        cardContent()
     }
 }
 
@@ -1113,6 +1193,8 @@ private fun DetailsSourceSelectorButton(
     isMenuEnabled: Boolean,
     onMenuClick: () -> Unit,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val sourceSelectorColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val isPrimaryEnabled = currentDisplayModel != null
 
     Column(
@@ -1125,9 +1207,22 @@ private fun DetailsSourceSelectorButton(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
+            shape = RoundedCornerShape(if (expressive) 22.dp else 16.dp),
+            color = if (expressive) {
+                sourceSelectorColors.containerColor.detailsButtonContainerColor()
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
+            },
+            border = BorderStroke(
+                1.dp,
+                if (expressive) {
+                    MaterialTheme.colorScheme.outlineVariant.copy(
+                        alpha = sourceSelectorColors.containerColor.alpha.coerceAtMost(0.34f),
+                    )
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)
+                },
+            ),
         ) {
             Row(
                 modifier = Modifier
@@ -1173,34 +1268,18 @@ private fun DetailsSourceSelectorButton(
                             )
                         }
                     }
-                    Column(
+                    Text(
+                        text = currentDisplayModel?.selectorTitle.orEmpty(),
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(1.dp),
-                    ) {
-                        Text(
-                            text = currentDisplayModel?.selectorTitle.orEmpty(),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = if (isPrimaryEnabled) {
-                                MaterialTheme.colorScheme.onSurface
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        currentDisplayModel
-                            ?.selectorSubtitle
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let { subtitle ->
-                                Text(
-                                    text = subtitle,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                    }
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = if (isPrimaryEnabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 Box(
                     modifier = Modifier
@@ -1309,6 +1388,7 @@ private fun SourceOptionCard(
     var statusMenuExpanded by remember(displayModel.linkedTrackingItem?.service, displayModel.linkedTrackingItem?.remoteId) {
         mutableStateOf(false)
     }
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val optionCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = modifier
@@ -1317,10 +1397,19 @@ private fun SourceOptionCard(
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(if (expressive) 20.dp else 12.dp),
         color = when {
-            displayModel.isActiveProjection -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-            displayModel.isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            displayModel.isActiveProjection -> if (expressive) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+            }
+            displayModel.isSelected -> if (expressive) {
+                optionCardColors.containerColor.detailsButtonContainerColor()
+            } else {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            }
+            expressive -> optionCardColors.containerColor.detailsPanelContainerColor()
             else -> optionCardColors.containerColor
         },
         border = when {
@@ -2162,9 +2251,16 @@ private fun SourceSearchField(
     modifier: Modifier = Modifier,
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(22.dp)
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val shape = RoundedCornerShape(if (expressive) 999.dp else 22.dp)
     val searchFieldColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
-    val containerColor = if (isFocused) {
+    val containerColor = if (expressive) {
+        if (isFocused) {
+            searchFieldColors.containerColor.detailsButtonContainerColor()
+        } else {
+            searchFieldColors.containerColor.detailsButtonContainerColor()
+        }
+    } else if (isFocused) {
         searchFieldColors.containerColor
     } else {
         searchFieldColors.containerColor.copy(
@@ -2176,7 +2272,11 @@ private fun SourceSearchField(
             modifier = modifier.height(44.dp),
             shape = shape,
             color = containerColor,
-            border = searchFieldColors.border,
+            border = if (expressive) {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f))
+            } else {
+                searchFieldColors.border
+            },
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
@@ -2237,6 +2337,7 @@ private fun DetailsSourceOverlayDialog(
     content: @Composable (panelDragModifier: Modifier) -> Unit,
 ) {
     var panelOffsetY by remember { mutableFloatStateOf(0f) }
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val panelColors = rememberGlassSurfaceColors(
         style = GlassDefaults.regularStyle(),
         glassPrefs = rememberDetailsSourceOverlayGlassPrefs(),
@@ -2288,8 +2389,8 @@ private fun DetailsSourceOverlayDialog(
                         indication = null,
                         onClick = {},
                 ),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                color = panelColors.containerColor,
+                shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
+                color = panelColors.containerColor.detailsPanelContainerColor(),
                 border = panelColors.border,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp,
@@ -2324,8 +2425,13 @@ private fun DetailsSourceOverlayDialog(
 private fun rememberDetailsSourceOverlayGlassPrefs() =
     rememberGlassPrefsOrFallback().let { prefs ->
         remember(prefs) {
+            val minOpacity = if (prefs.isGlassEffectEnabled) {
+                prefs.hazeOpacityPercent
+            } else {
+                prefs.hazeOpacityPercent.coerceAtLeast(DetailsSourceOverlayMinOpacityPercent)
+            }
             prefs.copy(
-                hazeOpacityPercent = prefs.hazeOpacityPercent.coerceAtLeast(DetailsSourceOverlayMinOpacityPercent),
+                hazeOpacityPercent = minOpacity,
             )
         }
     }
@@ -2416,11 +2522,12 @@ private fun ReadingSearchSection(
     onMigrateClick: (Content) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val sectionColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = sectionColors.containerColor,
+        shape = RoundedCornerShape(if (expressive) 28.dp else 20.dp),
+        color = sectionColors.containerColor.detailsPanelContainerColor(),
         border = sectionColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -2493,11 +2600,7 @@ private fun SourceOptionSheetRow(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    GlassSurface(
-        modifier = Modifier.fillMaxWidth(),
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(20.dp),
-    ) {
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2530,6 +2633,9 @@ private fun SourceOptionSheetRow(
             }
         }
     }
+    DetailsSearchRowSurface {
+        content()
+    }
 }
 
 @Composable
@@ -2537,11 +2643,7 @@ private fun TrackingSearchResultRow(
     item: TrackingSiteItem,
     onClick: () -> Unit,
 ) {
-    GlassSurface(
-        modifier = Modifier.fillMaxWidth(),
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(20.dp),
-    ) {
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2586,6 +2688,33 @@ private fun TrackingSearchResultRow(
             }
         }
     }
+    DetailsSearchRowSurface {
+        content()
+    }
+}
+
+@Composable
+private fun DetailsSearchRowSurface(
+    content: @Composable () -> Unit,
+) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    if (expressive) {
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            style = GlassDefaults.subtleStyle(),
+            shape = RoundedCornerShape(24.dp),
+        ) {
+            content()
+        }
+    } else {
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            style = GlassDefaults.subtleStyle(),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            content()
+        }
+    }
 }
 
 @Composable
@@ -2595,11 +2724,12 @@ private fun TrackingSearchResultCard(
     onBindClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
         modifier = modifier.width(108.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = resultCardColors.containerColor,
+        shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+        color = resultCardColors.containerColor.detailsPanelContainerColor(),
         border = resultCardColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -2724,6 +2854,7 @@ private fun ReadingSearchResultRow(
 ) {
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val coverUrl = item.coverUrl?.takeIfUsableImageUri()
     val coverRequest = remember(item.id, coverUrl, item.source) {
@@ -2810,6 +2941,7 @@ private fun ReadingSearchResultCard(
 ) {
     val latestChapterInfo = remember(item) { item.readingSearchLatestChapterInfo() }
     val context = LocalContext.current
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val resultCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val coverUrl = item.coverUrl?.takeIfUsableImageUri()
     val coverRequest = remember(item.id, coverUrl, item.source) {
@@ -2822,8 +2954,8 @@ private fun ReadingSearchResultCard(
     }
     Surface(
         modifier = modifier.width(108.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = resultCardColors.containerColor,
+        shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
+        color = resultCardColors.containerColor.detailsPanelContainerColor(),
         border = resultCardColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,

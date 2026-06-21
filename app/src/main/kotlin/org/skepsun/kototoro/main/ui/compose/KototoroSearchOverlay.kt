@@ -48,8 +48,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -87,6 +85,7 @@ import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
@@ -104,11 +103,65 @@ import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
 private const val SearchOverlayAnimationDurationMillis = 260
 private val SearchOverlayCollapsedHeight = 56.dp
 private val SearchOverlayCollapsedHorizontalPadding = 10.dp
-private val SearchOverlayCollapsedCornerRadius = 24.dp
 private val SearchSuggestionCardWidth = 108.dp
-private val SearchSuggestionCardCornerRadius = 8.dp
-private val SearchSuggestionCardInnerCornerRadius = 6.dp
-private val SearchSuggestionChipHeight = 28.dp
+
+private data class SearchOverlayStyle(
+    val collapsedCornerRadius: Dp,
+    val inputHeight: Dp,
+    val inputCornerRadius: Dp,
+    val inputContainerColor: Color,
+    val panelContainerColor: Color,
+    val listHorizontalPadding: Dp,
+    val listVerticalSpacing: Dp,
+    val rowCornerRadius: Dp,
+    val rowContainerColor: Color,
+    val rowVerticalPadding: Dp,
+    val chipHeight: Dp,
+    val chipCornerRadius: Dp,
+    val cardCornerRadius: Dp,
+    val cardInnerCornerRadius: Dp,
+)
+
+@Composable
+private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val colorScheme = MaterialTheme.colorScheme
+    return if (expressive) {
+        SearchOverlayStyle(
+            collapsedCornerRadius = 28.dp,
+            inputHeight = 52.dp,
+            inputCornerRadius = 26.dp,
+            inputContainerColor = colorScheme.surfaceContainerHigh,
+            panelContainerColor = colorScheme.surfaceContainerLowest,
+            listHorizontalPadding = 12.dp,
+            listVerticalSpacing = 4.dp,
+            rowCornerRadius = 18.dp,
+            rowContainerColor = colorScheme.surfaceContainerLow,
+            rowVerticalPadding = 10.dp,
+            chipHeight = 28.dp,
+            chipCornerRadius = 14.dp,
+            cardCornerRadius = 16.dp,
+            cardInnerCornerRadius = 12.dp,
+        )
+    } else {
+        SearchOverlayStyle(
+            collapsedCornerRadius = 16.dp,
+            inputHeight = 48.dp,
+            inputCornerRadius = 12.dp,
+            inputContainerColor = colorScheme.surfaceVariant.copy(alpha = 0.72f),
+            panelContainerColor = colorScheme.surface,
+            listHorizontalPadding = 8.dp,
+            listVerticalSpacing = 0.dp,
+            rowCornerRadius = 0.dp,
+            rowContainerColor = Color.Transparent,
+            rowVerticalPadding = 12.dp,
+            chipHeight = 32.dp,
+            chipCornerRadius = 8.dp,
+            cardCornerRadius = 8.dp,
+            cardInnerCornerRadius = 8.dp,
+        )
+    }
+}
 
 @Composable
 fun KototoroSearchOverlay(
@@ -160,6 +213,7 @@ fun KototoroSearchOverlay(
     var advancedTitle by remember { mutableStateOf("") }
     var advancedTags by remember { mutableStateOf("") }
     var advancedAuthor by remember { mutableStateOf("") }
+    val style = rememberSearchOverlayStyle()
 
     LaunchedEffect(visible) {
         animatedVisible = visible
@@ -240,7 +294,7 @@ fun KototoroSearchOverlay(
             )
         },
         label = "search_overlay_corner_radius",
-    ) { isVisible -> if (isVisible) 0.dp else SearchOverlayCollapsedCornerRadius }
+    ) { isVisible -> if (isVisible) 0.dp else style.collapsedCornerRadius }
     val suggestionsAlpha = ((progress - 0.28f) / 0.72f).coerceIn(0f, 1f)
 
     BoxWithConstraints(
@@ -265,7 +319,7 @@ fun KototoroSearchOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.38f * progress)),
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.24f * progress)),
         )
         Column(
             modifier = Modifier
@@ -274,7 +328,7 @@ fun KototoroSearchOverlay(
                 .padding(horizontal = horizontalPadding)
                 .height(panelHeight)
                 .clip(RoundedCornerShape(cornerRadius))
-                .background(MaterialTheme.colorScheme.surface),
+                .background(style.panelContainerColor),
         ) {
             Column(
                 modifier = Modifier
@@ -284,7 +338,7 @@ fun KototoroSearchOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onDismissRequest) {
@@ -300,7 +354,11 @@ fun KototoroSearchOverlay(
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 2.dp)
-                            .height(48.dp)
+                            .height(style.inputHeight)
+                            .background(
+                                color = style.inputContainerColor,
+                                shape = RoundedCornerShape(style.inputCornerRadius),
+                            )
                             .focusRequester(focusRequester),
                         placeholder = {
                             Text(
@@ -424,7 +482,7 @@ fun KototoroSearchOverlay(
                     }
                 }
             }
-            HorizontalDivider()
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
             SuggestionList(
                 suggestions = suggestions,
                 bottomPadding = navigationBarPadding.calculateBottomPadding(),
@@ -450,6 +508,7 @@ fun KototoroSearchOverlay(
                 },
                 onSourceSuggestionClick = onSourceSuggestionClick,
                 onDeleteQuery = onDeleteQuery,
+                style = style,
             )
         }
     }
@@ -548,6 +607,7 @@ private fun SuggestionList(
     suggestions: List<SearchSuggestionItem>,
     bottomPadding: Dp,
     modifier: Modifier = Modifier,
+    style: SearchOverlayStyle,
     onRecentQueryClick: (String) -> Unit,
     onHintClick: (String) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
@@ -560,7 +620,13 @@ private fun SuggestionList(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding + 8.dp),
+        contentPadding = PaddingValues(
+            start = style.listHorizontalPadding,
+            top = 10.dp,
+            end = style.listHorizontalPadding,
+            bottom = bottomPadding + 10.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(style.listVerticalSpacing),
     ) {
         items(
             items = suggestions,
@@ -595,12 +661,15 @@ private fun SuggestionList(
         ) { item ->
             when (item) {
                 is SearchSuggestionItem.RecentQuery -> {
-                    ListItem(
-                        headlineContent = { Text(item.query) },
-                        leadingContent = {
+                    SearchSuggestionRow(
+                        text = item.query,
+                        onClick = { onRecentQueryClick(item.query) },
+                        style = style,
+                        leadingIcon = {
                             Icon(
-                                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_history),
+                                painter = painterResource(R.drawable.ic_history),
                                 contentDescription = null,
+                                modifier = Modifier.size(20.dp),
                             )
                         },
                         trailingContent = {
@@ -612,42 +681,42 @@ private fun SuggestionList(
                                 )
                             }
                         },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.clickable { onRecentQueryClick(item.query) },
                     )
                 }
 
                 is SearchSuggestionItem.Hint -> {
-                    ListItem(
-                        headlineContent = { Text(item.query) },
-                        leadingContent = {
+                    SearchSuggestionRow(
+                        text = item.query,
+                        onClick = { onHintClick(item.query) },
+                        style = style,
+                        leadingIcon = {
                             Icon(
                                 imageVector = Icons.Filled.Search,
                                 contentDescription = null,
+                                modifier = Modifier.size(20.dp),
                             )
                         },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.clickable { onHintClick(item.query) },
                     )
                 }
 
                 is SearchSuggestionItem.Author -> {
-                    ListItem(
-                        headlineContent = { Text(item.name) },
-                        leadingContent = {
+                    SearchSuggestionRow(
+                        text = item.name,
+                        onClick = { onAuthorSuggestionClick(item.name) },
+                        style = style,
+                        leadingIcon = {
                             Icon(
                                 imageVector = Icons.Filled.Person,
                                 contentDescription = null,
+                                modifier = Modifier.size(20.dp),
                             )
                         },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.clickable { onAuthorSuggestionClick(item.name) },
                     )
                 }
 
                 is SearchSuggestionItem.Tags -> {
                     LazyRow(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(item.tags, contentType = { "tag_chip" }) { chip ->
@@ -655,8 +724,8 @@ private fun SuggestionList(
                             AssistChip(
                                 onClick = { tag?.let(onTagSuggestionClick) },
                                 label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
-                                modifier = Modifier.height(SearchSuggestionChipHeight),
-                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.height(style.chipHeight),
+                                shape = RoundedCornerShape(style.chipCornerRadius),
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                                 ),
@@ -669,6 +738,7 @@ private fun SuggestionList(
                     SourceSuggestionRow(
                         source = item.source,
                         onClick = { onSourceSuggestionClick(item.source) },
+                        style = style,
                     )
                 }
 
@@ -676,6 +746,7 @@ private fun SuggestionList(
                     SourceSuggestionRow(
                         source = item.source,
                         onClick = { onSourceSuggestionClick(item.source) },
+                        style = style,
                     )
                 }
 
@@ -684,7 +755,6 @@ private fun SuggestionList(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(
@@ -695,6 +765,7 @@ private fun SuggestionList(
                             ContentSuggestionCard(
                                 content = content,
                                 onClick = { onContentSuggestionClick(content) },
+                                style = style,
                             )
                         }
                     }
@@ -705,7 +776,6 @@ private fun SuggestionList(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(
@@ -716,6 +786,7 @@ private fun SuggestionList(
                             LocalEntitySuggestionCard(
                                 suggestion = suggestion,
                                 onClick = { onLocalEntitySuggestionClick(suggestion) },
+                                style = style,
                             )
                         }
                     }
@@ -726,7 +797,6 @@ private fun SuggestionList(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(
@@ -737,6 +807,7 @@ private fun SuggestionList(
                             TrackingEntitySuggestionCard(
                                 entity = entity,
                                 onClick = { onTrackingEntitySuggestionClick(entity) },
+                                style = style,
                             )
                         }
                     }
@@ -744,9 +815,11 @@ private fun SuggestionList(
 
                 is SearchSuggestionItem.Text -> {
                     if (item.textResId != 0) {
-                        ListItem(
-                            headlineContent = { Text(stringResource(item.textResId)) },
-                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                        Text(
+                            text = stringResource(item.textResId),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -756,16 +829,65 @@ private fun SuggestionList(
 }
 
 @Composable
+private fun SearchSuggestionRow(
+    text: String,
+    onClick: () -> Unit,
+    style: SearchOverlayStyle,
+    leadingIcon: @Composable () -> Unit,
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(style.rowCornerRadius),
+        color = style.rowContainerColor,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, top = style.rowVerticalPadding, end = 8.dp, bottom = style.rowVerticalPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.size(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                leadingIcon()
+            }
+            Text(
+                text = text,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (trailingContent != null) {
+                trailingContent()
+            }
+        }
+    }
+}
+
+@Composable
 private fun SourceSuggestionRow(
     source: ContentSource,
     onClick: () -> Unit,
+    style: SearchOverlayStyle,
 ) {
     val sourceTitle = rememberResolvedSourceTitle(source)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .background(
+                color = style.rowContainerColor,
+                shape = RoundedCornerShape(style.rowCornerRadius),
+            )
+            .padding(horizontal = 14.dp, vertical = style.rowVerticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -808,6 +930,7 @@ private fun SourceSuggestionRow(
 private fun TrackingEntitySuggestionCard(
     entity: TrackingEntity,
     onClick: () -> Unit,
+    style: SearchOverlayStyle,
 ) {
     val context = LocalContext.current
     val imageRequest = remember(entity.service, entity.entityType, entity.remoteId, entity.coverUrl) {
@@ -822,9 +945,9 @@ private fun TrackingEntitySuggestionCard(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(SearchSuggestionCardCornerRadius),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(style.cardCornerRadius),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -834,7 +957,7 @@ private fun TrackingEntitySuggestionCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(if (entity.entityType == EntityType.WORK) 0.7f else 1f)
-                    .clip(RoundedCornerShape(SearchSuggestionCardInnerCornerRadius))
+                    .clip(RoundedCornerShape(style.cardInnerCornerRadius))
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
@@ -889,6 +1012,7 @@ private fun EntityType.iconResId(): Int = when (this) {
 private fun ContentSuggestionCard(
     content: Content,
     onClick: () -> Unit,
+    style: SearchOverlayStyle,
 ) {
     val context = LocalContext.current
     val sourceTitle = rememberResolvedSourceTitle(content.source)
@@ -904,7 +1028,7 @@ private fun ContentSuggestionCard(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(SearchSuggestionCardCornerRadius),
+        shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
             width = 1.dp,
@@ -947,6 +1071,7 @@ private fun ContentSuggestionCard(
 private fun LocalEntitySuggestionCard(
     suggestion: LocalEntitySuggestion,
     onClick: () -> Unit,
+    style: SearchOverlayStyle,
 ) {
     val representative = suggestion.representative
     val context = LocalContext.current
@@ -963,7 +1088,7 @@ private fun LocalEntitySuggestionCard(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(SearchSuggestionCardCornerRadius),
+        shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
             width = 1.dp,

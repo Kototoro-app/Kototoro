@@ -115,6 +115,7 @@ import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.rememberVerticalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.image.panoramaBlur
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
@@ -1448,14 +1449,23 @@ private fun SourceQuickAccessCard(
     val actualSource = source.source.mangaSource
     val title = actualSource.getTitle(context)
     val isGridCard = browseListMode == ListMode.GRID
-    val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(if (isGridCard) 14.dp else 12.dp)
-    val cardBackground = if (isSelected) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        MaterialTheme.colorScheme.background
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val cardShape = RoundedCornerShape(
+        when {
+            expressive && isGridCard -> 20.dp
+            expressive -> 18.dp
+            isGridCard -> 14.dp
+            else -> 12.dp
+        },
+    )
+    val iconShape = RoundedCornerShape(if (expressive) 14.dp else if (isGridCard) 14.dp else 12.dp)
+    val cardBackground = when {
+        isSelected -> MaterialTheme.colorScheme.secondaryContainer
+        expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+        else -> MaterialTheme.colorScheme.background
     }
     val iconBackground = MaterialTheme.colorScheme.surfaceVariant.copy(
-        alpha = if (isGridCard) 0.44f else 0.52f,
+        alpha = if (expressive) 0.62f else if (isGridCard) 0.44f else 0.52f,
     )
 
     if (isGridCard) {
@@ -1465,6 +1475,17 @@ private fun SourceQuickAccessCard(
                 .height(metrics.cardHeight)
                 .clip(cardShape)
                 .background(cardBackground)
+                .then(
+                    if (expressive && !isSelected) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+                            shape = cardShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
@@ -1476,7 +1497,7 @@ private fun SourceQuickAccessCard(
             Box(
                 modifier = Modifier
                     .size(metrics.iconContainerSize)
-                    .clip(cardShape)
+                    .clip(iconShape)
                     .background(iconBackground),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1527,6 +1548,17 @@ private fun SourceQuickAccessCard(
                 .height(56.dp)
                 .clip(cardShape)
                 .background(cardBackground)
+                .then(
+                    if (expressive && !isSelected) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                            shape = cardShape,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
@@ -1538,7 +1570,7 @@ private fun SourceQuickAccessCard(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(cardShape)
+                    .clip(iconShape)
                     .background(iconBackground),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1773,6 +1805,13 @@ private fun BrowsePopularListItem(
     val heroTransitionInProgress = LocalHeroTransitionInProgress.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val surfaceShape = RoundedCornerShape(if (expressive) 28.dp else 24.dp)
+    val chipColor = if (expressive) {
+        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+    }
     val backgroundRequest = remember(item.coverUrl, item.id, panoramaCoverBlur) {
         buildExploreCoverRequest(
             context = context,
@@ -1806,9 +1845,13 @@ private fun BrowsePopularListItem(
                     onClick()
                 },
             ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.16f),
-        tonalElevation = 1.dp,
+        shape = surfaceShape,
+        color = if (expressive) {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.16f)
+        },
+        tonalElevation = if (expressive) 0.dp else 1.dp,
     ) {
         Box(
             modifier = Modifier
@@ -1884,8 +1927,8 @@ private fun BrowsePopularListItem(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(8.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                            shape = RoundedCornerShape(999.dp),
+                            color = chipColor,
                         ) {
                             Text(
                                 text = scoreText,
@@ -1940,8 +1983,12 @@ private fun BrowsePopularListItem(
                         )
                     }
                     Surface(
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.70f),
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (expressive) {
+                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f)
+                        } else {
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.70f)
+                        },
                     ) {
                         Text(
                             text = item.source.getTitle(context),
@@ -1969,6 +2016,12 @@ private fun TrackingCompactPoster(
     val heroTransitionInProgress = LocalHeroTransitionInProgress.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val scoreChipColor = if (expressive) {
+        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.9f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+    }
     val imageRequest = remember(item.coverUrl, item.id) {
         buildExploreCoverRequest(
             context = context,
@@ -2027,8 +2080,8 @@ private fun TrackingCompactPoster(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    shape = RoundedCornerShape(999.dp),
+                    color = scoreChipColor,
                 ) {
                     Text(
                         text = scoreText,

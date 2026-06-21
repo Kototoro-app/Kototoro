@@ -36,12 +36,16 @@ fun ChapterListCard(
 	}
 	val alphaFactor = if (item.isUnread || item.isCurrent) 1.0f else 0.6f
 	val titleWeight = if (item.isCurrent) androidx.compose.ui.text.font.FontWeight.Bold else null
+	val containerColor = when {
+		isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+		else -> Color.Transparent
+	}
 
 	Row(
 		modifier = modifier
 			.fillMaxWidth()
 			.heightIn(min = 64.dp)
-			.background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
+			.background(containerColor)
 			.combinedClickable(
 				onClick = onClick,
 				onLongClick = onLongClick
@@ -119,6 +123,10 @@ fun ChapterGridCard(
 	val context = LocalContext.current
 	val titleColor = if (item.isUnread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
 	val alphaFactor = if (item.isUnread) 1.0f else 0.6f
+	val containerColor = when {
+		isSelected -> MaterialTheme.colorScheme.primaryContainer
+		else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+	}
 
 	Card(
 		modifier = modifier
@@ -131,7 +139,7 @@ fun ChapterGridCard(
 			),
 		shape = RoundedCornerShape(8.dp),
 		colors = CardDefaults.cardColors(
-			containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+			containerColor = containerColor
 		),
 		border = if (!item.isUnread && !isSelected) null else CardDefaults.outlinedCardBorder()
 	) {

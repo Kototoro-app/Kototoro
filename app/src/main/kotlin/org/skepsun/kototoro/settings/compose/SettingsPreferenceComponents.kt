@@ -50,8 +50,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import kotlin.math.roundToInt
 
@@ -66,32 +64,20 @@ fun SettingsPreferenceSection(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    GlassSurface(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(if (expressive) 30.dp else 24.dp),
-        style = if (expressive) {
-            GlassDefaults.regularStyle().copy(shadowElevation = 0.dp)
-        } else {
-            GlassDefaults.subtleStyle()
-        },
-        allowRuntimeHaze = false,
+            .padding(vertical = 6.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-        ) {
+        if (title.isNotBlank()) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
-            content()
         }
+        content()
     }
 }
 
@@ -582,9 +568,7 @@ fun SettingsTextInputPreference(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
@@ -645,8 +629,7 @@ fun SettingsDialogTextPreference(
                 pendingValue = value
                 isDialogVisible = true
             }
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -739,8 +722,7 @@ fun SettingsReorderPreference(
                 pendingValue = value
                 isDialogVisible = true
             }
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(

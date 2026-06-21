@@ -2926,6 +2926,11 @@ SHA-256 指纹:
     <string name="pref_glass_blur_strength_summary">设置当前玻璃预设使用的最终模糊半径，单位 dp</string>
     <string name="pref_glass_noise_strength">玻璃噪点系数</string>
     <string name="pref_glass_noise_strength_summary">设置当前玻璃预设应用的最终噪点量，范围 0.00 至 1.00</string>
+    <string name="pref_app_font_preset">应用字体</string>
+    <string name="pref_app_font_preset_summary">关闭 Material 3 Expressive 组件时使用的字体</string>
+    <string name="pref_expressive_app_font_preset">Expressive 字体</string>
+    <string name="pref_expressive_app_font_preset_summary">开启 Material 3 Expressive 组件时使用的字体</string>
+    <string name="font_preset_system">系统默认</string>
     <string name="pref_glass_immersive_strength">沉浸式着色强度</string>
     <string name="pref_glass_immersive_strength_summary">独立控制顶部和底部的沉浸式着色强度，不受预设影响</string>
     <string name="glass_material_family_kototoro">Kototoro（推荐）</string>

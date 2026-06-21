@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,10 +55,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -88,6 +89,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
 import org.skepsun.kototoro.extensions.runtime.getExternalExtensionLanguageDisplayName
@@ -111,6 +113,30 @@ private const val UNIFIED_SOURCES_TAB_COUNT = 3
 private val unifiedCardListPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
 private val unifiedCardContentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 private val unifiedCardSpacing = 8.dp
+
+private data class UnifiedSourcesVisualStyle(
+	val chipShape: RoundedCornerShape,
+	val cardShape: RoundedCornerShape,
+	val rowShape: RoundedCornerShape,
+	val rowHorizontalPadding: androidx.compose.ui.unit.Dp,
+	val rowVerticalPadding: androidx.compose.ui.unit.Dp,
+	val iconShape: RoundedCornerShape,
+	val cardElevation: androidx.compose.ui.unit.Dp,
+)
+
+@Composable
+private fun rememberUnifiedSourcesVisualStyle(): UnifiedSourcesVisualStyle {
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	return UnifiedSourcesVisualStyle(
+		chipShape = RoundedCornerShape(if (expressive) 16.dp else 8.dp),
+		cardShape = RoundedCornerShape(if (expressive) 22.dp else 12.dp),
+		rowShape = RoundedCornerShape(if (expressive) 20.dp else 0.dp),
+		rowHorizontalPadding = if (expressive) 8.dp else 0.dp,
+		rowVerticalPadding = if (expressive) 3.dp else 0.dp,
+		iconShape = RoundedCornerShape(if (expressive) 12.dp else 8.dp),
+		cardElevation = if (expressive) 0.dp else 1.dp,
+	)
+}
 
 private sealed interface UnifiedSourcesDialogState {
 	data object AddRepositoryKind : UnifiedSourcesDialogState
@@ -1142,7 +1168,10 @@ fun UnifiedSourcesScreen(
 						.fillMaxSize()
 						.padding(innerPadding),
 				) {
-					TabRow(selectedTabIndex = selectedTab) {
+					SecondaryTabRow(
+						selectedTabIndex = selectedTab,
+						containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+					) {
 						Tab(
 							selected = selectedTab == UNIFIED_SOURCES_TAB_SOURCES,
 							onClick = {
@@ -1311,10 +1340,12 @@ private fun CompactFilterChip(
 	text: String,
 	modifier: Modifier = Modifier,
 ) {
+	val style = rememberUnifiedSourcesVisualStyle()
 	FilterChip(
 		selected = selected,
 		onClick = onClick,
 		modifier = modifier.defaultMinSize(minHeight = 30.dp),
+		shape = style.chipShape,
 		label = {
 			Text(
 				text = text,
@@ -1404,9 +1435,13 @@ private fun UnifiedSourceList(
 	onSourcePinnedChange: (String, Boolean) -> Unit,
 ) {
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
 	LazyColumn(state = listState,
 		modifier = modifier,
-		contentPadding = PaddingValues(vertical = 4.dp),
+		contentPadding = PaddingValues(
+			horizontal = if (expressive) 8.dp else 0.dp,
+			vertical = 4.dp,
+		),
 	) {
 		items(sources, key = { it.id }) { item ->
 			val isSelected = item.id in selectedSourceIds
@@ -1422,7 +1457,11 @@ private fun UnifiedSourceList(
 				onSourceEnabledChange = onSourceEnabledChange,
 				onSourcePinnedChange = onSourcePinnedChange,
 			)
-			HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
+			if (expressive) {
+				Spacer(modifier = Modifier.height(3.dp))
+			} else {
+				HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
+			}
 		}
 	}
 }
@@ -1453,10 +1492,18 @@ private fun UnifiedSourceRow(
 ) {
 	val context = LocalContext.current
 	var menuExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	val style = rememberUnifiedSourcesVisualStyle()
+	val rowContainerColor = when {
+		isSelected -> MaterialTheme.colorScheme.secondaryContainer
+		expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+		else -> MaterialTheme.colorScheme.background
+	}
 	Row(
 		modifier = Modifier
 			.fillMaxWidth()
-			.background(MaterialTheme.colorScheme.background)
+			.padding(horizontal = style.rowHorizontalPadding, vertical = style.rowVerticalPadding)
+			.background(rowContainerColor, style.rowShape)
 			.combinedClickable(
 				onClick = {
 					if (isSelectionMode) {
@@ -1467,7 +1514,7 @@ private fun UnifiedSourceRow(
 				},
 				onLongClick = onSelectionToggle,
 			)
-			.padding(start = 16.dp, top = 5.dp, end = 4.dp, bottom = 5.dp),
+			.padding(start = if (expressive) 12.dp else 16.dp, top = 7.dp, end = 4.dp, bottom = 7.dp),
 		verticalAlignment = Alignment.CenterVertically,
 	) {
 		if (isSelectionMode) {
@@ -1477,10 +1524,17 @@ private fun UnifiedSourceRow(
 				modifier = Modifier.size(32.dp),
 			)
 		} else {
-			UnifiedSourceIcon(
-				item = item,
-				modifier = Modifier.size(32.dp),
-			)
+			Box(
+				modifier = Modifier
+					.size(36.dp)
+					.background(MaterialTheme.colorScheme.surfaceContainerHigh, style.iconShape),
+				contentAlignment = Alignment.Center,
+			) {
+				UnifiedSourceIcon(
+					item = item,
+					modifier = Modifier.size(24.dp),
+				)
+			}
 		}
 		Spacer(modifier = Modifier.width(12.dp))
 		Column(
@@ -1573,6 +1627,8 @@ private fun UnifiedRepositoryList(
 	onDeleteRepository: (UnifiedSourceRepositoryItem) -> Unit,
 ) {
 	val listState2 = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	val style = rememberUnifiedSourcesVisualStyle()
 	LazyColumn(state = listState2,
 		modifier = modifier,
 		contentPadding = unifiedCardListPadding,
@@ -1591,7 +1647,20 @@ private fun UnifiedRepositoryList(
 			}
 		}
 		items(repositories, key = { it.id }) { item ->
-			ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+			ElevatedCard(
+				modifier = Modifier.fillMaxWidth(),
+				shape = style.cardShape,
+				colors = CardDefaults.elevatedCardColors(
+					containerColor = if (expressive) {
+						MaterialTheme.colorScheme.surfaceContainerLow
+					} else {
+						MaterialTheme.colorScheme.surface
+					},
+				),
+				elevation = CardDefaults.elevatedCardElevation(
+					defaultElevation = style.cardElevation,
+				),
+			) {
 				Column(
 					modifier = Modifier.padding(unifiedCardContentPadding),
 					verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1721,7 +1790,22 @@ private fun UnifiedPackageRow(
 	onUninstall: () -> Unit,
 	onCancelInstall: () -> Unit,
 ) {
-	ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	val style = rememberUnifiedSourcesVisualStyle()
+	ElevatedCard(
+		modifier = Modifier.fillMaxWidth(),
+		shape = style.cardShape,
+		colors = CardDefaults.elevatedCardColors(
+			containerColor = if (expressive) {
+				MaterialTheme.colorScheme.surfaceContainerLow
+			} else {
+				MaterialTheme.colorScheme.surface
+			},
+		),
+		elevation = CardDefaults.elevatedCardElevation(
+			defaultElevation = style.cardElevation,
+		),
+	) {
 		Column(
 			modifier = Modifier.padding(unifiedCardContentPadding),
 			verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1849,11 +1933,12 @@ private fun UnifiedPackageIcon(
 		runCatching { context.packageManager.getApplicationIcon(installedPackageName) }.getOrNull()
 	}
 	val iconModel = installedIcon ?: item.iconUrl
+	val style = rememberUnifiedSourcesVisualStyle()
 
 	Box(
 		modifier = modifier
 			.size(32.dp)
-			.background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(8.dp)),
+			.background(MaterialTheme.colorScheme.secondaryContainer, style.iconShape),
 		contentAlignment = Alignment.Center,
 	) {
 		if (iconModel != null) {

@@ -94,7 +94,12 @@ class TrackingRepository @Inject constructor(
 	}
 
 	fun observeUnreadUpdatesCount(): Flow<Int> {
-		return db.getTrackLogsDao().observeUnreadCount()
+		return combine(
+			db.getTrackLogsDao().observeUnreadCount(),
+			db.getTracksDao().observeUpdateContentCount(),
+		) { unreadLogs, updatedContent ->
+			maxOf(unreadLogs, updatedContent)
+		}
 	}
 
 	fun observeUpdatedContent(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<ContentTracking>> {

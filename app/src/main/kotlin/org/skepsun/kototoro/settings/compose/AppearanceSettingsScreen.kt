@@ -21,6 +21,7 @@ import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialFamily
+import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialPreset
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -35,6 +36,8 @@ data class AppearanceSettingsUiState(
     val theme: Int,
     val isAmoledTheme: Boolean,
     val isMaterialExpressiveComponentsEnabled: Boolean,
+    val appFontPreset: AppFontPreset,
+    val expressiveAppFontPreset: AppFontPreset,
     val isReducedVisualEffectsEnabled: Boolean,
     val isGlassEffectEnabled: Boolean,
     val isGlassEffectSettingsEnabled: Boolean,
@@ -102,6 +105,7 @@ data class AppearanceSettingsUiState(
 data class AppearanceSettingsOptions(
     val colorSchemes: List<SettingsChoiceOption<ColorScheme>>,
     val themes: List<SettingsChoiceOption<Int>>,
+    val fontPresets: List<SettingsChoiceOption<AppFontPreset>>,
     val glassMaterialFamilies: List<SettingsChoiceOption<GlassMaterialFamily>>,
     val tabletUiModes: List<SettingsChoiceOption<TabletUiMode>>,
     val appLocales: List<SettingsChoiceOption<String>>,
@@ -129,6 +133,8 @@ fun AppearanceSettingsScreen(
     onThemeChange: (Int) -> Unit,
     onAmoledThemeChange: (Boolean) -> Unit,
     onMaterialExpressiveComponentsChange: (Boolean) -> Unit,
+    onAppFontPresetChange: (AppFontPreset) -> Unit,
+    onExpressiveAppFontPresetChange: (AppFontPreset) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
     onGlassEffectEnabledChange: (Boolean) -> Unit,
     onGlassMaterialFamilyChange: (GlassMaterialFamily) -> Unit,
@@ -232,6 +238,22 @@ fun AppearanceSettingsScreen(
                     onCheckedChange = onMaterialExpressiveComponentsChange,
                 )
                 SettingsSectionDivider()
+                SettingsChoicePreference(
+                    title = stringResource(R.string.pref_app_font_preset),
+                    value = state.appFontPreset,
+                    options = options.fontPresets,
+                    summary = stringResource(R.string.pref_app_font_preset_summary),
+                    onValueChange = onAppFontPresetChange,
+                )
+                SettingsSectionDivider()
+                SettingsChoicePreference(
+                    title = stringResource(R.string.pref_expressive_app_font_preset),
+                    value = state.expressiveAppFontPreset,
+                    options = options.fontPresets,
+                    summary = stringResource(R.string.pref_expressive_app_font_preset_summary),
+                    onValueChange = onExpressiveAppFontPresetChange,
+                )
+                SettingsSectionDivider()
                 SettingsSwitchPreference(
                     title = stringResource(R.string.pref_reduce_visual_effects),
                     checked = state.isReducedVisualEffectsEnabled,
@@ -285,7 +307,6 @@ fun AppearanceSettingsScreen(
                     step = 5,
                     summary = stringResource(R.string.pref_haze_opacity_summary),
                     valueText = { "$it%" },
-                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onHazeOpacityChange,
                 )
                 SettingsSectionDivider()
@@ -296,7 +317,6 @@ fun AppearanceSettingsScreen(
                     step = 5,
                     summary = stringResource(R.string.pref_glass_immersive_strength_summary),
                     valueText = { "$it%" },
-                    enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onGlassImmersiveStrengthChange,
                 )
                 SettingsSectionDivider()

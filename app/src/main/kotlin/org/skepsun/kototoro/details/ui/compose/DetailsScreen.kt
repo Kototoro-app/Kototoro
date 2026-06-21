@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -168,6 +169,7 @@ import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -225,6 +227,12 @@ import java.util.concurrent.TimeUnit
 private val DetailsTopBarHeight = CompactTopBarPillHeight
 private const val ReadingRecordSheetLogTag = "ReadingRecordSheet"
 private const val DetailsSheetMinOpacityPercent = 80
+
+private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
+    return copy(alpha = alpha.coerceAtLeast(minAlpha))
+}
+
+private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70f)
 private val DetailsTopPrimaryActionButtonSize = CompactTopBarPillHeight
 private val DetailsTopCompactActionButtonSize = CompactTopBarCompactButtonSize
 private val DetailsTopActionIconSize = CompactTopBarIconSize
@@ -1615,14 +1623,20 @@ private fun DetailsPlainBottomSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val sheetColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
         sheetGesturesEnabled = false,
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        containerColor = if (expressive) {
+            sheetColors.containerColor.detailsPanelContainerColor()
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+        },
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
         dragHandle = null,
     ) {
         Column(
@@ -1641,6 +1655,7 @@ private fun DetailsTranslucentBottomSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val sheetColors = rememberGlassSurfaceColors(
         style = GlassDefaults.regularStyle(),
         glassPrefs = rememberDetailsSheetGlassPrefs(),
@@ -1661,8 +1676,8 @@ private fun DetailsTranslucentBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(modifier),
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = sheetColors.containerColor,
+            shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
+            color = sheetColors.containerColor.detailsPanelContainerColor(),
             border = sheetColors.border,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
@@ -1845,11 +1860,15 @@ private fun TrackingRelationMetaBlock(
     label: String,
     value: String,
 ) {
-    val blockColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val blockColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.subtleStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        color = blockColors.containerColor,
+        shape = RoundedCornerShape(if (expressive) 28.dp else 22.dp),
+        color = blockColors.containerColor.detailsPanelContainerColor(),
         border = blockColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -1883,6 +1902,7 @@ private fun TrackingReviewsSheet(
     onOpenExternal: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val reviewCardColors = rememberGlassSurfaceColors(
         style = GlassDefaults.subtleStyle(),
         glassPrefs = rememberDetailsSheetGlassPrefs(),
@@ -1921,8 +1941,8 @@ private fun TrackingReviewsSheet(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = reviewCardColors.containerColor,
+                        shape = RoundedCornerShape(if (expressive) 28.dp else 24.dp),
+                        color = reviewCardColors.containerColor.detailsPanelContainerColor(),
                         border = reviewCardColors.border,
                         tonalElevation = 0.dp,
                         shadowElevation = 0.dp,
@@ -1939,8 +1959,8 @@ private fun TrackingReviewsSheet(
                 items(reviews, key = { review -> review.url }) { review ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = reviewCardColors.containerColor,
+                        shape = RoundedCornerShape(if (expressive) 28.dp else 24.dp),
+                        color = reviewCardColors.containerColor.detailsPanelContainerColor(),
                         border = reviewCardColors.border,
                         tonalElevation = 0.dp,
                         shadowElevation = 0.dp,
@@ -2017,6 +2037,7 @@ private fun TrackingCommentsSheet(
     onOpenExternal: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val commentCardColors = rememberGlassSurfaceColors(
         style = GlassDefaults.subtleStyle(),
         glassPrefs = rememberDetailsSheetGlassPrefs(),
@@ -2055,8 +2076,8 @@ private fun TrackingCommentsSheet(
                 item {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = commentCardColors.containerColor,
+                        shape = RoundedCornerShape(if (expressive) 28.dp else 24.dp),
+                        color = commentCardColors.containerColor.detailsPanelContainerColor(),
                         border = commentCardColors.border,
                         tonalElevation = 0.dp,
                         shadowElevation = 0.dp,
@@ -2073,8 +2094,8 @@ private fun TrackingCommentsSheet(
                 items(threads, key = { thread -> "${thread.userName}:${thread.postedAt}:${thread.content.hashCode()}" }) { thread ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = commentCardColors.containerColor,
+                        shape = RoundedCornerShape(if (expressive) 28.dp else 24.dp),
+                        color = commentCardColors.containerColor.detailsPanelContainerColor(),
                         border = commentCardColors.border,
                         tonalElevation = 0.dp,
                         shadowElevation = 0.dp,
@@ -2129,14 +2150,20 @@ private fun TrackingCommentsSheet(
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             if (thread.replies.isNotEmpty()) {
+                                val replyCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
                                     thread.replies.forEach { reply ->
                                         Surface(
-                                            shape = RoundedCornerShape(18.dp),
-                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.26f),
+                                            shape = RoundedCornerShape(if (expressive) 22.dp else 18.dp),
+                                            color = if (expressive) {
+                                                replyCardColors.containerColor.detailsPanelContainerColor()
+                                            } else {
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0.26f)
+                                            },
+                                            border = if (expressive) replyCardColors.border else null,
                                         ) {
                                             Column(
                                                 modifier = Modifier
@@ -3345,8 +3372,13 @@ private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
 private fun rememberDetailsSheetGlassPrefs() =
     rememberGlassPrefsOrFallback().let { prefs ->
         remember(prefs) {
+            val minOpacity = if (prefs.isGlassEffectEnabled) {
+                prefs.hazeOpacityPercent
+            } else {
+                prefs.hazeOpacityPercent.coerceAtLeast(DetailsSheetMinOpacityPercent)
+            }
             prefs.copy(
-                hazeOpacityPercent = prefs.hazeOpacityPercent.coerceAtLeast(DetailsSheetMinOpacityPercent),
+                hazeOpacityPercent = minOpacity,
             )
         }
     }
@@ -3361,6 +3393,7 @@ private fun ReadingRecordSheet(
     onJumpPointClick: (ReadingJumpPointEntity) -> Unit,
 ) {
     val sessions = snapshot.sessions
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val sheetColors = rememberGlassSurfaceColors(
         style = GlassDefaults.regularStyle(),
         glassPrefs = rememberDetailsSheetGlassPrefs(),
@@ -3425,8 +3458,8 @@ private fun ReadingRecordSheet(
         Surface(
             modifier = Modifier
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = sheetColors.containerColor,
+            shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
+            color = sheetColors.containerColor.detailsPanelContainerColor(),
             border = sheetColors.border,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
@@ -3503,10 +3536,14 @@ private fun ReadingRecordSummaryCard(
     lastReadAt: Long?,
     progress: Float,
     ) {
-    val summaryCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val summaryCardColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.subtleStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = summaryCardColors.containerColor,
+        shape = RoundedCornerShape(if (expressive) 28.dp else 22.dp),
+        color = summaryCardColors.containerColor.detailsPanelContainerColor(),
         border = summaryCardColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
@@ -3587,10 +3624,14 @@ private fun ChapterStatisticsSummary(
     chapters: List<ReadingChapterAggregateEntity>,
     chapterTitle: (Long) -> String,
 ) {
-    val summaryCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val summaryCardColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.subtleStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = summaryCardColors.containerColor,
+        shape = RoundedCornerShape(if (expressive) 28.dp else 22.dp),
+        color = summaryCardColors.containerColor.detailsPanelContainerColor(),
         border = summaryCardColors.border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,

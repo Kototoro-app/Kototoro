@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.background
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +41,12 @@ fun SettingsSectionScaffold(
 	actions: (@Composable BoxScope.() -> Unit)? = null,
 	content: @Composable () -> Unit,
 ) {
+	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	val topBarContainerColor = if (expressive) {
+		MaterialTheme.colorScheme.surfaceContainerLow
+	} else {
+		MaterialTheme.colorScheme.background
+	}
 	Column(
 		modifier = modifier
 			.fillMaxSize()
@@ -56,11 +64,20 @@ fun SettingsSectionScaffold(
 					)
 				},
 				navigationIcon = {
-					IconButton(onClick = onNavigateUp) {
-						Icon(
-							imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-							contentDescription = null,
-						)
+					if (expressive) {
+						FilledTonalIconButton(onClick = onNavigateUp) {
+							Icon(
+								imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+								contentDescription = null,
+							)
+						}
+					} else {
+						IconButton(onClick = onNavigateUp) {
+							Icon(
+								imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+								contentDescription = null,
+							)
+						}
 					}
 				},
 				actions = {
@@ -73,7 +90,7 @@ fun SettingsSectionScaffold(
 					}
 				},
 				colors = TopAppBarDefaults.topAppBarColors(
-					containerColor = MaterialTheme.colorScheme.background,
+					containerColor = topBarContainerColor,
 					titleContentColor = MaterialTheme.colorScheme.onSurface,
 					navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
 					actionIconContentColor = MaterialTheme.colorScheme.onSurface,

@@ -117,6 +117,8 @@ class FeedViewModel @Inject constructor(
 		quickFilter.appliedOptions,
 		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
 			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
+		quickFilter.appliedOptions.combineWithSettings()
+			.flatMapLatest { repository.observeUpdatedContent(PAGE_SIZE, it) },
 		selectedCategoryId,
 		currentGroupTab,
 		currentSourceTags,
@@ -131,33 +133,46 @@ class FeedViewModel @Inject constructor(
 		val header = values[0] as UpdatedContentHeader?
 		val filters = values[1] as Set<ListFilterOption>
 		val list = values[2] as List<TrackingLogItem>
-		val categoryId = values[3] as Long
-		val groupTab = values[4] as BrowseGroupTab
-		val sourceTags = values[5] as Set<SourceTag>
-		val favorites = values[6] as List<org.skepsun.kototoro.favourites.data.FavouriteContent>
-		val preset = values[8] as? org.skepsun.kototoro.explore.data.SourcePreset
+		val updatedContent = values[3] as List<ContentTracking>
+		val categoryId = values[4] as Long
+		val groupTab = values[5] as BrowseGroupTab
+		val sourceTags = values[6] as Set<SourceTag>
+		val favorites = values[7] as List<org.skepsun.kototoro.favourites.data.FavouriteContent>
+		val preset = values[9] as? org.skepsun.kototoro.explore.data.SourcePreset
 		val mangaCategoryIds = favorites.buildFeedCategoryIds()
 
-		val filteredList = list.filter { item ->
-			val source = item.manga.source
+		fun matchesFeedScope(item: Content): Boolean {
+			val source = item.source
 			if (preset != null && source.name !in preset.sources) {
-				return@filter false
+				return false
 			}
 			val contentGroup = sourceGroupManager.getContentGroup(source)
 			val originGroup = sourceGroupManager.getOriginGroup(source)
-			val matchesCategory = categoryId == NO_ID || categoryId in mangaCategoryIds[item.manga.feedLookupKey()].orEmpty()
+			val matchesCategory = categoryId == NO_ID || categoryId in mangaCategoryIds[item.feedLookupKey()].orEmpty()
 			val matchesGroup = groupTab.matchesContentGroup(contentGroup)
 			val matchesSourceTag = sourceTags.isEmpty() || sourceTags.any { it.matches(contentGroup, originGroup) }
-			matchesCategory && matchesGroup && matchesSourceTag
+			return matchesCategory && matchesGroup && matchesSourceTag
 		}
 
-		val result = ArrayList<ListModel>((filteredList.size * 1.4).toInt().coerceAtLeast(3))
+		val filteredList = list.filter { item ->
+			matchesFeedScope(item.manga)
+		}
+		val fallbackList = if (filteredList.isEmpty()) {
+			updatedContent
+				.filter { item -> matchesFeedScope(item.manga) }
+				.map { item -> item.toFallbackTrackingLogItem() }
+		} else {
+			emptyList()
+		}
+
+		val displayList = filteredList.ifEmpty { fallbackList }
+		val result = ArrayList<ListModel>((displayList.size * 1.4).toInt().coerceAtLeast(3))
 		quickFilter.filterItem(filters)?.let(result::add)
 		if (header != null) {
 			result += header
 		}
 		isReady.set(true)
-		if (filteredList.isEmpty()) {
+		if (displayList.isEmpty()) {
 			result += EmptyState(
 				icon = R.drawable.ic_empty_feed,
 				textPrimary = R.string.text_empty_holder_primary,
@@ -165,12 +180,25 @@ class FeedViewModel @Inject constructor(
 				actionStringRes = 0,
 			)
 		} else {
-			filteredList.mapListTo(result)
+			displayList.mapListTo(result)
 		}
 		result as List<ListModel>
 	}.catch { e ->
 		emit(listOf(e.toErrorState(canRetry = false)))
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+
+	private fun ContentTracking.toFallbackTrackingLogItem(): TrackingLogItem {
+		return TrackingLogItem(
+			id = -anchorMangaId,
+			anchorMangaId = anchorMangaId,
+			entityId = entityId,
+			preferredLocalMangaId = preferredLocalMangaId,
+			manga = manga,
+			chapters = List(newChapters.coerceAtLeast(1)) { "" },
+			createdAt = lastChapterDate ?: lastCheck ?: java.time.Instant.EPOCH,
+			isNew = newChapters > 0,
+		)
+	}
 
 	init {
 		launchJob(Dispatchers.Default) {
@@ -212,7 +240,11 @@ class FeedViewModel @Inject constructor(
 
 	fun onItemClick(item: FeedItem) {
 		launchJob(Dispatchers.Default, CoroutineStart.ATOMIC) {
-			repository.markAsRead(item.id)
+			if (item.id < 0L) {
+				repository.clearUpdates(listOf(-item.id))
+			} else {
+				repository.markAsRead(item.id)
+			}
 		}
 	}
 

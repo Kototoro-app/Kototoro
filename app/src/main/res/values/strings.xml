@@ -2935,6 +2935,11 @@ Proceed?</string>
     <string name="pref_glass_effect_summary">Blur content behind supported Compose surfaces</string>
     <string name="pref_material_expressive_components">Material 3 Expressive components</string>
     <string name="pref_material_expressive_components_summary">Use Expressive styles for View-based buttons, toolbars, search bars, sliders, and navigation components. Restarts the current screen</string>
+    <string name="pref_app_font_preset">App font</string>
+    <string name="pref_app_font_preset_summary">Font used when Material 3 Expressive components are off</string>
+    <string name="pref_expressive_app_font_preset">Expressive font</string>
+    <string name="pref_expressive_app_font_preset_summary">Font used when Material 3 Expressive components are on</string>
+    <string name="font_preset_system">System default</string>
     <string name="pref_reduce_visual_effects">Reduce visual effects</string>
     <string name="pref_reduce_visual_effects_summary">Recommended for lower-end devices. Disable runtime Haze, Hero transitions, and panorama background motion with one switch without changing their individual settings</string>
     <string name="pref_haze_opacity">Glass surface opacity</string>

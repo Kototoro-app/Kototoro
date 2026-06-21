@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavItem
@@ -157,6 +158,9 @@ private class AppearanceSettingsCoordinator(
             settings.observeAsState(AppSettings.KEY_MATERIAL_EXPRESSIVE_COMPONENTS) {
                 isMaterialExpressiveComponentsEnabled
             }.value
+        val appFontPreset = settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) { appFontPreset }.value
+        val expressiveAppFontPreset =
+            settings.observeAsState(AppSettings.KEY_EXPRESSIVE_APP_FONT_PRESET) { expressiveAppFontPreset }.value
         val isReducedVisualEffectsEnabled =
             settings.observeAsState(AppSettings.KEY_REDUCED_VISUAL_EFFECTS) { isReducedVisualEffectsEnabled }.value
         val isGlassEffectEnabled =
@@ -277,6 +281,7 @@ private class AppearanceSettingsCoordinator(
         val options = AppearanceSettingsOptions(
             colorSchemes = buildColorSchemeOptions(),
             themes = buildThemeOptions(),
+            fontPresets = buildFontPresetOptions(),
             glassMaterialFamilies = buildGlassMaterialFamilyOptions(),
             tabletUiModes = buildTabletUiModeOptions(),
             appLocales = buildLocaleOptions(),
@@ -301,6 +306,8 @@ private class AppearanceSettingsCoordinator(
             theme = theme,
             isAmoledTheme = isAmoledTheme,
             isMaterialExpressiveComponentsEnabled = isMaterialExpressiveComponentsEnabled,
+            appFontPreset = appFontPreset,
+            expressiveAppFontPreset = expressiveAppFontPreset,
             isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
             isGlassEffectEnabled = effectiveGlassEffectEnabled,
             isGlassEffectSettingsEnabled = !isReducedVisualEffectsEnabled,
@@ -374,6 +381,12 @@ private class AppearanceSettingsCoordinator(
             onAmoledThemeChange = { updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
             onMaterialExpressiveComponentsChange = {
                 updateAndRestart(coroutineScope) { settings.isMaterialExpressiveComponentsEnabled = it }
+            },
+            onAppFontPresetChange = {
+                updateAndRestart(coroutineScope) { settings.appFontPreset = it }
+            },
+            onExpressiveAppFontPresetChange = {
+                updateAndRestart(coroutineScope) { settings.expressiveAppFontPreset = it }
             },
             onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
             onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
@@ -515,6 +528,15 @@ private class AppearanceSettingsCoordinator(
             SettingsChoiceOption(GlassMaterialFamily.CUPERTINO, context.getString(R.string.glass_material_family_cupertino)),
             SettingsChoiceOption(GlassMaterialFamily.FLUENT, context.getString(R.string.glass_material_family_fluent)),
             SettingsChoiceOption(GlassMaterialFamily.CUSTOM, context.getString(R.string.custom)),
+        )
+    }
+
+    private fun buildFontPresetOptions(): List<SettingsChoiceOption<AppFontPreset>> {
+        return listOf(
+            SettingsChoiceOption(AppFontPreset.SYSTEM, context.getString(R.string.font_preset_system)),
+            SettingsChoiceOption(AppFontPreset.ROBOTO, "Roboto"),
+            SettingsChoiceOption(AppFontPreset.ROBOTO_FLEX, "Roboto Flex"),
+            SettingsChoiceOption(AppFontPreset.GOOGLE_SANS, "Google Sans"),
         )
     }
 

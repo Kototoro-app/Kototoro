@@ -43,8 +43,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.settings.search.SettingsItem
 
@@ -88,10 +86,10 @@ fun SettingsRootScreen(
                     .only(WindowInsetsSides.End)
                     .asPaddingValues()
                     .calculateRightPadding(layoutDirection) + 16.dp,
-                top = topInset + 8.dp,
-                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+                top = topInset + 4.dp,
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (searchQuery.isBlank()) {
                 items(sections, key = { it.title }, contentType = { "settings_section" }) { section ->
@@ -113,31 +111,19 @@ fun SettingsRootScreen(
 private fun SettingsSectionCard(
     section: SettingsRootSection,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    GlassSurface(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(if (expressive) 30.dp else 24.dp),
-        style = if (expressive) {
-            GlassDefaults.regularStyle().copy(shadowElevation = 0.dp)
-        } else {
-            GlassDefaults.subtleStyle()
-        },
-        allowRuntimeHaze = false,
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-        ) {
-            Text(
-                text = section.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            )
-            section.items.forEachIndexed { index, item ->
-                SettingsRootRow(item = item)
-                if (index != section.items.lastIndex) {
-                    SettingsRootDivider(startPadding = 68.dp)
-                }
+        Text(
+            text = section.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+        )
+        section.items.forEachIndexed { index, item ->
+            SettingsRootRow(item = item)
+            if (index != section.items.lastIndex) {
+                SettingsRootDivider(startPadding = 62.dp)
             }
         }
     }
@@ -148,36 +134,24 @@ private fun SettingsSearchResultsCard(
     results: List<SettingsItem>,
     onItemClick: (SettingsItem) -> Unit,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    GlassSurface(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(if (expressive) 30.dp else 24.dp),
-        style = if (expressive) {
-            GlassDefaults.regularStyle().copy(shadowElevation = 0.dp)
-        } else {
-            GlassDefaults.subtleStyle()
-        },
-        allowRuntimeHaze = false,
     ) {
         if (results.isEmpty()) {
             Text(
                 text = stringResource(R.string.nothing_found),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            Column(
-                modifier = Modifier.padding(vertical = 8.dp),
-            ) {
-                results.forEachIndexed { index, item ->
-                    SettingsSearchResultRow(
-                        item = item,
-                        onClick = { onItemClick(item) },
-                    )
-                    if (index != results.lastIndex) {
-                        SettingsRootDivider(startPadding = 20.dp)
-                    }
+            results.forEachIndexed { index, item ->
+                SettingsSearchResultRow(
+                    item = item,
+                    onClick = { onItemClick(item) },
+                )
+                if (index != results.lastIndex) {
+                    SettingsRootDivider(startPadding = 14.dp)
                 }
             }
         }
@@ -197,14 +171,14 @@ private fun SettingsSearchResultRow(
             .then(
                 if (expressive) {
                     Modifier
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(18.dp),
                         )
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 } else {
-                    Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                 },
             ),
         verticalAlignment = Alignment.CenterVertically,
@@ -249,26 +223,26 @@ private fun SettingsRootRow(
             .then(
                 if (expressive) {
                     Modifier
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(18.dp),
                         )
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 } else {
-                    Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                 },
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(40.dp)
                 .then(
                     if (expressive) {
                         Modifier.background(
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.64f),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(14.dp),
                         )
                     } else {
                         Modifier
@@ -290,7 +264,7 @@ private fun SettingsRootRow(
         Spacer(modifier = Modifier.width(8.dp))
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             Text(
                 text = item.title,

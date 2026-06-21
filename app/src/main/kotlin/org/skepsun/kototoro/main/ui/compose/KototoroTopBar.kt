@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -78,6 +79,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.Content
@@ -188,12 +190,7 @@ fun KototoroTopBar(
                 enter = fadeIn() + expandHorizontally(),
                 exit = shrinkHorizontally() + fadeOut(),
             ) {
-                GlassSurface(
-                    shape = CompactTopBarPillShape,
-                    style = GlassDefaults.topBarChromeStyle(),
-                    visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                    componentRole = GlassComponentRole.TopBar,
-                ) {
+                TopBarControlSurface {
                     IconButton(
                         onClick = onSearchClick,
                         modifier = Modifier.size(CompactTopBarPillHeight),
@@ -233,12 +230,7 @@ fun KototoroTopBar(
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
-                GlassSurface(
-                    shape = CompactTopBarPillShape,
-                    style = GlassDefaults.topBarChromeStyle(),
-                    visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                    componentRole = GlassComponentRole.TopBar,
-                ) {
+                TopBarControlSurface {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
                         Row(
                             modifier = Modifier
@@ -465,6 +457,29 @@ fun KototoroTopBar(
             )
         }
     }
+}
+
+@Composable
+private fun TopBarControlSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    GlassSurface(
+        modifier = modifier,
+        shape = if (expressive) RoundedCornerShape(999.dp) else CompactTopBarPillShape,
+        style = if (expressive) {
+            GlassDefaults.topBarChromeStyle().copy(
+                containerAlpha = 0.90f,
+                borderAlpha = 0.24f,
+            )
+        } else {
+            GlassDefaults.topBarChromeStyle()
+        },
+        visualTreatment = GlassVisualTreatment.TopBarPrototype,
+        componentRole = GlassComponentRole.TopBar,
+        content = content,
+    )
 }
 
 @Composable

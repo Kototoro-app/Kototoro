@@ -58,6 +58,7 @@ import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -346,14 +347,19 @@ fun DetailsHeaderActionButton(
     filled: Boolean = false,
     onLongClick: (() -> Unit)? = null,
 ) {
-    val shape = MaterialTheme.shapes.medium
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val shape = if (expressive) RoundedCornerShape(20.dp) else MaterialTheme.shapes.medium
     val containerColor = if (filled) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.94f)
+        if (expressive) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.90f)
+        } else {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.94f)
+        }
     } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (expressive) 0.82f else 0.78f)
     }
     val contentColor = if (filled) {
-        MaterialTheme.colorScheme.onPrimary
+        if (expressive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary
     } else {
         MaterialTheme.colorScheme.onSurface
     }
@@ -364,6 +370,11 @@ fun DetailsHeaderActionButton(
         contentColor = contentColor,
         tonalElevation = if (filled) 2.dp else 0.dp,
         shadowElevation = if (filled) 2.dp else 0.dp,
+        border = if (expressive && !filled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
+        } else {
+            null
+        },
     ) {
         Row(
             modifier = Modifier
@@ -402,12 +413,22 @@ fun DetailsHeaderIconButton(
     filled: Boolean = false,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val shape = if (expressive) RoundedCornerShape(20.dp) else RoundedCornerShape(16.dp)
     if (filled) {
         Surface(
             modifier = modifier,
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shape = shape,
+            color = if (expressive) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.90f)
+            } else {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+            },
+            contentColor = if (expressive) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimary
+            },
             tonalElevation = 2.dp,
             shadowElevation = 2.dp,
         ) {
@@ -425,30 +446,46 @@ fun DetailsHeaderIconButton(
                     painter = rememberSafePainter(iconRes),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = if (expressive) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onPrimary
+                    },
                 )
             }
         }
     } else {
-        Box(
-            modifier = modifier
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f), RoundedCornerShape(16.dp))
-                .combinedClickable(
-                    enabled = enabled,
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                )
-                .padding(12.dp),
-            contentAlignment = Alignment.Center,
+        Surface(
+            modifier = modifier,
+            shape = shape,
+            color = if (expressive) {
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.82f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
+            },
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (expressive) 0.34f else 0.18f),
+            ),
         ) {
-            Icon(
-                painter = rememberSafePainter(iconRes),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
+            Box(
+                modifier = Modifier
+                    .combinedClickable(
+                        enabled = enabled,
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                    )
+                    .padding(12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = rememberSafePainter(iconRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
@@ -509,10 +546,8 @@ fun DetailsHeroBadge(
     text: String,
     @DrawableRes iconRes: Int? = null,
 ) {
-    GlassSurface(
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(999.dp),
-    ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -531,6 +566,25 @@ fun DetailsHeroBadge(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+    if (expressive) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
+        ) {
+            content()
+        }
+    } else {
+        GlassSurface(
+            style = GlassDefaults.subtleStyle(),
+            shape = RoundedCornerShape(999.dp),
+        ) {
+            content()
         }
     }
 }

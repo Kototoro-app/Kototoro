@@ -435,8 +435,15 @@ private fun computeGlassColors(
     style: GlassStyle,
     colorScheme: androidx.compose.material3.ColorScheme,
 ): GlassSurfaceColors {
+    val preferenceAlpha = (hazeOpacityPercent.coerceIn(0, 100)) / 100f
+    val effectiveContainerAlpha = resolveContainerAlpha(
+        preferenceAlpha = preferenceAlpha,
+        styleContainerAlpha = style.containerAlpha,
+    )
     if (!isGlassEffectEnabled) {
         val fallbackBaseColor = when {
+            effectiveContainerAlpha >= 0.86f -> colorScheme.surfaceContainerHigh
+            effectiveContainerAlpha >= 0.80f -> colorScheme.surfaceContainer
             style.shadowElevation >= 10.dp -> colorScheme.surfaceContainerHigh
             style.shadowElevation >= 6.dp -> colorScheme.surfaceContainer
             else -> colorScheme.surfaceContainerLow
@@ -449,8 +456,8 @@ private fun computeGlassColors(
             style.borderAlpha.coerceAtMost(0.18f)
         }
         return GlassSurfaceColors(
-            containerColor = fallbackBaseColor,
-            baseTintColor = fallbackBaseColor,
+            containerColor = fallbackBaseColor.copy(alpha = effectiveContainerAlpha),
+            baseTintColor = fallbackBaseColor.copy(alpha = effectiveContainerAlpha),
             blurRadius = 0.dp,
             noiseFactor = 0f,
             border = BorderStroke(
@@ -460,8 +467,6 @@ private fun computeGlassColors(
         )
     }
 
-    val preferenceAlpha = (hazeOpacityPercent.coerceIn(0, 100)) / 100f
-    val effectiveContainerAlpha = (preferenceAlpha * style.containerAlpha).coerceIn(0f, 1f)
     val baseColor = when {
         effectiveContainerAlpha >= 0.86f -> colorScheme.surfaceContainerHigh
         effectiveContainerAlpha >= 0.80f -> colorScheme.surfaceContainer
@@ -495,6 +500,21 @@ private fun computeGlassColors(
         noiseFactor = noiseFactor,
         border = border,
     )
+}
+
+private fun resolveContainerAlpha(
+    preferenceAlpha: Float,
+    styleContainerAlpha: Float,
+): Float {
+    val normalizedPreferenceAlpha = preferenceAlpha.coerceIn(0f, 1f)
+    val normalizedStyleAlpha = styleContainerAlpha.coerceIn(0f, 1f)
+    val defaultPreferenceAlpha = AppSettings.GlassMaterialDefaults.DEFAULT_OPACITY_PERCENT / 100f
+    return if (normalizedPreferenceAlpha <= defaultPreferenceAlpha) {
+        (normalizedPreferenceAlpha / defaultPreferenceAlpha) * normalizedStyleAlpha
+    } else {
+        val boostProgress = (normalizedPreferenceAlpha - defaultPreferenceAlpha) / (1f - defaultPreferenceAlpha)
+        normalizedStyleAlpha + ((1f - normalizedStyleAlpha) * boostProgress)
+    }.coerceIn(0f, 1f)
 }
 
 @Composable

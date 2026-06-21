@@ -105,6 +105,13 @@ enum class TrackingMetadataSourceStrategy {
 	API_ONLY,
 }
 
+enum class AppFontPreset {
+	SYSTEM,
+	ROBOTO,
+	ROBOTO_FLEX,
+	GOOGLE_SANS,
+}
+
 @Singleton
 class AppSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -199,6 +206,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var isMaterialExpressiveComponentsEnabled: Boolean
 		get() = prefs.getBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, false)
 		set(value) = prefs.edit { putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value) }
+
+	var appFontPreset: AppFontPreset
+		get() = prefs.getEnumValue(KEY_APP_FONT_PRESET, AppFontPreset.SYSTEM)
+		set(value) = prefs.edit { putEnumValue(KEY_APP_FONT_PRESET, value) }
+
+	var expressiveAppFontPreset: AppFontPreset
+		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.ROBOTO_FLEX)
+		set(value) = prefs.edit { putEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, value) }
 
 	var navHeight: Int
 		get() = prefs.getSafeInt(KEY_NAV_HEIGHT, 80).coerceIn(48, 88)
@@ -1962,6 +1977,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_COLOR_THEME = "color_theme"
 		const val KEY_THEME_AMOLED = "amoled_theme"
 		const val KEY_MATERIAL_EXPRESSIVE_COMPONENTS = "material_expressive_components"
+		const val KEY_APP_FONT_PRESET = "app_font_preset"
+		const val KEY_EXPRESSIVE_APP_FONT_PRESET = "expressive_app_font_preset"
 		const val KEY_TABLET_UI_MODE = "tablet_ui_mode"
 		const val KEY_OFFLINE_DISABLED = "no_offline"
 		const val KEY_PAGES_CACHE_CLEAR = "pages_cache_clear"
