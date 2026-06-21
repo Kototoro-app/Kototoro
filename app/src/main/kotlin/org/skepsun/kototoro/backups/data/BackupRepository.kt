@@ -575,11 +575,12 @@ class BackupRepository @Inject constructor(
     }
 
     private suspend fun trimRestoredTrackLogs(sections: Set<BackupSection>) {
-        if (BackupSection.TRACK_LOGS !in sections) {
+        if (BackupSection.TRACKS !in sections && BackupSection.TRACK_LOGS !in sections) {
             return
         }
         database.withTransaction {
             database.getTrackLogsDao().run {
+                ensureUnreadUpdateLogs()
                 gc()
                 trim(TRACK_LOG_RETAINED_SIZE)
             }

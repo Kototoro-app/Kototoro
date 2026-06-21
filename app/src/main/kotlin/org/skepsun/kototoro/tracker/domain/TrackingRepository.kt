@@ -199,6 +199,7 @@ class TrackingRepository @Inject constructor(
 	suspend fun gc() = db.withTransaction {
 		syncTrackAnchors()
 		db.getTrackLogsDao().run {
+			ensureUnreadUpdateLogs()
 			gc()
 			trim(TRACK_LOG_RETAINED_SIZE)
 		}

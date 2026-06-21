@@ -233,6 +233,21 @@ private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
 }
 
 private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70f)
+
+@Composable
+private fun rememberDetailsBottomBarGlassPrefs() =
+    rememberGlassPrefsOrFallback().let { prefs ->
+        remember(prefs) {
+            if (prefs.isGlassEffectEnabled) {
+                prefs
+            } else {
+                prefs.copy(
+                    hazeOpacityPercent = prefs.hazeOpacityPercent.coerceAtLeast(70),
+                )
+            }
+        }
+    }
+
 private val DetailsTopPrimaryActionButtonSize = CompactTopBarPillHeight
 private val DetailsTopCompactActionButtonSize = CompactTopBarCompactButtonSize
 private val DetailsTopActionIconSize = CompactTopBarIconSize
@@ -2511,84 +2526,87 @@ private fun DetailsPaneContent(
     } else {
         GlassDefaults.regularStyle()
     }
+    val bottomBarGlassPrefs = rememberDetailsBottomBarGlassPrefs()
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        GlassSurface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(modifier),
-            shape = paneShape,
-            style = paneGlassStyle,
-            dialogSurface = true,
-            componentRole = GlassComponentRole.Dialog,
-        ) {
-            Box(
+        CompositionLocalProvider(LocalGlassPrefs provides bottomBarGlassPrefs) {
+            GlassSurface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(modifier),
+                shape = paneShape,
+                style = paneGlassStyle,
+                dialogSurface = true,
+                componentRole = GlassComponentRole.Dialog,
             ) {
-                Column(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
                 ) {
-                    DetailsPaneActionsRow(
-                        detailsPaneState = detailsPaneState,
-                        selectedTabId = resolveDetailsTabSelection(selectedTabId, availableTabIds),
-                        isSheetFullyExpanded = isSheetFullyExpanded,
-                        sheetExpansionProgress = actionsExpansionProgress,
-                        isChapterSearchAvailable = isChapterSearchAvailable,
-                        isChaptersReversed = isChaptersReversed,
-                        isChaptersInGridView = isChaptersInGridView,
-                        isHideReadChapters = isHideReadChapters,
-                        isDownloadedOnly = isDownloadedOnly,
-                        isDownloadedFilterVisible = isDownloadedFilterVisible,
-                        pageGridSizeValue = pageGridSizeValue,
-                        onChapterSearchToggle = onChapterSearchToggle,
-                        onToggleChaptersReversed = onToggleChaptersReversed,
-                        onToggleChaptersGrid = onToggleChaptersGrid,
-                        onToggleHideReadChapters = onToggleHideReadChapters,
-                        onToggleDownloadedOnly = onToggleDownloadedOnly,
-                        onPageGridSizeChange = onPageGridSizeChange,
-                        showCollapsedHandle = showCollapsedHandle,
-                        handleTopInset = statusBarTopPadding,
-                        contentType = contentType,
-                        historyInfo = historyInfo,
-                        branches = branches,
-                        isLoading = isLoading,
-                        onActionClick = onActionClick,
-                    )
-                    Box(
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
+                            .fillMaxWidth(),
                     ) {
-                        ChaptersPagesTabsContent(
-                            viewModel = viewModel,
-                            pagesViewModel = pagesViewModel,
-                            bookmarksViewModel = bookmarksViewModel,
-                            settings = settings,
-                            appRouter = appRouter,
-                            pageSaveHelper = pageSaveHelper,
-                            metadataChapterTabs = metadataChapterTabs,
-                            readingChapterTabs = readingChapterTabs,
-                            onSelectMetadataChapterTab = onSelectMetadataChapterTab,
-                            onSelectReadingChapterTab = onSelectReadingChapterTab,
+                        DetailsPaneActionsRow(
+                            detailsPaneState = detailsPaneState,
                             selectedTabId = resolveDetailsTabSelection(selectedTabId, availableTabIds),
-                            showTabStrip = false,
                             isSheetFullyExpanded = isSheetFullyExpanded,
-                            isChapterListScrollEnabled = true,
-                            handleSelectionBackPressInternally = !showCollapsedHandle,
-                            detailsPaneState = if (showCollapsedHandle) detailsPaneState else null,
-                            chapterQuery = chapterQuery,
-                            isChapterSearchVisible = isChapterSearchVisible,
-                            onChapterQueryChange = onChapterQueryChange,
-                            onChapterSelectionStateChange = detailsPaneState::onChapterSelectionStateChanged,
-                            onSelectedTabIdChange = { tabId ->
-                                val resolvedTab = resolveDetailsTabSelection(tabId, availableTabIds)
-                                onSelectedTabIdChange(resolvedTab)
-                            },
+                            sheetExpansionProgress = actionsExpansionProgress,
+                            isChapterSearchAvailable = isChapterSearchAvailable,
+                            isChaptersReversed = isChaptersReversed,
+                            isChaptersInGridView = isChaptersInGridView,
+                            isHideReadChapters = isHideReadChapters,
+                            isDownloadedOnly = isDownloadedOnly,
+                            isDownloadedFilterVisible = isDownloadedFilterVisible,
+                            pageGridSizeValue = pageGridSizeValue,
+                            onChapterSearchToggle = onChapterSearchToggle,
+                            onToggleChaptersReversed = onToggleChaptersReversed,
+                            onToggleChaptersGrid = onToggleChaptersGrid,
+                            onToggleHideReadChapters = onToggleHideReadChapters,
+                            onToggleDownloadedOnly = onToggleDownloadedOnly,
+                            onPageGridSizeChange = onPageGridSizeChange,
+                            showCollapsedHandle = showCollapsedHandle,
+                            handleTopInset = statusBarTopPadding,
+                            contentType = contentType,
+                            historyInfo = historyInfo,
+                            branches = branches,
+                            isLoading = isLoading,
+                            onActionClick = onActionClick,
                         )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        ) {
+                            ChaptersPagesTabsContent(
+                                viewModel = viewModel,
+                                pagesViewModel = pagesViewModel,
+                                bookmarksViewModel = bookmarksViewModel,
+                                settings = settings,
+                                appRouter = appRouter,
+                                pageSaveHelper = pageSaveHelper,
+                                metadataChapterTabs = metadataChapterTabs,
+                                readingChapterTabs = readingChapterTabs,
+                                onSelectMetadataChapterTab = onSelectMetadataChapterTab,
+                                onSelectReadingChapterTab = onSelectReadingChapterTab,
+                                selectedTabId = resolveDetailsTabSelection(selectedTabId, availableTabIds),
+                                showTabStrip = false,
+                                isSheetFullyExpanded = isSheetFullyExpanded,
+                                isChapterListScrollEnabled = true,
+                                handleSelectionBackPressInternally = !showCollapsedHandle,
+                                detailsPaneState = if (showCollapsedHandle) detailsPaneState else null,
+                                chapterQuery = chapterQuery,
+                                isChapterSearchVisible = isChapterSearchVisible,
+                                onChapterQueryChange = onChapterQueryChange,
+                                onChapterSelectionStateChange = detailsPaneState::onChapterSelectionStateChanged,
+                                onSelectedTabIdChange = { tabId ->
+                                    val resolvedTab = resolveDetailsTabSelection(tabId, availableTabIds)
+                                    onSelectedTabIdChange(resolvedTab)
+                                },
+                            )
+                        }
                     }
                 }
             }

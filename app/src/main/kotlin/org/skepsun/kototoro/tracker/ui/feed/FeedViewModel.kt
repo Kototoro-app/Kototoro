@@ -240,9 +240,7 @@ class FeedViewModel @Inject constructor(
 
 	fun onItemClick(item: FeedItem) {
 		launchJob(Dispatchers.Default, CoroutineStart.ATOMIC) {
-			if (item.id < 0L) {
-				repository.clearUpdates(listOf(-item.id))
-			} else {
+			if (item.id > 0L) {
 				repository.markAsRead(item.id)
 			}
 		}

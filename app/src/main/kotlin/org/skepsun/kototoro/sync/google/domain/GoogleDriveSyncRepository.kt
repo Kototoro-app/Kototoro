@@ -323,6 +323,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 			snapshot.feed.logs.forEach { log ->
 				database.mergeTrackLog(log.toEntity().mapWith(mapping))
 			}
+			database.getTrackLogsDao().ensureUnreadUpdateLogs()
 			database.getTrackLogsDao().gc()
 			database.getTrackLogsDao().trim(TRACK_LOG_RETAINED_SIZE)
 		}
