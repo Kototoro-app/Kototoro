@@ -399,7 +399,6 @@ private fun FloatingBottomNavRow(
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 val itemModifier = Modifier
                     .widthIn(min = 48.dp)
-                    .fillMaxHeight()
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,
@@ -415,14 +414,16 @@ private fun FloatingBottomNavRow(
                 if (useExpressivePill) {
                     Box(
                         modifier = itemModifier
-                            .wrapContentWidth()
-                            .padding(vertical = 6.dp),
+                            .height(48.dp)
+                            .animateContentSize(alignment = Alignment.Center)
+                            .padding(vertical = 4.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(
                             modifier = Modifier
                                 .height(40.dp)
                                 .widthIn(min = 40.dp)
+                                .animateContentSize(alignment = Alignment.Center)
                                 .background(selectedContainerColor, CircleShape)
                                 .padding(horizontal = if (isSelected) 8.dp else 0.dp),
                             horizontalArrangement = Arrangement.Center,
@@ -452,7 +453,7 @@ private fun FloatingBottomNavRow(
                 } else {
                     Column(
                     modifier = Modifier
-                        .then(itemModifier)
+                        .then(itemModifier.fillMaxHeight())
                         .padding(horizontal = 1.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,

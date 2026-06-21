@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -97,6 +98,7 @@ data class KototoroTopBarMenuAction(
 @Composable
 fun KototoroTopBar(
     query: String,
+    titleRes: Int? = null,
     onSearchClick: () -> Unit = {},
     onOpenListOptions: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
@@ -160,6 +162,7 @@ fun KototoroTopBar(
     val showMoreActions = true
     val compactTabsExpanded = compactTabsState != null && (areCompactTabsExpanded || forceCompactTabsExpanded)
     val hidePrimaryControlsForTabs = compactTabsExpanded
+    val topBarTitle = titleRes?.let { stringResource(it) }
 
     LaunchedEffect(compactTabsState) {
         if (compactTabsState == null) {
@@ -195,23 +198,31 @@ fun KototoroTopBar(
                         onClick = onSearchClick,
                         modifier = Modifier.size(CompactTopBarPillHeight),
                     ) {
-                        Box(
+                        Icon(
+                            Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search),
                             modifier = Modifier.size(CompactTopBarIconSize),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Filled.Search,
-                                contentDescription = stringResource(R.string.search),
-                                modifier = Modifier.size(CompactTopBarIconSize),
-                            )
-                        }
+                        )
                     }
                 }
+            }
+            if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
+                Text(
+                    text = topBarTitle,
+                    modifier = Modifier
+                        .widthIn(max = if (compactTabsState != null) 72.dp else 128.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             if (compactTabsState != null) {
                 InlineCompactTopBarTabsRail(
                     state = compactTabsState,
-                    modifier = Modifier.weight(1f, fill = true),
+                    modifier = Modifier
+                        .weight(1f, fill = true)
+                        .widthIn(max = if (hidePrimaryControlsForTabs) Dp.Unspecified else 196.dp),
                     onExpandedChange = { areCompactTabsExpanded = it },
                 )
             } else {

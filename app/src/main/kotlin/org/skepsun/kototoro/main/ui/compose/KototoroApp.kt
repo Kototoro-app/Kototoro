@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
@@ -43,6 +44,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -52,6 +54,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -93,7 +96,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.mutableLongStateOf
@@ -118,6 +120,7 @@ import org.skepsun.kototoro.main.ui.navigation3.FeedNavKey
 import org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey
 import org.skepsun.kototoro.main.ui.navigation3.HomeNavKey
 import org.skepsun.kototoro.main.ui.navigation3.LocalNavKey
+import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
 import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
 import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
 import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
@@ -150,6 +153,7 @@ private data class KototoroFilterVisibilityPrefs(
 private fun routeOwnerKeyForTopLevelKey(
     key: TopLevelNavKey?,
 ): String? = when (key) {
+    HomeNavKey -> "home"
     DiscoverNavKey -> "discover"
     HistoryNavKey -> "history"
     FavoritesNavKey -> "favorites"
@@ -157,7 +161,24 @@ private fun routeOwnerKeyForTopLevelKey(
     FeedNavKey -> "feed"
     LocalNavKey -> "local"
     SuggestionsNavKey -> "suggestions"
+    BookmarksNavKey -> "bookmarks"
     UpdatedNavKey -> "updated"
+    else -> null
+}
+
+private fun topLevelKeyForRouteOwnerKey(
+    ownerKey: String?,
+): TopLevelNavKey? = when (ownerKey) {
+    "home" -> HomeNavKey
+    "discover" -> DiscoverNavKey
+    "history" -> HistoryNavKey
+    "favorites" -> FavoritesNavKey
+    "explore" -> ExploreNavKey
+    "feed" -> FeedNavKey
+    "local" -> LocalNavKey
+    "suggestions" -> SuggestionsNavKey
+    "bookmarks" -> BookmarksNavKey
+    "updated" -> UpdatedNavKey
     else -> null
 }
 
@@ -186,6 +207,20 @@ private fun TopLevelNavKey?.supportsGridSizeSlider(): Boolean = when (this) {
     UpdatedNavKey,
     -> true
     else -> false
+}
+
+private fun TopLevelNavKey?.titleRes(): Int? = when (this) {
+    HomeNavKey -> R.string.home
+    HistoryNavKey -> R.string.history
+    FavoritesNavKey -> R.string.favourites
+    ExploreNavKey -> R.string.explore
+    DiscoverNavKey -> R.string.discover
+    FeedNavKey -> R.string.feed
+    LocalNavKey -> R.string.local_storage
+    SuggestionsNavKey -> R.string.suggestions
+    BookmarksNavKey -> R.string.bookmarks
+    UpdatedNavKey -> R.string.updated
+    else -> null
 }
 
 private fun lerpFloat(
@@ -507,6 +542,7 @@ fun KototoroApp(
     } else {
         null
     }
+    val chromeTopLevelKey = currentTopLevelKey ?: topLevelKeyForRouteOwnerKey(chromeTopBarOwnerKey)
     val contextualMenuActions = chromeTopBarOwnerKey
         ?.let(routeContextualMenuActions::get)
         .orEmpty()
@@ -591,7 +627,7 @@ fun KototoroApp(
             heroTransitionPhase = HeroTransitionPhase.Idle
         }
     }
-    val showBrowseSourceSettingsEntry = currentTopLevelKey == ExploreNavKey || currentTopLevelKey == DiscoverNavKey
+    val showBrowseSourceSettingsEntry = chromeTopLevelKey == ExploreNavKey || chromeTopLevelKey == DiscoverNavKey
     val resolvedTopBarOverrideState = chromeTopBarOwnerKey
         ?.let(routeTopBarOverrideStates::get)
         ?: globalTopBarOverrideState
@@ -657,9 +693,9 @@ fun KototoroApp(
         label = "chrome_alpha",
     )
     val chromeAlpha = animatedChromeAlpha
-    val isHomeRoute = currentTopLevelKey == HomeNavKey
-    val supportsDisplayModeMenu = currentTopLevelKey.supportsDisplayModeMenu()
-    val supportsGridSizeSlider = currentTopLevelKey.supportsGridSizeSlider()
+    val isHomeRoute = chromeTopLevelKey == HomeNavKey
+    val supportsDisplayModeMenu = chromeTopLevelKey.supportsDisplayModeMenu()
+    val supportsGridSizeSlider = chromeTopLevelKey.supportsGridSizeSlider()
 
     LaunchedEffect(currentTopLevelKey) {
         val mappedId = currentTopLevelKey?.let(::bottomNavItemIdForTopLevelKey) ?: -1
@@ -796,6 +832,7 @@ fun KototoroApp(
                             }
                         },
                         query = query,
+                        titleRes = chromeTopLevelKey.titleRes(),
                         onSearchClick = {
                             searchOverlayInitialQuery = query
                             isSearchOverlayQueryCommitted = false
@@ -871,7 +908,6 @@ fun KototoroApp(
                         forceCompactTabsExpanded = shouldKeepTabsVisible,
                         effectiveCompactTabsTopBarOffset = effectiveCompactTabsTopBarOffset,
                     )
-
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
                         chromeSharedTransitionScope = chromeSharedTransitionScope,
@@ -1117,6 +1153,7 @@ private fun BoxScope.MainTopChrome(
     chromeAlpha: Float,
     onTopBarHeightMeasured: (Int) -> Unit,
     query: String,
+    titleRes: Int?,
     onSearchClick: () -> Unit,
     onOpenListOptions: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -1182,6 +1219,7 @@ private fun BoxScope.MainTopChrome(
     } else {
         KototoroTopBar(
             query = query,
+            titleRes = titleRes,
             onSearchClick = onSearchClick,
             onOpenListOptions = onOpenListOptions,
             onSettingsClick = onSettingsClick,

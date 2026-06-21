@@ -224,6 +224,7 @@ import java.util.concurrent.TimeUnit
 
 private val DetailsTopBarHeight = CompactTopBarPillHeight
 private const val ReadingRecordSheetLogTag = "ReadingRecordSheet"
+private const val DetailsSheetMinOpacityPercent = 80
 private val DetailsTopPrimaryActionButtonSize = CompactTopBarPillHeight
 private val DetailsTopCompactActionButtonSize = CompactTopBarCompactButtonSize
 private val DetailsTopActionIconSize = CompactTopBarIconSize
@@ -533,9 +534,16 @@ fun DetailsScreen(
         }
     }
     val panoramaExtraHeightDp = panoramaPrefs.extraHeight.coerceAtLeast(0).dp
-    val detailsHeaderTopSpacing = overlayTopBarInset + if (panoramaPrefs.isEnabled) panoramaExtraHeightDp else 0.dp
+    val compactPanoramaTopBarInset = remember(stableStatusBarTopPadding) {
+        stableStatusBarTopPadding + DetailsTopBarHeight
+    }
+    val detailsHeaderTopSpacing = if (panoramaPrefs.isEnabled) {
+        compactPanoramaTopBarInset + panoramaExtraHeightDp
+    } else {
+        overlayTopBarInset
+    }
     val landscapeHeaderTopSpacing = if (panoramaPrefs.isEnabled) {
-        DetailsTopBarHeight + 12.dp + panoramaExtraHeightDp
+        panoramaExtraHeightDp
     } else {
         0.dp
     }
@@ -1633,7 +1641,10 @@ private fun DetailsTranslucentBottomSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val sheetColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
+    val sheetColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.regularStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -1872,7 +1883,10 @@ private fun TrackingReviewsSheet(
     onOpenExternal: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val reviewCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    val reviewCardColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.subtleStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     DetailsTranslucentBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.fillMaxHeight(0.92f),
@@ -2003,7 +2017,10 @@ private fun TrackingCommentsSheet(
     onOpenExternal: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val commentCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
+    val commentCardColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.subtleStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     DetailsTranslucentBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = Modifier.fillMaxHeight(0.92f),
@@ -3324,6 +3341,16 @@ private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction.coerceIn(0f, 1f)
 }
 
+@Composable
+private fun rememberDetailsSheetGlassPrefs() =
+    rememberGlassPrefsOrFallback().let { prefs ->
+        remember(prefs) {
+            prefs.copy(
+                hazeOpacityPercent = prefs.hazeOpacityPercent.coerceAtLeast(DetailsSheetMinOpacityPercent),
+            )
+        }
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReadingRecordSheet(
@@ -3334,7 +3361,10 @@ private fun ReadingRecordSheet(
     onJumpPointClick: (ReadingJumpPointEntity) -> Unit,
 ) {
     val sessions = snapshot.sessions
-    val sheetColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
+    val sheetColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.regularStyle(),
+        glassPrefs = rememberDetailsSheetGlassPrefs(),
+    )
     val lastReadAt = snapshot.summary.lastReadAt ?: sessions.maxOfOrNull { it.endAt }
     val totalDuration = snapshot.summary.totalDuration.takeIf { it > 0L }
         ?: sessions.sumOf { (it.endAt - it.startAt).coerceAtLeast(0L) }

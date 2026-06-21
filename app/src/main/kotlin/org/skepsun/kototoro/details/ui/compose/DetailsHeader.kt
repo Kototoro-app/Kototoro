@@ -126,6 +126,7 @@ import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -155,6 +156,8 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.parsers.model.ContentType
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private const val DetailsSourceOverlayMinOpacityPercent = 80
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -2234,7 +2237,10 @@ private fun DetailsSourceOverlayDialog(
     content: @Composable (panelDragModifier: Modifier) -> Unit,
 ) {
     var panelOffsetY by remember { mutableFloatStateOf(0f) }
-    val panelColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
+    val panelColors = rememberGlassSurfaceColors(
+        style = GlassDefaults.regularStyle(),
+        glassPrefs = rememberDetailsSourceOverlayGlassPrefs(),
+    )
     val density = androidx.compose.ui.platform.LocalDensity.current
     val dismissThresholdPx = remember(density) {
         with(density) { 96.dp.toPx() }
@@ -2313,6 +2319,16 @@ private fun DetailsSourceOverlayDialog(
         }
     }
 }
+
+@Composable
+private fun rememberDetailsSourceOverlayGlassPrefs() =
+    rememberGlassPrefsOrFallback().let { prefs ->
+        remember(prefs) {
+            prefs.copy(
+                hazeOpacityPercent = prefs.hazeOpacityPercent.coerceAtLeast(DetailsSourceOverlayMinOpacityPercent),
+            )
+        }
+    }
 
 @Composable
 private fun MetadataSearchSection(
