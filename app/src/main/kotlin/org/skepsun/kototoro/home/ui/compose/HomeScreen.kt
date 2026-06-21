@@ -807,7 +807,7 @@ private fun HomeRecentSearchSection(
     modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val chipShape = RoundedCornerShape(if (expressive) 18.dp else 8.dp)
+    val chipShape = RoundedCornerShape(if (expressive) 16.dp else 8.dp)
     val chipColors = AssistChipDefaults.assistChipColors(
         containerColor = if (expressive) {
             MaterialTheme.colorScheme.surfaceContainerLow
@@ -840,19 +840,20 @@ private fun HomeRecentSearchSection(
             )
         }
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             queries.forEach { query ->
                 AssistChip(
                     onClick = { onQueryClick(query) },
+                    modifier = Modifier.height(32.dp),
                     shape = chipShape,
                     colors = chipColors,
                     trailingIcon = {
                         Icon(
                             painter = painterResource(R.drawable.ic_history),
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(14.dp),
                         )
                     },
                     label = {
@@ -860,6 +861,7 @@ private fun HomeRecentSearchSection(
                             text = query,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelMedium,
                         )
                     },
                 )

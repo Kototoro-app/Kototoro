@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -609,12 +611,14 @@ fun SettingsDialogTextPreference(
     value: String,
     summary: String? = null,
     placeholder: String? = null,
+    suggestions: List<SettingsChoiceOption<String>> = emptyList(),
     isPassword: Boolean = false,
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
     var pendingValue by remember(value) { mutableStateOf(value) }
+    var isSuggestionsExpanded by remember { mutableStateOf(false) }
     val displayValue = when {
         isPassword && value.isNotEmpty() -> "\u2022".repeat(value.length.coerceAtMost(8))
         value.isNotBlank() -> value
@@ -666,25 +670,64 @@ fun SettingsDialogTextPreference(
 
     if (isDialogVisible) {
         AlertDialog(
-            onDismissRequest = { isDialogVisible = false },
+            onDismissRequest = {
+                isSuggestionsExpanded = false
+                isDialogVisible = false
+            },
             title = { Text(text = title) },
             text = {
-                OutlinedTextField(
-                    value = pendingValue,
-                    onValueChange = { pendingValue = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = placeholder?.let { { Text(text = it) } },
-                    visualTransformation = if (isPassword) {
-                        PasswordVisualTransformation()
-                    } else {
-                        VisualTransformation.None
-                    },
-                )
+                Column {
+                    OutlinedTextField(
+                        value = pendingValue,
+                        onValueChange = {
+                            pendingValue = it
+                            isSuggestionsExpanded = suggestions.isNotEmpty()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = placeholder?.let { { Text(text = it) } },
+                        trailingIcon = if (suggestions.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { isSuggestionsExpanded = !isSuggestionsExpanded }) {
+                                    Icon(
+                                        imageVector = if (isSuggestionsExpanded) {
+                                            Icons.Filled.KeyboardArrowUp
+                                        } else {
+                                            Icons.Filled.KeyboardArrowDown
+                                        },
+                                        contentDescription = null,
+                                    )
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                        visualTransformation = if (isPassword) {
+                            PasswordVisualTransformation()
+                        } else {
+                            VisualTransformation.None
+                        },
+                    )
+                    DropdownMenu(
+                        expanded = isSuggestionsExpanded && suggestions.isNotEmpty(),
+                        onDismissRequest = { isSuggestionsExpanded = false },
+                    ) {
+                        suggestions.forEach { suggestion ->
+                            DropdownMenuItem(
+                                text = { Text(text = suggestion.label) },
+                                onClick = {
+                                    pendingValue = suggestion.value
+                                    isSuggestionsExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         onValueChange(pendingValue)
+                        isSuggestionsExpanded = false
                         isDialogVisible = false
                     },
                 ) {
@@ -692,7 +735,12 @@ fun SettingsDialogTextPreference(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { isDialogVisible = false }) {
+                TextButton(
+                    onClick = {
+                        isSuggestionsExpanded = false
+                        isDialogVisible = false
+                    },
+                ) {
                     Text(text = stringResource(android.R.string.cancel))
                 }
             },

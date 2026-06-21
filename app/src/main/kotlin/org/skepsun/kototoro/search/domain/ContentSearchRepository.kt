@@ -280,10 +280,12 @@ class ContentSearchRepository @Inject constructor(
 
 	fun saveSearchQuery(query: String) {
 		recentSuggestions.saveRecentQuery(query, null)
+		notifySearchHistoryChanged()
 	}
 
 	suspend fun clearSearchHistory(): Unit = withContext(Dispatchers.IO) {
 		recentSuggestions.clearHistory()
+		notifySearchHistoryChanged()
 	}
 
 	suspend fun deleteSearchQuery(query: String) = withContext(Dispatchers.IO) {
@@ -292,6 +294,11 @@ class ContentSearchRepository @Inject constructor(
 			"display1 = ?",
 			arrayOf(query),
 		)
+		notifySearchHistoryChanged()
+	}
+
+	private fun notifySearchHistoryChanged() {
+		context.contentResolver.notifyChange(ContentSuggestionsProvider.QUERY_URI, null)
 	}
 
 	suspend fun getSearchHistoryCount(): Int = withContext(Dispatchers.IO) {

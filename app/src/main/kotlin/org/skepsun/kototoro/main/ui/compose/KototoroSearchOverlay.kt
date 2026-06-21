@@ -37,7 +37,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
@@ -50,8 +49,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -491,6 +493,9 @@ fun KototoroSearchOverlay(
                     onQueryChanged(recentQuery)
                     submitSearch(recentQuery)
                 },
+                onRecentQueryCompleteClick = { recentQuery ->
+                    onQueryChanged(recentQuery)
+                },
                 onHintClick = { hint ->
                     onQueryChanged(hint)
                     submitSearch(hint)
@@ -609,6 +614,7 @@ private fun SuggestionList(
     modifier: Modifier = Modifier,
     style: SearchOverlayStyle,
     onRecentQueryClick: (String) -> Unit,
+    onRecentQueryCompleteClick: (String) -> Unit,
     onHintClick: (String) -> Unit,
     onAuthorSuggestionClick: (String) -> Unit,
     onContentSuggestionClick: (Content) -> Unit,
@@ -661,27 +667,44 @@ private fun SuggestionList(
         ) { item ->
             when (item) {
                 is SearchSuggestionItem.RecentQuery -> {
-                    SearchSuggestionRow(
-                        text = item.query,
-                        onClick = { onRecentQueryClick(item.query) },
-                        style = style,
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_history),
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
+                    val dismissState = rememberSwipeToDismissBoxState()
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        modifier = Modifier.fillMaxWidth(),
+                        backgroundContent = {
+                            RecentQueryDismissBackground(
+                                dismissDirection = dismissState.dismissDirection,
+                                style = style,
                             )
                         },
-                        trailingContent = {
-                            IconButton(onClick = { onDeleteQuery(item.query) }) {
+                        enableDismissFromStartToEnd = true,
+                        enableDismissFromEndToStart = true,
+                        onDismiss = { onDeleteQuery(item.query) },
+                    ) {
+                        SearchSuggestionRow(
+                            text = item.query,
+                            onClick = { onRecentQueryClick(item.query) },
+                            style = style,
+                            leadingIcon = {
                                 Icon(
-                                    imageVector = Icons.Filled.Close,
-                                    contentDescription = stringResource(R.string.remove),
-                                    modifier = Modifier.size(18.dp),
+                                    painter = painterResource(R.drawable.ic_history),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
                                 )
-                            }
-                        },
-                    )
+                            },
+                            trailingContent = {
+                                IconButton(onClick = { onRecentQueryCompleteClick(item.query) }) {
+                                    Icon(
+                                        painter = painterResource(
+                                            androidx.appcompat.R.drawable.abc_ic_commit_search_api_mtrl_alpha,
+                                        ),
+                                        contentDescription = stringResource(R.string.search),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
 
                 is SearchSuggestionItem.Hint -> {
@@ -825,6 +848,33 @@ private fun SuggestionList(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RecentQueryDismissBackground(
+    dismissDirection: SwipeToDismissBoxValue,
+    style: SearchOverlayStyle,
+) {
+    val contentAlignment = when (dismissDirection) {
+        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+        SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+        SwipeToDismissBoxValue.Settled -> Alignment.CenterEnd
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(style.rowCornerRadius))
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(horizontal = 20.dp),
+        contentAlignment = contentAlignment,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_delete),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onErrorContainer,
+        )
     }
 }
 

@@ -4,6 +4,7 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.jsoup.Jsoup
 import org.jsoup.HttpStatusException
 import org.skepsun.kototoro.parsers.exception.AuthRequiredException
 import org.skepsun.kototoro.parsers.exception.GraphQLException
@@ -110,37 +111,48 @@ public class OkHttpWebClient(
 		return this
 	}
 
-    private fun Response.ensureSuccess(): Response {
-        fun peekErrorBody(): String {
-            return runCatching {
-                val peek = peekBody(1024)
-                val bytes = peek.bytes()
-                val s = try {
-                    String(bytes, Charsets.UTF_8)
-                } catch (_: Exception) {
-                    bytes.joinToString(limit = 64, truncated = "…") { it.toUByte().toString() }
-                }
-                s
-            }.getOrDefault("")
-        }
+	private fun Response.ensureSuccess(): Response {
+		fun peekErrorBody(): String {
+			return runCatching {
+				val peek = peekBody(1024)
+				val bytes = peek.bytes()
+				val s = try {
+					String(bytes, Charsets.UTF_8)
+				} catch (_: Exception) {
+					bytes.joinToString(limit = 64, truncated = "…") { it.toUByte().toString() }
+				}
+				s.toDisplayErrorBody()
+			}.getOrDefault("")
+		}
 
-        val exception: Exception? = when (code) { // Catch some error codes, not all
-            HttpURLConnection.HTTP_NOT_FOUND -> NotFoundException(message, request.url.toString())
-            HttpURLConnection.HTTP_UNAUTHORIZED -> request.tag(ContentSource::class.java)?.let {
-                AuthRequiredException(it)
-            } ?: HttpStatusException(message, code, request.url.toString())
+		val exception: Exception? = when (code) { // Catch some error codes, not all
+			HttpURLConnection.HTTP_NOT_FOUND -> NotFoundException(message, request.url.toString())
+			HttpURLConnection.HTTP_UNAUTHORIZED -> request.tag(ContentSource::class.java)?.let {
+				AuthRequiredException(it)
+			} ?: HttpStatusException(message, code, request.url.toString())
 
-            in 400..599 -> {
-                val bodyText = peekErrorBody()
-                val msg = if (bodyText.isNotBlank()) "${message}: ${bodyText}" else message
-                HttpStatusException(msg, code, request.url.toString())
-            }
-            else -> null
-        }
-        if (exception != null) {
-            runCatching { close() }.onFailure { exception.addSuppressed(it) }
-            throw exception
-        }
-        return this
-    }
+			in 400..599 -> {
+				val bodyText = peekErrorBody()
+				val msg = if (bodyText.isNotBlank()) "$message: $bodyText" else message
+				HttpStatusException(msg, code, request.url.toString())
+			}
+			else -> null
+		}
+		if (exception != null) {
+			runCatching { close() }.onFailure { exception.addSuppressed(it) }
+			throw exception
+		}
+		return this
+	}
+
+	private fun String.toDisplayErrorBody(): String {
+		val trimmed = trim()
+		if (trimmed.isEmpty()) {
+			return ""
+		}
+		if (!trimmed.startsWith("<")) {
+			return trimmed.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+		}
+		return Jsoup.parse(trimmed).text().ifBlank { "HTML error response" }
+	}
 }

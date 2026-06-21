@@ -443,22 +443,7 @@ class SourceComposeSettingsFragment : Fragment() {
         return buildList {
             configKeys.forEach { key ->
                 when (key) {
-                    is ConfigKey.Domain -> add(
-                        SourceSettingsTextRowUiState(
-                            id = key.key,
-                            title = getString(contentType.getDomainTitleResId()),
-                            value = sourceSettings[key],
-                            placeholder = key.defaultValue,
-                            onValueChange = onDomainValueChange@{ value ->
-                                val trimmed = value.trim()
-                                if (trimmed.isNotEmpty() && !DomainValidator.isValidDomain(trimmed)) {
-                                    showToast(R.string.invalid_domain_message)
-                                    return@onDomainValueChange
-                                }
-                                sourceSettings[key] = trimmed
-                            },
-                        ),
-                    )
+                    is ConfigKey.Domain -> add(buildDomainRow(contentType, key))
 
                     is ConfigKey.Text -> add(
                         SourceSettingsTextRowUiState(
@@ -577,6 +562,40 @@ class SourceComposeSettingsFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun buildDomainRow(
+        contentType: ContentType,
+        key: ConfigKey.Domain,
+    ): SourceSettingsRowUiState {
+        return SourceSettingsTextRowUiState(
+            id = key.key,
+            title = getString(contentType.getDomainTitleResId()),
+            value = sourceSettings[key],
+            placeholder = key.defaultValue,
+            suggestions = buildDomainPresetOptions(key),
+            onValueChange = { value -> setDomainValue(key, value) },
+        )
+    }
+
+    private fun buildDomainPresetOptions(
+        key: ConfigKey.Domain,
+    ): List<SettingsChoiceOption<String>> {
+        return key.presetValues
+            .distinct()
+            .map { domain -> SettingsChoiceOption(domain, domain) }
+    }
+
+    private fun setDomainValue(
+        key: ConfigKey.Domain,
+        value: String,
+    ) {
+        val trimmed = value.trim()
+        if (trimmed.isNotEmpty() && !DomainValidator.isValidDomain(trimmed)) {
+            showToast(R.string.invalid_domain_message)
+            return
+        }
+        sourceSettings[key] = trimmed
     }
 
     private fun buildUserAgentPresetOptions(currentValue: String): List<SettingsChoiceOption<String>> {

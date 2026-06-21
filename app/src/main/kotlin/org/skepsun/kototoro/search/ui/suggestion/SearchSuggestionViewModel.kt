@@ -209,13 +209,13 @@ class SearchSuggestionViewModel @Inject constructor(
 			} else {
 				null
 			},
-			if (SearchSuggestionType.SOURCES in types) {
-				async { getSources(searchQuery, enabledSources) }
+			if (SearchSuggestionType.MANGA in types || searchQuery.isBlank()) {
+				async { getContent(searchQuery) }
 			} else {
 				null
 			},
-			if (SearchSuggestionType.MANGA in types) {
-				async { getContent(searchQuery) }
+			if (SearchSuggestionType.SOURCES in types) {
+				async { getSources(searchQuery, enabledSources) }
 			} else {
 				null
 			},
