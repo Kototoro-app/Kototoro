@@ -382,27 +382,6 @@ private fun HomeHighlightsSections(
             .padding(horizontal = 0.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (updateItems.isNotEmpty()) {
-            Surface(
-                shape = sectionShape,
-                color = sectionColor,
-                tonalElevation = 0.dp,
-            ) {
-                HomeContentRowSection(
-                    title = stringResource(R.string.home_recent_updates),
-                    sectionKey = "recent_updates",
-                    iconRes = R.drawable.ic_updated,
-                    items = updateDisplayItems,
-                    count = unreadUpdatesCount,
-                    posterStyle = posterStyle,
-                    listMode = listMode,
-                    onItemClick = onItemClick,
-                    onMoreClick = onViewAllUpdatesClick,
-                    addTopSpacing = false,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-                )
-            }
-        }
         if (historyItems.isNotEmpty()) {
             Surface(
                 shape = sectionShape,
@@ -419,6 +398,27 @@ private fun HomeHighlightsSections(
                     listMode = listMode,
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllRecentClick,
+                    addTopSpacing = false,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                )
+            }
+        }
+        if (updateItems.isNotEmpty()) {
+            Surface(
+                shape = sectionShape,
+                color = sectionColor,
+                tonalElevation = 0.dp,
+            ) {
+                HomeContentRowSection(
+                    title = stringResource(R.string.home_recent_updates),
+                    sectionKey = "recent_updates",
+                    iconRes = R.drawable.ic_updated,
+                    items = updateDisplayItems,
+                    count = unreadUpdatesCount,
+                    posterStyle = posterStyle,
+                    listMode = listMode,
+                    onItemClick = onItemClick,
+                    onMoreClick = onViewAllUpdatesClick,
                     addTopSpacing = false,
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                 )
