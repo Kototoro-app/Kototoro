@@ -361,7 +361,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
 		val entityIdMapping = LinkedHashMap<Long, Long>()
 		snapshot.entityGraph.entities.forEach { remote ->
-			val localId = restoreSyncEntity(
+			val localId = restoreGoogleDriveSyncEntity(
 				EntityRecord(
 					id = remote.id,
 					type = remote.type,
@@ -532,48 +532,6 @@ class GoogleDriveSyncRepository @Inject constructor(
 			return true
 		}
 		return localState == EntityBindingState.MANUAL && remoteState != EntityBindingState.MANUAL
-	}
-
-	private suspend fun MangaDatabase.restoreSyncEntity(remote: EntityRecord): Long {
-		val dao = getEntityGraphDao()
-		val trimmedName = remote.primaryName.trim()
-		val computedHash = computeNameHash(trimmedName)
-		val existing = dao.findEntity(remote.id)
-			?.takeIf { it.type == remote.type }
-			?: dao.findEntityByTypeAndPrimaryName(remote.type, trimmedName)
-		if (existing == null) {
-			val newRecord = remote.copy(
-				id = 0L,
-				primaryName = trimmedName,
-				nameHash = computedHash,
-				aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),
-				createdAt = remote.createdAt.coerceAtLeast(0L),
-				lastAccessed = remote.lastAccessed.coerceAtLeast(0L),
-				accessCount = remote.accessCount.coerceAtLeast(1),
-			)
-			val insertedId = dao.insertEntityIgnore(newRecord)
-			if (insertedId != -1L) {
-				return insertedId
-			}
-			return dao.findEntityByTypeAndNameHash(remote.type, computedHash)?.id
-				?: dao.insertEntity(newRecord.copy(nameHash = remote.id.takeIf { it > 0L } ?: -(remote.id + 1)))
-		}
-		val mergedNames = mergeAliases(
-			existing.primaryName,
-			decodeStringList(existing.aliases) + listOf(trimmedName) + decodeStringList(remote.aliases),
-		)
-		val newPrimary = mergedNames.firstOrNull() ?: existing.primaryName
-		dao.upsertEntityRecord(
-			existing.copy(
-				primaryName = newPrimary,
-				nameHash = computeNameHash(newPrimary),
-				aliases = encodeStringList(mergedNames.drop(1)),
-				createdAt = minOf(existing.createdAt, remote.createdAt.coerceAtLeast(0L)),
-				lastAccessed = maxOf(existing.lastAccessed, remote.lastAccessed.coerceAtLeast(0L)),
-				accessCount = maxOf(existing.accessCount, remote.accessCount.coerceAtLeast(1)),
-			),
-		)
-		return existing.id
 	}
 
 	private fun TrackEntity.mapWith(mapping: SyncIdMapping): TrackEntity {
