@@ -155,6 +155,9 @@ private fun FeedUpdatedPosterCard(
 			.build()
 	}
 	val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
+	val counterBadgeModel = remember(model, item.totalNewChapters) {
+		model.asBadgeModel().copy(counter = item.totalNewChapters)
+	}
 	var coverBounds by remember(model.id) { mutableStateOf<Rect?>(null) }
 	val sharedTransitionScope = LocalSharedTransitionScope.current
 	val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -196,6 +199,14 @@ private fun FeedUpdatedPosterCard(
 				onSuccess = { state ->
 					HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
 				},
+			)
+			ContentCardCornerBadges(
+				badges = if (item.totalNewChapters > 0) setOf("counter") else emptySet(),
+				item = counterBadgeModel,
+				corner = Alignment.TopEnd,
+				cardRadius = 12.dp,
+				metrics = badgeMetrics,
+				modifier = Modifier.align(Alignment.TopEnd),
 			)
 			if ("nsfw" in badgesBottomRight) {
 				ContentCardCornerBadges(

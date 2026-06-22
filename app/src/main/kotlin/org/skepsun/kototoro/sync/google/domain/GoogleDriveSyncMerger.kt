@@ -17,6 +17,8 @@ import org.skepsun.kototoro.sync.google.data.model.SyncWorkHistory
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkStats
 import org.skepsun.kototoro.tracker.data.TrackEntity
+import org.skepsun.kototoro.tracker.data.isNewerThan
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
 
 object GoogleDriveSyncMerger {
 
@@ -163,7 +165,9 @@ object GoogleDriveSyncMerger {
 	}
 
 	private fun SyncTrack.mergeWith(remote: SyncTrack): SyncTrack {
-		val newer = if (remote.isNewerThan(this)) remote else this
+		val localEntity = toEntity()
+		val remoteEntity = remote.toEntity()
+		val newer = if (remoteEntity.isNewerThan(localEntity)) remote else this
 		val mergedLastError = when {
 			newer.lastResult == TrackEntity.RESULT_FAILED -> newer.lastError
 			lastResult == TrackEntity.RESULT_FAILED && remote.lastResult != TrackEntity.RESULT_FAILED -> remote.lastError
@@ -174,20 +178,12 @@ object GoogleDriveSyncMerger {
 			mangaId = mangaId,
 			entityId = entityId ?: remote.entityId,
 			lastChapterId = newer.lastChapterId,
-			newChapters = if (newChapters == 0 || remote.newChapters == 0) 0 else maxOf(newChapters, remote.newChapters),
+			newChapters = mergeRestoredTrackNewChapters(localEntity, remoteEntity),
 			lastCheckTime = maxOf(lastCheckTime, remote.lastCheckTime),
 			lastChapterDate = maxOf(lastChapterDate, remote.lastChapterDate),
 			lastResult = newer.lastResult,
 			lastError = mergedLastError,
 		)
-	}
-
-	private fun SyncTrack.isNewerThan(other: SyncTrack): Boolean {
-		return when {
-			lastChapterDate != other.lastChapterDate -> lastChapterDate > other.lastChapterDate
-			lastCheckTime != other.lastCheckTime -> lastCheckTime > other.lastCheckTime
-			else -> lastChapterId > other.lastChapterId
-		}
 	}
 
 	private fun mergeTrackLogs(items: List<SyncTrackLog>): SyncTrackLog {

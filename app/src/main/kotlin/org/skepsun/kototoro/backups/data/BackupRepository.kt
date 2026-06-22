@@ -78,7 +78,10 @@ import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepositor
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
-import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
+import org.skepsun.kototoro.tracker.data.canBeClearedBy
+import org.skepsun.kototoro.tracker.data.isNewerThan
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
+import org.skepsun.kototoro.tracker.data.normalizeTrackFeedState
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -553,6 +556,12 @@ class BackupRepository @Inject constructor(
             if (BackupSection.SCROBBLING in sections) {
                 database.getScrobblingDao().deleteAll()
             }
+            if (BackupSection.TRACKS in sections) {
+                database.getTracksDao().clear()
+            }
+            if (BackupSection.TRACK_LOGS in sections) {
+                database.getTrackLogsDao().clear()
+            }
             if (BackupSection.STATS in sections) {
                 database.getWorkStatsDao().clear()
                 database.getStatsDao().clear()
@@ -578,13 +587,7 @@ class BackupRepository @Inject constructor(
         if (BackupSection.TRACKS !in sections && BackupSection.TRACK_LOGS !in sections) {
             return
         }
-        database.withTransaction {
-            database.getTrackLogsDao().run {
-                ensureUnreadUpdateLogs()
-                gc()
-                trim(TRACK_LOG_RETAINED_SIZE)
-            }
-        }
+        database.normalizeTrackFeedState()
     }
 
     private fun Set<BackupSection>.withImplicitRestoreSections(): Set<BackupSection> {
@@ -957,28 +960,12 @@ class BackupRepository @Inject constructor(
             mangaId = mangaId,
             entityId = entityId ?: remote.entityId,
             lastChapterId = newer.lastChapterId,
-            newChapters = mergeRestoredNewChapters(remote),
+            newChapters = mergeRestoredTrackNewChapters(this, remote),
             lastCheckTime = maxOf(lastCheckTime, remote.lastCheckTime),
             lastChapterDate = maxOf(lastChapterDate, remote.lastChapterDate),
             lastResult = newer.lastResult,
             lastError = mergedLastError,
         )
-    }
-
-    private fun TrackEntity.mergeRestoredNewChapters(remote: TrackEntity): Int {
-        return if (newChapters == 0 || remote.newChapters == 0) {
-            0
-        } else {
-            maxOf(newChapters, remote.newChapters)
-        }
-    }
-
-    private fun TrackEntity.isNewerThan(other: TrackEntity): Boolean {
-        return when {
-            lastChapterDate != other.lastChapterDate -> lastChapterDate > other.lastChapterDate
-            lastCheckTime != other.lastCheckTime -> lastCheckTime > other.lastCheckTime
-            else -> lastChapterId > other.lastChapterId
-        }
     }
 
     private suspend fun MangaDatabase.mergeTrackLog(remote: TrackLogEntity) {
@@ -994,9 +981,13 @@ class BackupRepository @Inject constructor(
             dao.insert(remote)
         } else if (existing.isUnread && !remote.isUnread) {
             dao.markAsRead(existing.id)
-            getTracksDao().clearCounter(existing.mangaId)
+            getTracksDao().findByOwnerId(existing.ownerId)
+                ?.takeIf { it.canBeClearedBy(remote) }
+                ?.let { getTracksDao().clearCounter(existing.mangaId) }
         } else if (!existing.isUnread) {
-            getTracksDao().clearCounter(existing.mangaId)
+            getTracksDao().findByOwnerId(existing.ownerId)
+                ?.takeIf { it.canBeClearedBy(existing) }
+                ?.let { getTracksDao().clearCounter(existing.mangaId) }
         }
     }
 

@@ -42,9 +42,12 @@ import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.HistoryRepository
-import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
+import org.skepsun.kototoro.tracker.data.canBeClearedBy
+import org.skepsun.kototoro.tracker.data.isNewerThan
+import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
+import org.skepsun.kototoro.tracker.data.normalizeTrackFeedState
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -328,10 +331,8 @@ class GoogleDriveSyncRepository @Inject constructor(
 			snapshot.feed.logs.forEach { log ->
 				database.mergeTrackLog(log.toEntity().mapWith(mapping))
 			}
-			database.getTrackLogsDao().ensureUnreadUpdateLogs()
-			database.getTrackLogsDao().gc()
-			database.getTrackLogsDao().trim(TRACK_LOG_RETAINED_SIZE)
 		}
+		database.normalizeTrackFeedState()
 	}
 
 	private suspend fun MangaDatabase.restoreSyncAnchors(snapshot: GoogleDriveSyncSnapshot): SyncIdMapping {
@@ -593,20 +594,12 @@ class GoogleDriveSyncRepository @Inject constructor(
 			mangaId = mangaId,
 			entityId = entityId ?: remote.entityId,
 			lastChapterId = newer.lastChapterId,
-			newChapters = if (newChapters == 0 || remote.newChapters == 0) 0 else maxOf(newChapters, remote.newChapters),
+			newChapters = mergeRestoredTrackNewChapters(this, remote),
 			lastCheckTime = maxOf(lastCheckTime, remote.lastCheckTime),
 			lastChapterDate = maxOf(lastChapterDate, remote.lastChapterDate),
 			lastResult = newer.lastResult,
 			lastError = mergedLastError,
 		)
-	}
-
-	private fun TrackEntity.isNewerThan(other: TrackEntity): Boolean {
-		return when {
-			lastChapterDate != other.lastChapterDate -> lastChapterDate > other.lastChapterDate
-			lastCheckTime != other.lastCheckTime -> lastCheckTime > other.lastCheckTime
-			else -> lastChapterId > other.lastChapterId
-		}
 	}
 
 	private suspend fun MangaDatabase.mergeTrackLog(remote: TrackLogEntity) {
@@ -625,9 +618,13 @@ class GoogleDriveSyncRepository @Inject constructor(
 			dao.insert(remote)
 		} else if (existing.isUnread && !remote.isUnread) {
 			dao.markAsRead(existing.id)
-			getTracksDao().clearCounter(existing.mangaId)
+			getTracksDao().findByOwnerId(existing.ownerId)
+				?.takeIf { it.canBeClearedBy(remote) }
+				?.let { getTracksDao().clearCounter(existing.mangaId) }
 		} else if (!existing.isUnread) {
-			getTracksDao().clearCounter(existing.mangaId)
+			getTracksDao().findByOwnerId(existing.ownerId)
+				?.takeIf { it.canBeClearedBy(existing) }
+				?.let { getTracksDao().clearCounter(existing.mangaId) }
 		}
 	}
 

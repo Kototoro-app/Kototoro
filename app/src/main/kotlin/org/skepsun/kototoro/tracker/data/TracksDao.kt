@@ -66,6 +66,102 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 	@Query("UPDATE tracks SET chapters_new = 0 WHERE manga_id = :mangaId")
 	abstract suspend fun clearCounter(mangaId: Long)
 
+	@Query(
+		"""
+		INSERT OR IGNORE INTO tracks(
+			owner_id,
+			manga_id,
+			entity_id,
+			last_chapter_id,
+			chapters_new,
+			last_check_time,
+			last_chapter_date,
+			last_result,
+			last_error
+		)
+		SELECT owner_id,
+			manga_id,
+			entity_id,
+			0,
+			SUM(
+				CASE
+					WHEN chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(chapters, 16) AS INTEGER)
+					WHEN chapters = '' THEN 1
+					ELSE LENGTH(chapters) - LENGTH(REPLACE(chapters, CHAR(10), '')) + 1
+				END
+			),
+			MAX(created_at),
+			MAX(created_at),
+			1,
+			NULL
+		FROM track_logs
+		WHERE unread = 1
+			AND NOT EXISTS (
+				SELECT 1
+				FROM tracks
+				WHERE tracks.owner_id = track_logs.owner_id
+			)
+		GROUP BY owner_id, manga_id, entity_id
+		""",
+	)
+	abstract suspend fun insertTracksFromUnreadLogs()
+
+	@Query(
+		"""
+		UPDATE tracks
+		SET
+			chapters_new = MAX(
+				chapters_new,
+				(
+					SELECT SUM(
+						CASE
+							WHEN track_logs.chapters LIKE 'New chapters x %' THEN CAST(SUBSTR(track_logs.chapters, 16) AS INTEGER)
+							WHEN track_logs.chapters = '' THEN 1
+							ELSE LENGTH(track_logs.chapters) - LENGTH(REPLACE(track_logs.chapters, CHAR(10), '')) + 1
+						END
+					)
+					FROM track_logs
+					WHERE track_logs.owner_id = tracks.owner_id
+						AND track_logs.unread = 1
+				)
+			),
+			last_check_time = MAX(
+				last_check_time,
+				IFNULL((
+					SELECT MAX(created_at)
+					FROM track_logs
+					WHERE track_logs.owner_id = tracks.owner_id
+						AND track_logs.unread = 1
+				), 0)
+			),
+			last_chapter_date = MAX(
+				last_chapter_date,
+				IFNULL((
+					SELECT MAX(created_at)
+					FROM track_logs
+					WHERE track_logs.owner_id = tracks.owner_id
+						AND track_logs.unread = 1
+				), 0)
+			),
+			last_result = CASE
+				WHEN (
+					SELECT COUNT(*)
+					FROM track_logs
+					WHERE track_logs.owner_id = tracks.owner_id
+						AND track_logs.unread = 1
+				) > 0 THEN 1
+				ELSE last_result
+			END
+		WHERE EXISTS (
+			SELECT 1
+			FROM track_logs
+			WHERE track_logs.owner_id = tracks.owner_id
+				AND track_logs.unread = 1
+		)
+		""",
+	)
+	abstract suspend fun restoreCountersFromUnreadLogs()
+
 	@Query("DELETE FROM tracks WHERE manga_id = :mangaId")
 	abstract suspend fun delete(mangaId: Long)
 
