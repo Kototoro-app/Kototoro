@@ -66,26 +66,38 @@ fun SettingsRootScreen(
     searchResults: List<SettingsItem>,
     onSearchResultClick: (SettingsItem) -> Unit,
     modifier: Modifier = Modifier,
+    listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) },
     topInset: Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+    horizontalPadding: Dp = 16.dp,
+    applyHorizontalDisplayCutoutPadding: Boolean = true,
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         val layoutDirection = LocalLayoutDirection.current
+        val displayCutoutStart = if (applyHorizontalDisplayCutoutPadding) {
+            WindowInsets.displayCutout
+                .only(WindowInsetsSides.Start)
+                .asPaddingValues()
+                .calculateLeftPadding(layoutDirection)
+        } else {
+            0.dp
+        }
+        val displayCutoutEnd = if (applyHorizontalDisplayCutoutPadding) {
+            WindowInsets.displayCutout
+                .only(WindowInsetsSides.End)
+                .asPaddingValues()
+                .calculateRightPadding(layoutDirection)
+        } else {
+            0.dp
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
-                start = WindowInsets.displayCutout
-                    .only(WindowInsetsSides.Start)
-                    .asPaddingValues()
-                    .calculateLeftPadding(layoutDirection) + 16.dp,
-                end = WindowInsets.displayCutout
-                    .only(WindowInsetsSides.End)
-                    .asPaddingValues()
-                    .calculateRightPadding(layoutDirection) + 16.dp,
+                start = displayCutoutStart + horizontalPadding,
+                end = displayCutoutEnd + horizontalPadding,
                 top = topInset + 4.dp,
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp,
             ),

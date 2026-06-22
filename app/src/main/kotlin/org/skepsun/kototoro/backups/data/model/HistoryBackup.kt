@@ -17,6 +17,7 @@ class HistoryBackup(
 	@SerialName("scroll") val scroll: Float,
 	@SerialName("percent") val percent: Float = PROGRESS_NONE,
 	@SerialName("chapters") val chaptersCount: Int = 0,
+	@SerialName("deleted_at") val deletedAt: Long = 0L,
 	@SerialName("manga") val manga: ContentBackup,
 ) {
 	// Legacy history payload keeps a projection snapshot only.
@@ -31,6 +32,7 @@ class HistoryBackup(
 		scroll = entity.history.scroll,
 		percent = entity.history.percent,
 		chaptersCount = entity.history.chaptersCount,
+		deletedAt = entity.history.deletedAt,
 		manga = ContentBackup(MangaWithTags(entity.manga, entity.tags)),
 	)
 
@@ -42,7 +44,7 @@ class HistoryBackup(
 		page = page,
 		scroll = scroll,
 		percent = percent,
-		deletedAt = 0L,
+		deletedAt = deletedAt,
 		chaptersCount = chaptersCount,
 	)
 }

@@ -1,8 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
 import android.content.Context
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentFactory
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
@@ -12,8 +10,6 @@ fun buildSettingsRootSections(
 	context: Context,
 	enabledSourcesCount: Int,
 	totalSourcesCount: Int,
-	classLoader: ClassLoader,
-	onOpenFragment: (Class<out Fragment>) -> Unit,
 	onOpenDestination: (SettingsDestination) -> Unit,
 ): List<SettingsRootSection> {
 	val contentSummary = if (enabledSourcesCount >= 0) {
@@ -152,35 +148,10 @@ fun buildSettingsRootSections(
 					onClick = { onOpenDestination(SettingsDestination.AboutSettings) },
 				),
 			)
-			buildOptionalDebugItem(context, classLoader, onOpenFragment)?.let(::add)
 		},
 	)
 
 	return listOf(usersSection, coreSection, servicesSection)
-}
-
-private fun buildOptionalDebugItem(
-	context: Context,
-	classLoader: ClassLoader,
-	onOpenFragment: (Class<out Fragment>) -> Unit,
-): SettingsRootItem? {
-	val fragmentClass = runCatching {
-		FragmentFactory.loadFragmentClass(
-			classLoader,
-			"org.skepsun.kototoro.settings.DebugSettingsFragment",
-		)
-	}.getOrNull() ?: return null
-
-	val iconRes = context.resources.getIdentifier("ic_debug", "drawable", context.packageName)
-		.takeIf { it != 0 }
-		?: R.drawable.ic_info_outline
-	return settingsRootItem(
-		key = "debug",
-		iconRes = iconRes,
-		title = context.getString(R.string.debug),
-		summary = context.getString(R.string.debug),
-		onClick = { onOpenFragment(fragmentClass) },
-	)
 }
 
 private fun settingsRootItem(

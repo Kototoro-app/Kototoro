@@ -26,6 +26,7 @@ suspend fun MangaDatabase.normalizeTrackFeedState() {
 		getTrackLogsDao().ensureUnreadUpdateLogs()
 		getTracksDao().insertTracksFromUnreadLogs()
 		getTracksDao().restoreCountersFromUnreadLogs()
+		getTracksDao().gc()
 		getTrackLogsDao().gc()
 		getTrackLogsDao().trim(TRACK_LOG_RETAINED_SIZE)
 	}

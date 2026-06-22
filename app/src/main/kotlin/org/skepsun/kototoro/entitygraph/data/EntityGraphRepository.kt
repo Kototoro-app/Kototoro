@@ -458,11 +458,13 @@ class EntityGraphRepository @Inject constructor(
 			} else {
 				dao.findEntitiesByIds(existingEntityIds).associateByTo(LinkedHashMap()) { it.id }
 			}
+			val redirectedEntityIds = LinkedHashMap<Long, Long>()
 			buildMap(distinctContents.size) {
 				for (content in distinctContents) {
 					val existingBinding = existingBindings[content.id]
 					if (existingBinding != null) {
-						val record = entityRecords[existingBinding.entityId] ?: dao.findEntity(existingBinding.entityId)
+						val entityId = redirectedEntityIds[existingBinding.entityId] ?: existingBinding.entityId
+						val record = entityRecords[entityId] ?: dao.findEntity(entityId)
 						if (record != null) {
 							val merged = mergeEntityRecord(
 								record = record,
@@ -471,17 +473,29 @@ class EntityGraphRepository @Inject constructor(
 								now = now,
 							)
 							if (merged != record) {
-								dao.updateEntity(merged)
-								entityRecords[merged.id] = merged
+								val resolved = updateEntityResolvingNameHashConflict(
+									dao = dao,
+									original = record,
+									merged = merged,
+									primaryName = content.title,
+									aliases = content.altTitles.toList(),
+									now = now,
+								)
+								if (resolved.id != record.id) {
+									redirectedEntityIds[record.id] = resolved.id
+									entityRecords.remove(record.id)
+								}
+								entityRecords[resolved.id] = resolved
 							}
 						}
+						val resolvedEntityId = redirectedEntityIds[existingBinding.entityId] ?: existingBinding.entityId
 						dao.upsertBindingForSource(
-							entityId = existingBinding.entityId,
+							entityId = resolvedEntityId,
 							source = "local_manga",
 							externalId = content.id.toString(),
 							confidence = existingBinding.confidence,
 						)
-						put(content.id, existingBinding.entityId)
+						put(content.id, resolvedEntityId)
 					} else {
 						val entity = createEntity(
 							type = EntityType.WORK,
@@ -2402,6 +2416,35 @@ class EntityGraphRepository @Inject constructor(
 			aliases = encodeStringList(mergedNames.drop(1).take(MAX_ENTITY_ALIASES)),
 			lastAccessed = now,
 		)
+	}
+
+	private suspend fun updateEntityResolvingNameHashConflict(
+		dao: EntityGraphDao,
+		original: EntityRecord,
+		merged: EntityRecord,
+		primaryName: String,
+		aliases: List<String>,
+		now: Long,
+	): EntityRecord {
+		val conflict = dao.findEntityByTypeAndNameHash(merged.type, merged.nameHash)
+		if (conflict == null || conflict.id == original.id) {
+			dao.updateEntity(merged)
+			return merged
+		}
+		val target = mergeEntityRecord(
+			record = conflict,
+			primaryName = primaryName,
+			aliases = aliases + original.primaryName + decodeStringList(original.aliases),
+			now = now,
+		)
+		dao.updateEntity(target)
+		remapBindingsAndRelations(
+			dao = dao,
+			targetEntityId = conflict.id,
+			sourceEntityIds = listOf(original.id),
+		)
+		dao.deleteEntitiesByIds(listOf(original.id))
+		return target
 	}
 
 	private fun resolveEntityPrimaryName(

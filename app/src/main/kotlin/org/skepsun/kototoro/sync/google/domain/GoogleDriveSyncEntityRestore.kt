@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.sync.google.domain
 
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.entitygraph.data.EntityGraphDao
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.entitygraph.data.decodeStringList
@@ -29,7 +30,26 @@ internal suspend fun MangaDatabase.restoreGoogleDriveSyncEntity(remote: EntityRe
 	}
 	val hashOwner = dao.findEntityByTypeAndNameHash(remote.type, computedHash)
 	val target = hashOwner?.takeIf { it.id != existing.id } ?: existing
-	dao.upsertEntityRecord(target.mergeWithGoogleDriveSyncEntity(remote, trimmedName))
+	return dao.upsertGoogleDriveSyncEntityWithoutNameHashConflict(
+		target = target,
+		remote = remote,
+		remotePrimaryName = trimmedName,
+	)
+}
+
+private suspend fun EntityGraphDao.upsertGoogleDriveSyncEntityWithoutNameHashConflict(
+	target: EntityRecord,
+	remote: EntityRecord,
+	remotePrimaryName: String,
+): Long {
+	val merged = target.mergeWithGoogleDriveSyncEntity(remote, remotePrimaryName)
+	val nameHashOwner = findEntityByTypeAndNameHash(merged.type, merged.nameHash)
+	if (nameHashOwner != null && nameHashOwner.id != target.id) {
+		val ownerMerged = nameHashOwner.mergeWithGoogleDriveSyncEntity(remote, remotePrimaryName)
+		upsertEntityRecord(ownerMerged)
+		return nameHashOwner.id
+	}
+	upsertEntityRecord(merged)
 	return target.id
 }
 

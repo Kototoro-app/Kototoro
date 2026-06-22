@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.settings
 
-import androidx.fragment.app.Fragment
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 
 sealed interface SettingsDestination {
@@ -34,10 +33,6 @@ sealed interface SettingsDestination {
 	data object NavConfigSettings : SettingsDestination
 	data object ChangelogSettings : SettingsDestination
 	data object AboutSettings : SettingsDestination
-
-	data class FragmentDestination(
-		val fragmentClass: Class<out Fragment>,
-	) : SettingsDestination
 
 	data class UnifiedSources(
 		val initialRepositoryKind: UnifiedSourceKind? = null,

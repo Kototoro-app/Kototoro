@@ -5,33 +5,27 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.unit.dp
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.core.view.children
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -47,7 +41,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import androidx.appcompat.widget.ActionMenuView
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -88,11 +81,9 @@ import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.util.ext.buildBundle
 import org.skepsun.kototoro.core.util.ext.end
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.core.util.ext.setNavigationIconSafe
 import org.skepsun.kototoro.core.util.ext.start
 import org.skepsun.kototoro.core.util.ext.textAndVisible
 import org.skepsun.kototoro.core.util.ext.tryLaunch
@@ -111,9 +102,13 @@ import org.skepsun.kototoro.settings.about.AboutSettingsViewModel
 import org.skepsun.kototoro.settings.about.AppUpdateActivity
 import org.skepsun.kototoro.settings.about.changelog.ChangelogRoute
 import org.skepsun.kototoro.settings.about.changelog.ChangelogViewModel
+import org.skepsun.kototoro.settings.compose.SettingsAdaptiveShell
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SettingsRootScreen
 import org.skepsun.kototoro.settings.compose.SettingsSectionScaffold
+import org.skepsun.kototoro.settings.compose.SettingsSearchTopBarAction
+import org.skepsun.kototoro.settings.compose.SettingsSearchTopAppBar
+import org.skepsun.kototoro.settings.compose.SettingsTopBarScaffold
 import org.skepsun.kototoro.settings.compose.buildSettingsRootSections
 import org.skepsun.kototoro.settings.nav.NavConfigRoute
 import org.skepsun.kototoro.settings.nav.NavConfigViewModel
@@ -211,7 +206,7 @@ class SettingsActivity :
 	lateinit var onnxModelManager: OnnxModelManager
 
 	private val isMasterDetails
-		get() = viewBinding.containerMaster != null && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
+		get() = FoldableUtils.shouldUseTabletLayout(this, kototoroAppSettings) && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
 			resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 		} else {
 			true
@@ -254,6 +249,7 @@ class SettingsActivity :
 	private var pendingUnifiedSourcesFileImportKind: UnifiedSourceKind? = null
 	private var unifiedSourcesSearchActive by mutableStateOf(false)
 	private var unifiedSourcesActivePanel by mutableStateOf<UnifiedToolbarFilterPanel?>(null)
+	private var isLegacyTopBarVisible = false
 
 	private val composeBackCallback = object : OnBackPressedCallback(false) {
 		override fun handleOnBackPressed() {
@@ -372,53 +368,60 @@ class SettingsActivity :
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(SettingsActivityLayoutBinding.inflate(layoutInflater))
+		setLegacyTopBarVisible(false)
 		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-		viewBinding.toolbarDetail?.apply {
-			setNavigationIconSafe(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
-			setNavigationOnClickListener { handleComposeNavigateUp() }
-		}
-		applyDetailToolbarColors()
 		addMenuProvider(
 			SettingsSearchMenuProvider(viewModel) {
-				isMasterDetails || composeDestination == SettingsDestination.Root
+				isLegacyTopBarVisible
 			},
 		)
 		onBackPressedDispatcher.addCallback(this, composeBackCallback)
+		val fm = supportFragmentManager
+		val currentFragment = fm.findFragmentById(R.id.container)
+		val restoredDestination = savedInstanceState?.toComposeDestination()
+		val initialComposeDestination = if (currentFragment == null) {
+			restoredDestination ?: resolveDefaultComposeDestination(intent)
+		} else {
+			restoredDestination
+		}
+		composeDestination = initialComposeDestination
+		composeDestinationToRestore = savedInstanceState
+			?.getBoolean(STATE_PENDING_RESTORE_ROOT)
+			?.takeIf { it }
+			?.let { SettingsDestination.Root }
 		viewBinding.containerCompose.setViewCompositionStrategy(
 			ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
 		)
 		viewBinding.containerCompose.setContent {
 			KototoroTheme {
-				val saveableStateHolder = rememberSaveableStateHolder()
-				AnimatedContent(targetState = composeDestination, label = "settings_page") { destination ->
-					if (destination != null) {
-						saveableStateHolder.SaveableStateProvider(composeDestinationStateKey(destination)) {
-							RenderComposeDestination(destination)
-						}
-					}
-				}
+				SettingsAdaptiveShell(
+					isTwoPane = isMasterDetails,
+					destination = composeDestination,
+					destinationKey = ::composeDestinationStateKey,
+					modifier = Modifier.fillMaxSize(),
+					rootContent = { modifier -> RenderSettingsRootContent(modifier) },
+					destinationContent = { destination -> RenderComposeDestination(destination) },
+				)
 			}
 		}
 		masterContainerComposeView()?.setViewCompositionStrategy(
 			ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
 		)
-		renderMasterSettingsRoot()
 		supportFragmentManager.addOnBackStackChangedListener {
 			restoreComposeDestinationIfNeeded()
 		}
-		val fm = supportFragmentManager
-		val currentFragment = fm.findFragmentById(R.id.container)
-		val restoredDestination = savedInstanceState?.toComposeDestination()
-		composeDestinationToRestore = savedInstanceState
-			?.getBoolean(STATE_PENDING_RESTORE_ROOT)
-			?.takeIf { it }
-			?.let { SettingsDestination.Root }
 		if (currentFragment == null) {
-			openDefaultFragment()
+			if (initialComposeDestination != null) {
+				openComposeDestination(
+					initialComposeDestination,
+					shouldRestoreFragment = savedInstanceState?.getBoolean(STATE_COMPOSE_RESTORE_FRAGMENT) == true,
+				)
+			} else {
+				openDefaultDestination()
+			}
 		}
 		viewModel.onNavigateToPreference.observeEvent(this, ::navigateToPreference)
 		aboutSettingsViewModel.onUpdateAvailable.observeEvent(this, ::onAboutUpdateAvailable)
-		restoredDestination?.let { openComposeDestination(it, shouldRestoreFragment = savedInstanceState.getBoolean(STATE_COMPOSE_RESTORE_FRAGMENT)) }
 
 		observeFoldableState()
 	}
@@ -458,16 +461,11 @@ class SettingsActivity :
 		val bars = insets.getInsets(
 			WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
 		)
-		val isTablet = viewBinding.containerMaster != null
+		val isTablet = isMasterDetails
 		viewBinding.appbar.updatePaddingRelative(
 			start = bars.start(v),
 			top = bars.top,
 			end = if (isTablet) 0 else bars.end(v),
-		)
-		viewBinding.appbarDetail?.updatePaddingRelative(
-			start = 0,
-			end = bars.end(v),
-			top = bars.top,
 		)
 		return insets
 	}
@@ -635,8 +633,7 @@ class SettingsActivity :
 						unifiedDestination.initialRepositoryUrl,
 					)
 				}
-				null,
-				is SettingsDestination.FragmentDestination -> Unit
+				null -> Unit
 			}
 		outState.putBoolean(
 			STATE_PENDING_RESTORE_ROOT,
@@ -645,155 +642,34 @@ class SettingsActivity :
 	}
 
 	fun setSectionTitle(title: CharSequence?) {
-		viewBinding.toolbarDetail?.let { toolbar ->
-			toolbar.title = title
-			toolbar.subtitle = null
-			toolbar.isVisible = isMasterDetails && title != null
-			viewBinding.appbarDetail?.isVisible = isMasterDetails && title != null
-			applyDetailToolbarColors()
-		} ?: setTitle(title ?: getString(R.string.settings))
-	}
-
-	private fun applyDetailToolbarColors() {
-		val toolbar = viewBinding.toolbarDetail ?: return
-		val color = toolbar.context.getThemeColor(com.google.android.material.R.attr.colorOnSurface)
-		if (isMasterDetails) {
-			toolbar.navigationIcon = null
-		} else {
-			toolbar.setNavigationIconSafe(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
-		}
-		toolbar.setTitleTextColor(color)
-		toolbar.setSubtitleTextColor(color)
-		toolbar.navigationIcon?.mutate()?.setTint(color)
-		toolbar.overflowIcon?.mutate()?.setTint(color)
-		(toolbar.findViewById<ActionMenuView>(androidx.appcompat.R.id.action_menu_presenter) ?: toolbar.children
-			.filterIsInstance<ActionMenuView>()
-			.firstOrNull()
-			)?.let { menuView ->
-				for (index in 0 until menuView.childCount) {
-					(menuView.getChildAt(index) as? android.widget.ImageView)?.setColorFilter(color)
-				}
-			}
-	}
-
-	fun setSectionToolbarActions(view: View?, fillAvailableWidth: Boolean = false) {
-		val toolbar = viewBinding.toolbarDetail ?: viewBinding.toolbar
-		val tag = "section_toolbar_actions"
-		(0 until toolbar.childCount)
-			.map { toolbar.getChildAt(it) }
-			.firstOrNull { it.tag == tag }
-			?.let(toolbar::removeView)
-		if (view == null) return
-
-		view.tag = tag
-		val actionWidth = if (fillAvailableWidth) {
-			ViewGroup.LayoutParams.MATCH_PARENT
-		} else {
-			val maxActionWidth = (420 * resources.displayMetrics.density).toInt()
-			(resources.displayMetrics.widthPixels * 0.36f).toInt().coerceAtMost(maxActionWidth)
-		}
-		toolbar.addView(
-			view,
-			androidx.appcompat.widget.Toolbar.LayoutParams(
-				actionWidth,
-				ViewGroup.LayoutParams.MATCH_PARENT,
-				Gravity.END or Gravity.CENTER_VERTICAL,
-			),
-		)
-	}
-
-	private fun updateUnifiedSourcesToolbarForSearch(searchActive: Boolean) {
-		if (composeDestination !is SettingsDestination.UnifiedSources) {
-			return
-		}
-		setTitle(
-			if (searchActive) {
-				null
-			} else {
-				composeDestinationTitle(composeDestination ?: return)
-			},
-		)
-		(0 until (viewBinding.toolbarDetail ?: viewBinding.toolbar).childCount)
-			.map { (viewBinding.toolbarDetail ?: viewBinding.toolbar).getChildAt(it) }
-			.firstOrNull { it.tag == "section_toolbar_actions" }
-			?.let { setSectionToolbarActions(it, fillAvailableWidth = searchActive) }
+		setTitle(title ?: getString(R.string.settings))
 	}
 
 	private fun updateUnifiedSourcesSearchActive(active: Boolean) {
 		unifiedSourcesSearchActive = active
-		updateUnifiedSourcesToolbarForSearch(active)
-	}
-
-	@Composable
-	private fun SectionToolbarActionsEffect(
-		fillAvailableWidth: Boolean = false,
-		content: @Composable () -> Unit,
-	) {
-		val toolbar = viewBinding.toolbarDetail ?: viewBinding.toolbar
-		val tag = "section_toolbar_actions"
-		val composeView = remember(toolbar) {
-			ComposeView(this).apply {
-				this.tag = tag
-				setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-			}
-		}
-		composeView.setContent {
-			KototoroTheme {
-				content()
-			}
-		}
-		SideEffect {
-			setSectionToolbarActions(composeView, fillAvailableWidth = fillAvailableWidth)
-		}
-		DisposableEffect(toolbar, composeView) {
-			onDispose {
-				(0 until toolbar.childCount)
-					.map { toolbar.getChildAt(it) }
-					.firstOrNull { it === composeView || it.tag == tag }
-					?.let(toolbar::removeView)
-			}
-		}
-	}
-
-	private fun setSectionToolbarActionsContent(
-		fillAvailableWidth: Boolean = false,
-		content: @Composable () -> Unit,
-	) {
-		val toolbar = viewBinding.toolbarDetail ?: viewBinding.toolbar
-		val tag = "section_toolbar_actions"
-		val composeView = (0 until toolbar.childCount)
-			.map { toolbar.getChildAt(it) }
-			.firstOrNull { it.tag == tag }
-			as? ComposeView ?: ComposeView(this).apply {
-			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-		}
-		composeView.setContent {
-			KototoroTheme {
-				content()
-			}
-		}
-		setSectionToolbarActions(composeView, fillAvailableWidth = fillAvailableWidth)
 	}
 
 	private fun setLegacyTopBarVisible(isVisible: Boolean) {
-		val showLegacyTopBar = isVisible || isMasterDetails
+		val showLegacyTopBar = isVisible
+		isLegacyTopBarVisible = showLegacyTopBar
 		viewBinding.legacyTopBarHost.isVisible = showLegacyTopBar
-		viewBinding.appbarDetail?.isVisible = isMasterDetails && currentDetailTitle() != null
 		updateSinglePaneScrollBehavior(showLegacyTopBar)
+		invalidateOptionsMenu()
 		viewBinding.root.requestLayout()
+	}
+
+	private fun showLegacyFragmentContainer() {
+		viewBinding.containerCompose.isVisible = false
+		findViewById<View>(R.id.container)?.isVisible = true
+		findViewById<View>(R.id.container_search)?.isVisible = false
+		setLegacyTopBarVisible(true)
 	}
 
 	private fun renderComposeContent(
 		showLegacyTopBar: Boolean,
 		destination: SettingsDestination,
 	) {
-		setLegacyTopBarVisible(true)
-		if (destination !is SettingsDestination.UnifiedSources) {
-			setSectionToolbarActions(null)
-		}
-		setTitle(composeDestinationTitle(destination))
-		applyCurrentDetailTitle()
-		invalidateOptionsMenu()
+		setLegacyTopBarVisible(showLegacyTopBar)
 	}
 
 	@Composable
@@ -804,8 +680,8 @@ class SettingsActivity :
 	) {
 		SettingsSectionScaffold(
 			title = title,
-			onNavigateUp = ::handleComposeNavigateUp,
-			showTopBar = false,
+			onNavigateUp = if (isMasterDetails) null else ::handleComposeNavigateUp,
+			showTopBar = true,
 			actions = actions,
 			content = content,
 		)
@@ -821,6 +697,7 @@ class SettingsActivity :
 		if (shouldPopHiddenFragment) {
 			supportFragmentManager.popBackStackImmediate()
 		}
+		showLegacyFragmentContainer()
 		viewModel.discardSearch()
 		val hasFragment = supportFragmentManager.findFragmentById(R.id.container) != null
 		supportFragmentManager.commit {
@@ -856,48 +733,41 @@ class SettingsActivity :
 		composeBackCallback.isEnabled = true
 	}
 
-		fun openDestination(destination: SettingsDestination, args: Bundle?, isFromRoot: Boolean) {
-			when (destination) {
-				SettingsDestination.Root -> openComposeDestination(
-					destination,
-					shouldRestoreFragment = false,
-					pushCurrentToStack = false,
-				)
-				SettingsDestination.AppearanceSettings,
-				SettingsDestination.UsersSettings,
-				SettingsDestination.AISettings,
-				SettingsDestination.OcrModelsSettings,
-				SettingsDestination.AiImageEnhancementSettings,
-				SettingsDestination.AiVideoEnhancementSettings,
-				SettingsDestination.TtsSettings,
-				SettingsDestination.PlaybackSettings,
-				SettingsDestination.ReaderSettings,
-				SettingsDestination.SourcesSettings,
-				SettingsDestination.SuggestionsSettings,
-				SettingsDestination.SyncSettings,
-				SettingsDestination.BackupsSettings,
-				SettingsDestination.EntityOrganizeSettings,
-				SettingsDestination.TranslationSettings,
-				SettingsDestination.TranslationApiSettings,
-				SettingsDestination.TranslationE2EApiSettings -> openComposeDestination(
-					destination,
-					shouldRestoreFragment = shouldRestoreFragmentForNextDestination(isFromRoot),
-				)
-				SettingsDestination.StorageAndNetworkSettings,
-				SettingsDestination.DataCleanupSettings,
-				SettingsDestination.DownloadsSettings,
-				SettingsDestination.TrackerSettings,
-				SettingsDestination.NotificationSettings,
-				SettingsDestination.ServicesSettings,
-				SettingsDestination.DiscordSettings,
-				SettingsDestination.ProxySettings,
-				SettingsDestination.NavConfigSettings,
-				SettingsDestination.ChangelogSettings,
-			SettingsDestination.AboutSettings -> openComposeDestination(
+	fun openDestination(destination: SettingsDestination, args: Bundle?, isFromRoot: Boolean) {
+		when (destination) {
+			SettingsDestination.Root -> openComposeDestination(
 				destination,
-				shouldRestoreFragment = shouldRestoreFragmentForNextDestination(isFromRoot),
+				shouldRestoreFragment = false,
+				pushCurrentToStack = false,
 			)
-			is SettingsDestination.FragmentDestination -> openFragment(destination.fragmentClass, args, isFromRoot)
+			SettingsDestination.AppearanceSettings,
+			SettingsDestination.UsersSettings,
+			SettingsDestination.AISettings,
+			SettingsDestination.OcrModelsSettings,
+			SettingsDestination.AiImageEnhancementSettings,
+			SettingsDestination.AiVideoEnhancementSettings,
+			SettingsDestination.TtsSettings,
+			SettingsDestination.PlaybackSettings,
+			SettingsDestination.ReaderSettings,
+			SettingsDestination.SourcesSettings,
+			SettingsDestination.SuggestionsSettings,
+			SettingsDestination.SyncSettings,
+			SettingsDestination.BackupsSettings,
+			SettingsDestination.EntityOrganizeSettings,
+			SettingsDestination.TranslationSettings,
+			SettingsDestination.TranslationApiSettings,
+			SettingsDestination.TranslationE2EApiSettings,
+			SettingsDestination.StorageAndNetworkSettings,
+			SettingsDestination.DataCleanupSettings,
+			SettingsDestination.DownloadsSettings,
+			SettingsDestination.TrackerSettings,
+			SettingsDestination.NotificationSettings,
+			SettingsDestination.ServicesSettings,
+			SettingsDestination.DiscordSettings,
+			SettingsDestination.ProxySettings,
+			SettingsDestination.NavConfigSettings,
+			SettingsDestination.ChangelogSettings,
+			SettingsDestination.AboutSettings,
 			is SettingsDestination.UnifiedSources -> openComposeDestination(
 				destination,
 				shouldRestoreFragment = shouldRestoreFragmentForNextDestination(isFromRoot),
@@ -905,37 +775,11 @@ class SettingsActivity :
 		}
 	}
 
-		private fun openDefaultFragment() {
-			resolveInitialUnifiedSourcesDestination(intent)?.let { destination ->
-				openComposeDestination(destination, shouldRestoreFragment = false)
-				return
-			}
-			val composeDestination = when (intent?.action) {
-				AppRouter.ACTION_SUGGESTIONS -> SettingsDestination.SuggestionsSettings
-				AppRouter.ACTION_SYNC_SETTINGS,
-				AppRouter.ACTION_PERIODIC_BACKUP,
-				AppRouter.ACTION_HISTORY -> SettingsDestination.BackupsSettings
-				AppRouter.ACTION_TRANSLATION -> SettingsDestination.TranslationSettings
-				AppRouter.ACTION_TRACKER -> SettingsDestination.TrackerSettings
-				AppRouter.ACTION_TRACKING_ACCOUNTS -> SettingsDestination.UsersSettings
-				AppRouter.ACTION_MANAGE_DISCORD -> SettingsDestination.DiscordSettings
-				AppRouter.ACTION_PROXY -> SettingsDestination.ProxySettings
-				AppRouter.ACTION_READER -> SettingsDestination.ReaderSettings
-				AppRouter.ACTION_SOURCES -> SettingsDestination.SourcesSettings
-				AppRouter.ACTION_ENTITY_ORGANIZE -> SettingsDestination.EntityOrganizeSettings
-				AppRouter.ACTION_MANAGE_DOWNLOADS -> SettingsDestination.DownloadsSettings
-				AppRouter.ACTION_MANAGE_SOURCES -> null
-				Intent.ACTION_VIEW -> when (intent.data?.host) {
-					"add-repo" -> null
-					HOST_ABOUT -> SettingsDestination.AboutSettings
-					else -> null
-				}
-				else -> null
-			}
-			if (composeDestination != null) {
-				openComposeDestination(composeDestination, shouldRestoreFragment = false)
-				return
-			}
+	private fun openDefaultDestination() {
+		resolveDefaultComposeDestination(intent)?.let { destination ->
+			openComposeDestination(destination, shouldRestoreFragment = false)
+			return
+		}
 		val fragment = when (intent?.action) {
 			AppRouter.ACTION_SOURCES -> null
 			AppRouter.ACTION_SOURCE -> resolveSingleSourceSettingsFragment(
@@ -953,9 +797,36 @@ class SettingsActivity :
 			openComposeDestination(SettingsDestination.Root, shouldRestoreFragment = false)
 			return
 		}
+		showLegacyFragmentContainer()
 		supportFragmentManager.commit {
 			setReorderingAllowed(true)
 			replace(R.id.container, fragment)
+		}
+	}
+
+	private fun resolveDefaultComposeDestination(intent: Intent?): SettingsDestination? {
+		return resolveInitialUnifiedSourcesDestination(intent) ?: when (intent?.action) {
+			AppRouter.ACTION_SUGGESTIONS -> SettingsDestination.SuggestionsSettings
+			AppRouter.ACTION_SYNC_SETTINGS,
+			AppRouter.ACTION_PERIODIC_BACKUP,
+			AppRouter.ACTION_HISTORY -> SettingsDestination.BackupsSettings
+			AppRouter.ACTION_TRANSLATION -> SettingsDestination.TranslationSettings
+			AppRouter.ACTION_TRACKER -> SettingsDestination.TrackerSettings
+			AppRouter.ACTION_TRACKING_ACCOUNTS -> SettingsDestination.UsersSettings
+			AppRouter.ACTION_MANAGE_DISCORD -> SettingsDestination.DiscordSettings
+			AppRouter.ACTION_PROXY -> SettingsDestination.ProxySettings
+			AppRouter.ACTION_READER -> SettingsDestination.ReaderSettings
+			AppRouter.ACTION_SOURCES -> SettingsDestination.SourcesSettings
+			AppRouter.ACTION_ENTITY_ORGANIZE -> SettingsDestination.EntityOrganizeSettings
+			AppRouter.ACTION_MANAGE_DOWNLOADS -> SettingsDestination.DownloadsSettings
+			AppRouter.ACTION_MANAGE_SOURCES -> null
+			AppRouter.ACTION_SOURCE -> null
+			Intent.ACTION_VIEW -> when (intent.data?.host) {
+				HOST_ADD_REPO -> null
+				HOST_ABOUT -> SettingsDestination.AboutSettings
+				else -> SettingsDestination.Root
+			}
+			else -> SettingsDestination.Root
 		}
 	}
 
@@ -999,14 +870,17 @@ class SettingsActivity :
 		if (destination !is SettingsDestination.UnifiedSources) {
 			updateUnifiedSourcesSearchActive(false)
 			unifiedSourcesActivePanel = null
-			setSectionToolbarActions(null)
 		}
 		if (supportFragmentManager.isStateSaved) {
 			return
 		}
 		if (isMasterDetails && destination == SettingsDestination.Root) {
 			composeNavigationStack.clear()
-			closeComposeDestination(restorePreviousFragment = false)
+			composeDestination = SettingsDestination.Root
+			viewBinding.containerCompose.isVisible = true
+			findViewById<View>(R.id.container)?.isVisible = false
+			findViewById<View>(R.id.container_search)?.isVisible = false
+			setLegacyTopBarVisible(false)
 			return
 		}
 		val currentComposeDestination = composeDestination
@@ -1033,6 +907,13 @@ class SettingsActivity :
 		composeDestination = destination
 		shouldRestoreFragmentOnComposeExit = shouldRestoreFragment
 		viewBinding.containerCompose.isVisible = true
+		if (isMasterDetails) {
+			findViewById<View>(R.id.container)?.isVisible = false
+			findViewById<View>(R.id.container_search)?.isVisible = false
+		} else {
+			findViewById<View>(R.id.container)?.isVisible = false
+			findViewById<View>(R.id.container_search)?.isVisible = false
+		}
 		prepareComposeDestination(destination)
 		renderComposeContent(showLegacyTopBar = false, destination = destination)
 		composeBackCallback.isEnabled = true
@@ -1107,7 +988,6 @@ class SettingsActivity :
 			SettingsDestination.NavConfigSettings -> COMPOSE_DESTINATION_NAV_CONFIG_SETTINGS
 			SettingsDestination.ChangelogSettings -> COMPOSE_DESTINATION_CHANGELOG_SETTINGS
 			SettingsDestination.AboutSettings -> COMPOSE_DESTINATION_ABOUT_SETTINGS
-			is SettingsDestination.FragmentDestination -> "fragment:${destination.fragmentClass.name}"
 			is SettingsDestination.UnifiedSources -> "unified:${destination.initialRepositoryKind}:${destination.initialRepositoryUrl}"
 		}
 	}
@@ -1143,7 +1023,6 @@ class SettingsActivity :
 			SettingsDestination.NavConfigSettings -> getString(R.string.main_screen_sections)
 			SettingsDestination.ChangelogSettings -> getString(R.string.changelog)
 			SettingsDestination.AboutSettings -> getString(R.string.about)
-			is SettingsDestination.FragmentDestination -> getString(R.string.settings)
 			is SettingsDestination.UnifiedSources -> getString(R.string.extension_management)
 		}
 	}
@@ -1152,28 +1031,7 @@ class SettingsActivity :
 	private fun RenderComposeDestination(destination: SettingsDestination) {
 		when (destination) {
 			SettingsDestination.Root -> {
-				val enabledSourcesCount by rootSettingsViewModel.enabledSourcesCount.collectAsStateWithLifecycle()
-				val searchResults by viewModel.content.collectAsStateWithLifecycle()
-				val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
-				SettingsRootScreen(
-					sections = buildSettingsRootSections(
-						context = this,
-						enabledSourcesCount = enabledSourcesCount,
-						totalSourcesCount = rootSettingsViewModel.totalSourcesCount,
-						classLoader = classLoader,
-						onOpenFragment = { fragmentClass ->
-							openFragment(fragmentClass, null, true)
-						},
-						onOpenDestination = { composeDestination ->
-							openDestination(composeDestination, null, true)
-						},
-					),
-					searchQuery = searchQuery,
-					searchResults = searchResults,
-					onSearchResultClick = { item -> navigateToPreference(item) },
-					topInset = 0.dp,
-					modifier = Modifier.fillMaxSize(),
-				)
+				RenderSettingsRootContent(modifier = Modifier.fillMaxSize())
 			}
 			SettingsDestination.AppearanceSettings -> RenderComposeSection(title = getString(R.string.appearance)) {
 				AppearanceSettingsRoute(
@@ -1509,33 +1367,29 @@ class SettingsActivity :
 					onSetupWizardClick = { router.showWelcomeSheet() },
 				)
 			}
-			is SettingsDestination.FragmentDestination -> Unit
 			is SettingsDestination.UnifiedSources -> {
 				val readyState by unifiedSourcesViewModel.uiState.collectAsStateWithLifecycle()
-				SectionToolbarActionsEffect(
-					fillAvailableWidth = unifiedSourcesSearchActive,
-				) {
-					UnifiedSourcesToolbarActions(
-						readyState = readyState as? org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesUiState.Ready,
-						searchActive = unifiedSourcesSearchActive,
-						onSearchClick = { updateUnifiedSourcesSearchActive(true) },
-						onSearchClose = {
-							updateUnifiedSourcesSearchActive(false)
-							unifiedSourcesViewModel.setSearchQuery("")
-						},
-						onSearchQueryChange = unifiedSourcesViewModel::setSearchQuery,
-						onLanguageFilterClick = {
-							unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.LANGUAGE
-						},
-						onMoreFiltersClick = {
-							unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.MORE
-						},
-						modifier = Modifier.fillMaxSize(),
-					)
-				}
 				RenderComposeSection(
 					title = getString(R.string.extension_management),
-					actions = null,
+					actions = {
+						UnifiedSourcesToolbarActions(
+							readyState = readyState as? org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesUiState.Ready,
+							searchActive = unifiedSourcesSearchActive,
+							onSearchClick = { updateUnifiedSourcesSearchActive(true) },
+							onSearchClose = {
+								updateUnifiedSourcesSearchActive(false)
+								unifiedSourcesViewModel.setSearchQuery("")
+							},
+							onSearchQueryChange = unifiedSourcesViewModel::setSearchQuery,
+							onLanguageFilterClick = {
+								unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.LANGUAGE
+							},
+							onMoreFiltersClick = {
+								unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.MORE
+							},
+							modifier = Modifier.fillMaxSize(),
+						)
+					},
 				) {
 					UnifiedSourcesRoute(
 						searchActive = unifiedSourcesSearchActive,
@@ -1564,33 +1418,51 @@ class SettingsActivity :
 		}
 	}
 
-	private fun renderMasterSettingsRoot() {
-		val masterComposeView = masterContainerComposeView() ?: return
-		masterComposeView.setContent {
-			KototoroTheme {
-				val enabledSourcesCount by rootSettingsViewModel.enabledSourcesCount.collectAsStateWithLifecycle()
-				val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
-				val searchResults by viewModel.content.collectAsStateWithLifecycle()
-				SettingsRootScreen(
-					sections = buildSettingsRootSections(
-						context = this,
-						enabledSourcesCount = enabledSourcesCount,
-						totalSourcesCount = rootSettingsViewModel.totalSourcesCount,
-						classLoader = classLoader,
-						onOpenFragment = { fragmentClass ->
-							openFragment(fragmentClass, null, true)
-						},
-						onOpenDestination = { composeDestination ->
-							openDestination(composeDestination, null, true)
-						},
-					),
-					searchQuery = searchQuery,
-					searchResults = searchResults,
-					onSearchResultClick = { item -> navigateToPreference(item) },
-					topInset = 0.dp,
-					modifier = Modifier.fillMaxSize(),
+	@Composable
+	private fun RenderSettingsRootContent(modifier: Modifier = Modifier) {
+		val enabledSourcesCount by rootSettingsViewModel.enabledSourcesCount.collectAsStateWithLifecycle()
+		val searchResults by viewModel.content.collectAsStateWithLifecycle()
+		val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
+		val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
+		val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+		SettingsTopBarScaffold(
+			title = getString(R.string.settings),
+			onNavigateUp = ::handleComposeNavigateUp,
+			modifier = modifier,
+			searchContent = if (isSearchActive) {
+				{
+					SettingsSearchTopAppBar(
+						query = searchQuery,
+						onNavigateUp = viewModel::discardSearch,
+						onQueryChange = viewModel::onQueryChanged,
+					)
+				}
+			} else {
+				null
+			},
+			actions = {
+				SettingsSearchTopBarAction(
+					onStartSearch = viewModel::startSearch,
 				)
-			}
+			},
+		) { innerPadding ->
+			SettingsRootScreen(
+				sections = buildSettingsRootSections(
+					context = this,
+					enabledSourcesCount = enabledSourcesCount,
+					totalSourcesCount = rootSettingsViewModel.totalSourcesCount,
+					onOpenDestination = { composeDestination ->
+						openDestination(composeDestination, null, true)
+					},
+				),
+				searchQuery = searchQuery,
+				searchResults = searchResults,
+				onSearchResultClick = { item -> navigateToPreference(item) },
+				listState = listState,
+				topInset = innerPadding.calculateTopPadding(),
+				applyHorizontalDisplayCutoutPadding = !isMasterDetails,
+				modifier = Modifier.fillMaxSize(),
+			)
 		}
 	}
 
@@ -1860,9 +1732,14 @@ class SettingsActivity :
 		val destination = composeDestination ?: return
 		onLeavingComposeDestination(destination)
 		viewBinding.containerCompose.isVisible = false
-		setSectionToolbarActions(null)
+		if (isMasterDetails) {
+			findViewById<View>(R.id.container)?.isVisible = true
+			findViewById<View>(R.id.container_search)?.isVisible = false
+		} else {
+			findViewById<View>(R.id.container)?.isVisible = true
+			findViewById<View>(R.id.container_search)?.isVisible = false
+		}
 		composeDestination = null
-		applyCurrentDetailTitle()
 		shouldRestoreFragmentOnComposeExit = false
 		composeBackCallback.isEnabled = false
 		invalidateOptionsMenu()
@@ -1886,19 +1763,14 @@ class SettingsActivity :
 		openComposeDestination(destination, shouldRestoreFragment = false)
 	}
 
-	private fun clearToolbarMenu() {
-		(viewBinding.toolbarDetail ?: viewBinding.toolbar).menu.clear()
-	}
-
 	private fun updateSinglePaneScrollBehavior(useLegacyTopBar: Boolean) {
 		if (isMasterDetails) {
 			return
 		}
-		fun update(view: View?) {
+		fun update(view: View?, shouldUseBehavior: Boolean) {
 			val targetView = view ?: return
 			val params = targetView.layoutParams as? CoordinatorLayout.LayoutParams ?: return
 			val currentBehavior = params.behavior
-			val shouldUseBehavior = useLegacyTopBar
 			val behaviorChanged = when {
 				shouldUseBehavior && currentBehavior !is AppBarLayout.ScrollingViewBehavior -> true
 				!shouldUseBehavior && currentBehavior != null -> true
@@ -1914,27 +1786,9 @@ class SettingsActivity :
 			}
 			targetView.layoutParams = params
 		}
-		update(viewBinding.containerCompose)
-		update(findViewById(R.id.container))
-		update(findViewById(R.id.container_search))
-	}
-
-	private fun currentDetailTitle(): CharSequence? {
-		if (!isMasterDetails) {
-			return null
-		}
-		val destination = composeDestination ?: return null
-		return when (destination) {
-			SettingsDestination.Root -> null
-			else -> composeDestinationTitle(destination)
-		}
-	}
-
-	private fun applyCurrentDetailTitle() {
-		val title = currentDetailTitle()
-		viewBinding.toolbarDetail?.title = title
-		viewBinding.toolbarDetail?.subtitle = null
-		viewBinding.appbarDetail?.isVisible = title != null
+		update(viewBinding.containerCompose, shouldUseBehavior = false)
+		update(findViewById(R.id.container), shouldUseBehavior = useLegacyTopBar)
+		update(findViewById(R.id.container_search), shouldUseBehavior = useLegacyTopBar)
 	}
 
 	private fun openUnifiedSourcesRepositoryFilePicker(kind: UnifiedSourceKind) {
@@ -2327,15 +2181,8 @@ class SettingsActivity :
         // 设置页不改变屏幕方向，仅保持默认方向
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
-        // 仅在折叠屏展开且窗口满足双栏宽度时重建，避免分屏窄窗口反复重建
-        if (isFoldUnfolded && viewBinding.containerMaster == null && FoldableUtils.shouldUseTwoPaneLayout(this)) {
-            recreate()
-            return
-        }
-
+		// 仅在折叠屏展开且窗口满足双栏宽度时重建，避免分屏窄窗口反复重建
 		viewBinding.root.requestLayout()
-		applyDetailToolbarColors()
-		applyCurrentDetailTitle()
-		setLegacyTopBarVisible(true)
+		setLegacyTopBarVisible(composeDestination == null)
     }
 }

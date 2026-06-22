@@ -39,7 +39,7 @@ abstract class WorkHistoryDao {
 			updated_at = :updatedAt,
 			chapters = :chapters,
 			parent_chapter_id = :parentChapterId,
-			deleted_at = 0
+			deleted_at = :deletedAt
 		WHERE entity_id = :entityId
 		""",
 	)
@@ -53,6 +53,7 @@ abstract class WorkHistoryDao {
 		chapters: Int,
 		updatedAt: Long,
 		parentChapterId: Long?,
+		deletedAt: Long,
 	): Int
 
 	suspend fun update(entity: WorkHistoryEntity): Int {
@@ -66,6 +67,7 @@ abstract class WorkHistoryDao {
 			chapters = entity.chaptersCount,
 			updatedAt = entity.updatedAt,
 			parentChapterId = entity.parentChapterId,
+			deletedAt = entity.deletedAt,
 		)
 	}
 
@@ -79,19 +81,22 @@ abstract class WorkHistoryDao {
 		}
 	}
 
-	@Query("UPDATE work_history SET deleted_at = :deletedAt WHERE entity_id = :entityId")
+	@Query("UPDATE work_history SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE entity_id = :entityId")
 	abstract suspend fun setDeletedAt(entityId: Long, deletedAt: Long)
 
 	suspend fun delete(entityId: Long) = setDeletedAt(entityId, System.currentTimeMillis())
 
-	suspend fun recover(entityId: Long) = setDeletedAt(entityId, 0L)
+	@Query("UPDATE work_history SET deleted_at = 0, updated_at = :updatedAt WHERE entity_id = :entityId")
+	abstract suspend fun recoverAt(entityId: Long, updatedAt: Long)
 
-	@Query("UPDATE work_history SET deleted_at = :deletedAt WHERE created_at >= :minDate AND deleted_at = 0")
+	suspend fun recover(entityId: Long) = recoverAt(entityId, System.currentTimeMillis())
+
+	@Query("UPDATE work_history SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE created_at >= :minDate AND deleted_at = 0")
 	abstract suspend fun setDeletedAtAfter(minDate: Long, deletedAt: Long)
 
 	suspend fun deleteAfter(minDate: Long) = setDeletedAtAfter(minDate, System.currentTimeMillis())
 
-	@Query("UPDATE work_history SET deleted_at = :deletedAt WHERE deleted_at = 0")
+	@Query("UPDATE work_history SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE deleted_at = 0")
 	abstract suspend fun setDeletedAtAll(deletedAt: Long)
 
 	suspend fun clear() = setDeletedAtAll(System.currentTimeMillis())

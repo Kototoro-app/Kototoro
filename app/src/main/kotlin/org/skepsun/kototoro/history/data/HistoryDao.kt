@@ -185,7 +185,10 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 
 	suspend fun delete(mangaId: Long) = setDeletedAt(mangaId, System.currentTimeMillis())
 
-	suspend fun recover(mangaId: Long) = setDeletedAt(mangaId, 0L)
+	@Query("UPDATE history SET deleted_at = 0, updated_at = :updatedAt WHERE manga_id = :mangaId")
+	protected abstract suspend fun recoverAt(mangaId: Long, updatedAt: Long)
+
+	suspend fun recover(mangaId: Long) = recoverAt(mangaId, System.currentTimeMillis())
 
 	@Query("DELETE FROM history WHERE deleted_at != 0 AND deleted_at < :maxDeletionTime")
 	abstract suspend fun gc(maxDeletionTime: Long)
@@ -242,16 +245,17 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 		}
 	}
 
-	@Query("UPDATE history SET deleted_at = :deletedAt WHERE manga_id = :mangaId")
+	@Query("UPDATE history SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE manga_id = :mangaId")
 	protected abstract suspend fun setDeletedAt(mangaId: Long, deletedAt: Long)
 
-	@Query("UPDATE history SET deleted_at = :deletedAt WHERE created_at >= :minDate AND deleted_at = 0")
+	@Query("UPDATE history SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE created_at >= :minDate AND deleted_at = 0")
 	protected abstract suspend fun setDeletedAtAfter(minDate: Long, deletedAt: Long)
 
 	@Query(
 		"""
 		UPDATE history
-		SET deleted_at = :deletedAt
+		SET deleted_at = :deletedAt,
+			updated_at = :deletedAt
 		WHERE deleted_at = 0
 			AND NOT EXISTS(
 				SELECT 1

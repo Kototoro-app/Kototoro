@@ -1418,13 +1418,7 @@ private fun QuickAccessButton(
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     Surface(
-        modifier = modifier.then(
-            if (compact) {
-                Modifier.height(if (expressive) 104.dp else 84.dp)
-            } else {
-                Modifier
-            },
-        ),
+        modifier = modifier,
         shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
         color = if (expressive) {
             MaterialTheme.colorScheme.surfaceContainerLow

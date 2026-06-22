@@ -14,7 +14,7 @@ class WorkHistoryBackup(
 	@SerialName("page") val page: Int,
 	@SerialName("scroll") val scroll: Float,
 	@SerialName("percent") val percent: Float,
-	@SerialName("deleted_at") val deletedAt: Long,
+	@SerialName("deleted_at") val deletedAt: Long = 0L,
 	@SerialName("chapters") val chaptersCount: Int,
 	@SerialName("parent_chapter_id") val parentChapterId: Long? = null,
 ) {

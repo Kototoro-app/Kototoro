@@ -2,7 +2,10 @@ package org.skepsun.kototoro.settings
 
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
+import androidx.coordinatorlayout.widget.CoordinatorLayout
+import androidx.fragment.app.FragmentContainerView
 import androidx.viewbinding.ViewBinding
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
@@ -14,9 +17,6 @@ class SettingsActivityLayoutBinding private constructor(
 	val appbar: AppBarLayout,
 	val toolbar: MaterialToolbar,
 	val containerCompose: ComposeView,
-	val containerMaster: ComposeView?,
-	val appbarDetail: AppBarLayout?,
-	val toolbarDetail: MaterialToolbar?,
 ) : ViewBinding {
 
 	override fun getRoot(): View = rootView
@@ -24,16 +24,63 @@ class SettingsActivityLayoutBinding private constructor(
 	companion object {
 
 		fun inflate(layoutInflater: LayoutInflater): SettingsActivityLayoutBinding {
-			val root = layoutInflater.inflate(R.layout.activity_settings, null, false)
+			val context = layoutInflater.context
+			val root = CoordinatorLayout(context).apply {
+				layoutParams = ViewGroup.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.MATCH_PARENT,
+				)
+			}
+			val appbar = AppBarLayout(context).apply {
+				id = R.id.appbar
+				visibility = View.GONE
+				addView(
+					MaterialToolbar(context).apply {
+						id = R.id.toolbar
+					},
+					AppBarLayout.LayoutParams(
+						ViewGroup.LayoutParams.MATCH_PARENT,
+						ViewGroup.LayoutParams.WRAP_CONTENT,
+					),
+				)
+			}
+			val fragmentContainer = FragmentContainerView(context).apply {
+				id = R.id.container
+				visibility = View.GONE
+				layoutParams = CoordinatorLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.MATCH_PARENT,
+				).apply {
+					behavior = AppBarLayout.ScrollingViewBehavior()
+				}
+			}
+			val composeContainer = ComposeView(context).apply {
+				id = R.id.container_compose
+				layoutParams = CoordinatorLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.MATCH_PARENT,
+				)
+			}
+			val searchContainer = FragmentContainerView(context).apply {
+				id = R.id.container_search
+				visibility = View.GONE
+				layoutParams = CoordinatorLayout.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.MATCH_PARENT,
+				).apply {
+					behavior = AppBarLayout.ScrollingViewBehavior()
+				}
+			}
+			root.addView(appbar)
+			root.addView(fragmentContainer)
+			root.addView(composeContainer)
+			root.addView(searchContainer)
 			return SettingsActivityLayoutBinding(
 				rootView = root,
-				legacyTopBarHost = root.findViewById(R.id.appbar),
-				appbar = root.requireViewByIdCompat(R.id.appbar),
-				toolbar = root.requireViewByIdCompat(R.id.toolbar),
-				containerCompose = root.requireViewByIdCompat(R.id.container_compose),
-				containerMaster = root.findViewById(R.id.container_master),
-				appbarDetail = root.findViewById(R.id.appbar_detail),
-				toolbarDetail = root.findViewById(R.id.toolbar_detail),
+				legacyTopBarHost = appbar,
+				appbar = appbar,
+				toolbar = appbar.requireViewByIdCompat(R.id.toolbar),
+				containerCompose = composeContainer,
 			)
 		}
 

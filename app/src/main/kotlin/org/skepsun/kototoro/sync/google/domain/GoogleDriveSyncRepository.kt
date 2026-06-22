@@ -10,6 +10,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncApi
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncAuth
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
@@ -187,8 +188,15 @@ class GoogleDriveSyncRepository @Inject constructor(
 			runSyncStep("apply database") {
 				applyToDatabase(merged)
 			}
-			Log.d(TAG, "sync applied=${buildLocalSnapshot().debugSummary()} ${database.localDatabaseSummary()}")
-			val upload = merged.copyForUpload(syncedAt = System.currentTimeMillis())
+			val applied = runSyncStep("build upload snapshot") {
+				buildLocalSnapshot()
+			}
+			Log.d(TAG, "sync applied=${applied.debugSummary()} ${database.localDatabaseSummary()}")
+			val compactedUpload = runSyncStep("compact upload snapshot") {
+				GoogleDriveSyncMerger.mergeSnapshots(applied, null)
+			}
+			Log.d(TAG, "sync upload=${compactedUpload.debugSummary()}")
+			val upload = compactedUpload.copyForUpload(syncedAt = System.currentTimeMillis())
 			if (canonical != null && baseVersion != null && attempt < MAX_CONFLICT_RETRIES) {
 				val currentVersion = runSyncStep("check drive version") {
 					api.getFileVersion(token, canonical.id)
@@ -307,7 +315,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 					)
 				},
 			),
-			content = database.getMangaDao().findEntitiesByIds(contentIds).map(::SyncContent),
+			content = database.findMangaEntitiesByIdsChunked(contentIds).map(::SyncContent),
 			work = SyncWorkState(
 				categories = database.getFavouriteCategoriesDao().dump().map(::SyncFavouriteCategory),
 				history = workHistory.map(::SyncWorkHistory),
@@ -321,18 +329,38 @@ class GoogleDriveSyncRepository @Inject constructor(
 		)
 	}
 
+	private suspend fun MangaDatabase.findMangaEntitiesByIdsChunked(ids: Collection<Long>): List<MangaEntity> {
+		if (ids.isEmpty()) {
+			return emptyList()
+		}
+		return ids
+			.chunked(SqliteBindParameterChunkSize)
+			.flatMap { chunk -> getMangaDao().findEntitiesByIds(chunk) }
+	}
+
 	private suspend fun applyToDatabase(snapshot: GoogleDriveSyncSnapshot) {
 		database.withTransaction {
-			val mapping = database.restoreSyncAnchors(snapshot)
-			database.restoreSyncWork(snapshot, mapping)
-			snapshot.feed.tracks.forEach { track ->
-				database.mergeTrack(track.toEntity().mapWith(mapping))
+			val mapping = runSyncStep("apply anchors") {
+				database.restoreSyncAnchors(snapshot)
 			}
-			snapshot.feed.logs.forEach { log ->
-				database.mergeTrackLog(log.toEntity().mapWith(mapping))
+			runSyncStep("apply work") {
+				database.restoreSyncWork(snapshot, mapping)
+			}
+			runSyncStep("apply feed") {
+				snapshot.feed.tracks.forEach { track ->
+					database.mergeTrack(track.toEntity().mapWith(mapping))
+				}
+				snapshot.feed.logs.forEach { log ->
+					database.mergeTrackLog(log.toEntity().mapWith(mapping))
+				}
+			}
+			runSyncStep("prune local sync residue") {
+				database.pruneLocalSyncResidue()
 			}
 		}
-		database.normalizeTrackFeedState()
+		runSyncStep("normalize track feed state") {
+			database.normalizeTrackFeedState()
+		}
 	}
 
 	private suspend fun MangaDatabase.restoreSyncAnchors(snapshot: GoogleDriveSyncSnapshot): SyncIdMapping {
@@ -380,6 +408,11 @@ class GoogleDriveSyncRepository @Inject constructor(
 				),
 			)
 			entityIdMapping[remote.id] = localId
+		}
+
+		val deletedLocalBindings = getEntityGraphDao().deleteBindingsBySources(LOCAL_CONTENT_BINDING_SOURCES)
+		if (deletedLocalBindings > 0) {
+			Log.d(TAG, "sync pruned stale local content bindings=$deletedLocalBindings")
 		}
 
 		snapshot.entityGraph.bindings.forEach { remote ->
@@ -459,6 +492,13 @@ class GoogleDriveSyncRepository @Inject constructor(
 				}
 		}
 		return SyncIdMapping(mangaIdMapping, entityIdMapping, categoryIdMapping)
+	}
+
+	private suspend fun MangaDatabase.pruneLocalSyncResidue() {
+		val deletedContent = getMangaDao().cleanupSyncResidue()
+		if (deletedContent > 0) {
+			Log.d(TAG, "sync pruned unreferenced content=$deletedContent")
+		}
 	}
 
 	private suspend fun MangaDatabase.restoreSyncWork(snapshot: GoogleDriveSyncSnapshot, mapping: SyncIdMapping) {
@@ -645,9 +685,12 @@ class GoogleDriveSyncRepository @Inject constructor(
 	}
 
 	private fun GoogleDriveSyncSnapshot.debugSummary(): String {
+		val activeFavourites = work.favourites.filter { it.deletedAt == 0L }
+		val activeHistory = work.history.count { it.deletedAt == 0L }
 		return "content=${content.size} entities=${entityGraph.entities.size} bindings=${entityGraph.bindings.size} " +
 			"relations=${entityGraph.relations.size} prefs=${entityGraph.prefs.size} categories=${work.categories.size} " +
-			"history=${work.history.size} favourites=${work.favourites.size} stats=${work.stats.size} " +
+			"history=${work.history.size}/$activeHistory favourites=${work.favourites.size}/${activeFavourites.size} " +
+			"favouriteEntities=${activeFavourites.map { it.entityId }.distinct().size} stats=${work.stats.size} " +
 			"tracks=${feed.tracks.size} logs=${feed.logs.size}"
 	}
 
@@ -678,7 +721,9 @@ class GoogleDriveSyncRepository @Inject constructor(
 		const val LEGACY_LOCAL_MANGA_SOURCE = "0"
 		const val MAX_CONFLICT_RETRIES = 3
 		const val TAG = "GoogleDriveSync"
+		private const val SqliteBindParameterChunkSize = 500
 		private const val GOOGLE_ACCOUNT_TYPE = "com.google"
+		val LOCAL_CONTENT_BINDING_SOURCES = listOf(LOCAL_MANGA_SOURCE, LEGACY_LOCAL_MANGA_SOURCE)
 		val SYNC_PROTECTED_BINDING_STATES = setOf(
 			EntityBindingState.MANUAL,
 			EntityBindingState.CANDIDATE,

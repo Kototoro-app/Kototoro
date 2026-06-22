@@ -109,6 +109,31 @@ abstract class MangaDao {
 	)
 	abstract suspend fun cleanup(idsToKeep: Set<Long>)
 
+	@Query(
+		"""
+		DELETE FROM manga WHERE NOT EXISTS(SELECT * FROM history WHERE history.manga_id == manga.manga_id) 
+			AND NOT EXISTS(SELECT * FROM favourites WHERE favourites.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM suggestions WHERE suggestions.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM scrobblings WHERE scrobblings.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM local_index WHERE local_index.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM tracks WHERE tracks.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM track_logs WHERE track_logs.manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM work_history WHERE work_history.anchor_manga_id == manga.manga_id)
+			AND NOT EXISTS(SELECT * FROM work_stats WHERE work_stats.anchor_manga_id == manga.manga_id)
+			AND NOT EXISTS(
+				SELECT * FROM entity_preferences
+				WHERE entity_preferences.preferred_local_manga_id == manga.manga_id
+			)
+			AND NOT EXISTS(
+				SELECT * FROM entity_binding
+				WHERE entity_binding.source IN ('local_manga', '0')
+					AND entity_binding.external_id == CAST(manga.manga_id AS TEXT)
+			)
+		""",
+	)
+	abstract suspend fun cleanupSyncResidue(): Int
+
 	@Transaction
 	open suspend fun upsert(manga: MangaEntity, tags: Iterable<TagEntity>? = null) {
 		upsert(manga)

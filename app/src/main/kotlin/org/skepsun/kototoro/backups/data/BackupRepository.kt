@@ -356,8 +356,10 @@ class BackupRepository @Inject constructor(
                         // normalize the record into work-owned history when entity bindings exist.
                         upsertContent(it.manga, restoreContext)
                         val legacy = it.toEntity()
-                        getHistoryDao().upsert(legacy)
-                        upsertWorkHistoryFromLegacy(legacy)
+                        if (shouldRestoreHistory(legacy, restoreMode)) {
+                            getHistoryDao().upsertIncludingDeleted(legacy)
+                            upsertWorkHistoryFromLegacy(legacy, restoreMode)
+                        }
                     }
 
                     BackupSection.CATEGORIES -> input.readJsonArray<CategoryBackup>(serializer()).restoreToDb("CATEGORIES") {
@@ -417,7 +419,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.WORK_HISTORY -> input.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
-                        getWorkHistoryDao().upsert(it.toEntity())
+                        restoreWorkHistory(it.toEntity(), restoreMode)
                     }
 
                     BackupSection.WORK_FAVOURITES -> input.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb("WORK_FAVOURITES") {
@@ -813,11 +815,12 @@ class BackupRepository @Inject constructor(
 
     private suspend fun MangaDatabase.upsertWorkHistoryFromLegacy(
         history: org.skepsun.kototoro.history.data.HistoryEntity,
+        restoreMode: RestoreMode = RestoreMode.MERGE,
     ) {
         val entityId = findEntityIdByLocalMangaId(history.mangaId) ?: return
         val anchorMangaId = resolveExistingLocalAnchorForEntity(entityId) ?: history.mangaId
-        getWorkHistoryDao().upsert(
-            WorkHistoryEntity(
+        restoreWorkHistory(
+            entity = WorkHistoryEntity(
                 entityId = entityId,
                 anchorMangaId = anchorMangaId,
                 createdAt = history.createdAt,
@@ -830,7 +833,32 @@ class BackupRepository @Inject constructor(
                 chaptersCount = history.chaptersCount,
                 parentChapterId = history.parentChapterId,
             ),
+            restoreMode = restoreMode,
         )
+    }
+
+    private suspend fun MangaDatabase.shouldRestoreHistory(
+        remote: org.skepsun.kototoro.history.data.HistoryEntity,
+        restoreMode: RestoreMode,
+    ): Boolean {
+        if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
+            return true
+        }
+        val local = getHistoryDao().findIncludingDeleted(remote.mangaId)
+        return local == null || remote.updatedAt >= local.updatedAt
+    }
+
+    private suspend fun MangaDatabase.restoreWorkHistory(
+        entity: WorkHistoryEntity,
+        restoreMode: RestoreMode,
+    ) {
+        if (restoreMode == RestoreMode.MERGE) {
+            val local = getWorkHistoryDao().find(entity.entityId)
+            if (local != null && entity.updatedAt < local.updatedAt) {
+                return
+            }
+        }
+        getWorkHistoryDao().upsert(entity)
     }
 
     private suspend fun MangaDatabase.upsertWorkFavouriteFromLegacy(

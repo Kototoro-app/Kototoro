@@ -10,6 +10,7 @@
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
 		android:fitsSystemWindows="false"
+		android:visibility="gone"
 		app:liftOnScroll="false">
 
 		<com.google.android.material.appbar.MaterialToolbar
@@ -25,13 +26,13 @@
 		android:id="@id/container"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
+		android:visibility="gone"
 		app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior" />
 
 	<androidx.compose.ui.platform.ComposeView
 		android:id="@+id/container_compose"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
-		android:visibility="gone"
 		app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior" />
 
 	<androidx.fragment.app.FragmentContainerView

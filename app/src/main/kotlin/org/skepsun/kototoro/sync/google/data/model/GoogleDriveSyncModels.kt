@@ -155,7 +155,7 @@ class SyncFavouriteCategory(
 	@SerialName("order") val order: String,
 	@SerialName("track") val track: Boolean,
 	@SerialName("show_in_lib") val isVisibleInLibrary: Boolean,
-	@SerialName("deleted_at") val deletedAt: Long,
+	@SerialName("deleted_at") val deletedAt: Long = 0L,
 ) {
 
 	constructor(entity: FavouriteCategoryEntity) : this(
@@ -195,7 +195,7 @@ class SyncWorkHistory(
 	@SerialName("percent") val percent: Float = 0f,
 	@SerialName("chapters") val chaptersCount: Int = 0,
 	@SerialName("parent_chapter_id") val parentChapterId: Long? = null,
-	@SerialName("deleted_at") val deletedAt: Long,
+	@SerialName("deleted_at") val deletedAt: Long = 0L,
 ) {
 
 	constructor(entity: WorkHistoryEntity) : this(

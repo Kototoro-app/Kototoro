@@ -350,6 +350,26 @@ abstract class EntityGraphDao {
 	@Query(
 		"""
 		DELETE FROM entity_binding
+		WHERE entity_id IN (:entityIds)
+			AND source IN (:sources)
+		"""
+	)
+	abstract suspend fun deleteBindingsByEntityIdsAndSources(
+		entityIds: List<Long>,
+		sources: List<String>,
+	): Int
+
+	@Query(
+		"""
+		DELETE FROM entity_binding
+		WHERE source IN (:sources)
+		"""
+	)
+	abstract suspend fun deleteBindingsBySources(sources: List<String>): Int
+
+	@Query(
+		"""
+		DELETE FROM entity_binding
 		WHERE source = :source AND external_id = :externalId
 		"""
 	)
