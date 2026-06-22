@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 private const val PAGE_SIZE = 20
+private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 200
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
@@ -118,7 +119,7 @@ class FeedViewModel @Inject constructor(
 		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
 			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
 		quickFilter.appliedOptions.combineWithSettings()
-			.flatMapLatest { repository.observeUpdatedContent(PAGE_SIZE, it) },
+			.flatMapLatest { repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, it) },
 		selectedCategoryId,
 		currentGroupTab,
 		currentSourceTags,
@@ -301,7 +302,7 @@ class FeedViewModel @Inject constructor(
 	}.flatMapLatest { args ->
 		if (args.hasHeader) {
 			quickFilter.appliedOptions.combineWithSettings().flatMapLatest {
-				repository.observeUpdatedContent(10, it)
+				repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, it)
 			}.map { mangaList ->
 				val mangaCategoryIds = args.favorites.buildFeedCategoryIds()
 				val filteredContentList = mangaList.filter { item ->
