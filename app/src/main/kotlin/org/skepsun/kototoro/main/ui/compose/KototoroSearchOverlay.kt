@@ -685,6 +685,7 @@ private fun SuggestionList(
                             text = item.query,
                             onClick = { onRecentQueryClick(item.query) },
                             style = style,
+                            containerColor = style.panelContainerColor,
                             leadingIcon = {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_history),
@@ -883,6 +884,7 @@ private fun SearchSuggestionRow(
     text: String,
     onClick: () -> Unit,
     style: SearchOverlayStyle,
+    containerColor: Color = style.rowContainerColor,
     leadingIcon: @Composable () -> Unit,
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
@@ -891,7 +893,7 @@ private fun SearchSuggestionRow(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(style.rowCornerRadius),
-        color = style.rowContainerColor,
+        color = containerColor,
     ) {
         Row(
             modifier = Modifier
