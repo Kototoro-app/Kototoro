@@ -208,7 +208,7 @@ fun KototoroTopBar(
                     text = topBarTitle,
                     modifier = Modifier
                         .widthIn(max = if (compactTabsState != null) 72.dp else 128.dp),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
