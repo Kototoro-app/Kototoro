@@ -354,6 +354,9 @@ class GoogleDriveSyncRepository @Inject constructor(
 					database.mergeTrackLog(log.toEntity().mapWith(mapping))
 				}
 			}
+			runSyncStep("prune legacy favourite projections") {
+				database.pruneLegacyFavouriteProjections()
+			}
 			runSyncStep("prune local sync residue") {
 				database.pruneLocalSyncResidue()
 			}
@@ -501,7 +504,16 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 	}
 
+	private suspend fun MangaDatabase.pruneLegacyFavouriteProjections() {
+		val deletedAt = System.currentTimeMillis()
+		val deletedFavourites = getFavouritesDao().deleteActiveWithoutWorkFavourite(deletedAt)
+		if (deletedFavourites > 0) {
+			Log.d(TAG, "sync pruned legacy favourite projections=$deletedFavourites")
+		}
+	}
+
 	private suspend fun MangaDatabase.restoreSyncWork(snapshot: GoogleDriveSyncSnapshot, mapping: SyncIdMapping) {
+		val favouriteLocalMangaIds = snapshot.resolveFavouriteLocalMangaIds(mapping)
 		snapshot.work.history.forEach { remote ->
 			val localEntityId = mapping.entityIds[remote.entityId] ?: return@forEach
 			val localMangaId = mapping.mangaIds[remote.anchorMangaId] ?: return@forEach
@@ -535,7 +547,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 			if (local == null || remote.updatedAt >= local.updatedAt) {
 				getWorkFavouritesDao().upsert(remote.toEntity(localEntityId, localCategoryId))
 			}
-			val localMangaId = findLegacyFavouriteMangaId(localEntityId) ?: return@forEach
+			val localMangaId = favouriteLocalMangaIds[remote.entityId] ?: return@forEach
 			getFavouritesDao().mergeWithTimestamp(
 				FavouriteEntity(
 					mangaId = localMangaId,
@@ -555,15 +567,20 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun MangaDatabase.findLegacyFavouriteMangaId(entityId: Long): Long? {
-		getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-			?.takeIf { getMangaDao().contains(it) }
-			?.let { return it }
-		return getEntityGraphDao().findActiveBindingsByEntity(entityId)
+	private fun GoogleDriveSyncSnapshot.resolveFavouriteLocalMangaIds(mapping: SyncIdMapping): Map<Long, Long> {
+		return entityGraph.bindings
 			.asSequence()
 			.filter { it.source == LOCAL_MANGA_SOURCE || it.source == LEGACY_LOCAL_MANGA_SOURCE }
-			.mapNotNull { it.externalId.toLongOrNull() }
-			.firstOrNull { getMangaDao().contains(it) }
+			.mapNotNull { binding ->
+				val localMangaId = binding.externalId.toLongOrNull()
+					?.let(mapping.mangaIds::get)
+					?: return@mapNotNull null
+				binding.entityId to (binding to localMangaId)
+			}
+			.groupBy({ it.first }, { it.second })
+			.mapValues { (_, bindings) ->
+				bindings.maxWith(favouriteProjectionBindingComparator).second
+			}
 	}
 
 	private fun EntityBindingRecord.shouldKeepOverSync(
@@ -728,6 +745,12 @@ class GoogleDriveSyncRepository @Inject constructor(
 			EntityBindingState.MANUAL,
 			EntityBindingState.CANDIDATE,
 			EntityBindingState.REJECTED,
+		)
+		val favouriteProjectionBindingComparator = compareBy<Pair<SyncEntityBindingRecord, Long>>(
+			{ it.first.source == LOCAL_MANGA_SOURCE },
+			{ it.first.isPrimary },
+			{ it.first.updatedAt },
+			{ it.first.confidence },
 		)
 	}
 
