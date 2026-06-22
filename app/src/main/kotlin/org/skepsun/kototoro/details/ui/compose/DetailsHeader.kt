@@ -119,6 +119,7 @@ import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.iconResForUi
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -2396,14 +2397,9 @@ private fun DetailsSourceOverlayDialog(
                 shadowElevation = 0.dp,
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Box(
+                    SheetDragHandle(
                         modifier = Modifier
                             .then(panelDragModifier)
-                            .padding(top = 8.dp)
-                            .width(36.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                             .align(Alignment.CenterHorizontally),
                     )
                     Box(

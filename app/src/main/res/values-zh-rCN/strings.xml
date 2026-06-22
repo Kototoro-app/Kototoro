@@ -45,6 +45,7 @@
     <string name="open_daily_schedule">打开每日放送</string>
     <string name="details_open_comments_site">站点评论</string>
     <string name="details_open_reviews_site">站点评价</string>
+    <string name="home_quick_action_extensions">拓展</string>
     <string name="clear_cookies">清除 Cookies</string>
     <string name="new_sources_text">发现了新的可用内容源</string>
     <string name="suggestions_summary">根据你的喜好推荐作品</string>
@@ -2854,6 +2855,13 @@ SHA-256 指纹:
     <string name="entity_organize_dataset_update_available">更新到 %1$s</string>
     <string name="entity_organize_dataset_not_installed_short">未安装</string>
     <string name="entity_organize_dataset_mangabaka_title">MangaBaka 桥接</string>
+    <string name="entity_organize_dataset_mangabaka_summary_ready_latest">本地快照与索引库均已就绪，当前已是最新版本</string>
+    <string name="entity_organize_dataset_mangabaka_summary_ready_indexed">本地快照已安装，索引库已就绪</string>
+    <string name="entity_organize_dataset_mangabaka_summary_installed_latest">本地快照已安装，当前已是最新版本</string>
+    <string name="entity_organize_dataset_mangabaka_summary_installed_update">本地快照已安装，当前 %1$s，最新 %2$s</string>
+    <string name="entity_organize_dataset_mangabaka_summary_installed_unknown">本地快照已安装，但尚未获取远端最新版本信息</string>
+    <string name="entity_organize_dataset_mangabaka_summary_download_available">可下载本地快照，最新版本 %1$s</string>
+    <string name="entity_organize_dataset_mangabaka_summary_refresh">可刷新远端状态并下载 MangaBaka 本地快照</string>
     <string name="entity_organize_dataset_index">索引</string>
     <string name="entity_organize_dataset_index_version">索引版本</string>
     <string name="entity_organize_dataset_index_build">生成索引库</string>
@@ -2900,6 +2908,10 @@ SHA-256 指纹:
     <string name="source_migration_start">开始迁移</string>
     <string name="source_migration_cancel">取消迁移</string>
     <string name="source_migration_concurrency">搜索并发数：%1$d</string>
+    <string name="source_migration_error_no_target_sources">未配置目标源</string>
+    <string name="source_migration_error_no_valid_preview_plan">未生成有效的迁移计划，请先预览并接受候选</string>
+    <string name="source_migration_error_no_favourites">当前范围内没有可迁移的收藏投影</string>
+    <string name="source_migration_error_preview_scope_mismatch">已接受的候选与当前收藏范围不匹配，请重新预览</string>
     <string name="source_migration_channel_name">源迁移</string>
     <string name="source_migration_notification_title">源迁移</string>
     <string name="migration_progress">已迁移 %1$d / %2$d</string>

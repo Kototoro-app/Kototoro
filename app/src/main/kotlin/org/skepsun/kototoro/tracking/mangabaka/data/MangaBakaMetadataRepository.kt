@@ -33,13 +33,13 @@ class MangaBakaMetadataRepository @Inject constructor(
 ) {
 
     data class Status(
-        val summary: String,
         val version: String?,
         val latestVersion: String?,
         val hasUpdate: Boolean,
         val sizeBytes: Long,
         val entryCount: Int,
         val isInstalled: Boolean,
+        val downloadedAt: Long,
         val hasSearchIndex: Boolean,
         val searchIndexVersion: String?,
         val searchIndexEntries: Int,
@@ -116,21 +116,14 @@ class MangaBakaMetadataRepository @Inject constructor(
             version.isNullOrBlank() -> true
             else -> latestVersion != version
         }
-        val summary = buildSummary(
-            installed = installed,
-            version = version,
-            latestVersion = latestVersion,
-            downloadedAt = meta.downloadedAt,
-            hasSearchIndex = hasSearchIndex,
-        )
         Status(
-            summary = summary,
             version = version,
             latestVersion = latestVersion,
             hasUpdate = hasUpdate,
             sizeBytes = remote?.sizeBytes ?: installedBytes,
             entryCount = readLocalEntryCount(),
             isInstalled = installed,
+            downloadedAt = meta.downloadedAt,
             hasSearchIndex = hasSearchIndex,
             searchIndexVersion = meta.searchIndexVersion,
             searchIndexEntries = meta.searchIndexEntries,
@@ -469,38 +462,6 @@ class MangaBakaMetadataRepository @Inject constructor(
                 return@withContext emptyList()
             }
             parseSeriesCandidates(JSONObject(body))
-        }
-    }
-
-    private fun buildSummary(
-        installed: Boolean,
-        version: String?,
-        latestVersion: String?,
-        downloadedAt: Long,
-        hasSearchIndex: Boolean,
-    ): String {
-        return when {
-            installed && hasSearchIndex && !version.isNullOrBlank() && version == latestVersion -> {
-                "本地快照与索引库均已就绪，当前已是最新版本"
-            }
-            installed && hasSearchIndex -> {
-                "本地快照已安装，索引库已就绪"
-            }
-            installed && !version.isNullOrBlank() && version == latestVersion -> {
-                "本地快照已安装，当前已是最新版本"
-            }
-            installed && !version.isNullOrBlank() && !latestVersion.isNullOrBlank() -> {
-                "本地快照已安装，当前 $version，最新 $latestVersion"
-            }
-            installed && downloadedAt > 0L -> {
-                "本地快照已安装，但尚未获取远端最新版本信息"
-            }
-            !installed && !latestVersion.isNullOrBlank() -> {
-                "可下载本地快照，最新版本 $latestVersion"
-            }
-            else -> {
-                "可刷新远端状态并下载 MangaBaka 本地快照"
-            }
         }
     }
 

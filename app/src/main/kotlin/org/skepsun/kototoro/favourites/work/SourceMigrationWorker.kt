@@ -30,6 +30,7 @@ import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationStatus
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.R
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -65,7 +66,7 @@ class SourceMigrationWorker @AssistedInject constructor(
 
         if (targetSourceNames.isEmpty()) {
             Log.e(TAG, "No target sources configured")
-            return failureResult("未配置目标源")
+            return failureResult(applicationContext.getString(R.string.source_migration_error_no_target_sources))
         }
         if (
             previewMangaIds.isEmpty() ||
@@ -73,7 +74,7 @@ class SourceMigrationWorker @AssistedInject constructor(
             previewMangaIds.size != previewActions.size
         ) {
             Log.e(TAG, "No valid migration preview plan configured")
-            return failureResult("未生成有效的迁移计划，请先预览并接受候选")
+            return failureResult(applicationContext.getString(R.string.source_migration_error_no_valid_preview_plan))
         }
 
         Log.d(
@@ -85,7 +86,7 @@ class SourceMigrationWorker @AssistedInject constructor(
         val favouriteContents = loadFavouriteContents(selectedContentIds, fromSourceName)
         if (favouriteContents.isEmpty()) {
             Log.d(TAG, "No favorites to migrate")
-            return failureResult("当前范围内没有可迁移的收藏投影")
+            return failureResult(applicationContext.getString(R.string.source_migration_error_no_favourites))
         }
         val plan: Map<Long, PreviewPlanItem> = previewMangaIds.indices.associate { index: Int ->
             previewMangaIds[index] to PreviewPlanItem(
@@ -99,7 +100,7 @@ class SourceMigrationWorker @AssistedInject constructor(
         }
         if (plannedFavourites.isEmpty()) {
             Log.e(TAG, "No favorites matched accepted preview plan")
-            return failureResult("已接受的候选与当前收藏范围不匹配，请重新预览")
+            return failureResult(applicationContext.getString(R.string.source_migration_error_preview_scope_mismatch))
         }
 
         val hasPermission = applicationContext.checkNotificationPermission(CHANNEL_ID_SOURCE_MIGRATION)
@@ -222,7 +223,14 @@ class SourceMigrationWorker @AssistedInject constructor(
                 KEY_NOT_FOUND to notFound,
                 KEY_REUSED to reused,
                 KEY_ATTACHED to attached,
-                KEY_MESSAGE to "迁移完成：成功 $completed 项，复用现有 $reused 项，新增投影 $attached 项，失败 $failed 项，未命中 $notFound 项",
+                KEY_MESSAGE to applicationContext.getString(
+                    R.string.entity_organize_reading_execute_feedback,
+                    completed,
+                    reused,
+                    attached,
+                    failed,
+                    notFound,
+                ),
             )
             setProgress(progressData)
             Result.success(progressData)

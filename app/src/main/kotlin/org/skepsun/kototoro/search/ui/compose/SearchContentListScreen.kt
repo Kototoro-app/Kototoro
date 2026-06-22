@@ -137,6 +137,7 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -234,6 +235,7 @@ private fun SearchFilterSheetSurface(
     shape: RoundedCornerShape = RoundedCornerShape(28.dp),
     allowRuntimeHaze: Boolean = true,
     componentRole: GlassComponentRole = GlassComponentRole.Sheet,
+    showDragHandle: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     GlassSurface(
@@ -244,8 +246,19 @@ private fun SearchFilterSheetSurface(
         dialogSurface = true,
         componentRole = componentRole,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            content()
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (showDragHandle) {
+                SheetDragHandle(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                content()
+            }
         }
     }
 }
@@ -876,6 +889,7 @@ fun AppSearchContentListRoute(
                 ) {
                     SearchFilterSheetSurface(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        showDragHandle = true,
                     ) {
                         SearchFilterPanel(
                             sourceName = viewModel.source.name,

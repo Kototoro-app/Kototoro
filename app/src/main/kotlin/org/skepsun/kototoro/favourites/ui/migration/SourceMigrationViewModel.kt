@@ -594,7 +594,7 @@ class SourceMigrationViewModel @Inject constructor(
                 val status = mangaBakaMetadataRepository.readStatus()
                 EntityOrganizeDatasetStatus(
                     isLoading = false,
-                    summary = status.summary,
+                    summary = buildMangaBakaDatasetSummary(status),
                     version = status.version,
                     latestVersion = status.latestVersion,
                     hasUpdate = status.hasUpdate,
@@ -664,7 +664,7 @@ class SourceMigrationViewModel @Inject constructor(
                 val status = mangaBakaMetadataRepository.readStatus()
                 EntityOrganizeDatasetStatus(
                     isLoading = false,
-                    summary = status.summary,
+                    summary = buildMangaBakaDatasetSummary(status),
                     version = status.version,
                     latestVersion = status.latestVersion,
                     hasUpdate = status.hasUpdate,
@@ -725,7 +725,7 @@ class SourceMigrationViewModel @Inject constructor(
                 val status = mangaBakaMetadataRepository.readStatus()
                 EntityOrganizeDatasetStatus(
                     isLoading = false,
-                    summary = status.summary,
+                    summary = buildMangaBakaDatasetSummary(status),
                     version = status.version,
                     latestVersion = status.latestVersion,
                     hasUpdate = status.hasUpdate,
@@ -2505,6 +2505,48 @@ class SourceMigrationViewModel @Inject constructor(
                 baseSummary,
                 latestVersion,
             )
+        }
+    }
+
+    private fun buildMangaBakaDatasetSummary(
+        status: MangaBakaMetadataRepository.Status,
+    ): String {
+        return when {
+            status.isInstalled &&
+                status.hasSearchIndex &&
+                !status.version.isNullOrBlank() &&
+                status.version == status.latestVersion -> {
+                appContext.getString(R.string.entity_organize_dataset_mangabaka_summary_ready_latest)
+            }
+
+            status.isInstalled && status.hasSearchIndex -> {
+                appContext.getString(R.string.entity_organize_dataset_mangabaka_summary_ready_indexed)
+            }
+
+            status.isInstalled && !status.version.isNullOrBlank() && status.version == status.latestVersion -> {
+                appContext.getString(R.string.entity_organize_dataset_mangabaka_summary_installed_latest)
+            }
+
+            status.isInstalled && !status.version.isNullOrBlank() && !status.latestVersion.isNullOrBlank() -> {
+                appContext.getString(
+                    R.string.entity_organize_dataset_mangabaka_summary_installed_update,
+                    status.version,
+                    status.latestVersion,
+                )
+            }
+
+            status.isInstalled && status.downloadedAt > 0L -> {
+                appContext.getString(R.string.entity_organize_dataset_mangabaka_summary_installed_unknown)
+            }
+
+            !status.isInstalled && !status.latestVersion.isNullOrBlank() -> {
+                appContext.getString(
+                    R.string.entity_organize_dataset_mangabaka_summary_download_available,
+                    status.latestVersion,
+                )
+            }
+
+            else -> appContext.getString(R.string.entity_organize_dataset_mangabaka_summary_refresh)
         }
     }
 

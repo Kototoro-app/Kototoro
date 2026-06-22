@@ -44,6 +44,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
 private const val DISPLAY_OPTIONS_SHEET_TAG = "DisplayOptionsSheet"
@@ -123,6 +124,9 @@ fun DisplayOptionsSheet(
                         .padding(bottom = 32.dp, top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
+                    SheetDragHandle(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
                     Text(
                         text = stringResource(R.string.display_options),
                         style = MaterialTheme.typography.titleLarge,

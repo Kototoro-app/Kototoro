@@ -11,7 +11,7 @@
     <string name="network_error">Network error</string>
     <string name="details">Details</string>
     <string name="chapters">Chapters</string>
-    <string name="list">Liste</string>
+    <string name="list">List</string>
     <string name="detailed_list">Detailed list</string>
     <string name="grid">Grid</string>
     <string name="list_mode">List mode</string>
@@ -210,6 +210,7 @@
     <string name="open_daily_schedule">Open daily schedule</string>
     <string name="details_open_comments_site">Site comments</string>
     <string name="details_open_reviews_site">Site reviews</string>
+    <string name="home_quick_action_extensions">Extension</string>
     <string name="details_character_voice_actors">CV: %1$s</string>
     <string name="details_character_voice_actors_more">CV: %1$s +%2$d</string>
     <string name="details_character_role_label">Role</string>
@@ -1224,6 +1225,13 @@ Proceed?</string>
     <string name="entity_organize_tracking_low_confidence_warning">Confidence is low. Review this match manually before binding.</string>
     <string name="entity_organize_dataset_title">Anime dataset bridge</string>
     <string name="entity_organize_dataset_mangabaka_title">MangaBaka bridge</string>
+    <string name="entity_organize_dataset_mangabaka_summary_ready_latest">Local snapshot and search index are ready. You are on the latest version.</string>
+    <string name="entity_organize_dataset_mangabaka_summary_ready_indexed">Local snapshot is installed and the search index is ready.</string>
+    <string name="entity_organize_dataset_mangabaka_summary_installed_latest">Local snapshot is installed. You are on the latest version.</string>
+    <string name="entity_organize_dataset_mangabaka_summary_installed_update">Local snapshot is installed. Current %1$s, latest %2$s.</string>
+    <string name="entity_organize_dataset_mangabaka_summary_installed_unknown">Local snapshot is installed, but the latest remote version has not been checked yet.</string>
+    <string name="entity_organize_dataset_mangabaka_summary_download_available">Local snapshot is available. Latest version %1$s.</string>
+    <string name="entity_organize_dataset_mangabaka_summary_refresh">Refresh remote status and download the MangaBaka local snapshot.</string>
     <string name="entity_organize_dataset_summary_latest">%1$s · Latest %2$s</string>
     <string name="entity_organize_dataset_version">Version</string>
     <string name="entity_organize_dataset_size">Size</string>
@@ -1325,6 +1333,10 @@ Proceed?</string>
     <string name="source_migration_start">Start migration</string>
     <string name="source_migration_cancel">Cancel migration</string>
     <string name="source_migration_concurrency">Search concurrency: %1$d</string>
+    <string name="source_migration_error_no_target_sources">No target sources configured.</string>
+    <string name="source_migration_error_no_valid_preview_plan">No valid migration plan was generated. Preview and accept candidates first.</string>
+    <string name="source_migration_error_no_favourites">There are no favorite projections to migrate in the current scope.</string>
+    <string name="source_migration_error_preview_scope_mismatch">Accepted candidates do not match the current favorites scope. Build the preview again.</string>
     <string name="source_migration_channel_name">Source migration</string>
     <string name="source_migration_notification_title">Source migration</string>
     <string name="migration_progress">Migrated %1$d / %2$d</string>

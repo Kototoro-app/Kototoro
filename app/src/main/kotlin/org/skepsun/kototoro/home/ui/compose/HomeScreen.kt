@@ -77,6 +77,7 @@ import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -215,7 +216,7 @@ fun HomeScreen(
         HomeQuickAction(stringResource(R.string.local_storage), R.drawable.ic_storage, actions.onLocalClick),
         HomeQuickAction(stringResource(R.string.downloads), R.drawable.ic_download, actions.onDownloadsClick),
         HomeQuickAction(stringResource(R.string.random), R.drawable.ic_dice, actions.onRandomClick, !isRandomLoading),
-        HomeQuickAction(stringResource(R.string.extension_management), R.drawable.ic_extension, actions.onManageSourcesClick),
+        HomeQuickAction(stringResource(R.string.home_quick_action_extensions), R.drawable.ic_extension, actions.onManageSourcesClick),
         HomeQuickAction(stringResource(R.string.translation_settings), R.drawable.ic_language, actions.onAutoTranslateClick),
         HomeQuickAction(stringResource(R.string.reader_settings), R.drawable.ic_read, actions.onReaderSettingsClick),
         HomeQuickAction(stringResource(R.string.settings), R.drawable.ic_settings, actions.onSettingsClick),
@@ -1417,7 +1418,13 @@ private fun QuickAccessButton(
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     Surface(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (compact) {
+                Modifier.height(if (expressive) 104.dp else 84.dp)
+            } else {
+                Modifier
+            },
+        ),
         shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
         color = if (expressive) {
             MaterialTheme.colorScheme.surfaceContainerLow
@@ -1448,8 +1455,10 @@ private fun QuickAccessButton(
                 )
                 Text(
                     text = action.label,
+                    modifier = Modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = if (action.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
