@@ -69,10 +69,9 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 	fun requestSignIn() {
 		viewModelScope.launch(Dispatchers.Default) {
 			try {
-				auth.requireAccessToken()
-				repository.onSignedIn("Google Drive", null)
+				val authorization = auth.authorize(promptSelectAccount = true)
+				repository.onSignedIn(authorization.email, authorization.displayName, authorization.account)
 				scheduler.schedule()
-				handleSyncResult(repository.sync())
 			} catch (e: GoogleDriveSyncAuthorizationException) {
 				val pendingIntent = e.authorizationIntent
 				if (pendingIntent != null) {
@@ -90,10 +89,9 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 	fun onAuthorizationResult(data: Intent?) {
 		viewModelScope.launch(Dispatchers.Default) {
 			try {
-				auth.accessTokenFromIntent(data)
-				repository.onSignedIn("Google Drive", null)
+				val authorization = auth.authorizationFromIntent(data)
+				repository.onSignedIn(authorization.email, authorization.displayName, authorization.account)
 				scheduler.schedule()
-				handleSyncResult(repository.sync())
 			} catch (e: Exception) {
 				settings.lastSyncError = e.message ?: e.javaClass.simpleName
 			}
@@ -102,8 +100,8 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 	}
 
 	fun signOut() {
-		repository.signOut()
 		viewModelScope.launch(Dispatchers.Default) {
+			repository.signOut()
 			scheduler.unschedule()
 			refresh()
 		}

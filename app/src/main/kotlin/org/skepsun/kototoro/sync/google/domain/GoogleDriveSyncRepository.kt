@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.sync.google.domain
 
+import android.accounts.Account
 import android.util.Log
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.toList
@@ -74,9 +75,10 @@ class GoogleDriveSyncRepository @Inject constructor(
 		coerceInputValues = true
 	}
 
-	fun onSignedIn(email: String?, displayName: String?) {
+	fun onSignedIn(email: String?, displayName: String?, account: Account?) {
 		settings.accountEmail = email?.ifBlank { null } ?: "Google Drive"
 		settings.accountName = displayName
+		settings.googleAccountName = account?.name
 	}
 
 	fun shouldSyncOnStart(now: Long = System.currentTimeMillis()): Boolean {
@@ -133,7 +135,10 @@ class GoogleDriveSyncRepository @Inject constructor(
 		GoogleDriveSyncResult.Error(e.message)
 	}
 
-	fun signOut() {
+	suspend fun signOut() {
+		runCatching {
+			auth.revokeAccess(settings.googleAccountName?.let { Account(it, GOOGLE_ACCOUNT_TYPE) })
+		}
 		settings.clearAccount()
 	}
 
@@ -676,6 +681,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 		const val LEGACY_LOCAL_MANGA_SOURCE = "0"
 		const val MAX_CONFLICT_RETRIES = 3
 		const val TAG = "GoogleDriveSync"
+		private const val GOOGLE_ACCOUNT_TYPE = "com.google"
 		val SYNC_PROTECTED_BINDING_STATES = setOf(
 			EntityBindingState.MANUAL,
 			EntityBindingState.CANDIDATE,

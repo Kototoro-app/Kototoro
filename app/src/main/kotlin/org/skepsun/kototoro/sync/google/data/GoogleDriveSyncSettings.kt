@@ -22,6 +22,10 @@ class GoogleDriveSyncSettings @Inject constructor(
 		get() = prefs.getString(KEY_ACCOUNT_NAME, null)
 		set(value) = prefs.edit { putString(KEY_ACCOUNT_NAME, value) }
 
+	var googleAccountName: String?
+		get() = prefs.getString(KEY_GOOGLE_ACCOUNT_NAME, null)
+		set(value) = prefs.edit { putString(KEY_GOOGLE_ACCOUNT_NAME, value) }
+
 	val isSignedIn: Boolean
 		get() = !accountEmail.isNullOrBlank()
 
@@ -62,6 +66,7 @@ class GoogleDriveSyncSettings @Inject constructor(
 	fun clearAccount() = prefs.edit {
 		remove(KEY_ACCOUNT_EMAIL)
 		remove(KEY_ACCOUNT_NAME)
+		remove(KEY_GOOGLE_ACCOUNT_NAME)
 		remove(KEY_LAST_SYNC_TIMESTAMP)
 		remove(KEY_LAST_SYNC_ATTEMPT_TIMESTAMP)
 		remove(KEY_LAST_SYNC_ERROR)
@@ -73,6 +78,7 @@ class GoogleDriveSyncSettings @Inject constructor(
 		private const val PREFS_NAME = "google_drive_sync"
 		private const val KEY_ACCOUNT_EMAIL = "account_email"
 		private const val KEY_ACCOUNT_NAME = "account_name"
+		private const val KEY_GOOGLE_ACCOUNT_NAME = "google_account_name"
 		private const val KEY_DEVICE_ID = "device_id"
 		const val KEY_INTERVAL_MINUTES = "interval_minutes"
 		const val KEY_WIFI_ONLY = "wifi_only"
