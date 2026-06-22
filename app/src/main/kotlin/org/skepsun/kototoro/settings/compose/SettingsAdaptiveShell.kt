@@ -4,9 +4,14 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -56,8 +61,14 @@ private fun SettingsSinglePaneShell(
 		label = "settings_page",
 	) { targetDestination ->
 		if (targetDestination != null) {
-			saveableStateHolder.SaveableStateProvider(destinationKey(targetDestination)) {
-				destinationContent(targetDestination)
+			Box(
+				modifier = Modifier
+					.fillMaxSize()
+					.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+			) {
+				saveableStateHolder.SaveableStateProvider(destinationKey(targetDestination)) {
+					destinationContent(targetDestination)
+				}
 			}
 		}
 	}
@@ -71,11 +82,14 @@ private fun SettingsTwoPaneShell(
 	destinationContent: @Composable (SettingsDestination) -> Unit,
 ) {
 	Row(modifier = modifier.fillMaxSize()) {
-		rootContent(
-			Modifier
+		Box(
+			modifier = Modifier
 				.fillMaxHeight()
-				.width(SettingsListPaneWidth),
-		)
+				.width(SettingsListPaneWidth)
+				.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)),
+		) {
+			rootContent(Modifier.fillMaxSize())
+		}
 		Box(
 			modifier = Modifier
 				.fillMaxHeight()
@@ -85,7 +99,8 @@ private fun SettingsTwoPaneShell(
 		Box(
 			modifier = Modifier
 				.weight(1f)
-				.fillMaxHeight(),
+				.fillMaxHeight()
+				.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.End)),
 		) {
 			if (destination == SettingsDestination.Root) {
 				Box(

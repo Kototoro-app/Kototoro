@@ -1460,7 +1460,7 @@ class SettingsActivity :
 				onSearchResultClick = { item -> navigateToPreference(item) },
 				listState = listState,
 				topInset = innerPadding.calculateTopPadding(),
-				applyHorizontalDisplayCutoutPadding = !isMasterDetails,
+				applyHorizontalDisplayCutoutPadding = false,
 				modifier = Modifier.fillMaxSize(),
 			)
 		}
