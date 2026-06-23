@@ -12,13 +12,13 @@
 
 相关设计文档：
 
-- [实体中心 Work 化改造执行计划（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/entity-centered-work-migration-execution-plan-2026-06.md)
-- [Entity Graph 治理收敛与历史债务清理方案（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/entity-graph-governance-remediation-plan-2026-06.md)
-- [Entity Graph Source Boundary 审计（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/entity-graph-source-boundary-audit-2026-06.md)
-- [Work Ownership Matrix（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/work-ownership-matrix-2026-06.md)
-- [Metadata Write Audit Plan（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/metadata-write-audit-plan-2026-06.md)
-- [Work 化迁移期间的新旧同步隔离方案（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/work-migration-sync-isolation-plan-2026-06.md)
-- [Work Sync Schema And Restore Isolation Spec（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/work-sync-schema-and-restore-isolation-spec-2026-06.md)
+- [实体中心 Work 化改造执行计划（2026-06）](./entity-centered-work-migration-execution-plan-2026-06.md)
+- [Entity Graph 治理收敛与历史债务清理方案（2026-06）](./entity-graph-governance-remediation-plan-2026-06.md)
+- [Entity Graph Source Boundary 审计（2026-06）](./entity-graph-source-boundary-audit-2026-06.md)
+- [Work Ownership Matrix（2026-06）](./work-ownership-matrix-2026-06.md)
+- [Metadata Write Audit Plan（2026-06）](./metadata-write-audit-plan-2026-06.md)
+- [Work 化迁移期间的新旧同步隔离方案（2026-06）](./work-migration-sync-isolation-plan-2026-06.md)
+- [Work Sync Schema And Restore Isolation Spec（2026-06）](./work-sync-schema-and-restore-isolation-spec-2026-06.md)
 
 ## 当前判断
 
@@ -36,7 +36,7 @@
 ## 按计划文档的阶段兑现情况
 
 基于当前代码与上面各节证据，对
-[实体中心 Work 化改造执行计划（2026-06）](/d1/chuxiong/code/Kototoro/docs/architecture/entity-centered-work-migration-execution-plan-2026-06.md)
+[实体中心 Work 化改造执行计划（2026-06）](./entity-centered-work-migration-execution-plan-2026-06.md)
 的分阶段状态可以先做一个收敛判断：
 
 ### Phase 0：冻结错误主链

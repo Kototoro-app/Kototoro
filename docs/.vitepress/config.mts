@@ -53,6 +53,7 @@ export default defineConfig({
           { text: "Architecture Review", link: "/architecture/architecture-review" },
           { text: "Architecture Roadmap", link: "/architecture/architecture-roadmap" },
           { text: "Entity Graph Plan", link: "/architecture/entity-graph-implementation-plan" },
+          { text: "Entity Identity Migration", link: "/architecture/entity-identity-migration-consolidation-plan-2026-06" },
           { text: "Entity Source Governance", link: "/architecture/entity-source-governance-plan" },
           { text: "Entity Source Boundary Audit", link: "/architecture/entity-graph-source-boundary-audit-2026-06" },
           { text: "Work Migration Status Audit", link: "/architecture/work-migration-status-audit-2026-06" },
