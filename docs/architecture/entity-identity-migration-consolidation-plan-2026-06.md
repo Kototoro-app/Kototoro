@@ -19,6 +19,93 @@ preferred_local_manga_id = 当前默认展示/阅读投影，不改变作品身�
 
 只要这个不变量不成立，收藏聚合、详情页、阅读记录、追踪、备份、同步都会继续出现局部修补和状态回流。
 
+## 硬性工程约束
+
+以下约束不是建议，而是迁移期间的 review gate。任何新代码、迁移脚本、repair 动作、restore 逻辑都必须满足。
+
+### 1. `manga_id` 不得作为作品 owner
+
+禁止新代码直接把 `manga_id` 当作收藏、历史、统计、追踪、阅读记录的主 owner。
+
+允许场景：
+
+- 打开来源详情。
+- 加载章节、阅读、播放、下载。
+- 作为 `anchor_manga_id` 记录当前执行投影。
+- legacy import 中作为待迁移输入。
+
+必须通过 `WorkResolver` 得到 `entity_id` 后，才能写作品级用户状态。
+
+### 2. 远端 `entity_id` 不得作为本地主键
+
+任何 backup / sync / WebDAV restore 中出现的 `entity_id` 都只能视为远端快照内临时 ID。
+
+禁止：
+
+- 直接把远端 `entity_id` 写入本地 work 状态。
+- 直接按远端 `entity_id` 关联本地 binding / prefs / favourites / history / stats。
+
+必须：
+
+- 建立 `remoteEntityId -> localEntityId` 映射。
+- 优先通过 local projection anchor、strong binding、manual binding 找到本地 entity。
+- 无法可靠映射时创建本地 entity 或 candidate，不得污染已有本地主实体。
+
+### 3. 自动流程不得确认候选身份
+
+`CANDIDATE` 只能进入整理建议和 repair UI，不能被自动流程提升为 `CONFIRMED`。
+
+允许自动确认的证据仅限：
+
+- 用户明确合并或绑定。
+- 已存在且未被拒绝的 manual / confirmed binding。
+- 同一 source-scoped provider key 的可靠恢复映射。
+- legacy normalization 中可证明一一对应的本地投影绑定。
+
+禁止：
+
+- 仅凭标题相似度自动合并。
+- 仅凭 tracking cache / `tracking_site_links` 自动确认。
+- 仅凭同名、同别名、同封面自动确认。
+- restore 时把 `LEGACY` / `SYNC` binding 自动提升为 `CONFIRMED`。
+
+### 4. `ensureForProjection` 不得成为隐式 owner 制造器
+
+`ensureForProjection(content)` 是迁移防腐入口，不是“看到一个 `manga_id` 就创建作品主实体”的快捷方式。
+
+允许调用场景：
+
+- 用户明确打开或收藏一个 projection，需要让它进入当前 Work 体系。
+- legacy import / restore 正在把旧投影状态迁移为新模型。
+- 读取链遇到旧状态时，需要触发一次性 migration staging，而不是长期兼容读。
+
+禁止：
+
+- 后台扫描全库时为所有 projection 批量创建 authoritative work。
+- 更新/订阅轮询时为了方便写状态而创建 work。
+- 因为某个 projection 标题相似就把它绑定到已有 work。
+
+要求：
+
+- 自动创建的 work 必须带 provenance，例如 `createdBy = MIGRATION / IMPORT / USER`。
+- 由旧状态迁移创建的 work 初始只能绑定当前 projection，不得自动吸附其它 projection。
+- 只有用户合并、强 provider key、或明确 import 映射，才能把多个 projection 合成同一 work。
+
+### 5. 聚合读必须有确定的冲突合并策略
+
+Work-first 不是把多个 projection 状态简单 `GROUP BY entity_id`。所有旧 projection 状态迁移进入 Work 模型时，必须有确定、可测试的 merge policy。
+
+最小规则：
+
+- 收藏分类：active category 取并集；删除依赖 tombstone / `updated_at`，不能用“任一 active 即恢复”覆盖较新的删除。
+- 置顶：同一 category 内 `pinned = true` 可 OR 合并，但删除后的 pinned 不参与合并。
+- 历史进度：以 `updated_at` 最新的 work history 为主；`anchor_manga_id` 必须跟随该进度来源。
+- 阅读统计：按事件唯一键或 `(entity_id, anchor_manga_id, started_at)` 去重后累加，不能把同一 restore 事件重复计入。
+- 追踪状态：owner 以 entity 为准；provider target 同 key 去重；冲突时保留 manual / confirmed，候选进入整理。
+- metadata：entity default 优先；projection override 只在显式用户覆盖时参与展示。
+
+没有 merge policy 的字段不得进入 `WorkAggregate` 主展示。
+
 ## 旧计划评价
 
 ### 合理的部分
@@ -74,8 +161,8 @@ preferred_local_manga_id = 当前默认展示/阅读投影，不改变作品身�
 
 - 根据 local manga binding 找 `entity_id`
 - 根据 `entity_preferences.preferred_local_manga_id` 选择展示内容
-- preferred projection 失效后 fallback 到任一 local binding
-- work 状态缺失时从 legacy manga 状态补齐
+- preferred projection 失效后重新选择合法 active local binding
+- 旧 manga 状态迁移为 work 状态
 - restore / sync 时把远端 `entity_id` 映射成本地 `entity_id`
 
 这些逻辑散落在 favourites、history、reading record、tracker、sync、backup、details 中。DRY 被破坏后，任何一处规则变化都会造成行为漂移。
@@ -96,7 +183,7 @@ preferred_local_manga_id = 当前默认展示/阅读投影，不改变作品身�
 
 ### 4. restore / sync 仍可能把旧语义重新带回主链
 
-旧版本备份和旧同步快照里的 `manga_id` 状态是必须兼容的，但不能被直接恢复成当前主真相。
+旧版本备份和旧同步快照里的 `manga_id` 状态是必须支持迁移的，但不能被直接恢复成当前主真相。
 
 如果 restore 逻辑执行：
 
@@ -200,7 +287,7 @@ Jellyfin version selection       -> Kototoro preferred_local_manga_id
 规则：
 
 - 新写路径必须写 work/entity 状态。
-- legacy manga 状态只作为兼容输入和 fallback。
+- 旧 manga 状态只作为迁移输入；成功迁移后不得继续参与主读写。
 - 主页面不直接合并多套状态，统一通过 Work 解析门面读取。
 
 ### WorkResolver
@@ -225,19 +312,116 @@ data class WorkIdentity(
     val requestedMangaId: Long?,
     val preferredMangaId: Long?,
     val localMangaIds: Set<Long>,
-    val isLegacyProjectionOnly: Boolean,
+    val migrationState: WorkMigrationState,
 )
+```
+
+```kotlin
+enum class WorkMigrationState {
+    VALID,
+    STAGED,
+    BLOCKED,
+}
 ```
 
 约束：
 
-- 页面、repository、backup、sync、repair 不再各自手写 identity fallback。
+- 页面、repository、backup、sync、repair 不再各自手写旧状态迁移或 identity fallback。
 - 所有 `mangaId -> entityId -> preferred projection` 规则集中在这里。
 - 这里是迁移期间最重要的防腐层。
 
+#### WorkResolver 方法语义
+
+`WorkResolver` 不是 `EntityGraphRepository` 的替代品，而是它前面的身份解析门面。
+
+关系定义：
+
+- `EntityGraphRepository` 保留底层 graph / binding / relation / repair 能力。
+- `WorkResolver` 包装 `EntityGraphRepository` 中与 `WORK` identity 相关的能力。
+- 页面和业务 repository 不直接调用 `EntityGraphRepository.findEntityIdsByAnyMangaIds(...)` 等低层 fallback。
+- 非 `WORK` 图谱能力仍留在 `EntityGraphRepository`，但不得参与用户状态 ownership。
+
+方法契约：
+
+| 方法 | 是否创建实体 | 返回语义 | 典型调用方 |
+| --- | --- | --- | --- |
+| `resolveByMangaId(mangaId)` | 否 | 只解析已有绑定；找不到时返回 `entityId = null, migrationState = STAGED` | 列表、详情、只读查询 |
+| `resolveByEntityId(entityId)` | 否 | entity 不存在返回 null；存在但无可用 projection 时 `preferredMangaId = null` | Work 入口、同步映射后校验 |
+| `resolveManyByMangaIds(mangaIds)` | 否 | 批量只读解析；不得触发创建或迁移写入 | 列表分页、批量状态查询 |
+| `ensureForProjection(content)` | 是 | 只在用户动作、restore/import、显式 migration job 中创建最小 WORK | 收藏、restore、normalization |
+| `selectPreferredProjection(entityId)` | 否 | 只选择合法 active local binding；不写入偏好 | UI 展示、reader anchor |
+
+事务与线程：
+
+- `ensureForProjection(...)` 必须在单个数据库事务内完成 entity、binding、prefs 的最小写入。
+- 批量 normalization 应分批事务执行，避免长事务阻塞主库。
+- 解析方法使用 IO dispatcher；不得在 Compose composition 中直接调用 suspend 查询。
+- `resolveManyByMangaIds(...)` 必须限制 IN 参数批次，复用当前 `MAX_BINDING_QUERY_PARAMS` 级别策略。
+
+调用频率：
+
+- 列表页必须优先用批量解析，不允许逐行调用 `resolveByMangaId(...)`。
+- 高频 UI state 通过 repository Flow 暴露，不由 Composable 逐次触发 resolver。
+- restore / normalization 可以调用 `ensureForProjection(...)`，但必须记录 provenance。
+
+### Migration Staging
+
+`migrationState != VALID` 不能只是 UI 标记，它必须表示旧状态尚未成功转换为新合法状态。
+
+staging 规则：
+
+- 可以显示。
+- 可以被用户打开。
+- 可以被用户整理、合并、拆分、选择默认来源后转为 `VALID`。
+- 可以作为 import 输入继续尝试迁移为 work 状态。
+
+禁止：
+
+- 作为 confirmed work 参与跨 projection 聚合。
+- 作为 sync v2 authoritative state 导出。
+- 作为 tracking / subscription owner。
+- 自动吸附其它同名 projection。
+
+退出 staging 条件：
+
+- 用户明确确认绑定或合并。
+- 恢复流程通过强 source-scoped key 完成本地映射。
+- normalization 能证明这是单 projection work，且没有冲突 binding / rejected evidence，此时自动转换为 `VALID`。
+
+如果不能退出 staging，应作为待整理迁移项显示，而不是保留一套旧世界读写路径。
+
+#### Staging 状态机
+
+```text
+OLD_INPUT
+  -> AUTO_MIGRATED -> VALID
+  -> NEEDS_REVIEW -> STAGED
+  -> CONFLICT / REJECTED_EVIDENCE -> BLOCKED
+```
+
+状态含义：
+
+- `VALID`：可进入 Work 聚合、订阅、备份和同步。
+- `STAGED`：可以展示和手动整理，不参与 authoritative 状态。
+- `BLOCKED`：存在 rejected binding、冲突 provider key、疑似误合并等风险，只允许人工处理。
+
+自动转 `VALID` 的最低证据：
+
+- 当前旧状态只对应一个 local projection。
+- 该 projection 没有 rejected evidence。
+- 没有另一个 confirmed/manual entity binding 指向同一 `(source, external_id)`。
+- 没有同源 provider key 冲突。
+
+批量 UX：
+
+- staging 列表按原因分组：缺少 binding、provider 冲突、preferred projection 失效、metadata 冲突。
+- 支持批量确认“单 projection work”。
+- 支持逐项合并、拆分、选择默认来源。
+- `BLOCKED` 项不提供一键确认。
+
 ## 数据库迁移策略
 
-### Phase 0：不删旧表，先建立统一解析门面
+### Phase 0：不删旧表，先建立统一迁移与解析门面
 
 不做高风险大迁移：
 
@@ -251,12 +435,25 @@ data class WorkIdentity(
 
 - `WorkResolver`
 - `WorkAggregateRepository`
+- tombstone / migrated shadow 基础设施
 - 明确所有新读写入口优先走 `entity_id`
+- 明确旧状态进入主页面前必须自动迁移或进入 staging
+
+schema 前置项：
+
+- 已有 `deleted_at / updated_at` 的表继续使用软删除语义。
+- 当前 `work_favourites` 已具备 `deleted_at / updated_at`：
+  - [WorkFavouriteEntity.kt](/d1/chuxiong/code/Kototoro/app/src/main/kotlin/org/skepsun/kototoro/favourites/data/WorkFavouriteEntity.kt:35)
+  - [WorkFavouritesDao.kt](/d1/chuxiong/code/Kototoro/app/src/main/kotlin/org/skepsun/kototoro/favourites/data/WorkFavouritesDao.kt:50)
+- 普通收藏删除应继续走软删除；FK `ON DELETE CASCADE` 只处理 entity/category 被物理删除的级联清理。
+- 缺少 tombstone 的 work-owned 状态必须先补齐字段或等价事件表，再进入跨设备 authoritative 合并。
+- 旧 owner 状态成功迁移后不得物理删除，必须通过 migrated / shadow 标记或 migration ledger 防止重复导入。
+- 如果某张旧表无法加 shadow 字段，必须用单独的 migration ledger 记录 `(table, legacy_key, migrated_at, target_entity_id)`。
 
 验收：
 
 - 收藏页、详情页、历史页可以通过同一聚合模型读取状态。
-- 旧数据不丢失。
+- 旧数据不丢失，并且不会以旧 owner 语义继续参与主读写。
 
 ### Phase 1：幂等归一化
 
@@ -265,9 +462,10 @@ data class WorkIdentity(
 1. 对所有 active legacy favourites/history/stats/tracks，确保存在 local manga binding。
 2. 缺失 `WORK` entity 时创建最小 entity。
 3. 从 legacy manga 状态补齐 work 状态。
-4. 不自动删除 legacy 状态。
+4. 成功补齐 work 状态后，将旧状态标记为 migrated / shadow，不再参与主读写。
 5. 不基于模糊标题自动合并不同 entity。
 6. 已存在 `MANUAL` / `REJECTED` 绑定时严格尊重。
+7. 无法证明身份边界的 projection 进入 migration staging，不进入 confirmed work 聚合。
 
 需要记录 normalization version，例如：
 
@@ -280,23 +478,34 @@ work_identity_normalization_version = 1
 - 同一设备多次运行结果一致。
 - 崩溃中断后可重跑。
 - 不会把候选绑定提升成 confirmed。
+- 成功迁移的旧状态不会继续被主查询读取。
 
-### Phase 2：双读单写
+迁移合并策略：
+
+- 收藏：按 `(entity_id, category_id)` 合并；同一 key 下取最新 `updated_at` 决定 active/delete，`created_at` 取最早，`pinned` 只在 active 行中 OR。
+- 历史：按 `entity_id` 合并；取最新 `updated_at` 的进度作为当前位置，保留该进度的 `anchor_manga_id`。
+- 统计：按事件 ledger 去重；没有稳定事件 id 时使用 `(entity_id, anchor_manga_id, started_at, duration, pages)`，宁可少合并也不跨源臆测去重。
+- 更新：按 `(entity_id, anchor_manga_id, source_chapter_key)` 去重，不做跨源章节同一性推断。
+- 追踪：按 `(entity_id, scrobbler, target_id, media_type)` 合并，manual/confirmed 优先于 candidate。
+
+### Phase 2：迁移读，单写新模型
 
 读：
 
-- 通过 `WorkResolver` 同时兼容 work 状态和 legacy manga 状态。
+- 通过 `WorkResolver` 检测旧状态并触发自动迁移。
+- 迁移成功后只返回新模型状态。
+- 迁移失败时返回 `migrationState = STAGED / BLOCKED`，供 UI 提示整理。
 
 写：
 
 - 新行为只写 work/entity 状态。
-- 只有兼容层需要时才同步更新 legacy projection 状态。
-- legacy projection 写入必须标记为 projection mirror / compatibility write，不能反向定义 owner。
+- 禁止为了兼容继续写 legacy projection owner 状态。
+- 如仍需写 projection snapshot，只能写非 authoritative snapshot 字段，且不得参与主读写。
 
 验收：
 
 - 新收藏、新历史、新统计、新追踪默认以 `entity_id` 为 owner。
-- `favourites(manga_id)` 仍可供旧导入和降级 fallback 使用。
+- `favourites(manga_id)` 只可作为导入/迁移输入，不作为降级 fallback 主状态。
 
 ### Phase 3：主页面切换到 WorkAggregate
 
@@ -322,6 +531,40 @@ data class WorkAggregate(
 )
 ```
 
+#### WorkAggregate 查询策略
+
+列表页不能把所有 projection 全量拉到内存后再聚合。
+
+收藏页推荐两阶段查询：
+
+1. `work_favourites` 驱动分页，先查出当前页的 `entity_id`。
+2. 批量查询这些 entity 的：
+   - `entity_preferences`
+   - active local bindings
+   - preferred projection manga rows
+   - category memberships
+   - pinned / sort metadata
+3. 对 staging 旧状态使用单独查询追加，不混入 confirmed work 分页。
+
+排序原则：
+
+- 主排序键来自 work-owned 状态，如 `work_favourites.created_at / sort_key / updated_at`。
+- projection 字段只能作为展示排序补充，例如标题字母序。
+- legacy/staging 项排在 confirmed work 之后或单独分组。
+
+筛选原则：
+
+- 分类筛选按 work category membership。
+- 来源筛选按 active local bindings / display projection source。
+- downloaded/local 筛选可以使用 projection 条件，但返回仍按 `entity_id` 聚合。
+
+性能约束：
+
+- 收藏页、历史页、更新页必须支持分页。
+- `WorkAggregateRepository` 不允许对全库 `findAll()` 后在内存里 `groupBy(entityId)` 作为主实现。
+- 批量查询要限制 IN 参数数量。
+- 需要为高频查询补索引，例如 `work_favourites(deleted_at, category_id, sort_key, updated_at)`、`entity_binding(entity_id, source_kind, state)`。
+
 验收：
 
 - 同一作品多来源收藏在收藏页只出现一个 work 行。
@@ -330,7 +573,7 @@ data class WorkAggregate(
 
 ### Phase 4：同步/备份语义隔离
 
-必须兼容旧输入：
+必须支持旧输入迁移：
 
 - 旧 backup 中只有 `FavouriteBackup(manga_id)`。
 - 旧 sync snapshot 中可能没有 work sections。
@@ -338,7 +581,7 @@ data class WorkAggregate(
 
 恢复规则：
 
-1. 旧 favourites/history/stats/tracks 先作为 import 输入。
+1. 旧 favourites/history/stats/tracks 先作为 migration input。
 2. 通过 `WorkResolver.ensureForProjection()` 映射到本地 entity。
 3. 再写 work 状态。
 4. 远端 `entity_id` 只作为快照内临时 id，不能直接当本地主键。
@@ -347,13 +590,13 @@ data class WorkAggregate(
 新导出规则：
 
 - 新 schema 导出 work sections。
-- legacy sections 可保留兼容，但不得作为 authoritative state。
+- legacy sections 不作为 v2 authoritative payload；如保留，只能作为 projection snapshot 或调试迁移信息。
 - semantic schema version 必须独立于 WebDAV transport generation。
 
 验收：
 
 - 新版可以读旧备份。
-- 新版不把旧语义直接上传成新主真相。
+- 新版会把旧语义自动转换为新合法状态，不能转换的进入 staging。
 - 多设备恢复后，本地 `entity_id` 映射稳定。
 
 ### Phase 5：整理工具降级为边界确认工具
@@ -376,21 +619,21 @@ data class WorkAggregate(
 - 整理工具不再承担运行时污染的兜底职责。
 - 用户看到的问题与实际身份边界一一对应。
 
-### Phase 6：退役 legacy 主决策
+### Phase 6：移除旧状态主决策残留
 
-只有在以下条件满足后，才允许考虑退役旧字段：
+只有在以下条件满足后，才允许考虑停止读取旧 owner 字段：
 
 - 所有主页面都使用 `WorkAggregate`。
 - backup / restore 已稳定支持 semantic schema version。
 - normalization 可重复且有测试覆盖。
-- 旧版本导入路径明确。
-- 至少一个稳定版本周期内没有新增 legacy mirror 污染。
+- 旧版本导入会自动迁移为新合法状态。
+- 至少一个稳定版本周期内没有新增 legacy owner 写入。
 
 退役顺序：
 
 1. legacy manga 状态从主读路径退出。
-2. legacy projection mirror 写入停止。
-3. 旧字段仅保留导入兼容。
+2. legacy projection owner 写入停止。
+3. 旧字段仅保留迁移输入。
 4. 最后才评估 schema 删除或命名统一。
 
 ## 页面数据流
@@ -412,8 +655,16 @@ List<WorkAggregate>
 规则：
 
 - 列表行以 `entity_id` 去重。
-- 无 entity 的 legacy projection 单独显示，并提示可整理。
-- 分类 membership 以 work 状态为准，legacy favourites 只补缺。
+- 无 entity 的旧 projection 先尝试自动迁移；不能迁移时作为 staging 项显示，并提示整理。
+- 分类 membership 以 work 状态为准；旧 favourites 只作为 migration input。
+
+UX 要求：
+
+- work 行显示主标题、默认来源、来源数量。
+- 多来源 work 提供来源切换入口，切换只更新 preferred projection。
+- 分类管理作用于 work；如果用户需要只管理某个来源，应进入 projection/source 详情执行局部动作。
+- staging 项必须有明确标识和整理入口，不能混在普通 work 行里。
+- 批量分类操作只作用于 `VALID` work；staging 项需要先迁移或确认。
 
 ### 详情页
 
@@ -436,7 +687,7 @@ List<WorkAggregate>
 
 - 打开内容必须携带 `manga_id`。
 - 写阅读历史和统计时必须解析 `entity_id`。
-- 如果实体解析失败，写 legacy 状态并进入 normalization 候选。
+- 如果实体解析失败，写入 staging 队列或阻塞提示，不再写 legacy owner 状态。
 
 ### Tracker / Scrobbling
 
@@ -445,6 +696,46 @@ List<WorkAggregate>
 - tracking binding 绑定到 entity。
 - update feed 和 unread counters 以 entity 聚合。
 - provider 的 per-manga cache 不参与 identity owner 决策。
+
+### Metadata authority 修复
+
+metadata 修复收敛 [entity-graph-governance-remediation-plan-2026-06.md](./entity-graph-governance-remediation-plan-2026-06.md) 的结论，纳入本计划主线：
+
+- `entity_preferences` 是 Work 默认 metadata authority。
+- manga prefs 中的 `metadata_source_*` 只表示用户显式 projection override。
+- 自动绑定、合并、restore、repair 不得把 entity metadata source mirror 到所有 projection。
+- 旧 manga metadata source 在迁移时分类：
+  - 与 entity default 一致且疑似 mirror：标记 migrated / shadow。
+  - 用户明确设置或无法判定：保留为 explicit override。
+  - 指向不存在 binding 或明显冲突：进入 staging / repair。
+- 新写入优先写 binding reference：`metadata_binding_source + metadata_binding_external_id`。
+- raw `metadata_source_service / remote_id` 仅作旧版本导入输入。
+
+### 更新 / 订阅
+
+更新和订阅最容易伪装成 Work-first，实际仍由 projection 驱动。必须拆成两层：
+
+```text
+订阅意图 = Work-owned
+更新观测 = Projection-owned
+```
+
+规则：
+
+- 用户是否订阅、是否在书架追更、是否参与通知，属于 `entity_id`。
+- 实际轮询哪个源、哪个 URL、哪个章节列表，属于 projection anchor。
+- 一个 work 可以有多个可轮询 projection，但默认只轮询 preferred / subscribed anchors，不自动轮询所有 bindings。
+- 新章节事件必须带 `entity_id + anchor_manga_id + source chapter key`。
+- 列表展示按 `entity_id` 聚合；详情里可以展开显示各 projection 的更新来源。
+- 如果不同 projection 报告同一章节，默认不做跨源自动去重；只能按 source-scoped chapter key 去重，跨源合并需要用户或强映射证据。
+- projection 轮询失败不能删除 work subscription，只能标记该 projection anchor 的更新状态。
+
+禁止：
+
+- 把“某个 projection 有新章节”直接解释为 work 订阅状态变化。
+- 因为 work 被收藏就自动订阅所有 projection。
+- 因为某个 projection 被删除就删除 work 订阅。
+- 用 `manga_id` 的 unread/new chapter count 作为 work 级唯一计数。
 
 ## 备份和同步兼容矩阵
 
@@ -457,6 +748,27 @@ List<WorkAggregate>
 | 远端 `entity_id` | 是 | 否 | 只作为快照内 id，必须映射到本地 id |
 | `tracking_site_links` | 可选 | 否 | cache / audit only |
 | legacy manga metadata source | 是 | 否 | explicit override 才保留 |
+
+### 同步/备份防回流规则
+
+备份和同步不能通过“同时导出 legacy section 和 work section”制造双主语义。
+
+规则：
+
+- sync v2 / Work-centric namespace 中，work sections 是唯一 authoritative 用户状态。
+- legacy sections 在 v2 中只能作为 projection snapshot / migration evidence，不参与合并主决策。
+- 自动上传前必须满足 normalization complete；否则禁写。
+- restore 后必须记录 import provenance 和 semantic schema version。
+- 删除必须保留 tombstone；不能因为旧 backup 里还有 active legacy row 就恢复较新的 work 删除。
+- 跨设备合并必须按字段级 policy 执行，不允许整行“远端覆盖本地”。
+- 设备时钟不可信时，必须优先使用本地导入顺序、dataVersion 或 monotonic revision；不能只靠 wall-clock `updated_at`。
+
+禁止：
+
+- 新版 sync v2 为了支持旧版导入而回写 v1 authoritative payload。
+- v2 restore 完成前立即 auto upload。
+- 旧客户端继续向 v2 namespace 上传。
+- 远端 legacy `favourites(manga_id)` 覆盖本地较新的 `work_favourites(entity_id)`。
 
 ## 测试计划
 
@@ -472,21 +784,118 @@ List<WorkAggregate>
 8. 新收藏写入只产生 work authoritative state。
 9. 详情页 Projection 入口尊重用户点击的 projection。
 10. 阅读器写历史时使用 entity owner 和 projection anchor。
+11. 新写路径不能只传入 `manga_id` 就写入作品级状态，必须经过 `WorkResolver`。
+12. restore 中远端 `entity_id` 与本地已有 `entity_id` 冲突时，不覆盖本地实体状态。
+13. `CANDIDATE` binding 不会被 normalization、restore、repair、sync 自动提升为 `CONFIRMED`。
+14. `tracking_site_links` 和标题相似度只能生成整理候选，不会生成 confirmed binding。
+15. `migrationState != VALID` 的记录不会参与 work 聚合、订阅 owner 或 sync v2 authoritative export。
+16. 同一 work 下多个 legacy favourite 的 category 删除/恢复按 tombstone 和 `updated_at` 合并，不会被旧 active row 误恢复。
+17. 更新订阅以 `entity_id` 保存订阅意图，以 `anchor_manga_id` 保存轮询观测；projection 删除不会删除 work subscription。
+18. 多 projection 更新只按 source-scoped chapter key 去重，不会把不同来源章节强行合并。
+19. sync v2 导出时 legacy sections 只作为 projection snapshot / migration evidence，不参与 authoritative merge。
+20. 设备时钟倒退时，restore merge 不只依赖 wall-clock `updated_at` 做整行覆盖。
+
+### 测试分层
+
+单元测试：
+
+- `WorkResolver`：找不到 entity、已有 binding、rejected binding、preferred projection 失效、批量解析分批。
+- migration staging 状态机：`OLD_INPUT -> VALID / STAGED / BLOCKED`。
+- merge policy：收藏 tombstone、历史进度选择、统计事件去重、tracking manual 优先。
+- metadata migration：mirror shadow、explicit override、orphan metadata source。
+
+DAO / Repository 测试：
+
+- `WorkAggregateRepository` 分页、排序、分类筛选、来源筛选。
+- migrated shadow 不参与主查询。
+- staging 项单独返回，不混入 confirmed work 分页。
+
+集成测试：
+
+- 旧数据库升级到新模型。
+- 旧备份 restore 后 normalization complete 才允许 auto upload。
+- 远端 `entity_id` 冲突映射。
+- 多设备 tombstone 合并。
+
+性能测试：
+
+- 5000 条收藏、每个 work 1-5 个 projection 的分页查询。
+- 旧备份批量恢复 5000 条 favourites/history 的 normalization 时间。
+- 收藏页首屏和翻页不允许全库内存聚合。
 
 ## 执行顺序
 
 推荐 PR 拆分：
 
-1. 新增 `WorkResolver` 和 `WorkIdentity`，迁移现有重复解析逻辑。
-2. 新增 `WorkAggregateRepository`，先服务收藏页。
-3. 收藏页切换到 `WorkAggregate`，保留 legacy fallback。
-4. 详情页入口收敛为 Work / Projection 两类。
-5. normalization 版本化和幂等测试。
-6. backup / restore 通过 `WorkResolver` 做本地身份映射。
-7. WebDAV auto upload gate 绑定 normalization 状态。
-8. 实体整理工具削减为合并、拆分、默认来源三类动作。
-9. tracker / scrobbling 的 owner 读写全部走 WorkResolver。
-10. legacy 主决策退役评估。
+1. 新增 migrated shadow / migration ledger 基础设施。
+2. 新增 `WorkResolver` 和 `WorkIdentity`，迁移现有重复解析逻辑。
+3. 新增 `WorkAggregateRepository`，先服务收藏页。
+4. normalization 版本化和幂等测试。
+5. 收藏页切换到 `WorkAggregate`，旧状态自动迁移或进入 staging。
+6. 详情页入口收敛为 Work / Projection 两类。
+7. backup / restore 通过 `WorkResolver` 做本地身份映射。
+8. WebDAV auto upload gate 绑定 normalization 状态。
+9. 更新/订阅、tracker、scrobbling 的 owner 读写全部走 WorkResolver。
+10. 实体整理工具削减为合并、拆分、默认来源三类动作。
+11. metadata authority cleanup。
+12. 旧 owner 字段主决策移除评估。
+
+### PR 依赖与发布策略
+
+```text
+PR-1 migration ledger / migrated shadow infrastructure
+  -> PR-2 WorkResolver contract + tests
+  -> PR-3 WorkAggregateRepository read model
+  -> PR-4 normalization merge policies + idempotency tests
+  -> PR-5 favourites page WorkAggregate migration
+  -> PR-6 history / reader write path migration
+  -> PR-7 backup / restore semantic schema + auto-upload gate
+  -> PR-8 updates / subscription owner split
+  -> PR-9 organize tool simplification
+  -> PR-10 metadata authority cleanup
+  -> PR-11 legacy owner main-read removal
+```
+
+可并行项：
+
+- PR-8 的 UI 文案和整理工具信息架构可以和 PR-4 之后并行。
+- PR-10 的 metadata 清理可在 PR-1/PR-2 后开始，不必等待全部页面迁移。
+- enforcement 检查可从 PR-1 开始独立落地。
+
+阻塞项：
+
+- PR-1 阻塞 normalization 和 sync/backup authoritative 合并。
+- PR-2 阻塞所有新读写路径。
+- PR-7 阻塞开启 v2 auto upload。
+
+增量发布：
+
+- M1：PR-1 到 PR-4 可发布内部测试版，验证 ledger、resolver 和 normalization。
+- M2：PR-5 到 PR-6 可发布小范围测试版，验证收藏/历史主链。
+- M3：PR-7 后才允许启用 v2 sync namespace。
+- M4：PR-11 后才考虑移除旧 owner 主读路径。
+
+### Enforcement
+
+文档规则必须工具化，至少包含：
+
+- Code review checklist：禁止新增 `manga_id` owner 写入、禁止远端 `entity_id` 直写、禁止 candidate 自动 confirmed。
+- `rg`/自定义脚本 CI：扫描新增直接调用 `EntityGraphRepository.findEntityIdsByAnyMangaIds`、直接写 `favourites(manga_id)` 的业务路径。
+- Repository 层架构测试：主页面 ViewModel 不直接依赖 `EntityGraphRepository`，只能依赖 `WorkResolver` / `WorkAggregateRepository`。
+- DAO 查询测试：主查询不得读取 migrated shadow。
+- Sync/backup 测试：v2 payload 不导出 legacy authoritative section。
+
+### 回滚策略
+
+迁移必须可回滚到“继续使用旧版本数据”而不是造成数据丢失。
+
+规则：
+
+- Phase 0-3 不物理删除旧 owner rows，只标记 migrated / shadow。
+- 每次 migration 写 ledger，包含 legacy key、target entity、时间、schema version。
+- 如果 Work 状态生成错误，可以通过 ledger 重新生成或撤销对应 work-owned rows。
+- v2 sync namespace 启用前，auto upload 必须默认禁写。
+- v2 namespace 一旦写入，不再回写 v1 authoritative payload；回滚客户端只能读取本地旧 rows 或提示升级，不参与 v2 上传。
 
 ## 验收标准
 
@@ -495,9 +904,15 @@ List<WorkAggregate>
 - 页面代码不再各自实现 `mangaId -> entityId -> preferred projection`。
 - 收藏、历史、统计、追踪的主 owner 是 `entity_id`。
 - `manga_id` 只作为 projection anchor 使用。
-- 旧备份和旧同步快照可以导入，但不会直接污染新主状态。
+- 旧备份和旧同步快照会自动转换为新合法状态；不能转换的进入 staging，不会直接污染新主状态。
 - 实体整理工具处理的是真实身份边界，而不是运行时双主状态造成的脏数据。
 - repair 分类能区分 identity、metadata、cache、legacy import。
+- 代码审查中禁止新增 `manga_id` 作为作品 owner 的写路径。
+- 跨设备输入中的远端 `entity_id` 必须先映射成本地 `entity_id`。
+- 自动流程不能把 candidate evidence 写成 confirmed identity。
+- migration staging 记录不得伪装成 confirmed work 参与聚合、订阅或 v2 同步。
+- 更新/订阅必须区分 work-owned intent 和 projection-owned observation。
+- sync / backup 必须有字段级冲突策略和 tombstone 规则，禁止整行覆盖。
 
 ## 非目标
 
@@ -508,4 +923,4 @@ List<WorkAggregate>
 - 引入图数据库或远程实体服务。
 - 用标题模糊匹配自动决定所有合并。
 - 把角色、人物、组织关系图纳入收藏/同步主链。
-- 兼容旧客户端继续向新语义 namespace 写入。
+- 允许旧客户端继续向新语义 namespace 写入。
