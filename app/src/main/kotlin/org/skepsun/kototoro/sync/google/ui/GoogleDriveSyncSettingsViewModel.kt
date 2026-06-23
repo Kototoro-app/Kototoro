@@ -66,6 +66,17 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 		}
 	}
 
+	fun deleteRemoteData() {
+		if (!settings.isSignedIn) {
+			requestSignIn()
+			return
+		}
+		viewModelScope.launch(Dispatchers.Default) {
+			handleSyncResult(repository.deleteRemoteData())
+			refresh()
+		}
+	}
+
 	fun requestSignIn() {
 		viewModelScope.launch(Dispatchers.Default) {
 			try {

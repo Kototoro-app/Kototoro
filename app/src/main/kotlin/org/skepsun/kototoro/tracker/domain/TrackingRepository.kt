@@ -197,12 +197,11 @@ class TrackingRepository @Inject constructor(
 	suspend fun markAsRead(trackLogId: Long) = db.getTrackLogsDao().markAsRead(trackLogId)
 
 	suspend fun gc() = db.withTransaction {
-		syncTrackAnchors()
-		db.getTrackLogsDao().run {
-			ensureUnreadUpdateLogs()
-			gc()
-			trim(TRACK_LOG_RETAINED_SIZE)
-		}
+		db.getTrackLogsDao().ensureUnreadUpdateLogs()
+		db.getTracksDao().insertTracksFromUnreadLogs()
+		db.getTracksDao().restoreCountersFromUnreadLogs()
+		db.getTrackLogsDao().gc()
+		db.getTrackLogsDao().trim(TRACK_LOG_RETAINED_SIZE)
 	}
 
 	suspend fun normalizeTracksForSync() {

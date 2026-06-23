@@ -63,6 +63,7 @@ fun SyncSettingsRoute(
         onGoogleDriveSignInClick = { googleDriveSyncViewModel.requestSignIn() },
         onGoogleDriveSignOutClick = { googleDriveSyncViewModel.signOut() },
         onGoogleDriveSyncNowClick = { googleDriveSyncViewModel.syncNow() },
+        onGoogleDriveDeleteRemoteClick = { googleDriveSyncViewModel.deleteRemoteData() },
         onGoogleDriveIntervalChange = { googleDriveSyncViewModel.setIntervalMinutes(it) },
         onGoogleDriveWifiOnlyChange = { googleDriveSyncViewModel.setWifiOnly(it) },
         onGoogleDriveSyncOnStartChange = { googleDriveSyncViewModel.setSyncOnStart(it) },

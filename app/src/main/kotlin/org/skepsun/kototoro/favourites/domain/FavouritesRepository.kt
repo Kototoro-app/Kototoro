@@ -420,12 +420,12 @@ class FavouritesRepository @Inject constructor(
 		if (!settings.requiresWorkMigrationNormalization && !hasWorkFavouriteDrift()) {
 			return
 		}
-		normalizeWorkFavourites()
+		normalizeWorkFavourites(includeDeletedLegacyRows = true)
 		settings.requiresWorkMigrationNormalization = false
 	}
 
 	suspend fun normalizeWorkFavouritesForSync() {
-		normalizeWorkFavourites()
+		normalizeWorkFavourites(includeDeletedLegacyRows = false)
 	}
 
 	private suspend fun hasWorkFavouriteDrift(): Boolean {
@@ -433,8 +433,12 @@ class FavouritesRepository @Inject constructor(
 		return db.getWorkFavouritesDao().countActive() != localActiveCount
 	}
 
-	private suspend fun normalizeWorkFavourites() {
-		val localFavourites = db.getFavouritesDao().findAllEntriesIncludingDeleted()
+	private suspend fun normalizeWorkFavourites(includeDeletedLegacyRows: Boolean) {
+		val localFavourites = if (includeDeletedLegacyRows) {
+			db.getFavouritesDao().findAllEntriesIncludingDeleted()
+		} else {
+			db.getFavouritesDao().findAllActiveEntries()
+		}
 		if (localFavourites.isEmpty()) {
 			return
 		}

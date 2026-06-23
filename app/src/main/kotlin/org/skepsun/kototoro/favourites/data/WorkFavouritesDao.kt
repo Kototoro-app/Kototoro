@@ -23,6 +23,9 @@ abstract class WorkFavouritesDao {
 	@Query("SELECT COUNT(*) FROM work_favourites WHERE deleted_at = 0")
 	abstract suspend fun countActive(): Int
 
+	@Query("SELECT * FROM work_favourites WHERE deleted_at = 0 ORDER BY updated_at DESC")
+	abstract suspend fun findActive(): List<WorkFavouriteEntity>
+
 	@Query("SELECT MAX(pinned) FROM work_favourites WHERE entity_id IN (:entityIds) AND deleted_at = 0")
 	abstract suspend fun isPinned(entityIds: List<Long>): Boolean?
 

@@ -233,6 +233,7 @@ class SyncWorkHistory(
 class SyncWorkFavourite(
 	@SerialName("entity_id") val entityId: Long,
 	@SerialName("category_id") val categoryId: Long,
+	@SerialName("anchor_manga_id") val anchorMangaId: Long? = null,
 	@SerialName("sort_key") val sortKey: Int,
 	@SerialName("pinned") val isPinned: Boolean,
 	@SerialName("created_at") val createdAt: Long,
@@ -243,6 +244,7 @@ class SyncWorkFavourite(
 	constructor(entity: WorkFavouriteEntity) : this(
 		entityId = entity.entityId,
 		categoryId = entity.categoryId,
+		anchorMangaId = null,
 		sortKey = entity.sortKey,
 		isPinned = entity.isPinned,
 		createdAt = entity.createdAt,

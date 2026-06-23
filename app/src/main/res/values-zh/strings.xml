@@ -2174,6 +2174,9 @@
     <string name="sync_syncing">同步中…</string>
     <string name="sync_last">上次同步：%s</string>
     <string name="sync_never">尚未同步</string>
+    <string name="sync_delete_remote_data">清除远端同步数据</string>
+    <string name="sync_delete_remote_data_summary">删除 Google Drive 同步快照。本机数据不会被更改。</string>
+    <string name="sync_delete_remote_data_confirm">要删除远端 Google Drive 同步快照吗？本机数据会保留在此设备上。恢复干净备份后，请执行“立即同步”以上传新的快照。</string>
     <string name="sync_frequency">同步频率</string>
     <string name="sync_wifi_only">仅通过 Wi-Fi 同步</string>
     <string name="sync_on_start">应用启动时同步</string>

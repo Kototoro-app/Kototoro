@@ -8,12 +8,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -39,11 +45,13 @@ fun SyncSettingsScreen(
     onGoogleDriveSignInClick: () -> Unit,
     onGoogleDriveSignOutClick: () -> Unit,
     onGoogleDriveSyncNowClick: () -> Unit,
+    onGoogleDriveDeleteRemoteClick: () -> Unit,
     onGoogleDriveIntervalChange: (Int) -> Unit,
     onGoogleDriveWifiOnlyChange: (Boolean) -> Unit,
     onGoogleDriveSyncOnStartChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var isDeleteRemoteDialogVisible by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         modifier = modifier,
         snackbarHost = {
@@ -115,6 +123,13 @@ fun SyncSettingsScreen(
                         )
                         SettingsSectionDivider()
                         SettingsActionPreference(
+                            title = stringResource(R.string.sync_delete_remote_data),
+                            summary = stringResource(R.string.sync_delete_remote_data_summary),
+                            enabled = !state.isGoogleDriveSyncing,
+                            onClick = { isDeleteRemoteDialogVisible = true },
+                        )
+                        SettingsSectionDivider()
+                        SettingsActionPreference(
                             title = stringResource(R.string.sync_sign_out),
                             onClick = onGoogleDriveSignOutClick,
                         )
@@ -128,5 +143,27 @@ fun SyncSettingsScreen(
                 }
             }
         }
+    }
+    if (isDeleteRemoteDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { isDeleteRemoteDialogVisible = false },
+            title = { Text(text = stringResource(R.string.sync_delete_remote_data)) },
+            text = { Text(text = stringResource(R.string.sync_delete_remote_data_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isDeleteRemoteDialogVisible = false
+                        onGoogleDriveDeleteRemoteClick()
+                    },
+                ) {
+                    Text(text = stringResource(R.string.clear))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isDeleteRemoteDialogVisible = false }) {
+                    Text(text = stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
 }

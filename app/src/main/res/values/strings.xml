@@ -2134,6 +2134,9 @@ Proceed?</string>
     <string name="sync_syncing">Syncing…</string>
     <string name="sync_last">Last synced: %s</string>
     <string name="sync_never">Not synced yet</string>
+    <string name="sync_delete_remote_data">Clear remote sync data</string>
+    <string name="sync_delete_remote_data_summary">Delete the Google Drive sync snapshot. Local data is not changed.</string>
+    <string name="sync_delete_remote_data_confirm">Delete the remote Google Drive sync snapshot? Local data will stay on this device. After restoring a clean backup, run Sync now to upload a fresh snapshot.</string>
     <string name="sync_frequency">Sync frequency</string>
     <string name="sync_wifi_only">Sync only over Wi-Fi</string>
     <string name="sync_on_start">Sync on app start</string>

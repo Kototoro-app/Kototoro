@@ -213,6 +213,9 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT * FROM favourites ORDER BY created_at DESC")
 	abstract suspend fun findAllEntriesIncludingDeleted(): List<FavouriteEntity>
 
+	@Query("SELECT * FROM favourites WHERE deleted_at = 0 ORDER BY created_at DESC")
+	abstract suspend fun findAllActiveEntries(): List<FavouriteEntity>
+
 	/** INSERT **/
 
 	@Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -276,6 +279,31 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 		""",
 	)
 	abstract suspend fun deleteActiveWithoutWorkFavourite(deletedAt: Long): Int
+
+	suspend fun deleteActiveOutsideSyncProjection(
+		allowedKeys: Set<Pair<Long, Long>>,
+		deletedAt: Long,
+	): Int {
+		var deleted = 0
+		findAllEntriesIncludingDeleted()
+			.asSequence()
+			.filter { it.deletedAt == 0L }
+			.filter { it.mangaId to it.categoryId !in allowedKeys }
+			.forEach { favourite ->
+				setDeletedAt(
+					categoryId = favourite.categoryId,
+					mangaId = favourite.mangaId,
+					deletedAt = deletedAt,
+				)
+				setUpdatedAt(
+					categoryId = favourite.categoryId,
+					mangaId = favourite.mangaId,
+					updatedAt = deletedAt,
+				)
+				deleted++
+			}
+		return deleted
+	}
 
 	@Query("UPDATE favourites SET pinned = :isPinned WHERE manga_id IN (:mangaIds)")
 	abstract suspend fun setPinned(mangaIds: List<Long>, isPinned: Boolean)
