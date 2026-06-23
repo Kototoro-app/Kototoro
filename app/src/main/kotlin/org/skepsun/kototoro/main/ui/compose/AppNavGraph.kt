@@ -80,10 +80,7 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.BaseApp
-import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
-import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.model.ListModel
-import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
@@ -165,46 +162,6 @@ private fun MainRouteScene(
     ) {
         content()
     }
-}
-
-private fun buildFavoriteCategoryTabsState(
-    items: List<ListModel>,
-    allTitle: String,
-    onClearSelection: () -> Unit,
-    onCategorySelected: (ListFilterOption.Favorite) -> Unit,
-): CompactTabsTopBarOverrideState? {
-    val quickFilter = items.firstOrNull { it is QuickFilter } as? QuickFilter ?: return null
-    val favoriteOptions = quickFilter.items.mapNotNull { chip ->
-        chip.data as? ListFilterOption.Favorite
-    }
-    if (favoriteOptions.isEmpty()) {
-        return null
-    }
-    val selectedCategoryId = favoriteOptions.firstOrNull { option ->
-        quickFilter.items.any { chip -> chip.data == option && chip.isChecked }
-    }?.category?.id ?: NO_ID
-    val optionsById = favoriteOptions.associateBy { it.category.id }
-    return CompactTabsTopBarOverrideState(
-        items = buildList {
-            add(CompactTopBarTabItem(id = NO_ID, title = allTitle))
-            favoriteOptions.forEach { option ->
-                add(
-                    CompactTopBarTabItem(
-                        id = option.category.id,
-                        title = option.category.title,
-                    ),
-                )
-            }
-        },
-        selectedItemId = selectedCategoryId,
-        onItemSelected = { categoryId ->
-            if (categoryId == NO_ID || categoryId == selectedCategoryId) {
-                onClearSelection()
-            } else {
-                optionsById[categoryId]?.let(onCategorySelected)
-            }
-        },
-    )
 }
 
 internal interface FavoritesEntityOrganizeResultSource {
@@ -1146,7 +1103,6 @@ internal fun FeedTopLevelRouteContent(
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>()
-    val context = LocalContext.current
     val items by viewModel.content.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -1205,32 +1161,11 @@ internal fun FeedTopLevelRouteContent(
         }
     }
 
-    val feedCategoryTabsState = remember(categories, selectedCategoryId) {
-        CompactTabsTopBarOverrideState(
-            items = categories.map { category ->
-                CompactTopBarTabItem(
-                    id = category.id,
-                    title = if (category.id == NO_ID) {
-                        context.getString(org.skepsun.kototoro.R.string.all_favourites)
-                    } else {
-                        category.title
-                    },
-                )
-            },
-            selectedItemId = selectedCategoryId,
-            onItemSelected = { categoryId ->
-                viewModel.selectCategory(if (selectedCategoryId == categoryId) NO_ID else categoryId)
-            },
-        )
-    }
-
     SideEffect {
         onExploreSourceSelectionTopBarChanged(
             RouteScopedTopBarOverrideState(
                 TOP_BAR_OWNER_FEED,
-                LayeredTopBarOverrideState(
-                    tabsState = feedCategoryTabsState,
-                ),
+                null,
             ),
         )
     }
@@ -1294,7 +1229,8 @@ internal fun FeedTopLevelRouteContent(
             categories = categories,
             selectedCategoryId = selectedCategoryId,
             onCategorySelected = viewModel::selectCategory,
-            showCategoryFilterInline = false,
+            onQuickFilterOptionClick = viewModel::toggleFilterOption,
+            showCategoryFilterInline = true,
         )
     }
 }
@@ -1535,28 +1471,13 @@ internal fun UpdatedTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>()
-    val items by viewModel.content.collectAsStateWithLifecycle()
-    val updatedCategoryTabsState = remember(items, activity) {
-        buildFavoriteCategoryTabsState(
-            items = items,
-            allTitle = activity.getString(org.skepsun.kototoro.R.string.all_favourites),
-            onClearSelection = { viewModel.clearFilter() },
-            onCategorySelected = { option ->
-                viewModel.clearFilter()
-                viewModel.setFilterOption(option, true)
-            },
-        )
-    }
     var updatedContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
 
     SideEffect {
         onExploreSourceSelectionTopBarChanged(
             RouteScopedTopBarOverrideState(
                 TOP_BAR_OWNER_UPDATED,
-                LayeredTopBarOverrideState(
-                    tabsState = updatedCategoryTabsState,
-                    contextualOverrideState = updatedContextualTopBarOverride,
-                ),
+                updatedContextualTopBarOverride,
             ),
         )
     }
@@ -1601,7 +1522,7 @@ internal fun UpdatedTopLevelRouteContent(
                     }
                 }
             },
-            showQuickFilterInline = false,
+            showQuickFilterInline = true,
         )
     }
 }

@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import dagger.hilt.android.EntryPointAccessors
@@ -58,6 +59,7 @@ import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.VerticalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.rememberVerticalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
@@ -288,7 +290,13 @@ fun KototoroContentListScreen(
                             ) {
                                 if (listHeader != null) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
-                                        listHeader()
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalBleed(sideGridPadding),
+                                        ) {
+                                            listHeader()
+                                        }
                                     }
                                 }
 
@@ -334,6 +342,7 @@ fun KototoroContentListScreen(
                                             item = listModel,
                                             listMode = listMode,
                                             gridScale = gridScale,
+                                            horizontalBleed = sideGridPadding,
                                             onQuickFilterOptionClick = onQuickFilterOptionClick,
                                             showQuickFilterInline = showQuickFilterInline,
                                             onEmptyActionClick = onEmptyActionClick,
@@ -571,11 +580,25 @@ private fun resolveGridSidePadding(
         .dp
 }
 
+private fun Modifier.horizontalBleed(horizontal: androidx.compose.ui.unit.Dp): Modifier {
+    if (horizontal <= 0.dp) return this
+    return layout { measurable, constraints ->
+        val bleedPx = horizontal.roundToPx()
+        val placeable = measurable.measure(
+            constraints.copy(maxWidth = constraints.maxWidth + bleedPx * 2),
+        )
+        layout(constraints.maxWidth, placeable.height) {
+            placeable.placeRelative(-bleedPx, 0)
+        }
+    }
+}
+
 @Composable
 private fun SupplementaryListItem(
     item: ListModel,
     listMode: ListMode,
     gridScale: Float,
+    horizontalBleed: androidx.compose.ui.unit.Dp = 0.dp,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     showQuickFilterInline: Boolean,
     onEmptyActionClick: () -> Unit,
@@ -587,6 +610,7 @@ private fun SupplementaryListItem(
             QuickFilterSection(
                 quickFilter = item,
                 onQuickFilterOptionClick = onQuickFilterOptionClick,
+                modifier = Modifier.horizontalBleed(horizontalBleed),
             )
         }
         is InfoModel -> InfoCard(item)
@@ -626,6 +650,7 @@ private fun ListHeaderItem(item: ListHeader) {
 fun QuickFilterSection(
     quickFilter: QuickFilter,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -647,9 +672,9 @@ fun QuickFilterSection(
     }
     LazyRow(
         state = listState,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        contentPadding = PaddingValues(horizontal = CompactTopBarHorizontalPadding, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         items(
             items = orderedChips,
@@ -757,6 +782,14 @@ private fun EmptyStateCard(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (item.icon != 0) {
+            Icon(
+                painter = painterResource(item.icon),
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         val titleText = item.textPrimaryText?.toString()
         Text(
             text = titleText ?: stringResource(item.textPrimary),

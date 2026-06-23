@@ -2,7 +2,6 @@ package org.skepsun.kototoro.tracker.ui.feed.compose
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,15 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,16 +41,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
+import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
@@ -74,6 +71,7 @@ fun FeedScreen(
 	categories: List<FavouriteCategory>,
 	selectedCategoryId: Long,
 	onCategorySelected: (Long) -> Unit,
+	onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 	showCategoryFilterInline: Boolean = true,
 	modifier: Modifier = Modifier
 ) {
@@ -157,26 +155,18 @@ fun FeedScreen(
 		LazyColumn(
 			state = listState,
 			contentPadding = PaddingValues(
-				top = contentPadding.calculateTopPadding() + 12.dp,
+				top = contentPadding.calculateTopPadding(),
 				bottom = contentPadding.calculateBottomPadding(),
 				start = 0.dp,
 				end = 0.dp,
 			),
 			modifier = Modifier.fillMaxSize()
 		) {
-			if (showCategoryFilterInline) {
-				item(key = "feed_filters") {
-					FeedFilterBar(
-						categories = categories,
-						selectedCategoryId = selectedCategoryId,
-						onCategorySelected = onCategorySelected,
-					)
-				}
-			}
 			itemsIndexed(
 				items = items,
 				key = { index, item ->
 					when (item) {
+						is QuickFilter -> "feed_filters"
 						is FeedItem -> "feed_${item.id}"
 						is UpdatedContentHeader -> "updates_header"
 						is ListHeader -> "header_${item.getText(context)}_$index"
@@ -187,6 +177,7 @@ fun FeedScreen(
 				},
 				contentType = { _, item ->
 					when (item) {
+						is QuickFilter -> "feed_filter"
 						is FeedItem -> "feed_item"
 						is UpdatedContentHeader -> "updated_carousel"
 						is ListHeader -> "list_header"
@@ -195,6 +186,14 @@ fun FeedScreen(
 				},
 			) { _, item ->
 				when (item) {
+					is QuickFilter -> {
+						if (showCategoryFilterInline) {
+							org.skepsun.kototoro.list.ui.compose.QuickFilterSection(
+								quickFilter = item,
+								onQuickFilterOptionClick = onQuickFilterOptionClick,
+							)
+						}
+					}
 					is FeedItem -> {
 						FeedItemCard(
 							item = item,
@@ -261,6 +260,7 @@ private fun FeedEmptyState(
 			Icon(
 				painter = painterResource(item.icon),
 				contentDescription = null,
+				modifier = Modifier.size(64.dp),
 				tint = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
 			Spacer(modifier = Modifier.height(12.dp))
@@ -278,64 +278,6 @@ private fun FeedEmptyState(
 				text = subtitleText ?: stringResource(item.textSecondary),
 				style = MaterialTheme.typography.bodyMedium,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
-			)
-		}
-	}
-}
-
-@Composable
-private fun FeedFilterBar(
-	categories: List<FavouriteCategory>,
-	selectedCategoryId: Long,
-	onCategorySelected: (Long) -> Unit,
-	modifier: Modifier = Modifier,
-) {
-	LazyRow(
-		modifier = modifier
-			.fillMaxWidth()
-			.padding(bottom = 8.dp),
-		contentPadding = PaddingValues(horizontal = 12.dp),
-		horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-	) {
-		items(categories, key = { "category_${it.id}" }, contentType = { "filter_chip" }) { category ->
-			FilterChip(
-				selected = selectedCategoryId == category.id,
-				onClick = { onCategorySelected(category.id) },
-				shape = MaterialTheme.shapes.small,
-				colors = FilterChipDefaults.filterChipColors(
-					containerColor = MaterialTheme.colorScheme.surface,
-					labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-					iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-					selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-					selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-					selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-				),
-				border = FilterChipDefaults.filterChipBorder(
-					enabled = true,
-					selected = selectedCategoryId == category.id,
-					borderColor = if (selectedCategoryId == category.id) {
-						MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f)
-					} else {
-						MaterialTheme.colorScheme.outlineVariant
-					},
-				),
-				label = {
-					Text(
-						if (category.id == NO_ID) {
-							stringResource(R.string.all_favourites)
-						} else {
-							category.title
-						},
-					)
-				},
-				leadingIcon = {
-					androidx.compose.material3.Icon(
-						painter = painterResource(
-							if (category.id == NO_ID) R.drawable.ic_heart else R.drawable.ic_bookmark
-						),
-						contentDescription = null,
-					)
-				},
 			)
 		}
 	}

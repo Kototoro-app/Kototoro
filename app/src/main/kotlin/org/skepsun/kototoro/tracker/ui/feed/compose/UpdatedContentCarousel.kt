@@ -78,13 +78,13 @@ fun UpdatedContentCarousel(
 	val scrollIntensity = rememberHorizontalRailScrollIntensity(listState)
 
 	Column(modifier = modifier.fillMaxWidth()) {
-		Row(
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(horizontal = 12.dp, vertical = 8.dp),
-			verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = Arrangement.SpaceBetween
-		) {
+			Row(
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(start = 12.dp, top = 0.dp, end = 12.dp, bottom = 8.dp),
+				verticalAlignment = Alignment.CenterVertically,
+				horizontalArrangement = Arrangement.SpaceBetween
+			) {
 			Text(
 				text = stringResource(R.string.updates),
 				style = MaterialTheme.typography.labelLarge,

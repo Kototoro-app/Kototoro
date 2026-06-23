@@ -69,27 +69,48 @@ abstract class FavouriteCategoriesDao {
 				SELECT IFNULL((
 					SELECT SUM(IFNULL(tracks.chapters_new, 0))
 					FROM tracks
-					WHERE tracks.entity_id IN (
-						SELECT DISTINCT wf.entity_id
+					WHERE EXISTS (
+						SELECT 1
 						FROM work_favourites wf
-						WHERE wf.category_id = favourite_categories.category_id
+						WHERE wf.entity_id = COALESCE(
+								tracks.entity_id,
+								(
+									SELECT entity_id
+									FROM entity_binding
+									WHERE source IN ('local_manga', '0')
+										AND external_id = CAST(tracks.manga_id AS TEXT)
+										AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+									LIMIT 1
+								)
+							)
+							AND wf.category_id = favourite_categories.category_id
 							AND wf.deleted_at = 0
 					)
-				), 0) + IFNULL((
-					SELECT SUM(IFNULL(tracks.chapters_new, 0))
-					FROM tracks
-					WHERE tracks.manga_id IN (
-						SELECT DISTINCT f.manga_id AS anchor_manga_id
-						FROM favourites f
-						WHERE f.category_id = favourite_categories.category_id
-							AND f.deleted_at = 0
-							AND NOT EXISTS (
-								SELECT 1
-								FROM entity_binding eb
-								WHERE eb.source IN ('local_manga', '0')
-									AND eb.external_id = CAST(f.manga_id AS TEXT)
-									AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					OR EXISTS (
+						SELECT 1
+						FROM favourites
+						WHERE favourites.manga_id = COALESCE(
+								(
+									SELECT m.manga_id
+									FROM entity_preferences ep
+									INNER JOIN manga m ON m.manga_id = ep.preferred_local_manga_id
+									WHERE ep.entity_id = COALESCE(
+											tracks.entity_id,
+											(
+												SELECT entity_id
+												FROM entity_binding
+												WHERE source IN ('local_manga', '0')
+													AND external_id = CAST(tracks.manga_id AS TEXT)
+													AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+												LIMIT 1
+											)
+										)
+									LIMIT 1
+								),
+								tracks.manga_id
 							)
+							AND favourites.category_id = favourite_categories.category_id
+							AND favourites.deleted_at = 0
 					)
 				), 0)
 			) AS new_chapters
