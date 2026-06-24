@@ -37,7 +37,6 @@ import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.flattenLatest
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.FavoritesListQuickFilter
@@ -60,6 +59,7 @@ import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val PAGE_SIZE = 32
@@ -72,7 +72,7 @@ class FavouritesListViewModel @AssistedInject constructor(
     private val markAsReadUseCase: MarkAsReadUseCase,
     quickFilterFactory: FavoritesListQuickFilter.Factory,
     private val sourceGroupManager: SourceGroupManager,
-    private val entityGraphRepository: EntityGraphRepository,
+    private val workResolver: WorkResolver,
     settings: AppSettings,
     private val dataRepository: ContentDataRepository,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
@@ -419,9 +419,13 @@ class FavouritesListViewModel @AssistedInject constructor(
         if (isEmpty()) {
             return emptyList()
         }
-        val resolvedEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.content.id })
+        val identitiesByMangaId = workResolver.resolveManyByMangaIds(map { it.content.id })
+        val resolvedEntityIdsByMangaId = identitiesByMangaId.mapValues { it.value.entityId }.filterValues { it != null }
+            .mapValues { requireNotNull(it.value) }
         val resolvedEntityIds = resolvedEntityIdsByMangaId.values.distinct()
-        val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+        val preferredLocalIdsByEntity = identitiesByMangaId.values
+            .mapNotNull { identity -> identity.entityId?.let { it to identity.preferredMangaId } }
+            .toMap()
         val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
         val displayTypeOrdinalByEntity = this
             .groupBy { resolvedEntityIdsByMangaId[it.content.id] }

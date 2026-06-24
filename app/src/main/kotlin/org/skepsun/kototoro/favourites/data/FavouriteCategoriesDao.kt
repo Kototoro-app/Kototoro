@@ -84,6 +84,7 @@ abstract class FavouriteCategoriesDao {
 								)
 							)
 							AND wf.category_id = favourite_categories.category_id
+							AND wf.anchor_manga_id IS NOT NULL
 							AND wf.deleted_at = 0
 					)
 					OR EXISTS (

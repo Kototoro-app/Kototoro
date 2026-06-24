@@ -15,7 +15,6 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.findKeyByValue
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.sanitize
-import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
@@ -29,6 +28,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.EnumMap
 
 abstract class Scrobbler(
@@ -36,6 +36,7 @@ abstract class Scrobbler(
 	val scrobblerService: ScrobblerService,
 	private val repository: ScrobblerRepository,
 	private val mangaRepositoryFactory: ContentRepository.Factory,
+	private val workResolver: WorkResolver,
 ) {
 
 	private val infoCache = java.util.concurrent.ConcurrentHashMap<InfoCacheKey, ScrobblerContentInfo>()
@@ -276,8 +277,8 @@ abstract class Scrobbler(
 	}
 
 	private suspend fun resolveScrobblingContext(mangaId: Long): ScrobblingContext {
-		val graphDao = db.getEntityGraphDao()
-		val entityId = graphDao.findWorkEntityIdByLocalMangaId(mangaId)
+		val identity = workResolver.resolveByMangaId(mangaId)
+		val entityId = identity.entityId
 		if (entityId == null) {
 			return ScrobblingContext(
 				entityId = null,
@@ -287,14 +288,10 @@ abstract class Scrobbler(
 				candidateMangaIds = listOf(mangaId),
 			)
 		}
-		val bindings = graphDao.findActiveBindingsByEntity(entityId)
-		val localMangaIds = bindings.asSequence()
-			.filter { it.source == "local_manga" || it.source == "0" }
-			.mapNotNull { it.externalId.toLongOrNull() }
+		val localMangaIds = identity.localMangaIds
 			.distinct()
-			.toList()
 			.filter { localId -> db.getMangaDao().contains(localId) }
-		val preferredLocalMangaId = graphDao.findEntityPrefs(entityId)?.preferredLocalMangaId
+		val preferredLocalMangaId = identity.preferredMangaId
 			?.takeIf { preferredId -> db.getMangaDao().contains(preferredId) }
 		val persistedLocalMangaId = preferredLocalMangaId
 			?: localMangaIds.firstOrNull()

@@ -43,6 +43,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import org.skepsun.kototoro.parsers.util.mapNotNullToSet
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,6 +55,7 @@ class AppShortcutManager @Inject constructor(
 	private val mangaRepository: ContentDataRepository,
 	private val settings: AppSettings,
 	private val entityGraphRepository: EntityGraphRepository,
+	private val workResolver: WorkResolver,
 ) : InvalidationTracker.Observer(
 	TABLE_HISTORY,
 	TABLE_WORK_HISTORY,
@@ -163,8 +165,8 @@ class AppShortcutManager @Inject constructor(
 	}
 
 	private suspend fun buildShortcutInfo(manga: Content): ShortcutInfoCompat = withContext(Dispatchers.Default) {
-		val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(manga.id))[manga.id]
-		val preferredLocalMangaId = entityId?.let { mangaRepository.getEntityPreferredLocalMangaId(it) }
+		val entityId = workResolver.resolveByMangaId(manga.id).entityId
+		val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
 		val resolvedId = preferredLocalMangaId ?: manga.id
 		val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = true)
 			?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = true)

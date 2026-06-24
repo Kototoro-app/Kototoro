@@ -61,6 +61,7 @@ import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
 import org.skepsun.kototoro.tracking.mangabaka.data.MangaBakaMetadataRepository
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 private const val TAG = "SourceMigrationVM"
@@ -283,6 +284,7 @@ class SourceMigrationViewModel @Inject constructor(
     private val bindTrackingToEntitiesUseCase: BindTrackingToEntitiesUseCase,
     private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
     private val entityGraphRepository: EntityGraphRepository,
+    private val workResolver: WorkResolver,
     private val database: MangaDatabase,
     private val contentDataRepository: ContentDataRepository,
     private val mihonExtensionManager: MihonExtensionManager,
@@ -2083,7 +2085,7 @@ class SourceMigrationViewModel @Inject constructor(
         }
         val serviceById = ScrobblerService.entries.associateBy { it.id.toString() }
         val serviceByIntId = ScrobblerService.entries.associateBy { it.id }
-        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
+        val entityIdsByMangaId = resolveEntityIdsByMangaIds(
             groups.flatMapTo(LinkedHashSet()) { it.mangaIds },
         )
         val trackingDao = database.getTrackingSiteDao()
@@ -2120,6 +2122,7 @@ class SourceMigrationViewModel @Inject constructor(
                 }
                 database.findTrackingLinksByWorkOrMangaCandidates(
                     mangaIds = group.mangaIds.toList(),
+                    workResolver = workResolver,
                 )
                     .distinctBy { "${it.service}:${it.remoteId}" }
                     .forEach { link ->
@@ -2236,6 +2239,13 @@ class SourceMigrationViewModel @Inject constructor(
         return service to this
     }
 
+    private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
+        return workResolver.resolveManyByMangaIds(mangaIds)
+            .mapValues { it.value.entityId }
+            .filterValues { it != null }
+            .mapValues { requireNotNull(it.value) }
+    }
+
     private suspend fun buildWorkbenchGroups(
         contents: List<org.skepsun.kototoro.parsers.model.Content>,
         state: MigrationUiState,
@@ -2248,12 +2258,14 @@ class SourceMigrationViewModel @Inject constructor(
             ),
         )
         val groupedIds = candidateGroups.flatMapTo(HashSet()) { it.mangaIds }
-        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(
+        val entityIdsByMangaId = resolveEntityIdsByMangaIds(
             contents.map { it.id },
         )
-        val preferredLocalIdsByEntity = contentDataRepository.getEntityPreferredLocalMangaIds(
-            (candidateGroups.mapNotNull { it.resolvedEntityId } + entityIdsByMangaId.values).distinct(),
-        )
+        val preferredLocalIdsByEntity = (candidateGroups.mapNotNull { it.resolvedEntityId } + entityIdsByMangaId.values)
+            .distinct()
+            .associateWith { entityId ->
+                workResolver.resolveByEntityId(entityId)?.preferredMangaId
+            }
         val reorderedCandidateGroups = candidateGroups.map { group ->
             group.copy(
                 items = sortGroupItems(

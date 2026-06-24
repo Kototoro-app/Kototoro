@@ -10,9 +10,9 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
-import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
 import org.skepsun.kototoro.stats.domain.StatsPeriod
 import org.skepsun.kototoro.stats.domain.StatsRecord
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.NavigableMap
 import java.util.TreeMap
 import java.util.concurrent.TimeUnit
@@ -21,6 +21,7 @@ import javax.inject.Inject
 class StatsRepository @Inject constructor(
 	private val settings: AppSettings,
 	private val db: MangaDatabase,
+	private val workResolver: WorkResolver,
 ) {
 
 	suspend fun getReadingStats(period: StatsPeriod, categories: Set<Long>): List<StatsRecord> {
@@ -113,6 +114,6 @@ class StatsRepository @Inject constructor(
 	// The incoming mangaId is a projection/local anchor. When a work/entity exists, stats should
 	// read from work-owned aggregates first and only fall back to legacy manga rows as needed.
 	private suspend fun resolveStatsEntityId(mangaId: Long): Long? {
-		return db.resolveWorkEntityIdByMangaId(mangaId)
+		return workResolver.resolveByMangaId(mangaId).entityId
 	}
 }

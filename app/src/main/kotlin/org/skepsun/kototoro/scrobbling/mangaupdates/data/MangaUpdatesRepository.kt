@@ -42,6 +42,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserProfile
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.io.IOException
 import java.time.LocalDate
 
@@ -59,6 +60,7 @@ class MangaUpdatesRepository(
 	private val cookieJar: MutableCookieJar,
 	private val storage: ScrobblerStorage,
 	private val db: MangaDatabase,
+	private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
 	override val oauthUrl: String = "kototoro+mangaupdates://auth"
@@ -191,7 +193,7 @@ class MangaUpdatesRepository(
 	}
 
 	override suspend fun unregister(mangaId: Long) {
-		db.deleteScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId)
+		db.deleteScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId, workResolver)
 	}
 
 	override suspend fun findContent(query: String, offset: Int, isAnime: Boolean): List<ScrobblerContent> {
@@ -787,7 +789,7 @@ class MangaUpdatesRepository(
 				comment = null,
 				rating = 0f
 			)
-			db.upsertScrobblingForManga(entity, mangaId)
+			db.upsertScrobblingForManga(entity, workResolver, mangaId = mangaId)
 		} else {
 			val responseBodyStr = response.body?.string() ?: "Empty body"
 			Log.e(TAG, "createRate: FAILED code=${response.code}, body=${responseBodyStr.take(200)}")
@@ -796,7 +798,7 @@ class MangaUpdatesRepository(
 	}
 
 	override suspend fun updateRate(rateId: Int, mangaId: Long, chapter: Int) {
-		val entity = db.findScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId)
+		val entity = db.findScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId, workResolver)
 		if (entity == null) {
 			Log.w(TAG, "updateRate(chapter): no entity for mangaId=$mangaId, skipping")
 			return
@@ -823,11 +825,11 @@ class MangaUpdatesRepository(
 		}
 
 		val updated = entity.copy(chapter = chapter)
-		db.upsertScrobblingForManga(updated, mangaId)
+		db.upsertScrobblingForManga(updated, workResolver, mangaId = mangaId)
 	}
 
 	override suspend fun updateRate(rateId: Int, mangaId: Long, rating: Float, status: String?, comment: String?) {
-		val entity = db.findScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId)
+		val entity = db.findScrobblingByWorkOrManga(ScrobblerService.MANGAUPDATES.id, mangaId, workResolver)
 			?: return
 
 		val payload = JSONArray().apply {
@@ -860,7 +862,7 @@ class MangaUpdatesRepository(
 		}
 
 		val updated = entity.copy(status = status, rating = rating, comment = comment)
-		db.upsertScrobblingForManga(updated, mangaId)
+		db.upsertScrobblingForManga(updated, workResolver, mangaId = mangaId)
 	}
 
 	suspend fun syncLibraryFromRemote(): Int {
@@ -898,7 +900,7 @@ class MangaUpdatesRepository(
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.MANGAUPDATES.id)
 			hydratedEntries.forEach { entity ->
-				db.upsertScrobbling(entity)
+				db.upsertScrobbling(entity, workResolver)
 			}
 		}
 
@@ -1147,7 +1149,7 @@ class MangaUpdatesRepository(
 		val coverUrl = fetchSeriesCover(targetId)?.takeIf { it.isNotBlank() } ?: return false
 		entities.forEach { entity ->
 			if (entity.remoteCoverUrl.isNullOrBlank()) {
-				db.upsertScrobblingPreview(entity, coverUrl = coverUrl)
+				db.upsertScrobblingPreview(entity, workResolver, coverUrl = coverUrl)
 			}
 		}
 		Log.d(TAG, "persistRemoteCoverIfMissing: targetId=$targetId ownerMangaId=${preferred.mangaId} updated=${entities.size}")

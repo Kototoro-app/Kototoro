@@ -4,7 +4,6 @@ import dagger.Reusable
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
-import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -13,12 +12,14 @@ import org.skepsun.kototoro.local.domain.LocalObserveMapper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @Reusable
 class HistoryLocalObserver @Inject constructor(
 	localContentIndex: LocalContentIndex,
 	private val db: MangaDatabase,
+	private val workResolver: WorkResolver,
 ) : LocalObserveMapper<ContentWithHistory, ContentWithHistory>(localContentIndex) {
 
 	fun observeAll(
@@ -27,15 +28,14 @@ class HistoryLocalObserver @Inject constructor(
 		limit: Int,
 	) = observe(
 		db.getHistoryDao().observeAll(order, filterOptions, limit).mapLatest { items ->
+			val identitiesByMangaId = workResolver.resolveManyByMangaIds(items.map { it.manga.id })
 			items.map { item ->
-				val entityId = db.resolveWorkEntityIdByMangaId(item.manga.id)
+				val identity = identitiesByMangaId[item.manga.id]
 				ContentWithHistory(
 					manga = item.toContent(),
 					history = item.history.toContentHistory(),
-					entityId = entityId,
-					preferredLocalMangaId = entityId?.let { entityIdValue ->
-						db.getEntityGraphDao().findEntityPrefs(entityIdValue)?.preferredLocalMangaId
-					} ?: item.manga.id,
+					entityId = identity?.entityId,
+					preferredLocalMangaId = identity?.preferredMangaId ?: item.manga.id,
 				)
 			}
 		},

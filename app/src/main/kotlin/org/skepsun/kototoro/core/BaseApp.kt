@@ -210,6 +210,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 		fun extensionInstallService(): org.skepsun.kototoro.extensions.install.ExtensionInstallService
 		fun contentSourcesRepository(): org.skepsun.kototoro.explore.data.ContentSourcesRepository
 		fun favouritesRepository(): org.skepsun.kototoro.favourites.domain.FavouritesRepository
+		fun workResolver(): org.skepsun.kototoro.work.domain.WorkResolver
 		fun imageLoader(): ImageLoader
 	}
 }

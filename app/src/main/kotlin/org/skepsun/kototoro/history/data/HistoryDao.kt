@@ -276,6 +276,7 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 					eb.rowid DESC
 					LIMIT 1
 				)
+					AND wf.anchor_manga_id IS NOT NULL
 					AND wf.deleted_at = 0
 			)
 			AND NOT EXISTS(
@@ -365,7 +366,7 @@ abstract class HistoryDao : MangaQueryBuilder.ConditionCallback {
 		val legacyCategoryFilter = categoryId?.let { " AND favourites.category_id = $it" }.orEmpty()
 		return "(" +
 			"EXISTS(SELECT 1 FROM work_favourites wf " +
-			"WHERE wf.entity_id = $entityExpr AND wf.deleted_at = 0$categoryFilter)" +
+			"WHERE wf.entity_id = $entityExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)" +
 			" OR " +
 			"EXISTS(SELECT 1 FROM favourites " +
 			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0$legacyCategoryFilter)" +

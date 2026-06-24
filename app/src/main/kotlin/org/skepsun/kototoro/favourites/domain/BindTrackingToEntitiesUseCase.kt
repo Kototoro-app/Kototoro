@@ -36,6 +36,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryServi
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracking.mangabaka.data.MangaBakaMetadataRepository
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 private const val TAG = "BindTrackingUseCase"
@@ -92,6 +93,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     private val trackingSiteMatcher: TrackingSiteMatcher,
     private val entityGraphRepository: EntityGraphRepository,
     private val contentDataRepository: ContentDataRepository,
+    private val workResolver: WorkResolver,
 ) {
 
     suspend fun preview(
@@ -314,7 +316,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     ): List<TrackingBindingPreview> {
         val resolvedEntityIds = buildSet {
             group.resolvedEntityId?.let(::add)
-            addAll(entityGraphRepository.findEntityIdsByAnyMangaIds(group.mangaIds).values)
+            addAll(resolveEntityIds(group.mangaIds))
         }
         val entityId = resolvedEntityIds.singleOrNull() ?: return emptyList()
         val bindings = entityGraphRepository.getBindings(entityId)
@@ -955,7 +957,7 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
     private suspend fun resolveAllowedTrackingTitleKeys(group: MergeCandidateGroup): Set<String> {
         val entityIds = buildSet {
             group.resolvedEntityId?.let(::add)
-            addAll(entityGraphRepository.findEntityIdsByAnyMangaIds(group.mangaIds).values)
+            addAll(resolveEntityIds(group.mangaIds))
         }
         val entities = entityGraphRepository.getEntitiesByIds(entityIds)
         val sourceNames = group.items.mapTo(LinkedHashSet(group.items.size)) { it.sourceName }
@@ -1197,6 +1199,13 @@ class BindTrackingToEntitiesUseCase @Inject constructor(
 
     private fun containsCjk(value: String): Boolean {
         return value.any { char -> char in '\u4E00'..'\u9FFF' }
+    }
+
+    private suspend fun resolveEntityIds(mangaIds: Collection<Long>): Collection<Long> {
+        return workResolver.resolveManyByMangaIds(mangaIds)
+            .values
+            .mapNotNull { it.entityId }
+            .distinct()
     }
 
     private companion object {

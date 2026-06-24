@@ -33,6 +33,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,6 +50,7 @@ class ShikimoriRepository @Inject constructor(
 	@ScrobblerType(ScrobblerService.SHIKIMORI) private val okHttp: OkHttpClient,
 	@ScrobblerType(ScrobblerService.SHIKIMORI) private val storage: ScrobblerStorage,
 	private val db: MangaDatabase,
+	private val workResolver: WorkResolver,
 ) : ScrobblerRepository {
 
 	private val clientId = context.getString(R.string.shikimori_clientId)
@@ -95,7 +97,7 @@ class ShikimoriRepository @Inject constructor(
 		}
 
 	override suspend fun unregister(mangaId: Long) {
-		return db.deleteScrobblingByWorkOrManga(ScrobblerService.SHIKIMORI.id, mangaId)
+		return db.deleteScrobblingByWorkOrManga(ScrobblerService.SHIKIMORI.id, mangaId, workResolver)
 	}
 
 	override fun logout() {
@@ -318,7 +320,7 @@ class ShikimoriRepository @Inject constructor(
 		db.withTransaction {
 			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.SHIKIMORI.id)
 			synced.forEach { entity ->
-				db.upsertScrobbling(entity)
+				db.upsertScrobbling(entity, workResolver)
 			}
 		}
 		return synced.size
@@ -915,7 +917,7 @@ class ShikimoriRepository @Inject constructor(
 			comment = json.getString("text"),
 			rating = (json.getDouble("score").toFloat() / 10f).coerceIn(0f, 1f),
 		)
-		db.upsertScrobbling(entity)
+		db.upsertScrobbling(entity, workResolver)
 	}
 
 	private fun ScrobblerContent(json: JSONObject, sourceTitle: String): ScrobblerContent {

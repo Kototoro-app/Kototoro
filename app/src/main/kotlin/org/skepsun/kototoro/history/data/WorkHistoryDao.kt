@@ -25,6 +25,12 @@ abstract class WorkHistoryDao {
 	@Query("SELECT anchor_manga_id FROM work_history WHERE deleted_at = 0")
 	abstract suspend fun findActiveAnchorMangaIds(): List<Long>
 
+	@Query("SELECT COUNT(*) FROM work_history WHERE deleted_at = 0")
+	abstract suspend fun countActive(): Int
+
+	@Query("SELECT COUNT(*) FROM work_history WHERE deleted_at = 0")
+	abstract fun observeCountActive(): Flow<Int>
+
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
 	protected abstract suspend fun insert(entity: WorkHistoryEntity): Long
 

@@ -36,10 +36,10 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.download.domain.DownloadState
 import org.skepsun.kototoro.download.ui.list.DownloadsActivity
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.format
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.UUID
 import androidx.appcompat.R as appcompatR
 
@@ -52,7 +52,7 @@ class DownloadNotificationFactory @AssistedInject constructor(
 	private val workManager: WorkManager,
 	private val coil: ImageLoader,
 	private val contentDataRepository: ContentDataRepository,
-	private val entityGraphRepository: EntityGraphRepository,
+	private val workResolver: WorkResolver,
 	@Assisted private val uuid: UUID,
 	@Assisted val isSilent: Boolean,
 ) {
@@ -298,7 +298,7 @@ class DownloadNotificationFactory @AssistedInject constructor(
 	)
 
 	private suspend fun resolveDetailsIntent(content: Content): Intent {
-		val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+		val entityId = workResolver.resolveByMangaId(content.id).entityId
 		val origin = if (entityId != null) {
 			DetailsOrigin.EntityGraph(
 				entityId = entityId,

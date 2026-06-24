@@ -11,21 +11,26 @@ import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
-import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
+import org.skepsun.kototoro.core.db.TABLE_MANGA
+import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
+import org.skepsun.kototoro.core.db.TABLE_TAGS
+import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContentList
 import org.skepsun.kototoro.core.db.entity.toContentTagsList
 import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
-import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
 import org.skepsun.kototoro.favourites.data.toContentList
@@ -37,13 +42,14 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @Reusable
 class FavouritesRepository @Inject constructor(
 	private val db: MangaDatabase,
-	private val localObserver: LocalFavoritesObserver,
 	private val entityGraphRepository: EntityGraphRepository,
+	private val workResolver: WorkResolver,
 	private val settings: AppSettings,
 ) {
 
@@ -52,14 +58,21 @@ class FavouritesRepository @Inject constructor(
 		val categoryId: Long,
 	)
 
+	private data class WorkFavouriteContentEntry(
+		val entry: WorkFavouriteEntity,
+		val content: Content,
+	)
+
 	suspend fun getAllContent(): List<Content> {
-		val entities = db.getFavouritesDao().findAll()
-		return resolveWorkAnchorContents(entities.toContentList())
+		return buildWorkFavouriteContents(categoryId = FavouriteCategory.NO_ID, order = ListSortOrder.NEWEST)
 	}
 
 	suspend fun getLastContent(limit: Int): List<Content> {
-		val entities = db.getFavouritesDao().findLast(limit)
-		return resolveWorkAnchorContents(entities.toContentList())
+		return buildWorkFavouriteContents(
+			categoryId = FavouriteCategory.NO_ID,
+			order = ListSortOrder.NEWEST,
+			limit = limit,
+		)
 	}
 
 	suspend fun search(query: String, kind: SearchKind, limit: Int): List<Content> {
@@ -77,24 +90,34 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	fun observeAll(order: ListSortOrder, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
-		if (ListFilterOption.Downloaded in filterOptions) {
-			return localObserver.observeAll(order, filterOptions, limit)
-		}
-		return db.getFavouritesDao().observeAll(order, filterOptions, limit)
-			.map { it.toContentList() }
+		return observeWorkFavouriteContents(FavouriteCategory.NO_ID, order, filterOptions, limit)
 	}
 
-	fun observeAllRawFavorites(): Flow<List<org.skepsun.kototoro.favourites.data.FavouriteContent>> {
-		return db.getFavouritesDao().observeAll(ListSortOrder.NEWEST, emptySet(), Int.MAX_VALUE)
+	fun observeFeedCategoryIds(): Flow<Map<String, Set<Long>>> {
+		return db.invalidationTracker.createFlow(
+			TABLE_WORK_FAVOURITES,
+			TABLE_ENTITY_PREFERENCES,
+			TABLE_MANGA,
+			emitInitialState = true,
+		).mapLatest {
+			buildWorkFavouriteCategoryIdsByFeedKey()
+		}.distinctUntilChanged()
 	}
 
 	fun observeCategoryCountEntries(): Flow<List<org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry>> {
-		return db.getFavouritesDao().observeCategoryCountEntries()
+		return db.invalidationTracker.createFlow(
+			TABLE_WORK_FAVOURITES,
+			TABLE_FAVOURITE_CATEGORIES,
+			TABLE_ENTITY_PREFERENCES,
+			TABLE_MANGA,
+			emitInitialState = true,
+		).mapLatest {
+			buildWorkFavouriteCategoryCountEntries()
+		}.distinctUntilChanged()
 	}
 
 	suspend fun getContent(categoryId: Long): List<Content> {
-		val entities = db.getFavouritesDao().findAll(categoryId)
-		return resolveWorkAnchorContents(entities.toContentList())
+		return buildWorkFavouriteContents(categoryId = categoryId, order = ListSortOrder.NEWEST)
 	}
 
 	fun observeAll(
@@ -103,11 +126,7 @@ class FavouritesRepository @Inject constructor(
 		filterOptions: Set<ListFilterOption>,
 		limit: Int
 	): Flow<List<Content>> {
-		if (ListFilterOption.Downloaded in filterOptions) {
-			return localObserver.observeAll(categoryId, order, filterOptions, limit)
-		}
-		return db.getFavouritesDao().observeAll(categoryId, order, filterOptions, limit)
-			.map { it.toContentList() }
+		return observeWorkFavouriteContents(categoryId, order, filterOptions, limit)
 	}
 
 	fun observeAll(categoryId: Long, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
@@ -116,7 +135,8 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	fun observeContentCount(): Flow<Int> {
-		return db.getFavouritesDao().observeContentCount()
+		return db.invalidationTracker.createFlow(TABLE_WORK_FAVOURITES, emitInitialState = true)
+			.mapLatest { db.getWorkFavouritesDao().countActiveWorks() }
 			.distinctUntilChanged()
 	}
 
@@ -134,8 +154,10 @@ class FavouritesRepository @Inject constructor(
 
 	fun observeCategoriesWithCovers(): Flow<Map<FavouriteCategory, List<Cover>>> {
 		return db.invalidationTracker.createFlow(
-			TABLE_FAVOURITES,
+			TABLE_WORK_FAVOURITES,
 			TABLE_FAVOURITE_CATEGORIES,
+			TABLE_ENTITY_PREFERENCES,
+			TABLE_MANGA,
 			emitInitialState = true,
 		).mapLatest {
 			db.withTransaction {
@@ -143,7 +165,7 @@ class FavouritesRepository @Inject constructor(
 				val res = LinkedHashMap<FavouriteCategory, List<Cover>>(categories.size)
 				for (entity in categories) {
 					val cat = entity.toFavouriteCategory()
-					res[cat] = db.getFavouritesDao().findCovers(
+					res[cat] = buildWorkFavouriteCovers(
 						categoryId = cat.id,
 						order = cat.order,
 					)
@@ -154,7 +176,11 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun getAllFavoritesCovers(order: ListSortOrder, limit: Int): List<Cover> {
-		return db.getFavouritesDao().findCovers(order, limit)
+		return buildWorkFavouriteCovers(
+			categoryId = FavouriteCategory.NO_ID,
+			order = order,
+			limit = limit,
+		)
 	}
 
 	fun observeCategory(id: Long): Flow<FavouriteCategory?> {
@@ -174,7 +200,7 @@ class FavouritesRepository @Inject constructor(
 
 	fun observeCategoriesByWork(mangaId: Long): Flow<Set<FavouriteCategory>> {
 		return db.invalidationTracker.createFlow(
-			TABLE_FAVOURITES,
+			TABLE_WORK_FAVOURITES,
 			TABLE_FAVOURITE_CATEGORIES,
 			TABLE_ENTITY_GRAPH_BINDING,
 			TABLE_ENTITY_PREFERENCES,
@@ -314,21 +340,12 @@ class FavouritesRepository @Inject constructor(
 				val tags = manga.tags.toEntities()
 				db.getTagsDao().upsert(tags)
 				db.getMangaDao().upsert(manga.toEntity(), tags)
-				val entity = FavouriteEntity(
-					mangaId = manga.id,
-					categoryId = categoryId,
-					createdAt = currentTime,
-					sortKey = 0,
-					deletedAt = 0L,
-					isPinned = false,
-					updatedAt = currentTime,
-				)
-				db.getFavouritesDao().insert(entity)
 				resolveFavouriteEntityId(manga.id)?.let { entityId ->
 					db.getWorkFavouritesDao().upsert(
 						WorkFavouriteEntity(
 							entityId = entityId,
 							categoryId = categoryId,
+							anchorMangaId = manga.id,
 							createdAt = currentTime,
 							sortKey = 0,
 							deletedAt = 0L,
@@ -344,7 +361,6 @@ class FavouritesRepository @Inject constructor(
 	suspend fun setPinned(mangaIds: Collection<Long>, isPinned: Boolean) {
 		if (mangaIds.isEmpty()) return
 		db.withTransaction {
-			db.getFavouritesDao().setPinned(mangaIds.toList(), isPinned)
 			val entityIds = mangaIds.mapNotNullTo(LinkedHashSet()) { resolveFavouriteEntityId(it) }
 			if (entityIds.isNotEmpty()) {
 				db.getWorkFavouritesDao().setPinned(entityIds.toList(), isPinned)
@@ -363,7 +379,7 @@ class FavouritesRepository @Inject constructor(
 
 	suspend fun getPinnedIds(mangaIds: Collection<Long>): Set<Long> {
 		if (mangaIds.isEmpty()) return emptySet()
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(mangaIds)
+		val entityIdsByMangaId = resolveEntityIdsByMangaIds(mangaIds)
 		val pinnedEntityIds = db.getWorkFavouritesDao().findPinnedEntityIds(entityIdsByMangaId.values.distinct())
 		if (pinnedEntityIds.isNotEmpty()) {
 			return mangaIds.filterTo(LinkedHashSet()) { mangaId ->
@@ -410,6 +426,176 @@ class FavouritesRepository @Inject constructor(
 			.distinctUntilChanged()
 	}
 
+	private fun observeWorkFavouriteContents(
+		categoryId: Long,
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption>,
+		limit: Int,
+	): Flow<List<Content>> {
+		return db.invalidationTracker.createFlow(
+			TABLE_WORK_FAVOURITES,
+			TABLE_FAVOURITE_CATEGORIES,
+			TABLE_ENTITY_GRAPH_BINDING,
+			TABLE_ENTITY_PREFERENCES,
+			TABLE_MANGA,
+			TABLE_TAGS,
+			TABLE_MANGA_TAGS,
+			"local_index",
+			emitInitialState = true,
+		).mapLatest {
+			buildWorkFavouriteContents(categoryId, order, filterOptions, limit)
+		}.distinctUntilChanged()
+	}
+
+	private suspend fun buildWorkFavouriteContents(
+		categoryId: Long,
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption> = emptySet(),
+		limit: Int = Int.MAX_VALUE,
+	): List<Content> {
+		if (limit <= 0) {
+			return emptyList()
+		}
+		val entries = findWorkFavouriteEntries(categoryId)
+		if (entries.isEmpty()) {
+			return emptyList()
+		}
+		val downloadedIds = if (ListFilterOption.Downloaded in filterOptions) {
+			db.getLocalContentIndexDao().findExistingIds(
+				entries.mapNotNull { resolveWorkFavouriteContent(it)?.id }.distinct(),
+			).toSet()
+		} else {
+			emptySet()
+		}
+		return entries
+			.mapNotNull { entry ->
+				val content = resolveWorkFavouriteContent(entry) ?: return@mapNotNull null
+				WorkFavouriteContentEntry(entry, content)
+			}
+			.filter { matchesFavouriteFilters(it.content, filterOptions, downloadedIds) }
+			.sortedWith(workFavouriteComparator(order))
+			.distinctBy { it.content.id }
+			.take(limit)
+			.map { it.content }
+	}
+
+	private suspend fun buildWorkFavouriteCovers(
+		categoryId: Long,
+		order: ListSortOrder,
+		limit: Int = Int.MAX_VALUE,
+	): List<Cover> {
+		return buildWorkFavouriteContentEntries(categoryId, order, limit)
+			.map { entry ->
+				Cover(
+					mangaId = entry.content.id,
+					url = entry.content.coverUrl,
+					source = entry.content.source.name,
+				)
+			}
+	}
+
+	private suspend fun buildWorkFavouriteCategoryCountEntries(): List<FavouriteCategoryCountEntry> {
+		return db.getWorkFavouritesDao().findActive()
+			.mapNotNull { entry ->
+				val content = resolveWorkFavouriteContent(entry) ?: return@mapNotNull null
+				FavouriteCategoryCountEntry(
+					mangaId = content.id,
+					categoryId = entry.categoryId,
+					source = content.source.name,
+					isNsfw = content.isNsfw(),
+				)
+			}
+	}
+
+	private suspend fun buildWorkFavouriteCategoryIdsByFeedKey(): Map<String, Set<Long>> {
+		val result = LinkedHashMap<String, LinkedHashSet<Long>>()
+		for (entry in db.getWorkFavouritesDao().findActive()) {
+			val content = resolveWorkFavouriteContent(entry) ?: continue
+			result.getOrPut(content.feedLookupKey()) { linkedSetOf() } += entry.categoryId
+		}
+		return result
+	}
+
+	private suspend fun buildWorkFavouriteContentEntries(
+		categoryId: Long,
+		order: ListSortOrder,
+		limit: Int,
+	): List<WorkFavouriteContentEntry> {
+		if (limit <= 0) {
+			return emptyList()
+		}
+		return findWorkFavouriteEntries(categoryId)
+			.mapNotNull { entry ->
+				val content = resolveWorkFavouriteContent(entry) ?: return@mapNotNull null
+				WorkFavouriteContentEntry(entry, content)
+			}
+			.sortedWith(workFavouriteComparator(order))
+			.distinctBy { it.content.id }
+			.take(limit)
+	}
+
+	private suspend fun findWorkFavouriteEntries(categoryId: Long): List<WorkFavouriteEntity> {
+		return if (categoryId == FavouriteCategory.NO_ID) {
+			db.getWorkFavouritesDao().findActive()
+		} else {
+			db.getWorkFavouritesDao().findActive(categoryId)
+		}
+	}
+
+	private suspend fun resolveWorkFavouriteContent(entry: WorkFavouriteEntity): Content? {
+		entry.anchorMangaId?.let { anchorId ->
+			db.getMangaDao().find(anchorId)?.toContent()?.let { return it }
+		}
+		val identity = workResolver.resolveByEntityId(entry.entityId)
+		val candidateIds = buildList {
+			identity?.preferredMangaId?.let(::add)
+			identity?.localMangaIds.orEmpty().forEach(::add)
+		}.distinct()
+		for (mangaId in candidateIds) {
+			db.getMangaDao().find(mangaId)?.toContent()?.let { return it }
+		}
+		return null
+	}
+
+	private fun matchesFavouriteFilters(
+		content: Content,
+		filterOptions: Set<ListFilterOption>,
+		downloadedIds: Set<Long>,
+	): Boolean {
+		return filterOptions.all { option ->
+			when (option) {
+				ListFilterOption.Downloaded -> content.id in downloadedIds
+				ListFilterOption.Macro.NSFW -> content.isNsfw()
+				is ListFilterOption.Inverted -> when (option.option) {
+					ListFilterOption.Macro.NSFW -> !content.isNsfw()
+					else -> true
+				}
+				is ListFilterOption.Tag -> content.tags.any { tag -> tag.title == option.tag.title && tag.key == option.tag.key }
+				is ListFilterOption.Source -> content.source.name == option.mangaSource.name
+				else -> true
+			}
+		}
+	}
+
+	private fun workFavouriteComparator(order: ListSortOrder): Comparator<WorkFavouriteContentEntry> {
+		val byPinned = compareByDescending<WorkFavouriteContentEntry> { it.entry.isPinned }
+		val byTitle = compareBy<WorkFavouriteContentEntry> { it.content.title }
+		return byPinned.then(
+			when (order) {
+				ListSortOrder.RATING -> compareByDescending { it.content.rating }
+				ListSortOrder.NEWEST -> compareByDescending { it.entry.createdAt }
+				ListSortOrder.OLDEST -> compareBy { it.entry.createdAt }
+				ListSortOrder.ALPHABETIC -> byTitle
+				ListSortOrder.ALPHABETIC_REVERSE -> byTitle.reversed()
+				else -> compareByDescending { it.entry.updatedAt }
+			},
+		)
+	}
+
+	private fun Content.feedLookupKey(): String {
+		return "${source.name}|$url"
+	}
+
 	suspend fun getMostUpdatedCategories(limit: Int): List<FavouriteCategory> {
 		return db.getFavouriteCategoriesDao().getMostUpdatedCategories(limit).map {
 			it.toFavouriteCategory()
@@ -446,8 +632,11 @@ class FavouritesRepository @Inject constructor(
 			.findEntitiesByIds(localFavourites.map { it.mangaId }.distinct())
 			.associateBy { it.id }
 		val contentById = mangaById.mapValues { (_, manga) -> manga.toContent(tags = emptySet(), chapters = null) }
-		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(contentById.values)
-		val existingEntityIds = entityGraphRepository.findEntityIdsByAnyMangaIds(localFavourites.map { it.mangaId })
+		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(
+			contents = contentById.values,
+			createdBy = EntityBindingCreatedBy.MIGRATION,
+		)
+		val existingEntityIds = resolveEntityIdsByMangaIds(localFavourites.map { it.mangaId })
 		val entityIdsByMangaId = existingEntityIds + ensuredEntityIds
 		val normalized = LinkedHashMap<WorkFavouriteNormalizationKey, WorkFavouriteEntity>()
 		for (favourite in localFavourites) {
@@ -459,6 +648,7 @@ class FavouritesRepository @Inject constructor(
 			val candidate = WorkFavouriteEntity(
 				entityId = entityId,
 				categoryId = favourite.categoryId,
+				anchorMangaId = favourite.mangaId,
 				sortKey = favourite.sortKey,
 				isPinned = favourite.isPinned,
 				createdAt = favourite.createdAt,
@@ -490,6 +680,13 @@ class FavouritesRepository @Inject constructor(
 		}
 	}
 
+	private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
+		return workResolver.resolveManyByMangaIds(mangaIds)
+			.mapValues { (_, identity) -> identity.entityId }
+			.filterValues { it != null }
+			.mapValues { (_, entityId) -> requireNotNull(entityId) }
+	}
+
 	private fun mergeNormalizedWorkFavourite(
 		existing: WorkFavouriteEntity,
 		candidate: WorkFavouriteEntity,
@@ -519,9 +716,6 @@ class FavouritesRepository @Inject constructor(
 			for (entityId in entityIds) {
 				db.getWorkFavouritesDao().recover(entityId)
 			}
-			for (id in ids) {
-				db.getFavouritesDao().recover(mangaId = id)
-			}
 		}
 	}
 
@@ -529,9 +723,6 @@ class FavouritesRepository @Inject constructor(
 		db.withTransaction {
 			for (entityId in entityIds) {
 				db.getWorkFavouritesDao().recover(entityId, categoryId)
-			}
-			for (id in ids) {
-				db.getFavouritesDao().recover(mangaId = id, categoryId = categoryId)
 			}
 		}
 	}
@@ -548,41 +739,31 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	private suspend fun resolveFavouriteEntityId(mangaId: Long): Long? {
-		return entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId]
+		return workResolver.resolveByMangaId(mangaId).entityId
 	}
 
 	private suspend fun resolveFavouriteAnchorIds(mangaId: Long): Set<Long> {
-		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId] ?: return setOf(mangaId)
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-		val localIds = entityGraphRepository.getBindings(entityId)
-			.asSequence()
-			.mapNotNull { binding ->
-				when (binding.source) {
-					"local_manga", "0" -> binding.externalId.toLongOrNull()
-					else -> null
-				}
-			}
+		val identity = workResolver.resolveByMangaId(mangaId)
+		return identity.localMangaIds
+			.plus(identity.preferredMangaId)
+			.filterNotNull()
 			.toCollection(LinkedHashSet())
-		preferredLocalId?.let(localIds::add)
-		return if (localIds.isEmpty()) setOf(mangaId) else localIds
+			.ifEmpty { setOf(mangaId) }
 	}
 
 	private suspend fun resolveWorkAnchorContents(mangas: Collection<Content>): List<Content> {
 		if (mangas.isEmpty()) return emptyList()
 		val contentsById = mangas.associateBy { it.id }
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(contentsById.keys)
-		val preferredLocalIdsByEntity = db.getEntityGraphDao()
-			.findEntityPrefsByIds(entityIdsByMangaId.values.distinct())
-			.associate { it.entityId to it.preferredLocalMangaId }
+		val identitiesByMangaId = workResolver.resolveManyByMangaIds(contentsById.keys)
 		val localContents = LinkedHashMap<Long, Content>()
 		val fallbackContents = LinkedHashMap<Long, Content>()
 		mangas.forEach { content ->
-			val entityId = entityIdsByMangaId[content.id]
-			if (entityId == null) {
+			val identity = identitiesByMangaId[content.id]
+			if (identity?.entityId == null) {
 				fallbackContents.putIfAbsent(content.id, content)
 				return@forEach
 			}
-			val preferredId = preferredLocalIdsByEntity[entityId]
+			val preferredId = identity.preferredMangaId
 			if (preferredId == null || preferredId == content.id) {
 				localContents.putIfAbsent(content.id, content)
 			} else {

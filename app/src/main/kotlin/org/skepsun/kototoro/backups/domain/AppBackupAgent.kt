@@ -8,9 +8,11 @@ import android.content.Context
 import android.os.ParcelFileDescriptor
 import androidx.annotation.VisibleForTesting
 import com.google.common.io.ByteStreams
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -41,6 +43,10 @@ class AppBackupAgent : BackupAgent() {
 		super.onFullBackup(data)
 		val db = MangaDatabase(context = applicationContext)
 		val appSettings = AppSettings(applicationContext)
+		val entryPoint = EntryPointAccessors.fromApplication(
+			applicationContext,
+			BaseApp.BaseAppEntryPoint::class.java,
+		)
 		val jsonSourceManager = org.skepsun.kototoro.core.jsonsource.JsonSourceManager(
 			jsonSourceDao = db.getJsonSourceDao(),
 			appSettings = appSettings,
@@ -111,6 +117,7 @@ class AppBackupAgent : BackupAgent() {
 				savedFiltersRepository = SavedFiltersRepository(
 					context = applicationContext,
 				),
+				workResolver = entryPoint.workResolver(),
 			),
 		)
 		try {
@@ -131,6 +138,10 @@ class AppBackupAgent : BackupAgent() {
 		if (destination?.name?.endsWith(".bk.zip") == true) {
 			val db = MangaDatabase(applicationContext)
 			val appSettings = AppSettings(applicationContext)
+			val entryPoint = EntryPointAccessors.fromApplication(
+				applicationContext,
+				BaseApp.BaseAppEntryPoint::class.java,
+			)
 			val jsonSourceManager = org.skepsun.kototoro.core.jsonsource.JsonSourceManager(
 				jsonSourceDao = db.getJsonSourceDao(),
 				appSettings = appSettings,
@@ -202,6 +213,7 @@ class AppBackupAgent : BackupAgent() {
 					savedFiltersRepository = SavedFiltersRepository(
 						context = applicationContext,
 					),
+					workResolver = entryPoint.workResolver(),
 				),
 			)
 			destination.delete()

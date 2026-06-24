@@ -485,6 +485,7 @@ class DetailsViewModel @Inject constructor(
 	private val entityGraphRepository: org.skepsun.kototoro.entitygraph.data.EntityGraphRepository,
 	private val trackingSiteDiscoveryService: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService,
 	private val sourceTypeIdentifier: SourceTypeIdentifier,
+	private val workResolver: org.skepsun.kototoro.work.domain.WorkResolver,
 ) : ChaptersPagesViewModel(
 	settings = settings,
 	interactor = interactor,
@@ -1401,7 +1402,7 @@ class DetailsViewModel @Inject constructor(
 			syncDisplayedState()
 		}
 		val bindings = entityGraphRepository.getBindings(entityId)
-		val persistedPreferredLocalId = dataRepository.getEntityPreferredLocalMangaId(entityId)
+		val persistedPreferredLocalId = workResolver.selectPreferredProjection(entityId)
 		val requestedProjectionLocalId = initialProjectionLocalMangaId?.takeIf { projectionId ->
 			bindings.any { binding ->
 				binding.isLocalReadingSource() &&
@@ -2227,8 +2228,8 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private suspend fun resolveWorkProjectionContext(mangaId: Long): WorkProjectionContext {
-		val graphDao = db.getEntityGraphDao()
-		val entityId = graphDao.findWorkEntityIdByLocalMangaId(mangaId)
+		val identity = workResolver.resolveByMangaId(mangaId)
+		val entityId = identity.entityId
 		if (entityId == null) {
 			return WorkProjectionContext(
 				entityId = null,
@@ -2238,27 +2239,21 @@ class DetailsViewModel @Inject constructor(
 				candidateMangaIds = listOf(mangaId),
 			)
 		}
-		val bindings = graphDao.findActiveBindingsByEntity(entityId)
-		val preferredLocalMangaId = graphDao.findEntityPrefs(entityId)?.preferredLocalMangaId
-		val localMangaIds = bindings.asSequence()
-			.filter { it.source == "local_manga" || it.source == "0" }
-			.mapNotNull { it.externalId.toLongOrNull() }
-			.distinct()
-			.toList()
+		val localMangaIds = identity.localMangaIds
 			.filter { localId -> db.getMangaDao().contains(localId) }
-		val persistedLocalMangaId = preferredLocalMangaId
+		val persistedLocalMangaId = identity.preferredMangaId
 			?.takeIf { preferredId -> db.getMangaDao().contains(preferredId) }
 			?: localMangaIds.firstOrNull()
 			?: mangaId
 		val candidateMangaIds = buildList {
 			add(mangaId)
-			preferredLocalMangaId?.let(::add)
+			add(persistedLocalMangaId)
 			addAll(localMangaIds)
 		}.distinct()
 		return WorkProjectionContext(
 			entityId = entityId,
 			requestedMangaId = mangaId,
-			preferredLocalMangaId = preferredLocalMangaId ?: persistedLocalMangaId,
+			preferredLocalMangaId = persistedLocalMangaId,
 			persistedLocalMangaId = persistedLocalMangaId,
 			candidateMangaIds = candidateMangaIds.ifEmpty { listOf(mangaId) },
 		)

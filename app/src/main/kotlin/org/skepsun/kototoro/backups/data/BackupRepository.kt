@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collectIndexed
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
@@ -44,6 +45,7 @@ import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity
+import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.progress.Progress
@@ -51,7 +53,6 @@ import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.RelationRecord
-import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.entitygraph.data.decodeStringList
 import org.skepsun.kototoro.entitygraph.data.encodeStringList
 import org.skepsun.kototoro.entitygraph.data.mergeAliases
@@ -82,6 +83,8 @@ import org.skepsun.kototoro.tracker.data.canBeClearedBy
 import org.skepsun.kototoro.tracker.data.isNewerThan
 import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
 import org.skepsun.kototoro.tracker.data.normalizeTrackFeedState
+import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -107,6 +110,7 @@ class BackupRepository @Inject constructor(
     private val tapGridSettings: TapGridSettings,
     private val mangaSourcesRepository: ContentSourcesRepository,
     private val savedFiltersRepository: SavedFiltersRepository,
+    private val workResolver: WorkResolver,
 ) {
 
     enum class RestoreMode {
@@ -147,6 +151,7 @@ class BackupRepository @Inject constructor(
         output: ZipOutputStream,
         progress: FlowCollector<Progress>?,
     ) {
+        normalizeLegacyWorkStateForAuthoritativeBackup()
         progress?.emit(Progress.INDETERMINATE)
         var commonProgress = Progress(0, BackupSection.entries.size)
         for (section in BackupSection.entries) {
@@ -159,11 +164,7 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.HISTORY -> output.writeJsonArray(
                     section = BackupSection.HISTORY,
-                    data = database.getHistoryDao().dump().map {
-                        HistoryBackup(
-                            entity = it,
-                        )
-                    },
+                    data = emptyFlow<HistoryBackup>(),
                     serializer = serializer(),
                 )
 
@@ -175,11 +176,7 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.FAVOURITES -> output.writeJsonArray(
                     section = BackupSection.FAVOURITES,
-                    data = database.getFavouritesDao().dump().map {
-                        FavouriteBackup(
-                            entity = it,
-                        )
-                    },
+                    data = emptyFlow<FavouriteBackup>(),
                     serializer = serializer(),
                 )
 
@@ -243,7 +240,7 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.STATS -> output.writeJsonArray(
                     section = BackupSection.STATS,
-                    data = database.getStatsDao().dumpEnabled().map { StatisticBackup(it) },
+                    data = emptyFlow<StatisticBackup>(),
                     serializer = serializer(),
                 )
 
@@ -352,14 +349,9 @@ class BackupRepository @Inject constructor(
                         CompositeResult.EMPTY
                     }
                     BackupSection.HISTORY -> input.readJsonArray<HistoryBackup>(serializer()).restoreToDb("HISTORY") {
-                        // Legacy history sections restore the projection snapshot first, then
-                        // normalize the record into work-owned history when entity bindings exist.
+                        // Legacy history is import input only: restore content and write work-owned state.
                         upsertContent(it.manga, restoreContext)
-                        val legacy = it.toEntity()
-                        if (shouldRestoreHistory(legacy, restoreMode)) {
-                            getHistoryDao().upsertIncludingDeleted(legacy)
-                            upsertWorkHistoryFromLegacy(legacy, restoreMode)
-                        }
+                        upsertWorkHistoryFromLegacy(it.toEntity(), restoreMode)
                     }
 
                     BackupSection.CATEGORIES -> input.readJsonArray<CategoryBackup>(serializer()).restoreToDb("CATEGORIES") {
@@ -367,12 +359,9 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.FAVOURITES -> input.readJsonArray<FavouriteBackup>(serializer()).restoreToDb("FAVOURITES") {
-                        // Legacy favourites sections restore the projection snapshot first, then
-                        // project collection state into work-owned favourites.
+                        // Legacy favourites are import input only: restore content and write work-owned state.
                         upsertContent(it.manga, restoreContext)
-                        val legacy = it.toEntity()
-                        getFavouritesDao().mergeWithTimestamp(legacy)
-                        upsertWorkFavouriteFromLegacy(legacy)
+                        upsertWorkFavouriteFromLegacy(it.toEntity())
                     }
 
                     BackupSection.SETTINGS -> input.readMap().let {
@@ -401,7 +390,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.SCROBBLING -> input.readJsonArray<ScrobblingBackup>(serializer()).restoreToDb("SCROBBLING") {
-                        upsertScrobbling(it.toEntity())
+                        upsertScrobbling(it.toEntity(), workResolver)
                     }
 
                     BackupSection.TRACKS -> input.readJsonArray<TrackBackup>(serializer()).restoreToDb("TRACKS") {
@@ -413,9 +402,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.STATS -> input.readJsonArray<StatisticBackup>(serializer()).restoreToDb("STATS") {
-                        val legacy = it.toEntity()
-                        getStatsDao().upsert(legacy)
-                        upsertWorkStatsFromLegacy(legacy)
+                        upsertWorkStatsFromLegacy(it.toEntity())
                     }
 
                     BackupSection.WORK_HISTORY -> input.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
@@ -536,6 +523,20 @@ class BackupRepository @Inject constructor(
                 database.getStatsDao().dumpEnabled().collect { stats ->
                     database.upsertWorkStatsFromLegacy(stats)
                 }
+            }
+        }
+    }
+
+    private suspend fun normalizeLegacyWorkStateForAuthoritativeBackup() {
+        database.withTransaction {
+            database.getHistoryDao().findAllEntriesIncludingDeleted().forEach { history ->
+                database.upsertWorkHistoryFromLegacy(history)
+            }
+            database.getFavouritesDao().findAllEntriesIncludingDeleted().forEach { favourite ->
+                database.upsertWorkFavouriteFromLegacy(favourite)
+            }
+            database.getStatsDao().dumpEnabled().collect { stats ->
+                database.upsertWorkStatsFromLegacy(stats)
             }
         }
     }
@@ -800,7 +801,13 @@ class BackupRepository @Inject constructor(
     ) {
         val tags = manga.tags.map { it.toEntity() }
         getTagsDao().upsert(tags)
-        getMangaDao().upsert(manga.toEntity(), tags)
+        val entity = manga.toEntity()
+        getMangaDao().upsert(entity, tags)
+        val identity = workResolver.ensureForProjection(
+            content = entity.toContent(tags = emptySet(), chapters = null),
+            provenance = WorkIdentityProvenance.RESTORE,
+        )
+        Log.d(TAG, "restore content: mangaId=${manga.id} title=${manga.title} entityId=${identity.entityId}")
         if (restoreContext.isLegacySemanticSchema && manga.hasLegacyPrefsPayload()) {
             // Legacy embedded prefs are import hints only.
             // Do not rebuild work-owned state shadows in projection prefs during restore.
@@ -809,16 +816,20 @@ class BackupRepository @Inject constructor(
         }
     }
 
-    private suspend fun MangaDatabase.findEntityIdByLocalMangaId(mangaId: Long): Long? {
-        return getEntityGraphDao().findWorkEntityIdByLocalMangaId(mangaId)
+    private suspend fun MangaDatabase.resolveWorkEntityIdForLocalManga(mangaId: Long): Long? {
+        return workResolver.resolveByMangaId(mangaId).entityId
     }
 
     private suspend fun MangaDatabase.upsertWorkHistoryFromLegacy(
         history: org.skepsun.kototoro.history.data.HistoryEntity,
         restoreMode: RestoreMode = RestoreMode.MERGE,
-    ) {
-        val entityId = findEntityIdByLocalMangaId(history.mangaId) ?: return
-        val anchorMangaId = resolveExistingLocalAnchorForEntity(entityId) ?: history.mangaId
+    ): Boolean {
+        val entityId = resolveWorkEntityIdForLocalManga(history.mangaId)
+        if (entityId == null) {
+            Log.w(TAG, "restore legacy history skipped: no work entity for mangaId=${history.mangaId}")
+            return false
+        }
+        val anchorMangaId = resolveExistingLocalProjectionForEntity(entityId) ?: history.mangaId
         restoreWorkHistory(
             entity = WorkHistoryEntity(
                 entityId = entityId,
@@ -835,17 +846,11 @@ class BackupRepository @Inject constructor(
             ),
             restoreMode = restoreMode,
         )
-    }
-
-    private suspend fun MangaDatabase.shouldRestoreHistory(
-        remote: org.skepsun.kototoro.history.data.HistoryEntity,
-        restoreMode: RestoreMode,
-    ): Boolean {
-        if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
-            return true
-        }
-        val local = getHistoryDao().findIncludingDeleted(remote.mangaId)
-        return local == null || remote.updatedAt >= local.updatedAt
+        Log.d(
+            TAG,
+            "restore legacy history converted: mangaId=${history.mangaId} entityId=$entityId anchorMangaId=$anchorMangaId",
+        )
+        return true
     }
 
     private suspend fun MangaDatabase.restoreWorkHistory(
@@ -863,12 +868,20 @@ class BackupRepository @Inject constructor(
 
     private suspend fun MangaDatabase.upsertWorkFavouriteFromLegacy(
         favourite: org.skepsun.kototoro.favourites.data.FavouriteEntity,
-    ) {
-        val entityId = findEntityIdByLocalMangaId(favourite.mangaId) ?: return
+    ): Boolean {
+        val entityId = resolveWorkEntityIdForLocalManga(favourite.mangaId)
+        if (entityId == null) {
+            Log.w(
+                TAG,
+                "restore legacy favourite skipped: no work entity for mangaId=${favourite.mangaId} categoryId=${favourite.categoryId}",
+            )
+            return false
+        }
         getWorkFavouritesDao().upsert(
             WorkFavouriteEntity(
                 entityId = entityId,
                 categoryId = favourite.categoryId,
+                anchorMangaId = favourite.mangaId,
                 sortKey = favourite.sortKey,
                 isPinned = favourite.isPinned,
                 createdAt = favourite.createdAt,
@@ -876,13 +889,18 @@ class BackupRepository @Inject constructor(
                 updatedAt = favourite.updatedAt,
             ),
         )
+        Log.d(
+            TAG,
+            "restore legacy favourite converted: mangaId=${favourite.mangaId} entityId=$entityId categoryId=${favourite.categoryId}",
+        )
+        return true
     }
 
     private suspend fun MangaDatabase.upsertWorkStatsFromLegacy(
         stats: org.skepsun.kototoro.stats.data.StatsEntity,
     ) {
-        val entityId = findEntityIdByLocalMangaId(stats.mangaId) ?: return
-        val anchorMangaId = resolveExistingLocalAnchorForEntity(entityId) ?: stats.mangaId
+        val entityId = resolveWorkEntityIdForLocalManga(stats.mangaId) ?: return
+        val anchorMangaId = resolveExistingLocalProjectionForEntity(entityId) ?: stats.mangaId
         getWorkStatsDao().upsert(
             WorkStatsEntity(
                 entityId = entityId,
@@ -902,7 +920,7 @@ class BackupRepository @Inject constructor(
         }
         val normalized = LinkedHashMap<ScrobblingRestoreKey, ScrobblingEntity>(all.size)
         all.forEach { entity ->
-            val entityId = entity.entityId ?: findEntityIdByLocalMangaId(entity.mangaId)
+            val entityId = entity.entityId ?: resolveWorkEntityIdForLocalManga(entity.mangaId)
             val anchorMangaId = resolvePreferredScrobblingAnchor(entity.mangaId) ?: entity.mangaId
             val anchored = if (anchorMangaId == entity.mangaId) {
                 if (entity.entityId == entityId) entity else entity.copy(entityId = entityId)
@@ -926,22 +944,19 @@ class BackupRepository @Inject constructor(
     }
 
     private suspend fun MangaDatabase.resolvePreferredScrobblingAnchor(mangaId: Long): Long? {
-        val entityId = findEntityIdByLocalMangaId(mangaId) ?: return null
-        return resolveExistingLocalAnchorForEntity(entityId) ?: mangaId
+        val entityId = resolveWorkEntityIdForLocalManga(mangaId) ?: return null
+        return resolveExistingLocalProjectionForEntity(entityId) ?: mangaId
     }
 
-    private suspend fun MangaDatabase.resolveExistingLocalAnchorForEntity(entityId: Long): Long? {
-        getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-            ?.takeIf { preferredId -> getMangaDao().contains(preferredId) }
-            ?.let { return it }
-        return getEntityGraphDao().findActiveBindingsByEntity(entityId)
-            .firstNotNullOfOrNull { binding ->
-                when (binding.source) {
-                    "local_manga", "0" -> binding.externalId.toLongOrNull()
-                        ?.takeIf { localId -> getMangaDao().contains(localId) }
-                    else -> null
-                }
-            }
+    private suspend fun MangaDatabase.resolveExistingLocalProjectionForEntity(entityId: Long): Long? {
+        val identity = workResolver.resolveByEntityId(entityId) ?: return null
+        val preferredMangaId = identity.preferredMangaId
+        if (preferredMangaId != null && getMangaDao().contains(preferredMangaId)) {
+            return preferredMangaId
+        }
+        return identity.localMangaIds.firstOrNull { localId ->
+            getMangaDao().contains(localId)
+        }
     }
 
     private fun choosePreferredScrobblingRestoreEntity(
@@ -1213,9 +1228,13 @@ class BackupRepository @Inject constructor(
             Log.d(
                 TAG,
                 "restoreToDb: label=$label processed=$processed batchSize=${batch.size} " +
+                    "failures=${batchResult.failures.size} " +
                     "batchElapsedMs=${SystemClock.elapsedRealtime() - batchStartedAt} " +
                     "totalElapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
             )
+            batchResult.failures.firstOrNull()?.let { error ->
+                Log.w(TAG, "restoreToDb: label=$label first failure", error)
+            }
             batch.clear()
         }
 

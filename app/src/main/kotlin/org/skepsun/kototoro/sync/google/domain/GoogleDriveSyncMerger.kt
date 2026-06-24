@@ -81,7 +81,8 @@ object GoogleDriveSyncMerger {
 				canonical
 			}
 			.sortedBy { it.id }
-		val entityGroups = buildEntityGroups(snapshot, contentIdMap)
+		val authoritativeContentIds = buildAuthoritativeContentIds(snapshot, contentIdMap)
+		val entityGroups = buildEntityGroups(snapshot, contentIdMap, authoritativeContentIds)
 		val entityIdMap = LinkedHashMap<Long, Long>()
 		val compactEntities = snapshot.entityGraph.entities
 			.groupBy { entity -> entityGroups.find(entity.id) }
@@ -113,7 +114,6 @@ object GoogleDriveSyncMerger {
 			.groupBy { it.entityId }
 			.values
 			.map(::mergePrefs)
-			.sortedBy { it.entityId }
 		val mappedHistory = snapshot.work.history
 			.map { history ->
 				SyncWorkHistory(
@@ -135,6 +135,7 @@ object GoogleDriveSyncMerger {
 			.map(::mergeWorkHistory)
 			.sortedByDescending { it.updatedAt }
 		val mappedFavourites = snapshot.work.favourites
+			.filter { it.anchorMangaId != null }
 			.map { favourite ->
 				SyncWorkFavourite(
 					entityId = entityIdMap[favourite.entityId] ?: favourite.entityId,
@@ -147,7 +148,7 @@ object GoogleDriveSyncMerger {
 					deletedAt = favourite.deletedAt,
 				)
 			}
-			.groupBy { favourite -> WorkFavouriteKey(favourite.anchorMangaId ?: favourite.entityId, favourite.categoryId) }
+			.groupBy { favourite -> WorkFavouriteKey(favourite.anchorMangaId, favourite.categoryId) }
 			.values
 			.map(::mergeWorkFavourite)
 			.sortedWith(compareBy<SyncWorkFavourite> { it.categoryId }.thenBy { it.sortKey })
@@ -197,17 +198,24 @@ object GoogleDriveSyncMerger {
 			.values
 			.map(::mergeTrackLogs)
 			.sortedByDescending { it.createdAt }
+		val authoritativeEntityIds = HashSet<Long>().apply {
+			addAll(mappedHistory.map { it.entityId })
+			addAll(mappedFavourites.map { it.entityId })
+			addAll(mappedStats.map { it.entityId })
+			addAll(mappedTracks.mapNotNull { it.entityId })
+			addAll(mappedLogs.mapNotNull { it.entityId })
+		}
+		val compactPrefs = mappedPrefs
+			.filter { it.entityId in authoritativeEntityIds }
+			.sortedBy { it.entityId }
 		val referencedContentIds = HashSet<Long>().apply {
 			addAll(mappedHistory.map { it.anchorMangaId })
+			addAll(mappedFavourites.mapNotNull { it.anchorMangaId })
 			addAll(mappedStats.map { it.anchorMangaId })
-			addAll(mappedPrefs.mapNotNull { it.preferredLocalMangaId })
+			addAll(compactPrefs.mapNotNull { it.preferredLocalMangaId })
 			addAll(mappedTracks.map { it.mangaId })
 			addAll(mappedLogs.map { it.mangaId })
 		}
-		val favouriteEntityIds = mappedFavourites
-			.asSequence()
-			.filter { it.deletedAt == 0L }
-			.mapTo(HashSet()) { it.entityId }
 		val mappedBindings = snapshot.entityGraph.bindings
 			.mapNotNull { binding ->
 				val localExternalId = if (binding.isLocalContentBinding()) {
@@ -231,20 +239,18 @@ object GoogleDriveSyncMerger {
 			.groupBy { BindingKey(it.source, it.externalId) }
 			.values
 			.map(::mergeBindings)
-		val preferredFavouriteBindings = mappedBindings
-			.asSequence()
-			.filter { it.isLocalContentBinding() && it.entityId in favouriteEntityIds }
-			.groupBy { it.entityId }
-			.mapValues { (_, bindings) -> bindings.maxWith(localBindingComparator) }
 		val compactBindings = mappedBindings
 			.filter { binding ->
+				if (binding.entityId !in authoritativeEntityIds) {
+					return@filter false
+				}
 				if (!binding.isLocalContentBinding()) {
 					true
 				} else {
 					val contentId = binding.externalId.toLongOrNull()
 					contentId != null &&
 						contentId in contentIds &&
-						(contentId in referencedContentIds || preferredFavouriteBindings[binding.entityId] == binding)
+						contentId in referencedContentIds
 				}
 			}
 			.sortedWith(compareBy<SyncEntityBindingRecord> { it.source }.thenBy { it.externalId })
@@ -263,7 +269,11 @@ object GoogleDriveSyncMerger {
 					createdAt = relation.createdAt,
 				)
 			}
-			.filter { it.fromEntityId != it.toEntityId }
+			.filter {
+				it.fromEntityId != it.toEntityId &&
+					it.fromEntityId in authoritativeEntityIds &&
+					it.toEntityId in authoritativeEntityIds
+			}
 			.distinctBy { RelationKey(it.fromEntityId, it.toEntityId, it.type) }
 			.sortedWith(compareBy<SyncEntityRelationRecord> { it.fromEntityId }.thenBy { it.toEntityId }.thenBy { it.type })
 		return GoogleDriveSyncSnapshot(
@@ -271,10 +281,10 @@ object GoogleDriveSyncMerger {
 			deviceId = snapshot.deviceId,
 			syncedAt = snapshot.syncedAt,
 			entityGraph = SyncEntityGraph(
-				entities = compactEntities,
+				entities = compactEntities.filter { it.id in authoritativeEntityIds },
 				bindings = compactBindings,
 				relations = compactRelations,
-				prefs = mappedPrefs,
+				prefs = compactPrefs,
 			),
 			content = finalContent,
 			work = SyncWorkState(
@@ -332,7 +342,8 @@ object GoogleDriveSyncMerger {
 				.map(::mergeWorkHistory)
 				.sortedByDescending { it.updatedAt },
 			favourites = (local.favourites + remote.favourites)
-				.groupBy { favourite -> WorkFavouriteKey(favourite.anchorMangaId ?: favourite.entityId, favourite.categoryId) }
+				.filter { it.anchorMangaId != null }
+				.groupBy { favourite -> WorkFavouriteKey(favourite.anchorMangaId, favourite.categoryId) }
 				.values
 				.map(::mergeWorkFavourite)
 				.sortedWith(compareBy<SyncWorkFavourite> { it.categoryId }.thenBy { it.sortKey }),
@@ -453,7 +464,7 @@ object GoogleDriveSyncMerger {
 	private data class BindingKey(val source: String, val externalId: String)
 	private data class RelationKey(val fromEntityId: Long, val toEntityId: Long, val type: String)
 	private data class WorkAnchorKey(val anchorMangaId: Long)
-	private data class WorkFavouriteKey(val workId: Long, val categoryId: Long)
+	private data class WorkFavouriteKey(val anchorMangaId: Long?, val categoryId: Long)
 	private data class WorkStatsKey(val entityId: Long, val startedAt: Long)
 
 	private fun contentKey(content: SyncContent): String {
@@ -476,6 +487,7 @@ object GoogleDriveSyncMerger {
 	private fun buildEntityGroups(
 		snapshot: GoogleDriveSyncSnapshot,
 		contentIdMap: Map<Long, Long>,
+		authoritativeContentIds: Set<Long>,
 	): EntityDisjointSet {
 		val groups = EntityDisjointSet(snapshot.entityGraph.entities.map { it.id })
 		snapshot.entityGraph.bindings
@@ -484,12 +496,30 @@ object GoogleDriveSyncMerger {
 					.toLongOrNull()
 					?.takeIf { binding.isLocalContentBinding() }
 					?: return@mapNotNull null
-				(contentIdMap[contentId] ?: contentId) to binding.entityId
+				val canonicalContentId = contentIdMap[contentId] ?: contentId
+				if (canonicalContentId !in authoritativeContentIds) {
+					return@mapNotNull null
+				}
+				canonicalContentId to binding.entityId
 			}
 			.groupBy({ it.first }, { it.second })
 			.values
 			.forEach { entityIds -> groups.unionAll(entityIds) }
 		return groups
+	}
+
+	private fun buildAuthoritativeContentIds(
+		snapshot: GoogleDriveSyncSnapshot,
+		contentIdMap: Map<Long, Long>,
+	): Set<Long> {
+		return (
+			snapshot.work.history.map { it.anchorMangaId } +
+				snapshot.work.favourites.mapNotNull { it.anchorMangaId } +
+				snapshot.work.stats.map { it.anchorMangaId } +
+				snapshot.feed.tracks.map { it.mangaId } +
+				snapshot.feed.logs.map { it.mangaId }
+			)
+			.mapTo(HashSet()) { contentIdMap[it] ?: it }
 	}
 
 	private class EntityDisjointSet(entityIds: List<Long>) {
@@ -526,13 +556,6 @@ object GoogleDriveSyncMerger {
 			parent[duplicate] = canonical
 		}
 	}
-
-	private val localBindingComparator = compareBy<SyncEntityBindingRecord>(
-		{ it.source == LOCAL_MANGA_SOURCE },
-		{ it.isPrimary },
-		{ it.updatedAt },
-		{ it.confidence },
-	)
 
 	private const val LOCAL_MANGA_SOURCE = "local_manga"
 	private const val LEGACY_LOCAL_MANGA_SOURCE = "0"

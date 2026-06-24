@@ -14,7 +14,6 @@ import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership
 import org.skepsun.kototoro.entitygraph.data.deleteTrackingLinksByWorkOrMangaCandidates
 import org.skepsun.kototoro.entitygraph.data.findLinksByWorkOrMangaCandidates
-import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.entitygraph.domain.titleSimilarityScore
 import org.skepsun.kototoro.parsers.model.Content
@@ -26,6 +25,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryServi
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 private const val AUTO_MATCH_THRESHOLD = 0.82f
@@ -36,6 +36,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 	private val db: MangaDatabase,
 	private val discoveryService: TrackingSiteDiscoveryService,
 	private val animeOfflineRepository: AnimeOfflineRepository,
+	private val workResolver: WorkResolver,
 ) : TrackingSiteMatcher {
 
 	override suspend fun matchLocalContent(
@@ -120,7 +121,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		val best = ranked.firstOrNull()
 		if (persistAutoMatch && best != null && best.confidence >= AUTO_MATCH_THRESHOLD) {
 			db.withTransaction {
-				db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds)
+				db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds, workResolver)
 				dao.upsertLink(
 					db.attachEntityOwnership(
 						TrackingSiteLinkEntity(
@@ -134,6 +135,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 							createdAt = System.currentTimeMillis(),
 							updatedAt = System.currentTimeMillis(),
 						),
+						workResolver,
 					),
 				)
 			}
@@ -151,7 +153,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		val title = db.getTrackingSiteDao().findItem(service.id, remoteId)?.title ?: remoteId.toString()
 		db.withTransaction {
 			val dao = db.getTrackingSiteDao()
-			db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds)
+			db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds, workResolver)
 			dao.upsertLink(
 				db.attachEntityOwnership(
 					TrackingSiteLinkEntity(
@@ -165,6 +167,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 						createdAt = System.currentTimeMillis(),
 						updatedAt = System.currentTimeMillis(),
 					),
+					workResolver,
 				),
 			)
 		}
@@ -187,12 +190,12 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 		contentId: Long,
 	) {
 		val anchor = resolveTrackingAnchor(contentId)
-		db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds)
+		db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds, workResolver)
 	}
 
 	private suspend fun resolveTrackingAnchor(mangaId: Long): TrackingAnchor {
-		val graphDao = db.getEntityGraphDao()
-		val entityId = graphDao.findWorkEntityIdByLocalMangaId(mangaId)
+		val identity = workResolver.resolveByMangaId(mangaId)
+		val entityId = identity.entityId
 		if (entityId == null) {
 			return TrackingAnchor(
 				entityId = null,
@@ -201,13 +204,8 @@ class DefaultTrackingSiteMatcher @Inject constructor(
 				candidateMangaIds = listOf(mangaId),
 			)
 		}
-		val bindings = graphDao.findActiveBindingsByEntity(entityId)
-		val localMangaIds = bindings.asSequence()
-			.filter { it.source == "local_manga" || it.source == "0" }
-			.mapNotNull { it.externalId.toLongOrNull() }
-			.distinct()
-			.toList()
-		val preferredLocalMangaId = graphDao.findEntityPrefs(entityId)?.preferredLocalMangaId
+		val localMangaIds = identity.localMangaIds.toList()
+		val preferredLocalMangaId = identity.preferredMangaId
 		return TrackingAnchor(
 			entityId = entityId,
 			requestedMangaId = mangaId,

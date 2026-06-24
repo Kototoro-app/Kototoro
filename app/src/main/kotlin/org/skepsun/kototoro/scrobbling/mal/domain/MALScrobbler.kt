@@ -12,6 +12,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.mal.data.MALRepository
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +23,8 @@ class MALScrobbler @Inject constructor(
 	private val repository: MALRepository,
 	db: MangaDatabase,
 	mangaRepositoryFactory: ContentRepository.Factory,
-) : Scrobbler(db, ScrobblerService.MAL, repository, mangaRepositoryFactory) {
+	workResolver: WorkResolver,
+) : Scrobbler(db, ScrobblerService.MAL, repository, mangaRepositoryFactory, workResolver) {
 
 	init {
 		statuses[ScrobblingStatus.PLANNED] = "plan_to_read"

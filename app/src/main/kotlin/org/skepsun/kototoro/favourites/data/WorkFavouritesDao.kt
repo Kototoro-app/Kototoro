@@ -11,25 +11,31 @@ import kotlinx.coroutines.isActive
 @Dao
 abstract class WorkFavouritesDao {
 
-	@Query("SELECT DISTINCT category_id FROM work_favourites WHERE entity_id = :entityId AND deleted_at = 0 ORDER BY created_at ASC")
+	@Query("SELECT DISTINCT category_id FROM work_favourites WHERE entity_id = :entityId AND anchor_manga_id IS NOT NULL AND deleted_at = 0 ORDER BY created_at ASC")
 	abstract suspend fun findCategoriesIds(entityId: Long): List<Long>
 
 	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId AND category_id = :categoryId LIMIT 1")
 	abstract suspend fun find(entityId: Long, categoryId: Long): WorkFavouriteEntity?
 
-	@Query("SELECT COUNT(category_id) FROM work_favourites WHERE entity_id = :entityId AND deleted_at = 0")
+	@Query("SELECT COUNT(category_id) FROM work_favourites WHERE entity_id = :entityId AND anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun findCategoriesCount(entityId: Long): Int
 
-	@Query("SELECT COUNT(*) FROM work_favourites WHERE deleted_at = 0")
+	@Query("SELECT COUNT(*) FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun countActive(): Int
 
-	@Query("SELECT * FROM work_favourites WHERE deleted_at = 0 ORDER BY updated_at DESC")
+	@Query("SELECT COUNT(DISTINCT entity_id) FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
+	abstract suspend fun countActiveWorks(): Int
+
+	@Query("SELECT * FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0 ORDER BY updated_at DESC")
 	abstract suspend fun findActive(): List<WorkFavouriteEntity>
 
-	@Query("SELECT MAX(pinned) FROM work_favourites WHERE entity_id IN (:entityIds) AND deleted_at = 0")
+	@Query("SELECT * FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0 AND category_id = :categoryId ORDER BY updated_at DESC")
+	abstract suspend fun findActive(categoryId: Long): List<WorkFavouriteEntity>
+
+	@Query("SELECT MAX(pinned) FROM work_favourites WHERE entity_id IN (:entityIds) AND anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun isPinned(entityIds: List<Long>): Boolean?
 
-	@Query("SELECT DISTINCT entity_id FROM work_favourites WHERE entity_id IN (:entityIds) AND pinned = 1 AND deleted_at = 0")
+	@Query("SELECT DISTINCT entity_id FROM work_favourites WHERE entity_id IN (:entityIds) AND anchor_manga_id IS NOT NULL AND pinned = 1 AND deleted_at = 0")
 	abstract suspend fun findPinnedEntityIds(entityIds: List<Long>): List<Long>
 
 	@Query(
@@ -38,6 +44,7 @@ abstract class WorkFavouritesDao {
 		FROM work_favourites wf
 		INNER JOIN favourite_categories fc ON fc.category_id = wf.category_id
 		WHERE wf.deleted_at = 0
+			AND wf.anchor_manga_id IS NOT NULL
 			AND fc.deleted_at = 0
 			AND fc.track = 1
 		""",

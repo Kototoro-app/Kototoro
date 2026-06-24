@@ -10,17 +10,18 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.RetainedLifecycleCoroutineScope
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.stats.data.StatsEntity
 import org.skepsun.kototoro.stats.data.WorkStatsEntity
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @ViewModelScoped
 class StatsCollector @Inject constructor(
 	private val db: MangaDatabase,
 	private val settings: AppSettings,
+	private val workResolver: WorkResolver,
 	lifecycle: ViewModelLifecycle,
 ) {
 
@@ -67,10 +68,10 @@ class StatsCollector @Inject constructor(
 	private fun commit(entity: StatsEntity) {
 		viewModelScope.launch(Dispatchers.Default) {
 			runCatchingCancellable {
-				db.getStatsDao().upsert(entity)
-				val entityId = db.resolveWorkEntityIdByMangaId(entity.mangaId)
+				val identity = workResolver.resolveByMangaId(entity.mangaId)
+				val entityId = identity.entityId
 				if (entityId != null) {
-					val anchorMangaId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId ?: entity.mangaId
+					val anchorMangaId = identity.preferredMangaId ?: entity.mangaId
 					db.getWorkStatsDao().upsert(
 						WorkStatsEntity(
 							entityId = entityId,

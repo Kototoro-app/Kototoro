@@ -6,7 +6,7 @@ import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.parser.ContentRepository
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.work.domain.WorkResolver
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -15,6 +15,6 @@ interface AppRouterEntryPoint {
     val settings: AppSettings
     val contentDataRepository: ContentDataRepository
     val mangaRepositoryFactory: ContentRepository.Factory
-    val entityGraphRepository: EntityGraphRepository
+    val workResolver: WorkResolver
     val jsonSourceManager: org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 }

@@ -59,6 +59,7 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -83,6 +84,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var entityGraphRepository: EntityGraphRepository
+
+    @Inject
+    lateinit var workResolver: WorkResolver
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -417,7 +421,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {
         lifecycleScope.launch {
             val preferredLocalMangaId = withContext(Dispatchers.IO) {
-                contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                workResolver.selectPreferredProjection(entityId)
             }
             router.openEntityDetails(
                 entityId = entityId,
@@ -432,7 +436,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     ) {
         lifecycleScope.launch {
             val origin = withContext(Dispatchers.IO) {
-                val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                val entityId = workResolver.resolveByMangaId(content.id).entityId
                 val canResolveProjection = entityId != null &&
                     contentDataRepository.findContentById(content.id, withChapters = false) != null
                 if (entityId != null && canResolveProjection) {

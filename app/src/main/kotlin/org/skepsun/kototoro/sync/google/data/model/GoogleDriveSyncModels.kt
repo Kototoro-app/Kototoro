@@ -244,7 +244,7 @@ class SyncWorkFavourite(
 	constructor(entity: WorkFavouriteEntity) : this(
 		entityId = entity.entityId,
 		categoryId = entity.categoryId,
-		anchorMangaId = null,
+		anchorMangaId = entity.anchorMangaId,
 		sortKey = entity.sortKey,
 		isPinned = entity.isPinned,
 		createdAt = entity.createdAt,
@@ -252,10 +252,11 @@ class SyncWorkFavourite(
 		deletedAt = entity.deletedAt,
 	)
 
-	fun toEntity(localEntityId: Long, localCategoryId: Long): WorkFavouriteEntity {
+	fun toEntity(localEntityId: Long, localCategoryId: Long, localMangaId: Long?): WorkFavouriteEntity {
 		return WorkFavouriteEntity(
 			entityId = localEntityId,
 			categoryId = localCategoryId,
+			anchorMangaId = localMangaId,
 			sortKey = sortKey,
 			isPinned = isPinned,
 			createdAt = createdAt,

@@ -37,6 +37,7 @@ import org.skepsun.kototoro.scrobbling.shikimori.domain.ShikimoriScrobbler
 import org.skepsun.kototoro.scrobbling.bangumi.data.BangumiAuthenticator
 import org.skepsun.kototoro.scrobbling.bangumi.data.BangumiInterceptor
 import org.skepsun.kototoro.scrobbling.bangumi.domain.BangumiScrobbler
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Singleton
 
 @Module
@@ -87,6 +88,7 @@ object ScrobblingModule {
 		@ScrobblerType(ScrobblerService.KITSU) storage: ScrobblerStorage,
 		database: MangaDatabase,
 		authenticator: KitsuAuthenticator,
+		workResolver: WorkResolver,
 	): KitsuRepository {
 		val okHttp = OkHttpClient.Builder().apply {
 			authenticator(authenticator)
@@ -95,7 +97,7 @@ object ScrobblingModule {
 				addInterceptor(CurlLoggingInterceptor())
 			}
 		}.build()
-		return KitsuRepository(context, okHttp, storage, database)
+		return KitsuRepository(context, okHttp, storage, database, workResolver)
 	}
 
 	@Provides
@@ -168,6 +170,7 @@ object ScrobblingModule {
 		cookieJar: MutableCookieJar,
 		@ScrobblerType(ScrobblerService.MANGAUPDATES) storage: ScrobblerStorage,
 		database: MangaDatabase,
+		workResolver: WorkResolver,
 	): org.skepsun.kototoro.scrobbling.mangaupdates.data.MangaUpdatesRepository {
 		val okHttp = baseHttpClient.newBuilder().apply {
 			addInterceptor(org.skepsun.kototoro.scrobbling.mangaupdates.data.MangaUpdatesInterceptor(storage, cookieJar))
@@ -177,6 +180,7 @@ object ScrobblingModule {
 			cookieJar = cookieJar,
 			storage = storage,
 			db = database,
+			workResolver = workResolver,
 		)
 	}
 
@@ -204,7 +208,8 @@ object ScrobblingModule {
 		@ScrobblerType(ScrobblerService.SIMKL) okHttp: OkHttpClient,
 		@ScrobblerType(ScrobblerService.SIMKL) storage: ScrobblerStorage,
 		database: MangaDatabase,
-	): SimklRepository = SimklRepository(context, okHttp, storage, database)
+		workResolver: WorkResolver,
+	): SimklRepository = SimklRepository(context, okHttp, storage, database, workResolver)
 
 	@Provides
 	@ElementsIntoSet

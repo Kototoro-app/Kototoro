@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
+import org.skepsun.kototoro.work.domain.WorkResolver
 
 private const val SCROBBLING_SCORE_ENTITY_OWNER = 16
 private const val SCROBBLING_SCORE_LOCAL_PROJECTION = 8
@@ -14,25 +14,39 @@ private const val SCROBBLING_SCORE_PROGRESS = 1
 private const val SCROBBLING_SCORE_REMOTE_PREVIEW = 1
 private const val SCROBBLING_SCORE_MEDIA_TYPE = 1
 
-suspend fun MangaDatabase.attachEntityOwnership(entity: ScrobblingEntity): ScrobblingEntity {
-	val resolvedEntityId = when {
-		entity.entityId != null -> entity.entityId
-		entity.mangaId == 0L -> null
-		else -> resolveWorkEntityIdByMangaId(entity.mangaId)
-	}
-	val resolvedOwnerId = resolveScrobblingOwnerId(resolvedEntityId, entity.mangaId)
-	return if (entity.entityId == resolvedEntityId && entity.ownerId == resolvedOwnerId) {
-		entity
+suspend fun MangaDatabase.attachEntityOwnership(
+	entity: ScrobblingEntity,
+	workResolver: WorkResolver,
+): ScrobblingEntity {
+	return entity.withScrobblingOwnership(fallbackEntityId = workResolver.resolveScrobblingEntityId(entity.mangaId))
+}
+
+private fun ScrobblingEntity.withResolvedOwnership(resolvedEntityId: Long?): ScrobblingEntity {
+	val resolvedOwnerId = resolveScrobblingOwnerId(resolvedEntityId, mangaId)
+	return if (entityId == resolvedEntityId && ownerId == resolvedOwnerId) {
+		this
 	} else {
-		entity.copy(
+		copy(
 			ownerId = resolvedOwnerId,
 			entityId = resolvedEntityId,
 		)
 	}
 }
 
-suspend fun MangaDatabase.findScrobblingByWorkOrManga(scrobbler: Int, mangaId: Long): ScrobblingEntity? {
-	val entityId = resolveWorkEntityIdByMangaId(mangaId)
+private fun ScrobblingEntity.withScrobblingOwnership(fallbackEntityId: Long?): ScrobblingEntity {
+	val resolvedEntityId = when {
+		entityId != null -> entityId
+		else -> fallbackEntityId
+	}
+	return withResolvedOwnership(resolvedEntityId)
+}
+
+suspend fun MangaDatabase.findScrobblingByWorkOrManga(
+	scrobbler: Int,
+	mangaId: Long,
+	workResolver: WorkResolver,
+): ScrobblingEntity? {
+	val entityId = workResolver.resolveScrobblingEntityId(mangaId)
 	return entityId?.let { getScrobblingDao().findByEntity(scrobbler, it) }
 		?: getScrobblingDao().findByLocalManga(scrobbler, mangaId)
 }
@@ -42,8 +56,9 @@ suspend fun MangaDatabase.findPreferredScrobblingByWorkTargetAndMediaType(
 	mangaId: Long,
 	targetId: Long,
 	mediaType: String,
+	workResolver: WorkResolver,
 ): ScrobblingEntity? {
-	val entityId = resolveWorkEntityIdByMangaId(mangaId)
+	val entityId = workResolver.resolveScrobblingEntityId(mangaId)
 	return entityId?.let {
 		getScrobblingDao().findPreferredByEntityTargetAndMediaType(
 			scrobbler = scrobbler,
@@ -58,8 +73,12 @@ suspend fun MangaDatabase.findPreferredScrobblingByWorkTargetAndMediaType(
 	)
 }
 
-suspend fun MangaDatabase.deleteScrobblingByWorkOrManga(scrobbler: Int, mangaId: Long) {
-	val entityId = resolveWorkEntityIdByMangaId(mangaId)
+suspend fun MangaDatabase.deleteScrobblingByWorkOrManga(
+	scrobbler: Int,
+	mangaId: Long,
+	workResolver: WorkResolver,
+) {
+	val entityId = workResolver.resolveScrobblingEntityId(mangaId)
 	if (entityId != null) {
 		getScrobblingDao().deleteByEntity(scrobbler, entityId)
 	} else {
@@ -71,11 +90,30 @@ suspend fun MangaDatabase.rebindScrobblingToManga(
 	scrobbler: Int,
 	sourceMangaId: Long,
 	targetMangaId: Long,
+	workResolver: WorkResolver,
 	fallback: () -> ScrobblingEntity,
 ): ScrobblingEntity {
 	val dao = getScrobblingDao()
-	val current = findScrobblingByWorkOrManga(scrobbler, sourceMangaId)
-	val targetEntityId = resolveWorkEntityIdByMangaId(targetMangaId)
+	val current = findScrobblingByWorkOrManga(scrobbler, sourceMangaId, workResolver)
+	val targetEntityId = workResolver.resolveScrobblingEntityId(targetMangaId)
+	return rebindScrobblingToManga(
+		dao = dao,
+		current = current,
+		scrobbler = scrobbler,
+		targetMangaId = targetMangaId,
+		targetEntityId = targetEntityId,
+		fallback = fallback,
+	)
+}
+
+private suspend fun rebindScrobblingToManga(
+	dao: ScrobblingDao,
+	current: ScrobblingEntity?,
+	scrobbler: Int,
+	targetMangaId: Long,
+	targetEntityId: Long?,
+	fallback: () -> ScrobblingEntity,
+): ScrobblingEntity {
 	val rebound = (current ?: fallback()).copy(
 		ownerId = resolveScrobblingOwnerId(targetEntityId, targetMangaId),
 		entityId = targetEntityId,
@@ -90,9 +128,18 @@ suspend fun MangaDatabase.rebindScrobblingToManga(
 
 suspend fun MangaDatabase.upsertScrobblingForManga(
 	entity: ScrobblingEntity,
+	workResolver: WorkResolver,
 	mangaId: Long = entity.mangaId,
 ): ScrobblingEntity {
-	val entityId = resolveWorkEntityIdByMangaId(mangaId)
+	val entityId = workResolver.resolveScrobblingEntityId(mangaId)
+	return upsertScrobblingForManga(entity, mangaId, entityId)
+}
+
+private suspend fun MangaDatabase.upsertScrobblingForManga(
+	entity: ScrobblingEntity,
+	mangaId: Long,
+	entityId: Long?,
+): ScrobblingEntity {
 	val normalized = entity.copy(
 		ownerId = resolveScrobblingOwnerId(entityId, mangaId),
 		entityId = entityId,
@@ -102,14 +149,18 @@ suspend fun MangaDatabase.upsertScrobblingForManga(
 	return normalized
 }
 
-suspend fun MangaDatabase.upsertScrobbling(entity: ScrobblingEntity): ScrobblingEntity {
-	val normalized = attachEntityOwnership(entity)
+suspend fun MangaDatabase.upsertScrobbling(
+	entity: ScrobblingEntity,
+	workResolver: WorkResolver,
+): ScrobblingEntity {
+	val normalized = attachEntityOwnership(entity, workResolver)
 	getScrobblingDao().upsert(normalized)
 	return normalized
 }
 
 suspend fun MangaDatabase.upsertScrobblingPreview(
 	entity: ScrobblingEntity,
+	workResolver: WorkResolver,
 	title: String? = entity.remoteTitle,
 	coverUrl: String? = entity.remoteCoverUrl,
 	url: String? = entity.remoteUrl,
@@ -119,7 +170,14 @@ suspend fun MangaDatabase.upsertScrobblingPreview(
 		remoteCoverUrl = coverUrl ?: entity.remoteCoverUrl,
 		remoteUrl = url ?: entity.remoteUrl,
 	)
-	return upsertScrobbling(normalized)
+	return upsertScrobbling(normalized, workResolver)
+}
+
+private suspend fun WorkResolver.resolveScrobblingEntityId(mangaId: Long): Long? {
+	return when (mangaId) {
+		0L -> null
+		else -> resolveByMangaId(mangaId).entityId
+	}
 }
 
 fun ScrobblingDao.observeByWorkOrMangaCandidates(

@@ -69,6 +69,8 @@ import org.skepsun.kototoro.core.db.migrations.Migration61To62
 import org.skepsun.kototoro.core.db.migrations.Migration62To63
 import org.skepsun.kototoro.core.db.migrations.Migration63To64
 import org.skepsun.kototoro.core.db.migrations.Migration64To65
+import org.skepsun.kototoro.core.db.migrations.Migration65To66
+import org.skepsun.kototoro.core.db.migrations.Migration66To67
 import org.skepsun.kototoro.core.db.migrations.Migration1To2
 import org.skepsun.kototoro.core.db.migrations.Migration20To21
 import org.skepsun.kototoro.core.db.migrations.Migration21To22
@@ -125,11 +127,13 @@ import org.skepsun.kototoro.suggestions.data.SuggestionEntity
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.TracksDao
+import org.skepsun.kototoro.work.data.WorkMigrationLedgerDao
+import org.skepsun.kototoro.work.data.WorkMigrationLedgerEntity
 
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 65
+const val DATABASE_VERSION = 67
 
 @Database(
 	entities = [
@@ -140,6 +144,7 @@ const val DATABASE_VERSION = 65
 		JsonSourceEntity::class, ExternalExtensionRepoEntity::class,
 		TrackingSiteItemEntity::class, TrackingSiteLinkEntity::class, SourcePresetEntity::class,
 		EntityRecord::class, EntityBindingRecord::class, RelationRecord::class, EntityPrefsRecord::class,
+		WorkMigrationLedgerEntity::class,
 		ReadingRecordEntity::class, ReadingJumpPointEntity::class,
 		// EpubChapterEntity::class,
 	],
@@ -194,6 +199,8 @@ abstract class MangaDatabase : RoomDatabase() {
 	abstract fun getSourcePresetsDao(): SourcePresetsDao
 
 	abstract fun getEntityGraphDao(): EntityGraphDao
+
+	abstract fun getWorkMigrationLedgerDao(): WorkMigrationLedgerDao
 
 	abstract fun getReadingRecordDao(): ReadingRecordDao
 
@@ -266,6 +273,8 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
 	Migration62To63(),
 	Migration63To64(),
 	Migration64To65(),
+	Migration65To66(),
+	Migration66To67(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

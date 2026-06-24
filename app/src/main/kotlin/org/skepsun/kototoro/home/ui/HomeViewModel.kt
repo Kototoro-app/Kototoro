@@ -63,6 +63,7 @@ import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @Immutable
@@ -176,6 +177,7 @@ class HomeViewModel @Inject constructor(
     private val contentSearchRepository: ContentSearchRepository,
     private val contentDataRepository: ContentDataRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
+    private val workResolver: WorkResolver,
     @ApplicationContext private val appContext: Context,
     private val historyPreviewCache: HistoryPreviewCache,
     private val historyQuickFilter: HistoryListQuickFilter,
@@ -284,9 +286,9 @@ class HomeViewModel @Inject constructor(
                         progressPercent = history.toProgressPercent(),
                     )
                     runCatching {
-                        val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                        val entityId = workResolver.resolveByMangaId(content.id).entityId
                         val preferredLocalMangaId = if (entityId != null) {
-                            contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                            workResolver.selectPreferredProjection(entityId)
                         } else {
                             null
                         }
@@ -449,7 +451,7 @@ class HomeViewModel @Inject constructor(
             addAll(snapshot.recommendations.map { it.id })
         }
     }.distinctUntilChanged().map { ids ->
-        entityGraphRepository.findEntityIdsByLocalMangaIds(ids)
+        resolveEntityIdsByMangaIds(ids)
     }
         .distinctUntilChanged()
         .onEach { entityIdsByMangaId ->
@@ -539,7 +541,7 @@ class HomeViewModel @Inject constructor(
             } else {
                 contentData.recommendations
             }
-            val preferredLocalIdsByEntity = contentDataRepository.getEntityPreferredLocalMangaIds(entityIdsByMangaId.values)
+            val preferredLocalIdsByEntity = resolvePreferredMangaIdsByEntityIds(entityIdsByMangaId.values)
             val displayContentOverrides = buildDisplayContentOverrides(
                 resumeContent = contentData.resumeState.content,
                 history = contentData.history,
@@ -635,6 +637,7 @@ class HomeViewModel @Inject constructor(
             )
         }
     }
+
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .stateIn(
@@ -650,6 +653,22 @@ class HomeViewModel @Inject constructor(
             selectedSourceTags = globalFavoritesState.selectedSourceTags.value,
         ),
     )
+
+    private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
+        return workResolver.resolveManyByMangaIds(mangaIds)
+            .mapValues { (_, identity) -> identity.entityId }
+            .filterValues { it != null }
+            .mapValues { (_, entityId) -> requireNotNull(entityId) }
+    }
+
+    private suspend fun resolvePreferredMangaIdsByEntityIds(entityIds: Collection<Long>): Map<Long, Long> {
+        return entityIds.distinct()
+            .mapNotNull { entityId ->
+                val preferredMangaId = workResolver.selectPreferredProjection(entityId)
+                if (preferredMangaId == null) null else entityId to preferredMangaId
+            }
+            .toMap()
+    }
 
     fun setSelectedTab(tab: HomeContentTab?) {
         val groupTab = when (tab) {
@@ -680,9 +699,9 @@ class HomeViewModel @Inject constructor(
             isRandomLoading.value = true
             try {
                 val manga = exploreRepository.findRandomContent(tagsLimit = 8)
-                val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(manga.id))[manga.id]
+                val entityId = workResolver.resolveByMangaId(manga.id).entityId
                 val preferredLocalMangaId = if (entityId != null) {
-                    contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                    workResolver.selectPreferredProjection(entityId)
                 } else {
                     null
                 }
@@ -701,9 +720,9 @@ class HomeViewModel @Inject constructor(
 
     fun openContent(content: Content) {
         viewModelScope.launch(Dispatchers.Default) {
-            val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+            val entityId = workResolver.resolveByMangaId(content.id).entityId
             val preferredLocalMangaId = if (entityId != null) {
-                contentDataRepository.getEntityPreferredLocalMangaId(entityId)
+                workResolver.selectPreferredProjection(entityId)
             } else {
                 null
             }

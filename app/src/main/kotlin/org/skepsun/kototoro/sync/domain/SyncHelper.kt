@@ -52,6 +52,7 @@ import org.skepsun.kototoro.sync.data.model.HistorySyncDto
 import org.skepsun.kototoro.sync.data.model.ContentSyncDto
 import org.skepsun.kototoro.sync.data.model.ContentTagSyncDto
 import org.skepsun.kototoro.sync.data.model.SyncDto
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.net.HttpURLConnection
 import java.util.concurrent.TimeUnit
 
@@ -62,6 +63,7 @@ class SyncHelper @AssistedInject constructor(
 	@Assisted private val provider: ContentProviderClient,
 	private val settings: SyncSettings,
 	private val db: MangaDatabase,
+	private val workResolver: WorkResolver,
 ) {
 
 	private val authorityHistory = context.getString(R.string.sync_authority_history)
@@ -234,10 +236,8 @@ class SyncHelper @AssistedInject constructor(
 			if (cursor.moveToFirst()) {
 				do {
 					val mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id"))
-					val entityId = findEntityIdByLocalMangaId(mangaId)
-					val anchorMangaId = entityId?.let {
-						runBlocking { db.getEntityGraphDao().findEntityPrefs(it)?.preferredLocalMangaId }
-					}
+					val entityId = resolveWorkEntityIdForLocalManga(mangaId)
+					val anchorMangaId = entityId?.let { resolveExistingLocalProjectionForEntity(it) }
 					val base = HistorySyncDto(cursor, getContent(authorityHistory, mangaId))
 					result.add(
 						base.copy(
@@ -273,15 +273,15 @@ class SyncHelper @AssistedInject constructor(
 			val mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id"))
 			val manga = getContent(authorityFavourites, mangaId)
 			FavouriteSyncDto(cursor, manga).copy(
-				entityId = findEntityIdByLocalMangaId(mangaId),
+				entityId = resolveWorkEntityIdForLocalManga(mangaId),
 			)
 		}
 	}
 
 	private fun upsertWorkHistory(dto: HistorySyncDto) {
 		val entityId = resolveSyncEntityId(dto.entityId, dto.mangaId) ?: return
-		val anchorMangaId = dto.anchorMangaId
-			?: resolveExistingLocalAnchorForEntity(entityId)
+		val anchorMangaId = dto.anchorMangaId?.takeIf(::mangaExists)
+			?: resolveExistingLocalProjectionForEntity(entityId)
 			?: dto.mangaId
 		runBlocking {
 			db.getWorkHistoryDao().upsert(
@@ -309,6 +309,7 @@ class SyncHelper @AssistedInject constructor(
 				WorkFavouriteEntity(
 					entityId = entityId,
 					categoryId = dto.categoryId.toLong(),
+					anchorMangaId = dto.mangaId,
 					sortKey = dto.sortKey,
 					isPinned = dto.pinned,
 					createdAt = dto.createdAt,
@@ -320,44 +321,34 @@ class SyncHelper @AssistedInject constructor(
 	}
 
 	private fun resolveSyncEntityId(remoteEntityId: Long?, mangaId: Long): Long? {
+		resolveWorkEntityIdForLocalManga(mangaId)?.let { return it }
 		if (remoteEntityId != null && remoteEntityId > 0L) {
-			val localEntityExists = runBlocking {
-				db.getEntityGraphDao().findEntity(remoteEntityId) != null
-			}
-			if (localEntityExists) {
-				return remoteEntityId
-			}
+			val identity = runBlocking { workResolver.resolveByEntityId(remoteEntityId) }
+			return identity?.entityId?.takeIf { mangaId in identity.localMangaIds }
 		}
-		return findEntityIdByLocalMangaId(mangaId)
+		return null
 	}
 
 	private fun resolveSyncMangaIdForEntity(entityId: Long, fallbackMangaId: Long? = null): Long? {
+		return resolveExistingLocalProjectionForEntity(entityId)
+			?: fallbackMangaId?.takeIf(::mangaExists)
+	}
+
+	private fun resolveExistingLocalProjectionForEntity(entityId: Long): Long? {
+		val identity = runBlocking { workResolver.resolveByEntityId(entityId) } ?: return null
+		return identity.preferredMangaId?.takeIf(::mangaExists)
+			?: identity.localMangaIds.firstOrNull(::mangaExists)
+	}
+
+	private fun mangaExists(mangaId: Long): Boolean {
 		return runBlocking {
-			resolveExistingLocalAnchorForEntity(entityId)
-				?: fallbackMangaId
+			db.getMangaDao().contains(mangaId)
 		}
 	}
 
-	private fun resolveExistingLocalAnchorForEntity(entityId: Long): Long? {
+	private fun resolveWorkEntityIdForLocalManga(mangaId: Long): Long? {
 		return runBlocking {
-			db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-				?.takeIf { preferredId -> db.getMangaDao().contains(preferredId) }
-				?: db.getEntityGraphDao().findActiveBindingsByEntity(entityId)
-					.firstNotNullOfOrNull { binding ->
-						when (binding.source) {
-							"local_manga", "0" -> binding.externalId.toLongOrNull()
-								?.takeIf { localId -> db.getMangaDao().contains(localId) }
-							else -> null
-						}
-					}
-		}
-	}
-
-	private fun findEntityIdByLocalMangaId(mangaId: Long): Long? {
-		val dao = db.getEntityGraphDao()
-		return runBlocking {
-			dao.findActiveBinding("local_manga", mangaId.toString())?.entityId
-				?: dao.findActiveBinding("0", mangaId.toString())?.entityId
+			workResolver.resolveByMangaId(mangaId).entityId
 		}
 	}
 

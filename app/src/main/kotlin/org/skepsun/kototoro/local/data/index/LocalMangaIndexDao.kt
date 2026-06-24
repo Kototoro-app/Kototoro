@@ -10,6 +10,9 @@ interface LocalContentIndexDao {
 	@Query("SELECT path FROM local_index WHERE manga_id = :mangaId")
 	suspend fun findPath(mangaId: Long): String?
 
+	@Query("SELECT manga_id FROM local_index WHERE manga_id IN (:mangaIds)")
+	suspend fun findExistingIds(mangaIds: Collection<Long>): List<Long>
+
 	@Query("SELECT title FROM local_index LEFT JOIN manga_tags ON manga_tags.manga_id = local_index.manga_id LEFT JOIN tags ON tags.tag_id = manga_tags.tag_id WHERE title IS NOT NULL GROUP BY title")
 	suspend fun findTags(): List<String>
 

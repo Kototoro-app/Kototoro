@@ -13,9 +13,9 @@ import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.db.entity.toContent
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 data class ReadingRecordSummary(
@@ -35,7 +35,7 @@ class ReadingRecordRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val settings: AppSettings,
 	private val mangaRepository: ContentDataRepository,
-	private val entityGraphRepository: EntityGraphRepository,
+	private val workResolver: WorkResolver,
 ) {
 
 	fun observeSnapshot(mangaId: Long): Flow<ReadingRecordSnapshot> {
@@ -168,27 +168,16 @@ class ReadingRecordRepository @Inject constructor(
 	private suspend fun resolveReadingRecordReadIds(mangaId: Long): List<Long> {
 		// Reading records stay physically keyed by local manga ids, but reads aggregate across
 		// every local projection in the same work so source switching keeps one logical timeline.
-		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId] ?: return listOf(mangaId)
-		return entityGraphRepository.getBindings(entityId)
-			.asSequence()
-			.mapNotNull { binding ->
-				when (binding.source) {
-					"local_manga", "0" -> binding.externalId.toLongOrNull()
-					else -> null
-				}
-			}
-			.distinct()
+		return workResolver.resolveByMangaId(mangaId)
+			.localMangaIds
+			.ifEmpty { setOf(mangaId) }
 			.toList()
-			.ifEmpty { listOf(mangaId) }
 	}
 
 	private suspend fun resolveReadingRecordAnchorContent(manga: Content): Content {
 		// Writes land on the preferred local projection for the owning work. If no work exists yet,
 		// the current projection remains the anchor for compatibility with legacy storage.
-		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(manga.id))[manga.id]
-		val anchorId = entityId?.let {
-			db.getEntityGraphDao().findEntityPrefs(it)?.preferredLocalMangaId
-		} ?: manga.id
+		val anchorId = workResolver.resolveByMangaId(manga.id).preferredMangaId ?: manga.id
 		if (anchorId == manga.id) {
 			return manga
 		}

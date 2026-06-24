@@ -42,7 +42,6 @@ import org.skepsun.kototoro.details.ui.compose.DetailsScreen
 import org.skepsun.kototoro.details.ui.compose.handleDetailsAction
 import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.SortOrder
@@ -51,6 +50,7 @@ import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.getSerializableExtraCompat
+import org.skepsun.kototoro.work.domain.WorkResolver
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -78,10 +78,10 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
     lateinit var appShortcutManager: AppShortcutManager
 
     @Inject
-    lateinit var entityGraphRepository: EntityGraphRepository
+    lateinit var contentDataRepository: ContentDataRepository
 
     @Inject
-    lateinit var contentDataRepository: ContentDataRepository
+    lateinit var workResolver: WorkResolver
 
     private lateinit var pageSaveHelper: PageSaveHelper
 
@@ -237,7 +237,7 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
     ) {
         lifecycleScope.launch {
             val origin = withContext(Dispatchers.IO) {
-                val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+                val entityId = workResolver.resolveByMangaId(content.id).entityId
                 val canResolveProjection = entityId != null &&
                     contentDataRepository.findContentById(content.id, withChapters = false) != null
                 if (entityId != null && canResolveProjection) {

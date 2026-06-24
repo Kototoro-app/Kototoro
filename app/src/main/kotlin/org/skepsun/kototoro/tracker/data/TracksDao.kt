@@ -179,6 +179,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 			FROM work_favourites wf
 			INNER JOIN favourite_categories fc ON fc.category_id = wf.category_id
 			WHERE wf.deleted_at = 0
+				AND wf.anchor_manga_id IS NOT NULL
 				AND fc.deleted_at = 0
 				AND fc.track = 1
 
@@ -280,7 +281,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 		val legacyCategoryFilter = categoryId?.let { " AND favourites.category_id = $it" }.orEmpty()
 		return "(" +
 			"EXISTS(SELECT 1 FROM work_favourites wf " +
-			"WHERE wf.entity_id = $entityIdExpr AND wf.deleted_at = 0$categoryFilter)" +
+			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)" +
 			" OR " +
 			"EXISTS(SELECT 1 FROM favourites " +
 			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0$legacyCategoryFilter)" +
@@ -292,7 +293,7 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 		val representativeLocalMangaIdExpr = representativeLocalMangaIdExpr(localMangaIdExpr)
 		return "IFNULL((" +
 			"SELECT MAX(pinned) FROM work_favourites wf " +
-			"WHERE wf.entity_id = $entityIdExpr AND wf.deleted_at = 0" +
+			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0" +
 			"), IFNULL((" +
 			"SELECT MAX(pinned) FROM favourites " +
 			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0" +

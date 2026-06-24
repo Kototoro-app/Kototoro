@@ -52,8 +52,8 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentPage
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContentListFilter
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -165,8 +165,8 @@ class AppRouter private constructor(
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).contentDataRepository
     }
 
-    private val entityGraphRepository: EntityGraphRepository by lazy {
-        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).entityGraphRepository
+    private val workResolver: WorkResolver by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).workResolver
     }
 
     private val jsonSourceManager: org.skepsun.kototoro.core.jsonsource.JsonSourceManager by lazy {
@@ -1237,7 +1237,7 @@ class AppRouter private constructor(
 
     private suspend fun resolveDetailsOriginForContent(content: Content): DetailsOrigin {
         return withContext(Dispatchers.IO) {
-            val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(content.id))[content.id]
+            val entityId = workResolver.resolveByMangaId(content.id).entityId
             val canResolveProjection = entityId != null &&
                 contentDataRepository.findContentById(content.id, withChapters = false) != null
             if (entityId != null && canResolveProjection) {

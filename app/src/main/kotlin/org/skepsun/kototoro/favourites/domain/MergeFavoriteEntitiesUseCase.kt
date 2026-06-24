@@ -20,6 +20,7 @@ import org.skepsun.kototoro.entitygraph.domain.titleSimilarityScore
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 private const val TAG = "MergeFavoriteEntities"
@@ -75,13 +76,14 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
     private val database: MangaDatabase,
     private val entityGraphRepository: EntityGraphRepository,
     private val contentDataRepository: ContentDataRepository,
+    private val workResolver: WorkResolver,
 ) {
 
     suspend fun buildCandidateGroups(
         contents: List<Content>,
         options: MergeCandidateOptions = MergeCandidateOptions(),
     ): List<MergeCandidateGroup> {
-        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(contents.map { it.id })
+        val entityIdsByMangaId = resolveEntityIdsByMangaIds(contents.map { it.id })
         val localReadingBindingsByMangaId = entityGraphRepository.findLocalReadingBindingsByMangaIds(contents.map { it.id })
         val localEntityIdsByMangaId = localReadingBindingsByMangaId.mapValues { (_, binding) -> binding.entityId }
         val protectedLocalMangaIds = localReadingBindingsByMangaId
@@ -162,6 +164,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         contents.forEach { content ->
             val links = database.findTrackingLinksByWorkOrMangaCandidates(
                 mangaIds = resolveTrackingCandidateMangaIds(content.id),
+                workResolver = workResolver,
             )
             links.forEach { link ->
                 if (!isUsableTrackingMergeEvidence(link) || isSuspectTrackingLink(content, link)) {
@@ -317,6 +320,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         val trackingLinksByMangaId = group.items.associate { item ->
             item.mangaId to database.findTrackingLinksByWorkOrMangaCandidates(
                 mangaIds = resolveTrackingCandidateMangaIds(item.mangaId),
+                workResolver = workResolver,
             )
                 .distinctBy { "${it.service}:${it.remoteId}" }
         }
@@ -333,7 +337,7 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
             )
             return false
         }
-        val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(contents.map { it.id })
+        val entityIdsByMangaId = resolveEntityIdsByMangaIds(contents.map { it.id })
         val entityIds = entityIdsByMangaId.values.distinct()
         Log.d(
             TAG,
@@ -545,12 +549,9 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
     private suspend fun resolveTrackingCandidateMangaIds(mangaId: Long): List<Long> {
         val binding = entityGraphRepository.findLocalReadingBinding(mangaId)
             ?: return listOf(mangaId)
-        val preferredLocalMangaId = database.getEntityGraphDao().findEntityPrefs(binding.entityId)?.preferredLocalMangaId
-        val localMangaIds = entityGraphRepository.getBindings(binding.entityId)
-            .asSequence()
-            .filter { it.isLocalReadingSource() }
-            .mapNotNull { it.externalId.toLongOrNull() }
-            .toList()
+        val identity = workResolver.resolveByEntityId(binding.entityId)
+        val preferredLocalMangaId = identity?.preferredMangaId
+        val localMangaIds = identity?.localMangaIds.orEmpty()
         return buildList {
             add(mangaId)
             preferredLocalMangaId?.let(::add)
@@ -912,6 +913,13 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         } else {
             MergeResolution(entityId = entityIds.singleOrNull(), isAlreadyMerged = false)
         }
+    }
+
+    private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
+        return workResolver.resolveManyByMangaIds(mangaIds)
+            .mapValues { it.value.entityId }
+            .filterValues { it != null }
+            .mapValues { requireNotNull(it.value) }
     }
 
     private data class MergeGroupKey(

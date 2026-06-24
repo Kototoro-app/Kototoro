@@ -20,6 +20,7 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership as attachScrobblingOwnership
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.work.domain.WorkResolver
 
 @HiltWorker
 class EntityGraphMigrationWorker @AssistedInject constructor(
@@ -28,6 +29,7 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
     private val db: MangaDatabase,
     private val entityGraphRepository: EntityGraphRepository,
     private val favouritesRepository: FavouritesRepository,
+    private val workResolver: WorkResolver,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -74,7 +76,10 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                     )
                 }
             }
-            entityGraphRepository.ensureLocalWorkEntities(favouritesRepository.getAllContent())
+            entityGraphRepository.ensureLocalWorkEntities(
+                contents = favouritesRepository.getAllContent(),
+                createdBy = EntityBindingCreatedBy.MIGRATION,
+            )
             normalizeTrackingLinkOwnership()
             normalizeScrobblingOwnership()
             normalizeReadingRecordAnchors()
@@ -94,13 +99,13 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
 
     private suspend fun normalizeTrackingLinkOwnership() {
         val dao = db.getTrackingSiteDao()
-        val normalized = dao.findAllLinks().map { db.attachTrackingLinkOwnership(it) }
+        val normalized = dao.findAllLinks().map { db.attachTrackingLinkOwnership(it, workResolver) }
         normalized.forEach { dao.upsertLink(it) }
     }
 
     private suspend fun normalizeScrobblingOwnership() {
         val dao = db.getScrobblingDao()
-        val normalized = dao.findAllByScrobblerEntries().map { db.attachScrobblingOwnership(it) }
+        val normalized = dao.findAllByScrobblerEntries().map { db.attachScrobblingOwnership(it, workResolver) }
         normalized.forEach { dao.upsert(it) }
     }
 
@@ -117,7 +122,7 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
             if (localIds.size < 2) {
                 return@forEach
             }
-            val preferredLocalId = entityDao.findEntityPrefs(entityId)?.preferredLocalMangaId
+            val preferredLocalId = workResolver.selectPreferredProjection(entityId)
                 ?: localIds.firstOrNull()
                 ?: return@forEach
             val sourceIds = localIds.filter { it != preferredLocalId }

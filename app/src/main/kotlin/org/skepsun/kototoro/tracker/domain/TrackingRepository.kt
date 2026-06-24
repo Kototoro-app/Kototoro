@@ -16,7 +16,6 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
-import org.skepsun.kototoro.entitygraph.data.resolveWorkEntityIdByMangaId
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
 import org.skepsun.kototoro.core.parser.ContentDataRepository
@@ -35,6 +34,8 @@ import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
 import org.skepsun.kototoro.tracker.ui.debug.TrackDebugItem
+import org.skepsun.kototoro.work.domain.WorkIdentity
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -46,6 +47,7 @@ class TrackingRepository @Inject constructor(
 	private val settings: AppSettings,
 	private val progressUpdateUseCase: ProgressUpdateUseCase,
 	private val contentDataRepository: ContentDataRepository,
+	private val workResolver: WorkResolver,
 ) {
 
 	private var isGcCalled = AtomicBoolean(false)
@@ -128,9 +130,9 @@ class TrackingRepository @Inject constructor(
 	suspend fun getTrack(manga: Content): ContentTracking {
 		val anchorMangaId = resolvePersistableTrackAnchorMangaId(manga.id)
 		val entityId = if (anchorMangaId != null) {
-			db.resolveWorkEntityIdByMangaId(anchorMangaId)
+			resolveTrackIdentity(anchorMangaId).entityId
 		} else {
-			db.resolveWorkEntityIdByMangaId(manga.id)
+			resolveTrackIdentity(manga.id).entityId
 		}
 		return getTrackOrNull(manga) ?: ContentTracking(
 			anchorMangaId = anchorMangaId ?: manga.id,
@@ -147,7 +149,7 @@ class TrackingRepository @Inject constructor(
 	suspend fun getTrackOrNull(manga: Content): ContentTracking? {
 		val anchorMangaId = resolvePersistableTrackAnchorMangaId(manga.id) ?: return null
 		val track = db.getTracksDao().find(anchorMangaId) ?: return null
-		val entityId = track.entityId ?: db.resolveWorkEntityIdByMangaId(anchorMangaId)
+		val entityId = track.entityId ?: resolveTrackIdentity(anchorMangaId).entityId
 		val fallbackContent = if (anchorMangaId == manga.id) manga else db.getMangaDao().find(anchorMangaId)?.toContent() ?: manga
 		return ContentTracking(
 			anchorMangaId = anchorMangaId,
@@ -213,7 +215,7 @@ class TrackingRepository @Inject constructor(
 	suspend fun saveUpdates(updates: MangaUpdates) {
 		db.withTransaction {
 			val anchorMangaId = resolvePersistableTrackAnchorMangaId(updates.manga.id) ?: return@withTransaction
-			val entityId = db.resolveWorkEntityIdByMangaId(anchorMangaId)
+			val entityId = resolveTrackIdentity(anchorMangaId).entityId
 			val track = getOrCreateTrack(anchorMangaId).mergeWith(updates, anchorMangaId)
 			db.getTracksDao().upsert(track)
 			if (updates is MangaUpdates.Success && updates.isValid && updates.newChapters.isNotEmpty()) {
@@ -248,7 +250,7 @@ class TrackingRepository @Inject constructor(
 
 	suspend fun mergeWith(tracking: ContentTracking) {
 		val anchorMangaId = resolvePersistableTrackAnchorMangaId(tracking.anchorMangaId) ?: return
-		val entityId = db.resolveWorkEntityIdByMangaId(anchorMangaId)
+		val entityId = resolveTrackIdentity(anchorMangaId).entityId
 		val entity = TrackEntity(
 			ownerId = resolveTrackOwnerId(entityId, anchorMangaId),
 			mangaId = anchorMangaId,
@@ -278,7 +280,7 @@ class TrackingRepository @Inject constructor(
 	private suspend fun getOrCreateTrack(mangaId: Long): TrackEntity {
 		return db.getTracksDao().find(mangaId) ?: TrackEntity.create(
 			mangaId = mangaId,
-			entityId = db.resolveWorkEntityIdByMangaId(mangaId),
+			entityId = resolveTrackIdentity(mangaId).entityId,
 		)
 	}
 
@@ -312,11 +314,10 @@ class TrackingRepository @Inject constructor(
 
 	private suspend fun resolvePersistableTrackAnchorMangaId(mangaId: Long): Long? {
 		if (db.getMangaDao().contains(mangaId)) {
-			val entityId = db.resolveWorkEntityIdByMangaId(mangaId) ?: return mangaId
-			return resolveExistingTrackAnchorForEntity(entityId) ?: mangaId
+			val identity = resolveTrackIdentity(mangaId)
+			return resolveExistingTrackAnchor(identity) ?: mangaId
 		}
-		val entityId = db.resolveWorkEntityIdByMangaId(mangaId) ?: return null
-		return resolveExistingTrackAnchorForEntity(entityId)
+		return resolveExistingTrackAnchor(resolveTrackIdentity(mangaId))
 	}
 
 	private suspend fun resolvePersistableTrackAnchorMangaIds(mangaIds: Iterable<Long>): List<Long> {
@@ -328,19 +329,12 @@ class TrackingRepository @Inject constructor(
 	}
 
 	private suspend fun resolveTrackAnchorMangaIdsForRead(mangaId: Long): List<Long> {
-		val entityId = db.resolveWorkEntityIdByMangaId(mangaId)
-			?: return listOfNotNull(resolvePersistableTrackAnchorMangaId(mangaId))
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-		val localBindingIds = db.getEntityGraphDao().findActiveBindingsByEntity(entityId)
-			.asSequence()
-			.mapNotNull { binding ->
-				when (binding.source) {
-					"local_manga", "0" -> binding.externalId.toLongOrNull()
-					else -> null
-				}
-			}
-			.toCollection(LinkedHashSet())
-		preferredLocalId?.let(localBindingIds::add)
+		val identity = resolveTrackIdentity(mangaId)
+		if (identity.entityId == null) {
+			return listOfNotNull(resolvePersistableTrackAnchorMangaId(mangaId))
+		}
+		val localBindingIds = identity.localMangaIds.toCollection(LinkedHashSet())
+		identity.preferredMangaId?.let(localBindingIds::add)
 		return if (localBindingIds.isEmpty()) {
 			listOfNotNull(resolvePersistableTrackAnchorMangaId(mangaId))
 		} else {
@@ -359,7 +353,7 @@ class TrackingRepository @Inject constructor(
 				dao.upsert(
 					TrackEntity.create(
 						mangaId = mangaId,
-						entityId = db.resolveWorkEntityIdByMangaId(mangaId),
+						entityId = resolveTrackIdentity(mangaId).entityId,
 					),
 				)
 			}
@@ -387,19 +381,24 @@ class TrackingRepository @Inject constructor(
 	}
 
 	private suspend fun resolveExistingTrackAnchorForEntity(entityId: Long): Long? {
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-		if (preferredLocalId != null && db.getMangaDao().contains(preferredLocalId)) {
-			return preferredLocalId
+		return resolveExistingTrackAnchor(workResolver.resolveByEntityId(entityId))
+	}
+
+	private suspend fun resolveExistingTrackAnchor(identity: WorkIdentity?): Long? {
+		if (identity?.entityId == null) {
+			return null
 		}
-		return db.getEntityGraphDao().findActiveBindingsByEntity(entityId)
-			.asSequence()
-			.mapNotNull { binding ->
-				when (binding.source) {
-					"local_manga", "0" -> binding.externalId.toLongOrNull()
-					else -> null
-				}
-			}
-			.firstOrNull { localId -> db.getMangaDao().contains(localId) }
+		val preferredMangaId = identity.preferredMangaId
+		if (preferredMangaId != null && db.getMangaDao().contains(preferredMangaId)) {
+			return preferredMangaId
+		}
+		return identity.localMangaIds.firstOrNull { localId ->
+			db.getMangaDao().contains(localId)
+		}
+	}
+
+	private suspend fun resolveTrackIdentity(mangaId: Long): WorkIdentity {
+		return workResolver.resolveByMangaId(mangaId)
 	}
 
 	private suspend fun resolveDisplayTrackingContent(anchorMangaId: Long, fallback: Content): Content {
@@ -455,15 +454,12 @@ class TrackingRepository @Inject constructor(
 		val anchorIds = items.map(TrackLogEntity::mangaId)
 		val fallbackByAnchorId = buildFallbackContentByAnchorId(anchorIds)
 		val entityIdsByAnchorId = anchorIds.distinct().associateWith { anchorId ->
-			db.resolveWorkEntityIdByMangaId(anchorId)
+			resolveTrackIdentity(anchorId).entityId
 		}
 		val preferredLocalIdsByEntity = entityIdsByAnchorId.values
 			.filterNotNull()
 			.distinct()
-			.associateWith { entityId ->
-				db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-					?: resolveExistingTrackAnchorForEntity(entityId)
-			}
+			.associateWith { entityId -> resolveExistingTrackAnchorForEntity(entityId) }
 		return items.mapNotNull { item ->
 			val entityId = entityIdsByAnchorId[item.mangaId]
 			val fallbackContent = fallbackByAnchorId[item.mangaId] ?: return@mapNotNull null

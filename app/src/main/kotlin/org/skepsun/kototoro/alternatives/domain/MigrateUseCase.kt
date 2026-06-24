@@ -21,6 +21,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 class MigrateUseCase
@@ -32,6 +33,7 @@ constructor(
 	private val entityGraphRepository: EntityGraphRepository,
 	private val progressUpdateUseCase: ProgressUpdateUseCase,
 	private val scrobblers: Set<@JvmSuppressWildcards Scrobbler>,
+	private val workResolver: WorkResolver,
 ) {
 	suspend operator fun invoke(
 		oldContent: Content,
@@ -199,6 +201,7 @@ constructor(
 						sourceName = newContent.source.name,
 						updatedAt = currentTime,
 					),
+					workResolver,
 				),
 			)
 		}

@@ -14,6 +14,14 @@ internal suspend fun MangaDatabase.restoreGoogleDriveSyncEntity(remote: EntityRe
 	val computedHash = computeNameHash(trimmedName)
 	val existing = dao.findEntity(remote.id)
 		?.takeIf { it.type == remote.type }
+	val nameHashOwner = dao.findEntityByTypeAndNameHash(remote.type, computedHash)
+	if (nameHashOwner != null && nameHashOwner.id != existing?.id) {
+		return dao.upsertGoogleDriveSyncEntity(
+			target = nameHashOwner,
+			remote = remote,
+			remotePrimaryName = trimmedName,
+		)
+	}
 	if (existing == null) {
 		val newRecord = remote.toNormalizedGoogleDriveSyncEntity(
 			primaryName = trimmedName,
@@ -23,27 +31,27 @@ internal suspend fun MangaDatabase.restoreGoogleDriveSyncEntity(remote: EntityRe
 		if (insertedId != -1L) {
 			return insertedId
 		}
-		return dao.insertEntity(newRecord.copy(nameHash = remote.id.takeIf { it > 0L } ?: -(remote.id + 1)))
+		return dao.findEntityByTypeAndNameHash(newRecord.type, newRecord.nameHash)?.id
+			?: dao.insertEntity(newRecord)
 	}
-	return dao.upsertGoogleDriveSyncEntityWithoutNameHashConflict(
+	return dao.upsertGoogleDriveSyncEntity(
 		target = existing,
 		remote = remote,
 		remotePrimaryName = trimmedName,
-		fallbackHash = remote.id.takeIf { it > 0L } ?: -(remote.id + 1),
 	)
 }
 
-private suspend fun EntityGraphDao.upsertGoogleDriveSyncEntityWithoutNameHashConflict(
+private suspend fun EntityGraphDao.upsertGoogleDriveSyncEntity(
 	target: EntityRecord,
 	remote: EntityRecord,
 	remotePrimaryName: String,
-	fallbackHash: Long,
 ): Long {
 	val merged = target.mergeWithGoogleDriveSyncEntity(remote, remotePrimaryName)
 	val nameHashOwner = findEntityByTypeAndNameHash(merged.type, merged.nameHash)
 	if (nameHashOwner != null && nameHashOwner.id != target.id) {
-		upsertEntityRecord(merged.copy(nameHash = fallbackHash))
-		return target.id
+		val remapped = nameHashOwner.mergeWithGoogleDriveSyncEntity(merged, merged.primaryName)
+		upsertEntityRecord(remapped)
+		return nameHashOwner.id
 	}
 	upsertEntityRecord(merged)
 	return target.id

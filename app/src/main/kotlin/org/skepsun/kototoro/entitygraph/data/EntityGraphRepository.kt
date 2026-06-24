@@ -433,6 +433,7 @@ class EntityGraphRepository @Inject constructor(
 
 	suspend fun ensureLocalWorkEntities(
 		contents: Collection<Content>,
+		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.USER,
 	): Map<Long, Long> = withContext(Dispatchers.Default) {
 		if (contents.isEmpty()) {
 			return@withContext emptyMap()
@@ -494,6 +495,7 @@ class EntityGraphRepository @Inject constructor(
 							source = "local_manga",
 							externalId = content.id.toString(),
 							confidence = existingBinding.confidence,
+							createdBy = createdBy,
 						)
 						put(content.id, resolvedEntityId)
 					} else {
@@ -505,6 +507,7 @@ class EntityGraphRepository @Inject constructor(
 							externalId = content.id.toString(),
 							confidence = 1f,
 							now = now,
+							createdBy = createdBy,
 						)
 						entityRecords[entity.id] = entity.toRecord()
 						put(content.id, entity.id)
@@ -680,6 +683,7 @@ class EntityGraphRepository @Inject constructor(
 
 	suspend fun ensureLocalWorkEntity(
 		content: Content,
+		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.USER,
 	): Entity = withContext(Dispatchers.Default) {
 		db.withTransaction {
 			val now = System.currentTimeMillis()
@@ -702,6 +706,7 @@ class EntityGraphRepository @Inject constructor(
 					source = "local_manga",
 					externalId = content.id.toString(),
 					confidence = existing.confidence,
+					createdBy = createdBy,
 				)
 				dao.touchEntity(existing.entityId, now)
 				return@withTransaction requireNotNull(dao.findEntity(existing.entityId)).toModel()
@@ -714,6 +719,7 @@ class EntityGraphRepository @Inject constructor(
 				externalId = content.id.toString(),
 				contentType = content.source.contentType,
 				now = now,
+				createdBy = createdBy,
 			)
 		}
 	}
@@ -1402,7 +1408,7 @@ class EntityGraphRepository @Inject constructor(
 							)
 						}
 					}
-				db.findTrackingLinksByWorkOrMangaCandidates(
+				db.findTrackingLinksByLegacyWorkOrMangaCandidates(
 					mangaIds = resolveTrackingCandidateMangaIds(content.id),
 				)
 					.distinctBy { "${it.service}:${it.remoteId}:${it.mangaId}" }
@@ -1801,6 +1807,7 @@ class EntityGraphRepository @Inject constructor(
 		externalId: String?,
 		contentType: ContentType? = null,
 		now: Long,
+		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.INGEST,
 	): Entity {
 		val dao = db.getEntityGraphDao()
 		if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
@@ -1820,6 +1827,7 @@ class EntityGraphRepository @Inject constructor(
 						source = source,
 						externalId = externalId,
 						confidence = 1f,
+						createdBy = createdBy,
 					)
 					return dao.findEntity(merged.id)?.toModel() ?: merged.toModel()
 				}
@@ -1836,6 +1844,7 @@ class EntityGraphRepository @Inject constructor(
 				externalId = externalId,
 				confidence = 0.99f,
 				now = now,
+				createdBy = createdBy,
 			)
 		}
 		val malsyncCandidate = resolveMalSyncCandidate(
@@ -1853,6 +1862,7 @@ class EntityGraphRepository @Inject constructor(
 				externalId = externalId,
 				confidence = 0.98f,
 				now = now,
+				createdBy = createdBy,
 			)
 		}
 		val candidate = pickCandidate(
@@ -1870,9 +1880,10 @@ class EntityGraphRepository @Inject constructor(
 						aliases = aliases,
 						source = source,
 						externalId = externalId,
-						confidence = candidate.confidence,
-						now = now,
-					)
+							confidence = candidate.confidence,
+							now = now,
+							createdBy = createdBy,
+						)
 				}
 
 				EntityBindingStrength.WEAK_BIND -> {
@@ -1882,9 +1893,10 @@ class EntityGraphRepository @Inject constructor(
 						aliases = aliases,
 						source = source,
 						externalId = externalId,
-						confidence = 1f,
-						now = now,
-					)
+							confidence = 1f,
+							now = now,
+							createdBy = createdBy,
+						)
 					insertRelationIfAbsent(
 						fromEntityId = created.id,
 						toEntityId = candidate.entity.id,
@@ -1907,6 +1919,7 @@ class EntityGraphRepository @Inject constructor(
 			externalId = externalId,
 			confidence = 1f,
 			now = now,
+			createdBy = createdBy,
 		)
 	}
 
@@ -1964,6 +1977,7 @@ class EntityGraphRepository @Inject constructor(
 		externalId: String?,
 		confidence: Float,
 		now: Long,
+		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.INGEST,
 	): Entity {
 		val dao = db.getEntityGraphDao()
 		val merged = mergeEntityRecord(
@@ -1980,6 +1994,7 @@ class EntityGraphRepository @Inject constructor(
 				source = source,
 				externalId = externalId,
 				confidence = confidence,
+				createdBy = createdBy,
 			)
 		}
 		return dao.findEntity(entity.id)?.toModel() ?: entity
@@ -2054,6 +2069,7 @@ class EntityGraphRepository @Inject constructor(
 		externalId: String?,
 		confidence: Float,
 		now: Long,
+		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.INGEST,
 	): Entity {
 		val dao = db.getEntityGraphDao()
 		val trimmedName = resolveEntityPrimaryName(primaryName, aliases, source, externalId)
@@ -2082,6 +2098,7 @@ class EntityGraphRepository @Inject constructor(
 					externalId = externalId,
 					confidence = confidence,
 					now = now,
+					createdBy = createdBy,
 				)
 			}
 		}
@@ -2091,6 +2108,7 @@ class EntityGraphRepository @Inject constructor(
 				source = source,
 				externalId = externalId,
 				confidence = confidence,
+				createdBy = createdBy,
 			)
 		}
 		return requireNotNull(dao.findEntity(id)).toModel()

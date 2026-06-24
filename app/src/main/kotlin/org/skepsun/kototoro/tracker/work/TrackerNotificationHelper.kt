@@ -27,9 +27,9 @@ import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.toBitmapOrNull
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 class TrackerNotificationHelper @Inject constructor(
@@ -37,7 +37,7 @@ class TrackerNotificationHelper @Inject constructor(
 	private val settings: AppSettings,
 	private val coil: ImageLoader,
 	private val contentDataRepository: ContentDataRepository,
-	private val entityGraphRepository: EntityGraphRepository,
+	private val workResolver: WorkResolver,
 ) {
 
 	fun getAreNotificationsEnabled(): Boolean {
@@ -162,7 +162,7 @@ class TrackerNotificationHelper @Inject constructor(
 
 	private suspend fun resolveDetailsIntent(content: Content) = AppRouter.detailsIntent(
 		applicationContext,
-		entityGraphRepository.findEntityIdsByLocalMangaIds(listOf(content.id))[content.id]?.let { entityId ->
+		workResolver.resolveByMangaId(content.id).entityId?.let { entityId ->
 			DetailsOrigin.EntityGraph(
 				entityId = entityId,
 				initialProjectionLocalMangaId = content.id,

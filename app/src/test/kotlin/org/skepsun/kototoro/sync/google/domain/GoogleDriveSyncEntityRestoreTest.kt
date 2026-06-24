@@ -50,6 +50,36 @@ class GoogleDriveSyncEntityRestoreTest {
 		}
 	}
 
+	@Test
+	fun `restore maps new remote entity to existing hash owner instead of inserting fallback identity`() = runTest {
+		val hashOwner = entity(id = 2L, primaryName = "Frieren")
+		val remote = entity(
+			id = 100L,
+			primaryName = "Frieren",
+			createdAt = 5L,
+			lastAccessed = 20L,
+			accessCount = 7,
+		)
+
+		coEvery { dao.findEntity(100L) } returns null
+		coEvery { dao.findEntityByTypeAndNameHash("WORK", computeNameHash("Frieren")) } returns hashOwner
+
+		val localId = db.restoreGoogleDriveSyncEntity(remote)
+
+		assertEquals(2L, localId)
+		coVerify(exactly = 0) { dao.insertEntity(any()) }
+		coVerify(exactly = 0) { dao.insertEntityIgnore(any()) }
+		coVerify(exactly = 1) {
+			dao.upsertEntityRecord(
+				match {
+					it.id == 2L &&
+						it.primaryName == "Frieren" &&
+						it.nameHash == computeNameHash("Frieren")
+				},
+			)
+		}
+	}
+
 	private fun entity(
 		id: Long,
 		primaryName: String,

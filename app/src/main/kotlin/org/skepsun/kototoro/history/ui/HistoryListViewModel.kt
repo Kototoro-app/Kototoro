@@ -72,6 +72,7 @@ import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.list.ui.model.QuickFilter
+import org.skepsun.kototoro.work.domain.WorkResolver
 
 private const val PAGE_SIZE = 32
 
@@ -104,6 +105,7 @@ class HistoryListViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val entityGraphRepository: EntityGraphRepository,
 	private val historyPreviewCache: HistoryPreviewCache,
+	private val workResolver: WorkResolver,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
 
 	@Volatile
@@ -337,8 +339,8 @@ class HistoryListViewModel @Inject constructor(
 	fun openLastReader() {
 		launchLoadingJob(Dispatchers.Default) {
 			val rawContent = repository.getLastOrNull() ?: throw EmptyHistoryException()
-			val entityId = entityGraphRepository.findEntityIdsByLocalMangaIds(setOf(rawContent.id))[rawContent.id]
-			val preferredLocalMangaId = entityId?.let { dataRepository.getEntityPreferredLocalMangaId(it) }
+			val entityId = workResolver.resolveByMangaId(rawContent.id).entityId
+			val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
 			val resolvedBase = preferredLocalMangaId
 				?.takeIf { it != rawContent.id }
 				?.let { dataRepository.findDisplayContentById(it, withChapters = false) }
@@ -606,7 +608,9 @@ class HistoryListViewModel @Inject constructor(
 			return emptyList()
 		}
 		val resolvedEntityIds = mapNotNull(ContentWithHistory::entityId).distinct()
-		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+		val preferredLocalIdsByEntity = resolvedEntityIds.associateWith { entityId ->
+			workResolver.resolveByEntityId(entityId)?.preferredMangaId
+		}
 		val result = ArrayList<HistoryGroup>(size)
 		var current: MutableList<ContentWithHistory>? = null
 		var currentUiId: Long? = null

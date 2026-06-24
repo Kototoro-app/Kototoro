@@ -42,7 +42,7 @@ abstract class WorkStatsDao {
 		if (favouriteCategories.isNotEmpty()) {
 			val ids = favouriteCategories.joinToString(",")
 			groupedConditions.add(
-				"EXISTS(SELECT 1 FROM work_favourites wf WHERE wf.entity_id = ws.entity_id AND wf.deleted_at = 0 AND wf.category_id IN ($ids))",
+				"EXISTS(SELECT 1 FROM work_favourites wf WHERE wf.entity_id = ws.entity_id AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0 AND wf.category_id IN ($ids))",
 			)
 		}
 		val outerConditions = ArrayList<String>()

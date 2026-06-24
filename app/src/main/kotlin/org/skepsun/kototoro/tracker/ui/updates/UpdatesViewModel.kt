@@ -47,6 +47,7 @@ import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.tracker.work.TrackWorker
+import org.skepsun.kototoro.work.domain.WorkResolver
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -62,6 +63,7 @@ class UpdatesViewModel @Inject constructor(
 	private val quickFilter: UpdatesListQuickFilter,
 	private val sourceGroupManager: SourceGroupManager,
 	private val dataRepository: ContentDataRepository,
+	private val workResolver: WorkResolver,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
@@ -261,7 +263,7 @@ class UpdatesViewModel @Inject constructor(
 			return emptyList()
 		}
 		val resolvedEntityIds = mapNotNull(ContentTracking::entityId).distinct()
-		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIds)
+		val preferredLocalIdsByEntity = resolvePreferredLocalIdsByEntity(resolvedEntityIds)
 		val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
 		val displayTypeOrdinalByEntity = this
 			.groupBy(ContentTracking::entityId)
@@ -290,6 +292,12 @@ class UpdatesViewModel @Inject constructor(
 					item.entityId?.let(metadataSelectionsByEntity::get)
 				},
 			)
+		}
+	}
+
+	private suspend fun resolvePreferredLocalIdsByEntity(entityIds: Collection<Long>): Map<Long, Long?> {
+		return entityIds.associateWith { entityId ->
+			workResolver.resolveByEntityId(entityId)?.preferredMangaId
 		}
 	}
 

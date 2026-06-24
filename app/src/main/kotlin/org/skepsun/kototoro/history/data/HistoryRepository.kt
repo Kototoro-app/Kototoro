@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
-import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
@@ -31,6 +30,7 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -44,6 +44,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -56,6 +57,7 @@ class HistoryRepository @Inject constructor(
 	private val localObserver: HistoryLocalObserver,
 	private val newChaptersUseCaseProvider: Provider<CheckNewChaptersUseCase>,
 	private val entityGraphRepository: EntityGraphRepository,
+	private val workResolver: WorkResolver,
 ) {
 
 	private data class WorkHistoryOwner(
@@ -133,7 +135,8 @@ class HistoryRepository @Inject constructor(
 	}
 
 	fun observeCount(): Flow<Int> {
-		return db.getHistoryDao().observeCount()
+		return db.getWorkHistoryDao().observeCountActive()
+			.distinctUntilChanged()
 	}
 
 	fun observeAll(limit: Int): Flow<List<Content>> {
@@ -151,43 +154,26 @@ class HistoryRepository @Inject constructor(
 		} else {
 			filterOptions
 		}
-		// Use no-group-by variant to avoid SQL GROUP BY overhead; deduplicate in code
-		val flow = db.getHistoryDao().observeAllNoGroup(order, effectiveFilters, limit)
-			.mapLatest { items ->
-				mapToHistoryList(items)
+		val flow = db.invalidationTracker.createFlow(
+			tables = arrayOf(
+				TABLE_WORK_HISTORY,
+				TABLE_WORK_FAVOURITES,
+				TABLE_ENTITY_GRAPH_BINDING,
+				TABLE_ENTITY_PREFERENCES,
+				TABLE_MANGA,
+				TABLE_TAGS,
+				TABLE_MANGA_TAGS,
+				"local_index",
+			),
+			emitInitialState = true,
+		).mapLatest {
+				buildObservedHistoryList(order, effectiveFilters, limit)
 			}
 			.distinctUntilChanged()
 		return if (requiresLocalMapping) {
 			localObserver.observe(flow)
 		} else {
 			flow
-		}
-	}
-
-	private suspend fun mapToHistoryList(items: List<HistoryWithContent>): List<ContentWithHistory> {
-		if (items.isEmpty()) return emptyList()
-		// Deduplicate by manga_id (GROUP BY removed from SQL for speed)
-		val seen = HashSet<Long>(items.size)
-		val unique = items.filter { seen.add(it.manga.id) }
-		val mangaIds = unique.map { it.manga.id }
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(mangaIds)
-		val distinctEntityIds = entityIdsByMangaId.values.distinct()
-		val prefByEntityId = if (distinctEntityIds.isEmpty()) {
-			emptyMap()
-		} else {
-			db.getEntityGraphDao().findEntityPrefsByIds(distinctEntityIds)
-				.associate { it.entityId to it.preferredLocalMangaId }
-		}
-		return unique.map { item ->
-			val content = item.toContent()
-			val history = item.history.toContentHistory()
-			val entityId = entityIdsByMangaId[content.id]
-			ContentWithHistory(
-				manga = content,
-				history = history,
-				entityId = entityId,
-				preferredLocalMangaId = entityId?.let(prefByEntityId::get) ?: content.id,
-			)
 		}
 	}
 
@@ -234,26 +220,7 @@ class HistoryRepository @Inject constructor(
 			mangaRepository.storeContent(anchorManga, replaceExisting = true)
 			val branch = manga.chapters?.findById(chapterId)?.branch
 			val now = System.currentTimeMillis()
-			val entity = HistoryEntity(
-				mangaId = anchorManga.id,
-				createdAt = now,
-				updatedAt = now,
-				chapterId = chapterId,
-				page = page,
-				scroll = scroll.toFloat(), // we migrate to int, but decide to not update database
-				percent = percent,
-				chaptersCount = manga.chapters?.count { it.branch == branch } ?: 0,
-				deletedAt = 0L,
-				parentChapterId = parentChapterId,  // 保存父章节ID
-			)
 			android.util.Log.d("HistoryRepository", "Upserting history: anchorMangaId=${anchorManga.id}, sourceMangaId=${manga.id}, chapterId=$chapterId, parentChapterId=$parentChapterId")
-			try {
-				val result = db.getHistoryDao().upsert(entity)
-				android.util.Log.d("HistoryRepository", "Upsert result: $result (true=inserted, false=updated)")
-			} catch (e: Exception) {
-				android.util.Log.e("HistoryRepository", "Upsert failed", e)
-				throw e
-			}
 			owner.entityId?.let { entityId ->
 				db.getWorkHistoryDao().upsert(
 					WorkHistoryEntity(
@@ -410,9 +377,6 @@ class HistoryRepository @Inject constructor(
 			for (entityId in entityIds) {
 				db.getWorkHistoryDao().recover(entityId)
 			}
-			for (id in historyIds) {
-				db.getHistoryDao().recover(id)
-			}
 		}
 	}
 
@@ -442,7 +406,6 @@ class HistoryRepository @Inject constructor(
 		val targetSize = if (limit == null) Int.MAX_VALUE else offset + limit
 		val entries = ArrayList<RecentContentEntry>()
 		entries += collectRecentWorkEntries(targetSize)
-		entries += collectRecentLegacyEntries(targetSize)
 		return entries
 			.sortedByDescending { it.updatedAt }
 			.drop(offset)
@@ -479,30 +442,6 @@ class HistoryRepository @Inject constructor(
 		return result
 	}
 
-	private suspend fun collectRecentLegacyEntries(targetSize: Int): List<RecentContentEntry> {
-		val result = ArrayList<RecentContentEntry>()
-		val pageSize = if (targetSize == Int.MAX_VALUE) 100 else minOf(100, maxOf(targetSize, 20))
-		var offset = 0
-		while (true) {
-			val page = db.getHistoryDao().findAll(offset, pageSize)
-			if (page.isEmpty()) {
-				break
-			}
-			val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(page.map { it.manga.id })
-			for (history in page) {
-				if (entityIdsByMangaId[history.manga.id] != null) {
-					continue
-				}
-				result += RecentContentEntry(history.history.updatedAt, history.toContent())
-			}
-			offset += pageSize
-			if (targetSize != Int.MAX_VALUE && result.size >= targetSize) {
-				break
-			}
-		}
-		return result
-	}
-
 	private suspend fun buildObservedHistoryList(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
@@ -515,34 +454,23 @@ class HistoryRepository @Inject constructor(
 
 		// ---- Batch entity resolution (eliminates N+1) ----
 		val allMangaIds = contents.mapTo(LinkedHashSet()) { it.id }
-		val entityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(allMangaIds)
+		val identitiesByMangaId = workResolver.resolveManyByMangaIds(allMangaIds)
+		val entityIdsByMangaId = identitiesToEntityIds(identitiesByMangaId)
 		val distinctEntityIds = entityIdsByMangaId.values.distinct()
-
-		// Batch entity preferences
-		val prefByEntityId = if (distinctEntityIds.isEmpty()) {
-			emptyMap()
-		} else {
-			db.getEntityGraphDao().findEntityPrefsByIds(distinctEntityIds)
-				.associateBy({ it.entityId }, { it.preferredLocalMangaId })
-		}
 
 		// Build owner refs from precomputed maps (no per-item DB calls)
 		val ownerRefsByMangaId = allMangaIds.associateWith { mangaId ->
-			val entityId = entityIdsByMangaId[mangaId]
-			val anchorMangaId = if (entityId != null) {
-				prefByEntityId[entityId] ?: mangaId
-			} else {
-				mangaId
-			}
+			val identity = identitiesByMangaId[mangaId]
+			val entityId = identity?.entityId
 			HistoryOwnerRef(
 				cacheKey = entityId ?: -mangaId,
 				entityId = entityId,
-				anchorMangaId = anchorMangaId,
+				anchorMangaId = identity?.preferredMangaId ?: mangaId,
 			)
 		}
 
 		val preferredLocalIdsByEntity = distinctEntityIds.associateWith { entityId ->
-			prefByEntityId[entityId]
+			identitiesByMangaId.values.firstOrNull { it.entityId == entityId }?.preferredMangaId
 		}
 
 		// Batch work history lookup
@@ -554,17 +482,14 @@ class HistoryRepository @Inject constructor(
 				.associateBy(WorkHistoryEntity::entityId)
 		}
 
-		// Resolve legacy anchor IDs using precomputed pref map
-		val entitiesWithoutPref = distinctEntityIds.filter { prefByEntityId[it] == null }
-		val bindingsByEntityId = if (entitiesWithoutPref.isEmpty()) {
-			emptyMap()
-		} else {
-			db.getEntityGraphDao().findActiveBindingsByEntities(entitiesWithoutPref)
-				.groupBy({ it.entityId }, { it.externalId.toLongOrNull() })
-				.mapValues { (_, ids) -> ids.filterNotNull().toSet() }
-		}
+		val bindingsByEntityId = identitiesByMangaId.values
+			.mapNotNull { identity ->
+				identity.entityId?.let { entityId -> entityId to identity.localMangaIds }
+			}
+			.groupBy({ it.first }, { it.second })
+			.mapValues { (_, idSets) -> idSets.flatten().toSet() }
 		val legacyAnchorIds = ownerRefsByMangaId.values
-			.flatMapTo(LinkedHashSet()) { resolveHistoryAnchorIds(it, prefByEntityId, bindingsByEntityId) }
+			.flatMapTo(LinkedHashSet()) { resolveHistoryAnchorIds(it, preferredLocalIdsByEntity, bindingsByEntityId) }
 		val legacyHistoryByMangaId = db.getHistoryDao().findByIds(legacyAnchorIds).associateBy(HistoryEntity::mangaId)
 		val baseList = contents.mapNotNull { content ->
 			val ownerRef = ownerRefsByMangaId.getValue(content.id)
@@ -686,11 +611,8 @@ class HistoryRepository @Inject constructor(
 	}
 
 	private suspend fun runBlockingCategoryLookup(ownerRef: HistoryOwnerRef): Set<Long> {
-		val result = LinkedHashSet<Long>()
-		resolveHistoryAnchorIds(ownerRef).forEach { anchorId ->
-			result += db.getFavouritesDao().findCategoriesIds(anchorId)
-		}
-		return result
+		val entityId = ownerRef.entityId ?: return emptySet()
+		return db.getWorkFavouritesDao().findCategoriesIds(entityId).toSet()
 	}
 
 	private suspend fun getTrackAggregate(
@@ -743,9 +665,8 @@ class HistoryRepository @Inject constructor(
 	}
 
 	private suspend fun resolveRepresentativeContentForWorkHistory(entity: WorkHistoryEntity): Content? {
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entity.entityId)?.preferredLocalMangaId
 		val candidateIds = buildList {
-			preferredLocalId?.let(::add)
+			workResolver.resolveByEntityId(entity.entityId)?.preferredMangaId?.let(::add)
 			add(entity.anchorMangaId)
 		}.distinct()
 		for (candidateId in candidateIds) {
@@ -757,31 +678,28 @@ class HistoryRepository @Inject constructor(
 	private suspend fun resolveWorkHistoryOwner(manga: Content): WorkHistoryOwner {
 		// History ownership is work-first. The returned anchor manga id is the preferred local
 		// projection used for legacy history rows and compatibility lookups.
-		val entityId = resolveWorkEntityId(manga.id)
+		val identity = workResolver.resolveByMangaId(manga.id)
+		val entityId = identity.entityId
 		if (entityId == null) {
 			return WorkHistoryOwner(
 				entityId = null,
 				anchorMangaId = manga.id,
 			)
 		}
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
 		return WorkHistoryOwner(
 			entityId = entityId,
-			anchorMangaId = preferredLocalId ?: manga.id,
+			anchorMangaId = identity.preferredMangaId ?: manga.id,
 		)
 	}
 
 	private suspend fun resolveWorkEntityId(mangaId: Long): Long? {
-		return entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId]
+		return workResolver.resolveByMangaId(mangaId).entityId
 	}
 
 	private suspend fun resolveHistoryOwnerRef(mangaId: Long): HistoryOwnerRef {
-		val entityId = resolveWorkEntityId(mangaId)
-		val anchorMangaId = if (entityId != null) {
-			db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId ?: mangaId
-		} else {
-			mangaId
-		}
+		val identity = workResolver.resolveByMangaId(mangaId)
+		val entityId = identity.entityId
+		val anchorMangaId = identity.preferredMangaId ?: mangaId
 		return HistoryOwnerRef(
 			cacheKey = entityId ?: -mangaId,
 			entityId = entityId,
@@ -800,38 +718,16 @@ class HistoryRepository @Inject constructor(
 	}
 
 	private suspend fun resolveHistoryAnchorIds(mangaId: Long): Set<Long> {
-		val entityId = entityGraphRepository.findEntityIdsByAnyMangaIds(setOf(mangaId))[mangaId] ?: return setOf(mangaId)
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-		if (preferredLocalId != null) {
-			return setOf(preferredLocalId)
-		}
-		val localIds = entityGraphRepository.getBindings(entityId)
-			.asSequence()
-			.mapNotNull { binding ->
-				when (binding.source) {
-					"local_manga", "0" -> binding.externalId.toLongOrNull()
-					else -> null
-				}
-			}
-			.toCollection(LinkedHashSet())
-		return if (localIds.isEmpty()) setOf(mangaId) else localIds
+		val identity = workResolver.resolveByMangaId(mangaId)
+		identity.preferredMangaId?.let { return setOf(it) }
+		return identity.localMangaIds.ifEmpty { setOf(mangaId) }
 	}
 
 	private suspend fun resolveHistoryAnchorIds(ownerRef: HistoryOwnerRef): Set<Long> {
 		val entityId = ownerRef.entityId ?: return setOf(ownerRef.anchorMangaId)
-		val preferredLocalId = db.getEntityGraphDao().findEntityPrefs(entityId)?.preferredLocalMangaId
-		if (preferredLocalId != null) {
-			return setOf(preferredLocalId)
-		}
-		val localIds = entityGraphRepository.getBindings(entityId)
-			.asSequence()
-			.mapNotNull { binding ->
-				when (binding.source) {
-					"local_manga", "0" -> binding.externalId.toLongOrNull()
-					else -> null
-				}
-			}
-			.toCollection(LinkedHashSet())
+		val identity = workResolver.resolveByEntityId(entityId)
+		identity?.preferredMangaId?.let { return setOf(it) }
+		val localIds = identity?.localMangaIds.orEmpty()
 		return if (localIds.isEmpty()) setOf(ownerRef.anchorMangaId) else localIds
 	}
 
@@ -871,7 +767,6 @@ class HistoryRepository @Inject constructor(
 		)?.id ?: return this
 		android.util.Log.w("HistoryRepository", "Recovered: $chapterId -> $newChapterId (percent=$percent)")
 		val newEntity = copy(chapterId = newChapterId)
-		db.getHistoryDao().update(newEntity)
 		resolveWorkEntityId(manga.id)?.let { entityId ->
 			db.getWorkHistoryDao().update(
 				WorkHistoryEntity(
@@ -929,8 +824,11 @@ class HistoryRepository @Inject constructor(
 			.findEntitiesByIds(localHistory.map { it.mangaId }.distinct())
 			.associateBy { it.id }
 		val contentById = mangaById.mapValues { (_, manga) -> manga.toContent(tags = emptySet(), chapters = null) }
-		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(contentById.values)
-		val existingEntityIds = entityGraphRepository.findEntityIdsByAnyMangaIds(localHistory.map { it.mangaId })
+		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(
+			contents = contentById.values,
+			createdBy = EntityBindingCreatedBy.MIGRATION,
+		)
+		val existingEntityIds = resolveEntityIdsByMangaIds(localHistory.map { it.mangaId })
 		val entityIdsByMangaId = existingEntityIds + ensuredEntityIds
 		val normalized = LinkedHashMap<Long, WorkHistoryEntity>()
 		for (history in localHistory) {
@@ -965,6 +863,19 @@ class HistoryRepository @Inject constructor(
 				}
 			}
 		}
+	}
+
+	private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
+		return identitiesToEntityIds(workResolver.resolveManyByMangaIds(mangaIds))
+	}
+
+	private fun identitiesToEntityIds(
+		identitiesByMangaId: Map<Long, org.skepsun.kototoro.work.domain.WorkIdentity>,
+	): Map<Long, Long> {
+		return identitiesByMangaId
+			.mapValues { (_, identity) -> identity.entityId }
+			.filterValues { it != null }
+			.mapValues { (_, entityId) -> requireNotNull(entityId) }
 	}
 
 	private fun WorkHistoryEntity.toLegacyHistoryEntity() = HistoryEntity(

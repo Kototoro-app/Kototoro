@@ -134,6 +134,26 @@ abstract class EntityGraphDao {
 	@Query(
 		"""
 		SELECT * FROM entity_binding
+		WHERE entity_id = :entityId
+			AND source IN ('local_manga', '0')
+			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		"""
+	)
+	abstract suspend fun findActiveLocalBindingsByEntity(entityId: Long): List<EntityBindingRecord>
+
+	@Query(
+		"""
+		SELECT * FROM entity_binding
+		WHERE entity_id IN (:entityIds)
+			AND source IN ('local_manga', '0')
+			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		"""
+	)
+	abstract suspend fun findActiveLocalBindingsByEntities(entityIds: List<Long>): List<EntityBindingRecord>
+
+	@Query(
+		"""
+		SELECT * FROM entity_binding
 		WHERE source IN (:sources) AND external_id IN (:externalIds)
 		"""
 	)

@@ -271,6 +271,7 @@ abstract class FavouritesDao : MangaQueryBuilder.ConditionCallback {
 				INNER JOIN work_favourites wf
 					ON wf.entity_id = eb.entity_id
 					AND wf.category_id = favourites.category_id
+					AND wf.anchor_manga_id IS NOT NULL
 					AND wf.deleted_at = 0
 				WHERE eb.source IN ('local_manga', '0')
 					AND eb.external_id = CAST(favourites.manga_id AS TEXT)

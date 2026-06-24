@@ -50,6 +50,49 @@ class MangaDatabaseTest {
 		}
 	}
 
+	@Test
+	fun migrate65To66CreatesWorkMigrationLedger() {
+		helper.createDatabase(TEST_DB, 65).close()
+		helper.runMigrationsAndValidate(
+			TEST_DB,
+			66,
+			true,
+			migrations.single { it.startVersion == 65 && it.endVersion == 66 },
+		).use { db ->
+			db.execSQL(
+				"""
+				INSERT INTO work_migration_ledger (
+					legacy_table,
+					legacy_key,
+					legacy_checksum,
+					target_entity_id,
+					migration_version,
+					status,
+					migrated_at
+				) VALUES ('favourites', 'manga=1;category=2', 'checksum-a', 10, 1, 'MIGRATED', 1000)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT OR REPLACE INTO work_migration_ledger (
+					legacy_table,
+					legacy_key,
+					legacy_checksum,
+					target_entity_id,
+					migration_version,
+					status,
+					migrated_at
+				) VALUES ('favourites', 'manga=1;category=2', 'checksum-b', 10, 1, 'NEEDS_REVIEW', 2000)
+				""".trimIndent(),
+			)
+			db.query("SELECT COUNT(*), MAX(status) FROM work_migration_ledger").use { cursor ->
+				cursor.moveToFirst()
+				assertEquals(1, cursor.getInt(0))
+				assertEquals("NEEDS_REVIEW", cursor.getString(1))
+			}
+		}
+	}
+
 	private companion object {
 
 		const val TEST_DB = "test-db"

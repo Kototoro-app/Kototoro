@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.TrackingSiteDao
 import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
+import org.skepsun.kototoro.work.domain.WorkResolver
 
 suspend fun EntityGraphDao.findWorkEntityIdByLocalMangaId(mangaId: Long): Long? {
 	return findActiveBinding("local_manga", mangaId.toString())?.entityId
@@ -19,6 +20,27 @@ suspend fun MangaDatabase.resolveWorkEntityIdByMangaId(mangaId: Long): Long? {
 // Prefer work-owned tracking links whenever any candidate projection already belongs to a work.
 // Only fall back to raw manga ids for not-yet-bound legacy records.
 suspend fun MangaDatabase.findTrackingLinksByWorkOrMangaCandidates(
+	service: Int? = null,
+	mangaIds: List<Long>,
+	workResolver: WorkResolver,
+): List<TrackingSiteLinkEntity> {
+	if (mangaIds.isEmpty()) {
+		return emptyList()
+	}
+	val distinctIds = mangaIds.distinct()
+	val entityIds = workResolver.resolveManyByMangaIds(distinctIds).values
+		.mapNotNull { it.entityId }
+		.distinct()
+	val trackingDao = getTrackingSiteDao()
+	return when {
+		entityIds.isNotEmpty() && service != null -> trackingDao.findLinksByEntityIds(service, entityIds)
+		entityIds.isNotEmpty() -> trackingDao.findLinksByEntityIds(entityIds)
+		service != null -> trackingDao.findLinksByMangaIds(service, distinctIds)
+		else -> trackingDao.findLinksByMangaIds(distinctIds)
+	}
+}
+
+suspend fun MangaDatabase.findTrackingLinksByLegacyWorkOrMangaCandidates(
 	service: Int? = null,
 	mangaIds: List<Long>,
 ): List<TrackingSiteLinkEntity> {
@@ -40,12 +62,15 @@ suspend fun MangaDatabase.findTrackingLinksByWorkOrMangaCandidates(
 suspend fun MangaDatabase.deleteTrackingLinksByWorkOrMangaCandidates(
 	service: Int,
 	mangaIds: List<Long>,
+	workResolver: WorkResolver,
 ) {
 	if (mangaIds.isEmpty()) {
 		return
 	}
 	val distinctIds = mangaIds.distinct()
-	val entityIds = distinctIds.mapNotNull { resolveWorkEntityIdByMangaId(it) }.distinct()
+	val entityIds = workResolver.resolveManyByMangaIds(distinctIds).values
+		.mapNotNull { it.entityId }
+		.distinct()
 	val trackingDao = getTrackingSiteDao()
 	if (entityIds.isNotEmpty()) {
 		trackingDao.deleteLinksByEntityIds(service, entityIds)
@@ -75,11 +100,14 @@ suspend fun TrackingSiteDao.findLinksByWorkOrMangaCandidates(
 		?: findLinksByMangaIds(service, mangaIds.distinct())
 }
 
-suspend fun MangaDatabase.attachEntityOwnership(link: TrackingSiteLinkEntity): TrackingSiteLinkEntity {
+suspend fun MangaDatabase.attachEntityOwnership(
+	link: TrackingSiteLinkEntity,
+	workResolver: WorkResolver,
+): TrackingSiteLinkEntity {
 	if (link.entityId != null || link.mangaId == 0L) {
 		return link
 	}
-	val entityId = resolveWorkEntityIdByMangaId(link.mangaId)
+	val entityId = workResolver.resolveByMangaId(link.mangaId).entityId
 	return if (link.entityId == entityId) {
 		link
 	} else {

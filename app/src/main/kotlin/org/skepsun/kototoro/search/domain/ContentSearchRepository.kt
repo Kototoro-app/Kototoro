@@ -27,7 +27,6 @@ import org.skepsun.kototoro.core.db.entity.toContentTag
 import org.skepsun.kototoro.core.db.entity.toContentTagsList
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -35,6 +34,7 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.search.ui.ContentSuggestionsProvider
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import kotlin.math.abs
 
@@ -52,8 +52,8 @@ class ContentSearchRepository @Inject constructor(
 	@ApplicationContext private val context: Context,
 	private val recentSuggestions: SearchRecentSuggestions,
 	private val settings: AppSettings,
-	private val entityGraphRepository: EntityGraphRepository,
 	private val dataRepository: ContentDataRepository,
+	private val workResolver: WorkResolver,
 ) {
 
 	suspend fun getContentSuggestion(query: String, limit: Int, source: ContentSource?): List<LocalEntitySuggestion> = when {
@@ -98,8 +98,12 @@ class ContentSearchRepository @Inject constructor(
 		if (isEmpty()) {
 			return emptyList()
 		}
-		val resolvedEntityIdsByMangaId = entityGraphRepository.findEntityIdsByAnyMangaIds(map { it.id })
-		val preferredLocalIdsByEntity = dataRepository.getEntityPreferredLocalMangaIds(resolvedEntityIdsByMangaId.values)
+		val identitiesByMangaId = workResolver.resolveManyByMangaIds(map { it.id })
+		val resolvedEntityIdsByMangaId = identitiesByMangaId.mapValues { it.value.entityId }.filterValues { it != null }
+			.mapValues { requireNotNull(it.value) }
+		val preferredLocalIdsByEntity = identitiesByMangaId.values
+			.mapNotNull { identity -> identity.entityId?.let { it to identity.preferredMangaId } }
+			.toMap()
 		val displayTypeOrdinalByEntity = this
 			.groupBy { resolvedEntityIdsByMangaId[it.id] }
 			.mapNotNull { (entityId, items) ->
