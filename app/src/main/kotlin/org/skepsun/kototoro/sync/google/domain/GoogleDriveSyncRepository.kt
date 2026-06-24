@@ -127,7 +127,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 
 	suspend fun deleteRemoteData(): GoogleDriveSyncResult = try {
 		val token = auth.requireAccessToken()
-		api.findSyncFiles(token).forEach { file ->
+		api.findCurrentSyncFiles(token).forEach { file ->
 			runCatching { api.delete(token, file.id) }
 		}
 		settings.lastSyncTimestamp = 0L
@@ -138,6 +138,39 @@ class GoogleDriveSyncRepository @Inject constructor(
 		GoogleDriveSyncResult.AuthorizationRequired(e)
 	} catch (e: Exception) {
 		GoogleDriveSyncResult.Error(e.message)
+	}
+
+	suspend fun importLegacyRemoteData(): GoogleDriveSyncResult {
+		if (!settings.isSignedIn) {
+			return GoogleDriveSyncResult.AuthorizationRequired(GoogleDriveSyncAuthorizationException())
+		}
+		if (!syncMutex.tryLock()) {
+			return GoogleDriveSyncResult.Success
+		}
+		isSyncing.value = true
+		settings.lastSyncAttemptTimestamp = System.currentTimeMillis()
+		return try {
+			val token = auth.requireAccessToken()
+			importLegacyRemoteData(token)
+			settings.lastSyncTimestamp = System.currentTimeMillis()
+			settings.lastSyncError = null
+			settings.isDirty = false
+			GoogleDriveSyncResult.Success
+		} catch (e: GoogleDriveSyncAuthorizationException) {
+			settings.lastSyncError = e.message
+			GoogleDriveSyncResult.AuthorizationRequired(e)
+		} catch (e: GoogleDriveSyncSchemaException) {
+			settings.lastSyncError = e.message
+			Log.e(TAG, "legacy sync import failed: schema", e)
+			GoogleDriveSyncResult.Error(e.message, retryable = false)
+		} catch (e: Exception) {
+			settings.lastSyncError = e.message ?: e.javaClass.simpleName
+			Log.e(TAG, "legacy sync import failed: ${settings.lastSyncError}", e)
+			GoogleDriveSyncResult.Error(settings.lastSyncError)
+		} finally {
+			isSyncing.value = false
+			syncMutex.unlock()
+		}
 	}
 
 	suspend fun signOut() {
@@ -160,7 +193,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 		var attempt = 0
 		while (true) {
 			val files = runSyncStep("list drive files") {
-				api.findSyncFiles(token)
+				api.findCurrentSyncFiles(token)
 			}
 			val canonical = files.firstOrNull()
 			val baseVersion = canonical?.version
@@ -215,6 +248,44 @@ class GoogleDriveSyncRepository @Inject constructor(
 				runCatching { api.delete(token, duplicate.id) }
 			}
 			return
+		}
+	}
+
+	private suspend fun importLegacyRemoteData(token: String) {
+		val files = runSyncStep("list legacy drive files") {
+			api.findLegacySyncFiles(token)
+		}
+		val decoded = ArrayList<GoogleDriveSyncSnapshot>(files.size)
+		for (file in files) {
+			val snapshot = runSyncStep("download legacy ${file.id}") {
+				decodeSnapshot(api.download(token, file.id))
+			}
+			if (snapshot != null) {
+				decoded += snapshot
+			}
+		}
+		val remote = runSyncStep("merge legacy remote snapshots") {
+			GoogleDriveSyncMerger.combine(decoded)
+		} ?: return
+		Log.d(TAG, "legacy import remote=${remote.debugSummary()} files=${files.size}")
+		runSyncStep("apply legacy remote snapshot") {
+			applyToDatabase(remote)
+		}
+		val upload = runSyncStep("build current snapshot after legacy import") {
+			GoogleDriveSyncMerger.mergeSnapshots(buildLocalSnapshot(), null)
+				.copyForUpload(syncedAt = System.currentTimeMillis())
+		}
+		Log.d(TAG, "legacy import upload=${upload.debugSummary()} ${database.localDatabaseSummary()}")
+		val payload = json.encodeToString(GoogleDriveSyncSnapshot.serializer(), upload).encodeToByteArray()
+		val currentFiles = runSyncStep("list current drive files") {
+			api.findCurrentSyncFiles(token)
+		}
+		val current = currentFiles.firstOrNull()
+		val fileId = runSyncStep("upload current snapshot") {
+			api.upload(token, payload, current?.id)
+		}
+		currentFiles.filter { it.id != fileId }.forEach { duplicate ->
+			runCatching { api.delete(token, duplicate.id) }
 		}
 	}
 

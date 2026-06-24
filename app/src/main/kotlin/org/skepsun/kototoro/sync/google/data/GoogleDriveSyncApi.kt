@@ -56,10 +56,14 @@ class GoogleDriveSyncApi @Inject constructor() {
 		@SerialName("id") val id: String,
 	)
 
-	suspend fun findSyncFiles(token: String): List<DriveFile> = withContext(Dispatchers.IO) {
+	suspend fun findCurrentSyncFiles(token: String): List<DriveFile> = findSyncFiles(token, CURRENT_FILE_NAME)
+
+	suspend fun findLegacySyncFiles(token: String): List<DriveFile> = findSyncFiles(token, LEGACY_FILE_NAME)
+
+	private suspend fun findSyncFiles(token: String, fileName: String): List<DriveFile> = withContext(Dispatchers.IO) {
 		val url = "$DRIVE_BASE/files".toHttpUrl().newBuilder()
 			.addQueryParameter("spaces", "appDataFolder")
-			.addQueryParameter("q", "name = '$FILE_NAME' and trashed = false")
+			.addQueryParameter("q", "name = '$fileName' and trashed = false")
 			.addQueryParameter("fields", "files(id,name,createdTime,modifiedTime,version)")
 			.addQueryParameter("orderBy", "createdTime")
 			.addQueryParameter("pageSize", "100")
@@ -116,7 +120,7 @@ class GoogleDriveSyncApi @Inject constructor() {
 	}
 
 	private fun createEmptyFile(token: String): String {
-		val metadata = """{"name":"$FILE_NAME","parents":["appDataFolder"]}"""
+		val metadata = """{"name":"$CURRENT_FILE_NAME","parents":["appDataFolder"]}"""
 		val url = "$DRIVE_BASE/files".toHttpUrl().newBuilder()
 			.addQueryParameter("fields", "id")
 			.build()
@@ -159,7 +163,8 @@ class GoogleDriveSyncApi @Inject constructor() {
 
 	private companion object {
 
-		const val FILE_NAME = "kototoro_sync.json"
+		const val CURRENT_FILE_NAME = "kototoro_sync_work_v2.json"
+		const val LEGACY_FILE_NAME = "kototoro_sync.json"
 		const val DRIVE_BASE = "https://www.googleapis.com/drive/v3"
 		const val UPLOAD_BASE = "https://www.googleapis.com/upload/drive/v3"
 		const val MAX_NETWORK_ATTEMPTS = 2

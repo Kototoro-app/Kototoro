@@ -77,6 +77,17 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 		}
 	}
 
+	fun importLegacyRemoteData() {
+		if (!settings.isSignedIn) {
+			requestSignIn()
+			return
+		}
+		viewModelScope.launch(Dispatchers.Default) {
+			handleSyncResult(repository.importLegacyRemoteData())
+			refresh()
+		}
+	}
+
 	fun requestSignIn() {
 		viewModelScope.launch(Dispatchers.Default) {
 			try {

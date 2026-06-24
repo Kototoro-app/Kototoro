@@ -46,12 +46,14 @@ fun SyncSettingsScreen(
     onGoogleDriveSignOutClick: () -> Unit,
     onGoogleDriveSyncNowClick: () -> Unit,
     onGoogleDriveDeleteRemoteClick: () -> Unit,
+    onGoogleDriveImportLegacyClick: () -> Unit,
     onGoogleDriveIntervalChange: (Int) -> Unit,
     onGoogleDriveWifiOnlyChange: (Boolean) -> Unit,
     onGoogleDriveSyncOnStartChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isDeleteRemoteDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var isImportLegacyDialogVisible by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         modifier = modifier,
         snackbarHost = {
@@ -130,6 +132,13 @@ fun SyncSettingsScreen(
                         )
                         SettingsSectionDivider()
                         SettingsActionPreference(
+                            title = stringResource(R.string.sync_import_legacy_remote_data),
+                            summary = stringResource(R.string.sync_import_legacy_remote_data_summary),
+                            enabled = !state.isGoogleDriveSyncing,
+                            onClick = { isImportLegacyDialogVisible = true },
+                        )
+                        SettingsSectionDivider()
+                        SettingsActionPreference(
                             title = stringResource(R.string.sync_sign_out),
                             onClick = onGoogleDriveSignOutClick,
                         )
@@ -161,6 +170,28 @@ fun SyncSettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { isDeleteRemoteDialogVisible = false }) {
+                    Text(text = stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (isImportLegacyDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { isImportLegacyDialogVisible = false },
+            title = { Text(text = stringResource(R.string.sync_import_legacy_remote_data)) },
+            text = { Text(text = stringResource(R.string.sync_import_legacy_remote_data_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isImportLegacyDialogVisible = false
+                        onGoogleDriveImportLegacyClick()
+                    },
+                ) {
+                    Text(text = stringResource(R.string.import_legacy_sync))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isImportLegacyDialogVisible = false }) {
                     Text(text = stringResource(android.R.string.cancel))
                 }
             },

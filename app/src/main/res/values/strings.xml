@@ -2135,8 +2135,12 @@ Proceed?</string>
     <string name="sync_last">Last synced: %s</string>
     <string name="sync_never">Not synced yet</string>
     <string name="sync_delete_remote_data">Clear remote sync data</string>
-    <string name="sync_delete_remote_data_summary">Delete the Google Drive sync snapshot. Local data is not changed.</string>
-    <string name="sync_delete_remote_data_confirm">Delete the remote Google Drive sync snapshot? Local data will stay on this device. After restoring a clean backup, run Sync now to upload a fresh snapshot.</string>
+    <string name="sync_delete_remote_data_summary">Delete the current Google Drive sync snapshot. Older legacy snapshots are not changed.</string>
+    <string name="sync_delete_remote_data_confirm">Delete the current remote Google Drive sync snapshot? Local data and older legacy snapshots will stay unchanged. After restoring a clean backup, run Sync now to upload a fresh current snapshot.</string>
+    <string name="sync_import_legacy_remote_data">Import old Google Drive sync</string>
+    <string name="sync_import_legacy_remote_data_summary">Read the old sync snapshot once, convert it to the current format, then upload a current snapshot.</string>
+    <string name="sync_import_legacy_remote_data_confirm">Only continue if you are certain the old sync snapshot was not polluted by an older app version. If it was polluted, history records may be imported as favourites or stale projections. Current sync ignores old snapshots unless you import them here.</string>
+    <string name="import_legacy_sync">Import old sync</string>
     <string name="sync_frequency">Sync frequency</string>
     <string name="sync_wifi_only">Sync only over Wi-Fi</string>
     <string name="sync_on_start">Sync on app start</string>
