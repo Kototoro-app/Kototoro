@@ -43,14 +43,8 @@ class WebDavAutoRestoreRunner @Inject constructor(
             Log.d(TAG, "performAutoRestore: listing backups once...")
             val allRemoteFiles = webDavUploader.listAllBackupFiles()
             val v3Files = allRemoteFiles.filter { it.namespace == RemoteNamespace.V3 }
-            val v2Files = allRemoteFiles.filter { it.namespace == RemoteNamespace.V2 }
-            val v1Files = allRemoteFiles.filter { it.namespace == RemoteNamespace.V1 }
 
-            val candidate = when {
-                v3Files.isNotEmpty() -> selectPreferredCandidate(v3Files)
-                v2Files.isNotEmpty() -> selectPreferredCandidate(v2Files)
-                else -> selectLegacyCandidate(v1Files)
-            } ?: run {
+            val candidate = selectPreferredCandidate(v3Files) ?: run {
                 val reason = if (allRemoteFiles.isEmpty()) "no_remote_backups" else "no_compatible_backup"
                 logBackupFlow(TAG, flow = BackupFlow.WEBDAV_AUTO_RESTORE, event = "restore_skipped", reason = reason)
                 settings.backupWebDavLastAutoRestoreCheckTime = currentTime
@@ -60,7 +54,6 @@ class WebDavAutoRestoreRunner @Inject constructor(
             restoreCandidate(
                 candidate = candidate,
                 currentTime = currentTime,
-                isLegacyMigration = candidate.namespace == RemoteNamespace.V1,
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to perform auto restore", e)
@@ -73,7 +66,6 @@ class WebDavAutoRestoreRunner @Inject constructor(
     private suspend fun restoreCandidate(
         candidate: BackupFileInfo,
         currentTime: Long,
-        isLegacyMigration: Boolean,
     ) {
         logBackupFlow(
             TAG,
@@ -122,30 +114,15 @@ class WebDavAutoRestoreRunner @Inject constructor(
                 "transportGeneration" to restoreResultCommit.transportGeneration,
                 "writeBlocked" to restoreResultCommit.writeBlocked,
                 "legacyJarReposImported" to restoreResult.legacyJarReposImported,
-                "legacyMigration" to isLegacyMigration,
+                "legacyMigration" to false,
             )
 
-            if (isLegacyMigration) {
-                settings.backupWebDavLastSeenLegacyCreatedAt = candidate.lastModified.time
-                settings.isBackupWebDavAutoUploadBlockedByLegacyRestore = true
-            }
             settings.hasCompletedBackupWebDavV2Migration = true
         } finally {
             if (tempFile.exists()) {
                 tempFile.delete()
             }
         }
-    }
-
-    private fun selectLegacyCandidate(legacyFiles: List<BackupFileInfo>): BackupFileInfo? {
-        if (settings.hasCompletedBackupWebDavV2Migration) {
-            return null
-        }
-        val candidate = selectPreferredCandidate(legacyFiles) ?: return null
-        if (candidate.lastModified.time <= settings.backupWebDavLastSeenLegacyCreatedAt) {
-            return null
-        }
-        return candidate
     }
 
     private fun selectPreferredCandidate(remoteFiles: List<BackupFileInfo>): BackupFileInfo? {

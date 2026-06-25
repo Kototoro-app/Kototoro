@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
@@ -2670,39 +2671,33 @@ class EntityGraphRepository @Inject constructor(
 	/**
 	 * Complete entity reset: deletes all entities, bindings, relations, preferences,
 	 * work_history, work_favourites, tracks, and tracking_site_links.
-	 * Then re-creates one clean entity per manga found in history/favourites.
-	 *
-	 * Legacy manga-level history and favourites are preserved.
+	 * Then re-creates one clean entity per manga found in current Work state.
 	 */
 	suspend fun resetAllEntities() = withContext(Dispatchers.Default) {
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
 
-			// 1. Collect all manga IDs that need entities
-			Log.d(TAG, "resetAll: collecting manga IDs...")
-			val historyMangaIds = db.getHistoryDao().findAllIds().toSet()
-			val favouriteMangaIds = db.getFavouritesDao().findAllRaw(offset = 0, limit = Int.MAX_VALUE)
-				.map { it.favourite.mangaId }.toSet()
+			Log.d(TAG, "resetAll: collecting Work state...")
+			val workHistorySnapshot = db.getWorkHistoryDao().dump().toList()
+			val workFavouriteSnapshot = db.getWorkFavouritesDao().dump().toList()
+			val historyMangaIds = workHistorySnapshot.mapTo(LinkedHashSet()) { it.anchorMangaId }
+			val favouriteMangaIds = workFavouriteSnapshot.mapNotNullTo(LinkedHashSet()) { it.anchorMangaId }
 			val allMangaIds = (historyMangaIds + favouriteMangaIds).distinct()
 			Log.d(TAG, "resetAll: ${allMangaIds.size} manga IDs, clearing tables...")
 
-			// 2. Clear all entity-dependent tables
 			db.getTracksDao().clear()
 			db.getWorkHistoryDao().clear()
 			db.getWorkFavouritesDao().deleteAll()
 			db.getTrackingSiteDao().deleteAllLinks()
 
-			// 3. Clear entity core tables
 			dao.deleteAllRelations()
 			dao.deleteAllBindings()
 			dao.deleteAllPrefs()
 			dao.deleteAllEntities()
 			Log.d(TAG, "resetAll: core tables cleared, rebuilding...")
 
-			// 4. Re-create entities: one per manga, using real manga titles
 			val now = System.currentTimeMillis()
 			val allMangaIdsList = allMangaIds.toList()
-			// Batch-read manga titles in chunks to avoid Room parameter limits
 			val mangaById = mutableMapOf<Long, org.skepsun.kototoro.core.db.entity.MangaEntity>()
 			allMangaIdsList.chunked(500).forEach { chunk ->
 				db.getMangaDao().findEntitiesByIds(chunk).forEach { manga ->
@@ -2740,7 +2735,6 @@ class EntityGraphRepository @Inject constructor(
 					)
 				}
 			}
-			// 5. Rebuild work_history from legacy history
 			val bindings = db.getEntityGraphDao().findActiveBindingsBySources(
 				sources = listOf("local_manga", "0"),
 				externalIds = allMangaIdsList.map { it.toString() },
@@ -2750,27 +2744,24 @@ class EntityGraphRepository @Inject constructor(
 				val mangaId = binding.externalId.toLongOrNull() ?: continue
 				entityIdByMangaId[mangaId] = binding.entityId
 			}
-			val historyEntries = db.getHistoryDao().findByIds(allMangaIdsList)
-				.filter { it.deletedAt == 0L }
-			for (entry in historyEntries) {
-				val entityId = entityIdByMangaId[entry.mangaId] ?: continue
-				db.getWorkHistoryDao().upsert(
-					WorkHistoryEntity(
-						entityId = entityId,
-						anchorMangaId = entry.mangaId,
-						createdAt = entry.createdAt,
-						updatedAt = entry.updatedAt,
-						chapterId = entry.chapterId,
-						page = entry.page,
-						scroll = entry.scroll,
-						percent = entry.percent,
-						chaptersCount = entry.chaptersCount,
-						deletedAt = entry.deletedAt,
-						parentChapterId = entry.parentChapterId,
-					)
-				)
+			var restoredHistory = 0
+			for (entry in workHistorySnapshot) {
+				val entityId = entityIdByMangaId[entry.anchorMangaId] ?: continue
+				db.getWorkHistoryDao().upsert(entry.copy(entityId = entityId))
+				restoredHistory++
 			}
-			Log.d(TAG, "resetAll: complete, rebuilt ${allMangaIdsList.size} entities, ${historyEntries.size} history entries")
+			var restoredFavourites = 0
+			for (entry in workFavouriteSnapshot) {
+				val anchorMangaId = entry.anchorMangaId ?: continue
+				val entityId = entityIdByMangaId[anchorMangaId] ?: continue
+				db.getWorkFavouritesDao().upsert(entry.copy(entityId = entityId))
+				restoredFavourites++
+			}
+			Log.d(
+				TAG,
+				"resetAll: complete, rebuilt ${allMangaIdsList.size} entities, " +
+					"$restoredHistory history entries, $restoredFavourites favourite entries",
+			)
 		}
 	}
 }

@@ -10,6 +10,8 @@ import org.skepsun.kototoro.entitygraph.data.isLocalReadingSource
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
+import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 class AttachReadingSourceToEntityUseCase @Inject constructor(
@@ -17,6 +19,7 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
     private val contentDataRepository: ContentDataRepository,
     private val database: MangaDatabase,
     private val entityGraphRepository: EntityGraphRepository,
+    private val workResolver: WorkResolver,
 ) {
 
     suspend operator fun invoke(
@@ -61,7 +64,12 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
     }
 
     private suspend fun resolveOrCreateEntityId(content: Content): Long {
-        return entityGraphRepository.ensureLocalWorkEntity(content).id
+        return requireNotNull(
+            workResolver.ensureForProjection(
+                content = content,
+                provenance = WorkIdentityProvenance.USER,
+            ).entityId,
+        )
     }
 
     private suspend fun findLocalBinding(mangaId: Long): EntityBinding? {

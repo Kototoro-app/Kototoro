@@ -9,10 +9,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
-import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
+import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.entity.ContentRating
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.toEntities
@@ -366,11 +367,45 @@ class ContentDataRepository @Inject constructor(
 
 	fun observeDisplayPreferencesChanges(): Flow<Int> {
 		return db.invalidationTracker.createFlow(
-			tables = arrayOf(TABLE_PREFERENCES, TABLE_ENTITY_PREFERENCES),
+			tables = arrayOf(TABLE_PREFERENCES, TABLE_ENTITY_PREFERENCES, TABLE_ENTITY_GRAPH_BINDING),
 			emitInitialState = true,
 		)
-			.map { it.hashCode() }
+			.map { displayPreferencesSignature() }
 			.distinctUntilChanged()
+	}
+
+	private suspend fun displayPreferencesSignature(): Int {
+		var result = 1
+		db.getEntityGraphDao().dumpPrefs().forEach { prefs ->
+			result = 31 * result + prefs.entityId.hashCode()
+			result = 31 * result + prefs.preferredLocalMangaId.hashCode()
+			result = 31 * result + prefs.titleOverride.hashCode()
+			result = 31 * result + prefs.coverUrlOverride.hashCode()
+			result = 31 * result + prefs.contentRatingOverride.hashCode()
+			result = 31 * result + prefs.metadataSourceKind.hashCode()
+			result = 31 * result + prefs.metadataBindingSource.hashCode()
+			result = 31 * result + prefs.metadataBindingExternalId.hashCode()
+			result = 31 * result + prefs.metadataSourceService.hashCode()
+			result = 31 * result + prefs.metadataSourceRemoteId.hashCode()
+		}
+		db.getEntityGraphDao().dumpBindings()
+			.asSequence()
+			.filter { it.source.isLocalEntityBindingSource() }
+			.forEach { binding ->
+				result = 31 * result + binding.entityId.hashCode()
+				result = 31 * result + binding.source.hashCode()
+				result = 31 * result + binding.externalId.hashCode()
+			}
+		db.getPreferencesDao().findDisplayPreferenceRows().forEach { prefs ->
+			result = 31 * result + prefs.mangaId.hashCode()
+			result = 31 * result + prefs.titleOverride.hashCode()
+			result = 31 * result + prefs.coverUrlOverride.hashCode()
+			result = 31 * result + prefs.contentRatingOverride.hashCode()
+			result = 31 * result + prefs.metadataSourceKind.hashCode()
+			result = 31 * result + prefs.metadataSourceService.hashCode()
+			result = 31 * result + prefs.metadataSourceRemoteId.hashCode()
+		}
+		return result
 	}
 
 	suspend fun findContentById(mangaId: Long, withChapters: Boolean): Content? {
@@ -473,7 +508,7 @@ class ContentDataRepository @Inject constructor(
 	)
 
 	fun observeFavoritesTrigger(emitInitialState: Boolean) = db.invalidationTracker.createFlow(
-		tables = arrayOf(TABLE_FAVOURITES, TABLE_FAVOURITE_CATEGORIES),
+		tables = arrayOf(TABLE_WORK_FAVOURITES, TABLE_FAVOURITE_CATEGORIES),
 		emitInitialState = emitInitialState,
 	)
 

@@ -25,7 +25,7 @@ import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
 import org.skepsun.kototoro.core.util.ext.trySetForeground
 import org.skepsun.kototoro.favourites.data.FavouriteContent
 import org.skepsun.kototoro.favourites.domain.AttachReadingSourceToEntityUseCase
-import org.skepsun.kototoro.favourites.data.FavouriteSourcesRepository
+import org.skepsun.kototoro.favourites.domain.EntityOrganizeRepository
 import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationStatus
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
@@ -40,7 +40,7 @@ private const val TAG = "SourceMigration"
 class SourceMigrationWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
-    private val favouriteSourcesRepository: FavouriteSourcesRepository,
+    private val entityOrganizeRepository: EntityOrganizeRepository,
     private val attachReadingSourceToEntityUseCase: AttachReadingSourceToEntityUseCase,
     private val contentDataRepository: ContentDataRepository,
     private val notificationFactoryFactory: SourceMigrationNotificationFactory.Factory,
@@ -242,8 +242,8 @@ class SourceMigrationWorker @AssistedInject constructor(
         fromSourceName: String?,
     ): List<FavouriteContent> {
         return when {
-            selectedContentIds.isNotEmpty() -> favouriteSourcesRepository.getFavouriteContentsByIds(selectedContentIds)
-            !fromSourceName.isNullOrBlank() -> favouriteSourcesRepository.getFavouriteContentsBySource(fromSourceName)
+            selectedContentIds.isNotEmpty() -> entityOrganizeRepository.listFavouriteContentsByMangaIds(selectedContentIds)
+            !fromSourceName.isNullOrBlank() -> entityOrganizeRepository.listFavouriteContents(fromSourceName)
             else -> emptyList()
         }
     }

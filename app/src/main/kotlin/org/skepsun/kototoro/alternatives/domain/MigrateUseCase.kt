@@ -4,14 +4,14 @@ import androidx.room.withTransaction
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.TrackingSiteDao
 import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
+import org.skepsun.kototoro.core.model.ContentHistory
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.history.data.HistoryEntity
-import org.skepsun.kototoro.history.data.toContentHistory
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -22,6 +22,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 import org.skepsun.kototoro.work.domain.WorkResolver
+import java.time.Instant
 import javax.inject.Inject
 
 class MigrateUseCase
@@ -54,27 +55,36 @@ constructor(
 		mangaDataRepository.storeContent(newDetails, replaceExisting = true)
 		database.withTransaction {
 			val currentTime = System.currentTimeMillis()
+			val localReadingBinding = entityGraphRepository.findLocalReadingBinding(oldDetails.id)
+				?: entityGraphRepository.findLocalReadingBinding(newDetails.id)
+			// keep the migrated content bound to the same entity graph node so source alternatives stay grouped
+			localReadingBinding?.let { binding ->
+				entityGraphRepository.attachLocalReadingBinding(
+					entityId = binding.entityId,
+					localMangaId = newDetails.id,
+					confidence = binding.confidence,
+				)
+			}
 			// replace favorites
-			val favoritesDao = database.getFavouritesDao()
-			val oldFavourites = favoritesDao.findAllRaw(oldDetails.id)
+			val workFavouritesDao = database.getWorkFavouritesDao()
+			val oldFavourites = workFavouritesDao.findActiveByAnchorMangaId(oldDetails.id)
 			if (oldFavourites.isNotEmpty()) {
-				favoritesDao.delete(oldContent.id)
-				for (f in oldFavourites) {
-					val e =
-						f.copy(
-							mangaId = newContent.id,
-						)
-					favoritesDao.upsert(e)
+				for (favourite in oldFavourites) {
+					workFavouritesDao.upsert(
+						favourite.copy(
+							anchorMangaId = newDetails.id,
+							updatedAt = currentTime,
+						),
+					)
 				}
 			}
 			// replace history
-			val historyDao = database.getHistoryDao()
-			val oldHistory = historyDao.find(oldDetails.id)
+			val workHistoryDao = database.getWorkHistoryDao()
+			val oldHistory = workHistoryDao.findActiveByAnchorMangaId(oldDetails.id)
 			val newHistory =
 				if (oldHistory != null) {
 					val newHistory = makeNewHistory(oldDetails, newDetails, oldHistory)
-					historyDao.delete(oldDetails.id)
-					historyDao.upsert(newHistory)
+					workHistoryDao.upsert(newHistory)
 					newHistory
 				} else {
 					null
@@ -95,8 +105,6 @@ constructor(
 					),
 				)
 			}
-			val localReadingBinding = entityGraphRepository.findLocalReadingBinding(oldDetails.id)
-				?: entityGraphRepository.findLocalReadingBinding(newDetails.id)
 			// replace tracking discovery links
 			migrateTrackingLinkAnchors(
 				trackingSiteDao = database.getTrackingSiteDao(),
@@ -105,14 +113,6 @@ constructor(
 				entityId = localReadingBinding?.entityId,
 				currentTime = currentTime,
 			)
-			// keep the migrated content bound to the same entity graph node so source alternatives stay grouped
-			localReadingBinding?.let { binding ->
-				entityGraphRepository.attachLocalReadingBinding(
-					entityId = binding.entityId,
-					localMangaId = newDetails.id,
-					confidence = binding.confidence,
-				)
-			}
 			// track
 			val tracksDao = database.getTracksDao()
 			val oldTrack = tracksDao.find(oldDetails.id)
@@ -220,8 +220,8 @@ constructor(
 	private fun makeNewHistory(
 		oldContent: Content,
 		newContent: Content,
-		history: HistoryEntity,
-	): HistoryEntity {
+		history: WorkHistoryEntity,
+	): WorkHistoryEntity {
 		if (oldContent.chapters.isNullOrEmpty()) { // probably broken manga/source
 			val branch = newContent.getPreferredBranch(null)
 			val chapters = checkNotNull(newContent.getChapters(branch))
@@ -231,10 +231,8 @@ constructor(
 				} else {
 					chapters.first()
 				}
-			return HistoryEntity(
-				mangaId = newContent.id,
-				createdAt = history.createdAt,
-				updatedAt = history.updatedAt,
+			return history.copy(
+				anchorMangaId = newContent.id,
 				chapterId = currentChapter.id,
 				page = history.page,
 				scroll = history.scroll,
@@ -268,10 +266,8 @@ constructor(
 					it.findByNumber(oldChapter.volume, oldChapter.number) ?: it.getOrNull(index) ?: it.last()
 				}.id
 
-		return HistoryEntity(
-			mangaId = newContent.id,
-			createdAt = history.createdAt,
-			updatedAt = history.updatedAt,
+		return history.copy(
+			anchorMangaId = newContent.id,
 			chapterId = newChapterId,
 			page = history.page,
 			scroll = history.scroll,
@@ -280,6 +276,17 @@ constructor(
 			chaptersCount = checkNotNull(newChapters[newBranch]).size,
 		)
 	}
+
+	private fun WorkHistoryEntity.toContentHistory() = ContentHistory(
+		createdAt = Instant.ofEpochMilli(createdAt),
+		updatedAt = Instant.ofEpochMilli(updatedAt),
+		chapterId = chapterId,
+		page = page,
+		scroll = scroll.toInt(),
+		percent = percent,
+		chaptersCount = chaptersCount,
+		parentChapterId = parentChapterId,
+	)
 
 	private fun List<ContentChapter>.findByNumber(
 		volume: Int,

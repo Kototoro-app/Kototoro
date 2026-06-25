@@ -34,6 +34,8 @@ import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
 import org.skepsun.kototoro.core.db.TABLE_TAGS
+import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.util.ext.buildContentValues
@@ -144,15 +146,11 @@ class SyncHelper @AssistedInject constructor(
 	}
 
 	private fun upsertHistory(history: List<HistorySyncDto>): Array<ContentProviderResult> {
-		val uri = uri(authorityHistory, TABLE_HISTORY)
 		val operations = ArrayList<ContentProviderOperation>()
 		history.forEach {
 			operations.addAll(upsertContent(it.manga, authorityHistory))
-			operations += ContentProviderOperation.newInsert(uri)
-				.withValues(it.toContentValues())
-				.build()
 		}
-		val result = provider.applyBatch(operations)
+		val result = if (operations.isEmpty()) emptyArray() else provider.applyBatch(operations)
 		history.forEach { dto ->
 			upsertWorkHistory(dto)
 		}
@@ -171,15 +169,11 @@ class SyncHelper @AssistedInject constructor(
 	}
 
 	private fun upsertFavourites(favourites: List<FavouriteSyncDto>): Array<ContentProviderResult> {
-		val uri = uri(authorityFavourites, TABLE_FAVOURITES)
 		val operations = ArrayList<ContentProviderOperation>()
 		favourites.forEach {
 			operations.addAll(upsertContent(it.manga, authorityFavourites))
-			operations += ContentProviderOperation.newInsert(uri)
-				.withValues(it.toContentValues())
-				.build()
 		}
-		val result = provider.applyBatch(operations)
+		val result = if (operations.isEmpty()) emptyArray() else provider.applyBatch(operations)
 		favourites.forEach { dto ->
 			upsertWorkFavourite(dto)
 		}
@@ -212,68 +206,39 @@ class SyncHelper @AssistedInject constructor(
 
 	private fun getHistory(): List<HistorySyncDto> {
 		val workHistory = runBlocking { db.getWorkHistoryDao().dump().toList() }
-		if (workHistory.isNotEmpty()) {
-			return workHistory.mapNotNull { entry: WorkHistoryEntity ->
-				val mangaId = resolveSyncMangaIdForEntity(entry.entityId, entry.anchorMangaId) ?: return@mapNotNull null
-				HistorySyncDto(
-					entityId = entry.entityId,
-					anchorMangaId = entry.anchorMangaId,
-					mangaId = mangaId,
-					createdAt = entry.createdAt,
-					updatedAt = entry.updatedAt,
-					chapterId = entry.chapterId,
-					page = entry.page,
-					scroll = entry.scroll,
-					percent = entry.percent,
-					deletedAt = entry.deletedAt,
-					chaptersCount = entry.chaptersCount,
-					manga = getContent(authorityHistory, mangaId),
-				)
-			}
-		}
-		return provider.query(authorityHistory, TABLE_HISTORY).use { cursor ->
-			val result = ArrayList<HistorySyncDto>(cursor.count)
-			if (cursor.moveToFirst()) {
-				do {
-					val mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id"))
-					val entityId = resolveWorkEntityIdForLocalManga(mangaId)
-					val anchorMangaId = entityId?.let { resolveExistingLocalProjectionForEntity(it) }
-					val base = HistorySyncDto(cursor, getContent(authorityHistory, mangaId))
-					result.add(
-						base.copy(
-							entityId = entityId,
-							anchorMangaId = anchorMangaId ?: mangaId,
-						),
-					)
-				} while (cursor.moveToNext())
-			}
-			result
+		return workHistory.mapNotNull { entry: WorkHistoryEntity ->
+			val mangaId = resolveSyncMangaIdForEntity(entry.entityId, entry.anchorMangaId) ?: return@mapNotNull null
+			HistorySyncDto(
+				entityId = entry.entityId,
+				anchorMangaId = entry.anchorMangaId,
+				mangaId = mangaId,
+				createdAt = entry.createdAt,
+				updatedAt = entry.updatedAt,
+				chapterId = entry.chapterId,
+				page = entry.page,
+				scroll = entry.scroll,
+				percent = entry.percent,
+				deletedAt = entry.deletedAt,
+				chaptersCount = entry.chaptersCount,
+				manga = getContent(authorityHistory, mangaId),
+			)
 		}
 	}
 
 	private fun getFavourites(): List<FavouriteSyncDto> {
 		val workFavourites = runBlocking { db.getWorkFavouritesDao().dump().toList() }
-		if (workFavourites.isNotEmpty()) {
-			return workFavourites.mapNotNull { entry: WorkFavouriteEntity ->
-				val mangaId = resolveSyncMangaIdForEntity(entry.entityId) ?: return@mapNotNull null
-				FavouriteSyncDto(
-					entityId = entry.entityId,
-					mangaId = mangaId,
-					manga = getContent(authorityFavourites, mangaId),
-					categoryId = entry.categoryId.toInt(),
-					sortKey = entry.sortKey,
-					pinned = entry.isPinned,
-					createdAt = entry.createdAt,
-					deletedAt = entry.deletedAt,
-					updatedAt = entry.updatedAt,
-				)
-			}
-		}
-		return provider.query(authorityFavourites, TABLE_FAVOURITES).map { cursor ->
-			val mangaId = cursor.getLong(cursor.getColumnIndexOrThrow("manga_id"))
-			val manga = getContent(authorityFavourites, mangaId)
-			FavouriteSyncDto(cursor, manga).copy(
-				entityId = resolveWorkEntityIdForLocalManga(mangaId),
+		return workFavourites.mapNotNull { entry: WorkFavouriteEntity ->
+			val mangaId = resolveSyncMangaIdForEntity(entry.entityId) ?: return@mapNotNull null
+			FavouriteSyncDto(
+				entityId = entry.entityId,
+				mangaId = mangaId,
+				manga = getContent(authorityFavourites, mangaId),
+				categoryId = entry.categoryId.toInt(),
+				sortKey = entry.sortKey,
+				pinned = entry.isPinned,
+				createdAt = entry.createdAt,
+				deletedAt = entry.deletedAt,
+				updatedAt = entry.updatedAt,
 			)
 		}
 	}
@@ -404,7 +369,7 @@ class SyncHelper @AssistedInject constructor(
 		val deletedAt = System.currentTimeMillis() - defaultGcPeriod
 		val selection = "deleted_at != 0 AND deleted_at < ?"
 		val args = arrayOf(deletedAt.toString())
-		provider.delete(uri(authorityFavourites, TABLE_FAVOURITES), selection, args)
+		provider.delete(uri(authorityFavourites, TABLE_WORK_FAVOURITES), selection, args)
 		provider.delete(uri(authorityFavourites, TABLE_FAVOURITE_CATEGORIES), selection, args)
 	}
 
@@ -412,7 +377,7 @@ class SyncHelper @AssistedInject constructor(
 		val deletedAt = System.currentTimeMillis() - defaultGcPeriod
 		val selection = "deleted_at != 0 AND deleted_at < ?"
 		val args = arrayOf(deletedAt.toString())
-		provider.delete(uri(authorityHistory, TABLE_HISTORY), selection, args)
+		provider.delete(uri(authorityHistory, TABLE_WORK_HISTORY), selection, args)
 	}
 
 	private fun ContentProviderClient.query(authority: String, table: String): Cursor {

@@ -12,6 +12,7 @@ import org.skepsun.kototoro.sync.google.data.model.SyncEntityRecord
 import org.skepsun.kototoro.sync.google.data.model.SyncEntityRelationRecord
 import org.skepsun.kototoro.sync.google.data.model.SyncFavouriteCategory
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkFavourite
+import org.skepsun.kototoro.sync.google.data.model.SyncWorkHistory
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
 
 class GoogleDriveSyncMergerTest {
@@ -19,6 +20,8 @@ class GoogleDriveSyncMergerTest {
 	@Test
 	fun `compact drops dirty favourite projections outside authoritative work anchors`() {
 		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
 			entityGraph = SyncEntityGraph(
 				entities = listOf(entity(10L, "Dirty"), entity(20L, "Clean")),
 				bindings = listOf(
@@ -59,15 +62,111 @@ class GoogleDriveSyncMergerTest {
 		assertEquals(listOf(2L), compact.work.favourites.map { it.anchorMangaId })
 	}
 
-	private fun content(id: Long): SyncContent {
+	@Test
+	fun `compact keeps current work sync protocol marker`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(20L, "Clean")),
+				bindings = listOf(localBinding(entityId = 20L, mangaId = 2L)),
+			),
+			content = listOf(content(2L)),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				favourites = listOf(favourite(entityId = 20L, anchorMangaId = 2L)),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(GoogleDriveSyncSnapshot.SCHEMA_VERSION, compact.schemaVersion)
+		assertEquals(GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2, compact.namespace)
+		assertEquals(GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION, compact.semanticSchemaVersion)
+	}
+
+	@Test
+	fun `compact merges work state by entity owner instead of projection anchor`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(20L, "Work")),
+				bindings = listOf(
+					localBinding(entityId = 20L, mangaId = 2L),
+					localBinding(entityId = 20L, mangaId = 3L),
+				),
+				prefs = listOf(prefs(entityId = 20L, preferredLocalMangaId = 2L)),
+			),
+			content = listOf(content(2L), content(3L)),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(
+					history(entityId = 20L, anchorMangaId = 3L, updatedAt = 10L),
+					history(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L),
+				),
+				favourites = listOf(
+					favourite(entityId = 20L, anchorMangaId = 3L, updatedAt = 10L),
+					favourite(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L),
+				),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(2L), compact.work.history.map { it.anchorMangaId })
+		assertEquals(listOf(2L), compact.work.favourites.map { it.anchorMangaId })
+		assertEquals(1, compact.work.history.size)
+		assertEquals(1, compact.work.favourites.size)
+	}
+
+	@Test
+	fun `compact does not merge projections by weak title and cover fallback`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(20L, "First"), entity(30L, "Second")),
+				bindings = listOf(
+					localBinding(entityId = 20L, mangaId = 2L),
+					localBinding(entityId = 30L, mangaId = 3L),
+				),
+			),
+			content = listOf(
+				content(id = 2L, title = "Same", url = "", publicUrl = "", coverUrl = "same-cover"),
+				content(id = 3L, title = "Same", url = "", publicUrl = "", coverUrl = "same-cover"),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(
+					history(entityId = 20L, anchorMangaId = 2L),
+					history(entityId = 30L, anchorMangaId = 3L),
+				),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(2L, 3L), compact.content.map { it.id })
+		assertEquals(listOf(20L, 30L), compact.entityGraph.entities.map { it.id })
+		assertEquals(listOf(2L, 3L), compact.work.history.map { it.anchorMangaId }.sorted())
+	}
+
+	private fun content(
+		id: Long,
+		title: String = "Title $id",
+		url: String = "https://example.test/$id",
+		publicUrl: String = "https://public.example.test/$id",
+		coverUrl: String = "https://cover.example.test/$id.jpg",
+	): SyncContent {
 		return SyncContent(
 			id = id,
-			title = "Title $id",
-			url = "https://example.test/$id",
-			publicUrl = "https://public.example.test/$id",
+			title = title,
+			url = url,
+			publicUrl = publicUrl,
 			rating = 0f,
 			isNsfw = false,
-			coverUrl = "https://cover.example.test/$id.jpg",
+			coverUrl = coverUrl,
 			source = "source",
 		)
 	}
@@ -119,7 +218,16 @@ class GoogleDriveSyncMergerTest {
 		)
 	}
 
-	private fun favourite(entityId: Long, anchorMangaId: Long?): SyncWorkFavourite {
+	private fun history(entityId: Long, anchorMangaId: Long, updatedAt: Long = 1L): SyncWorkHistory {
+		return SyncWorkHistory(
+			entityId = entityId,
+			anchorMangaId = anchorMangaId,
+			createdAt = 1L,
+			updatedAt = updatedAt,
+		)
+	}
+
+	private fun favourite(entityId: Long, anchorMangaId: Long?, updatedAt: Long = 1L): SyncWorkFavourite {
 		return SyncWorkFavourite(
 			entityId = entityId,
 			categoryId = 1L,
@@ -127,7 +235,7 @@ class GoogleDriveSyncMergerTest {
 			sortKey = 1,
 			isPinned = false,
 			createdAt = 1L,
-			updatedAt = 1L,
+			updatedAt = updatedAt,
 			deletedAt = 0L,
 		)
 	}

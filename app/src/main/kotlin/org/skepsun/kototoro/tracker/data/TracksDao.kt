@@ -30,6 +30,9 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT * FROM tracks WHERE owner_id = :ownerId LIMIT 1")
 	abstract suspend fun findByOwnerId(ownerId: Long): TrackEntity?
 
+	@Query("SELECT * FROM tracks WHERE entity_id IN (:entityIds) ORDER BY last_chapter_date DESC, last_check_time DESC")
+	abstract suspend fun findByEntityIds(entityIds: Collection<Long>): List<TrackEntity>
+
 	@Query("SELECT IFNULL(chapters_new,0) FROM tracks WHERE manga_id = :mangaId LIMIT 1")
 	abstract suspend fun findNewChapters(mangaId: Long): Int
 
@@ -182,60 +185,6 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 				AND wf.anchor_manga_id IS NOT NULL
 				AND fc.deleted_at = 0
 				AND fc.track = 1
-
-			UNION
-
-			SELECT COALESCE(
-				(
-					SELECT eb.entity_id
-					FROM entity_binding eb
-					WHERE eb.source IN ('local_manga', '0')
-						AND eb.external_id = CAST(history.manga_id AS TEXT)
-						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-					ORDER BY CASE eb.state
-						WHEN 'MANUAL' THEN 0
-						WHEN 'CONFIRMED' THEN 1
-						WHEN 'LEGACY' THEN 2
-						ELSE 3
-					END,
-					eb.updated_at DESC,
-					eb.rowid DESC
-					LIMIT 1
-				),
-				-history.manga_id
-			)
-			FROM history
-			WHERE history.deleted_at = 0
-
-			UNION
-
-			SELECT COALESCE(
-				(
-					SELECT eb.entity_id
-					FROM entity_binding eb
-					WHERE eb.source IN ('local_manga', '0')
-						AND eb.external_id = CAST(favourites.manga_id AS TEXT)
-						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-					ORDER BY CASE eb.state
-						WHEN 'MANUAL' THEN 0
-						WHEN 'CONFIRMED' THEN 1
-						WHEN 'LEGACY' THEN 2
-						ELSE 3
-					END,
-					eb.updated_at DESC,
-					eb.rowid DESC
-					LIMIT 1
-				),
-				-favourites.manga_id
-			)
-			FROM favourites
-			WHERE favourites.deleted_at = 0
-				AND category_id IN (
-					SELECT category_id
-					FROM favourite_categories
-					WHERE favourite_categories.deleted_at = 0
-						AND track = 1
-				)
 		)
 		""",
 	)
@@ -276,27 +225,16 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
 	private fun favouriteExistsExpr(localMangaIdExpr: String, categoryId: Long? = null): String {
 		val entityIdExpr = entityIdExpr(localMangaIdExpr)
-		val representativeLocalMangaIdExpr = representativeLocalMangaIdExpr(localMangaIdExpr)
 		val categoryFilter = categoryId?.let { " AND wf.category_id = $it" }.orEmpty()
-		val legacyCategoryFilter = categoryId?.let { " AND favourites.category_id = $it" }.orEmpty()
-		return "(" +
-			"EXISTS(SELECT 1 FROM work_favourites wf " +
-			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)" +
-			" OR " +
-			"EXISTS(SELECT 1 FROM favourites " +
-			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0$legacyCategoryFilter)" +
-			")"
+		return "EXISTS(SELECT 1 FROM work_favourites wf " +
+			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)"
 	}
 
 	private fun pinnedSortExpr(localMangaIdExpr: String): String {
 		val entityIdExpr = entityIdExpr(localMangaIdExpr)
-		val representativeLocalMangaIdExpr = representativeLocalMangaIdExpr(localMangaIdExpr)
 		return "IFNULL((" +
 			"SELECT MAX(pinned) FROM work_favourites wf " +
 			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0" +
-			"), IFNULL((" +
-			"SELECT MAX(pinned) FROM favourites " +
-			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0" +
-			"), 0))"
+			"), 0)"
 	}
 }

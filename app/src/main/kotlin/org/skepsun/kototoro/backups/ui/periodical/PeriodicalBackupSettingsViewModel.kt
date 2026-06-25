@@ -130,11 +130,11 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			try {
 				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
-				Log.d(TAG, "restoreWebDavNow: listing backups once...")
-				val latest = webDavUploader.getLatestBackup()
+				Log.d(TAG, "restoreWebDavNow: listing current work backups once...")
+				val latest = webDavUploader.getLatestBackup(RemoteNamespace.V3)
 				if (latest == null) {
-					Log.w(TAG, "restoreWebDavNow: no backups found in any namespace")
-					throw IllegalStateException("No WebDAV backups found")
+					Log.w(TAG, "restoreWebDavNow: no current work backups found")
+					throw IllegalStateException("No current WebDAV work backups found")
 				}
 				Log.d(TAG, "restoreWebDavNow: found ${latest.name} (ns=${latest.namespace}, ${latest.size}b)")
 				val tempFile = java.io.File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)

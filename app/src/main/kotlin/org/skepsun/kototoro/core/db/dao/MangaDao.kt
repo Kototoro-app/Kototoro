@@ -31,11 +31,23 @@ abstract class MangaDao {
 	abstract suspend fun findByPublicUrl(publicUrl: String): MangaWithTags?
 
 	@Transaction
+	@Query("SELECT * FROM manga WHERE source = :source AND url = :url LIMIT 1")
+	abstract suspend fun findBySourceAndUrl(source: String, url: String): MangaWithTags?
+
+	@Transaction
+	@Query("SELECT * FROM manga WHERE source = :source AND public_url = :publicUrl LIMIT 1")
+	abstract suspend fun findBySourceAndPublicUrl(source: String, publicUrl: String): MangaWithTags?
+
+	@Transaction
 	@Query("SELECT * FROM manga WHERE source = :source")
 	abstract suspend fun findAllBySource(source: String): List<MangaWithTags>
 
 	@Query("SELECT * FROM manga WHERE manga_id IN (:ids)")
 	abstract suspend fun findEntitiesByIds(ids: Collection<Long>): List<MangaEntity>
+
+	@Transaction
+	@Query("SELECT * FROM manga WHERE manga_id IN (:ids)")
+	abstract suspend fun findWithTagsByIds(ids: Collection<Long>): List<MangaWithTags>
 
 	@Query("SELECT * FROM manga_tags WHERE manga_id IN (:ids)")
 	abstract suspend fun findTagRelationsByMangaIds(ids: Collection<Long>): List<MangaTagsEntity>
@@ -51,10 +63,17 @@ abstract class MangaDao {
 		"""
 		SELECT * FROM manga
 		WHERE (title LIKE :query OR alt_title LIKE :query)
-			AND manga_id IN (
-				SELECT manga_id FROM favourites
-				UNION
-				SELECT manga_id FROM history WHERE deleted_at = 0
+			AND (
+				EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
+				OR EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
+				OR EXISTS(
+					SELECT 1 FROM entity_binding
+					WHERE entity_binding.source IN ('local_manga', '0')
+						AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
+						AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+				)
 			)
 		LIMIT :limit
 		""",
@@ -67,10 +86,17 @@ abstract class MangaDao {
 		SELECT * FROM manga
 		WHERE (title LIKE :query OR alt_title LIKE :query)
 			AND source = :source
-			AND manga_id IN (
-				SELECT manga_id FROM favourites
-				UNION
-				SELECT manga_id FROM history WHERE deleted_at = 0
+			AND (
+				EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
+				OR EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
+				OR EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
+				OR EXISTS(
+					SELECT 1 FROM entity_binding
+					WHERE entity_binding.source IN ('local_manga', '0')
+						AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
+						AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+				)
 			)
 		LIMIT :limit
 		""",
@@ -98,8 +124,17 @@ abstract class MangaDao {
 
 	@Query(
 		"""
-		DELETE FROM manga WHERE NOT EXISTS(SELECT * FROM history WHERE history.manga_id == manga.manga_id) 
-			AND NOT EXISTS(SELECT * FROM favourites WHERE favourites.manga_id == manga.manga_id)
+		DELETE FROM manga
+		WHERE NOT EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
+			AND NOT EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
+			AND NOT EXISTS(
+				SELECT 1 FROM entity_binding
+				WHERE entity_binding.source IN ('local_manga', '0')
+					AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
+					AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+			)
 			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM suggestions WHERE suggestions.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM scrobblings WHERE scrobblings.manga_id == manga.manga_id)
@@ -111,8 +146,17 @@ abstract class MangaDao {
 
 	@Query(
 		"""
-		DELETE FROM manga WHERE NOT EXISTS(SELECT * FROM history WHERE history.manga_id == manga.manga_id) 
-			AND NOT EXISTS(SELECT * FROM favourites WHERE favourites.manga_id == manga.manga_id)
+		DELETE FROM manga
+		WHERE NOT EXISTS(SELECT 1 FROM work_history WHERE work_history.anchor_manga_id = manga.manga_id AND work_history.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM work_favourites WHERE work_favourites.anchor_manga_id = manga.manga_id AND work_favourites.deleted_at = 0)
+			AND NOT EXISTS(SELECT 1 FROM work_stats WHERE work_stats.anchor_manga_id = manga.manga_id)
+			AND NOT EXISTS(SELECT 1 FROM entity_preferences WHERE entity_preferences.preferred_local_manga_id = manga.manga_id)
+			AND NOT EXISTS(
+				SELECT 1 FROM entity_binding
+				WHERE entity_binding.source IN ('local_manga', '0')
+					AND entity_binding.external_id = CAST(manga.manga_id AS TEXT)
+					AND entity_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+			)
 			AND NOT EXISTS(SELECT * FROM bookmarks WHERE bookmarks.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM suggestions WHERE suggestions.manga_id == manga.manga_id)
 			AND NOT EXISTS(SELECT * FROM scrobblings WHERE scrobblings.manga_id == manga.manga_id)

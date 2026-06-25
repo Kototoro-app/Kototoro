@@ -76,10 +76,12 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                     )
                 }
             }
-            entityGraphRepository.ensureLocalWorkEntities(
-                contents = favouritesRepository.getAllContent(),
-                createdBy = EntityBindingCreatedBy.MIGRATION,
-            )
+            favouritesRepository.getAllContent().forEach { content ->
+                workResolver.ensureForProjection(
+                    content = content,
+                    provenance = org.skepsun.kototoro.work.domain.WorkIdentityProvenance.MIGRATION,
+                )
+            }
             normalizeTrackingLinkOwnership()
             normalizeScrobblingOwnership()
             normalizeReadingRecordAnchors()

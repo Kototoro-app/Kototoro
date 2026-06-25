@@ -35,11 +35,9 @@ class MihonBackupExportRepository @Inject constructor(
     ): MihonBackupExportSummary {
         progress?.emit(Progress.INDETERMINATE)
 
-        val favouriteEntries = database.getFavouritesDao()
-            .findAllEntriesIncludingDeleted()
-            .filter { it.deletedAt == 0L }
-        val historyIds = database.getHistoryDao().findAllIds().distinct().toList()
-        val candidateIds = (favouriteEntries.map(FavouriteEntity::mangaId) + historyIds).distinct()
+        val workState = database.readExternalBackupWorkState()
+        val favouriteEntries = workState.favouriteEntries
+        val candidateIds = workState.candidateMangaIds
 
         val mangaById = database.getMangaDao().findEntitiesByIds(candidateIds).associateBy(MangaEntity::id)
         val exportedMangaIds = candidateIds.filter { mangaById[it]?.source.toMihonSourceIdOrNull() != null }
@@ -47,17 +45,14 @@ class MihonBackupExportRepository @Inject constructor(
             throw IllegalStateException(context.getString(R.string.export_mihon_backup_empty))
         }
 
-        val historyByMangaId = database.getHistoryDao()
-            .findByIds(exportedMangaIds)
-            .filter { it.deletedAt == 0L }
-            .associateBy(HistoryEntity::mangaId)
+        val historyByMangaId = workState.historyByMangaId
+            .filterKeys { it in exportedMangaIds }
         val chaptersByMangaId = database.getChaptersDao()
             .findAllByMangaIds(exportedMangaIds)
             .groupBy(ChapterEntity::mangaId)
-        val favoriteEntriesByMangaId = favouriteEntries.groupBy(FavouriteEntity::mangaId)
-        val categoryMembershipsByMangaId = database.getFavouritesDao()
-            .findCategoryMemberships(exportedMangaIds)
-            .groupBy(FavouriteCategoryMembership::mangaId)
+        val favoriteEntriesByMangaId = workState.favouriteEntriesByMangaId
+        val categoryMembershipsByMangaId = workState.categoryMembershipsByMangaId
+            .filterKeys { it in exportedMangaIds }
         val categoriesById = database.getFavouriteCategoriesDao()
             .findAll()
             .associateBy { it.categoryId.toLong() }

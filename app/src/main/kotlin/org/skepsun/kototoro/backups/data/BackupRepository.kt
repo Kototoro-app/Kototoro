@@ -151,7 +151,6 @@ class BackupRepository @Inject constructor(
         output: ZipOutputStream,
         progress: FlowCollector<Progress>?,
     ) {
-        normalizeLegacyWorkStateForAuthoritativeBackup()
         progress?.emit(Progress.INDETERMINATE)
         var commonProgress = Progress(0, BackupSection.entries.size)
         for (section in BackupSection.entries) {
@@ -349,9 +348,10 @@ class BackupRepository @Inject constructor(
                         CompositeResult.EMPTY
                     }
                     BackupSection.HISTORY -> input.readJsonArray<HistoryBackup>(serializer()).restoreToDb("HISTORY") {
-                        // Legacy history is import input only: restore content and write work-owned state.
                         upsertContent(it.manga, restoreContext)
-                        upsertWorkHistoryFromLegacy(it.toEntity(), restoreMode)
+                        if (restoreContext.isLegacySemanticSchema) {
+                            upsertWorkHistoryFromLegacy(it.toEntity(), restoreMode)
+                        }
                     }
 
                     BackupSection.CATEGORIES -> input.readJsonArray<CategoryBackup>(serializer()).restoreToDb("CATEGORIES") {
@@ -359,9 +359,10 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.FAVOURITES -> input.readJsonArray<FavouriteBackup>(serializer()).restoreToDb("FAVOURITES") {
-                        // Legacy favourites are import input only: restore content and write work-owned state.
                         upsertContent(it.manga, restoreContext)
-                        upsertWorkFavouriteFromLegacy(it.toEntity())
+                        if (restoreContext.isLegacySemanticSchema) {
+                            upsertWorkFavouriteFromLegacy(it.toEntity())
+                        }
                     }
 
                     BackupSection.SETTINGS -> input.readMap().let {
@@ -402,7 +403,9 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.STATS -> input.readJsonArray<StatisticBackup>(serializer()).restoreToDb("STATS") {
-                        upsertWorkStatsFromLegacy(it.toEntity())
+                        if (restoreContext.isLegacySemanticSchema) {
+                            upsertWorkStatsFromLegacy(it.toEntity())
+                        }
                     }
 
                     BackupSection.WORK_HISTORY -> input.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
@@ -460,8 +463,6 @@ class BackupRepository @Inject constructor(
         val normalizeStartedAt = SystemClock.elapsedRealtime()
         normalizeRestoredWorkState(
             requestedSections = effectiveSections,
-            archiveSections = archiveSections,
-            restoreContext = restoreContext,
         )
         Log.d(TAG, "restoreBackup: normalizeRestoredWorkState elapsedMs=${SystemClock.elapsedRealtime() - normalizeStartedAt}")
         val trimStartedAt = SystemClock.elapsedRealtime()
@@ -485,58 +486,10 @@ class BackupRepository @Inject constructor(
 
     private suspend fun normalizeRestoredWorkState(
         requestedSections: Set<BackupSection>,
-        archiveSections: Set<BackupSection>,
-        restoreContext: RestoreSemanticContext,
     ) {
-        val hasAuthoritativeWorkHistory = restoreContext.isAuthoritativeWorkSchema &&
-            BackupSection.WORK_HISTORY in archiveSections
-        val hasAuthoritativeWorkFavourites = restoreContext.isAuthoritativeWorkSchema &&
-            BackupSection.WORK_FAVOURITES in archiveSections
-        val hasAuthoritativeWorkStats = restoreContext.isAuthoritativeWorkSchema &&
-            BackupSection.WORK_STATS in archiveSections
-
         database.withTransaction {
             if (BackupSection.SCROBBLING in requestedSections) {
                 database.normalizeRestoredScrobblingState()
-            }
-            if (!hasAuthoritativeWorkHistory &&
-                (BackupSection.HISTORY in requestedSections || BackupSection.WORK_HISTORY in requestedSections)
-            ) {
-                database.getHistoryDao().findAllIds().forEach { mangaId ->
-                    database.getHistoryDao().find(mangaId)?.let { history ->
-                        database.upsertWorkHistoryFromLegacy(history)
-                    }
-                }
-            }
-            if (!hasAuthoritativeWorkFavourites &&
-                (BackupSection.FAVOURITES in requestedSections || BackupSection.WORK_FAVOURITES in requestedSections)
-            ) {
-                database.getFavouritesDao().findAll().forEach { favouriteContent ->
-                    favouriteContent.favourite.let { favourite ->
-                        database.upsertWorkFavouriteFromLegacy(favourite)
-                    }
-                }
-            }
-            if (!hasAuthoritativeWorkStats &&
-                (BackupSection.STATS in requestedSections || BackupSection.WORK_STATS in requestedSections)
-            ) {
-                database.getStatsDao().dumpEnabled().collect { stats ->
-                    database.upsertWorkStatsFromLegacy(stats)
-                }
-            }
-        }
-    }
-
-    private suspend fun normalizeLegacyWorkStateForAuthoritativeBackup() {
-        database.withTransaction {
-            database.getHistoryDao().findAllEntriesIncludingDeleted().forEach { history ->
-                database.upsertWorkHistoryFromLegacy(history)
-            }
-            database.getFavouritesDao().findAllEntriesIncludingDeleted().forEach { favourite ->
-                database.upsertWorkFavouriteFromLegacy(favourite)
-            }
-            database.getStatsDao().dumpEnabled().collect { stats ->
-                database.upsertWorkStatsFromLegacy(stats)
             }
         }
     }

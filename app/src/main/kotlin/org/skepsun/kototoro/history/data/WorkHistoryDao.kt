@@ -19,8 +19,14 @@ abstract class WorkHistoryDao {
 	@Query("SELECT * FROM work_history WHERE entity_id IN (:entityIds) AND deleted_at = 0")
 	abstract suspend fun findByEntityIds(entityIds: List<Long>): List<WorkHistoryEntity>
 
+	@Query("SELECT * FROM work_history WHERE anchor_manga_id = :anchorMangaId AND deleted_at = 0 LIMIT 1")
+	abstract suspend fun findActiveByAnchorMangaId(anchorMangaId: Long): WorkHistoryEntity?
+
 	@Query("SELECT * FROM work_history WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT 1")
 	abstract suspend fun findLastOrNull(): WorkHistoryEntity?
+
+	@Query("SELECT * FROM work_history WHERE deleted_at = 0 ORDER BY updated_at DESC LIMIT :limit")
+	abstract suspend fun findRecent(limit: Int): List<WorkHistoryEntity>
 
 	@Query("SELECT anchor_manga_id FROM work_history WHERE deleted_at = 0")
 	abstract suspend fun findActiveAnchorMangaIds(): List<Long>

@@ -33,15 +33,16 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.data.FavouriteContent
-import org.skepsun.kototoro.favourites.data.FavouriteSourcesRepository
 import org.skepsun.kototoro.favourites.data.toContent
 import org.skepsun.kototoro.favourites.domain.BindTrackingToEntitiesUseCase
 import org.skepsun.kototoro.favourites.domain.DEFAULT_FUZZY_MERGE_THRESHOLD
+import org.skepsun.kototoro.favourites.domain.EntityOrganizeRepository
 import org.skepsun.kototoro.favourites.domain.MigrationProgress
 import org.skepsun.kototoro.favourites.domain.MergeCandidateOptions
 import org.skepsun.kototoro.favourites.domain.MergeCandidateGroup
 import org.skepsun.kototoro.favourites.domain.MergeEntitiesResult
 import org.skepsun.kototoro.favourites.domain.MergeFavoriteEntitiesUseCase
+import org.skepsun.kototoro.favourites.domain.OrganizableWork
 import org.skepsun.kototoro.favourites.domain.PreviewReadingSourceMigrationUseCase
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreview
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
@@ -129,6 +130,7 @@ data class MigrationUiState(
     val favouriteSources: List<ContentSource> = emptyList(),
     val availableSources: List<ContentSource> = emptyList(),
     val selectedContentIds: Set<Long> = emptySet(),
+    val organizableWorks: List<OrganizableWork> = emptyList(),
     val scopedFavouriteContents: List<FavouriteContent> = emptyList(),
     val mergeCandidateGroups: List<MergeCandidateGroup> = emptyList(),
     val mergePreviewReady: Boolean = false,
@@ -277,7 +279,7 @@ internal fun buildEntityOrganizeCloseResult(
 class SourceMigrationViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val appSettings: AppSettings,
-    private val favouriteSourcesRepository: FavouriteSourcesRepository,
+    private val entityOrganizeRepository: EntityOrganizeRepository,
     private val sourcesRepository: ContentSourcesRepository,
     private val sourceGroupManager: SourceGroupManager,
     private val mergeFavoriteEntitiesUseCase: MergeFavoriteEntitiesUseCase,
@@ -321,12 +323,15 @@ class SourceMigrationViewModel @Inject constructor(
 
     fun loadSources() {
         viewModelScope.launch(Dispatchers.IO) {
-            val favSources = favouriteSourcesRepository.getFavouriteSources()
-            val sourceCounts = favSources.associateWith { source ->
-                favouriteSourcesRepository.getFavouriteContentsBySource(source.name).size
-            }
-            val sortedFavSources = favSources.sortedByDescending { sourceCounts[it] ?: 0 }
+            val favouriteContents = entityOrganizeRepository.listFavouriteContents()
+            val organizableWorks = entityOrganizeRepository.listOrganizableWorks()
+            val sourceCounts = favouriteContents
+                .groupingBy { it.manga.source }
+                .eachCount()
             val allSources = sourcesRepository.getAllAvailableSourcesForListing()
+            val sortedFavSources = allSources
+                .filter { it.name in sourceCounts }
+                .sortedByDescending { sourceCounts[it.name] ?: 0 }
             val trackingServices = ScrobblerService.entries.filter { service ->
                 trackingSiteDiscoveryService.getCapabilities(service).supportsSearch
             }
@@ -334,6 +339,7 @@ class SourceMigrationViewModel @Inject constructor(
             _uiState.value = state.copy(
                 favouriteSources = sortedFavSources,
                 availableSources = allSources,
+                organizableWorks = organizableWorks,
                 availableTrackingServices = trackingServices,
                 trackingMetadataSourceStrategy = appSettings.trackingMetadataSourceStrategy,
                 selectedTrackingServices = state.selectedTrackingServices.filter { it in trackingServices },
@@ -1095,279 +1101,6 @@ class SourceMigrationViewModel @Inject constructor(
         )
     }
 
-    fun splitSuspectMismergedLocalWorks() {
-        val state = _uiState.value
-        val suspectIds = state.suspectMismergedLocalMangaIds
-        if (suspectIds.isEmpty() || state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            var repairedCount = 0
-            Log.i(TAG, "splitSuspectMismergedLocalWorks start count=${suspectIds.size} ids=${suspectIds.joinToString()}")
-            suspectIds.forEach { mangaId ->
-                val result = entityGraphRepository.splitLocalWorkProjectionWithDiagnostics(mangaId)
-                if (result.isSuccess) {
-                    repairedCount++
-                }
-                Log.i(
-                    TAG,
-                    "splitSuspectMismergedLocalWorks item mangaId=${result.localMangaId} " +
-                        "success=${result.isSuccess} oldEntity=${result.oldEntityId} " +
-                        "newEntity=${result.newEntityId} oldSource=${result.oldSource} " +
-                        "hadLocalContent=${result.hadLocalContent} failure=${result.failure}",
-                )
-            }
-            refreshMergeCandidates()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            val remainingSuspects = repairReport.issues
-                .asSequence()
-                .filter { it.kind == EntityGraphRepairIssueKind.SUSPECT_MISMERGED_LOCAL_WORK }
-                .mapNotNull { it.externalId?.toLongOrNull() }
-                .toSet()
-            Log.i(
-                TAG,
-                "splitSuspectMismergedLocalWorks finish repaired=$repairedCount " +
-                    "failed=${suspectIds.size - repairedCount} remaining=${remainingSuspects.size} " +
-                    "remainingIds=${remainingSuspects.joinToString()}",
-            )
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                selectedMergeItemsByGroup = current.selectedMergeItemsByGroup.mapValues { (_, ids) ->
-                    ids - suspectIds
-                },
-                selectedManualMergeMangaIds = current.selectedManualMergeMangaIds - suspectIds,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.MERGE,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_split_suspect_feedback,
-                        repairedCount,
-                        suspectIds.size - repairedCount,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun hideStaleLegacyRelations() {
-        val state = _uiState.value
-        val staleRelationCount = state.repairReport?.staleLegacyRelationCount ?: 0
-        if (staleRelationCount <= 0 || state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            val hiddenCount = entityGraphRepository.hideStaleLegacyRelations()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.MERGE,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_hide_legacy_relations_feedback,
-                        hiddenCount,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun rejectSuspectTrackingBindings() {
-        val state = _uiState.value
-        val suspectCount = state.repairReport?.suspectTrackingBindingCount ?: 0
-        if (suspectCount <= 0 || state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            val rejectedCount = entityGraphRepository.rejectSuspectTrackingBindings()
-            refreshMergeCandidates()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.TRACKING,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_reject_suspect_tracking_feedback,
-                        rejectedCount,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun resetAllEntities() {
-        val state = _uiState.value
-        if (state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(isExecuting = true, isFinished = false)
-        viewModelScope.launch(Dispatchers.IO) {
-            entityGraphRepository.resetAllEntities()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-            )
-        }
-    }
-
-    fun repairSuspectMetadataSourceSelections() {
-        val state = _uiState.value
-        val suspectCount = state.repairReport?.suspectMetadataSourceCount ?: 0
-        if (suspectCount <= 0 || state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            val repairedCount = entityGraphRepository.repairSuspectMetadataSourceSelections()
-            refreshMergeCandidates()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.TRACKING,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_metadata_source_feedback,
-                        repairedCount,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun pruneRedundantProjectionMetadataSelections() {
-        val state = _uiState.value
-        if (state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            val prunedCount = entityGraphRepository.pruneRedundantProjectionMetadataSelections()
-            refreshMergeCandidates()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.TRACKING,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_prune_projection_metadata_feedback,
-                        prunedCount,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun pruneRedundantProjectionOverrides() {
-        val state = _uiState.value
-        if (state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            val prunedCount = entityGraphRepository.pruneRedundantProjectionOverrides()
-            refreshMergeCandidates()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.TRACKING,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_prune_projection_override_feedback,
-                        prunedCount,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun pruneRedundantProjectionReadingStatuses() {
-        val state = _uiState.value
-        if (state.isExecuting) {
-            return
-        }
-        _uiState.value = state.copy(
-            isExecuting = true,
-            isFinished = false,
-            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.TRACKING),
-        )
-        viewModelScope.launch(Dispatchers.IO) {
-            val prunedCount = entityGraphRepository.pruneRedundantProjectionReadingStatuses()
-            refreshMergeCandidates()
-            val repairReport = entityGraphRepository.inspectRepairIssues()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                repairReport = repairReport,
-                isLoadingRepairReport = false,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.TRACKING,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_prune_projection_reading_status_feedback,
-                        prunedCount,
-                    ),
-                ),
-            )
-        }
-    }
-
     fun mergeSelectedEntities() {
         val state = _uiState.value
         if (!state.mergePreviewReady || state.selectedMergeGroupIds.isEmpty() || state.isExecuting) {
@@ -1416,7 +1149,7 @@ class SourceMigrationViewModel @Inject constructor(
             stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
         )
         viewModelScope.launch(Dispatchers.IO) {
-            val contents = favouriteSourcesRepository.getFavouriteContentsByIds(selectedMangaIds)
+            val contents = entityOrganizeRepository.listFavouriteContentsByMangaIds(selectedMangaIds)
                 .map { it.toContent() }
                 .distinctBy { it.id }
             val sameContentType = contents
@@ -2340,24 +2073,24 @@ class SourceMigrationViewModel @Inject constructor(
 
     private suspend fun loadScopedFavouriteContents(state: MigrationUiState): List<FavouriteContent> = when {
         state.selectedContentIds.isNotEmpty() -> {
-            favouriteSourcesRepository.getFavouriteContentsByIds(state.selectedContentIds)
+            entityOrganizeRepository.listFavouriteContentsByMangaIds(state.selectedContentIds)
         }
 
         state.selectedFromSource != null -> {
-            favouriteSourcesRepository.getFavouriteContentsBySource(
+            entityOrganizeRepository.listFavouriteContents(
                 state.selectedFromSource.name,
             )
         }
 
         else -> {
-            favouriteSourcesRepository.getAllFavouriteContents()
+            entityOrganizeRepository.listFavouriteContents()
         }
     }
 
     private suspend fun loadTrackingPreviewFavouriteContents(state: MigrationUiState): List<FavouriteContent> {
         val scopeIds = state.trackingOperationScopeIds()
         return if (scopeIds.isNotEmpty()) {
-            favouriteSourcesRepository.getFavouriteContentsByIds(scopeIds)
+            entityOrganizeRepository.listFavouriteContentsByMangaIds(scopeIds)
         } else {
             loadScopedFavouriteContents(state)
         }

@@ -1541,9 +1541,13 @@ class DetailsViewModel @Inject constructor(
 					val localContent = originContent
 						?: currentObservedLocalMangaIdSnapshot()?.let { mangaId -> db.getMangaDao().find(mangaId)?.toContent() }
 						?: return@launchJob
-				val entity = entityGraphRepository.ensureLocalWorkEntity(localContent)
+				val identity = workResolver.ensureForProjection(
+					content = localContent,
+					provenance = org.skepsun.kototoro.work.domain.WorkIdentityProvenance.USER,
+				)
+				val entityId = identity.entityId ?: return@launchJob
 				applyEntityContext(
-					entityId = entity.id,
+					entityId = entityId,
 					preferredLocalMangaId = localContent.id,
 					populateSyntheticHeader = false,
 				)

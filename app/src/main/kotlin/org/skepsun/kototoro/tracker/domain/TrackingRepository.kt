@@ -34,6 +34,8 @@ import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
 import org.skepsun.kototoro.tracker.ui.debug.TrackDebugItem
+import org.skepsun.kototoro.work.domain.WorkAggregate
+import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentity
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
@@ -48,6 +50,7 @@ class TrackingRepository @Inject constructor(
 	private val progressUpdateUseCase: ProgressUpdateUseCase,
 	private val contentDataRepository: ContentDataRepository,
 	private val workResolver: WorkResolver,
+	private val workAggregateRepository: WorkAggregateRepository,
 ) {
 
 	private var isGcCalled = AtomicBoolean(false)
@@ -107,17 +110,16 @@ class TrackingRepository @Inject constructor(
 	fun observeUpdatedContent(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<ContentTracking>> {
 		return db.getTracksDao().observeUpdatedContent(limit, filterOptions)
 			.mapLatest { tracks ->
-				aggregateUpdatedTrackings(
-					resolveDisplayTrackings(tracks),
-				)
+				workAggregateRepository.buildTrackingAggregates(tracks)
+					.mapNotNull { aggregate -> aggregate.toContentTracking() }
 			}.distinctUntilChanged()
 			.onStart { gcIfNotCalled() }
 	}
 
 	suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
-		return aggregateUpdatedTrackings(
-			resolveDisplayTrackings(db.getTracksDao().findAll(offset = offset, limit = limit)),
-		)
+		return workAggregateRepository
+			.buildTrackingAggregates(db.getTracksDao().findAll(offset = offset, limit = limit))
+			.mapNotNull { aggregate -> aggregate.toContentTracking() }
 	}
 
 	fun observeTrackDebugItems(): Flow<List<TrackDebugItem>> {
@@ -368,14 +370,12 @@ class TrackingRepository @Inject constructor(
 		val ids = LinkedHashSet<Long>()
 		if (AppSettings.TRACK_HISTORY in settings.trackSources) {
 			ids += db.getWorkHistoryDao().findActiveAnchorMangaIds()
-			ids += resolvePersistableTrackAnchorMangaIds(db.getHistoryDao().findAllIds().asIterable())
 		}
 		if (AppSettings.TRACK_FAVOURITES in settings.trackSources) {
 			val trackedEntityIds = db.getWorkFavouritesDao().findTrackedEntityIds()
 			for (entityId in trackedEntityIds) {
 				resolveExistingTrackAnchorForEntity(entityId)?.let(ids::add)
 			}
-			ids += resolvePersistableTrackAnchorMangaIds(db.getFavouritesDao().findIdsWithTrack().asIterable())
 		}
 		return ids.toList()
 	}
@@ -403,29 +403,6 @@ class TrackingRepository @Inject constructor(
 
 	private suspend fun resolveDisplayTrackingContent(anchorMangaId: Long, fallback: Content): Content {
 		return contentDataRepository.findDisplayContentById(anchorMangaId, withChapters = false) ?: fallback
-	}
-
-	private suspend fun resolveDisplayTrackings(tracks: List<TrackEntity>): List<ContentTracking> {
-		if (tracks.isEmpty()) {
-			return emptyList()
-		}
-		val fallbackByAnchorId = buildFallbackContentByAnchorId(tracks.map(TrackEntity::mangaId))
-		val preferredLocalIdsByEntity = tracks.mapNotNull { it.entityId }
-			.distinct()
-			.associateWith { entityId -> resolveExistingTrackAnchorForEntity(entityId) }
-		return tracks.mapNotNull { track ->
-			val fallbackContent = fallbackByAnchorId[track.mangaId] ?: return@mapNotNull null
-			ContentTracking(
-				anchorMangaId = track.mangaId,
-				entityId = track.entityId,
-				preferredLocalMangaId = track.entityId?.let(preferredLocalIdsByEntity::get) ?: track.mangaId,
-				manga = resolveDisplayTrackingContent(track.mangaId, fallbackContent),
-				lastChapterId = track.lastChapterId,
-				lastCheck = track.lastCheckTime.toInstantOrNull(),
-				lastChapterDate = track.lastChapterDate.toInstantOrNull(),
-				newChapters = track.newChapters,
-			)
-		}
 	}
 
 	private suspend fun resolveTrackDebugItems(tracks: List<TrackEntity>): List<TrackDebugItem> {
@@ -496,38 +473,24 @@ class TrackingRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun aggregateUpdatedTrackings(items: List<ContentTracking>): List<ContentTracking> {
-		if (items.size < 2) {
-			return items
-		}
-		val grouped = LinkedHashMap<Long, MutableList<ContentTracking>>(items.size)
-		for (item in items) {
-			val anchorId = resolvePersistableTrackAnchorMangaId(item.manga.id) ?: item.anchorMangaId
-			grouped.getOrPut(anchorId) { ArrayList(1) }.add(item)
-		}
-		return grouped.values.map { group ->
-			val representative = group.firstOrNull { item ->
-				resolvePersistableTrackAnchorMangaId(item.manga.id) == item.manga.id
-			} ?: group.maxWithOrNull(
-				compareBy<ContentTracking>(
-					{ it.lastChapterDate ?: it.lastCheck },
-					{ it.newChapters },
-				),
-			) ?: group.first()
-			representative.copy(
-				newChapters = group.sumOf { it.newChapters },
-				lastCheck = group.mapNotNull { it.lastCheck }.maxOrNull(),
-				lastChapterDate = group.mapNotNull { it.lastChapterDate }.maxOrNull(),
-			)
-		}.sortedWith(
-			compareByDescending<ContentTracking> { it.lastChapterDate ?: it.lastCheck }
-				.thenByDescending { it.newChapters },
-		)
-	}
-
 	private suspend fun gcIfNotCalled() {
 		if (isGcCalled.compareAndSet(false, true)) {
 			gc()
 		}
+	}
+
+	private fun WorkAggregate.toContentTracking(): ContentTracking? {
+		val tracking = tracking ?: return null
+		val displayProjection = displayProjection ?: return null
+		return ContentTracking(
+			anchorMangaId = tracking.anchorMangaId,
+			entityId = identity.entityId,
+			preferredLocalMangaId = identity.preferredMangaId ?: tracking.anchorMangaId,
+			manga = displayProjection,
+			lastChapterId = tracking.lastChapterId,
+			lastCheck = tracking.lastCheckTime.toInstantOrNull(),
+			lastChapterDate = tracking.lastChapterDate.toInstantOrNull(),
+			newChapters = tracking.newChapters,
+		)
 	}
 }

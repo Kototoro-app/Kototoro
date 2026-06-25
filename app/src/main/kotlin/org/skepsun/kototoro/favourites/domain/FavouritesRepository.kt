@@ -18,8 +18,6 @@ import org.skepsun.kototoro.core.db.TABLE_TAGS
 import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
-import org.skepsun.kototoro.core.db.entity.toContentList
-import org.skepsun.kototoro.core.db.entity.toContentTagsList
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
@@ -27,13 +25,10 @@ import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
-import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
-import org.skepsun.kototoro.favourites.data.toContentList
 import org.skepsun.kototoro.favourites.domain.model.Cover
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -42,14 +37,16 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.search.domain.SearchKind
+import org.skepsun.kototoro.work.domain.WorkAggregateRepository
+import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @Reusable
 class FavouritesRepository @Inject constructor(
 	private val db: MangaDatabase,
-	private val entityGraphRepository: EntityGraphRepository,
 	private val workResolver: WorkResolver,
+	private val workAggregateRepository: WorkAggregateRepository,
 	private val settings: AppSettings,
 ) {
 
@@ -64,29 +61,60 @@ class FavouritesRepository @Inject constructor(
 	)
 
 	suspend fun getAllContent(): List<Content> {
-		return buildWorkFavouriteContents(categoryId = FavouriteCategory.NO_ID, order = ListSortOrder.NEWEST)
+		return workAggregateRepository.findFavouriteAggregates(
+			categoryId = FavouriteCategory.NO_ID,
+			order = ListSortOrder.NEWEST,
+		).mapNotNull { it.displayProjection }
 	}
 
 	suspend fun getLastContent(limit: Int): List<Content> {
-		return buildWorkFavouriteContents(
+		return workAggregateRepository.findFavouriteAggregates(
 			categoryId = FavouriteCategory.NO_ID,
 			order = ListSortOrder.NEWEST,
 			limit = limit,
-		)
+		).mapNotNull { it.displayProjection }
 	}
 
 	suspend fun search(query: String, kind: SearchKind, limit: Int): List<Content> {
-		val dao = db.getFavouritesDao()
-		val q = "%$query%"
-		val entities = when (kind) {
-			SearchKind.SIMPLE,
-			SearchKind.TITLE -> dao.searchByTitle(q, limit).sortedBy { it.manga.title.levenshteinDistance(query) }
-
-			SearchKind.AUTHOR -> dao.searchByAuthor(q, limit)
-			SearchKind.TAG -> dao.searchByTag(q, limit)
-			SearchKind.ADVANCED -> dao.searchByTitle(q, limit)
+		if (limit <= 0) {
+			return emptyList()
 		}
-		return resolveWorkAnchorContents(entities.toContentList())
+		val normalizedQuery = query.trim()
+		if (normalizedQuery.isEmpty()) {
+			return emptyList()
+		}
+		val comparator = compareBy<Content> { it.title.levenshteinDistance(normalizedQuery) }
+			.thenBy { it.title }
+		return getAllContent()
+			.asSequence()
+			.filter { content -> content.matchesFavouriteSearch(normalizedQuery, kind) }
+			.let { sequence ->
+				when (kind) {
+					SearchKind.SIMPLE,
+					SearchKind.TITLE,
+					SearchKind.ADVANCED -> sequence.sortedWith(comparator)
+					SearchKind.AUTHOR,
+					SearchKind.TAG -> sequence
+				}
+			}
+			.take(limit)
+			.toList()
+	}
+
+	private fun Content.matchesFavouriteSearch(query: String, kind: SearchKind): Boolean {
+		val normalizedQuery = query.lowercase()
+		fun String?.containsQuery() = this?.lowercase()?.contains(normalizedQuery) == true
+		fun Iterable<String>.anyContainsQuery() = any { it.lowercase().contains(normalizedQuery) }
+		return when (kind) {
+			SearchKind.SIMPLE,
+			SearchKind.TITLE,
+			SearchKind.ADVANCED -> {
+				title.containsQuery() ||
+					altTitles.anyContainsQuery()
+			}
+			SearchKind.AUTHOR -> authors.anyContainsQuery()
+			SearchKind.TAG -> tags.any { it.title.containsQuery() }
+		}
 	}
 
 	fun observeAll(order: ListSortOrder, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
@@ -189,13 +217,17 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	fun observeCategoriesIds(mangaId: Long): Flow<Set<Long>> {
-		return db.getFavouritesDao().observeIds(mangaId).map { it.toSet() }
+		return db.invalidationTracker.createFlow(
+			TABLE_WORK_FAVOURITES,
+			TABLE_ENTITY_GRAPH_BINDING,
+			emitInitialState = true,
+		).mapLatest {
+			findWorkCategoryIds(mangaId)
+		}.distinctUntilChanged()
 	}
 
 	fun observeCategories(mangaId: Long): Flow<Set<FavouriteCategory>> {
-		return db.getFavouritesDao().observeCategories(mangaId).map {
-			it.mapTo(LinkedHashSet(it.size)) { x -> x.toFavouriteCategory() }
-		}
+		return observeCategoriesByWork(mangaId)
 	}
 
 	fun observeCategoriesByWork(mangaId: Long): Flow<Set<FavouriteCategory>> {
@@ -223,22 +255,33 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun isFavorite(mangaId: Long): Boolean {
-		return db.getFavouritesDao().findCategoriesCount(mangaId) != 0
+		return isFavoriteByWork(mangaId)
 	}
 
 	suspend fun getCategoriesIds(mangaId: Long): Set<Long> {
-		return db.getFavouritesDao().findCategoriesIds(mangaId).toSet()
+		return findWorkCategoryIds(mangaId)
 	}
 
 	suspend fun getCategoriesIds(mangaIds: Collection<Long>): Map<Long, Set<Long>> {
 		if (mangaIds.isEmpty()) return emptyMap()
-		return db.getFavouritesDao().findCategoryMemberships(mangaIds.toList())
+		val identitiesByMangaId = workResolver.resolveManyByMangaIds(mangaIds)
+		val entityIdsByMangaId = identitiesByMangaId
+			.mapValues { (_, identity) -> identity.entityId }
+			.filterValues { it != null }
+			.mapValues { (_, entityId) -> requireNotNull(entityId) }
+		if (entityIdsByMangaId.isEmpty()) {
+			return mangaIds.associateWith { emptySet() }
+		}
+		val categoryIdsByEntityId = db.getWorkFavouritesDao()
+			.findCategoryMemberships(entityIdsByMangaId.values.distinct())
 			.groupBy(
-				keySelector = { it.mangaId },
+				keySelector = { it.entityId },
 				valueTransform = { it.categoryId },
 			)
 			.mapValues { (_, categoryIds) -> categoryIds.toCollection(LinkedHashSet()) }
-			.let { grouped -> mangaIds.associateWith { grouped[it].orEmpty() } }
+		return mangaIds.associateWith { mangaId ->
+			entityIdsByMangaId[mangaId]?.let { entityId -> categoryIdsByEntityId[entityId] }.orEmpty()
+		}
 	}
 
 	suspend fun isFavoriteByWork(mangaId: Long): Boolean {
@@ -246,9 +289,7 @@ class FavouritesRepository @Inject constructor(
 		if (entityId != null) {
 			return db.getWorkFavouritesDao().findCategoriesCount(entityId) != 0
 		}
-		return resolveFavouriteAnchorIds(mangaId).any { anchorId ->
-			db.getFavouritesDao().findCategoriesCount(anchorId) != 0
-		}
+		return false
 	}
 
 	suspend fun getCategoriesIdsByWork(mangaId: Long): Set<Long> {
@@ -256,18 +297,31 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun findPopularSources(categoryId: Long, limit: Int): List<ContentSource> {
-		return db.getFavouritesDao().run {
-			if (categoryId == FavouriteCategory.NO_ID) {
-				findPopularSources(limit)
-			} else {
-				findPopularSources(categoryId, limit)
-			}
-		}.toContentSources()
+		return buildWorkFavouriteContents(
+			categoryId = categoryId,
+			order = ListSortOrder.NEWEST,
+		)
+			.groupingBy { it.source.name }
+			.eachCount()
+			.entries
+			.sortedByDescending { it.value }
+			.take(limit)
+			.map { it.key }
+			.toContentSources()
 	}
 
 	suspend fun findPopularTags(categoryId: Long, limit: Int): List<ContentTag> {
-		val daoCategoryId = if (categoryId == FavouriteCategory.NO_ID) 0L else categoryId
-		return db.getFavouritesDao().findPopularTags(daoCategoryId, limit).toContentTagsList()
+		return buildWorkFavouriteContents(
+			categoryId = categoryId,
+			order = ListSortOrder.NEWEST,
+		)
+			.flatMap { it.tags }
+			.groupingBy { it }
+			.eachCount()
+			.entries
+			.sortedByDescending { it.value }
+			.take(limit)
+			.map { it.key }
 	}
 
 	suspend fun createCategory(
@@ -313,7 +367,6 @@ class FavouritesRepository @Inject constructor(
 		db.withTransaction {
 			for (id in ids) {
 				db.getWorkFavouritesDao().deleteAll(id)
-				db.getFavouritesDao().deleteAll(id)
 				db.getFavouriteCategoriesDao().delete(id)
 			}
 			db.getChaptersDao().gc()
@@ -371,52 +424,41 @@ class FavouritesRepository @Inject constructor(
 	suspend fun isPinned(mangaIds: Collection<Long>): Boolean {
 		if (mangaIds.isEmpty()) return false
 		val entityIds = mangaIds.mapNotNullTo(LinkedHashSet()) { resolveFavouriteEntityId(it) }
-		if (entityIds.isNotEmpty()) {
-			return db.getWorkFavouritesDao().isPinned(entityIds.toList()) ?: false
-		}
-		return db.getFavouritesDao().isPinned(mangaIds.toList()) ?: false
+		return entityIds.isNotEmpty() && db.getWorkFavouritesDao().isPinned(entityIds.toList()) == true
 	}
 
 	suspend fun getPinnedIds(mangaIds: Collection<Long>): Set<Long> {
 		if (mangaIds.isEmpty()) return emptySet()
 		val entityIdsByMangaId = resolveEntityIdsByMangaIds(mangaIds)
 		val pinnedEntityIds = db.getWorkFavouritesDao().findPinnedEntityIds(entityIdsByMangaId.values.distinct())
-		if (pinnedEntityIds.isNotEmpty()) {
-			return mangaIds.filterTo(LinkedHashSet()) { mangaId ->
-				entityIdsByMangaId[mangaId] in pinnedEntityIds
-			}
+		if (pinnedEntityIds.isEmpty()) {
+			return emptySet()
 		}
-		return db.getFavouritesDao().findPinnedIds(mangaIds.toList()).toSet()
+		return mangaIds.filterTo(LinkedHashSet()) { mangaId ->
+			entityIdsByMangaId[mangaId] in pinnedEntityIds
+		}
 	}
 
 	suspend fun removeFromFavourites(ids: Collection<Long>): ReversibleHandle {
-		val resolvedIds = ids.flatMapTo(LinkedHashSet()) { resolveFavouriteAnchorIds(it) }
 		val resolvedEntityIds = ids.mapNotNullTo(LinkedHashSet()) { resolveFavouriteEntityId(it) }
 		db.withTransaction {
 			for (entityId in resolvedEntityIds) {
 				db.getWorkFavouritesDao().delete(entityId)
 			}
-			for (id in resolvedIds) {
-				db.getFavouritesDao().delete(mangaId = id)
-			}
 			db.getChaptersDao().gc()
 		}
-		return ReversibleHandle { recoverToFavourites(resolvedIds, resolvedEntityIds) }
+		return ReversibleHandle { recoverToFavourites(resolvedEntityIds) }
 	}
 
 	suspend fun removeFromCategory(categoryId: Long, ids: Collection<Long>): ReversibleHandle {
-		val resolvedIds = ids.flatMapTo(LinkedHashSet()) { resolveFavouriteAnchorIds(it) }
 		val resolvedEntityIds = ids.mapNotNullTo(LinkedHashSet()) { resolveFavouriteEntityId(it) }
 		db.withTransaction {
 			for (entityId in resolvedEntityIds) {
 				db.getWorkFavouritesDao().delete(entityId, categoryId)
 			}
-			for (id in resolvedIds) {
-				db.getFavouritesDao().delete(categoryId = categoryId, mangaId = id)
-			}
 			db.getChaptersDao().gc()
 		}
-		return ReversibleHandle { recoverToCategory(categoryId, resolvedIds, resolvedEntityIds) }
+		return ReversibleHandle { recoverToCategory(categoryId, resolvedEntityIds) }
 	}
 
 	private fun observeOrder(categoryId: Long): Flow<ListSortOrder> {
@@ -453,30 +495,12 @@ class FavouritesRepository @Inject constructor(
 		filterOptions: Set<ListFilterOption> = emptySet(),
 		limit: Int = Int.MAX_VALUE,
 	): List<Content> {
-		if (limit <= 0) {
-			return emptyList()
-		}
-		val entries = findWorkFavouriteEntries(categoryId)
-		if (entries.isEmpty()) {
-			return emptyList()
-		}
-		val downloadedIds = if (ListFilterOption.Downloaded in filterOptions) {
-			db.getLocalContentIndexDao().findExistingIds(
-				entries.mapNotNull { resolveWorkFavouriteContent(it)?.id }.distinct(),
-			).toSet()
-		} else {
-			emptySet()
-		}
-		return entries
-			.mapNotNull { entry ->
-				val content = resolveWorkFavouriteContent(entry) ?: return@mapNotNull null
-				WorkFavouriteContentEntry(entry, content)
-			}
-			.filter { matchesFavouriteFilters(it.content, filterOptions, downloadedIds) }
-			.sortedWith(workFavouriteComparator(order))
-			.distinctBy { it.content.id }
-			.take(limit)
-			.map { it.content }
+		return workAggregateRepository.findFavouriteContents(
+			categoryId = categoryId,
+			order = order,
+			filterOptions = filterOptions,
+			limit = limit,
+		)
 	}
 
 	private suspend fun buildWorkFavouriteCovers(
@@ -603,20 +627,17 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun normalizeWorkFavouritesIfNeeded() {
-		if (!settings.requiresWorkMigrationNormalization && !hasWorkFavouriteDrift()) {
+		if (!settings.requiresWorkMigrationNormalization) {
 			return
 		}
 		normalizeWorkFavourites(includeDeletedLegacyRows = true)
-		settings.requiresWorkMigrationNormalization = false
 	}
 
-	suspend fun normalizeWorkFavouritesForSync() {
-		normalizeWorkFavourites(includeDeletedLegacyRows = false)
-	}
-
-	private suspend fun hasWorkFavouriteDrift(): Boolean {
-		val localActiveCount = db.getFavouritesDao().countActive()
-		return db.getWorkFavouritesDao().countActive() != localActiveCount
+	suspend fun normalizeWorkFavouritesForSync(): Boolean {
+		if (settings.requiresWorkMigrationNormalization) {
+			normalizeWorkFavourites(includeDeletedLegacyRows = false)
+		}
+		return true
 	}
 
 	private suspend fun normalizeWorkFavourites(includeDeletedLegacyRows: Boolean) {
@@ -632,10 +653,7 @@ class FavouritesRepository @Inject constructor(
 			.findEntitiesByIds(localFavourites.map { it.mangaId }.distinct())
 			.associateBy { it.id }
 		val contentById = mangaById.mapValues { (_, manga) -> manga.toContent(tags = emptySet(), chapters = null) }
-		val ensuredEntityIds = entityGraphRepository.ensureLocalWorkEntities(
-			contents = contentById.values,
-			createdBy = EntityBindingCreatedBy.MIGRATION,
-		)
+		val ensuredEntityIds = ensureMigrationWorkEntities(contentById.values)
 		val existingEntityIds = resolveEntityIdsByMangaIds(localFavourites.map { it.mangaId })
 		val entityIdsByMangaId = existingEntityIds + ensuredEntityIds
 		val normalized = LinkedHashMap<WorkFavouriteNormalizationKey, WorkFavouriteEntity>()
@@ -677,6 +695,7 @@ class FavouritesRepository @Inject constructor(
 					},
 				)
 			}
+			db.getFavouritesDao().clear()
 		}
 	}
 
@@ -685,6 +704,17 @@ class FavouritesRepository @Inject constructor(
 			.mapValues { (_, identity) -> identity.entityId }
 			.filterValues { it != null }
 			.mapValues { (_, entityId) -> requireNotNull(entityId) }
+	}
+
+	private suspend fun ensureMigrationWorkEntities(contents: Collection<Content>): Map<Long, Long> {
+		return contents.associate { content ->
+			content.id to requireNotNull(
+				workResolver.ensureForProjection(
+					content = content,
+					provenance = WorkIdentityProvenance.MIGRATION,
+				).entityId,
+			)
+		}
 	}
 
 	private fun mergeNormalizedWorkFavourite(
@@ -711,7 +741,7 @@ class FavouritesRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun recoverToFavourites(ids: Collection<Long>, entityIds: Collection<Long>) {
+	private suspend fun recoverToFavourites(entityIds: Collection<Long>) {
 		db.withTransaction {
 			for (entityId in entityIds) {
 				db.getWorkFavouritesDao().recover(entityId)
@@ -719,7 +749,7 @@ class FavouritesRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun recoverToCategory(categoryId: Long, ids: Collection<Long>, entityIds: Collection<Long>) {
+	private suspend fun recoverToCategory(categoryId: Long, entityIds: Collection<Long>) {
 		db.withTransaction {
 			for (entityId in entityIds) {
 				db.getWorkFavouritesDao().recover(entityId, categoryId)
@@ -728,27 +758,12 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	private suspend fun findWorkCategoryIds(mangaId: Long): Set<Long> {
-		val categoryIds = LinkedHashSet<Long>()
-		resolveFavouriteEntityId(mangaId)?.let { entityId ->
-			categoryIds += db.getWorkFavouritesDao().findCategoriesIds(entityId)
-		}
-		resolveFavouriteAnchorIds(mangaId).forEach { anchorId ->
-			categoryIds += db.getFavouritesDao().findCategoriesIds(anchorId)
-		}
-		return categoryIds
+		val entityId = resolveFavouriteEntityId(mangaId) ?: return emptySet()
+		return db.getWorkFavouritesDao().findCategoriesIds(entityId).toCollection(LinkedHashSet())
 	}
 
 	private suspend fun resolveFavouriteEntityId(mangaId: Long): Long? {
 		return workResolver.resolveByMangaId(mangaId).entityId
-	}
-
-	private suspend fun resolveFavouriteAnchorIds(mangaId: Long): Set<Long> {
-		val identity = workResolver.resolveByMangaId(mangaId)
-		return identity.localMangaIds
-			.plus(identity.preferredMangaId)
-			.filterNotNull()
-			.toCollection(LinkedHashSet())
-			.ifEmpty { setOf(mangaId) }
 	}
 
 	private suspend fun resolveWorkAnchorContents(mangas: Collection<Content>): List<Content> {

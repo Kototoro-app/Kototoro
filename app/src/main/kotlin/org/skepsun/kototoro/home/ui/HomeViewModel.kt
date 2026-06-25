@@ -187,7 +187,6 @@ class HomeViewModel @Inject constructor(
         private const val TAG = "HomeViewModel"
         private const val HOME_UPDATES_LIMIT = 64
         private const val HOME_RECOMMENDATIONS_LIMIT = 64
-        private const val HOME_SUBSCRIPTION_TIMEOUT_MS = 5_000L
     }
 
     private fun logHomeDiag(stage: String, message: String) {
@@ -434,7 +433,7 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(HOME_SUBSCRIPTION_TIMEOUT_MS),
+            started = SharingStarted.Eagerly,
             initialValue = ContentDataSnapshot(
                 resumeState = HomeResumeState(),
                 history = emptyList(),
@@ -641,18 +640,18 @@ class HomeViewModel @Inject constructor(
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(HOME_SUBSCRIPTION_TIMEOUT_MS),
-        initialValue = HomeSummaryState(
-            selectedTab = when (globalFavoritesState.selectedGroupTab.value) {
-                org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
-                org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel -> HomeContentTab.NOVEL
-                org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video -> HomeContentTab.VIDEO
-                else -> null
-            },
-            selectedSourceTags = globalFavoritesState.selectedSourceTags.value,
-        ),
-    )
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = HomeSummaryState(
+                selectedTab = when (globalFavoritesState.selectedGroupTab.value) {
+                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
+                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel -> HomeContentTab.NOVEL
+                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video -> HomeContentTab.VIDEO
+                    else -> null
+                },
+                selectedSourceTags = globalFavoritesState.selectedSourceTags.value,
+            ),
+        )
 
     private suspend fun resolveEntityIdsByMangaIds(mangaIds: Collection<Long>): Map<Long, Long> {
         return workResolver.resolveManyByMangaIds(mangaIds)

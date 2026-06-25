@@ -23,8 +23,6 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
-import org.skepsun.kototoro.core.db.TABLE_FAVOURITES
-import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -68,9 +66,7 @@ class DataSyncManager @Inject constructor(
     }
 
     private val tablesToObserve = arrayOf(
-        TABLE_HISTORY,
         TABLE_WORK_HISTORY,
-        TABLE_FAVOURITES,
         TABLE_WORK_FAVOURITES,
         TABLE_FAVOURITE_CATEGORIES,
         TABLE_ENTITY_GRAPH_RELATION,

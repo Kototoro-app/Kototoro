@@ -376,6 +376,13 @@ fun SourceMigrationPanel(
             }
 
             item {
+                EntityOrganizeScopeSummary(
+                    uiState = uiState,
+                    selectedCount = initialSelectedContentIds.size,
+                )
+            }
+
+            item {
                 DatasetBridgeCard(
                     selectedBridge = selectedDatasetBridge,
                     animeStatus = uiState.animeDatasetStatus,
@@ -462,13 +469,51 @@ fun SourceMigrationPanel(
                     onConcurrencyChange = viewModel::setConcurrency,
                 )
             }
+        }
+    }
+}
 
-            item {
-                EntityResetCard(
-                    isExecuting = uiState.isExecuting,
-                    onReset = viewModel::resetAllEntities,
-                )
-            }
+@Composable
+private fun EntityOrganizeScopeSummary(
+    uiState: MigrationUiState,
+    selectedCount: Int,
+) {
+    val workCount = uiState.organizableWorks.size
+    val projectionCount = uiState.organizableWorks.sumOf { it.projections.size }
+    val favouriteAnchorCount = uiState.organizableWorks
+        .flatMap { work -> work.projections }
+        .count { projection -> projection.isFavouriteAnchor }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CompactInfoChip(
+                label = stringResource(R.string.entity_organize_scope_works_label),
+                value = workCount.toString(),
+                modifier = Modifier.weight(1f),
+            )
+            CompactInfoChip(
+                label = stringResource(R.string.entity_organize_scope_projections_label),
+                value = projectionCount.toString(),
+                modifier = Modifier.weight(1f),
+            )
+            CompactInfoChip(
+                label = stringResource(R.string.entity_organize_scope_anchors_label),
+                value = favouriteAnchorCount.toString(),
+                modifier = Modifier.weight(1f),
+            )
+            CompactInfoChip(
+                label = stringResource(R.string.entity_organize_entry_scope_label),
+                value = if (selectedCount > 0) selectedCount.toString() else stringResource(R.string.entity_organize_entry_count_all),
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -500,487 +545,6 @@ private fun HeaderSection(
         }
         IconButton(onClick = { if (!uiState.isExecuting) onDismiss() }) {
             Icon(Icons.Default.Close, contentDescription = null)
-        }
-    }
-}
-
-@Composable
-private fun EntityResetCard(
-    isExecuting: Boolean,
-    onReset: () -> Unit,
-) {
-    var showConfirm by rememberSaveable { mutableStateOf(false) }
-    if (showConfirm) {
-        AlertDialog(
-            onDismissRequest = { showConfirm = false },
-            title = { Text(stringResource(R.string.entity_reset_title)) },
-            text = { Text(stringResource(R.string.entity_reset_confirm)) },
-            confirmButton = {
-                TextButton(onClick = { showConfirm = false; onReset() }) {
-                    Text(stringResource(R.string.entity_reset))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    OutlinedCard(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.entity_reset_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = stringResource(R.string.entity_reset_description),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(
-                onClick = { showConfirm = true },
-                enabled = !isExecuting,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = stringResource(R.string.entity_reset))
-            }
-        }
-    }
-}
-
-@Composable
-private fun RepairDiagnosticsCard(
-    uiState: MigrationUiState,
-    onRefresh: () -> Unit,
-    onHideStaleLegacyRelations: () -> Unit,
-    onRejectSuspectTrackingBindings: () -> Unit,
-    onRepairSuspectMetadataSourceSelections: () -> Unit,
-    onPruneRedundantProjectionMetadataSelections: () -> Unit,
-    onPruneRedundantProjectionOverrides: () -> Unit,
-    onPruneRedundantProjectionReadingStatuses: () -> Unit,
-    onSplitSuspectMismerged: () -> Unit,
-    onResetAllEntities: () -> Unit,
-) {
-    val report = uiState.repairReport
-    var showHideLegacyConfirm by rememberSaveable { mutableStateOf(false) }
-    var showRejectTrackingConfirm by rememberSaveable { mutableStateOf(false) }
-    var showRepairMetadataSourceConfirm by rememberSaveable { mutableStateOf(false) }
-    var showPruneProjectionMetadataConfirm by rememberSaveable { mutableStateOf(false) }
-    var showPruneProjectionOverrideConfirm by rememberSaveable { mutableStateOf(false) }
-    var showPruneProjectionReadingStatusConfirm by rememberSaveable { mutableStateOf(false) }
-    var showSplitSuspectConfirm by rememberSaveable { mutableStateOf(false) }
-    var showResetAllConfirm by rememberSaveable { mutableStateOf(false) }
-    if (showHideLegacyConfirm) {
-        AlertDialog(
-            onDismissRequest = { showHideLegacyConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_hide_legacy_relations_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.entity_organize_repair_hide_legacy_relations_confirm,
-                        report?.staleLegacyRelationCount ?: 0,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showHideLegacyConfirm = false
-                        onHideStaleLegacyRelations()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showHideLegacyConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRejectTrackingConfirm) {
-        AlertDialog(
-            onDismissRequest = { showRejectTrackingConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_reject_suspect_tracking_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.entity_organize_repair_reject_suspect_tracking_confirm,
-                        report?.suspectTrackingBindingCount ?: 0,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showRejectTrackingConfirm = false
-                        onRejectSuspectTrackingBindings()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRejectTrackingConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRepairMetadataSourceConfirm) {
-        AlertDialog(
-            onDismissRequest = { showRepairMetadataSourceConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_metadata_source_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.entity_organize_repair_metadata_source_confirm,
-                        report?.suspectMetadataSourceCount ?: 0,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showRepairMetadataSourceConfirm = false
-                        onRepairSuspectMetadataSourceSelections()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRepairMetadataSourceConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showPruneProjectionMetadataConfirm) {
-        AlertDialog(
-            onDismissRequest = { showPruneProjectionMetadataConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_prune_projection_metadata_title)) },
-            text = {
-                Text(stringResource(R.string.entity_organize_repair_prune_projection_metadata_confirm))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPruneProjectionMetadataConfirm = false
-                        onPruneRedundantProjectionMetadataSelections()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPruneProjectionMetadataConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showPruneProjectionOverrideConfirm) {
-        AlertDialog(
-            onDismissRequest = { showPruneProjectionOverrideConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_prune_projection_override_title)) },
-            text = {
-                Text(stringResource(R.string.entity_organize_repair_prune_projection_override_confirm))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPruneProjectionOverrideConfirm = false
-                        onPruneRedundantProjectionOverrides()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPruneProjectionOverrideConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showPruneProjectionReadingStatusConfirm) {
-        AlertDialog(
-            onDismissRequest = { showPruneProjectionReadingStatusConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_prune_projection_reading_status_title)) },
-            text = {
-                Text(stringResource(R.string.entity_organize_repair_prune_projection_reading_status_confirm))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPruneProjectionReadingStatusConfirm = false
-                        onPruneRedundantProjectionReadingStatuses()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPruneProjectionReadingStatusConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showSplitSuspectConfirm) {
-        AlertDialog(
-            onDismissRequest = { showSplitSuspectConfirm = false },
-            title = { Text(stringResource(R.string.entity_organize_repair_split_suspect_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.entity_organize_repair_split_suspect_confirm,
-                        uiState.suspectMismergedLocalMangaIds.size,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showSplitSuspectConfirm = false
-                        onSplitSuspectMismerged()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_organize_repair_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSplitSuspectConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    if (showResetAllConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetAllConfirm = false },
-            title = { Text(stringResource(R.string.entity_reset_title)) },
-            text = { Text(stringResource(R.string.entity_reset_confirm)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showResetAllConfirm = false
-                        onResetAllEntities()
-                    },
-                ) {
-                    Text(stringResource(R.string.entity_reset))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetAllConfirm = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
-    }
-    OutlinedCard(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.entity_organize_repair_diagnostics_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = when {
-                            uiState.isLoadingRepairReport -> stringResource(R.string.entity_organize_repair_diagnostics_loading)
-                            report == null -> stringResource(R.string.entity_organize_repair_diagnostics_failed)
-                            !report.hasIssues -> stringResource(R.string.entity_organize_repair_diagnostics_clean)
-                            else -> stringResource(
-                                R.string.entity_organize_repair_diagnostics_summary,
-                                report.issues.size,
-                            )
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (uiState.isLoadingRepairReport) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    OutlinedButton(onClick = onRefresh) {
-                        Text(text = stringResource(R.string.entity_organize_dataset_refresh))
-                    }
-                }
-            }
-            if (report != null && report.hasIssues) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_orphan_local),
-                        value = report.orphanPreferredLocalCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_orphan_metadata),
-                        value = report.orphanMetadataSourceCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_redundant_projection_metadata),
-                        value = report.redundantProjectionMetadataSelectionCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_redundant_projection_override),
-                        value = report.redundantProjectionOverrideCount.toString(),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_redundant_projection_reading_status),
-                        value = report.redundantProjectionReadingStatusCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_suspect_tracking),
-                        value = report.suspectTrackingBindingCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_metadata_source),
-                        value = report.suspectMetadataSourceCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_tracking_cache),
-                        value = report.staleTrackingCacheLinkCount.toString(),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = { showRejectTrackingConfirm = true },
-                        enabled = !uiState.isExecuting && report.suspectTrackingBindingCount > 0,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_reject_suspect_tracking_action))
-                    }
-                    OutlinedButton(
-                        onClick = { showRepairMetadataSourceConfirm = true },
-                        enabled = !uiState.isExecuting && report.suspectMetadataSourceCount > 0,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_metadata_source_action))
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = { showPruneProjectionMetadataConfirm = true },
-                        enabled = !uiState.isExecuting && report.redundantProjectionMetadataSelectionCount > 0,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_prune_projection_metadata_action))
-                    }
-                    OutlinedButton(
-                        onClick = { showPruneProjectionOverrideConfirm = true },
-                        enabled = !uiState.isExecuting && report.redundantProjectionOverrideCount > 0,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_prune_projection_override_action))
-                    }
-                    OutlinedButton(
-                        onClick = { showPruneProjectionReadingStatusConfirm = true },
-                        enabled = !uiState.isExecuting && report.redundantProjectionReadingStatusCount > 0,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_prune_projection_reading_status_action))
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_conflicting_reading),
-                        value = report.conflictingReadingBindingCount.toString(),
-                    )
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_legacy_relations),
-                        value = report.staleLegacyRelationCount.toString(),
-                    )
-                    OutlinedButton(
-                        onClick = { showHideLegacyConfirm = true },
-                        enabled = !uiState.isExecuting && report.staleLegacyRelationCount > 0,
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_hide_legacy_relations_action))
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    WorkbenchMetricChip(
-                        label = stringResource(R.string.entity_organize_repair_suspect_mismerged),
-                        value = report.suspectMismergedLocalWorkCount.toString(),
-                    )
-                    OutlinedButton(
-                        onClick = { showSplitSuspectConfirm = true },
-                        enabled = !uiState.isExecuting && uiState.suspectMismergedLocalMangaIds.isNotEmpty(),
-                    ) {
-                        Text(text = stringResource(R.string.entity_organize_repair_split_suspect_action))
-                    }
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = { showResetAllConfirm = true },
-                    enabled = !uiState.isExecuting,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = stringResource(R.string.entity_reset))
-                }
-            }
         }
     }
 }
@@ -2734,7 +2298,13 @@ private fun stageStateLabelRes(state: WorkbenchStageState): Int {
 internal fun buildEntityWorkbenchRows(
     uiState: MigrationUiState,
 ): List<EntityWorkbenchRow> {
-    return uiState.mergeCandidateGroups.map { group ->
+    val candidateGroups = uiState.mergeCandidateGroups
+    val groupedMangaIds = candidateGroups.flatMapTo(LinkedHashSet()) { it.mangaIds }
+    val workGroups = uiState.organizableWorks
+        .filter { work -> work.projections.any { projection -> projection.mangaId !in groupedMangaIds } }
+        .map(::workToWorkbenchGroup)
+    val groups = candidateGroups + workGroups
+    return groups.map { group ->
         EntityWorkbenchRow(
             group = group,
             existingTrackingBindings = uiState.existingTrackingPreviews.filter { it.groupId == group.id },
@@ -2745,6 +2315,34 @@ internal fun buildEntityWorkbenchRows(
             isMergeCandidate = group.isExecutableMergeCandidate(),
         )
     }
+}
+
+private fun workToWorkbenchGroup(
+    work: org.skepsun.kototoro.favourites.domain.OrganizableWork,
+): MergeCandidateGroup {
+    return MergeCandidateGroup(
+        id = "work:${work.entityId}",
+        title = work.title,
+        normalizedTitle = work.title.lowercase(),
+        contentType = work.projections.firstOrNull()?.source?.let { sourceName ->
+            org.skepsun.kototoro.core.model.ContentSource(sourceName).contentType
+        } ?: org.skepsun.kototoro.parsers.model.ContentType.MANGA,
+        mangaIds = work.projections.mapTo(LinkedHashSet()) { it.mangaId },
+        items = work.projections.map { projection ->
+            org.skepsun.kototoro.favourites.domain.MergeCandidateItem(
+                mangaId = projection.mangaId,
+                title = projection.title,
+                normalizedTitle = projection.title.lowercase(),
+                sourceName = projection.source,
+                coverUrl = null,
+                score = 1f,
+            )
+        },
+        matchScore = 1f,
+        isExactMatch = true,
+        resolvedEntityId = work.entityId,
+        isAlreadyMerged = work.projections.size >= 2,
+    )
 }
 
 private fun stageTabCount(

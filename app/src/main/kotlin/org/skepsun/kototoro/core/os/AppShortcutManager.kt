@@ -22,7 +22,6 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
-import org.skepsun.kototoro.core.db.TABLE_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.model.getTitle
@@ -57,7 +56,6 @@ class AppShortcutManager @Inject constructor(
 	private val entityGraphRepository: EntityGraphRepository,
 	private val workResolver: WorkResolver,
 ) : InvalidationTracker.Observer(
-	TABLE_HISTORY,
 	TABLE_WORK_HISTORY,
 	TABLE_ENTITY_PREFERENCES,
 	TABLE_MANGA,

@@ -25,8 +25,24 @@ abstract class WorkStatsDao {
 	@Query("SELECT IFNULL(SUM(duration)/SUM(pages), 0) FROM work_stats WHERE entity_id = :entityId")
 	abstract suspend fun getAverageTimePerPage(entityId: Long): Long
 
+	@Query("SELECT IFNULL(SUM(duration)/SUM(pages), 0) FROM work_stats")
+	abstract suspend fun getAverageTimePerPage(): Long
+
 	@Query("SELECT COUNT(*) FROM work_stats WHERE entity_id = :entityId")
 	abstract suspend fun getRowCount(entityId: Long): Int
+
+	@Query(
+		"""
+		SELECT entity_id AS entityId,
+			IFNULL(SUM(pages), 0) AS totalPages,
+			IFNULL(SUM(duration) / SUM(pages), 0) AS averageTimePerPage,
+			COUNT(*) AS entryCount
+		FROM work_stats
+		WHERE entity_id IN (:entityIds)
+		GROUP BY entity_id
+		""",
+	)
+	abstract suspend fun findSummaries(entityIds: Collection<Long>): List<WorkStatsSummaryRow>
 
 	@Query("DELETE FROM work_stats")
 	abstract suspend fun clear()

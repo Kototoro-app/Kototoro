@@ -97,7 +97,11 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 		}
 		processLifecycleScope.launch(Dispatchers.Default) {
 			runCatching {
-				entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()
+				if (entryPoint.settings().requiresWorkMigrationNormalization) {
+					entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()
+					entryPoint.historyRepository().normalizeWorkHistoryIfNeeded()
+					entryPoint.settings().requiresWorkMigrationNormalization = false
+				}
 				setupDatabaseObservers()
 				entryPoint.localStorageChanges().collect(entryPoint.localContentIndexProvider().get())
 			}
@@ -210,6 +214,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 		fun extensionInstallService(): org.skepsun.kototoro.extensions.install.ExtensionInstallService
 		fun contentSourcesRepository(): org.skepsun.kototoro.explore.data.ContentSourcesRepository
 		fun favouritesRepository(): org.skepsun.kototoro.favourites.domain.FavouritesRepository
+		fun historyRepository(): org.skepsun.kototoro.history.data.HistoryRepository
 		fun workResolver(): org.skepsun.kototoro.work.domain.WorkResolver
 		fun imageLoader(): ImageLoader
 	}

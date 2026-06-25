@@ -17,6 +17,9 @@ abstract class FavouriteCategoriesDao {
 	@Query("SELECT * FROM favourite_categories WHERE deleted_at = 0 ORDER BY sort_key")
 	abstract suspend fun findAll(): List<FavouriteCategoryEntity>
 
+	@Query("SELECT * FROM favourite_categories WHERE category_id IN (:ids) AND deleted_at = 0 ORDER BY sort_key")
+	abstract suspend fun findByIds(ids: Collection<Long>): List<FavouriteCategoryEntity>
+
 	@Query("SELECT * FROM favourite_categories ORDER BY category_id ASC")
 	abstract suspend fun dump(): List<FavouriteCategoryEntity>
 
@@ -86,32 +89,6 @@ abstract class FavouriteCategoriesDao {
 							AND wf.category_id = favourite_categories.category_id
 							AND wf.anchor_manga_id IS NOT NULL
 							AND wf.deleted_at = 0
-					)
-					OR EXISTS (
-						SELECT 1
-						FROM favourites
-						WHERE favourites.manga_id = COALESCE(
-								(
-									SELECT m.manga_id
-									FROM entity_preferences ep
-									INNER JOIN manga m ON m.manga_id = ep.preferred_local_manga_id
-									WHERE ep.entity_id = COALESCE(
-											tracks.entity_id,
-											(
-												SELECT entity_id
-												FROM entity_binding
-												WHERE source IN ('local_manga', '0')
-													AND external_id = CAST(tracks.manga_id AS TEXT)
-													AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-												LIMIT 1
-											)
-										)
-									LIMIT 1
-								),
-								tracks.manga_id
-							)
-							AND favourites.category_id = favourite_categories.category_id
-							AND favourites.deleted_at = 0
 					)
 				), 0)
 			) AS new_chapters

@@ -24,12 +24,10 @@ abstract class SyncProvider : ContentProvider() {
 	private val database by lazy { entryPoint.database }
 
 	private val supportedTables = setOf(
-		TABLE_FAVOURITES,
 		TABLE_WORK_FAVOURITES,
 		TABLE_MANGA,
 		TABLE_TAGS,
 		TABLE_FAVOURITE_CATEGORIES,
-		TABLE_HISTORY,
 		TABLE_WORK_HISTORY,
 		TABLE_MANGA_TAGS,
 	)
@@ -107,10 +105,8 @@ abstract class SyncProvider : ContentProvider() {
 			TABLE_TAGS -> listOf("tag_id")
 			TABLE_MANGA_TAGS -> listOf("tag_id", "manga_id")
 			TABLE_MANGA -> listOf("manga_id")
-			TABLE_FAVOURITES -> listOf("manga_id", "category_id")
 			TABLE_WORK_FAVOURITES -> listOf("entity_id", "category_id")
 			TABLE_FAVOURITE_CATEGORIES -> listOf("category_id")
-			TABLE_HISTORY -> listOf("manga_id")
 			TABLE_WORK_HISTORY -> listOf("entity_id")
 			else -> throw IllegalArgumentException("Update for $table is not supported")
 		}

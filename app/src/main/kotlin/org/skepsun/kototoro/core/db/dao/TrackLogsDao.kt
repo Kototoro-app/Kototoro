@@ -126,28 +126,17 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
 
 	private fun favouriteExistsExpr(localMangaIdExpr: String, categoryId: Long? = null): String {
 		val entityIdExpr = entityIdExpr(localMangaIdExpr)
-		val representativeLocalMangaIdExpr = representativeLocalMangaIdExpr(localMangaIdExpr)
 		val categoryFilter = categoryId?.let { " AND wf.category_id = $it" }.orEmpty()
-		val legacyCategoryFilter = categoryId?.let { " AND favourites.category_id = $it" }.orEmpty()
-		return "(" +
-			"EXISTS(SELECT 1 FROM work_favourites wf " +
-			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)" +
-			" OR " +
-			"EXISTS(SELECT 1 FROM favourites " +
-			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0$legacyCategoryFilter)" +
-			")"
+		return "EXISTS(SELECT 1 FROM work_favourites wf " +
+			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0$categoryFilter)"
 	}
 
 	private fun pinnedSortExpr(localMangaIdExpr: String): String {
 		val entityIdExpr = entityIdExpr(localMangaIdExpr)
-		val representativeLocalMangaIdExpr = representativeLocalMangaIdExpr(localMangaIdExpr)
 		return "IFNULL((" +
 			"SELECT MAX(pinned) FROM work_favourites wf " +
 			"WHERE wf.entity_id = $entityIdExpr AND wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0" +
-			"), IFNULL((" +
-			"SELECT MAX(pinned) FROM favourites " +
-			"WHERE favourites.manga_id = $representativeLocalMangaIdExpr AND favourites.deleted_at = 0" +
-			"), 0))"
+			"), 0)"
 	}
 
 	private fun representativeLocalMangaIdExpr(localMangaIdExpr: String): String =
