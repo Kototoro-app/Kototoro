@@ -1706,6 +1706,10 @@ class SettingsActivity :
 			return
 		}
 		val shouldRestore = shouldRestoreFragmentOnComposeExit && supportFragmentManager.backStackEntryCount > 0
+		if (isMasterDetails && !shouldRestore) {
+			finishFromComposeDestination(currentDestination)
+			return
+		}
 		closeComposeDestination(restorePreviousFragment = false)
 		if (shouldRestore) {
 			supportFragmentManager.popBackStack()
