@@ -104,6 +104,9 @@ abstract class WorkFavouritesDao {
 	@Query("DELETE FROM work_favourites WHERE deleted_at != 0 AND deleted_at < :maxDeletionTime")
 	abstract suspend fun gc(maxDeletionTime: Long)
 
+	@Query("UPDATE work_favourites SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
+	abstract suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long)
+
 	@Query("UPDATE work_favourites SET pinned = :isPinned WHERE entity_id IN (:entityIds)")
 	abstract suspend fun setPinned(entityIds: List<Long>, isPinned: Boolean)
 

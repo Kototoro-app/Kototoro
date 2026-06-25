@@ -98,6 +98,9 @@ abstract class WorkHistoryDao {
 
 	suspend fun delete(entityId: Long) = setDeletedAt(entityId, System.currentTimeMillis())
 
+	@Query("UPDATE work_history SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
+	abstract suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long)
+
 	@Query("UPDATE work_history SET deleted_at = 0, updated_at = :updatedAt WHERE entity_id = :entityId")
 	abstract suspend fun recoverAt(entityId: Long, updatedAt: Long)
 

@@ -47,6 +47,9 @@ abstract class WorkStatsDao {
 	@Query("DELETE FROM work_stats")
 	abstract suspend fun clear()
 
+	@Query("UPDATE work_stats SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
+	abstract suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long)
+
 	suspend fun getDurationStats(
 		fromDate: Long,
 		isNsfw: Boolean?,

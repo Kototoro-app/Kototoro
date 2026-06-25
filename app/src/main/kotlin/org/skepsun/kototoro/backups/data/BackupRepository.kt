@@ -331,6 +331,8 @@ class BackupRepository @Inject constructor(
             clearRestoreTargets(effectiveSections)
             Log.d(TAG, "restoreBackup: clearRestoreTargets elapsedMs=${SystemClock.elapsedRealtime() - clearStartedAt}")
         }
+        database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
+        try {
         while (entry != null) {
             val section = BackupSection.of(entry)
             if (section != null) {
@@ -463,6 +465,7 @@ class BackupRepository @Inject constructor(
         val normalizeStartedAt = SystemClock.elapsedRealtime()
         normalizeRestoredWorkState(
             requestedSections = effectiveSections,
+            entityIdMapping = entityIdMapping,
         )
         Log.d(TAG, "restoreBackup: normalizeRestoredWorkState elapsedMs=${SystemClock.elapsedRealtime() - normalizeStartedAt}")
         val trimStartedAt = SystemClock.elapsedRealtime()
@@ -475,6 +478,9 @@ class BackupRepository @Inject constructor(
             legacyJarReposImported = legacyJarReposImported,
             backupIndex = backupIndex,
         )
+        } finally {
+            database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+        }
     }
 
     fun resolveRestoreSemanticContext(backupIndex: BackupIndex?): RestoreSemanticContext {
@@ -486,11 +492,35 @@ class BackupRepository @Inject constructor(
 
     private suspend fun normalizeRestoredWorkState(
         requestedSections: Set<BackupSection>,
+        entityIdMapping: Map<Long, Long>,
     ) {
         database.withTransaction {
+            if (entityIdMapping.isNotEmpty()) {
+                database.remapWorkEntityIds(requestedSections, entityIdMapping)
+            }
             if (BackupSection.SCROBBLING in requestedSections) {
                 database.normalizeRestoredScrobblingState()
             }
+        }
+    }
+
+    private suspend fun MangaDatabase.remapWorkEntityIds(
+        requestedSections: Set<BackupSection>,
+        entityIdMapping: Map<Long, Long>,
+    ) {
+        val remaps = entityIdMapping.entries.filter { (old, new) -> old != new }
+        if (remaps.isEmpty()) return
+        if (BackupSection.WORK_FAVOURITES in requestedSections) {
+            val dao = getWorkFavouritesDao()
+            for ((oldId, newId) in remaps) dao.remapEntityId(oldId, newId)
+        }
+        if (BackupSection.WORK_HISTORY in requestedSections) {
+            val dao = getWorkHistoryDao()
+            for ((oldId, newId) in remaps) dao.remapEntityId(oldId, newId)
+        }
+        if (BackupSection.WORK_STATS in requestedSections) {
+            val dao = getWorkStatsDao()
+            for ((oldId, newId) in remaps) dao.remapEntityId(oldId, newId)
         }
     }
 
@@ -498,11 +528,15 @@ class BackupRepository @Inject constructor(
         val startedAt = SystemClock.elapsedRealtime()
         database.withTransaction {
             if (BackupSection.HISTORY in sections) {
-                database.getWorkHistoryDao().clear()
+                if (BackupSection.WORK_HISTORY in sections) {
+                    database.getWorkHistoryDao().clear()
+                }
                 database.getHistoryDao().clear()
             }
             if (BackupSection.FAVOURITES in sections) {
-                database.getWorkFavouritesDao().deleteAll()
+                if (BackupSection.WORK_FAVOURITES in sections) {
+                    database.getWorkFavouritesDao().deleteAll()
+                }
                 database.getFavouritesDao().clear()
                 database.getFavouriteCategoriesDao().deleteAll()
             }
@@ -519,7 +553,9 @@ class BackupRepository @Inject constructor(
                 database.getTrackLogsDao().clear()
             }
             if (BackupSection.STATS in sections) {
-                database.getWorkStatsDao().clear()
+                if (BackupSection.WORK_STATS in sections) {
+                    database.getWorkStatsDao().clear()
+                }
                 database.getStatsDao().clear()
             }
             if (BackupSection.EXTENSION_REPOS in sections) {
