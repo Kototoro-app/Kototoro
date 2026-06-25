@@ -157,7 +157,6 @@ import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
-import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialogRoute
 import org.skepsun.kototoro.filter.ui.tags.TagsCatalogRoute
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.filter.data.PersistableFilter
@@ -410,7 +409,6 @@ fun AppSearchContentListRoute(
     var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
     var previewContent by remember { mutableStateOf<Content?>(null) }
     var showTagsCatalog by remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
-    var showFavoriteDialogState by remember { mutableStateOf<List<Content>?>(null) }
     var selectedItemsIds by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
     val focusRequester = remember { FocusRequester() }
     val selectedItems: Set<Content> = remember(selectedItemsIds, contentListItems) {
@@ -568,7 +566,8 @@ fun AppSearchContentListRoute(
                             selectedItemsIds = emptySet()
                         }
                         SelectionAction.FAVOURITE -> {
-                            showFavoriteDialogState = selectedItems.toList()
+                            appRouter.showFavoriteDialog(selectedItems)
+                            selectedItemsIds = emptySet()
                         }
                         SelectionAction.SAVE -> {
                             if (isAllNonLocal) {
@@ -846,7 +845,8 @@ fun AppSearchContentListRoute(
                                     }
 
                                     SelectionAction.FAVOURITE -> {
-                                        showFavoriteDialogState = selectedItems.toList()
+                                        appRouter.showFavoriteDialog(selectedItems)
+                                        selectedItemsIds = emptySet()
                                         true
                                     }
 
@@ -944,14 +944,6 @@ fun AppSearchContentListRoute(
                 isExcludeTag = excludeMode,
                 groupTitle = groupTitle,
                 onDismiss = { showTagsCatalog = null },
-            )
-        }
-
-        showFavoriteDialogState?.let { manga ->
-            FavoriteCategoryDialogRoute(
-                manga = manga,
-                onManageCategories = appRouter::openFavoriteCategories,
-                onDismiss = { showFavoriteDialogState = null },
             )
         }
     }

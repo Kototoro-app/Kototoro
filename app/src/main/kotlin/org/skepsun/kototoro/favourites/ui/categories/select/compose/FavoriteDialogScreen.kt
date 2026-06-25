@@ -264,7 +264,7 @@ private fun CategoryRow(
     ) {
         TriStateCheckbox(
             state = state,
-            onClick = onClick,
+            onClick = null,
         )
         Spacer(modifier = Modifier.width(8.dp))
 

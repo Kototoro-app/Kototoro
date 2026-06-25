@@ -387,13 +387,22 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun addToCategory(categoryId: Long, mangas: Collection<Content>) {
+		val anchorContents = resolveWorkAnchorContents(mangas)
+		val entityIdsByMangaId = anchorContents.associate { manga ->
+			manga.id to requireNotNull(
+				workResolver.ensureForProjection(
+					content = manga,
+					provenance = WorkIdentityProvenance.USER,
+				).entityId,
+			)
+		}
 		db.withTransaction {
 			val currentTime = System.currentTimeMillis()
-			for (manga in resolveWorkAnchorContents(mangas)) {
+			for (manga in anchorContents) {
 				val tags = manga.tags.toEntities()
 				db.getTagsDao().upsert(tags)
 				db.getMangaDao().upsert(manga.toEntity(), tags)
-				resolveFavouriteEntityId(manga.id)?.let { entityId ->
+				entityIdsByMangaId[manga.id]?.let { entityId ->
 					db.getWorkFavouritesDao().upsert(
 						WorkFavouriteEntity(
 							entityId = entityId,
