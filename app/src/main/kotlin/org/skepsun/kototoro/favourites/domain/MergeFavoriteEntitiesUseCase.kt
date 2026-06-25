@@ -152,6 +152,29 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                 .thenByDescending { it.mangaIds.size }
                 .thenBy { it.title.lowercase() },
         )
+            .also { groups ->
+                Log.d(
+                    TAG,
+                    "buildCandidateGroups: total=${groups.size}, strategy=t:${trackingGroups.size} e:${exactGroups.size} a:${aliasGroups.size} f:${fuzzyGroups.size} fuzzy=${options.fuzzyEnabled}",
+                )
+                groups.forEach { group ->
+                    Log.d(
+                        TAG,
+                        buildString {
+                            append("candidate group: id=${group.id}")
+                            append(", title='${group.title}'")
+                            append(", normalized='${group.normalizedTitle}'")
+                            append(", size=${group.mangaIds.size}")
+                            append(", score=${group.matchScore}")
+                            append(", exact=${group.isExactMatch}")
+                            append(", merged=${group.isAlreadyMerged}")
+                            group.items.forEach { item ->
+                                append("\n  - mangaId=${item.mangaId} src=${item.sourceName} score=${item.score} title='${item.title}'")
+                            }
+                        },
+                    )
+                }
+            }
     }
 
     private suspend fun buildTrackingBindingGroups(
@@ -339,6 +362,19 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
         }
         val entityIdsByMangaId = resolveEntityIdsByMangaIds(contents.map { it.id })
         val entityIds = entityIdsByMangaId.values.distinct()
+        if (
+            !group.id.contains(":manual:") &&
+            hasDuplicateSourceProjectionAfterMerge(
+                entityIds = entityIds,
+                contents = contents,
+            )
+        ) {
+            Log.i(
+                TAG,
+                "merge skipped: group=${group.id}, duplicate source projection after merge",
+            )
+            return false
+        }
         Log.d(
             TAG,
             if (Log.isLoggable(TAG, Log.DEBUG)) {
@@ -828,61 +864,140 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
             if (aliasKeys.isEmpty()) {
                 return@flatMap emptyList()
             }
-            ContentType.entries.mapNotNull { contentType ->
+            ContentType.entries.flatMap { contentType ->
                 val entityContents = contentsByEntityAndType[
                     EntityContentTypeKey(entityId = entity.id, contentType = contentType),
                 ].orEmpty()
                     .filterNot { content -> content.id in protectedLocalMangaIds }
-                    .filter { content -> normalizeTitle(content) in aliasKeys }
+                    .mapNotNull { content ->
+                        val key = normalizeTitle(content)
+                        if (key in aliasKeys) key to content else null
+                    }
                 if (entityContents.isEmpty()) {
-                    return@mapNotNull null
+                    return@flatMap emptyList()
                 }
-                val matchedContents = contents.filter { content ->
-                    entityIdsByMangaId[content.id] != entity.id &&
-                        content.source.contentType == contentType &&
-                        content.id !in protectedLocalMangaIds &&
-                        normalizeTitle(content) in aliasKeys
-                }
+                val matchedContents = contents
+                    .asSequence()
+                    .filter { content ->
+                        entityIdsByMangaId[content.id] != entity.id &&
+                            content.source.contentType == contentType &&
+                            content.id !in protectedLocalMangaIds
+                    }
+                    .map { content -> normalizeTitle(content) to content }
+                    .filter { (key, _) -> key.isNotBlank() }
+                    .toList()
                 if (matchedContents.isEmpty()) {
-                    return@mapNotNull null
+                    return@flatMap emptyList()
                 }
-                val items = (entityContents + matchedContents).distinctBy { it.id }
-                val sourceNames = items.mapTo(LinkedHashSet(items.size)) { it.source.name }
-                if (
-                    items.size < 2 ||
-                    sourceNames.size != items.size ||
-                    items.all { it.id in higherPriorityIds }
-                ) {
-                    return@mapNotNull null
-                }
-                val mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id }
-                val mergeState = resolveMergeState(mangaIds, localEntityIdsByMangaId)
-                MergeCandidateGroup(
-                    id = "${contentType.name}:alias:${entity.id}:${mangaIds.joinToString("-")}",
-                    title = entity.primaryName,
-                    normalizedTitle = normalizeTitle(entity.primaryName, sourceNames),
-                    contentType = contentType,
-                    mangaIds = mangaIds,
-                    items = items.map { content ->
-                        val normalizedTitle = normalizeTitle(content)
-                        MergeCandidateItem(
-                            mangaId = content.id,
-                            title = content.title,
-                            normalizedTitle = normalizedTitle,
-                            sourceName = content.source.name,
-                            coverUrl = content.coverUrl,
-                            score = if (normalizedTitle in aliasKeys) 1f else 0f,
+                entityContents
+                    .groupBy(
+                        keySelector = { (key, _) -> key },
+                        valueTransform = { (_, content) -> content },
+                    )
+                    .mapNotNull { (entityKey, anchoredContents) ->
+                        val matches = matchedContents.mapNotNull { (candidateKey, content) ->
+                            val score = aliasVariantScore(entityKey, candidateKey)
+                            if (score >= DEFAULT_FUZZY_MERGE_THRESHOLD) {
+                                AliasContentMatch(content = content, score = score)
+                            } else {
+                                null
+                            }
+                        }
+                        if (matches.isEmpty()) {
+                            return@mapNotNull null
+                        }
+                        val items = (anchoredContents + matches.map { it.content }).distinctBy { it.id }
+                        val sourceNames = items.mapTo(LinkedHashSet(items.size)) { it.source.name }
+                        if (
+                            items.size < 2 ||
+                            sourceNames.size != items.size ||
+                            items.all { it.id in higherPriorityIds }
+                        ) {
+                            return@mapNotNull null
+                        }
+                        val mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id }
+                        val mergeState = resolveMergeState(mangaIds, localEntityIdsByMangaId)
+                        val matchScore = matches.minOfOrNull { it.score } ?: 1f
+                        Log.d(
+                            TAG,
+                            "alias match: entityId=${entity.id} primary='${entity.primaryName}' aliases=${entity.aliases.joinToString("|")} matchedKey='$entityKey' score=$matchScore members=${items.map { "${it.title}(${it.source.name})" }.joinToString(", ")}",
                         )
-                    },
-                    matchScore = 1f,
-                    isExactMatch = true,
-                    resolvedEntityId = mergeState.entityId,
-                    isAlreadyMerged = mergeState.isAlreadyMerged,
-                )
+                        MergeCandidateGroup(
+                            id = "${contentType.name}:alias:${entity.id}:${mangaIds.joinToString("-")}",
+                            title = entity.primaryName,
+                            normalizedTitle = normalizeTitle(entity.primaryName, sourceNames),
+                            contentType = contentType,
+                            mangaIds = mangaIds,
+                            items = items.map { content ->
+                                val normalizedTitle = normalizeTitle(content)
+                                MergeCandidateItem(
+                                    mangaId = content.id,
+                                    title = content.title,
+                                    normalizedTitle = normalizedTitle,
+                                    sourceName = content.source.name,
+                                    coverUrl = content.coverUrl,
+                                    score = if (normalizedTitle == entityKey) 1f else aliasVariantScore(entityKey, normalizedTitle),
+                                )
+                            },
+                            matchScore = matchScore,
+                            isExactMatch = matchScore >= 1f,
+                            resolvedEntityId = mergeState.entityId,
+                            isAlreadyMerged = mergeState.isAlreadyMerged,
+                        )
+                    }
             }
         }.distinctBy { group ->
             "${group.contentType.name}:${group.mangaIds.sorted().joinToString("-")}"
         }
+    }
+
+    private suspend fun hasDuplicateSourceProjectionAfterMerge(
+        entityIds: Collection<Long>,
+        contents: Collection<Content>,
+    ): Boolean {
+        val mergedContents = LinkedHashMap<Long, Content>()
+        contents.forEach { content -> mergedContents[content.id] = content }
+        entityIds.forEach { entityId ->
+            val identity = workResolver.resolveByEntityId(entityId) ?: return@forEach
+            val localMangaIds = buildSet {
+                identity.preferredMangaId?.let(::add)
+                addAll(identity.localMangaIds)
+            }
+            if (localMangaIds.isEmpty()) {
+                return@forEach
+            }
+            database.getMangaDao()
+                .findWithTagsByIds(localMangaIds)
+                .map { it.toContent() }
+                .forEach { content -> mergedContents.putIfAbsent(content.id, content) }
+        }
+        return mergedContents.values
+            .groupBy { content -> content.source.contentType to content.source.name }
+            .any { (_, sourceContents) -> sourceContents.mapTo(HashSet()) { it.id }.size > 1 }
+    }
+
+    private fun aliasVariantScore(anchorKey: String, candidateKey: String): Float {
+        if (anchorKey.isBlank() || candidateKey.isBlank()) {
+            return 0f
+        }
+        if (anchorKey == candidateKey) {
+            return 1f
+        }
+        if (isAsciiContainedInMixedScriptTitle(anchorKey, candidateKey)) {
+            return 0f
+        }
+        return titleSimilarity(anchorKey, candidateKey)
+    }
+
+    private fun isAsciiContainedInMixedScriptTitle(left: String, right: String): Boolean {
+        val compactLeft = left.filterNot(Char::isWhitespace)
+        val compactRight = right.filterNot(Char::isWhitespace)
+        val shorter = if (compactLeft.length <= compactRight.length) compactLeft else compactRight
+        val longer = if (compactLeft.length <= compactRight.length) compactRight else compactLeft
+        return shorter.length >= 4 &&
+            shorter.all { it.code in 0..127 } &&
+            longer.any { it.code > 127 } &&
+            longer.contains(shorter)
     }
 
     private fun Entity.strictNameKeys(sourceNames: Iterable<String>): Set<String> {
@@ -936,6 +1051,11 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
     private data class EntityContentTypeKey(
         val entityId: Long?,
         val contentType: ContentType,
+    )
+
+    private data class AliasContentMatch(
+        val content: Content,
+        val score: Float,
     )
 
     private data class MergeResolution(
