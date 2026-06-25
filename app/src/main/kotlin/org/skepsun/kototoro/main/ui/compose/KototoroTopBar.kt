@@ -81,6 +81,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.explore.data.SourcePreset
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -142,6 +143,9 @@ fun KototoroTopBar(
     onIncognitoToggle: () -> Unit = {},
     isCollapsedFullyTransparent: Boolean = false,
     forceCompactTabsExpanded: Boolean = false,
+    sortOrders: List<ListSortOrder> = emptyList(),
+    selectedSortOrder: ListSortOrder? = null,
+    onSortOrderSelected: (ListSortOrder) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -404,6 +408,7 @@ fun KototoroTopBar(
                                         },
                                     )
                                 }
+
                             }
                         }
                     }
@@ -418,7 +423,7 @@ fun KototoroTopBar(
                     .padding(top = 8.dp),
             )
         }
-        if (showDisplayOptionsSheet && (supportsDisplayModeMenu || supportsGridSizeSlider || onBrowseTrackingRecommendationsChange != null)) {
+        if (showDisplayOptionsSheet && (supportsDisplayModeMenu || supportsGridSizeSlider || onBrowseTrackingRecommendationsChange != null || sortOrders.isNotEmpty())) {
             org.skepsun.kototoro.list.ui.compose.DisplayOptionsSheet(
                 supportsDisplayModeMenu = supportsDisplayModeMenu,
                 currentListMode = pendingListMode,
@@ -432,6 +437,9 @@ fun KototoroTopBar(
                     pendingGridSize = it
                     onGridSizeChange(it)
                 },
+                sortOrders = sortOrders,
+                selectedSortOrder = selectedSortOrder,
+                onSortOrderSelected = onSortOrderSelected,
                 extraContent = if (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null) {
                     {
                         Column {

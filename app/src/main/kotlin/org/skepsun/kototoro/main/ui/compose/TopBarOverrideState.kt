@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.ContentSource
 
 interface TopBarOverrideState
@@ -51,6 +52,9 @@ data class LayeredTopBarOverrideState(
     val filterRailState: CompactFilterRailOverrideState? = null,
     val contextualOverrideState: TopBarOverrideState? = null,
     val keepTabsExpandedWhenCollapsed: Boolean = false,
+    val sortOrders: List<ListSortOrder> = emptyList(),
+    val selectedSortOrder: ListSortOrder? = null,
+    val onSortOrderSelected: (ListSortOrder) -> Unit = {},
 ) : TopBarOverrideState
 
 data class RouteScopedTopBarOverrideState(

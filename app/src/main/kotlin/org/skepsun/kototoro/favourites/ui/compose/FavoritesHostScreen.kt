@@ -52,6 +52,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
@@ -85,6 +86,7 @@ fun KototoroFavoritesHostRoute(
     val globalState = viewModel.globalFavoritesState
     val selectedGroupTab by globalState.selectedGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
+    val allFavoritesSortOrder by viewModel.allFavoritesSortOrder.collectAsStateWithLifecycle()
 
     DisposableEffect(mainActivity, globalState, selectedGroupTab, selectedSourceTags, registerFilterCallback) {
         if (!registerFilterCallback) {
@@ -149,6 +151,12 @@ fun KototoroFavoritesHostRoute(
     val activePage = pagerState.settledPage.coerceIn(0, (displayCategories.size - 1).coerceAtLeast(0))
     val selectedTabsPage = pagerState.targetPage.coerceIn(0, (displayCategories.size - 1).coerceAtLeast(0))
     val activeCategoryId = displayCategories.getOrNull(activePage)?.id
+    val activeCategory = displayCategories.getOrNull(activePage)
+    val selectedSortOrder = if (activeCategoryId == NO_ID) {
+        allFavoritesSortOrder
+    } else {
+        activeCategory?.order ?: allFavoritesSortOrder
+    }
 
     LaunchedEffect(uiState.isLoading, displayCategories, initialCategoryId, initialSelectionApplied) {
         if (uiState.isLoading || initialSelectionApplied || displayCategories.isEmpty()) {
@@ -202,11 +210,18 @@ fun KototoroFavoritesHostRoute(
     val favoritesTopBarOverrideState = remember(
         compactTabsState,
         effectiveChildTopBarOverrideState,
+        selectedSortOrder,
+        activeCategoryId,
     ) {
         LayeredTopBarOverrideState(
             tabsState = compactTabsState,
             contextualOverrideState = effectiveChildTopBarOverrideState,
             keepTabsExpandedWhenCollapsed = true,
+            sortOrders = ListSortOrder.FAVORITES.sortedBy { it.ordinal },
+            selectedSortOrder = selectedSortOrder,
+            onSortOrderSelected = { order ->
+                viewModel.setSortOrder(activeCategoryId ?: NO_ID, order)
+            },
         )
     }
 

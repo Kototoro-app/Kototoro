@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 
 private const val DISPLAY_OPTIONS_SHEET_TAG = "DisplayOptionsSheet"
 
@@ -137,7 +139,7 @@ fun DisplayOptionsSheet(
                     if (supportsDisplayModeMenu) {
                         Text(
                             text = stringResource(R.string.list_mode),
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Row(
@@ -267,36 +269,67 @@ private fun SortOrderSection(
     selectedSortOrder: ListSortOrder?,
     onSortOrderSelected: (ListSortOrder) -> Unit,
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedOrder = selectedSortOrder ?: sortOrders.firstOrNull()
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = stringResource(R.string.sort_order),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            sortOrders.chunked(2).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    rowItems.forEach { order ->
-                        DisplayModeChip(
-                            iconRes = R.drawable.ic_sort,
-                            label = stringResource(order.titleResId),
-                            selected = order == selectedSortOrder,
-                            onClick = { onSortOrderSelected(order) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (rowItems.size == 1) {
-                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
-                    }
+        Box {
+            AssistChip(
+                onClick = { expanded = true },
+                label = {
+                    Text(
+                        text = selectedOrder?.let { stringResource(it.titleResId) }.orEmpty(),
+                        maxLines = 1,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_sort),
+                        contentDescription = null,
+                    )
+                },
+                trailingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_expand_more),
+                        contentDescription = null,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+                    labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    leadingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    trailingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ),
+            )
+            GlassDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                sortOrders.forEach { order ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(order.titleResId)) },
+                        onClick = {
+                            expanded = false
+                            onSortOrderSelected(order)
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(
+                                    if (order == selectedOrder) R.drawable.ic_check else R.drawable.ic_sort,
+                                ),
+                                contentDescription = null,
+                            )
+                        },
+                    )
                 }
             }
         }

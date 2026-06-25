@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.favourites.domain.GlobalFavoritesState
 import org.skepsun.kototoro.favourites.domain.FavoritesListQuickFilter
 import org.skepsun.kototoro.list.domain.QuickFilterListener
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -69,6 +70,10 @@ class FavouritesContainerViewModel @Inject constructor(
 
 	val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
+
+	val allFavoritesSortOrder = settings.observeAsFlow(AppSettings.KEY_FAVORITES_ORDER) {
+		allFavoritesSortOrder
+	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.allFavoritesSortOrder)
 
 	val currentGroupTab = globalFavoritesState.selectedGroupTab
 	val selectedSourceTags = globalFavoritesState.selectedSourceTags
@@ -164,7 +169,7 @@ class FavouritesContainerViewModel @Inject constructor(
 				result.add(FavouriteTabModel(NO_ID, null))
 			}
 		}
-		filteredList.mapTo(result) { FavouriteTabModel(it.id, it.title) }
+		filteredList.mapTo(result) { FavouriteTabModel(it.id, it.title, it.order) }
 
 		val isEmpty = if (activeCounts != null) {
 			list.all { activeCounts.getOrDefault(it.id, 0) == 0 } &&
@@ -237,6 +242,16 @@ class FavouritesContainerViewModel @Inject constructor(
 	fun deleteCategory(categoryId: Long) {
 		launchJob(Dispatchers.Default) {
 			favouritesRepository.removeCategories(setOf(categoryId))
+		}
+	}
+
+	fun setSortOrder(categoryId: Long, order: ListSortOrder) {
+		launchJob(Dispatchers.Default) {
+			if (categoryId == NO_ID) {
+				settings.allFavoritesSortOrder = order
+			} else {
+				favouritesRepository.setCategoryOrder(categoryId, order)
+			}
 		}
 	}
 

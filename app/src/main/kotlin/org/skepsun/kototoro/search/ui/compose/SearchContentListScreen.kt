@@ -2340,9 +2340,7 @@ private fun SortOrderFilterSection(
     onSortOrderChange: (SortOrder) -> Unit,
 ) {
     val selectedLabel = selectedSortOrder?.let { resolveSortOrderLabel(sourceName, it) }.orEmpty()
-    Column(
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    Box {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
@@ -2379,44 +2377,32 @@ private fun SortOrderFilterSection(
             }
         }
 
-        if (expanded) {
-            Column {
-                sortOrders.forEachIndexed { index, item ->
-                    val selected = item == selectedSortOrder
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onSortOrderChange(item)
-                                onExpandedChange(false)
-                            }
-                            .padding(vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = resolveSortOrderLabel(sourceName, item),
-                            color = if (selected) {
+        GlassDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+        ) {
+            sortOrders.forEach { item ->
+                val selected = item == selectedSortOrder
+                DropdownMenuItem(
+                    text = { Text(resolveSortOrderLabel(sourceName, item)) },
+                    onClick = {
+                        onSortOrderChange(item)
+                        onExpandedChange(false)
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(
+                                if (selected) R.drawable.ic_check else R.drawable.ic_sort,
+                            ),
+                            contentDescription = null,
+                            tint = if (selected) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                MaterialTheme.colorScheme.onSurface
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             },
                         )
-                        if (selected) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_check),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                    }
-                    if (index != sortOrders.lastIndex) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
-                        )
-                    }
-                }
+                    },
+                )
             }
         }
     }

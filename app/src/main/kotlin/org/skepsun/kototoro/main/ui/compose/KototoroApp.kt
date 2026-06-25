@@ -126,6 +126,8 @@ import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
 import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
 import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 import org.skepsun.kototoro.main.ui.navigation3.rememberMainNavState
+import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 
 @Immutable
 private data class KototoroNavigationPrefs(
@@ -696,6 +698,22 @@ fun KototoroApp(
     val isHomeRoute = chromeTopLevelKey == HomeNavKey
     val supportsDisplayModeMenu = chromeTopLevelKey.supportsDisplayModeMenu()
     val supportsGridSizeSlider = chromeTopLevelKey.supportsGridSizeSlider()
+    val isFavoritesRoute = chromeTopLevelKey == FavoritesNavKey
+    val fallbackFavoritesSortOrders = if (isFavoritesRoute) ListSortOrder.FAVORITES.sortedByOrdinal() else emptyList()
+    val globalFavoritesSortOrder by appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
+        allFavoritesSortOrder
+    }
+    val sortOrders = layeredTopBarOverrideState?.sortOrders?.takeIf { it.isNotEmpty() } ?: fallbackFavoritesSortOrders
+    val selectedSortOrder = layeredTopBarOverrideState?.selectedSortOrder ?: if (isFavoritesRoute) {
+        globalFavoritesSortOrder
+    } else {
+        null
+    }
+    val onDisplaySortOrderSelected = layeredTopBarOverrideState?.onSortOrderSelected ?: { order: ListSortOrder ->
+        if (isFavoritesRoute) {
+            appSettings.allFavoritesSortOrder = order
+        }
+    }
 
     LaunchedEffect(currentTopLevelKey) {
         val mappedId = currentTopLevelKey?.let(::bottomNavItemIdForTopLevelKey) ?: -1
@@ -907,6 +925,9 @@ fun KototoroApp(
                         contextualMenuActions = contextualMenuActions,
                         forceCompactTabsExpanded = shouldKeepTabsVisible,
                         effectiveCompactTabsTopBarOffset = effectiveCompactTabsTopBarOffset,
+                        sortOrders = sortOrders,
+                        selectedSortOrder = selectedSortOrder,
+                        onSortOrderSelected = onDisplaySortOrderSelected,
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
@@ -1195,6 +1216,9 @@ private fun BoxScope.MainTopChrome(
     contextualMenuActions: List<KototoroTopBarMenuAction>,
     forceCompactTabsExpanded: Boolean,
     effectiveCompactTabsTopBarOffset: Float,
+    sortOrders: List<org.skepsun.kototoro.list.domain.ListSortOrder> = emptyList(),
+    selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
+    onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
 ) {
     val topChromeModifier = Modifier
         .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
@@ -1260,6 +1284,9 @@ private fun BoxScope.MainTopChrome(
             showSourceSettingsEntry = showSourceSettingsEntry,
             contextualMenuActions = contextualMenuActions,
             forceCompactTabsExpanded = forceCompactTabsExpanded,
+            sortOrders = sortOrders,
+            selectedSortOrder = selectedSortOrder,
+            onSortOrderSelected = onSortOrderSelected,
             modifier = topChromeModifier.offset {
                 androidx.compose.ui.unit.IntOffset(0, (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt())
             },
