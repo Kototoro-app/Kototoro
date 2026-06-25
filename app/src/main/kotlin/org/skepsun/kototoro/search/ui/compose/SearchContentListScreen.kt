@@ -157,6 +157,7 @@ import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
+import org.skepsun.kototoro.filter.ui.tags.TagsCatalogRoute
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.filter.data.PersistableFilter
 import org.skepsun.kototoro.filter.data.PersistableFilter.Companion.MAX_TITLE_LENGTH
@@ -407,6 +408,7 @@ fun AppSearchContentListRoute(
     var showFilterPanel by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(isWideAdaptiveLayout) }
     var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
     var previewContent by remember { mutableStateOf<Content?>(null) }
+    var showTagsCatalog by remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
     var selectedItemsIds by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
     val focusRequester = remember { FocusRequester() }
     val selectedItems: Set<Content> = remember(selectedItemsIds, contentListItems) {
@@ -780,10 +782,7 @@ fun AppSearchContentListRoute(
                                 textInputLabel = viewModel.filterCoordinator::getTextInputLabel,
                                 onSetTextInputValue = viewModel.filterCoordinator::setTextInputValue,
                                 onOpenTagCatalog = { groupTitle, excludeMode ->
-                                    appRouter.showTagsCatalogSheet(
-                                        excludeMode = excludeMode,
-                                        groupTitle = groupTitle,
-                                    )
+                                    showTagsCatalog = groupTitle to excludeMode
                                 },
                                 modifier = Modifier.fillMaxHeight(),
                                 savedFilters = savedFiltersProperty,
@@ -923,10 +922,7 @@ fun AppSearchContentListRoute(
                             textInputLabel = viewModel.filterCoordinator::getTextInputLabel,
                             onSetTextInputValue = viewModel.filterCoordinator::setTextInputValue,
                             onOpenTagCatalog = { groupTitle, excludeMode ->
-                                appRouter.showTagsCatalogSheet(
-                                    excludeMode = excludeMode,
-                                    groupTitle = groupTitle,
-                                )
+                                showTagsCatalog = groupTitle to excludeMode
                             },
                             modifier = Modifier.fillMaxWidth(),
                             fillAvailableHeight = false,
@@ -940,6 +936,15 @@ fun AppSearchContentListRoute(
                     }
                 }
             }
+        }
+
+        showTagsCatalog?.let { (groupTitle, excludeMode) ->
+            TagsCatalogRoute(
+                filter = viewModel.filterCoordinator,
+                isExcludeTag = excludeMode,
+                groupTitle = groupTitle,
+                onDismiss = { showTagsCatalog = null },
+            )
         }
     }
 }
@@ -2360,7 +2365,7 @@ private fun SortOrderFilterSection(
             ) {
                 Text(
                     text = selectedLabel,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2368,7 +2373,7 @@ private fun SortOrderFilterSection(
                 Icon(
                     painter = painterResource(R.drawable.ic_expand_more),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -2500,17 +2505,14 @@ private fun TagGroupContent(
                     fontWeight = FontWeight.SemiBold,
                 )
                 if (canExpand) {
-                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 18.dp) {
-                        IconButton(
-                            onClick = { onOpenTagCatalog(group.title, excludeMode) },
-                            modifier = Modifier.size(18.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = stringResource(R.string.show_more),
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
+                    IconButton(
+                        onClick = { onOpenTagCatalog(group.title, excludeMode) },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.show_more),
+                            modifier = Modifier.size(14.dp),
+                        )
                     }
                 }
             }

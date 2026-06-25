@@ -1052,11 +1052,12 @@ class AppRouter private constructor(
         val composeActivity = activity as? BaseComposeActivity
         val filterOwner = activity as? FilterCoordinator.Owner
         if (composeActivity != null && filterOwner != null) {
-            composeActivity.showComposeModal {
+            val modalKey = FILTER_SHEET_MODAL_KEY
+            composeActivity.showComposeModal(key = modalKey) {
                 FilterSheetRoute(
                     filter = filterOwner.filterCoordinator,
                     isEmbedded = false,
-                    onDismiss = composeActivity::dismissComposeModal,
+                    onDismiss = { composeActivity.dismissComposeModal(modalKey) },
                     onOpenTagCatalog = { groupTitle, excludeMode ->
                         showTagsCatalogSheet(excludeMode = excludeMode, groupTitle = groupTitle)
                     },
@@ -1074,12 +1075,13 @@ class AppRouter private constructor(
         val composeActivity = activity as? BaseComposeActivity
         val filterOwner = activity as? FilterCoordinator.Owner
         if (composeActivity != null && filterOwner != null) {
-            composeActivity.showComposeModal {
+            val modalKey = buildTagsCatalogModalKey(excludeMode = excludeMode, groupTitle = groupTitle)
+            composeActivity.showComposeModal(key = modalKey) {
                 TagsCatalogRoute(
                     filter = filterOwner.filterCoordinator,
                     isExcludeTag = excludeMode,
                     groupTitle = groupTitle,
-                    onDismiss = composeActivity::dismissComposeModal,
+                    onDismiss = { composeActivity.dismissComposeModal(modalKey) },
                 )
             }
             return
@@ -1333,6 +1335,7 @@ class AppRouter private constructor(
     }
 
     companion object {
+        private const val FILTER_SHEET_MODAL_KEY = "filter-sheet-modal"
 
         fun from(view: View): AppRouter? = runCatching {
             AppRouter(view.findFragment())
@@ -1596,6 +1599,15 @@ class AppRouter private constructor(
         private const val TYPE_TEXT = "text/plain"
         private const val TYPE_IMAGE = "image/*"
         private const val TYPE_CBZ = "application/x-cbz"
+
+        private fun buildTagsCatalogModalKey(excludeMode: Boolean, groupTitle: String?): String {
+            return buildString {
+                append("tags-catalog-modal:")
+                append(excludeMode)
+                append(':')
+                append(groupTitle.orEmpty())
+            }
+        }
 
         private fun Class<out Fragment>.fragmentTag() = name // TODO
 

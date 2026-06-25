@@ -115,6 +115,13 @@ abstract class BaseComposeActivity :
         }
     }
 
+    fun dismissComposeModal(key: String) {
+        val index = modalStack.indexOfLast { it.key == key }
+        if (index >= 0) {
+            modalStack.removeAt(index)
+        }
+    }
+
     fun dismissAllComposeModals() {
         modalStack.clear()
     }

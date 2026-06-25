@@ -50,3 +50,4 @@ docs/.vitepress/dist/
 .pirc.json
 *.txt
 policy
+chroma
