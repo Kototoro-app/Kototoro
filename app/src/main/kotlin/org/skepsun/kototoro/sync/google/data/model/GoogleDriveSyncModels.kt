@@ -14,6 +14,8 @@ import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 @Serializable
 class GoogleDriveSyncSnapshot(
 	@SerialName("schema") val schemaVersion: Int = SCHEMA_VERSION,
+	@SerialName("namespace") val namespace: String = NAMESPACE_WORK_V2,
+	@SerialName("semantic_schema") val semanticSchemaVersion: Int = SEMANTIC_SCHEMA_VERSION,
 	@SerialName("device_id") val deviceId: String = "",
 	@SerialName("synced_at") val syncedAt: Long = 0L,
 	@SerialName("entity_graph") val entityGraph: SyncEntityGraph = SyncEntityGraph(),
@@ -26,6 +28,8 @@ class GoogleDriveSyncSnapshot(
 	companion object {
 
 		const val SCHEMA_VERSION = 1
+		const val NAMESPACE_WORK_V2 = "kototoro.work.v2"
+		const val SEMANTIC_SCHEMA_VERSION = 1
 	}
 }
 
@@ -92,6 +96,7 @@ class SyncContent(
 @Serializable
 class SyncEntityRecord(
 	@SerialName("id") val id: Long,
+	@SerialName("sync_id") val syncId: String = "",
 	@SerialName("type") val type: String,
 	@SerialName("primary_name") val primaryName: String,
 	@SerialName("name_hash") val nameHash: Long,

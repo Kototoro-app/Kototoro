@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncApi
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncAuth
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
@@ -34,8 +35,6 @@ import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.RelationRecord
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
-import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
-import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -62,6 +61,7 @@ sealed interface GoogleDriveSyncResult {
 @Singleton
 class GoogleDriveSyncRepository @Inject constructor(
 	private val settings: GoogleDriveSyncSettings,
+	private val appSettings: AppSettings,
 	private val auth: GoogleDriveSyncAuth,
 	private val api: GoogleDriveSyncApi,
 	private val database: MangaDatabase,
@@ -115,6 +115,14 @@ class GoogleDriveSyncRepository @Inject constructor(
 			settings.lastSyncError = e.message
 			Log.e(TAG, "sync failed: schema", e)
 			GoogleDriveSyncResult.Error(e.message, retryable = false)
+		} catch (e: GoogleDriveSyncProtocolException) {
+			settings.lastSyncError = e.message
+			Log.e(TAG, "sync failed: protocol", e)
+			GoogleDriveSyncResult.Error(e.message, retryable = false)
+		} catch (e: GoogleDriveSyncWriteBlockedException) {
+			settings.lastSyncError = e.message
+			Log.e(TAG, "sync failed: write blocked", e)
+			GoogleDriveSyncResult.Error(e.message, retryable = false)
 		} catch (e: Exception) {
 			settings.lastSyncError = e.message ?: e.javaClass.simpleName
 			Log.e(TAG, "sync failed: ${settings.lastSyncError}", e)
@@ -163,6 +171,14 @@ class GoogleDriveSyncRepository @Inject constructor(
 			settings.lastSyncError = e.message
 			Log.e(TAG, "legacy sync import failed: schema", e)
 			GoogleDriveSyncResult.Error(e.message, retryable = false)
+		} catch (e: GoogleDriveSyncProtocolException) {
+			settings.lastSyncError = e.message
+			Log.e(TAG, "legacy sync import failed: protocol", e)
+			GoogleDriveSyncResult.Error(e.message, retryable = false)
+		} catch (e: GoogleDriveSyncWriteBlockedException) {
+			settings.lastSyncError = e.message
+			Log.e(TAG, "legacy sync import failed: write blocked", e)
+			GoogleDriveSyncResult.Error(e.message, retryable = false)
 		} catch (e: Exception) {
 			settings.lastSyncError = e.message ?: e.javaClass.simpleName
 			Log.e(TAG, "legacy sync import failed: ${settings.lastSyncError}", e)
@@ -181,15 +197,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 	}
 
 	private suspend fun performSync(token: String) {
-		runSyncStep("normalize favourites") {
-			favouritesRepository.normalizeWorkFavouritesForSync()
-		}
-		runSyncStep("normalize history") {
-			historyRepository.normalizeWorkHistoryForSync()
-		}
-		runSyncStep("normalize tracks") {
-			trackingRepository.normalizeTracksForSync()
-		}
+		normalizeLocalWorkStateForSync()
 		var attempt = 0
 		while (true) {
 			val files = runSyncStep("list drive files") {
@@ -201,7 +209,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 			val decodedIds = HashSet<String>(files.size)
 			for (file in files) {
 				val snapshot = runSyncStep("download ${file.id}") {
-					decodeSnapshot(api.download(token, file.id))
+					decodeCurrentSnapshot(api.download(token, file.id))
 				}
 				if (snapshot != null) {
 					decoded += snapshot
@@ -258,7 +266,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 		val decoded = ArrayList<GoogleDriveSyncSnapshot>(files.size)
 		for (file in files) {
 			val snapshot = runSyncStep("download legacy ${file.id}") {
-				decodeSnapshot(api.download(token, file.id))
+				decodeLegacySnapshot(api.download(token, file.id))
 			}
 			if (snapshot != null) {
 				decoded += snapshot
@@ -268,9 +276,12 @@ class GoogleDriveSyncRepository @Inject constructor(
 			GoogleDriveSyncMerger.combine(decoded)
 		} ?: return
 		Log.d(TAG, "legacy import remote=${remote.debugSummary()} files=${files.size}")
+		appSettings.isWorkMigrationSyncWriteBlocked = true
+		appSettings.requiresWorkMigrationNormalization = false
 		runSyncStep("apply legacy remote snapshot") {
 			applyToDatabase(remote)
 		}
+		normalizeLocalWorkStateForSync()
 		val upload = runSyncStep("build current snapshot after legacy import") {
 			GoogleDriveSyncMerger.mergeSnapshots(buildLocalSnapshot(), null)
 				.copyForUpload(syncedAt = System.currentTimeMillis())
@@ -286,6 +297,26 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 		currentFiles.filter { it.id != fileId }.forEach { duplicate ->
 			runCatching { api.delete(token, duplicate.id) }
+		}
+	}
+
+	private suspend fun normalizeLocalWorkStateForSync() {
+		val favouritesNormalized = runSyncStep("normalize favourites") {
+			favouritesRepository.normalizeWorkFavouritesForSync()
+		}
+		val historyNormalized = runSyncStep("normalize history") {
+			historyRepository.normalizeWorkHistoryForSync()
+		}
+		runSyncStep("normalize tracks") {
+			trackingRepository.normalizeTracksForSync()
+		}
+		val normalized = favouritesNormalized && historyNormalized
+		appSettings.requiresWorkMigrationNormalization = !normalized
+		if (normalized) {
+			appSettings.isWorkMigrationSyncWriteBlocked = false
+		}
+		if (!normalized || appSettings.isWorkMigrationSyncWriteBlocked) {
+			throw GoogleDriveSyncWriteBlockedException()
 		}
 	}
 
@@ -328,6 +359,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 				entities = entityRecords.filter { it.id in scope.entityIds }.map {
 					SyncEntityRecord(
 						id = it.id,
+						syncId = it.syncId,
 						type = it.type,
 						primaryName = it.primaryName,
 						nameHash = it.nameHash,
@@ -457,10 +489,10 @@ class GoogleDriveSyncRepository @Inject constructor(
 		database.withTransaction {
 			runSyncStep("apply feed") {
 				snapshot.feed.tracks.forEach { track ->
-					database.mergeTrack(track.toEntity().mapWith(database, mapping))
+					track.toEntity().mapWith(database, mapping)?.let { database.mergeTrack(it) }
 				}
 				snapshot.feed.logs.forEach { log ->
-					database.mergeTrackLog(log.toEntity().mapWith(database, mapping))
+					log.toEntity().mapWith(database, mapping)?.let { database.mergeTrackLog(it) }
 				}
 			}
 			runSyncStep("prune local sync residue") {
@@ -477,9 +509,7 @@ class GoogleDriveSyncRepository @Inject constructor(
 		val categoryIdMapping = LinkedHashMap<Long, Long>()
 		var nextImportedMangaId = minOf(getMangaDao().findMinId() ?: 0L, 0L) - 1L
 		snapshot.content.forEach { content ->
-			val existing = content.publicUrl
-				.takeIf { it.isNotBlank() }
-				?.let { getMangaDao().findByPublicUrl(it)?.manga }
+			val existing = getMangaDao().find(content.id)?.manga
 			val local = existing ?: run {
 				val localId = if (getMangaDao().contains(content.id)) {
 					nextImportedMangaId--
@@ -512,6 +542,14 @@ class GoogleDriveSyncRepository @Inject constructor(
 				remote.externalId
 			}
 			val existing = getEntityGraphDao().findBinding(remote.source, localExternalId)
+			if (remote.isLocalContentBinding() && existing != null && existing.entityId != localEntityId) {
+				Log.d(
+					TAG,
+					"sync skipped conflicting local content binding: source=${remote.source} " +
+						"externalId=$localExternalId localEntity=${existing.entityId} remoteEntity=$localEntityId",
+				)
+				return@forEach
+			}
 			if (existing != null && existing.shouldKeepOverSync(remote)) {
 				return@forEach
 			}
@@ -601,14 +639,38 @@ class GoogleDriveSyncRepository @Inject constructor(
 		snapshot.feed.tracks.forEach { mapByAnchor(it.entityId ?: return@forEach, it.mangaId) }
 		snapshot.feed.logs.forEach { mapByAnchor(it.entityId ?: return@forEach, it.mangaId) }
 		val remoteEntitiesById = snapshot.entityGraph.entities.associateBy { it.id }
+		remoteEntitiesById.values.forEach { remote ->
+			val syncId = remote.syncId.trim()
+			if (syncId.isEmpty()) {
+				return@forEach
+			}
+			val local = getEntityGraphDao().findEntityBySyncId(syncId)
+				?.takeIf { it.type == remote.type }
+				?: return@forEach
+			entityIdMapping[remote.id] = local.id
+		}
+		val remoteLocalBindingsByEntityId = snapshot.entityGraph.bindings
+			.filter { it.isLocalContentBinding() }
+			.groupBy { it.entityId }
+		var restored = 0
+		var skipped = 0
 		for (remoteEntityId in remoteWorkEntityIds) {
 			if (remoteEntityId in entityIdMapping) {
 				continue
 			}
-			val remote = remoteEntitiesById[remoteEntityId] ?: continue
-			val localId = restoreGoogleDriveSyncEntity(
+			val remote = remoteEntitiesById[remoteEntityId]
+			if (remote == null) {
+				skipped++
+				continue
+			}
+			if (hasConflictingLocalContentBinding(remoteLocalBindingsByEntityId[remoteEntityId].orEmpty(), mangaIdMapping)) {
+				skipped++
+				continue
+			}
+			val localId = restoreGoogleDriveSyncEntityIsolated(
 				EntityRecord(
-					id = 0L,
+					id = remote.id,
+					syncId = remote.syncId,
 					type = remote.type,
 					primaryName = remote.primaryName,
 					nameHash = remote.nameHash,
@@ -619,8 +681,26 @@ class GoogleDriveSyncRepository @Inject constructor(
 				),
 			)
 			entityIdMapping[remoteEntityId] = localId
+			restored++
+		}
+		if (restored > 0 || skipped > 0) {
+			Log.d(TAG, "sync remote work entities restored=$restored skipped=$skipped")
 		}
 		return entityIdMapping
+	}
+
+	private suspend fun MangaDatabase.hasConflictingLocalContentBinding(
+		remoteBindings: List<SyncEntityBindingRecord>,
+		mangaIdMapping: Map<Long, Long>,
+	): Boolean {
+		for (binding in remoteBindings) {
+			val remoteMangaId = binding.externalId.toLongOrNull() ?: return true
+			val localMangaId = mangaIdMapping[remoteMangaId] ?: return true
+			if (getEntityGraphDao().findBinding(binding.source, localMangaId.toString()) != null) {
+				return true
+			}
+		}
+		return false
 	}
 
 	private suspend fun MangaDatabase.pruneLocalSyncResidue() {
@@ -638,7 +718,6 @@ class GoogleDriveSyncRepository @Inject constructor(
 				remoteEntityId = remote.entityId,
 				localMangaId = localMangaId,
 			) ?: return@forEach
-			ensureSyncLocalBinding(localEntityId, localMangaId, remote.updatedAt)
 			val local = getWorkHistoryDao().find(localEntityId)
 			if (local == null || remote.updatedAt >= local.updatedAt) {
 				getWorkHistoryDao().upsert(remote.toEntity(localEntityId, localMangaId))
@@ -656,41 +735,20 @@ class GoogleDriveSyncRepository @Inject constructor(
 				remoteEntityId = remote.entityId,
 				localMangaId = localMangaId,
 			) ?: return@forEach
-			ensureSyncLocalBinding(localEntityId, localMangaId, remote.updatedAt)
 			val local = getWorkFavouritesDao().find(localEntityId, localCategoryId)
 			if (local == null || remote.updatedAt >= local.updatedAt) {
 				getWorkFavouritesDao().upsert(remote.toEntity(localEntityId, localCategoryId, localMangaId))
 			}
 		}
 		snapshot.work.stats.forEach { remote ->
-			val localEntityId = mapping.entityIds[remote.entityId] ?: return@forEach
 			val localMangaId = mapping.mangaIds[remote.anchorMangaId] ?: return@forEach
-			ensureSyncLocalBinding(localEntityId, localMangaId, remote.startedAt)
+			val localEntityId = resolveLocalEntityIdForManga(
+				mapping = mapping,
+				remoteEntityId = remote.entityId,
+				localMangaId = localMangaId,
+			) ?: return@forEach
 			getWorkStatsDao().upsert(remote.toEntity(localEntityId, localMangaId))
 		}
-	}
-
-	private suspend fun MangaDatabase.ensureSyncLocalBinding(entityId: Long, localMangaId: Long, updatedAt: Long) {
-		val externalId = localMangaId.toString()
-		if (getEntityGraphDao().findActiveBinding(LOCAL_MANGA_SOURCE, externalId)?.entityId == entityId) {
-			return
-		}
-		if (getEntityGraphDao().findActiveBinding(LEGACY_LOCAL_MANGA_SOURCE, externalId)?.entityId == entityId) {
-			return
-		}
-		getEntityGraphDao().upsertBinding(
-			EntityBindingRecord(
-				entityId = entityId,
-				source = LOCAL_MANGA_SOURCE,
-				externalId = externalId,
-				confidence = 1f,
-				isPrimary = false,
-				sourceKind = LOCAL_MANGA_SOURCE.toEntityBindingSourceKind().name,
-				state = EntityBindingState.LEGACY.name,
-				createdBy = EntityBindingCreatedBy.SYNC.name,
-				updatedAt = updatedAt,
-			),
-		)
 	}
 
 	private suspend fun MangaDatabase.resolveLocalEntityIdForManga(
@@ -703,7 +761,6 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 		return getEntityGraphDao().findActiveBinding(LOCAL_MANGA_SOURCE, localMangaId.toString())?.entityId
 			?: getEntityGraphDao().findActiveBinding(LEGACY_LOCAL_MANGA_SOURCE, localMangaId.toString())?.entityId
-			?: mapping.entityIds[remoteEntityId]
 	}
 
 	private fun EntityBindingRecord.shouldKeepOverSync(
@@ -720,13 +777,13 @@ class GoogleDriveSyncRepository @Inject constructor(
 		return localState == EntityBindingState.MANUAL && remoteState != EntityBindingState.MANUAL
 	}
 
-	private suspend fun TrackEntity.mapWith(database: MangaDatabase, mapping: SyncIdMapping): TrackEntity {
+	private suspend fun TrackEntity.mapWith(database: MangaDatabase, mapping: SyncIdMapping): TrackEntity? {
 		val localMangaId = mapping.mangaIds[mangaId] ?: mangaId
 		val localEntityId = database.resolveLocalEntityIdForManga(
 			mapping = mapping,
 			remoteEntityId = entityId ?: 0L,
 			localMangaId = localMangaId,
-		) ?: entityId?.let { mapping.entityIds[it] ?: it }
+		) ?: return null
 		return TrackEntity(
 			ownerId = org.skepsun.kototoro.tracker.data.resolveTrackOwnerId(localEntityId, localMangaId),
 			mangaId = localMangaId,
@@ -740,13 +797,13 @@ class GoogleDriveSyncRepository @Inject constructor(
 		)
 	}
 
-	private suspend fun TrackLogEntity.mapWith(database: MangaDatabase, mapping: SyncIdMapping): TrackLogEntity {
+	private suspend fun TrackLogEntity.mapWith(database: MangaDatabase, mapping: SyncIdMapping): TrackLogEntity? {
 		val localMangaId = mapping.mangaIds[mangaId] ?: mangaId
 		val localEntityId = database.resolveLocalEntityIdForManga(
 			mapping = mapping,
 			remoteEntityId = entityId ?: 0L,
 			localMangaId = localMangaId,
-		) ?: entityId?.let { mapping.entityIds[it] ?: it }
+		) ?: return null
 		return TrackLogEntity(
 			ownerId = org.skepsun.kototoro.tracker.data.resolveTrackOwnerId(localEntityId, localMangaId),
 			mangaId = localMangaId,
@@ -816,16 +873,40 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 	}
 
-	private fun decodeSnapshot(bytes: ByteArray): GoogleDriveSyncSnapshot? {
+	private fun decodeCurrentSnapshot(bytes: ByteArray): GoogleDriveSyncSnapshot? {
+		return decodeSnapshot(bytes, requireCurrentProtocol = true)
+	}
+
+	private fun decodeLegacySnapshot(bytes: ByteArray): GoogleDriveSyncSnapshot? {
+		return decodeSnapshot(bytes, requireCurrentProtocol = false)
+	}
+
+	private fun decodeSnapshot(bytes: ByteArray, requireCurrentProtocol: Boolean): GoogleDriveSyncSnapshot? {
 		val text = bytes.decodeToString()
 		if (text.isBlank()) {
 			return null
 		}
-		val version = runCatching {
-			json.decodeFromString(SchemaProbe.serializer(), text).schemaVersion
+		val probe = runCatching {
+			json.decodeFromString(SchemaProbe.serializer(), text)
 		}.getOrNull()
-		if (version != null && version > GoogleDriveSyncSnapshot.SCHEMA_VERSION) {
-			throw GoogleDriveSyncSchemaException(version)
+		val version = probe?.schemaVersion
+		val namespace = probe?.namespace
+		val semanticSchemaVersion = probe?.semanticSchemaVersion
+		when {
+			version == null && requireCurrentProtocol -> throw GoogleDriveSyncProtocolException()
+			version != null && version > GoogleDriveSyncSnapshot.SCHEMA_VERSION -> {
+				throw GoogleDriveSyncSchemaException(version)
+			}
+			requireCurrentProtocol && version != GoogleDriveSyncSnapshot.SCHEMA_VERSION -> {
+				throw GoogleDriveSyncProtocolException()
+			}
+			requireCurrentProtocol && namespace != GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2 -> {
+				throw GoogleDriveSyncProtocolException()
+			}
+			requireCurrentProtocol &&
+				semanticSchemaVersion != GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION -> {
+				throw GoogleDriveSyncProtocolException()
+			}
 		}
 		return runCatching {
 			json.decodeFromString(GoogleDriveSyncSnapshot.serializer(), text)
@@ -846,9 +927,15 @@ class GoogleDriveSyncRepository @Inject constructor(
 		return "workFavourites=${getWorkFavouritesDao().countActive()} workHistory=${getWorkHistoryDao().countActive()}"
 	}
 
+	private fun SyncEntityBindingRecord.isLocalContentBinding(): Boolean {
+		return source == LOCAL_MANGA_SOURCE || source == LEGACY_LOCAL_MANGA_SOURCE
+	}
+
 	private fun GoogleDriveSyncSnapshot.copyForUpload(syncedAt: Long): GoogleDriveSyncSnapshot {
 		return GoogleDriveSyncSnapshot(
-			schemaVersion = schemaVersion,
+			schemaVersion = GoogleDriveSyncSnapshot.SCHEMA_VERSION,
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
 			deviceId = settings.deviceId,
 			syncedAt = syncedAt,
 			entityGraph = entityGraph,
@@ -861,7 +948,9 @@ class GoogleDriveSyncRepository @Inject constructor(
 
 	@Serializable
 	private class SchemaProbe(
-		@SerialName("schema") val schemaVersion: Int = 0,
+		@SerialName("schema") val schemaVersion: Int? = null,
+		@SerialName("namespace") val namespace: String? = null,
+		@SerialName("semantic_schema") val semanticSchemaVersion: Int? = null,
 	)
 
 	private companion object {

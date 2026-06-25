@@ -14,6 +14,9 @@ abstract class EntityGraphDao {
 	@Query("SELECT * FROM `entity` WHERE id = :entityId LIMIT 1")
 	abstract suspend fun findEntity(entityId: Long): EntityRecord?
 
+	@Query("SELECT * FROM `entity` WHERE sync_id = :syncId LIMIT 1")
+	abstract suspend fun findEntityBySyncId(syncId: String): EntityRecord?
+
 	@Query("SELECT * FROM `entity` WHERE id = :entityId LIMIT 1")
 	abstract fun observeEntity(entityId: Long): Flow<EntityRecord?>
 

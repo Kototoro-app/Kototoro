@@ -37,26 +37,30 @@ object GoogleDriveSyncMerger {
 			return compactSnapshot(local)
 		}
 		val config = mergeConfig(local.config, remote.config)
+		val isolatedRemote = remote.withIdsIsolatedFrom(local)
 		return compactSnapshot(
 			GoogleDriveSyncSnapshot(
+				schemaVersion = local.schemaVersion,
+				namespace = local.namespace,
+				semanticSchemaVersion = local.semanticSchemaVersion,
 				deviceId = local.deviceId,
 				syncedAt = maxOf(local.syncedAt, remote.syncedAt),
 				entityGraph = SyncEntityGraph(
-					entities = local.entityGraph.entities + remote.entityGraph.entities,
-					bindings = local.entityGraph.bindings + remote.entityGraph.bindings,
-					relations = local.entityGraph.relations + remote.entityGraph.relations,
-					prefs = local.entityGraph.prefs + remote.entityGraph.prefs,
+					entities = local.entityGraph.entities + isolatedRemote.entityGraph.entities,
+					bindings = local.entityGraph.bindings + isolatedRemote.entityGraph.bindings,
+					relations = local.entityGraph.relations + isolatedRemote.entityGraph.relations,
+					prefs = local.entityGraph.prefs + isolatedRemote.entityGraph.prefs,
 				),
-				content = local.content + remote.content,
+				content = local.content + isolatedRemote.content,
 				work = SyncWorkState(
-					categories = local.work.categories + remote.work.categories,
-					history = local.work.history + remote.work.history,
-					favourites = local.work.favourites + remote.work.favourites,
-					stats = local.work.stats + remote.work.stats,
+					categories = local.work.categories + isolatedRemote.work.categories,
+					history = local.work.history + isolatedRemote.work.history,
+					favourites = local.work.favourites + isolatedRemote.work.favourites,
+					stats = local.work.stats + isolatedRemote.work.stats,
 				),
 				feed = SyncFeedState(
-					tracks = local.feed.tracks + remote.feed.tracks,
-					logs = local.feed.logs + remote.feed.logs,
+					tracks = local.feed.tracks + isolatedRemote.feed.tracks,
+					logs = local.feed.logs + isolatedRemote.feed.logs,
 				),
 				config = config,
 			),
@@ -81,8 +85,7 @@ object GoogleDriveSyncMerger {
 				canonical
 			}
 			.sortedBy { it.id }
-		val authoritativeContentIds = buildAuthoritativeContentIds(snapshot, contentIdMap)
-		val entityGroups = buildEntityGroups(snapshot, contentIdMap, authoritativeContentIds)
+		val entityGroups = buildEntityGroups(snapshot)
 		val entityIdMap = LinkedHashMap<Long, Long>()
 		val compactEntities = snapshot.entityGraph.entities
 			.groupBy { entity -> entityGroups.find(entity.id) }
@@ -130,7 +133,7 @@ object GoogleDriveSyncMerger {
 					deletedAt = history.deletedAt,
 				)
 			}
-			.groupBy { WorkAnchorKey(it.anchorMangaId) }
+			.groupBy { WorkHistoryKey(it.entityId) }
 			.values
 			.map(::mergeWorkHistory)
 			.sortedByDescending { it.updatedAt }
@@ -148,7 +151,7 @@ object GoogleDriveSyncMerger {
 					deletedAt = favourite.deletedAt,
 				)
 			}
-			.groupBy { favourite -> WorkFavouriteKey(favourite.anchorMangaId, favourite.categoryId) }
+			.groupBy { favourite -> WorkFavouriteKey(favourite.entityId, favourite.categoryId) }
 			.values
 			.map(::mergeWorkFavourite)
 			.sortedWith(compareBy<SyncWorkFavourite> { it.categoryId }.thenBy { it.sortKey })
@@ -278,6 +281,8 @@ object GoogleDriveSyncMerger {
 			.sortedWith(compareBy<SyncEntityRelationRecord> { it.fromEntityId }.thenBy { it.toEntityId }.thenBy { it.type })
 		return GoogleDriveSyncSnapshot(
 			schemaVersion = snapshot.schemaVersion,
+			namespace = snapshot.namespace,
+			semanticSchemaVersion = snapshot.semanticSchemaVersion,
 			deviceId = snapshot.deviceId,
 			syncedAt = snapshot.syncedAt,
 			entityGraph = SyncEntityGraph(
@@ -310,6 +315,7 @@ object GoogleDriveSyncMerger {
 			val newer = if (right.lastAccessed > left.lastAccessed) right else left
 			SyncEntityRecord(
 				id = left.id,
+				syncId = left.syncId.ifBlank { right.syncId },
 				type = left.type,
 				primaryName = newer.primaryName,
 				nameHash = newer.nameHash,
@@ -322,7 +328,11 @@ object GoogleDriveSyncMerger {
 	}
 
 	private fun mergeBindings(items: List<SyncEntityBindingRecord>): SyncEntityBindingRecord {
-		return items.maxBy { it.updatedAt }
+		return if (items.any { it.entityId != items.first().entityId }) {
+			items.first()
+		} else {
+			items.maxBy { it.updatedAt }
+		}
 	}
 
 	private fun mergePrefs(items: List<SyncEntityPrefsRecord>): SyncEntityPrefsRecord {
@@ -337,13 +347,13 @@ object GoogleDriveSyncMerger {
 				.map(::mergeCategories)
 				.sortedBy { it.sortKey },
 			history = (local.history + remote.history)
-				.groupBy { WorkAnchorKey(it.anchorMangaId) }
+				.groupBy { WorkHistoryKey(it.entityId) }
 				.values
 				.map(::mergeWorkHistory)
 				.sortedByDescending { it.updatedAt },
 			favourites = (local.favourites + remote.favourites)
 				.filter { it.anchorMangaId != null }
-				.groupBy { favourite -> WorkFavouriteKey(favourite.anchorMangaId, favourite.categoryId) }
+				.groupBy { favourite -> WorkFavouriteKey(favourite.entityId, favourite.categoryId) }
 				.values
 				.map(::mergeWorkFavourite)
 				.sortedWith(compareBy<SyncWorkFavourite> { it.categoryId }.thenBy { it.sortKey }),
@@ -462,50 +472,256 @@ object GoogleDriveSyncMerger {
 	)
 
 	private data class BindingKey(val source: String, val externalId: String)
+	private data class EntitySyncKey(val type: String, val syncId: String)
 	private data class RelationKey(val fromEntityId: Long, val toEntityId: Long, val type: String)
-	private data class WorkAnchorKey(val anchorMangaId: Long)
-	private data class WorkFavouriteKey(val anchorMangaId: Long?, val categoryId: Long)
+	private data class WorkHistoryKey(val entityId: Long)
+	private data class WorkFavouriteKey(val entityId: Long, val categoryId: Long)
 	private data class WorkStatsKey(val entityId: Long, val startedAt: Long)
 
+	private fun GoogleDriveSyncSnapshot.withIdsIsolatedFrom(local: GoogleDriveSyncSnapshot): GoogleDriveSyncSnapshot {
+		val entityIdMap = remapCollidingEntityIds(local, this)
+		val contentIdMap = remapConflictingContentIds(local, this)
+		if (entityIdMap.isEmpty() && contentIdMap.isEmpty()) {
+			return this
+		}
+		return GoogleDriveSyncSnapshot(
+			schemaVersion = schemaVersion,
+			namespace = namespace,
+			semanticSchemaVersion = semanticSchemaVersion,
+			deviceId = deviceId,
+			syncedAt = syncedAt,
+			entityGraph = SyncEntityGraph(
+				entities = entityGraph.entities.map { entity ->
+					entityIdMap[entity.id]?.let { entity.copyWithId(it) } ?: entity
+				},
+				bindings = entityGraph.bindings.map { binding ->
+					SyncEntityBindingRecord(
+						entityId = entityIdMap[binding.entityId] ?: binding.entityId,
+						source = binding.source,
+						externalId = if (binding.isLocalContentBinding()) {
+							binding.externalId.toLongOrNull()
+								?.let { contentIdMap[it] ?: it }
+								?.toString()
+								?: binding.externalId
+						} else {
+							binding.externalId
+						},
+						confidence = binding.confidence,
+						sourceKind = binding.sourceKind,
+						state = binding.state,
+						createdBy = binding.createdBy,
+						isPrimary = binding.isPrimary,
+						updatedAt = binding.updatedAt,
+					)
+				},
+				relations = entityGraph.relations.map { relation ->
+					SyncEntityRelationRecord(
+						fromEntityId = entityIdMap[relation.fromEntityId] ?: relation.fromEntityId,
+						toEntityId = entityIdMap[relation.toEntityId] ?: relation.toEntityId,
+						type = relation.type,
+						createdAt = relation.createdAt,
+					)
+				},
+				prefs = entityGraph.prefs.map { prefs ->
+					SyncEntityPrefsRecord(
+						entityId = entityIdMap[prefs.entityId] ?: prefs.entityId,
+						preferredLocalMangaId = prefs.preferredLocalMangaId?.let { contentIdMap[it] ?: it },
+						titleOverride = prefs.titleOverride,
+						coverUrlOverride = prefs.coverUrlOverride,
+						contentRatingOverride = prefs.contentRatingOverride,
+						readingStatus = prefs.readingStatus,
+						metadataSourceKind = prefs.metadataSourceKind,
+						metadataBindingSource = prefs.metadataBindingSource,
+						metadataBindingExternalId = prefs.metadataBindingExternalId,
+						metadataSourceService = prefs.metadataSourceService,
+						metadataSourceRemoteId = prefs.metadataSourceRemoteId,
+						updatedAt = prefs.updatedAt,
+					)
+				},
+			),
+			content = content.map { content ->
+				contentIdMap[content.id]?.let { content.copyWithId(it) } ?: content
+			},
+			work = SyncWorkState(
+				categories = work.categories,
+				history = work.history.map { history ->
+					SyncWorkHistory(
+						entityId = entityIdMap[history.entityId] ?: history.entityId,
+						anchorMangaId = contentIdMap[history.anchorMangaId] ?: history.anchorMangaId,
+						createdAt = history.createdAt,
+						updatedAt = history.updatedAt,
+						chapterId = history.chapterId,
+						page = history.page,
+						scroll = history.scroll,
+						percent = history.percent,
+						chaptersCount = history.chaptersCount,
+						parentChapterId = history.parentChapterId,
+						deletedAt = history.deletedAt,
+					)
+				},
+				favourites = work.favourites.map { favourite ->
+					SyncWorkFavourite(
+						entityId = entityIdMap[favourite.entityId] ?: favourite.entityId,
+						categoryId = favourite.categoryId,
+						anchorMangaId = favourite.anchorMangaId?.let { contentIdMap[it] ?: it },
+						sortKey = favourite.sortKey,
+						isPinned = favourite.isPinned,
+						createdAt = favourite.createdAt,
+						updatedAt = favourite.updatedAt,
+						deletedAt = favourite.deletedAt,
+					)
+				},
+				stats = work.stats.map { stats ->
+					SyncWorkStats(
+						entityId = entityIdMap[stats.entityId] ?: stats.entityId,
+						anchorMangaId = contentIdMap[stats.anchorMangaId] ?: stats.anchorMangaId,
+						startedAt = stats.startedAt,
+						duration = stats.duration,
+						pages = stats.pages,
+					)
+				},
+			),
+			feed = SyncFeedState(
+				tracks = feed.tracks.map { track ->
+					SyncTrack(
+						ownerId = track.ownerId,
+						mangaId = contentIdMap[track.mangaId] ?: track.mangaId,
+						entityId = track.entityId?.let { entityIdMap[it] ?: it },
+						lastChapterId = track.lastChapterId,
+						newChapters = track.newChapters,
+						lastCheckTime = track.lastCheckTime,
+						lastChapterDate = track.lastChapterDate,
+						lastResult = track.lastResult,
+						lastError = track.lastError,
+					)
+				},
+				logs = feed.logs.map { log ->
+					SyncTrackLog(
+						ownerId = log.ownerId,
+						mangaId = contentIdMap[log.mangaId] ?: log.mangaId,
+						entityId = log.entityId?.let { entityIdMap[it] ?: it },
+						chapters = log.chapters,
+						createdAt = log.createdAt,
+						isUnread = log.isUnread,
+					)
+				},
+			),
+			config = config,
+		)
+	}
+
+	private fun remapCollidingEntityIds(
+		local: GoogleDriveSyncSnapshot,
+		remote: GoogleDriveSyncSnapshot,
+	): Map<Long, Long> {
+		val localIds = local.entityGraph.entities.mapTo(HashSet()) { it.id }
+		val localBySyncId = local.entityGraph.entities
+			.asSequence()
+			.filter { it.syncId.isNotBlank() }
+			.associateBy { EntitySyncKey(it.type, it.syncId) }
+		var nextId = minOf(localIds.minOrNull() ?: 0L, remote.entityGraph.entities.minOfOrNull { it.id } ?: 0L, 0L) - 1L
+		val result = LinkedHashMap<Long, Long>()
+		remote.entityGraph.entities.forEach { remoteEntity ->
+			val matchingLocal = remoteEntity.syncId
+				.takeIf { it.isNotBlank() }
+				?.let { localBySyncId[EntitySyncKey(remoteEntity.type, it)] }
+			if (matchingLocal != null) {
+				result[remoteEntity.id] = matchingLocal.id
+				return@forEach
+			}
+			if (remoteEntity.id !in localIds || remoteEntity.id in result) {
+				return@forEach
+			}
+			while (nextId in localIds || nextId in result.values) {
+				nextId--
+			}
+			result[remoteEntity.id] = nextId--
+		}
+		return result
+	}
+
+	private fun remapConflictingContentIds(
+		local: GoogleDriveSyncSnapshot,
+		remote: GoogleDriveSyncSnapshot,
+	): Map<Long, Long> {
+		val localContentById = local.content.associateBy { it.id }
+		val localIds = localContentById.keys
+		val remoteIds = remote.content.mapTo(HashSet()) { it.id }
+		var nextId = minOf(localIds.minOrNull() ?: 0L, remoteIds.minOrNull() ?: 0L, 0L) - 1L
+		return remote.content
+			.asSequence()
+			.filter { remoteContent ->
+				localContentById[remoteContent.id]?.let { localContent ->
+					!localContent.hasSameProjectionPayload(remoteContent)
+				} ?: false
+			}
+			.map { it.id }
+			.distinct()
+			.associateWith {
+				while (nextId in localIds || nextId in remoteIds) {
+					nextId--
+				}
+				nextId--
+			}
+	}
+
+	private fun SyncEntityRecord.copyWithId(id: Long): SyncEntityRecord {
+		return SyncEntityRecord(
+			id = id,
+			syncId = syncId,
+			type = type,
+			primaryName = primaryName,
+			nameHash = nameHash,
+			aliases = aliases,
+			createdAt = createdAt,
+			lastAccessed = lastAccessed,
+			accessCount = accessCount,
+		)
+	}
+
+	private fun SyncContent.copyWithId(id: Long): SyncContent {
+		return SyncContent(
+			id = id,
+			title = title,
+			altTitles = altTitles,
+			url = url,
+			publicUrl = publicUrl,
+			rating = rating,
+			isNsfw = isNsfw,
+			contentRating = contentRating,
+			coverUrl = coverUrl,
+			largeCoverUrl = largeCoverUrl,
+			state = state,
+			authors = authors,
+			source = source,
+		)
+	}
+
+	private fun SyncContent.hasSameProjectionPayload(other: SyncContent): Boolean {
+		return title == other.title &&
+			altTitles == other.altTitles &&
+			url == other.url &&
+			publicUrl == other.publicUrl &&
+			rating == other.rating &&
+			isNsfw == other.isNsfw &&
+			contentRating == other.contentRating &&
+			coverUrl == other.coverUrl &&
+			largeCoverUrl == other.largeCoverUrl &&
+			state == other.state &&
+			authors == other.authors &&
+			source == other.source
+	}
+
 	private fun contentKey(content: SyncContent): String {
-		val publicUrl = content.publicUrl.trim()
-		if (publicUrl.isNotEmpty()) {
-			return "public:$publicUrl"
-		}
-		val source = content.source.trim()
-		val url = content.url.trim()
-		if (url.isNotEmpty()) {
-			return "source-url:$source\n$url"
-		}
-		return "fallback:$source\n${content.title.trim()}\n${content.coverUrl.trim()}"
+		return "projection-id:${content.id}"
 	}
 
 	private fun SyncEntityBindingRecord.isLocalContentBinding(): Boolean {
 		return source == LOCAL_MANGA_SOURCE || source == LEGACY_LOCAL_MANGA_SOURCE
 	}
 
-	private fun buildEntityGroups(
-		snapshot: GoogleDriveSyncSnapshot,
-		contentIdMap: Map<Long, Long>,
-		authoritativeContentIds: Set<Long>,
-	): EntityDisjointSet {
-		val groups = EntityDisjointSet(snapshot.entityGraph.entities.map { it.id })
-		snapshot.entityGraph.bindings
-			.mapNotNull { binding ->
-				val contentId = binding.externalId
-					.toLongOrNull()
-					?.takeIf { binding.isLocalContentBinding() }
-					?: return@mapNotNull null
-				val canonicalContentId = contentIdMap[contentId] ?: contentId
-				if (canonicalContentId !in authoritativeContentIds) {
-					return@mapNotNull null
-				}
-				canonicalContentId to binding.entityId
-			}
-			.groupBy({ it.first }, { it.second })
-			.values
-			.forEach { entityIds -> groups.unionAll(entityIds) }
-		return groups
+	private fun buildEntityGroups(snapshot: GoogleDriveSyncSnapshot): EntityDisjointSet {
+		return EntityDisjointSet(snapshot.entityGraph.entities.map { it.id })
 	}
 
 	private fun buildAuthoritativeContentIds(

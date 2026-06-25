@@ -14,6 +14,7 @@ import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.EntityRelationOrigin
 import org.skepsun.kototoro.entitygraph.domain.EntityRelationState
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
+import java.util.UUID
 
 @Serializable
 @Entity(
@@ -21,6 +22,7 @@ import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
 	indices = [
 		Index(name = "idx_entity_name", value = ["primary_name"]),
 		Index(name = "idx_entity_name_hash", value = ["type", "name_hash"], unique = true),
+		Index(name = "idx_entity_sync_id", value = ["sync_id"], unique = true),
 		Index(name = "idx_entity_type_access", value = ["type", "access_count", "last_accessed", "id"]),
 	],
 )
@@ -28,6 +30,7 @@ data class EntityRecord(
 	@PrimaryKey(autoGenerate = true)
 	@ColumnInfo(name = "id") val id: Long = 0L,
 	@ColumnInfo(name = "type") val type: String,
+	@ColumnInfo(name = "sync_id", defaultValue = "''") val syncId: String = UUID.randomUUID().toString(),
 	@ColumnInfo(name = "primary_name") val primaryName: String,
 	@ColumnInfo(name = "name_hash") val nameHash: Long = 0L,
 	@ColumnInfo(name = "aliases") val aliases: String?,
