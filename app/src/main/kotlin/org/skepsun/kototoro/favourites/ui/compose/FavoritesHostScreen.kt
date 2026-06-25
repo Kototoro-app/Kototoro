@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,8 +47,6 @@ import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -58,9 +55,9 @@ import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
-import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabsRail
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
 import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
+import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
@@ -201,22 +198,28 @@ fun KototoroFavoritesHostRoute(
             childTopBarOverrideGeneration == activeChildOverrideGeneration &&
             it is ContentSelectionTopBarOverrideState
     }
-    val showCategoryTabs = effectiveChildTopBarOverrideState == null && compactTabsState.items.isNotEmpty()
+
+    val favoritesTopBarOverrideState = remember(
+        compactTabsState,
+        effectiveChildTopBarOverrideState,
+    ) {
+        LayeredTopBarOverrideState(
+            tabsState = compactTabsState,
+            contextualOverrideState = effectiveChildTopBarOverrideState,
+            keepTabsExpandedWhenCollapsed = true,
+        )
+    }
 
     val innerPadding = PaddingValues(
         start = contentPadding.calculateStartPadding(LocalLayoutDirection.current),
         end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
-        top = if (showCategoryTabs) {
-            contentPadding.calculateTopPadding() + CompactTopBarPillHeight
-        } else {
-            contentPadding.calculateTopPadding()
-        },
+        top = contentPadding.calculateTopPadding(),
         bottom = contentPadding.calculateBottomPadding(),
     )
 
-    LaunchedEffect(uiState.isLoading, effectiveChildTopBarOverrideState) {
+    LaunchedEffect(uiState.isLoading, favoritesTopBarOverrideState) {
         if (!uiState.isLoading) {
-            onTopBarOverrideChanged(effectiveChildTopBarOverrideState)
+            onTopBarOverrideChanged(favoritesTopBarOverrideState)
         }
     }
     DisposableEffect(Unit) {
@@ -312,22 +315,6 @@ fun KototoroFavoritesHostRoute(
                     )
                 }
             }
-            if (showCategoryTabs) {
-                CompactTopBarTabsRail(
-                    state = compactTabsState,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .padding(
-                            start = contentPadding.calculateStartPadding(LocalLayoutDirection.current) +
-                                CompactTopBarHorizontalPadding,
-                            top = contentPadding.calculateTopPadding(),
-                            end = contentPadding.calculateEndPadding(LocalLayoutDirection.current) +
-                                CompactTopBarHorizontalPadding,
-                        ),
-                )
-            }
-
         }
     }
 }

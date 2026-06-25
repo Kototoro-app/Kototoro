@@ -204,14 +204,20 @@ fun KototoroTopBar(
                 }
             }
             if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
+                val maxWidth = if (compactTabsState != null) 72.dp else 128.dp
+                var useSmall by remember(topBarTitle) { mutableStateOf(false) }
                 Text(
                     text = topBarTitle,
-                    modifier = Modifier
-                        .widthIn(max = if (compactTabsState != null) 72.dp else 128.dp),
-                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.widthIn(max = maxWidth),
+                    style = if (useSmall) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = if (useSmall) 2 else 1,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { result ->
+                        if (result.hasVisualOverflow && !useSmall) {
+                            useSmall = true
+                        }
+                    },
                 )
             }
             if (compactTabsState != null) {
