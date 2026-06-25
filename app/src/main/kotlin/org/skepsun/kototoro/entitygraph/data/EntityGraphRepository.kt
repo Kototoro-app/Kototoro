@@ -2040,6 +2040,25 @@ class EntityGraphRepository @Inject constructor(
 				updatedAt = System.currentTimeMillis(),
 			),
 		)
+		reconcileProjectionSyncId(entityId)
+	}
+
+	private suspend fun EntityGraphDao.reconcileProjectionSyncId(entityId: Long) {
+		val entity = findEntity(entityId) ?: return
+		val projectionBindings = findActiveBindingsByEntity(entityId)
+			.filter { it.isAuthoritativeProjectionBinding() }
+		if (projectionBindings.size != 1) {
+			return
+		}
+		val projection = projectionBindings.single()
+		val projectionSyncId = computeProjectionSyncId(
+			source = projection.source,
+			externalId = projection.externalId,
+		)
+		if (entity.syncId == projectionSyncId) {
+			return
+		}
+		updateEntity(entity.copy(syncId = projectionSyncId))
 	}
 
 	private suspend fun EntityGraphDao.attachLocalWorkBindingForMerge(
@@ -2077,6 +2096,11 @@ class EntityGraphRepository @Inject constructor(
 		val nameHash = computeNameHash(trimmedName)
 		val record = EntityRecord(
 			type = type.name,
+			syncId = if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
+				computeProjectionSyncId(source, externalId)
+			} else {
+				java.util.UUID.randomUUID().toString()
+			},
 			primaryName = trimmedName,
 			nameHash = nameHash,
 			aliases = encodeStringList(mergeAliases(trimmedName, aliases + primaryName).drop(1)),

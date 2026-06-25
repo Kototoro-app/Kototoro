@@ -3,6 +3,7 @@ package org.skepsun.kototoro.sync.google.domain
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.entitygraph.data.EntityGraphDao
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
+import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.entitygraph.data.decodeStringList
 import org.skepsun.kototoro.entitygraph.data.encodeStringList

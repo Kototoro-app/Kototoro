@@ -34,6 +34,7 @@ import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.RelationRecord
+import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
@@ -639,8 +640,16 @@ class GoogleDriveSyncRepository @Inject constructor(
 		snapshot.feed.tracks.forEach { mapByAnchor(it.entityId ?: return@forEach, it.mangaId) }
 		snapshot.feed.logs.forEach { mapByAnchor(it.entityId ?: return@forEach, it.mangaId) }
 		val remoteEntitiesById = snapshot.entityGraph.entities.associateBy { it.id }
+		val remoteReadingBindingsByEntityId = snapshot.entityGraph.bindings
+			.filter { it.isAuthoritativeProjectionBindingForSync() }
+			.groupBy { it.entityId }
 		remoteEntitiesById.values.forEach { remote ->
-			val syncId = remote.syncId.trim()
+			val syncId = remote.syncId.trim().ifEmpty {
+				remoteReadingBindingsByEntityId[remote.id]
+					?.singleOrNull()
+					?.let { binding -> computeProjectionSyncId(binding.source, binding.externalId) }
+					.orEmpty()
+			}
 			if (syncId.isEmpty()) {
 				return@forEach
 			}
@@ -929,6 +938,13 @@ class GoogleDriveSyncRepository @Inject constructor(
 
 	private fun SyncEntityBindingRecord.isLocalContentBinding(): Boolean {
 		return source == LOCAL_MANGA_SOURCE || source == LEGACY_LOCAL_MANGA_SOURCE
+	}
+
+	private fun SyncEntityBindingRecord.isAuthoritativeProjectionBindingForSync(): Boolean {
+		if (isLocalContentBinding()) {
+			return false
+		}
+		return sourceKind != "TRACKING_SOURCE"
 	}
 
 	private fun GoogleDriveSyncSnapshot.copyForUpload(syncedAt: Long): GoogleDriveSyncSnapshot {

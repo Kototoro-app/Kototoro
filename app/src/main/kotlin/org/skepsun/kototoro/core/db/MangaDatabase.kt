@@ -72,6 +72,7 @@ import org.skepsun.kototoro.core.db.migrations.Migration64To65
 import org.skepsun.kototoro.core.db.migrations.Migration65To66
 import org.skepsun.kototoro.core.db.migrations.Migration66To67
 import org.skepsun.kototoro.core.db.migrations.Migration67To68
+import org.skepsun.kototoro.core.db.migrations.Migration68To69
 import org.skepsun.kototoro.core.db.migrations.Migration1To2
 import org.skepsun.kototoro.core.db.migrations.Migration20To21
 import org.skepsun.kototoro.core.db.migrations.Migration21To22
@@ -134,7 +135,7 @@ import org.skepsun.kototoro.work.data.WorkMigrationLedgerEntity
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 68
+const val DATABASE_VERSION = 69
 
 @Database(
 	entities = [
@@ -277,6 +278,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
 	Migration65To66(),
 	Migration66To67(),
 	Migration67To68(),
+	Migration68To69(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.entitygraph.data
 import org.json.JSONArray
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.entitygraph.domain.Relation
@@ -113,4 +114,17 @@ internal fun normalizeName(value: String): String = normalizeEntityName(value)
  */
 internal fun computeNameHash(primaryName: String): Long {
 	return normalizeName(primaryName.trim()).longHashCode()
+}
+
+internal fun computeProjectionSyncId(source: String, externalId: String): String {
+	val normalizedSource = source.trim()
+	val normalizedExternalId = externalId.trim()
+	return "projection:${normalizedSource.length}:$normalizedSource:${normalizedExternalId.length}:$normalizedExternalId"
+}
+
+internal fun EntityBindingRecord.isAuthoritativeProjectionBinding(): Boolean {
+	if (source.isLocalEntityBindingSource()) {
+		return false
+	}
+	return sourceKind != EntityBindingSourceKind.TRACKING_SOURCE.name
 }
