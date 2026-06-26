@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.MapColumn
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.room.Transaction
 import androidx.room.Upsert
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
@@ -48,7 +49,38 @@ abstract class WorkStatsDao {
 	abstract suspend fun clear()
 
 	@Query("UPDATE work_stats SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
-	abstract suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long)
+	protected abstract suspend fun remapEntityIdRaw(oldEntityId: Long, newEntityId: Long)
+
+	@Query("DELETE FROM work_stats WHERE entity_id = :entityId AND started_at = :startedAt")
+	protected abstract suspend fun deleteRow(entityId: Long, startedAt: Long)
+
+	/**
+	 * Move every row from [oldEntityId] to [newEntityId]. Rows that collide on a
+	 * target `(newEntityId, started_at)` key are merged via
+	 * [mergeRestoredWorkStats] instead of letting the bulk UPDATE hit the
+	 * `(entity_id, started_at)` primary-key constraint during restore / remap.
+	 */
+	@Transaction
+	open suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long) {
+		if (oldEntityId == newEntityId) return
+		val sources = findAll(oldEntityId)
+		if (sources.isEmpty()) return
+		val targetsByStartedAt = findAll(newEntityId).associateBy { it.startedAt }
+		if (targetsByStartedAt.isEmpty()) {
+			remapEntityIdRaw(oldEntityId, newEntityId)
+			return
+		}
+		for (source in sources) {
+			val moved = source.copy(entityId = newEntityId)
+			val target = targetsByStartedAt[source.startedAt]
+			deleteRow(oldEntityId, source.startedAt)
+			if (target == null) {
+				upsert(moved)
+			} else {
+				upsert(mergeRestoredWorkStats(target, moved))
+			}
+		}
+	}
 
 	suspend fun getDurationStats(
 		fromDate: Long,

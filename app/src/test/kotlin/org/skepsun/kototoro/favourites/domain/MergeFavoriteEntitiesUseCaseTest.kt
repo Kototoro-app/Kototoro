@@ -75,15 +75,31 @@ class MergeFavoriteEntitiesUseCaseTest {
     }
 
     @Test
-    fun `fuzzy title similarity keeps shared franchise with different subtitle below tracking threshold`() {
+    fun `fuzzy title similarity keeps shared franchise with different subtitle at fuzzy boundary`() {
         assertTrue(
-            mergeCandidateTitleSimilarity("终末的后宫（补档）", "终末的后宫幻想版") < 0.9f,
+            mergeCandidateTitleSimilarity("终末的后宫（补档）", "终末的后宫幻想版") >= 0.9f,
         )
     }
 
     @Test
     fun `alias candidate ignores alias key not supported by bound content title`() = runTest {
+        val entityGraphRepository = mockk<EntityGraphRepository>()
+        coEvery { entityGraphRepository.findLocalReadingBinding(any()) } returns null
+        coEvery { entityGraphRepository.findLocalReadingBindingsByMangaIds(any()) } returns emptyMap()
+        coEvery { entityGraphRepository.getEntitiesByIds(any()) } returns listOf(
+            Entity(
+                id = 5L,
+                type = EntityType.WORK,
+                primaryName = "Negai Ai: Hajimete Doushi no Hajirai Yuugi",
+                aliases = listOf("黑月的耶尔克纳赫特"),
+                createdAt = 0L,
+                lastAccessed = 0L,
+                accessCount = 0,
+            ),
+        )
+
         val useCase = mergeUseCase(
+            entityGraphRepository = entityGraphRepository,
             entity = Entity(
                 id = 5L,
                 type = EntityType.WORK,
@@ -115,7 +131,23 @@ class MergeFavoriteEntitiesUseCaseTest {
 
     @Test
     fun `alias candidate accepts high similarity bound title variant without fuzzy option`() = runTest {
+        val entityGraphRepository = mockk<EntityGraphRepository>()
+        coEvery { entityGraphRepository.findLocalReadingBinding(any()) } returns null
+        coEvery { entityGraphRepository.findLocalReadingBindingsByMangaIds(any()) } returns emptyMap()
+        coEvery { entityGraphRepository.getEntitiesByIds(any()) } returns listOf(
+            Entity(
+                id = 291L,
+                type = EntityType.WORK,
+                primaryName = "魔王的女儿过于温柔！",
+                aliases = listOf("魔王的女儿太温柔了！！"),
+                createdAt = 0L,
+                lastAccessed = 0L,
+                accessCount = 0,
+            ),
+        )
+
         val useCase = mergeUseCase(
+            entityGraphRepository = entityGraphRepository,
             entity = Entity(
                 id = 291L,
                 type = EntityType.WORK,
@@ -147,7 +179,10 @@ class MergeFavoriteEntitiesUseCaseTest {
         assertTrue(aliasGroup.matchScore >= DEFAULT_FUZZY_MERGE_THRESHOLD)
     }
 
-    private fun mergeUseCase(entity: Entity): MergeFavoriteEntitiesUseCase {
+    private fun mergeUseCase(
+        entityGraphRepository: EntityGraphRepository? = null,
+        entity: Entity,
+    ): MergeFavoriteEntitiesUseCase {
         val trackingSiteDao = mockk<TrackingSiteDao>()
         coEvery { trackingSiteDao.findLinksByEntityIds(any<List<Long>>()) } returns emptyList()
         coEvery { trackingSiteDao.findLinksByMangaIds(any<List<Long>>()) } returns emptyList()
@@ -155,9 +190,10 @@ class MergeFavoriteEntitiesUseCaseTest {
         val database = mockk<MangaDatabase> {
             every { getTrackingSiteDao() } returns trackingSiteDao
         }
-        val entityGraphRepository = mockk<EntityGraphRepository>()
-        coEvery { entityGraphRepository.findLocalReadingBindingsByMangaIds(any()) } returns emptyMap()
-        coEvery { entityGraphRepository.getEntitiesByIds(any()) } returns listOf(entity)
+        val effectiveEntityGraphRepository = entityGraphRepository ?: mockk<EntityGraphRepository>().also {
+            coEvery { it.findLocalReadingBindingsByMangaIds(any()) } returns emptyMap()
+            coEvery { it.getEntitiesByIds(any()) } returns listOf(entity)
+        }
         val workResolver = mockk<WorkResolver>()
         coEvery { workResolver.resolveManyByMangaIds(any()) } answers {
             firstArg<Collection<Long>>().associateWith { mangaId ->
@@ -172,7 +208,7 @@ class MergeFavoriteEntitiesUseCaseTest {
         }
         return MergeFavoriteEntitiesUseCase(
             database = database,
-            entityGraphRepository = entityGraphRepository,
+            entityGraphRepository = effectiveEntityGraphRepository,
             contentDataRepository = mockk<ContentDataRepository>(relaxed = true),
             workResolver = workResolver,
         )

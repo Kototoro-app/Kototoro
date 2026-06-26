@@ -99,7 +99,30 @@ abstract class WorkHistoryDao {
 	suspend fun delete(entityId: Long) = setDeletedAt(entityId, System.currentTimeMillis())
 
 	@Query("UPDATE work_history SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
-	abstract suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long)
+	protected abstract suspend fun remapEntityIdRaw(oldEntityId: Long, newEntityId: Long)
+
+	@Query("DELETE FROM work_history WHERE entity_id = :entityId")
+	protected abstract suspend fun deleteRow(entityId: Long)
+
+	/**
+	 * Move the row from [oldEntityId] to [newEntityId]. When a row already
+	 * exists at [newEntityId] the two are merged via [mergeRestoredWorkHistory]
+	 * instead of letting the bulk UPDATE hit the `entity_id` primary-key
+	 * constraint during restore / entity remap.
+	 */
+	@Transaction
+	open suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long) {
+		if (oldEntityId == newEntityId) return
+		val source = find(oldEntityId) ?: return
+		val moved = source.copy(entityId = newEntityId)
+		val target = find(newEntityId)
+		if (target == null) {
+			remapEntityIdRaw(oldEntityId, newEntityId)
+			return
+		}
+		deleteRow(oldEntityId)
+		upsert(mergeRestoredWorkHistory(target, moved))
+	}
 
 	@Query("UPDATE work_history SET deleted_at = 0, updated_at = :updatedAt WHERE entity_id = :entityId")
 	abstract suspend fun recoverAt(entityId: Long, updatedAt: Long)

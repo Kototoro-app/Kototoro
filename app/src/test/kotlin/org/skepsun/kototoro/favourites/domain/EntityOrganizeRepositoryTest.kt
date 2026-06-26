@@ -68,10 +68,13 @@ class EntityOrganizeRepositoryTest {
             binding(entityId = 7L, mangaId = 100L, state = EntityBindingState.CONFIRMED),
             binding(entityId = 7L, mangaId = 101L, state = EntityBindingState.MANUAL),
         )
-        coEvery { mangaDao.findWithTagsByIds(setOf(100L, 101L)) } returns listOf(
-            mangaWithTags(100L, "Source A", "Anchor"),
-            mangaWithTags(101L, "Source B", "Preferred"),
-        )
+        coEvery { mangaDao.findWithTagsByIds(any<Collection<Long>>()) } answers {
+            val ids = firstArg<Collection<Long>>()
+            listOfNotNull(
+                if (100L in ids) mangaWithTags(100L, "Source A", "Anchor") else null,
+                if (101L in ids) mangaWithTags(101L, "Source B", "Preferred") else null,
+            )
+        }
         coEvery { categoriesDao.findByIds(listOf(2L)) } returns listOf(category(2))
 
         val works = repository.listOrganizableWorks()

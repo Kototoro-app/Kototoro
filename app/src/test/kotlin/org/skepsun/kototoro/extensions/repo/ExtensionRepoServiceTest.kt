@@ -335,7 +335,7 @@ class ExtensionRepoServiceTest : FunSpec({
 	test("fetchRepoDetails discovers custom cloudstream metadata file from github contents api") {
 		runBlocking {
 			val baseUrl = "https://raw.githubusercontent.com/example/CXXX/builds"
-			val apiUrl = "https://api.github.com/repos/example/CXXX/contents/builds?ref=master"
+			val apiUrl = "https://api.github.com/repos/example/CXXX/contents?ref=builds"
 			val client = OkHttpClient.Builder()
 				.addInterceptor { chain ->
 					val url = chain.request().url.toString()

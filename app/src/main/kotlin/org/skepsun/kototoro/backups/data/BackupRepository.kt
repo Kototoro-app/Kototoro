@@ -1030,12 +1030,20 @@ class BackupRepository @Inject constructor(
         val dao = getEntityGraphDao()
         val trimmedName = remote.primaryName.trim()
         val computedHash = computeNameHash(trimmedName)
-        val existing = dao.findEntity(remote.id)
+        // Prefer the stable cross-device identity (sync_id) when the backup carries
+        // one. Backups written before the sync_id identity system have a blank
+        // sync_id and fall through to the legacy id / name-hash resolution.
+        val syncIdOwner = remote.syncId.trim()
+            .takeIf { it.isNotEmpty() }
+            ?.let { dao.findEntityBySyncId(it) }
             ?.takeIf { it.type == remote.type }
+        val existing = syncIdOwner
+            ?: dao.findEntity(remote.id)?.takeIf { it.type == remote.type }
             ?: dao.findEntityByTypeAndPrimaryName(remote.type, trimmedName)
         val localId = if (existing == null) {
             val newRecord = EntityRecord(
                 type = remote.type,
+                syncId = remote.syncId.trim().ifEmpty { java.util.UUID.randomUUID().toString() },
                 primaryName = trimmedName,
                 nameHash = computedHash,
                 aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),

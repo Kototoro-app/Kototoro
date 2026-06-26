@@ -27,22 +27,22 @@ class EntityOrganizeEntryModeTest {
     }
 
     @Test
-    fun `manual selection defaults to full visibility and best match ordering`() {
+    fun `manual selection defaults to selected and best match ordering`() {
         val defaults = resolveEntityOrganizeWorkbenchDefaults(
             entryMode = EntityOrganizeEntryMode.MANUAL_SELECTION,
         )
 
-        assertEquals(WorkbenchStatusFilter.ALL, defaults.statusFilter)
+        assertEquals(WorkbenchStatusFilter.SELECTED, defaults.statusFilter)
         assertEquals(WorkbenchSortMode.MATCH_SCORE, defaults.sortMode)
     }
 
     @Test
-    fun `all favorites defaults to action required and action first ordering`() {
+    fun `all favorites defaults to all and action first ordering`() {
         val defaults = resolveEntityOrganizeWorkbenchDefaults(
             entryMode = EntityOrganizeEntryMode.ALL_FAVORITES,
         )
 
-        assertEquals(WorkbenchStatusFilter.ACTION_REQUIRED, defaults.statusFilter)
+        assertEquals(WorkbenchStatusFilter.ALL, defaults.statusFilter)
         assertEquals(WorkbenchSortMode.ACTION_FIRST, defaults.sortMode)
     }
 }

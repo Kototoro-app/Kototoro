@@ -2,6 +2,7 @@ package org.skepsun.kototoro.favourites.data
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -105,7 +106,43 @@ abstract class WorkFavouritesDao {
 	abstract suspend fun gc(maxDeletionTime: Long)
 
 	@Query("UPDATE work_favourites SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
-	abstract suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long)
+	protected abstract suspend fun remapEntityIdRaw(oldEntityId: Long, newEntityId: Long)
+
+	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId")
+	protected abstract suspend fun findAllForEntity(entityId: Long): List<WorkFavouriteEntity>
+
+	@Query("DELETE FROM work_favourites WHERE entity_id = :entityId AND category_id = :categoryId")
+	protected abstract suspend fun deleteRow(entityId: Long, categoryId: Long)
+
+	/**
+	 * Move every row from [oldEntityId] to [newEntityId]. When a target
+	 * `(newEntityId, category_id)` row already exists the two are merged via
+	 * [mergeRestoredWorkFavourites] instead of letting the bulk UPDATE hit the
+	 * `(entity_id, category_id)` primary-key constraint (the restore crash that
+	 * surfaced as SQLITE_CONSTRAINT_PRIMARYKEY on work_favourites).
+	 */
+	@Transaction
+	open suspend fun remapEntityId(oldEntityId: Long, newEntityId: Long) {
+		if (oldEntityId == newEntityId) return
+		val sources = findAllForEntity(oldEntityId)
+		if (sources.isEmpty()) return
+		val targetsByCategory = findAllForEntity(newEntityId).associateBy { it.categoryId }
+		if (targetsByCategory.isEmpty()) {
+			remapEntityIdRaw(oldEntityId, newEntityId)
+			return
+		}
+		for (source in sources) {
+			val moved = source.copy(entityId = newEntityId)
+			val target = targetsByCategory[source.categoryId]
+			if (target == null) {
+				deleteRow(oldEntityId, source.categoryId)
+				upsert(moved)
+			} else {
+				deleteRow(oldEntityId, source.categoryId)
+				upsert(mergeRestoredWorkFavourites(target, moved))
+			}
+		}
+	}
 
 	@Query("UPDATE work_favourites SET pinned = :isPinned WHERE entity_id IN (:entityIds)")
 	abstract suspend fun setPinned(entityIds: List<Long>, isPinned: Boolean)
