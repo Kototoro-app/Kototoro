@@ -16,6 +16,7 @@ import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
 import org.skepsun.kototoro.core.db.TABLE_TAGS
 import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
@@ -53,11 +54,6 @@ class FavouritesRepository @Inject constructor(
 	private data class WorkFavouriteNormalizationKey(
 		val entityId: Long,
 		val categoryId: Long,
-	)
-
-	private data class WorkFavouriteContentEntry(
-		val entry: WorkFavouriteEntity,
-		val content: Content,
 	)
 
 	suspend fun getAllContent(): List<Content> {
@@ -186,6 +182,8 @@ class FavouritesRepository @Inject constructor(
 			TABLE_FAVOURITE_CATEGORIES,
 			TABLE_ENTITY_PREFERENCES,
 			TABLE_MANGA,
+			TABLE_WORK_HISTORY,
+			"tracks",
 			emitInitialState = true,
 		).mapLatest {
 			db.withTransaction {
@@ -491,6 +489,8 @@ class FavouritesRepository @Inject constructor(
 			TABLE_MANGA,
 			TABLE_TAGS,
 			TABLE_MANGA_TAGS,
+			TABLE_WORK_HISTORY,
+			"tracks",
 			"local_index",
 			emitInitialState = true,
 		).mapLatest {
@@ -517,12 +517,15 @@ class FavouritesRepository @Inject constructor(
 		order: ListSortOrder,
 		limit: Int = Int.MAX_VALUE,
 	): List<Cover> {
-		return buildWorkFavouriteContentEntries(categoryId, order, limit)
-			.map { entry ->
+		return workAggregateRepository.findFavouriteContents(
+			categoryId = categoryId,
+			order = order,
+			limit = limit,
+		).map { content ->
 				Cover(
-					mangaId = entry.content.id,
-					url = entry.content.coverUrl,
-					source = entry.content.source.name,
+					mangaId = content.id,
+					url = content.coverUrl,
+					source = content.source.name,
 				)
 			}
 	}
@@ -547,32 +550,6 @@ class FavouritesRepository @Inject constructor(
 			result.getOrPut(content.feedLookupKey()) { linkedSetOf() } += entry.categoryId
 		}
 		return result
-	}
-
-	private suspend fun buildWorkFavouriteContentEntries(
-		categoryId: Long,
-		order: ListSortOrder,
-		limit: Int,
-	): List<WorkFavouriteContentEntry> {
-		if (limit <= 0) {
-			return emptyList()
-		}
-		return findWorkFavouriteEntries(categoryId)
-			.mapNotNull { entry ->
-				val content = resolveWorkFavouriteContent(entry) ?: return@mapNotNull null
-				WorkFavouriteContentEntry(entry, content)
-			}
-			.sortedWith(workFavouriteComparator(order))
-			.distinctBy { it.content.id }
-			.take(limit)
-	}
-
-	private suspend fun findWorkFavouriteEntries(categoryId: Long): List<WorkFavouriteEntity> {
-		return if (categoryId == FavouriteCategory.NO_ID) {
-			db.getWorkFavouritesDao().findActive()
-		} else {
-			db.getWorkFavouritesDao().findActive(categoryId)
-		}
 	}
 
 	private suspend fun resolveWorkFavouriteContent(entry: WorkFavouriteEntity): Content? {
@@ -608,21 +585,6 @@ class FavouritesRepository @Inject constructor(
 				else -> true
 			}
 		}
-	}
-
-	private fun workFavouriteComparator(order: ListSortOrder): Comparator<WorkFavouriteContentEntry> {
-		val byPinned = compareByDescending<WorkFavouriteContentEntry> { it.entry.isPinned }
-		val byTitle = compareBy<WorkFavouriteContentEntry> { it.content.title }
-		return byPinned.then(
-			when (order) {
-				ListSortOrder.RATING -> compareByDescending { it.content.rating }
-				ListSortOrder.NEWEST -> compareByDescending { it.entry.createdAt }
-				ListSortOrder.OLDEST -> compareBy { it.entry.createdAt }
-				ListSortOrder.ALPHABETIC -> byTitle
-				ListSortOrder.ALPHABETIC_REVERSE -> byTitle.reversed()
-				else -> compareByDescending { it.entry.updatedAt }
-			},
-		)
 	}
 
 	private fun Content.feedLookupKey(): String {

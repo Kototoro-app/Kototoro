@@ -208,6 +208,7 @@ class WorkAggregateRepository @Inject constructor(
 		)
 		val entityIds = entries.map(WorkFavouriteEntity::entityId)
 		val categoriesById = findCategoriesById(entries.map { it.categoryId })
+		val historyByEntityId = findHistoryByEntityId(entityIds)
 		val statsByEntityId = findStatsByEntityId(entityIds)
 		val trackingByEntityId = findTrackingByEntityId(entityIds)
 
@@ -226,6 +227,7 @@ class WorkAggregateRepository @Inject constructor(
 				projections = listOf(displayProjection),
 				categories = categories,
 				favourite = entry,
+				history = historyByEntityId[entry.entityId],
 				stats = statsByEntityId[entry.entityId],
 				tracking = trackingByEntityId[entry.entityId],
 			)
@@ -265,6 +267,15 @@ class WorkAggregateRepository @Inject constructor(
 		return db.getWorkStatsDao()
 			.findSummaries(entityIds.distinct())
 			.associate { row -> row.entityId to row.toWorkStatsSummary() }
+	}
+
+	private suspend fun findHistoryByEntityId(entityIds: Collection<Long>): Map<Long, WorkHistoryEntity> {
+		if (entityIds.isEmpty()) {
+			return emptyMap()
+		}
+		return db.getWorkHistoryDao()
+			.findByEntityIds(entityIds.distinct())
+			.associateBy(WorkHistoryEntity::entityId)
 	}
 
 	private suspend fun findTrackingByEntityId(entityIds: Collection<Long>): Map<Long, WorkTrackingSummary> {
@@ -328,11 +339,6 @@ class WorkAggregateRepository @Inject constructor(
 					db.getWorkFavouritesDao().findActiveOldest(queryLimit)
 				} else {
 					db.getWorkFavouritesDao().findActiveOldest(categoryId, queryLimit)
-				}
-				ListSortOrder.UPDATED -> if (categoryId == FavouriteCategory.NO_ID) {
-					db.getWorkFavouritesDao().findActiveUpdated(queryLimit)
-				} else {
-					db.getWorkFavouritesDao().findActiveUpdated(categoryId, queryLimit)
 				}
 				else -> findAllFavouriteEntries(categoryId)
 			}
@@ -428,6 +434,14 @@ class WorkAggregateRepository @Inject constructor(
 				ListSortOrder.RATING -> compareByDescending { it.displayProjection?.rating ?: -1f }
 				ListSortOrder.NEWEST -> compareByDescending { it.favourite?.createdAt ?: 0L }
 				ListSortOrder.OLDEST -> compareBy { it.favourite?.createdAt ?: 0L }
+				ListSortOrder.PROGRESS -> compareByDescending { it.history?.percent ?: 0f }
+				ListSortOrder.UNREAD -> compareBy { it.history?.percent ?: 0f }
+				ListSortOrder.LAST_READ -> compareByDescending { it.history?.updatedAt ?: 0L }
+				ListSortOrder.LONG_AGO_READ -> compareBy { it.history?.updatedAt ?: 0L }
+				ListSortOrder.NEW_CHAPTERS -> compareByDescending<WorkAggregate> {
+					it.tracking?.newChapters ?: 0
+				}.thenByDescending { it.tracking?.lastChapterDate ?: 0L }
+				ListSortOrder.UPDATED -> compareByDescending { it.tracking?.lastChapterDate ?: 0L }
 				ListSortOrder.ALPHABETIC -> byTitle
 				ListSortOrder.ALPHABETIC_REVERSE -> byTitle.reversed()
 				else -> compareByDescending { it.favourite?.updatedAt ?: 0L }
