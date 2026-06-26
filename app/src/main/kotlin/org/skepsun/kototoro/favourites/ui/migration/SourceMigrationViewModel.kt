@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.model.getStableIdentityKey
 import org.skepsun.kototoro.core.parser.ContentDataRepository
@@ -63,6 +65,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
 import org.skepsun.kototoro.tracking.mangabaka.data.MangaBakaMetadataRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
+import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 
 private const val TAG = "SourceMigrationVM"
@@ -172,6 +175,9 @@ data class MigrationUiState(
     ),
     val repairReport: EntityGraphRepairReport? = null,
     val isLoadingRepairReport: Boolean = true,
+    val isEntityResetRunning: Boolean = false,
+    val entityResetFeedback: String? = null,
+    val isEntityResetConfirmationPending: Boolean = false,
 ) {
     val suspectMismergedLocalMangaIds: Set<Long>
         get() = repairReport
@@ -286,6 +292,7 @@ class SourceMigrationViewModel @Inject constructor(
     private val bindTrackingToEntitiesUseCase: BindTrackingToEntitiesUseCase,
     private val previewReadingSourceMigrationUseCase: PreviewReadingSourceMigrationUseCase,
     private val entityGraphRepository: EntityGraphRepository,
+    private val backupRepository: BackupRepository,
     private val workResolver: WorkResolver,
     private val database: MangaDatabase,
     private val contentDataRepository: ContentDataRepository,
@@ -300,7 +307,11 @@ class SourceMigrationViewModel @Inject constructor(
         private const val LOW_CONFIDENCE_THRESHOLD = 0.85f
     }
 
-    private val _uiState = MutableStateFlow(MigrationUiState())
+    private val _uiState = MutableStateFlow(
+        MigrationUiState(
+            isEntityResetConfirmationPending = appSettings.isWorkMigrationSyncWriteBlocked,
+        ),
+    )
     val uiState: StateFlow<MigrationUiState> = _uiState.asStateFlow()
 
     private var migrationObserver: Observer<WorkInfo?>? = null
@@ -364,6 +375,71 @@ class SourceMigrationViewModel @Inject constructor(
                 isLoadingRepairReport = false,
             )
         }
+    }
+
+    fun resetEntityIdentities() {
+        val state = _uiState.value
+        if (state.isExecuting || state.isEntityResetRunning) {
+            return
+        }
+        _uiState.value = state.copy(
+            isEntityResetRunning = true,
+            isFinished = false,
+            entityResetFeedback = null,
+            isEntityResetConfirmationPending = false,
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            var resetSucceeded = false
+            val feedback = runCatching {
+                val backupFile = BackupUtils.createTempFile(appContext)
+                ZipOutputStream(backupFile.outputStream()).use { output ->
+                    backupRepository.createBackup(output, null)
+                }
+                val result = entityGraphRepository.resetAllEntities()
+                resetSucceeded = true
+                appContext.getString(
+                    R.string.entity_organize_reset_feedback,
+                    result.rebuiltEntityCount,
+                    result.duplicateProjectionGroupCount,
+                    result.favouriteActiveRowsBefore,
+                    result.favouriteActiveRowsAfter,
+                    result.favouriteActiveWorksBefore,
+                    result.favouriteActiveWorksAfter,
+                    result.restoredHistoryCount,
+                    result.restoredStatsCount,
+                    backupFile.absolutePath,
+                )
+            }.getOrElse { error ->
+                Log.e(TAG, "Entity identity reset failed", error)
+                appContext.getString(
+                    R.string.entity_organize_reset_failed,
+                    error.getDisplayMessage(appContext.resources),
+                )
+            }
+            refreshMergeCandidates()
+            refreshRepairReport()
+            loadSources()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isEntityResetRunning = false,
+                isFinished = true,
+                entityResetFeedback = feedback,
+                isEntityResetConfirmationPending = resetSucceeded,
+            )
+        }
+    }
+
+    fun confirmEntityResetResult() {
+        val state = _uiState.value
+        if (state.isEntityResetRunning || !state.isEntityResetConfirmationPending) {
+            return
+        }
+        appSettings.isWorkMigrationSyncWriteBlocked = false
+        appSettings.requiresWorkMigrationNormalization = false
+        _uiState.value = state.copy(
+            isEntityResetConfirmationPending = false,
+            entityResetFeedback = appContext.getString(R.string.entity_organize_reset_confirmed_feedback),
+        )
     }
 
     fun setSelectedContentIds(ids: Set<Long>) {

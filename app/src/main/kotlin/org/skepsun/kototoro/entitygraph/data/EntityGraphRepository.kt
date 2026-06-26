@@ -8,12 +8,15 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingMatcher
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingStrength
 import org.skepsun.kototoro.entitygraph.domain.EntityRelationOrigin
@@ -31,11 +34,16 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
 import org.skepsun.kototoro.entitygraph.domain.toTrackingServiceOrNull
+import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.favourites.data.mergeRestoredWorkFavourites
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
+import org.skepsun.kototoro.history.data.mergeRestoredWorkHistory
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.stats.data.WorkStatsEntity
+import org.skepsun.kototoro.stats.data.mergeRestoredWorkStats
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.malsync.data.MALSyncMappingRepository
 import org.skepsun.kototoro.parsers.util.longHashCode
@@ -50,6 +58,7 @@ private const val MAX_BINDING_QUERY_PARAMS = 500
 private const val MAX_ENTITY_ALIASES = 50
 private const val TAG = "EntityGraphRepository"
 private const val MAX_REPAIR_DIAGNOSTIC_LOGS = 80
+private const val LOCAL_MANGA_BINDING_SOURCE = "local_manga"
 
 @Singleton
 class EntityGraphRepository @Inject constructor(
@@ -57,6 +66,7 @@ class EntityGraphRepository @Inject constructor(
 	private val bindingMatcher: EntityBindingMatcher,
 	private val animeOfflineRepository: AnimeOfflineRepository,
 	private val malsyncMappingRepository: MALSyncMappingRepository,
+	private val settings: AppSettings,
 ) {
 
 	suspend fun ingestWorkFromTracking(
@@ -2693,99 +2703,242 @@ class EntityGraphRepository @Inject constructor(
 	}
 
 	/**
-	 * Complete entity reset: deletes all entities, bindings, relations, preferences,
-	 * work_history, work_favourites, tracks, and tracking_site_links.
-	 * Then re-creates one clean entity per manga found in current Work state.
+	 * Rebuilds the Work identity layer from projection anchors.
+	 *
+	 * This is an intentionally conservative disaster-recovery operation. It
+	 * only groups duplicate local projections when they share a source-scoped
+	 * URL/public URL key, never by fuzzy title similarity.
 	 */
-	suspend fun resetAllEntities() = withContext(Dispatchers.Default) {
+	suspend fun resetAllEntities(): EntityIdentityResetResult = withContext(Dispatchers.Default) {
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
-
-			Log.d(TAG, "resetAll: collecting Work state...")
 			val workHistorySnapshot = db.getWorkHistoryDao().dump().toList()
 			val workFavouriteSnapshot = db.getWorkFavouritesDao().dump().toList()
-			val historyMangaIds = workHistorySnapshot.mapTo(LinkedHashSet()) { it.anchorMangaId }
-			val favouriteMangaIds = workFavouriteSnapshot.mapNotNullTo(LinkedHashSet()) { it.anchorMangaId }
-			val allMangaIds = (historyMangaIds + favouriteMangaIds).distinct()
-			Log.d(TAG, "resetAll: ${allMangaIds.size} manga IDs, clearing tables...")
+			val workStatsSnapshot = db.getWorkStatsDao().dumpEnabled().toList()
+			val favouriteActiveRowsBefore = workFavouriteSnapshot.count { it.anchorMangaId != null && it.deletedAt == 0L }
+			val favouriteActiveWorksBefore = workFavouriteSnapshot
+				.asSequence()
+				.filter { it.anchorMangaId != null && it.deletedAt == 0L }
+				.map { it.entityId }
+				.distinct()
+				.count()
+			val allMangaIds = collectResetAnchorMangaIds(
+				workHistorySnapshot = workHistorySnapshot,
+				workFavouriteSnapshot = workFavouriteSnapshot,
+				workStatsSnapshot = workStatsSnapshot,
+			)
+			Log.d(TAG, "resetAll: anchors=${allMangaIds.size}, collecting projections")
+
+			val mangaById = loadMangaById(allMangaIds)
+			val groups = buildResetProjectionGroups(
+				mangaIds = allMangaIds,
+				mangaById = mangaById,
+				workHistorySnapshot = workHistorySnapshot,
+				workFavouriteSnapshot = workFavouriteSnapshot,
+			)
+			Log.d(TAG, "resetAll: groups=${groups.size}, clearing identity tables")
 
 			db.getTracksDao().clear()
+			db.getTrackingSiteDao().deleteAllLinks()
 			db.getWorkHistoryDao().clear()
 			db.getWorkFavouritesDao().deleteAll()
-			db.getTrackingSiteDao().deleteAllLinks()
-
+			db.getWorkStatsDao().clear()
 			dao.deleteAllRelations()
 			dao.deleteAllBindings()
 			dao.deleteAllPrefs()
 			dao.deleteAllEntities()
-			Log.d(TAG, "resetAll: core tables cleared, rebuilding...")
 
 			val now = System.currentTimeMillis()
-			val allMangaIdsList = allMangaIds.toList()
-			val mangaById = mutableMapOf<Long, org.skepsun.kototoro.core.db.entity.MangaEntity>()
-			allMangaIdsList.chunked(500).forEach { chunk ->
-				db.getMangaDao().findEntitiesByIds(chunk).forEach { manga ->
-					mangaById[manga.id] = manga
+			val entityIdByMangaId = LinkedHashMap<Long, Long>()
+			var rebuiltEntities = 0
+			var duplicateProjectionGroups = 0
+			groups.forEach { group ->
+				val canonical = mangaById[group.canonicalMangaId]
+				val title = canonical?.title?.ifBlank { null } ?: "Manga #${group.canonicalMangaId}"
+				val entityId = insertResetEntity(
+					dao = dao,
+					title = title,
+					canonicalMangaId = group.canonicalMangaId,
+					now = now,
+				) ?: return@forEach
+				rebuiltEntities++
+				if (group.mangaIds.size > 1) {
+					duplicateProjectionGroups++
 				}
-			}
-			for (mangaId in allMangaIdsList) {
-				val manga = mangaById[mangaId]
-				val title = manga?.title?.ifBlank { null } ?: "Manga #$mangaId"
-				val nameHash = (title + "|" + mangaId.toString()).longHashCode()
-				val entityId = dao.insertEntityIgnore(
-					EntityRecord(
-						type = EntityType.WORK.name,
-						primaryName = title,
-						nameHash = nameHash,
-						aliases = null,
-						createdAt = now,
-						lastAccessed = now,
-						accessCount = 0,
-					)
-				)
-				if (entityId > 0L) {
+				group.mangaIds.forEach { mangaId ->
 					dao.upsertBinding(
 						EntityBindingRecord(
 							entityId = entityId,
-							source = "local_manga",
+							source = LOCAL_MANGA_BINDING_SOURCE,
 							externalId = mangaId.toString(),
 							confidence = 1f,
-							isPrimary = true,
-							sourceKind = "LOCAL_MANGA",
+							isPrimary = mangaId == group.canonicalMangaId,
+							sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
 							state = EntityBindingState.CONFIRMED.name,
-							createdBy = EntityBindingCreatedBy.USER.name,
+							createdBy = EntityBindingCreatedBy.MIGRATION.name,
 							updatedAt = now,
-						)
+						),
 					)
+					entityIdByMangaId[mangaId] = entityId
 				}
+				dao.upsertPrefsRecord(
+					EntityPrefsRecord(
+						entityId = entityId,
+						preferredLocalMangaId = group.canonicalMangaId,
+						titleOverride = null,
+						coverUrlOverride = null,
+						contentRatingOverride = null,
+						readingStatus = null,
+						metadataSourceKind = null,
+						metadataBindingSource = null,
+						metadataBindingExternalId = null,
+						metadataSourceService = null,
+						metadataSourceRemoteId = null,
+						updatedAt = now,
+					),
+				)
 			}
-			val bindings = db.getEntityGraphDao().findActiveBindingsBySources(
-				sources = listOf("local_manga", "0"),
-				externalIds = allMangaIdsList.map { it.toString() },
-			)
-			val entityIdByMangaId = HashMap<Long, Long>()
-			for (binding in bindings) {
-				val mangaId = binding.externalId.toLongOrNull() ?: continue
-				entityIdByMangaId[mangaId] = binding.entityId
+
+			val restoredHistory = restoreResetWorkHistory(workHistorySnapshot, entityIdByMangaId)
+			val restoredFavourites = restoreResetWorkFavourites(workFavouriteSnapshot, entityIdByMangaId)
+			val restoredStats = restoreResetWorkStats(workStatsSnapshot, entityIdByMangaId)
+			val favouriteActiveRowsAfter = db.getWorkFavouritesDao().countActive()
+			val favouriteActiveWorksAfter = db.getWorkFavouritesDao().countActiveWorks()
+			settings.isWorkMigrationSyncWriteBlocked = true
+			settings.requiresWorkMigrationNormalization = true
+
+			EntityIdentityResetResult(
+				anchorMangaCount = allMangaIds.size,
+				rebuiltEntityCount = rebuiltEntities,
+				duplicateProjectionGroupCount = duplicateProjectionGroups,
+				restoredHistoryCount = restoredHistory,
+				restoredFavouriteCount = restoredFavourites,
+				favouriteActiveRowsBefore = favouriteActiveRowsBefore,
+				favouriteActiveRowsAfter = favouriteActiveRowsAfter,
+				favouriteActiveWorksBefore = favouriteActiveWorksBefore,
+				favouriteActiveWorksAfter = favouriteActiveWorksAfter,
+				restoredStatsCount = restoredStats,
+				skippedAnchorCount = allMangaIds.count { it !in entityIdByMangaId },
+			).also { result ->
+				Log.d(TAG, "resetAll: complete result=$result")
 			}
-			var restoredHistory = 0
-			for (entry in workHistorySnapshot) {
-				val entityId = entityIdByMangaId[entry.anchorMangaId] ?: continue
-				db.getWorkHistoryDao().upsert(entry.copy(entityId = entityId))
-				restoredHistory++
-			}
-			var restoredFavourites = 0
-			for (entry in workFavouriteSnapshot) {
-				val anchorMangaId = entry.anchorMangaId ?: continue
-				val entityId = entityIdByMangaId[anchorMangaId] ?: continue
-				db.getWorkFavouritesDao().upsert(entry.copy(entityId = entityId))
-				restoredFavourites++
-			}
-			Log.d(
-				TAG,
-				"resetAll: complete, rebuilt ${allMangaIdsList.size} entities, " +
-					"$restoredHistory history entries, $restoredFavourites favourite entries",
-			)
 		}
 	}
+
+	private fun collectResetAnchorMangaIds(
+		workHistorySnapshot: List<WorkHistoryEntity>,
+		workFavouriteSnapshot: List<WorkFavouriteEntity>,
+		workStatsSnapshot: List<WorkStatsEntity>,
+	): List<Long> {
+		return buildSet {
+			workHistorySnapshot.forEach { add(it.anchorMangaId) }
+			workFavouriteSnapshot.forEach { it.anchorMangaId?.let(::add) }
+			workStatsSnapshot.forEach { add(it.anchorMangaId) }
+		}.toList()
+	}
+
+	private suspend fun loadMangaById(mangaIds: Collection<Long>): Map<Long, MangaEntity> {
+		if (mangaIds.isEmpty()) return emptyMap()
+		return mangaIds.chunked(MAX_BINDING_QUERY_PARAMS)
+			.flatMap { db.getMangaDao().findEntitiesByIds(it) }
+			.associateBy { it.id }
+	}
+
+	private suspend fun insertResetEntity(
+		dao: EntityGraphDao,
+		title: String,
+		canonicalMangaId: Long,
+		now: Long,
+	): Long? {
+		val baseHash = "reset|$canonicalMangaId|$title".longHashCode()
+		val record = EntityRecord(
+			type = EntityType.WORK.name,
+			primaryName = title,
+			nameHash = baseHash,
+			aliases = null,
+			createdAt = now,
+			lastAccessed = now,
+			accessCount = 0,
+		)
+		val insertedId = dao.insertEntityIgnore(record)
+		if (insertedId != -1L) {
+			return insertedId
+		}
+		return dao.insertEntity(record.copy(nameHash = "reset-collision|$canonicalMangaId|$now".longHashCode()))
+	}
+
+	private suspend fun restoreResetWorkHistory(
+		snapshot: List<WorkHistoryEntity>,
+		entityIdByMangaId: Map<Long, Long>,
+	): Int {
+		val mergedByEntityId = LinkedHashMap<Long, WorkHistoryEntity>()
+		snapshot.forEach { entry ->
+			val entityId = entityIdByMangaId[entry.anchorMangaId] ?: return@forEach
+			val moved = entry.copy(entityId = entityId)
+			val existing = mergedByEntityId[entityId]
+			mergedByEntityId[entityId] = if (existing == null) {
+				moved
+			} else {
+				mergeRestoredWorkHistory(existing, moved)
+			}
+		}
+		mergedByEntityId.values.forEach { db.getWorkHistoryDao().upsert(it) }
+		return mergedByEntityId.size
+	}
+
+	private suspend fun restoreResetWorkFavourites(
+		snapshot: List<WorkFavouriteEntity>,
+		entityIdByMangaId: Map<Long, Long>,
+	): Int {
+		val mergedByKey = LinkedHashMap<Pair<Long, Long>, WorkFavouriteEntity>()
+		snapshot.forEach { entry ->
+			val anchorMangaId = entry.anchorMangaId ?: return@forEach
+			val entityId = entityIdByMangaId[anchorMangaId] ?: return@forEach
+			val moved = entry.copy(entityId = entityId)
+			val key = entityId to entry.categoryId
+			val existing = mergedByKey[key]
+			mergedByKey[key] = if (existing == null) {
+				moved
+			} else {
+				mergeRestoredWorkFavourites(existing, moved)
+			}
+		}
+		mergedByKey.values.forEach { db.getWorkFavouritesDao().upsert(it) }
+		return mergedByKey.size
+	}
+
+	private suspend fun restoreResetWorkStats(
+		snapshot: List<WorkStatsEntity>,
+		entityIdByMangaId: Map<Long, Long>,
+	): Int {
+		val mergedByKey = LinkedHashMap<Pair<Long, Long>, WorkStatsEntity>()
+		snapshot.forEach { entry ->
+			val entityId = entityIdByMangaId[entry.anchorMangaId] ?: return@forEach
+			val moved = entry.copy(entityId = entityId)
+			val key = entityId to entry.startedAt
+			val existing = mergedByKey[key]
+			mergedByKey[key] = if (existing == null) {
+				moved
+			} else {
+				mergeRestoredWorkStats(existing, moved)
+			}
+		}
+		mergedByKey.values.forEach { db.getWorkStatsDao().upsert(it) }
+		return mergedByKey.size
+	}
+
 }
+
+data class EntityIdentityResetResult(
+	val anchorMangaCount: Int,
+	val rebuiltEntityCount: Int,
+	val duplicateProjectionGroupCount: Int,
+	val restoredHistoryCount: Int,
+	val restoredFavouriteCount: Int,
+	val favouriteActiveRowsBefore: Int,
+	val favouriteActiveRowsAfter: Int,
+	val favouriteActiveWorksBefore: Int,
+	val favouriteActiveWorksAfter: Int,
+	val restoredStatsCount: Int,
+	val skippedAnchorCount: Int,
+)

@@ -1053,17 +1053,8 @@
     <string name="entity_organize_entry_manual_title">Organizing a manual selection</string>
     <string name="entity_organize_entry_manual_subtitle">This run starts from %1$d selected favorites from the favorites screen. You can review entity merge, tracking bind, and reading attach in one place.</string>
     <string name="entity_reset_title">Reset entities</string>
-    <string name="entity_reset_description">Restore original state: one entity per work, remove all merges and tracking bindings. Reading history and favorites are preserved.</string>
-    <string name="entity_reset_confirm">This will:
-• Delete all entity merges
-• Remove all tracking bindings
-• Rebuild clean entities (one per work)
-
-History and favorites are NOT deleted.
-
-Proceed?</string>
-    <string name="entity_reset">Reset</string>
-    <string name="entity_reset_done">Entities reset complete</string>
+    <string name="entity_reset_description">Open Entity Organize to rebuild work identities with a mandatory local backup and sync upload gate.</string>
+    <string name="entity_reset">Open Entity Organize</string>
     <string name="entity_organize_entry_all_title">Organizing your full favorites archive</string>
     <string name="entity_organize_entry_all_subtitle">This run starts from the current favorites archive. To organize only part of it, long-press and multi-select favorites before opening this page.</string>
     <string name="entity_organize_entry_default_view_hint">Default view: %1$s, sorted by %2$s.</string>
@@ -1303,6 +1294,14 @@ Proceed?</string>
     <string name="entity_organize_repair_prune_projection_override_feedback">Pruned %1$d redundant projection override mirrors.</string>
     <string name="entity_organize_repair_prune_projection_reading_status_feedback">Pruned %1$d redundant projection reading status mirrors.</string>
     <string name="entity_organize_repair_action_failed">Repair action failed. The projection may no longer have an active entity binding.</string>
+    <string name="entity_organize_reset_title">Rebuild entity identities</string>
+    <string name="entity_organize_reset_summary">Advanced maintenance action. It creates a local backup first, rebuilds work identities from strong source URL evidence, and blocks WebDAV auto upload until you confirm the result.</string>
+    <string name="entity_organize_reset_confirm">A full local backup will be created first. The current entities, bindings, relations, entity preferences, and Work state are then rebuilt from local projections. Title similarity will not be used for automatic merging, and tracking bindings/relations must be organized again later. Continue?</string>
+    <string name="entity_organize_reset_action">Rebuild identities</string>
+    <string name="entity_organize_reset_feedback">Entity identities rebuilt: %1$d works, %2$d duplicate projection groups. Active favourite category rows: %3$d -> %4$d. Favorites page works: %5$d -> %6$d. Restored %7$d history rows and %8$d stats rows. Auto sync is blocked. Backup: %9$s</string>
+    <string name="entity_organize_reset_failed">Entity identity rebuild failed: %1$s</string>
+    <string name="entity_organize_reset_confirm_result_action">Confirm result and allow sync</string>
+    <string name="entity_organize_reset_confirmed_feedback">Entity identity rebuild confirmed. Auto sync is allowed again.</string>
     <string name="entity_organize_reading_title">Usable projection completion</string>
     <string name="entity_organize_reading_subtitle">Within a fixed reading/playback source scope, search by priority and attach the first usable hit as an enabled projection of the entity.</string>
     <string name="entity_organize_reading_targets_title">Target source priority</string>

@@ -42,7 +42,7 @@ fun DataCleanupSettingsScreen(
     onClearCookies: () -> Unit,
     onClearBrowserData: () -> Unit,
     onDeleteReadChapters: () -> Unit,
-    onResetEntities: () -> Unit,
+    onOpenEntityOrganize: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -128,7 +128,7 @@ fun DataCleanupSettingsScreen(
             SettingsActionPreference(
                 title = stringResource(R.string.entity_reset),
                 summary = stringResource(R.string.entity_reset_description),
-                onClick = onResetEntities,
+                onClick = onOpenEntityOrganize,
             )
         }
     }

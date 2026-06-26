@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.PlaylistAddCheck
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -292,6 +293,7 @@ fun SourceMigrationPanel(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedStage by rememberSaveable { mutableStateOf(EntityOrganizeStage.MERGE) }
     var selectedDatasetBridge by rememberSaveable { mutableStateOf(EntityOrganizeDatasetBridge.ANIME_OFFLINE) }
+    var showEntityResetConfirm by rememberSaveable { mutableStateOf(false) }
     val entryMode = remember(initialSelectedContentIds.size) {
         resolveEntityOrganizeEntryMode(initialSelectedContentIds.size)
     }
@@ -379,6 +381,14 @@ fun SourceMigrationPanel(
                 EntityOrganizeScopeSummary(
                     uiState = uiState,
                     selectedCount = initialSelectedContentIds.size,
+                )
+            }
+
+            item {
+                EntityIdentityResetCard(
+                    uiState = uiState,
+                    onResetClick = { showEntityResetConfirm = true },
+                    onConfirmResultClick = viewModel::confirmEntityResetResult,
                 )
             }
 
@@ -471,6 +481,43 @@ fun SourceMigrationPanel(
             }
         }
     }
+    if (showEntityResetConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!uiState.isEntityResetRunning) {
+                    showEntityResetConfirm = false
+                }
+            },
+            icon = {
+                Icon(Icons.Default.RestartAlt, contentDescription = null)
+            },
+            title = {
+                Text(stringResource(R.string.entity_organize_reset_title))
+            },
+            text = {
+                Text(stringResource(R.string.entity_organize_reset_confirm))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showEntityResetConfirm = false
+                        viewModel.resetEntityIdentities()
+                    },
+                    enabled = !uiState.isEntityResetRunning,
+                ) {
+                    Text(stringResource(R.string.entity_organize_reset_action))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showEntityResetConfirm = false },
+                    enabled = !uiState.isEntityResetRunning,
+                ) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -514,6 +561,97 @@ private fun EntityOrganizeScopeSummary(
                 value = if (selectedCount > 0) selectedCount.toString() else stringResource(R.string.entity_organize_entry_count_all),
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+@Composable
+private fun EntityIdentityResetCard(
+    uiState: MigrationUiState,
+    onResetClick: () -> Unit,
+    onConfirmResultClick: () -> Unit,
+) {
+    OutlinedCard(
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.18f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.28f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.RestartAlt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_reset_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(R.string.entity_organize_reset_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    uiState.entityResetFeedback?.let { feedback ->
+                        Text(
+                            text = feedback,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (uiState.isEntityResetConfirmationPending) {
+                    Button(
+                        onClick = onConfirmResultClick,
+                        enabled = !uiState.isExecuting && !uiState.isEntityResetRunning,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.entity_organize_reset_confirm_result_action))
+                    }
+                }
+                OutlinedButton(
+                    onClick = onResetClick,
+                    enabled = !uiState.isExecuting && !uiState.isEntityResetRunning,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    if (uiState.isEntityResetRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(stringResource(R.string.entity_organize_reset_action))
+                }
+            }
         }
     }
 }
