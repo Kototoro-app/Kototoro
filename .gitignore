@@ -51,3 +51,4 @@ docs/.vitepress/dist/
 *.txt
 policy
 chroma
+reasonix.toml
