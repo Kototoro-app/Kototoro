@@ -34,6 +34,16 @@ abstract class WorkHistoryDao {
 	@Query("SELECT COUNT(*) FROM work_history WHERE deleted_at = 0")
 	abstract suspend fun countActive(): Int
 
+	@Query(
+		"""
+		SELECT COUNT(*)
+		FROM work_history wh
+		LEFT JOIN `entity` e ON e.id = wh.entity_id
+		WHERE e.id IS NULL
+		""",
+	)
+	abstract suspend fun countDanglingEntityRefs(): Int
+
 	@Query("SELECT COUNT(*) FROM work_history WHERE deleted_at = 0")
 	abstract fun observeCountActive(): Flow<Int>
 

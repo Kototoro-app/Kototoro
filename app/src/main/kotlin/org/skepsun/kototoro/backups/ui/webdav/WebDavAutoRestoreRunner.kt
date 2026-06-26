@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.ui.periodical.BackupFileInfo
@@ -82,6 +83,14 @@ class WebDavAutoRestoreRunner @Inject constructor(
         try {
             Log.d(TAG, "Downloading backup file: ${candidate.name}")
             webDavUploader.downloadBackup(candidate.name, tempFile, candidate.namespace)
+            val inspection = BackupPayloadGuard.requireRestorableWorkSnapshot(
+                file = tempFile,
+                operation = "auto WebDAV restore",
+            )
+            Log.d(
+                TAG,
+                "Auto restore backup payload: size=${tempFile.length()}b entries=${inspection.describe()}",
+            )
 
             Log.d(TAG, "Restoring backup from: ${tempFile.absolutePath}")
             val restoreResult = ZipInputStream(FileInputStream(tempFile)).use { zis ->

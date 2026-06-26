@@ -1365,10 +1365,6 @@ class EntityGraphRepository @Inject constructor(
 		activeBindingsByEntity.forEach { (entityId, entityBindings) ->
 			val localBindings = entityBindings.filter { it.isLocalReadingSource() }
 			val hasTrackingBinding = entityBindings.any { it.source.toTrackingServiceOrNull() != null }
-			// Debug log for entity 1213
-			if (entityId == 1213L) {
-				Log.w(TAG, "repair suspectMismerged entity 1213: localBindings=${localBindings.map { it.externalId }} hasTracking=$hasTrackingBinding entityExists=${entitiesById[entityId] != null}")
-			}
 			if (localBindings.isEmpty()) {
 				return@forEach
 			}
@@ -1377,11 +1373,16 @@ class EntityGraphRepository @Inject constructor(
 			if (strictEntityNameKeys.isEmpty()) {
 				return@forEach
 			}
-			Log.i(TAG, "repair suspectMismerged: entityId=$entityId name=${entity.primaryName} aliases=${decodeStringList(entity.aliases)} strictKeys=$strictEntityNameKeys localBindings=${localBindings.map { it.externalId }} hasTracking=$hasTrackingBinding")
 			localBindings.forEach { binding ->
 				val localMangaId = binding.externalId.toLongOrNull()
 				val content = localMangaId?.let { db.getMangaDao().find(it)?.toContent() }
 				if (content != null && content.localStrictTitleKeys().none { it in strictEntityNameKeys }) {
+					Log.d(
+						TAG,
+						"repair suspectMismerged: entityId=$entityId name=${entity.primaryName} " +
+							"aliases=${decodeStringList(entity.aliases)} strictKeys=$strictEntityNameKeys " +
+							"localMangaId=$localMangaId localTitle=${content.title} hasTracking=$hasTrackingBinding",
+					)
 					issues += EntityGraphRepairIssue(
 						kind = EntityGraphRepairIssueKind.SUSPECT_MISMERGED_LOCAL_WORK,
 						entityId = entityId,

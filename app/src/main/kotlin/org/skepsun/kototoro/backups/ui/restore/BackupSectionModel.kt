@@ -27,6 +27,7 @@ data class BackupSectionModel(
 				BackupSection.SCROBBLING -> R.string.tracking
 				BackupSection.TRACKS -> R.string.feed
 				BackupSection.TRACK_LOGS -> R.string.updates
+				BackupSection.PROJECTIONS -> 0
 				BackupSection.STATS -> R.string.statistics
 				BackupSection.SAVED_FILTERS -> R.string.saved_filters
 				BackupSection.AUTH -> R.string.auth_title

@@ -35,6 +35,16 @@ abstract class WorkFavouritesDao {
 	@Query("SELECT COUNT(*) FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun countActive(): Int
 
+	@Query(
+		"""
+		SELECT COUNT(*)
+		FROM work_favourites wf
+		LEFT JOIN `entity` e ON e.id = wf.entity_id
+		WHERE e.id IS NULL
+		""",
+	)
+	abstract suspend fun countDanglingEntityRefs(): Int
+
 	@Query("SELECT COUNT(DISTINCT entity_id) FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun countActiveWorks(): Int
 

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.settings.userdata
 import android.content.Intent
 import android.os.Bundle
 import android.text.format.DateUtils
+import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -30,6 +31,7 @@ import org.skepsun.kototoro.backups.ui.backup.AniyomiBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.BackupService
 import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
+import org.skepsun.kototoro.backups.ui.periodical.WebDavRemoteBackupRestoreStatus
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
@@ -42,6 +44,7 @@ import org.skepsun.kototoro.settings.SettingsActivity
 import org.skepsun.kototoro.settings.compose.BackupsSettingsScreen
 import org.skepsun.kototoro.settings.compose.BackupsSettingsUiState
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.settings.compose.WebDavRemoteBackupUiItem
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -193,6 +196,8 @@ fun BackupsSettingsRoute(
     val isWebDavCheckLoading = viewModel.isWebDavCheckLoading.collectAsStateWithLifecycle().value
     val webDavUploadBusyMessageRes = viewModel.webDavUploadBusyMessageRes.collectAsStateWithLifecycle().value
     val webDavRestoreBusyMessageRes = viewModel.webDavRestoreBusyMessageRes.collectAsStateWithLifecycle().value
+    val webDavRemoteBackups = viewModel.webDavRemoteBackups.collectAsStateWithLifecycle().value
+    val isWebDavRemoteBackupBusy = viewModel.isWebDavRemoteBackupBusy.collectAsStateWithLifecycle().value
     val backupFrequency =
         settings.observeAsState(AppSettings.KEY_BACKUP_PERIODICAL_FREQUENCY) { periodicalBackupFrequency }.value
     val isPeriodicalTrimEnabled =
@@ -247,6 +252,34 @@ fun BackupsSettingsRoute(
         context.getString(it.first) + " - " + DateUtils.getRelativeTimeSpanString(it.second)
     }
     val isWebDavBusy = webDavUploadBusyMessageRes != null || webDavRestoreBusyMessageRes != null
+    val webDavRemoteBackupItems = webDavRemoteBackups.map { remote ->
+        val file = remote.file
+        val status = when (remote.restoreStatus) {
+            WebDavRemoteBackupRestoreStatus.UNKNOWN -> context.getString(R.string.webdav_remote_backup_status_unknown)
+            WebDavRemoteBackupRestoreStatus.RESTORABLE -> context.getString(R.string.webdav_remote_backup_status_restorable)
+            WebDavRemoteBackupRestoreStatus.UNRESTORABLE -> context.getString(R.string.webdav_remote_backup_status_unrestorable)
+        }
+        val summary = buildString {
+            append(status)
+            append(" - ")
+            append(Formatter.formatFileSize(context, file.size))
+            append(" - ")
+            append(DateUtils.getRelativeTimeSpanString(file.lastModified.time))
+            file.dataVersion?.let {
+                append(" - v")
+                append(it)
+            }
+            append(" - ")
+            append(file.namespace.name)
+        }
+        WebDavRemoteBackupUiItem(
+            file = file,
+            title = file.name,
+            summary = summary,
+            restoreStatus = remote.restoreStatus,
+        )
+    }
+    val isAnyWebDavBusy = isWebDavBusy || isWebDavRemoteBackupBusy
     val state = BackupsSettingsUiState(
         backupOutputSummary = when (backupDirectory) {
             null -> context.getString(R.string.invalid_value_message)
@@ -271,7 +304,13 @@ fun BackupsSettingsRoute(
         isWebDavPolicyNoteVisible = !isWebDavKeepLocalCopyEnabled && isWebDavEnabled,
         webDavUploadBusySummary = webDavUploadBusyMessageRes?.let(context::getString),
         webDavRestoreBusySummary = webDavRestoreBusyMessageRes?.let(context::getString),
-        isWebDavBusy = isWebDavBusy,
+        webDavRemoteBackupBusySummary = if (isWebDavRemoteBackupBusy) {
+            context.getString(R.string.webdav_remote_backups_loading)
+        } else {
+            null
+        },
+        webDavRemoteBackups = webDavRemoteBackupItems,
+        isWebDavBusy = isAnyWebDavBusy,
     )
 
     BackupsSettingsScreen(
@@ -301,6 +340,11 @@ fun BackupsSettingsRoute(
         onWebDavTestClick = { viewModel.checkWebDav() },
         onWebDavUploadNowClick = { viewModel.uploadWebDavNow() },
         onWebDavRestoreNowClick = { viewModel.restoreWebDavNow() },
+        onWebDavRefreshRemoteBackupsClick = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = false) },
+        onWebDavInspectRemoteBackupsClick = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = true) },
+        onWebDavRestoreRemoteBackupClick = { viewModel.restoreWebDavRemoteBackup(it) },
+        onWebDavDeleteRemoteBackupClick = { viewModel.deleteWebDavRemoteBackup(it) },
+        onWebDavClearRemoteBackupsClick = { viewModel.clearWebDavRemoteBackups() },
         onWebDavAutoRestoreChange = { settings.isBackupWebDavAutoRestoreEnabled = it },
         onWebDavKeepLocalCopyChange = { settings.isBackupWebDavKeepLocalCopyEnabled = it },
     )

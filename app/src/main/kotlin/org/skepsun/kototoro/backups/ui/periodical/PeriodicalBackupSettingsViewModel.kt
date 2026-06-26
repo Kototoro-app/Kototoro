@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.BackupUtils
@@ -22,7 +23,20 @@ import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.resolveFile
 import java.util.Date
+import java.io.File
+import java.io.FileInputStream
 import javax.inject.Inject
+
+data class WebDavRemoteBackupState(
+	val file: BackupFileInfo,
+	val restoreStatus: WebDavRemoteBackupRestoreStatus = WebDavRemoteBackupRestoreStatus.UNKNOWN,
+)
+
+enum class WebDavRemoteBackupRestoreStatus {
+	UNKNOWN,
+	RESTORABLE,
+	UNRESTORABLE,
+}
 
 @HiltViewModel
 class PeriodicalBackupSettingsViewModel @Inject constructor(
@@ -49,6 +63,8 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	val isWebDavCheckLoading = MutableStateFlow(false)
 	val webDavUploadBusyMessageRes = MutableStateFlow<Int?>(null)
 	val webDavRestoreBusyMessageRes = MutableStateFlow<Int?>(null)
+	val webDavRemoteBackups = MutableStateFlow<List<WebDavRemoteBackupState>>(emptyList())
+	val isWebDavRemoteBackupBusy = MutableStateFlow(false)
 	val onActionDone = MutableEventFlow<ReversibleAction>()
 
 	// 最近一次 WebDAV 操作（类型文案资源ID，发生时间毫秒）
@@ -137,65 +153,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 					throw IllegalStateException("No current WebDAV work backups found")
 				}
 				Log.d(TAG, "restoreWebDavNow: found ${latest.name} (ns=${latest.namespace}, ${latest.size}b)")
-				val tempFile = java.io.File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
-				try {
-					Log.d(TAG, "restoreWebDavNow: downloading ${latest.name}...")
-					webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
-					Log.d(TAG, "restoreWebDavNow: downloaded, starting restore from zip...")
-					val allSections = setOf(
-						org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
-						org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
-						org.skepsun.kototoro.backups.domain.BackupSection.CATEGORIES,
-						org.skepsun.kototoro.backups.domain.BackupSection.FAVOURITES,
-						org.skepsun.kototoro.backups.domain.BackupSection.BOOKMARKS,
-						org.skepsun.kototoro.backups.domain.BackupSection.STATS,
-						org.skepsun.kototoro.backups.domain.BackupSection.WORK_HISTORY,
-						org.skepsun.kototoro.backups.domain.BackupSection.WORK_FAVOURITES,
-						org.skepsun.kototoro.backups.domain.BackupSection.WORK_STATS,
-						org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
-						org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
-						org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
-						org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS_READER_GRID,
-						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,
-						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
-						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
-						org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_PREFS,
-					)
-					val restoreResult = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile)).use { zis ->
-						repository.restoreBackup(
-							input = zis,
-							sections = allSections,
-							progress = null,
-							restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
-						)
-					}
-					Log.d(TAG, "restoreWebDavNow: restore complete, committing...")
-					val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
-						backupWebDavRestoreCoordinator.commitManualRestore(
-							state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
-								semanticSchemaVersion = restoreContext.semanticSchemaVersion,
-								transportGeneration = restoreContext.transportGeneration,
-							),
-						)
-						Log.d(TAG, "restoreWebDavNow: committed, done")
-						onActionDone.call(
-							ReversibleAction(
-								if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
-								R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
-							} else if (restoreContext.isLegacySemanticSchema) {
-								R.string.webdav_restore_success_legacy_requires_normalization
-							} else if (restoreResult.legacyJarReposImported) {
-								R.string.webdav_restore_success_legacy_jar_hint
-							} else {
-								R.string.webdav_restore_success
-							},
-							null,
-						),
-					)
-					updateWebDavLastAction()
-				} finally {
-					if (tempFile.exists()) tempFile.delete()
-				}
+				restoreWebDavBackup(latest)
 			} catch (e: Exception) {
 				Log.e(TAG, "restoreWebDavNow: failed", e)
 				errorEvent.call(e)
@@ -204,6 +162,167 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 			}
 		}
 	}
+
+	fun refreshWebDavRemoteBackups(inspectPayloads: Boolean = false) {
+		launchJob(Dispatchers.Default) {
+			try {
+				isWebDavRemoteBackupBusy.value = true
+				val files = webDavUploader.listAllBackupFiles()
+					.sortedWith(
+						compareByDescending<BackupFileInfo> { it.lastModified.time }
+							.thenByDescending { it.dataVersion ?: Int.MIN_VALUE },
+					)
+				webDavRemoteBackups.value = files.map { WebDavRemoteBackupState(it) }
+				if (inspectPayloads) {
+					inspectWebDavRemoteBackups(files)
+				}
+			} catch (e: Exception) {
+				errorEvent.call(e)
+			} finally {
+				isWebDavRemoteBackupBusy.value = false
+			}
+		}
+	}
+
+	fun restoreWebDavRemoteBackup(file: BackupFileInfo) {
+		launchJob(Dispatchers.Default) {
+			try {
+				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
+				restoreWebDavBackup(file)
+			} catch (e: Exception) {
+				Log.e(TAG, "restoreWebDavRemoteBackup: failed name=${file.name}", e)
+				errorEvent.call(e)
+			} finally {
+				webDavRestoreBusyMessageRes.value = null
+			}
+		}
+	}
+
+	fun deleteWebDavRemoteBackup(file: BackupFileInfo) {
+		launchJob(Dispatchers.Default) {
+			try {
+				isWebDavRemoteBackupBusy.value = true
+				webDavUploader.deleteRemote(file.name, file.namespace)
+				webDavRemoteBackups.value = webDavRemoteBackups.value.filterNot { it.file.name == file.name }
+				onActionDone.call(ReversibleAction(R.string.webdav_remote_backup_deleted, null))
+			} catch (e: Exception) {
+				errorEvent.call(e)
+			} finally {
+				isWebDavRemoteBackupBusy.value = false
+			}
+		}
+	}
+
+	fun clearWebDavRemoteBackups() {
+		launchJob(Dispatchers.Default) {
+			try {
+				isWebDavRemoteBackupBusy.value = true
+				val files = webDavUploader.listAllBackupFiles()
+				files.forEach { file ->
+					webDavUploader.deleteRemote(file.name, file.namespace)
+				}
+				webDavRemoteBackups.value = emptyList()
+				onActionDone.call(ReversibleAction(R.string.webdav_remote_backups_cleared, null))
+			} catch (e: Exception) {
+				errorEvent.call(e)
+			} finally {
+				isWebDavRemoteBackupBusy.value = false
+			}
+		}
+	}
+
+	private suspend fun inspectWebDavRemoteBackups(files: List<BackupFileInfo>) {
+		val inspected = files.map { file ->
+			val tempFile = File.createTempFile("webdav_backup_inspect", ".bk.zip", appContext.cacheDir)
+			try {
+				webDavUploader.downloadBackup(file.name, tempFile, file.namespace)
+				runCatching {
+					BackupPayloadGuard.requireRestorableWorkSnapshot(
+						file = tempFile,
+						operation = "WebDAV backup inspection",
+					)
+				}.fold(
+					onSuccess = { WebDavRemoteBackupState(file, WebDavRemoteBackupRestoreStatus.RESTORABLE) },
+					onFailure = { WebDavRemoteBackupState(file, WebDavRemoteBackupRestoreStatus.UNRESTORABLE) },
+				)
+			} finally {
+				if (tempFile.exists()) tempFile.delete()
+			}
+		}
+		webDavRemoteBackups.value = inspected
+	}
+
+	private suspend fun restoreWebDavBackup(file: BackupFileInfo) {
+		val tempFile = File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
+		try {
+			Log.d(TAG, "restoreWebDavBackup: downloading ${file.name}...")
+			webDavUploader.downloadBackup(file.name, tempFile, file.namespace)
+			val inspection = BackupPayloadGuard.requireRestorableWorkSnapshot(
+				file = tempFile,
+				operation = "manual WebDAV restore",
+			)
+			Log.d(
+				TAG,
+				"restoreWebDavBackup: downloaded name=${file.name} size=${tempFile.length()}b " +
+					"entries=${inspection.describe()}",
+			)
+			Log.d(TAG, "restoreWebDavBackup: starting restore from zip...")
+			val restoreResult = java.util.zip.ZipInputStream(FileInputStream(tempFile)).use { zis ->
+				repository.restoreBackup(
+					input = zis,
+					sections = buildManualRestoreSections(),
+					progress = null,
+					restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+				)
+			}
+			Log.d(TAG, "restoreWebDavBackup: restore complete, committing...")
+			val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
+			backupWebDavRestoreCoordinator.commitManualRestore(
+				state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
+					semanticSchemaVersion = restoreContext.semanticSchemaVersion,
+					transportGeneration = restoreContext.transportGeneration,
+				),
+			)
+			Log.d(TAG, "restoreWebDavBackup: committed, done")
+			onActionDone.call(
+				ReversibleAction(
+					if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
+						R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
+					} else if (restoreContext.isLegacySemanticSchema) {
+						R.string.webdav_restore_success_legacy_requires_normalization
+					} else if (restoreResult.legacyJarReposImported) {
+						R.string.webdav_restore_success_legacy_jar_hint
+					} else {
+						R.string.webdav_restore_success
+					},
+					null,
+				),
+			)
+			updateWebDavLastAction()
+		} finally {
+			if (tempFile.exists()) tempFile.delete()
+		}
+	}
+
+	private fun buildManualRestoreSections() = setOf(
+		org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
+		org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,
+		org.skepsun.kototoro.backups.domain.BackupSection.CATEGORIES,
+		org.skepsun.kototoro.backups.domain.BackupSection.FAVOURITES,
+		org.skepsun.kototoro.backups.domain.BackupSection.BOOKMARKS,
+		org.skepsun.kototoro.backups.domain.BackupSection.STATS,
+		org.skepsun.kototoro.backups.domain.BackupSection.WORK_HISTORY,
+		org.skepsun.kototoro.backups.domain.BackupSection.WORK_FAVOURITES,
+		org.skepsun.kototoro.backups.domain.BackupSection.WORK_STATS,
+		org.skepsun.kototoro.backups.domain.BackupSection.SOURCES,
+		org.skepsun.kototoro.backups.domain.BackupSection.EXTENSION_REPOS,
+		org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS,
+		org.skepsun.kototoro.backups.domain.BackupSection.SETTINGS_READER_GRID,
+		org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_ENTITIES,
+		org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_BINDINGS,
+		org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_RELATIONS,
+		org.skepsun.kototoro.backups.domain.BackupSection.ENTITY_GRAPH_PREFS,
+	)
 
 	fun updateSummaryData() {
 		updateBackupsDirectory()

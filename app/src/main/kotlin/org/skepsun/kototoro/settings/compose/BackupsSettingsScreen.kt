@@ -18,12 +18,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
+import org.skepsun.kototoro.backups.ui.periodical.BackupFileInfo
+import org.skepsun.kototoro.backups.ui.periodical.WebDavRemoteBackupRestoreStatus
 
 data class BackupsSettingsUiState(
     val backupOutputSummary: String,
@@ -45,7 +51,16 @@ data class BackupsSettingsUiState(
     val isWebDavPolicyNoteVisible: Boolean,
     val webDavUploadBusySummary: String?,
     val webDavRestoreBusySummary: String?,
+    val webDavRemoteBackupBusySummary: String?,
+    val webDavRemoteBackups: List<WebDavRemoteBackupUiItem>,
     val isWebDavBusy: Boolean,
+)
+
+data class WebDavRemoteBackupUiItem(
+    val file: BackupFileInfo,
+    val title: String,
+    val summary: String,
+    val restoreStatus: WebDavRemoteBackupRestoreStatus,
 )
 
 @Composable
@@ -73,6 +88,11 @@ fun BackupsSettingsScreen(
     onWebDavTestClick: () -> Unit,
     onWebDavUploadNowClick: () -> Unit,
     onWebDavRestoreNowClick: () -> Unit,
+    onWebDavRefreshRemoteBackupsClick: () -> Unit,
+    onWebDavInspectRemoteBackupsClick: () -> Unit,
+    onWebDavRestoreRemoteBackupClick: (BackupFileInfo) -> Unit,
+    onWebDavDeleteRemoteBackupClick: (BackupFileInfo) -> Unit,
+    onWebDavClearRemoteBackupsClick: () -> Unit,
     onWebDavAutoRestoreChange: (Boolean) -> Unit,
     onWebDavKeepLocalCopyChange: (Boolean) -> Unit,
 ) {
@@ -84,6 +104,8 @@ fun BackupsSettingsScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        var selectedRemoteBackup by remember { mutableStateOf<WebDavRemoteBackupUiItem?>(null) }
+        var isClearRemoteBackupsConfirmVisible by rememberSaveable { mutableStateOf(false) }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
@@ -245,6 +267,40 @@ fun BackupsSettingsScreen(
                         onClick = onWebDavRestoreNowClick,
                     )
                     SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.webdav_remote_backups_refresh),
+                        summary = state.webDavRemoteBackupBusySummary ?: stringResource(R.string.webdav_remote_backups_refresh_summary),
+                        enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
+                        onClick = onWebDavRefreshRemoteBackupsClick,
+                    )
+                    SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.webdav_remote_backups_inspect),
+                        summary = stringResource(R.string.webdav_remote_backups_inspect_summary),
+                        enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
+                        onClick = onWebDavInspectRemoteBackupsClick,
+                    )
+                    SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.webdav_remote_backups_clear),
+                        summary = stringResource(R.string.webdav_remote_backups_clear_summary),
+                        enabled = state.isWebDavEnabled &&
+                            !state.isWebDavCheckLoading &&
+                            !state.isWebDavBusy &&
+                            state.webDavRemoteBackups.isNotEmpty(),
+                        showChevron = false,
+                        onClick = { isClearRemoteBackupsConfirmVisible = true },
+                    )
+                    state.webDavRemoteBackups.forEach { backup ->
+                        SettingsSectionDivider()
+                        SettingsActionPreference(
+                            title = backup.title,
+                            summary = backup.summary,
+                            enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
+                            onClick = { selectedRemoteBackup = backup },
+                        )
+                    }
+                    SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.webdav_auto_restore),
                         checked = state.isWebDavAutoRestoreEnabled,
@@ -280,7 +336,7 @@ fun BackupsSettingsScreen(
                         val busyText = state.webDavUploadBusySummary ?: state.webDavRestoreBusySummary ?: ""
                         SettingsInfoPreference(
                             title = stringResource(R.string.processing_),
-                            summary = busyText,
+                            summary = state.webDavRemoteBackupBusySummary ?: busyText,
                             iconRes = R.drawable.ic_info_outline,
                         )
                     }
@@ -311,6 +367,59 @@ fun BackupsSettingsScreen(
                 confirmButton = {},
                 dismissButton = {
                     TextButton(onClick = onDismissExternalImportDialog) {
+                        Text(text = stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
+        selectedRemoteBackup?.let { backup ->
+            AlertDialog(
+                onDismissRequest = { selectedRemoteBackup = null },
+                title = { Text(text = backup.title) },
+                text = { Text(text = backup.summary) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            selectedRemoteBackup = null
+                            onWebDavRestoreRemoteBackupClick(backup.file)
+                        },
+                        enabled = backup.restoreStatus != WebDavRemoteBackupRestoreStatus.UNRESTORABLE,
+                    ) {
+                        Text(text = stringResource(R.string.restore_backup))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            selectedRemoteBackup = null
+                            onWebDavDeleteRemoteBackupClick(backup.file)
+                        },
+                    ) {
+                        Text(text = stringResource(R.string.delete))
+                    }
+                    TextButton(onClick = { selectedRemoteBackup = null }) {
+                        Text(text = stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
+        if (isClearRemoteBackupsConfirmVisible) {
+            AlertDialog(
+                onDismissRequest = { isClearRemoteBackupsConfirmVisible = false },
+                title = { Text(text = stringResource(R.string.webdav_remote_backups_clear)) },
+                text = { Text(text = stringResource(R.string.webdav_remote_backups_clear_confirm)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            isClearRemoteBackupsConfirmVisible = false
+                            onWebDavClearRemoteBackupsClick()
+                        },
+                    ) {
+                        Text(text = stringResource(R.string.clear))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { isClearRemoteBackupsConfirmVisible = false }) {
                         Text(text = stringResource(android.R.string.cancel))
                     }
                 },

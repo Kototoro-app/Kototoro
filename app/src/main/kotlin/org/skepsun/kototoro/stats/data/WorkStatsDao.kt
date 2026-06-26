@@ -32,6 +32,9 @@ abstract class WorkStatsDao {
 	@Query("SELECT COUNT(*) FROM work_stats WHERE entity_id = :entityId")
 	abstract suspend fun getRowCount(entityId: Long): Int
 
+	@Query("SELECT DISTINCT anchor_manga_id FROM work_stats")
+	abstract suspend fun findAnchorMangaIds(): List<Long>
+
 	@Query(
 		"""
 		SELECT entity_id AS entityId,

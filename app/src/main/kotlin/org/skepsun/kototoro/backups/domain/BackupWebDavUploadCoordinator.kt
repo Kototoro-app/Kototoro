@@ -25,6 +25,10 @@ class BackupWebDavUploadCoordinator @Inject constructor(
 		uploadKind: String,
 		now: Long = System.currentTimeMillis(),
 	): UploadCommitResult {
+		BackupPayloadGuard.requireRestorableWorkSnapshot(
+			file = file,
+			operation = "WebDAV $uploadKind upload",
+		)
 		val targetVersion = settings.backupWebDavDataVersion + 1
 		webDavBackupUploader.uploadBackup(
 			file = file,
