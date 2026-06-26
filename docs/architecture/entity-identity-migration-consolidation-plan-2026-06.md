@@ -11,8 +11,9 @@
 核心不变量：
 
 ```text
-entity_id = 作品级用户状态键
-manga_id = 来源投影 / 执行锚点
+entity_id = 本地作品级用户状态键，只在当前数据库内有效
+sync_id = 作品身份跨设备稳定键，用于 backup / sync / restore 映射本地 entity_id
+manga_id = 本地来源投影 / 执行锚点，只在当前数据库内有效
 entity_binding = 来源投影与作品身份之间的唯一证据
 preferred_local_manga_id = 当前默认展示/阅读投影，不改变作品身份
 ```
@@ -52,8 +53,27 @@ preferred_local_manga_id = 当前默认展示/阅读投影，不改变作品身�
 必须：
 
 - 建立 `remoteEntityId -> localEntityId` 映射。
-- 优先通过 local projection anchor、strong binding、manual binding 找到本地 entity。
+- 优先通过 `sync_id` 找到本地 entity；没有 `sync_id` 时再通过 local projection anchor、strong binding、manual binding 找到本地 entity。
 - 无法可靠映射时创建本地 entity 或 candidate，不得污染已有本地主实体。
+
+### 2a. `sync_id` 是 Work 跨设备身份，不是本地主键
+
+`sync_id` 只属于 `EntityRecord` / Work identity，用于跨设备和备份恢复时识别同一个作品身份。
+
+禁止：
+
+- 把远端 `sync_id` 当成本地 `entity_id` 或 `manga_id` 写入。
+- 把 `sync_id` 写到 projection / manga 表作为执行锚点。
+- 因 preferred projection 变化而重写一个已存在 Work 的 `sync_id`。
+- 用不可信裸 `Content.id` / `manga_id` 生成 projection-derived `sync_id`。
+
+必须：
+
+- restore / sync 映射优先使用 `(type, sync_id)` 找本地 entity。
+- `sync_id` 缺失时，才允许退回到强 binding / anchor projection / legacy name-hash 映射。
+- 单 projection Work 可以使用 source-scoped projection key 生成确定性 `sync_id`。
+- 多 projection 或用户合并后的 Work 必须保留 survivor entity 的 `sync_id`；选择默认来源只改 `preferred_local_manga_id`。
+- `sync_id` 只能解决“哪个本地 entity 对应远端 Work”，不能替代 `entity_binding(source, external_id)` 对 projection 归属的证据职责。
 
 ### 3. 自动流程不得确认候选身份
 
@@ -230,6 +250,7 @@ Jellyfin version selection       -> Kototoro preferred_local_manga_id
 
 - 表示一个作品级身份。
 - 持有 primary name、aliases、创建时间、访问统计。
+- 持有跨设备稳定身份 `sync_id`。
 - 只对 `WORK` 承担用户状态 owner 语义。
 
 非职责：
@@ -242,6 +263,29 @@ Jellyfin version selection       -> Kototoro preferred_local_manga_id
 
 - `WORK` 是迁移期主线。
 - `CHARACTER / PERSON / ORGANIZATION / relation` 暂时降级为详情页元数据缓存和导航辅助，不参与用户状态 ownership。
+
+### Entity Sync Identity
+
+职责：
+
+- `sync_id` 表示一个 Work 在 backup / sync / restore 语义中的跨设备身份。
+- 本地 `entity_id` 可以不同，但同一 `(type, sync_id)` 应映射到同一作品身份。
+- `sync_id` 是 restore 时建立 `remoteEntityId -> localEntityId` 映射的首选证据。
+
+规则：
+
+- `sync_id` 必须在本地 entity 表内唯一。
+- 新建普通 Work 时可以生成 UUID `sync_id`。
+- 如果 Work 只有一个 authoritative projection binding，可以使用 `computeProjectionSyncId(source, externalId)` 这类确定性键，让多设备独立创建的同一单来源 Work 可自动对齐。
+- 一旦 Work 拥有多个 projection 或经过用户合并，`sync_id` 不再随 projection / preferred projection 改变。
+- 合并 Work 时保留 survivor entity 的 `sync_id`；loser entity 的远端 id 只能通过 import mapping / merge ledger 关联，不得继续作为 active 本地主键。
+- `sync_id` 不是 metadata authority，不参与章节、阅读、下载等 source-native 执行动作。
+
+禁止：
+
+- 用标题、封面、tracking cache、裸 `Content.id` 生成 `sync_id`。
+- 因自动候选匹配而把两个不同 `sync_id` 的 Work 合并为 confirmed。
+- 把 `sync_id` 当作 `entity_binding.external_id` 的替代品；binding 仍必须保存 source-scoped projection/provider key。
 
 ### Entity Binding
 
@@ -258,6 +302,8 @@ Jellyfin version selection       -> Kototoro preferred_local_manga_id
 - `CANDIDATE` 只用于整理建议，不参与主状态。
 - `LEGACY` 可读，但不能自动提升为 `CONFIRMED`。
 - 标题相似度只能生成候选，不能直接成为强真相。
+- authoritative projection binding 的 `external_id` 必须是 source-scoped provider / projection key；如果源返回的裸 id 不可靠，应使用规范化 URL / publicUrl。
+- 单 projection Work 的 projection-derived `sync_id` 应从同一个 source-scoped key 计算，避免不同设备对同一来源条目生成不同 Work 身份。
 
 ### Projection
 
@@ -271,6 +317,8 @@ Jellyfin version selection       -> Kototoro preferred_local_manga_id
 - `manga_id` 可以作为 execution anchor。
 - `manga_id` 不再默认等价于作品 owner。
 - 同一 entity 下可以有多个 local projection。
+- `manga_id` 是本地数据库锚点，backup / sync / restore 时必须通过 projection key 重新映射，不能跨设备直接复用。
+- Projection key 至少包含 `source.name + normalized url/publicUrl`；源返回的 `Content.id` 只能作为候选输入，不能在已知可能重复时作为唯一跨设备 key。
 
 ### Work User State
 
@@ -623,14 +671,18 @@ data class WorkAggregate(
 恢复规则：
 
 1. 旧 favourites/history/stats/tracks 先作为 migration input。
-2. 通过 `WorkResolver.ensureForProjection()` 映射到本地 entity。
-3. 再写 work 状态。
-4. 远端 `entity_id` 只作为快照内临时 id，不能直接当本地主键。
-5. restore 后如果 normalization 未完成，auto upload 必须禁写。
+2. 先用 `(type, sync_id)` 建立 `remoteEntityId -> localEntityId` 映射；缺失 `sync_id` 时才回退到强 binding / projection anchor / legacy name-hash。
+3. 通过 projection key 将远端 `manga_id` / anchor 映射成本地 `manga_id`；远端 `manga_id` 不能直接复用。
+4. 对缺失 Work 的旧输入，通过 `WorkResolver.ensureForProjection()` 创建最小本地 Work。
+5. 再写 work 状态，owner 使用本地 `entity_id`，执行锚点使用本地 `manga_id`。
+6. 远端 `entity_id` 只作为快照内临时 id，不能直接当本地主键。
+7. restore 后如果 normalization 未完成，auto upload 必须禁写。
 
 新导出规则：
 
 - 新 schema 导出 work sections。
+- 新 schema 必须导出 entity `sync_id`。
+- 新 schema 中的 `entity_id` / `manga_id` 只能作为 snapshot 内引用；跨设备合并必须依赖 `sync_id`、binding 和 projection key 重新映射。
 - legacy sections 不作为 v2 authoritative payload；如保留，只能作为 projection snapshot 或调试迁移信息。
 - semantic schema version 必须独立于 WebDAV transport generation。
 
@@ -638,7 +690,9 @@ data class WorkAggregate(
 
 - 新版可以读旧备份。
 - 新版会把旧语义自动转换为新合法状态，不能转换的进入 review。
-- 多设备恢复后，本地 `entity_id` 映射稳定。
+- 多设备恢复后，本地 `entity_id` 映射稳定，且优先由 `sync_id` 驱动。
+- 不同设备独立创建的同一单 projection Work 在拥有相同 projection-derived `sync_id` 时会合并到同一 Work。
+- 合并后的多 projection Work 切换默认来源不会改变 `sync_id`。
 
 ### Phase 5：整理工具降级为边界确认工具
 
@@ -804,8 +858,10 @@ follow-up 目标：
 | 旧 `FavouriteBackup(manga_id)` | 是 | 否 | import -> ensure work -> 写 work favourite |
 | 旧 history/stat backup | 是 | 否 | import -> map anchor -> 写 work state |
 | 旧 `entity_binding` | 是 | 否 | 保留 state，`LEGACY` 不自动提升 |
-| 新 work sections | 是 | 是 | 先 remote id 映射，再写本地 work state |
+| 新 work sections | 是 | 是 | 先通过 `sync_id` / binding / anchor 映射本地 entity，再写本地 work state |
 | 远端 `entity_id` | 是 | 否 | 只作为快照内 id，必须映射到本地 id |
+| 远端 `sync_id` | 是 | 否 | 作为跨设备 Work 身份键，用于查找或创建本地 entity，不得当本地主键 |
+| 远端 `manga_id` | 是 | 否 | 只作为快照内 projection 引用，必须通过 projection key 映射到本地 `manga_id` |
 | `tracking_site_links` | 可选 | 否 | cache / audit only |
 | legacy manga metadata source | 是 | 否 | explicit override 才保留 |
 
@@ -819,6 +875,10 @@ follow-up 目标：
 - legacy sections 在 v2 中只能作为 projection snapshot / migration evidence，不参与合并主决策。
 - 自动上传前必须满足 normalization complete；否则禁写。
 - restore 后必须记录 import provenance 和 semantic schema version。
+- restore / merge 必须优先按 `(type, sync_id)` 映射 Work；缺失 `sync_id` 才使用强 binding / anchor fallback。
+- `sync_id` 冲突且 entity type 不一致时进入 review / isolated import，不自动覆盖。
+- 单 projection Work 的 projection-derived `sync_id` 只能由 source-scoped projection key 生成。
+- 多 projection Work、用户合并 Work、手动整理后的 Work 不得因 preferred projection 改变而重写 `sync_id`。
 - 删除必须保留 tombstone；不能因为旧 backup 里还有 active legacy row 就恢复较新的 work 删除。
 - 跨设备合并必须按字段级 policy 执行，不允许整行“远端覆盖本地”。
 - 设备时钟不可信时，必须优先使用本地导入顺序、dataVersion 或 monotonic revision；不能只靠 wall-clock `updated_at`。
@@ -840,6 +900,8 @@ follow-up 目标：
 - v2 restore 完成前立即 auto upload。
 - 旧客户端继续向 v2 namespace 上传。
 - 远端 legacy `favourites(manga_id)` 覆盖本地较新的 `work_favourites(entity_id)`。
+- 把远端 `sync_id` 复制到本地 projection / manga anchor。
+- 用远端 `manga_id` 或不可信源裸 id 推导新的 `sync_id`。
 
 ## 测试计划
 
@@ -867,7 +929,12 @@ Phase 4：备份 / 同步隔离
 
 - 旧备份恢复后不立即 auto upload。
 - 旧备份中的 remote `entity_id` 不直接写成本地 `entity_id`。
+- restore 优先用 `(type, sync_id)` 映射本地 entity。
+- 远端 `sync_id` 不会被写入 projection / manga anchor。
+- 远端 `manga_id` 通过 projection key 映射成本地 `manga_id`。
 - restore 中远端 `entity_id` 与本地已有 `entity_id` 冲突时，不覆盖本地实体状态。
+- 单 projection Work 在不同设备独立创建时，可通过相同 projection-derived `sync_id` 合并。
+- 多 projection Work 切换 preferred projection 后 `sync_id` 保持不变。
 - sync v2 导出时 legacy sections 只作为 projection snapshot / migration evidence，不参与 authoritative merge。
 - 设备时钟倒退时，restore merge 不只依赖 wall-clock `updated_at` 做整行覆盖。
 
@@ -882,6 +949,7 @@ Phase 5：更新 / 订阅 / 整理
 单元测试：
 
 - `WorkResolver`：找不到 entity、已有 binding、rejected binding、preferred projection 失效、批量解析分批。
+- `sync_id`：UUID Work、projection-derived Work、合并 survivor、preferred projection 切换不变。
 - migration review 状态机：`OLD_INPUT -> VALID / NEEDS_REVIEW`。
 - merge policy：收藏 tombstone、历史进度选择、统计事件去重、tracking manual 优先。
 - metadata migration：mirror shadow、explicit override、orphan metadata source。
@@ -897,6 +965,9 @@ DAO / Repository 测试：
 - 旧数据库升级到新模型。
 - 旧备份 restore 后 normalization complete 才允许 auto upload。
 - 远端 `entity_id` 冲突映射。
+- 远端 `sync_id` 与本地已有 entity 匹配时复用本地 `entity_id`。
+- 远端 `sync_id` 缺失时才回退到 binding / anchor / legacy name-hash。
+- 远端 `manga_id` 与本地 `manga_id` 冲突时，通过 projection key 重建 anchor 映射。
 - 多设备 tombstone 合并。
 
 性能测试：
@@ -912,13 +983,13 @@ DAO / Repository 测试：
 
 推荐 PR 拆分：
 
-1. 新增 migrated shadow 基础设施和最小 migration ledger。
-2. 新增 `WorkResolver` 和 `WorkIdentity`，迁移现有重复解析逻辑。
+1. 新增 migrated shadow 基础设施、最小 migration ledger，并固化 `sync_id` 语义约束。
+2. 新增 `WorkResolver` 和 `WorkIdentity`，迁移现有重复解析逻辑，统一 `sync_id` / binding / projection anchor 映射优先级。
 3. 新增 `WorkAggregateRepository`，先服务收藏页。
 4. normalization 版本化和幂等测试。
 5. 收藏页切换到 `WorkAggregate`，旧状态自动迁移或进入 review。
 6. 详情页入口收敛为 Work / Projection 两类。
-7. backup / restore 通过 `WorkResolver` 做本地身份映射。
+7. backup / restore 通过 `sync_id` + `WorkResolver` 做本地身份映射。
 8. WebDAV auto upload gate 绑定 normalization 状态。
 9. 更新/订阅、tracker、scrobbling 的 owner 读写全部走 WorkResolver。
 10. 实体整理工具削减为合并、拆分、默认来源三类动作。
@@ -928,13 +999,13 @@ DAO / Repository 测试：
 ### PR 依赖与发布策略
 
 ```text
-PR-1 migrated shadow infrastructure + minimal migration ledger
-  -> PR-2 WorkResolver contract + tests
+PR-1 migrated shadow infrastructure + minimal migration ledger + sync_id invariants
+  -> PR-2 WorkResolver contract + sync_id/binding/projection mapping tests
   -> PR-3 WorkAggregateRepository read model
   -> PR-4 normalization merge policies + idempotency tests
   -> PR-5 favourites page WorkAggregate migration
   -> PR-6 history / reader write path migration
-  -> PR-7 backup / restore semantic schema + auto-upload gate
+  -> PR-7 backup / restore semantic schema + sync_id mapping + auto-upload gate
   -> PR-8 updates / subscription owner split
   -> PR-9 organize tool simplification
   -> PR-10 legacy owner main-read removal

@@ -434,11 +434,23 @@ class ContentDataRepository @Inject constructor(
 	suspend fun resolveIntent(intent: ContentIntent, withChapters: Boolean): Content? {
 		val mangaId = intent.mangaId
 		if (mangaId != 0L) {
-			findContentById(mangaId, withChapters)?.let { return it }
+			val intentManga = intent.manga
+			findContentById(mangaId, withChapters)?.let { cached ->
+				if (intentManga == null || cached.hasSameRemoteIdentity(intentManga)) {
+					return cached
+				}
+			}
 		}
 		intent.manga?.let { return it.withCachedChaptersIfNeeded(withChapters) }
 		intent.uri?.let { return resolverProvider.get().resolve(it).withCachedChaptersIfNeeded(withChapters) }
 		return null
+	}
+
+	private fun Content.hasSameRemoteIdentity(other: Content): Boolean {
+		val hasSameUrl = url.isNotBlank() && url == other.url
+		val hasSamePublicUrl = publicUrl.isNotBlank() && publicUrl == other.publicUrl
+		return source.name == other.source.name &&
+			(hasSameUrl || hasSamePublicUrl)
 	}
 
 	suspend fun storeContent(manga: Content, replaceExisting: Boolean) {

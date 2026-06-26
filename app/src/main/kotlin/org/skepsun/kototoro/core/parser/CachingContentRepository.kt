@@ -22,13 +22,13 @@ abstract class CachingContentRepository(
 	private val cache: MemoryContentCache,
 ) : ContentRepository {
 
-	private val detailsMutex = MultiMutex<Long>()
-	private val relatedContentMutex = MultiMutex<Long>()
-	private val pagesMutex = MultiMutex<Long>()
+	private val detailsMutex = MultiMutex<ContentCacheLockKey>()
+	private val relatedContentMutex = MultiMutex<ContentCacheLockKey>()
+	private val pagesMutex = MultiMutex<ContentCacheLockKey>()
 
 	final override suspend fun getDetails(manga: Content): Content = getDetails(manga, CachePolicy.ENABLED)
 
-	final override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = pagesMutex.withLock(chapter.id) {
+	final override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = pagesMutex.withLock(chapter.cacheLockKey()) {
 		cache.getPages(source, chapter.url)?.let {
 			Log.w("CachingRepo", "getPages cache-hit chapterId=${chapter.id} url=${chapter.url} pages=${it.size}")
 			return it
@@ -41,7 +41,7 @@ abstract class CachingContentRepository(
 		pages
 	}.await()
 
-	final override suspend fun getRelated(seed: Content): List<Content> = relatedContentMutex.withLock(seed.id) {
+	final override suspend fun getRelated(seed: Content): List<Content> = relatedContentMutex.withLock(seed.cacheLockKey()) {
 		cache.getRelatedContent(source, seed.url)?.let { return it }
 		val related = asyncSafe {
 			getRelatedContentImpl(seed).filterNot { it.id == seed.id }
@@ -50,7 +50,7 @@ abstract class CachingContentRepository(
 		related
 	}.await()
 
-	suspend fun getDetails(manga: Content, cachePolicy: CachePolicy): Content = detailsMutex.withLock(manga.id) {
+	suspend fun getDetails(manga: Content, cachePolicy: CachePolicy): Content = detailsMutex.withLock(manga.cacheLockKey()) {
 		if (cachePolicy.readEnabled) {
 			cache.getDetails(source, manga.url)?.let { return it }
 		}
@@ -107,4 +107,19 @@ abstract class CachingContentRepository(
 		}
 		return result
 	}
+
+	private fun Content.cacheLockKey() = ContentCacheLockKey(
+		source = source.name,
+		url = url.ifBlank { publicUrl }.ifBlank { id.toString() },
+	)
+
+	private fun ContentChapter.cacheLockKey() = ContentCacheLockKey(
+		source = source.name,
+		url = url.ifBlank { id.toString() },
+	)
+
+	private data class ContentCacheLockKey(
+		val source: String,
+		val url: String,
+	)
 }
