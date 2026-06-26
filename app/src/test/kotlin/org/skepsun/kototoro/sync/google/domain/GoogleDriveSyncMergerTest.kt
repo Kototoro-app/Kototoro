@@ -152,6 +152,87 @@ class GoogleDriveSyncMergerTest {
 		assertEquals(listOf(2L, 3L), compact.work.history.map { it.anchorMangaId }.sorted())
 	}
 
+	@Test
+	fun `compact merges same source url projection across legacy content ids`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(20L, "Work")),
+				bindings = listOf(
+					localBinding(entityId = 20L, mangaId = 2L),
+					localBinding(entityId = 20L, mangaId = 99L),
+				),
+				prefs = listOf(prefs(entityId = 20L, preferredLocalMangaId = 99L)),
+			),
+			content = listOf(
+				content(
+					id = 2L,
+					title = "Same Work",
+					url = "/same",
+					publicUrl = "https://public.example.test/same",
+				),
+				content(
+					id = 99L,
+					title = "Same Work",
+					url = "/same",
+					publicUrl = "https://public.example.test/same",
+				),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(history(entityId = 20L, anchorMangaId = 99L)),
+				favourites = listOf(favourite(entityId = 20L, anchorMangaId = 99L)),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(2L), compact.content.map { it.id })
+		assertEquals(listOf(2L), compact.entityGraph.bindings.mapNotNull { it.externalId.toLongOrNull() }.distinct())
+		assertEquals(listOf(2L), compact.entityGraph.prefs.mapNotNull { it.preferredLocalMangaId })
+		assertEquals(listOf(2L), compact.work.history.map { it.anchorMangaId })
+		assertEquals(listOf(2L), compact.work.favourites.map { it.anchorMangaId })
+	}
+
+	@Test
+	fun `compact merges same source public url projection when url is missing`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(20L, "Work")),
+				bindings = listOf(
+					localBinding(entityId = 20L, mangaId = 2L),
+					localBinding(entityId = 20L, mangaId = 99L),
+				),
+			),
+			content = listOf(
+				content(
+					id = 2L,
+					title = "Same Work",
+					url = "",
+					publicUrl = "https://public.example.test/same",
+				),
+				content(
+					id = 99L,
+					title = "Same Work",
+					url = "",
+					publicUrl = "https://public.example.test/same",
+				),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(history(entityId = 20L, anchorMangaId = 99L)),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(2L), compact.content.map { it.id })
+		assertEquals(listOf(2L), compact.work.history.map { it.anchorMangaId })
+	}
+
 	private fun content(
 		id: Long,
 		title: String = "Title $id",

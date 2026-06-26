@@ -130,11 +130,11 @@ class ScrobblerConfigViewModel @Inject constructor(
 		launchLoadingJob(Dispatchers.Default) {
 			android.util.Log.d("ScrobblerConfigVM", "bindContent: info.mangaId=${info.mangaId}, info.targetId=${info.targetId}, info.chapter=${info.chapter}, pickedContent.id=${pickedContent.id}, pickedContent.title=${pickedContent.title}")
 			// 1. Insert the online Content result into MangaDatabase via ContentDataRepository
-			mangaDataRepository.storeContent(pickedContent, replaceExisting = false)
-			val mangaId = pickedContent.id
+			val storedContent = mangaDataRepository.storeContentAndReturn(pickedContent, replaceExisting = false)
+			val mangaId = storedContent.id
 			val boundContent = mangaDataRepository.findPreferredLocalContentById(mangaId, withChapters = true)
 				?: mangaDataRepository.findContentById(mangaId, withChapters = true)
-				?: pickedContent
+				?: storedContent
 			android.util.Log.d("ScrobblerConfigVM", "bindContent: stored manga, mangaId=$mangaId")
 
 			// 2. Re-link the tracker

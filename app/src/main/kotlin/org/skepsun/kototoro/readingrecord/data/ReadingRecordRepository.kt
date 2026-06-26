@@ -98,10 +98,10 @@ class ReadingRecordRepository @Inject constructor(
 		if (!allowShort && endAt - startAt < MIN_SESSION_DURATION_MS) return
 		db.withTransaction {
 			val anchorManga = resolveReadingRecordAnchorContent(manga)
-			mangaRepository.storeContent(anchorManga, replaceExisting = true)
+			val storedAnchorManga = mangaRepository.storeContentAndReturn(anchorManga, replaceExisting = true)
 			db.getReadingRecordDao().insertSession(
 				ReadingRecordEntity(
-					mangaId = anchorManga.id,
+					mangaId = storedAnchorManga.id,
 					startAt = startAt,
 					endAt = endAt,
 					startChapterId = startState.chapterId,
@@ -129,10 +129,10 @@ class ReadingRecordRepository @Inject constructor(
 		if (!force && shouldSkip(manga)) return
 		db.withTransaction {
 			val anchorManga = resolveReadingRecordAnchorContent(manga)
-			mangaRepository.storeContent(anchorManga, replaceExisting = true)
+			val storedAnchorManga = mangaRepository.storeContentAndReturn(anchorManga, replaceExisting = true)
 			db.getReadingRecordDao().insertJumpPoint(
 				ReadingJumpPointEntity(
-					mangaId = anchorManga.id,
+					mangaId = storedAnchorManga.id,
 					createdAt = System.currentTimeMillis(),
 					fromChapterId = fromState.chapterId,
 					fromPage = fromState.page,

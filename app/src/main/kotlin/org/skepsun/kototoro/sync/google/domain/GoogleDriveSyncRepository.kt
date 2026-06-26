@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncApi
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncAuth
@@ -33,9 +34,11 @@ import org.skepsun.kototoro.sync.google.data.model.SyncWorkStats
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.data.RelationRecord
 import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
-import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -510,16 +513,17 @@ class GoogleDriveSyncRepository @Inject constructor(
 		val categoryIdMapping = LinkedHashMap<Long, Long>()
 		var nextImportedMangaId = minOf(getMangaDao().findMinId() ?: 0L, 0L) - 1L
 		snapshot.content.forEach { content ->
-			val existing = getMangaDao().find(content.id)?.manga
-			val local = existing ?: run {
-				val localId = if (getMangaDao().contains(content.id)) {
+			val existingByProjection = content.findLocalProjection(this)
+			val existingById = getMangaDao().find(content.id)?.manga
+			val local = existingByProjection ?: existingById?.takeIf { it.hasSameProjectionIdentity(content) } ?: run {
+				val localId = if (existingById != null || getMangaDao().contains(content.id)) {
 					nextImportedMangaId--
 				} else {
 					content.id
 				}
 				content.toEntity(localId)
 			}
-			if (existing == null) {
+			if (existingByProjection == null && existingById?.id != local.id) {
 				getMangaDao().upsert(local)
 			}
 			mangaIdMapping[content.id] = local.id
@@ -534,6 +538,32 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 
 		val entityIdMapping = resolveRemoteWorkEntityIds(snapshot, mangaIdMapping)
+
+		snapshot.content.forEach { content ->
+			val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl)
+				?: return@forEach
+			val localEntityId = content.findLocalEntityIdForProjectionBackfill(
+				database = this,
+				snapshot = snapshot,
+				mangaIdMapping = mangaIdMapping,
+				entityIdMapping = entityIdMapping,
+			) ?: return@forEach
+			if (getEntityGraphDao().findBinding(content.source, projectionKey) == null) {
+				getEntityGraphDao().upsertBinding(
+					EntityBindingRecord(
+						entityId = localEntityId,
+						source = content.source,
+						externalId = projectionKey,
+						confidence = 1f,
+						isPrimary = false,
+						sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
+						state = EntityBindingState.CONFIRMED.name,
+						createdBy = EntityBindingCreatedBy.SYNC.name,
+						updatedAt = System.currentTimeMillis(),
+					),
+				)
+			}
+		}
 
 		snapshot.entityGraph.bindings.forEach { remote ->
 			val localEntityId = entityIdMapping[remote.entityId] ?: return@forEach
@@ -934,6 +964,61 @@ class GoogleDriveSyncRepository @Inject constructor(
 
 	private suspend fun MangaDatabase.localDatabaseSummary(): String {
 		return "workFavourites=${getWorkFavouritesDao().countActive()} workHistory=${getWorkHistoryDao().countActive()}"
+	}
+
+	private suspend fun SyncContent.findLocalProjection(database: MangaDatabase): MangaEntity? {
+		if (url.isNotBlank()) {
+			database.getMangaDao().findBySourceAndUrl(source, url)?.manga?.let { return it }
+		}
+		if (publicUrl.isNotBlank()) {
+			database.getMangaDao().findBySourceAndPublicUrl(source, publicUrl)?.manga?.let { return it }
+		}
+		return null
+	}
+
+	private fun MangaEntity.hasSameProjectionIdentity(remote: SyncContent): Boolean {
+		return ProjectionIdentityKeys.hasSameIdentity(
+			source = source,
+			url = url,
+			publicUrl = publicUrl,
+			otherSource = remote.source,
+			otherUrl = remote.url,
+			otherPublicUrl = remote.publicUrl,
+		)
+	}
+
+	private suspend fun SyncContent.findLocalEntityIdForProjectionBackfill(
+		database: MangaDatabase,
+		snapshot: GoogleDriveSyncSnapshot,
+		mangaIdMapping: Map<Long, Long>,
+		entityIdMapping: Map<Long, Long>,
+	): Long? {
+		val localMangaId = mangaIdMapping[id] ?: return null
+		database.getEntityGraphDao().findActiveBinding(LOCAL_MANGA_SOURCE, localMangaId.toString())?.let {
+			return it.entityId
+		}
+		database.getEntityGraphDao().findActiveBinding(LEGACY_LOCAL_MANGA_SOURCE, localMangaId.toString())?.let {
+			return it.entityId
+		}
+		for (remoteEntityId in snapshot.findRemoteEntityIdsForContent(id)) {
+			entityIdMapping[remoteEntityId]?.let { return it }
+		}
+		return null
+	}
+
+	private fun GoogleDriveSyncSnapshot.findRemoteEntityIdsForContent(contentId: Long): List<Long> {
+		return buildList {
+			entityGraph.bindings.forEach { binding ->
+				if (binding.isLocalContentBinding() && binding.externalId.toLongOrNull() == contentId) {
+					add(binding.entityId)
+				}
+			}
+			work.history.forEach { if (it.anchorMangaId == contentId) add(it.entityId) }
+			work.favourites.forEach { if (it.anchorMangaId == contentId) add(it.entityId) }
+			work.stats.forEach { if (it.anchorMangaId == contentId) add(it.entityId) }
+			feed.tracks.forEach { if (it.mangaId == contentId) it.entityId?.let(::add) }
+			feed.logs.forEach { if (it.mangaId == contentId) it.entityId?.let(::add) }
+		}.distinct()
 	}
 
 	private fun SyncEntityBindingRecord.isLocalContentBinding(): Boolean {

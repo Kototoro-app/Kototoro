@@ -95,13 +95,13 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
                 )
                 return@forEach
             }
-            contentDataRepository.storeContent(match.content, replaceExisting = true)
+            val storedContent = contentDataRepository.storeContentAndReturn(match.content, replaceExisting = true)
             previews += ReadingSourcePreview(
                 mangaId = favourite.manga.id,
                 title = favourite.manga.title,
                 targetSourceName = match.source.name,
-                targetContentId = match.content.id,
-                matchedTitle = match.content.title,
+                targetContentId = storedContent.id,
+                matchedTitle = storedContent.title,
                 action = match.action,
             )
             completed++

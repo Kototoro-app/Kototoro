@@ -24,8 +24,7 @@ class RecoverContentUseCase @Inject constructor(
 			repository.getDetails(it)
 		} ?: return@runCatchingCancellable null
 		val merged = merge(manga, newContent)
-		mangaDataRepository.storeContent(merged, replaceExisting = true)
-		merged
+		mangaDataRepository.storeContentAndReturn(merged, replaceExisting = true)
 	}.onFailure {
 		it.printStackTraceDebug()
 	}.getOrNull()

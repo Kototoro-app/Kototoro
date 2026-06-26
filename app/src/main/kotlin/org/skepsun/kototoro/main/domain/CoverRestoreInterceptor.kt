@@ -74,8 +74,8 @@ class CoverRestoreInterceptor @Inject constructor(
 		val repo = repositoryFactory.create(currentContent.source)
 		val fixed = repo.find(currentContent) ?: return false
 		return if (fixed != currentContent) {
-			dataRepository.storeContent(fixed, replaceExisting = true)
-			fixed.coverUrl != currentContent.coverUrl
+			val stored = dataRepository.storeContentAndReturn(fixed, replaceExisting = true)
+			stored.coverUrl != currentContent.coverUrl
 		} else {
 			false
 		}

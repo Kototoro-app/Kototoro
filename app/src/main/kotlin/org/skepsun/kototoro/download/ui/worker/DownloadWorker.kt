@@ -261,17 +261,21 @@ class DownloadWorker @AssistedInject constructor(
 				when (task.kind) {
 					DownloadTaskKind.DOWNLOAD -> {
 						val resolvedContent = resolveExecutionContent(executionContext.executionManga)
-						mangaDataRepository.storeContent(resolvedContent.executionDetails, replaceExisting = true)
-						publishExecutionDetailsState(resolvedContent.executionDetails)
+						val storedExecutionDetails = mangaDataRepository.storeContentAndReturn(
+							resolvedContent.executionDetails,
+							replaceExisting = true,
+						)
+						val storedResolvedContent = resolvedContent.copy(executionDetails = storedExecutionDetails)
+						publishExecutionDetailsState(storedExecutionDetails)
 						Log.i("DownloadWorker", "doWork before downloadContentImpl: workId=$id mangaId=${executionContext.executionManga.id}")
-						val downloadedIds = getDoneChapters(resolvedContent.executionDetails)
+						val downloadedIds = getDoneChapters(storedExecutionDetails)
 						Log.i(
 							"DownloadWorker",
 							"doWork after getDoneChapters: downloadedIds=${downloadedIds.size} workId=$id mangaId=${executionContext.executionManga.id}",
 						)
 						downloadContentImpl(
 							subject = executionContext.executionManga,
-							resolvedContent = resolvedContent,
+							resolvedContent = storedResolvedContent,
 							task = task,
 							excludedIds = downloadedIds,
 						)
@@ -2320,15 +2324,21 @@ class DownloadWorker @AssistedInject constructor(
 				return
 			}
 			val requests = tasks.map { (manga, task) ->
-				val currentManga = mangaDataRepository.findContentById(task.executionMangaId, withChapters = true) ?: manga
-				val displayManga = task.displayMangaId
-					?.let { displayId ->
-						mangaDataRepository.findDisplayContentById(displayId, withChapters = false)
+				val storedManga = mangaDataRepository.storeContentAndReturn(manga, replaceExisting = true)
+				val currentManga = mangaDataRepository.findContentById(storedManga.id, withChapters = true) ?: storedManga
+				val displayManga = if (task.displayMangaId != null && task.displayMangaId != task.executionMangaId) {
+					mangaDataRepository.findDisplayContentById(task.displayMangaId, withChapters = false)
+				} else {
+					mangaDataRepository.findDisplayContentById(currentManga.id, withChapters = false)
+				}
+				val storedDisplayManga = displayManga
+					?.takeIf { it.id != currentManga.id }
+					?.let { representativeManga ->
+						mangaDataRepository.storeContentAndReturn(representativeManga, replaceExisting = false)
 					}
-					?: mangaDataRepository.findDisplayContentById(task.executionMangaId, withChapters = false)
-				val displayMangaId = displayManga?.id ?: currentManga.id
+				val displayMangaId = storedDisplayManga?.id ?: displayManga?.id ?: currentManga.id
 				val normalizedTask = DownloadTask.createExecutionTask(
-					executionMangaId = task.executionMangaId,
+					executionMangaId = currentManga.id,
 					displayMangaId = displayMangaId,
 					isPaused = task.isPaused,
 					isSilent = task.isSilent,
@@ -2340,10 +2350,6 @@ class DownloadWorker @AssistedInject constructor(
 					preferredQuality = task.preferredQuality,
 					kind = task.kind,
 				)
-				mangaDataRepository.storeContent(currentManga, replaceExisting = true)
-				displayManga?.takeIf { it.id != task.executionMangaId }?.let { representativeManga ->
-					mangaDataRepository.storeContent(representativeManga, replaceExisting = false)
-				}
 				OneTimeWorkRequestBuilder<DownloadWorker>()
 					.setConstraints(createConstraints(task.allowMeteredNetwork))
 					.addTag(TAG)

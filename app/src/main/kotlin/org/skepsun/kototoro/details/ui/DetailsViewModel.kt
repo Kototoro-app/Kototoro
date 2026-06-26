@@ -1541,14 +1541,15 @@ class DetailsViewModel @Inject constructor(
 					val localContent = originContent
 						?: currentObservedLocalMangaIdSnapshot()?.let { mangaId -> db.getMangaDao().find(mangaId)?.toContent() }
 						?: return@launchJob
+				val storedContent = dataRepository.storeContentAndReturn(localContent, replaceExisting = false)
 				val identity = workResolver.ensureForProjection(
-					content = localContent,
+					content = storedContent,
 					provenance = org.skepsun.kototoro.work.domain.WorkIdentityProvenance.USER,
 				)
 				val entityId = identity.entityId ?: return@launchJob
 				applyEntityContext(
 					entityId = entityId,
-					preferredLocalMangaId = localContent.id,
+					preferredLocalMangaId = storedContent.id,
 					populateSyntheticHeader = false,
 				)
 			}
@@ -4843,8 +4844,7 @@ class DetailsViewModel @Inject constructor(
 					}.getOrElse { content }
 				} else {
 					runCatchingCancellable {
-						dataRepository.storeContent(content, replaceExisting = false)
-						content
+						dataRepository.storeContentAndReturn(content, replaceExisting = false)
 					}.getOrDefault(content)
 				}
 				runCatchingCancellable {

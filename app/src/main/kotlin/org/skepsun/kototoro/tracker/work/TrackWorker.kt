@@ -269,23 +269,26 @@ class TrackWorker @AssistedInject constructor(
 					?.let { localRepository.findSavedContent(it) }
 					?: localRepository.findSavedContent(downloadSeed.executionManga)
 				if (localContent != null) {
-					val displayMangaId = downloadSeed.displayManga?.id ?: downloadSeed.executionManga.id
-						val task = DownloadTask.createExecutionTask(
-							executionMangaId = downloadSeed.executionManga.id,
-							displayMangaId = displayMangaId,
-							isPaused = false,
-							isSilent = false,
-							executionChapterIds = mangaUpdates.newChapters.ids().toLongArray(),
-							executionChapterRefs = mangaUpdates.newChapters.map(ExecutionChapterRef::fromChapter),
-							destination = null,
-							format = null,
-							allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
-						)
-					contentDataRepository.storeContent(downloadSeed.executionManga, replaceExisting = true)
-					downloadSeed.displayManga?.let { displayManga ->
-						contentDataRepository.storeContent(displayManga, replaceExisting = false)
+					val storedExecutionManga = contentDataRepository.storeContentAndReturn(
+						downloadSeed.executionManga,
+						replaceExisting = true,
+					)
+					val storedDisplayManga = downloadSeed.displayManga?.let { displayManga ->
+						contentDataRepository.storeContentAndReturn(displayManga, replaceExisting = false)
 					}
-					downloadSchedulerLazy.get().schedule(setOf(downloadSeed.executionManga to task))
+					val displayMangaId = storedDisplayManga?.id ?: storedExecutionManga.id
+					val task = DownloadTask.createExecutionTask(
+						executionMangaId = storedExecutionManga.id,
+						displayMangaId = displayMangaId,
+						isPaused = false,
+						isSilent = false,
+						executionChapterIds = mangaUpdates.newChapters.ids().toLongArray(),
+						executionChapterRefs = mangaUpdates.newChapters.map(ExecutionChapterRef::fromChapter),
+						destination = null,
+						format = null,
+						allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
+					)
+					downloadSchedulerLazy.get().schedule(setOf(storedExecutionManga to task))
 				}
 			}
 		}

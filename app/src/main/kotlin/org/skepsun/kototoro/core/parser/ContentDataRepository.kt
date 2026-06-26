@@ -45,6 +45,7 @@ class ContentDataRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val resolverProvider: Provider<ContentLinkResolver>,
 	private val appShortcutManagerProvider: Provider<AppShortcutManager>,
+	private val projectionIdentityResolver: ProjectionIdentityResolver,
 ) {
 
 	sealed interface MetadataSourceSelection {
@@ -62,16 +63,16 @@ class ContentDataRepository @Inject constructor(
 
 	suspend fun saveReaderMode(manga: Content, mode: ReaderMode) {
 		db.withTransaction {
-			storeContent(manga, replaceExisting = false)
-			val entity = db.getPreferencesDao().find(manga.id) ?: newEntity(manga.id)
+			val stored = storeContentAndReturn(manga, replaceExisting = false)
+			val entity = db.getPreferencesDao().find(stored.id) ?: newEntity(stored.id)
 			db.getPreferencesDao().upsert(entity.copy(mode = mode.id))
 		}
 	}
 
 	suspend fun saveColorFilter(manga: Content, colorFilter: ReaderColorFilter?) {
 		db.withTransaction {
-			storeContent(manga, replaceExisting = false)
-			val entity = db.getPreferencesDao().find(manga.id) ?: newEntity(manga.id)
+			val stored = storeContentAndReturn(manga, replaceExisting = false)
+			val entity = db.getPreferencesDao().find(stored.id) ?: newEntity(stored.id)
 			db.getPreferencesDao().upsert(
 				entity.copy(
 					cfBrightness = colorFilter?.brightness ?: 0f,
@@ -263,9 +264,9 @@ class ContentDataRepository @Inject constructor(
 
 	suspend fun setOverride(manga: Content, override: ContentOverride?) {
 		db.withTransaction {
-			storeContent(manga, replaceExisting = false)
+			val stored = storeContentAndReturn(manga, replaceExisting = false)
 			val normalizedOverride = override.normalized()
-			val entityPrefs = findEntityPrefsForMangaId(manga.id)
+			val entityPrefs = findEntityPrefsForMangaId(stored.id)
 			if (entityPrefs != null) {
 				val entityDao = db.getEntityGraphDao()
 				entityDao.upsertPrefsRecord(
@@ -279,7 +280,7 @@ class ContentDataRepository @Inject constructor(
 				// Once a work owner exists, manual overrides are authoritative there.
 				// Drop same-projection shadow overrides so runtime no longer keeps two truths.
 				val prefsDao = db.getPreferencesDao()
-				val legacyPrefs = prefsDao.find(manga.id)
+				val legacyPrefs = prefsDao.find(stored.id)
 				if (legacyPrefs != null &&
 					(
 						legacyPrefs.titleOverride != null ||
@@ -297,7 +298,7 @@ class ContentDataRepository @Inject constructor(
 				}
 			} else {
 				val dao = db.getPreferencesDao()
-				val entity = dao.find(manga.id) ?: newEntity(manga.id)
+				val entity = dao.find(stored.id) ?: newEntity(stored.id)
 				dao.upsert(
 					entity.copy(
 						titleOverride = normalizedOverride?.title,
@@ -308,9 +309,9 @@ class ContentDataRepository @Inject constructor(
 			}
 			// Sync the manga table's nsfw/content_rating columns so SQL-level filters
 			// (e.g. HistoryDao "manga.nsfw = 1") respect the manual override.
-			val effectiveRating = normalizedOverride?.contentRating ?: manga.contentRating
+			val effectiveRating = normalizedOverride?.contentRating ?: stored.contentRating
 			val effectiveNsfw = effectiveRating == org.skepsun.kototoro.parsers.model.ContentRating.ADULT
-			db.getMangaDao().updateContentRating(manga.id, effectiveNsfw, effectiveRating?.name)
+			db.getMangaDao().updateContentRating(stored.id, effectiveNsfw, effectiveRating?.name)
 		}
 	}
 
@@ -454,26 +455,32 @@ class ContentDataRepository @Inject constructor(
 	}
 
 	suspend fun storeContent(manga: Content, replaceExisting: Boolean) {
-		if (!replaceExisting && db.getMangaDao().find(manga.id) != null) {
-			return
-		}
-		db.withTransaction {
+		storeContentAndReturn(manga, replaceExisting)
+	}
+
+	suspend fun storeContentAndReturn(manga: Content, replaceExisting: Boolean): Content {
+		return db.withTransaction {
+			val stored = projectionIdentityResolver.resolveStoredProjection(manga)
+			if (!replaceExisting && db.getMangaDao().find(stored.id) != null) {
+				return@withTransaction stored
+			}
 			// avoid storing local manga if remote one is already stored
-			val existing = if (manga.isLocal) {
-				db.getMangaDao().find(manga.id)?.manga
+			val existing = if (stored.isLocal) {
+				db.getMangaDao().find(stored.id)?.manga
 			} else {
 				null
 			}
-			if (existing == null || existing.source == manga.source.name) {
-				val tags = manga.tags.toEntities()
+			if (existing == null || existing.source == stored.source.name) {
+				val tags = stored.tags.toEntities()
 				db.getTagsDao().upsert(tags)
-				db.getMangaDao().upsert(manga.toEntity(), tags)
-				if (!manga.isLocal) {
-					manga.chapters?.let { chapters ->
-						db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
+				db.getMangaDao().upsert(stored.toEntity(), tags)
+				if (!stored.isLocal) {
+					stored.chapters?.let { chapters ->
+						db.getChaptersDao().replaceAll(stored.id, chapters.withIndex().toEntities(stored.id))
 					}
 				}
 			}
+			stored
 		}
 	}
 

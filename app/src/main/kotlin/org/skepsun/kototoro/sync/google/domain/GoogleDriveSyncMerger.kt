@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.sync.google.domain
 
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.sync.google.data.model.GoogleDriveSyncSnapshot
 import org.skepsun.kototoro.sync.google.data.model.SyncConfig
 import org.skepsun.kototoro.sync.google.data.model.SyncContent
@@ -713,7 +714,12 @@ object GoogleDriveSyncMerger {
 	}
 
 	private fun contentKey(content: SyncContent): String {
-		return "projection-id:${content.id}"
+		return ProjectionIdentityKeys.contentCompactKey(
+			source = content.source,
+			id = content.id,
+			url = content.url,
+			publicUrl = content.publicUrl,
+		)
 	}
 
 	private fun SyncEntityBindingRecord.isLocalContentBinding(): Boolean {

@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
@@ -33,6 +34,7 @@ import org.skepsun.kototoro.entitygraph.domain.TrackingStaffDto
 import org.skepsun.kototoro.entitygraph.domain.TrackingWorkDto
 import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
 import org.skepsun.kototoro.entitygraph.domain.stripEntityDisambiguationTitleSuffix
+import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.toTrackingServiceOrNull
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.mergeRestoredWorkFavourites
@@ -698,7 +700,11 @@ class EntityGraphRepository @Inject constructor(
 	): Entity = withContext(Dispatchers.Default) {
 		db.withTransaction {
 			val now = System.currentTimeMillis()
+			val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl)
 			val existing = findEntityByLocalMangaId(content.id)
+				?: projectionKey?.let { key ->
+					findBindingBySourceKey(content.source.name, key)
+				}
 			if (existing != null) {
 				val dao = db.getEntityGraphDao()
 				val record = dao.findEntity(existing.entityId)
@@ -719,19 +725,60 @@ class EntityGraphRepository @Inject constructor(
 					confidence = existing.confidence,
 					createdBy = createdBy,
 				)
+				if (projectionKey != null) {
+					dao.upsertBindingForSource(
+						entityId = existing.entityId,
+						source = content.source.name,
+						externalId = projectionKey,
+						confidence = existing.confidence,
+						createdBy = createdBy,
+						sourceKind = EntityBindingSourceKind.READING_SOURCE,
+					)
+				}
 				dao.touchEntity(existing.entityId, now)
 				return@withTransaction requireNotNull(dao.findEntity(existing.entityId)).toModel()
 			}
-			resolveOrCreateEntity(
-				type = EntityType.WORK,
-				primaryName = content.title,
-				aliases = content.altTitles.toList(),
+			val entity = if (projectionKey != null) {
+				resolveOrCreateEntity(
+					type = EntityType.WORK,
+					primaryName = content.title,
+					aliases = content.altTitles.toList(),
+					source = content.source.name,
+					externalId = projectionKey,
+					contentType = content.source.contentType,
+					now = now,
+					createdBy = createdBy,
+				)
+			} else {
+				resolveOrCreateEntity(
+					type = EntityType.WORK,
+					primaryName = content.title,
+					aliases = content.altTitles.toList(),
+					source = "local_manga",
+					externalId = content.id.toString(),
+					contentType = content.source.contentType,
+					now = now,
+					createdBy = createdBy,
+				)
+			}
+			if (projectionKey != null) {
+				db.getEntityGraphDao().upsertBindingForSource(
+					entityId = entity.id,
+					source = content.source.name,
+					externalId = projectionKey,
+					confidence = 1f,
+					createdBy = createdBy,
+					sourceKind = EntityBindingSourceKind.READING_SOURCE,
+				)
+			}
+			db.getEntityGraphDao().upsertBindingForSource(
+				entityId = entity.id,
 				source = "local_manga",
 				externalId = content.id.toString(),
-				contentType = content.source.contentType,
-				now = now,
+				confidence = 1f,
 				createdBy = createdBy,
 			)
+			entity
 		}
 	}
 
@@ -2028,6 +2075,7 @@ class EntityGraphRepository @Inject constructor(
 		externalId: String,
 		confidence: Float,
 		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.INGEST,
+		sourceKind: EntityBindingSourceKind? = null,
 	) {
 		val existing = findBinding(source, externalId)
 		if (existing?.state in AUTO_BIND_OVERWRITE_BLOCKING_STATES) {
@@ -2041,6 +2089,7 @@ class EntityGraphRepository @Inject constructor(
 				externalId = externalId,
 				confidence = confidence,
 				isPrimary = bindings.isEmpty(),
+				sourceKind = sourceKind?.name ?: source.toEntityBindingSourceKind().name,
 				state = if (createdBy == EntityBindingCreatedBy.USER) {
 					EntityBindingState.MANUAL.name
 				} else {

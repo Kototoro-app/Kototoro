@@ -52,16 +52,16 @@ constructor(
 		} else {
 			newContent
 		}
-		mangaDataRepository.storeContent(newDetails, replaceExisting = true)
+		val storedNewDetails = mangaDataRepository.storeContentAndReturn(newDetails, replaceExisting = true)
 		database.withTransaction {
 			val currentTime = System.currentTimeMillis()
 			val localReadingBinding = entityGraphRepository.findLocalReadingBinding(oldDetails.id)
-				?: entityGraphRepository.findLocalReadingBinding(newDetails.id)
+				?: entityGraphRepository.findLocalReadingBinding(storedNewDetails.id)
 			// keep the migrated content bound to the same entity graph node so source alternatives stay grouped
 			localReadingBinding?.let { binding ->
 				entityGraphRepository.attachLocalReadingBinding(
 					entityId = binding.entityId,
-					localMangaId = newDetails.id,
+					localMangaId = storedNewDetails.id,
 					confidence = binding.confidence,
 				)
 			}
@@ -72,7 +72,7 @@ constructor(
 				for (favourite in oldFavourites) {
 					workFavouritesDao.upsert(
 						favourite.copy(
-							anchorMangaId = newDetails.id,
+							anchorMangaId = storedNewDetails.id,
 							updatedAt = currentTime,
 						),
 					)
@@ -83,18 +83,18 @@ constructor(
 			val oldHistory = workHistoryDao.findActiveByAnchorMangaId(oldDetails.id)
 			val newHistory =
 				if (oldHistory != null) {
-					val newHistory = makeNewHistory(oldDetails, newDetails, oldHistory)
+					val newHistory = makeNewHistory(oldDetails, storedNewDetails, oldHistory)
 					workHistoryDao.upsert(newHistory)
 					newHistory
 				} else {
 					null
-			}
+				}
 			// Only projection-local prefs should follow source migration.
 			// Work-owned state such as metadata authority, overrides, and reading status must stay on entity/work.
 			database.getPreferencesDao().find(oldDetails.id)?.let { pref ->
 				database.getPreferencesDao().upsert(
 					pref.copy(
-						mangaId = newDetails.id,
+						mangaId = storedNewDetails.id,
 						titleOverride = null,
 						coverUrlOverride = null,
 						contentRatingOverride = null,
@@ -109,7 +109,7 @@ constructor(
 			migrateTrackingLinkAnchors(
 				trackingSiteDao = database.getTrackingSiteDao(),
 				oldMangaId = oldDetails.id,
-				newContent = newDetails,
+				newContent = storedNewDetails,
 				entityId = localReadingBinding?.entityId,
 				currentTime = currentTime,
 			)
@@ -117,11 +117,11 @@ constructor(
 			val tracksDao = database.getTracksDao()
 			val oldTrack = tracksDao.find(oldDetails.id)
 			if (oldTrack != null) {
-				val lastChapter = newDetails.chapters?.lastOrNull()
+				val lastChapter = storedNewDetails.chapters?.lastOrNull()
 				val newTrack =
 					TrackEntity(
-						ownerId = resolveTrackOwnerId(localReadingBinding?.entityId, newDetails.id),
-						mangaId = newDetails.id,
+						ownerId = resolveTrackOwnerId(localReadingBinding?.entityId, storedNewDetails.id),
+						mangaId = storedNewDetails.id,
 						entityId = localReadingBinding?.entityId,
 						lastChapterId = lastChapter?.id ?: 0L,
 						newChapters = 0,
@@ -141,7 +141,7 @@ constructor(
 				val prevInfo = scrobbler.getScrobblingInfoOrNull(oldDetails.id) ?: continue
 				scrobbler.unregisterScrobbling(oldDetails.id)
 				scrobbler.linkContent(
-					newDetails.id,
+					storedNewDetails.id,
 					ScrobblerContent(
 						id = prevInfo.targetId,
 						name = prevInfo.title,
@@ -151,7 +151,7 @@ constructor(
 					),
 				)
 				scrobbler.updateScrobblingInfo(
-					mangaId = newDetails.id,
+					mangaId = storedNewDetails.id,
 					rating = prevInfo.rating,
 					status =
 						prevInfo.status ?: when {
@@ -163,13 +163,13 @@ constructor(
 				)
 				if (newHistory != null) {
 					scrobbler.scrobble(
-						manga = newDetails,
+						manga = storedNewDetails,
 						chapterId = newHistory.chapterId,
 					)
 				}
 			}
 		}
-		progressUpdateUseCase(newDetails)
+		progressUpdateUseCase(storedNewDetails)
 	}
 
 	private suspend fun migrateTrackingLinkAnchors(

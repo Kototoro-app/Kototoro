@@ -219,15 +219,15 @@ class HistoryRepository @Inject constructor(
 			} else {
 				db.getMangaDao().find(owner.anchorMangaId)?.toContent() ?: manga
 			}
-			mangaRepository.storeContent(anchorManga, replaceExisting = true)
+			val storedAnchorManga = mangaRepository.storeContentAndReturn(anchorManga, replaceExisting = true)
 			val branch = manga.chapters?.findById(chapterId)?.branch
 			val now = System.currentTimeMillis()
-			android.util.Log.d("HistoryRepository", "Upserting history: anchorMangaId=${anchorManga.id}, sourceMangaId=${manga.id}, chapterId=$chapterId, parentChapterId=$parentChapterId")
+			android.util.Log.d("HistoryRepository", "Upserting history: anchorMangaId=${storedAnchorManga.id}, sourceMangaId=${manga.id}, chapterId=$chapterId, parentChapterId=$parentChapterId")
 			owner.entityId?.let { entityId ->
 				db.getWorkHistoryDao().upsert(
 					WorkHistoryEntity(
 						entityId = entityId,
-						anchorMangaId = anchorManga.id,
+						anchorMangaId = storedAnchorManga.id,
 						createdAt = now,
 						updatedAt = now,
 						chapterId = chapterId,

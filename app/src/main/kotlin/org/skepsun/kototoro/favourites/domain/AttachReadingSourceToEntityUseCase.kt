@@ -31,21 +31,21 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
         } else {
             newContent
         }
-        contentDataRepository.storeContent(newDetails, replaceExisting = true)
-        var preferredProjectionId = newDetails.id
+        val storedDetails = contentDataRepository.storeContentAndReturn(newDetails, replaceExisting = true)
+        var preferredProjectionId = storedDetails.id
         database.withTransaction {
             val entityId = resolveOrCreateEntityId(oldContent)
             val existingProjectionForSource = findEntityProjectionBySource(
                 entityId = entityId,
-                sourceName = newDetails.source.name,
+                sourceName = storedDetails.source.name,
             )
-            preferredProjectionId = existingProjectionForSource?.id ?: newDetails.id
-            val existingBinding = findLocalBinding(newDetails.id)
+            preferredProjectionId = existingProjectionForSource?.id ?: storedDetails.id
+            val existingBinding = findLocalBinding(storedDetails.id)
             if (existingProjectionForSource == null && existingBinding == null) {
                 val confidence = findLocalBinding(oldContent.id)?.confidence ?: 1f
                 entityGraphRepository.attachLocalReadingBinding(
                     entityId = entityId,
-                    localMangaId = newDetails.id,
+                    localMangaId = storedDetails.id,
                     confidence = confidence,
                 )
             }
@@ -60,7 +60,7 @@ class AttachReadingSourceToEntityUseCase @Inject constructor(
         }
         return runCatchingCancellable {
             contentDataRepository.findContentById(preferredProjectionId, withChapters = false)
-        }.getOrNull() ?: newDetails
+        }.getOrNull() ?: storedDetails
     }
 
     private suspend fun resolveOrCreateEntityId(content: Content): Long {
