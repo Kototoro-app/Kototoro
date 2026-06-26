@@ -1,12 +1,18 @@
 package org.skepsun.kototoro.entitygraph.data
 
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
 
 internal data class ResetProjectionGroup(
 	val mangaIds: List<Long>,
 	val canonicalMangaId: Long,
+)
+
+internal data class ResetProjectionBindingKey(
+	val source: String,
+	val externalId: String,
 )
 
 internal fun buildResetProjectionGroups(
@@ -39,6 +45,33 @@ internal fun buildResetProjectionGroups(
 		}
 		.sortedBy { it.canonicalMangaId }
 		.toList()
+}
+
+internal fun buildResetProjectionBindingKeys(
+	group: ResetProjectionGroup,
+	mangaById: Map<Long, MangaEntity>,
+): List<ResetProjectionBindingKey> {
+	return group.mangaIds
+		.asSequence()
+		.mapNotNull { mangaById[it] }
+		.mapNotNull { manga ->
+			ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)?.let { key ->
+				ResetProjectionBindingKey(
+					source = manga.source,
+					externalId = key,
+				)
+			}
+		}
+		.distinct()
+		.toList()
+}
+
+internal fun resetProjectionSyncId(
+	group: ResetProjectionGroup,
+	mangaById: Map<Long, MangaEntity>,
+): String? {
+	val bindings = buildResetProjectionBindingKeys(group, mangaById)
+	return bindings.singleOrNull()?.let { computeProjectionSyncId(it.source, it.externalId) }
 }
 
 private fun buildResetCanonicalScores(

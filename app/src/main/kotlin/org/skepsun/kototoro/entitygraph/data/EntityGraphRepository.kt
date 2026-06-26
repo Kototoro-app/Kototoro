@@ -225,7 +225,7 @@ class EntityGraphRepository @Inject constructor(
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
 			val existing = findEntityByLocalMangaId(localMangaId) ?: return@withTransaction false
-			deleteLocalReadingBinding(dao, localMangaId.toString())
+			deleteLocalProjectionBindings(dao, localMangaId)
 			dao.touchEntity(existing.entityId, System.currentTimeMillis())
 			true
 		}
@@ -261,7 +261,7 @@ class EntityGraphRepository @Inject constructor(
 			val existing = findEntityByLocalMangaId(content.id) ?: return@withTransaction null
 			val existingEntity = dao.findEntity(existing.entityId) ?: return@withTransaction null
 			val now = System.currentTimeMillis()
-			deleteLocalReadingBinding(dao, content.id.toString())
+			deleteLocalProjectionBindings(dao, content)
 			val entity = createDetachedLocalWorkEntity(
 				content = content,
 				now = now,
@@ -312,7 +312,11 @@ class EntityGraphRepository @Inject constructor(
 				"bindings=${oldEntityBindings.size} localMangaIds=$oldEntityLocalMangaIds " +
 				"splittingMangaId=$localMangaId content=${content?.let { "${it.title}(${it.id})" }}")
 			val now = System.currentTimeMillis()
-			deleteLocalReadingBinding(dao, localMangaId.toString())
+			if (content != null) {
+				deleteLocalProjectionBindings(dao, content)
+			} else {
+				deleteLocalProjectionBindings(dao, localMangaId)
+			}
 			val entity = if (content != null) {
 				createDetachedLocalWorkEntity(
 					content = content,
@@ -586,6 +590,11 @@ class EntityGraphRepository @Inject constructor(
 					externalId = content.id.toString(),
 					now = now,
 				)
+				dao.attachProjectionBindingWithoutSyncIdRewrite(
+					entityId = targetEntityId,
+					content = content,
+					now = now,
+				)
 			}
 			dao.deleteEntitiesByIds(entityIds.filterNot { it == targetEntityId })
 			dao.touchEntity(targetEntityId, now)
@@ -685,6 +694,11 @@ class EntityGraphRepository @Inject constructor(
 				dao.attachLocalWorkBindingForMerge(
 					entityId = entityId,
 					externalId = content.id.toString(),
+					now = now,
+				)
+				dao.attachProjectionBindingWithoutSyncIdRewrite(
+					entityId = entityId,
+					content = content,
 					now = now,
 				)
 			}
@@ -1745,6 +1759,7 @@ class EntityGraphRepository @Inject constructor(
 		selection: TrackingSelection?,
 		now: Long,
 	) {
+		dao.findEntity(entityId) ?: return
 		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId, now))
 		dao.updateEntityMetadataSourceSelection(
 			entityId = entityId,
@@ -2140,6 +2155,49 @@ class EntityGraphRepository @Inject constructor(
 		)
 	}
 
+	private suspend fun EntityGraphDao.attachProjectionBindingWithoutSyncIdRewrite(
+		entityId: Long,
+		content: Content,
+		now: Long,
+	) {
+		val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl) ?: return
+		val existing = findBinding(content.source.name, projectionKey)
+		if (existing?.state in AUTO_BIND_OVERWRITE_BLOCKING_STATES) {
+			return
+		}
+		upsertBinding(
+			EntityBindingRecord(
+				entityId = entityId,
+				source = content.source.name,
+				externalId = projectionKey,
+				confidence = 1f,
+				isPrimary = false,
+				sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
+				state = EntityBindingState.MANUAL.name,
+				createdBy = EntityBindingCreatedBy.USER.name,
+				updatedAt = now,
+			),
+		)
+	}
+
+	private suspend fun EntityGraphDao.upsertProjectionBindingForContent(
+		entityId: Long,
+		content: Content,
+		confidence: Float,
+		createdBy: EntityBindingCreatedBy,
+		sourceKind: EntityBindingSourceKind,
+	) {
+		val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl) ?: return
+		upsertBindingForSource(
+			entityId = entityId,
+			source = content.source.name,
+			externalId = projectionKey,
+			confidence = confidence,
+			createdBy = createdBy,
+			sourceKind = sourceKind,
+		)
+	}
+
 	private suspend fun createEntity(
 		type: EntityType,
 		primaryName: String,
@@ -2239,6 +2297,13 @@ class EntityGraphRepository @Inject constructor(
 			externalId = content.id.toString(),
 			confidence = 1f,
 			createdBy = EntityBindingCreatedBy.USER,
+		)
+		dao.upsertProjectionBindingForContent(
+			entityId = id,
+			content = content,
+			confidence = 1f,
+			createdBy = EntityBindingCreatedBy.USER,
+			sourceKind = EntityBindingSourceKind.READING_SOURCE,
 		)
 		return requireNotNull(dao.findEntity(id)).toModel()
 	}
@@ -2379,6 +2444,50 @@ class EntityGraphRepository @Inject constructor(
 	) {
 		dao.deleteBindingBySource("local_manga", externalId)
 		dao.deleteBindingBySource("0", externalId)
+	}
+
+	private suspend fun deleteLocalProjectionBindings(
+		dao: EntityGraphDao,
+		localMangaId: Long,
+	) {
+		deleteLocalReadingBinding(dao, localMangaId.toString())
+		db.getMangaDao().find(localMangaId)?.toContent()?.let { content ->
+			deleteProjectionBinding(dao, content)
+		}
+	}
+
+	private suspend fun deleteLocalProjectionBindings(
+		dao: EntityGraphDao,
+		content: Content,
+	) {
+		deleteLocalReadingBinding(dao, content.id.toString())
+		deleteProjectionBinding(dao, content)
+	}
+
+	private suspend fun deleteProjectionBinding(
+		dao: EntityGraphDao,
+		content: Content,
+	) {
+		val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl) ?: return
+		val binding = dao.findBinding(content.source.name, projectionKey) ?: return
+		var hasSiblingWithSameProjectionKey = false
+		for (localBinding in dao.findActiveLocalBindingsByEntity(binding.entityId)) {
+			val siblingId = localBinding.externalId.toLongOrNull()
+			if (siblingId == null || siblingId == content.id) {
+				continue
+			}
+			val sibling = db.getMangaDao().find(siblingId)?.manga ?: continue
+			if (
+				sibling.source == content.source.name &&
+					ProjectionIdentityKeys.bindingKey(sibling.url, sibling.publicUrl) == projectionKey
+			) {
+				hasSiblingWithSameProjectionKey = true
+				break
+			}
+		}
+		if (!hasSiblingWithSameProjectionKey) {
+			dao.deleteBindingBySource(content.source.name, projectionKey)
+		}
 	}
 
 	private fun String?.toScrobblerServiceOrNull(): ScrobblerService? {
@@ -2808,6 +2917,7 @@ class EntityGraphRepository @Inject constructor(
 					dao = dao,
 					title = title,
 					canonicalMangaId = group.canonicalMangaId,
+					syncId = resetProjectionSyncId(group, mangaById),
 					now = now,
 				) ?: return@forEach
 				rebuiltEntities++
@@ -2829,6 +2939,21 @@ class EntityGraphRepository @Inject constructor(
 						),
 					)
 					entityIdByMangaId[mangaId] = entityId
+				}
+				buildResetProjectionBindingKeys(group, mangaById).forEach { binding ->
+					dao.upsertBinding(
+						EntityBindingRecord(
+							entityId = entityId,
+							source = binding.source,
+							externalId = binding.externalId,
+							confidence = 1f,
+							isPrimary = false,
+							sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
+							state = EntityBindingState.CONFIRMED.name,
+							createdBy = EntityBindingCreatedBy.MIGRATION.name,
+							updatedAt = now,
+						),
+					)
 				}
 				dao.upsertPrefsRecord(
 					EntityPrefsRecord(
@@ -2897,11 +3022,13 @@ class EntityGraphRepository @Inject constructor(
 		dao: EntityGraphDao,
 		title: String,
 		canonicalMangaId: Long,
+		syncId: String?,
 		now: Long,
 	): Long? {
 		val baseHash = "reset|$canonicalMangaId|$title".longHashCode()
 		val record = EntityRecord(
 			type = EntityType.WORK.name,
+			syncId = syncId ?: java.util.UUID.randomUUID().toString(),
 			primaryName = title,
 			nameHash = baseHash,
 			aliases = null,

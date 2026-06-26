@@ -70,6 +70,61 @@ class EntityIdentityResetPlannerTest {
 		assertEquals(2L, groups.single().canonicalMangaId)
 	}
 
+	@Test
+	fun `reset projection bindings use source scoped projection keys`() {
+		val mangaById = mapOf(
+			1L to manga(id = 1L, source = "SRC", url = " /same ", publicUrl = "https://site/public"),
+			2L to manga(id = 2L, source = "SRC", url = "", publicUrl = " https://site/public "),
+			3L to manga(id = 3L, source = "OTHER", url = "/same", publicUrl = ""),
+		)
+		val group = ResetProjectionGroup(
+			mangaIds = listOf(1L, 2L, 3L),
+			canonicalMangaId = 1L,
+		)
+
+		val bindings = buildResetProjectionBindingKeys(group, mangaById)
+
+		assertEquals(
+			listOf(
+				ResetProjectionBindingKey(source = "SRC", externalId = "url:/same"),
+				ResetProjectionBindingKey(source = "SRC", externalId = "public_url:https://site/public"),
+				ResetProjectionBindingKey(source = "OTHER", externalId = "url:/same"),
+			),
+			bindings,
+		)
+	}
+
+	@Test
+	fun `single reset projection key gets deterministic sync id`() {
+		val mangaById = mapOf(
+			1L to manga(id = 1L, source = "SRC", url = "/same"),
+			2L to manga(id = 2L, source = "SRC", url = "/same"),
+		)
+		val group = ResetProjectionGroup(
+			mangaIds = listOf(1L, 2L),
+			canonicalMangaId = 1L,
+		)
+
+		assertEquals(
+			computeProjectionSyncId("SRC", "url:/same"),
+			resetProjectionSyncId(group, mangaById),
+		)
+	}
+
+	@Test
+	fun `multiple reset projection keys keep non projection sync id`() {
+		val mangaById = mapOf(
+			1L to manga(id = 1L, source = "SRC", url = "/a"),
+			2L to manga(id = 2L, source = "SRC", url = "/b"),
+		)
+		val group = ResetProjectionGroup(
+			mangaIds = listOf(1L, 2L),
+			canonicalMangaId = 1L,
+		)
+
+		assertEquals(null, resetProjectionSyncId(group, mangaById))
+	}
+
 	private fun manga(
 		id: Long,
 		source: String,
