@@ -48,7 +48,7 @@ fun TtsSettingsScreen(
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
         ) {
             SettingsPreferenceSection(title = stringResource(R.string.reader_translation_section_general)) {
                 SettingsSwitchPreference(

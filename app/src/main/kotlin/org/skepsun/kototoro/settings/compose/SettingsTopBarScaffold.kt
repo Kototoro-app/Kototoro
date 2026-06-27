@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 
 private val SettingsSearchTopBarHeight = 56.dp
+internal val SettingsContentHorizontalPadding = CompactTopBarHorizontalPadding
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

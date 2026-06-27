@@ -68,7 +68,7 @@ fun SettingsRootScreen(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) },
     topInset: Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
-    horizontalPadding: Dp = 16.dp,
+    horizontalPadding: Dp = SettingsContentHorizontalPadding,
     applyHorizontalDisplayCutoutPadding: Boolean = true,
 ) {
     Surface(
@@ -132,10 +132,27 @@ private fun SettingsSectionCard(
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
         )
-        section.items.forEachIndexed { index, item ->
-            SettingsRootRow(item = item)
-            if (index != section.items.lastIndex) {
-                SettingsRootDivider(startPadding = 62.dp)
+        if (LocalMaterialExpressiveComponentsEnabled.current) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+            ) {
+                Column {
+                    section.items.forEachIndexed { index, item ->
+                        SettingsRootRow(item = item)
+                        if (index != section.items.lastIndex) {
+                            SettingsRootDivider(startPadding = 62.dp)
+                        }
+                    }
+                }
+            }
+        } else {
+            section.items.forEachIndexed { index, item ->
+                SettingsRootRow(item = item)
+                if (index != section.items.lastIndex) {
+                    SettingsRootDivider(startPadding = 62.dp)
+                }
             }
         }
     }
@@ -157,13 +174,33 @@ private fun SettingsSearchResultsCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            results.forEachIndexed { index, item ->
-                SettingsSearchResultRow(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                )
-                if (index != results.lastIndex) {
-                    SettingsRootDivider(startPadding = 14.dp)
+            if (LocalMaterialExpressiveComponentsEnabled.current) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                ) {
+                    Column {
+                        results.forEachIndexed { index, item ->
+                            SettingsSearchResultRow(
+                                item = item,
+                                onClick = { onItemClick(item) },
+                            )
+                            if (index != results.lastIndex) {
+                                SettingsRootDivider(startPadding = 14.dp)
+                            }
+                        }
+                    }
+                }
+            } else {
+                results.forEachIndexed { index, item ->
+                    SettingsSearchResultRow(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                    )
+                    if (index != results.lastIndex) {
+                        SettingsRootDivider(startPadding = 14.dp)
+                    }
                 }
             }
         }
@@ -182,13 +219,7 @@ private fun SettingsSearchResultRow(
             .clickable(onClick = onClick)
             .then(
                 if (expressive) {
-                    Modifier
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                            shape = RoundedCornerShape(18.dp),
-                        )
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                 } else {
                     Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                 },
@@ -234,13 +265,7 @@ private fun SettingsRootRow(
             .clickable(onClick = item.onClick)
             .then(
                 if (expressive) {
-                    Modifier
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                            shape = RoundedCornerShape(18.dp),
-                        )
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                 } else {
                     Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
                 },
@@ -305,7 +330,13 @@ private fun SettingsRootDivider(
     startPadding: Dp,
 ) {
     if (LocalMaterialExpressiveComponentsEnabled.current) {
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = startPadding, end = 20.dp)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
+        )
     } else {
         Spacer(
             modifier = Modifier

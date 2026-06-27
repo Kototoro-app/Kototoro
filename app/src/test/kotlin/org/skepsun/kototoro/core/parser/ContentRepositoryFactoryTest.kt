@@ -6,6 +6,7 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -228,15 +229,16 @@ class ContentRepositoryFactoryTest {
 	}
 
 	@Test
-	fun `factory falls back to empty repository when providers do not match`() {
+	fun `factory does not cache empty repository when providers do not match`() {
 		val source = namedSource("UNMATCHED")
 
 		val first = factory.create(source)
 		val second = factory.create(source)
 
 		assertTrue(first is EmptyContentRepository)
+		assertTrue(second is EmptyContentRepository)
 		assertSame(source, first.source)
-		assertSame(first, second)
+		assertNotSame(first, second)
 		verify(exactly = 0) { parserContentRepositoryProvider.create(source) }
 	}
 

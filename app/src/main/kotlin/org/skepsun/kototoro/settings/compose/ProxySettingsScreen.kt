@@ -44,7 +44,7 @@ fun ProxySettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
     ) {
         SettingsChoicePreference(
             title = stringResource(R.string.type),

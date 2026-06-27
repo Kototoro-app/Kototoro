@@ -39,7 +39,7 @@ fun TranslationApiSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 20.dp),
+                .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
             val summaryRes = when (currentMode) {
                 ReaderTranslationMode.LOCAL_ONLY -> R.string.ai_api_usage_summary_local_only

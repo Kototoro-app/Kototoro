@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.core.parser
 
 import androidx.annotation.AnyThread
+import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
 import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -13,6 +14,8 @@ class ContentRepositoryFactory @Inject constructor(
 	private val repositoryProviderRegistry: ContentRepositoryProviderRegistry,
 	private val repositoryInstanceCache: ContentRepositoryInstanceCache,
 ) {
+	private val cacheVersionLock = Any()
+	private var cachedGlobalExtensionVersion = GlobalExtensionManager.version
 
 	enum class ResolutionStatus {
 		UNCHANGED,
@@ -61,6 +64,7 @@ class ContentRepositoryFactory @Inject constructor(
 
 	@AnyThread
 	fun createWithDiagnostics(source: ContentSource): CreationResult {
+		invalidateCacheIfGlobalExtensionsChanged()
 		android.util.Log.d(
 			"ContentRepoFactory",
 			"stage=create_start source=${source.name} sourceType=${source::class.simpleName}",
@@ -81,7 +85,10 @@ class ContentRepositoryFactory @Inject constructor(
 		}
 		var selectionResult: ContentRepositoryProviderRegistry.SelectionResult? = null
 		var failureReason: FailureReason? = null
-		val cacheResult = repositoryInstanceCache.getOrPutWithResult(resolvedSource) {
+		val cacheResult = repositoryInstanceCache.getOrPutWithResult(
+			source = resolvedSource,
+			shouldCache = { repository -> repository !is EmptyContentRepository },
+		) {
 			val selection = repositoryProviderRegistry.select(resolvedSource)
 			selectionResult = selection
 			if (selection.repository != null) {
@@ -133,6 +140,19 @@ class ContentRepositoryFactory @Inject constructor(
 			resolutionTrace = resolutionResult.steps,
 			failureReason = failureReason,
 		)
+	}
+
+	private fun invalidateCacheIfGlobalExtensionsChanged() {
+		val currentVersion = GlobalExtensionManager.version
+		if (cachedGlobalExtensionVersion == currentVersion) {
+			return
+		}
+		synchronized(cacheVersionLock) {
+			if (cachedGlobalExtensionVersion != currentVersion) {
+				repositoryInstanceCache.clear()
+				cachedGlobalExtensionVersion = currentVersion
+			}
+		}
 	}
 
 	private fun determineFailureReason(

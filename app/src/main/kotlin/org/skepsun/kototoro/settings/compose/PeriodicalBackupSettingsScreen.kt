@@ -44,7 +44,7 @@ fun PeriodicalBackupSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
     ) {
         val webDavEnabled = settings.prefs.getBoolean(AppSettings.KEY_BACKUP_WEBDAV_ENABLED, false)
         val keepLocal = settings.prefs.getBoolean(AppSettings.KEY_BACKUP_WEBDAV_KEEP_LOCAL_COPY, true)

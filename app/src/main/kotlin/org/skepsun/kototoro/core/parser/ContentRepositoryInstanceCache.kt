@@ -33,12 +33,28 @@ class ContentRepositoryInstanceCache @Inject constructor() {
 	}
 
 	fun getOrPutWithResult(source: ContentSource, create: () -> ContentRepository): LookupResult {
+		return getOrPutWithResult(source, shouldCache = { true }, create = create)
+	}
+
+	fun getOrPutWithResult(
+		source: ContentSource,
+		shouldCache: (ContentRepository) -> Boolean,
+		create: () -> ContentRepository,
+	): LookupResult {
 		get(source)?.let { return LookupResult(repository = it, cacheHit = true) }
 		return synchronized(cache) {
 			cache[source]?.get()?.let { return LookupResult(repository = it, cacheHit = true) }
 			val repository = create()
-			cache[source] = WeakReference(repository)
+			if (shouldCache(repository)) {
+				cache[source] = WeakReference(repository)
+			}
 			LookupResult(repository = repository, cacheHit = false)
+		}
+	}
+
+	fun clear() {
+		synchronized(cache) {
+			cache.clear()
 		}
 	}
 }

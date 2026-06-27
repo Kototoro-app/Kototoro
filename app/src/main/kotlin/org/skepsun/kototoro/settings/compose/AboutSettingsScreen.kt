@@ -42,8 +42,8 @@ fun AboutSettingsScreen(
         LazyColumn(state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
+                start = SettingsContentHorizontalPadding,
+                end = SettingsContentHorizontalPadding,
                 top = 8.dp,
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),

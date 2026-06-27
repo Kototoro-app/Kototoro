@@ -36,7 +36,7 @@ fun OcrModelsSettingsScreen(
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
         ) {
             sections.forEach { section ->
                 SettingsPreferenceSection(title = section.title) {

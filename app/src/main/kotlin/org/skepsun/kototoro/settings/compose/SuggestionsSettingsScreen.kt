@@ -42,7 +42,7 @@ fun SuggestionsSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 20.dp),
+                .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
             SettingsPreferenceSection(
                 title = stringResource(R.string.suggestions),

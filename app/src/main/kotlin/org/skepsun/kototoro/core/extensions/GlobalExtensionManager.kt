@@ -1,7 +1,12 @@
 package org.skepsun.kototoro.core.extensions
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.preference.PreferenceManager
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.koitharu.kotatsu.parsers.MangaLoaderContext
@@ -12,8 +17,6 @@ import org.skepsun.kototoro.parsers.ContentParser
 import org.skepsun.kototoro.parsers.model.ContentSource
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import androidx.preference.PreferenceManager
-import android.content.SharedPreferences
 
 data class PluginMangaSource(
     val originalSource: MangaSource,
@@ -34,6 +37,16 @@ data class PluginContentSource(
 object GlobalExtensionManager {
     private val mangaPlugins = ConcurrentHashMap<String, LoadedJarPlugin>()
     private val contentPlugins = ConcurrentHashMap<String, LoadedJarPlugin>()
+
+    @Volatile
+    var version: Int = 0
+        private set
+
+    private val _updates = MutableSharedFlow<Unit>(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val updates: SharedFlow<Unit> = _updates
 
     private val _mangaSources = MutableStateFlow<List<PluginMangaSource>>(emptyList())
     val mangaSources: StateFlow<List<PluginMangaSource>> = _mangaSources.asStateFlow()
@@ -78,12 +91,14 @@ object GlobalExtensionManager {
             prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
                 if (key == "jar_priority_order") {
                     applyDeduplication(prefs)
+                    publishRegistryUpdate()
                 }
             }
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         }
         
         applyDeduplication(prefs)
+        publishRegistryUpdate()
     }
 
     private fun applyDeduplication(prefs: SharedPreferences) {
@@ -123,6 +138,11 @@ object GlobalExtensionManager {
 
         _mangaSources.value = deduplicatedMangaSources
         _contentSources.value = deduplicatedContentSources
+    }
+
+    private fun publishRegistryUpdate() {
+        version++
+        _updates.tryEmit(Unit)
     }
 
     fun getMangaParser(source: MangaSource, context: MangaLoaderContext): MangaParser {
