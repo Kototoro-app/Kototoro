@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -265,6 +266,12 @@ fun SettingsSwitchPreference(
 ) {
     Row(
         modifier = Modifier
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -289,7 +296,7 @@ fun SettingsSwitchPreference(
         Switch(
             checked = checked,
             enabled = enabled,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
         )
     }
 }

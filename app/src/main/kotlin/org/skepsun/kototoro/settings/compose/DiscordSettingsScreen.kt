@@ -13,8 +13,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.core.content.edit
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsState
 
 @Composable
 fun DiscordSettingsScreen(
@@ -24,7 +26,12 @@ fun DiscordSettingsScreen(
     onTokenClick: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
-    val isEnabled = settings.isDiscordRpcEnabled
+    val isEnabled by settings.observeAsState(AppSettings.KEY_DISCORD_RPC) {
+        isDiscordRpcEnabled
+    }
+    val skipNsfw by settings.observeAsState(AppSettings.KEY_DISCORD_RPC_SKIP_NSFW) {
+        isDiscordRpcSkipNsfw
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -44,7 +51,9 @@ fun DiscordSettingsScreen(
                     title = stringResource(R.string.discord_rpc),
                     checked = isEnabled,
                     onCheckedChange = { checked ->
-                        settings.prefs.edit().putBoolean(AppSettings.KEY_DISCORD_RPC, checked).apply()
+                        settings.prefs.edit {
+                            putBoolean(AppSettings.KEY_DISCORD_RPC, checked)
+                        }
                     },
                 )
                 SettingsSectionDivider()
@@ -67,10 +76,12 @@ fun DiscordSettingsScreen(
                 SettingsSwitchPreference(
                     title = stringResource(R.string.disable_nsfw),
                     summary = stringResource(R.string.rpc_skip_nsfw_summary),
-                    checked = settings.prefs.getBoolean("discord_rpc_skip_nsfw", false),
+                    checked = skipNsfw,
                     enabled = isEnabled,
                     onCheckedChange = { checked ->
-                        settings.prefs.edit().putBoolean("discord_rpc_skip_nsfw", checked).apply()
+                        settings.prefs.edit {
+                            putBoolean(AppSettings.KEY_DISCORD_RPC_SKIP_NSFW, checked)
+                        }
                     },
                 )
             }
