@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
@@ -32,7 +33,8 @@ class ProgressUpdateUseCase @Inject constructor(
 		} else {
 			seed
 		}
-		val chapter = details.findChapterById(history.chapterId) ?: return PROGRESS_NONE
+		val chapter = details.findChapterById(history.chapterId)
+			?: return estimateFromCounts(manga, details, history.percent, history.chaptersCount)
 		// Use all chapters for global progress calculation, not just current branch
 		val chapters = details.chapters ?: emptyList()
 		val chapterRepo = if (repo.source == chapter.source) {
@@ -45,12 +47,32 @@ class ProgressUpdateUseCase @Inject constructor(
 			return PROGRESS_NONE
 		}
 		val chapterIndex = chapters.indexOfFirst { x -> x.id == history.chapterId }
+		if (chapterIndex < 0) {
+			return estimateFromCounts(manga, details, history.percent, history.chaptersCount)
+		}
 		val pagesCount = chapterRepo.getPages(chapter).size
 		if (pagesCount == 0) {
 			return PROGRESS_NONE
 		}
 		val pagePercent = (history.page + 1) / pagesCount.toFloat()
 		val ppc = 1f / chaptersCount
-		return ppc * chapterIndex + ppc * pagePercent
+		val result = ppc * chapterIndex + ppc * pagePercent
+		historyRepository.updateProgress(manga.id, result, chaptersCount)
+		return result
+	}
+
+	private suspend fun estimateFromCounts(
+		manga: Content,
+		details: Content,
+		percent: Float,
+		chaptersCount: Int,
+	): Float {
+		val newTotal = details.chapters?.size ?: 0
+		if (newTotal == 0 || chaptersCount <= 0 || !ReadingProgress.isValid(percent)) {
+			return PROGRESS_NONE
+		}
+		val estimated = (percent * chaptersCount / newTotal).coerceIn(0f, 1f)
+		historyRepository.updateProgress(manga.id, estimated, newTotal)
+		return estimated
 	}
 }

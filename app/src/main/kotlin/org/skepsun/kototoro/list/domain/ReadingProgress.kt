@@ -6,6 +6,7 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_READ
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.NONE
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
+import kotlin.math.ceil
 
 data class ReadingProgress(
 	val percent: Float,
@@ -17,10 +18,10 @@ data class ReadingProgress(
 		get() = 1f - percent
 
 	val chapters: Int
-		get() = (totalChapters * percent).toInt()
+		get() = ceil(totalChapters * percent).toInt()
 
 	val chaptersLeft: Int
-		get() = (totalChapters * percentLeft).toInt()
+		get() = totalChapters - chapters
 
 	fun isValid() = when (mode) {
 		NONE -> false

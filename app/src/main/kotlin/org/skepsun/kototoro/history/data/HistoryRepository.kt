@@ -273,6 +273,20 @@ class HistoryRepository @Inject constructor(
 		}
 	}
 
+	suspend fun updateProgress(mangaId: Long, percent: Float, chaptersCount: Int): Boolean {
+		val entity = findWorkHistoryEntityByWorkAnchor(mangaId) ?: return false
+		if (entity.percent == percent && entity.chaptersCount == chaptersCount) {
+			return false
+		}
+		db.getWorkHistoryDao().update(
+			entity.copy(
+				percent = percent,
+				chaptersCount = chaptersCount,
+			),
+		)
+		return true
+	}
+
 	suspend fun clear() {
 		db.getWorkHistoryDao().clear()
 		db.getHistoryDao().clear()
