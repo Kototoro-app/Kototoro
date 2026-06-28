@@ -458,30 +458,13 @@ class SourceComposeSettingsFragment : Fragment() {
                     )
 
                     is ConfigKey.UserAgent -> {
-                        val currentValue = sourceSettings[key]
-                        val presetOptions = buildUserAgentPresetOptions(currentValue)
-                        add(
-                            SourceSettingsChoiceRowUiState(
-                                id = "${key.key}_preset",
-                                title = getString(R.string.user_agent),
-                                value = currentValue.takeIf { value ->
-                                    presetOptions.any { it.value == value }
-                                } ?: USER_AGENT_CUSTOM_VALUE,
-                                options = presetOptions,
-                                summary = getString(R.string.custom),
-                                onValueChange = { value ->
-                                    if (value != USER_AGENT_CUSTOM_VALUE) {
-                                        sourceSettings[key] = value
-                                    }
-                                },
-                            ),
-                        )
                         add(
                             SourceSettingsTextRowUiState(
                                 id = key.key,
-                                title = getString(R.string.custom),
-                                value = currentValue,
+                                title = getString(R.string.user_agent),
+                                value = sourceSettings[key],
                                 placeholder = key.defaultValue,
+                                suggestions = buildUserAgentPresetOptions(),
                                 onValueChange = onUserAgentValueChange@{ value ->
                                     if (value.isNotBlank() && !isValidHeaderValue(value.trim())) {
                                         showToast(R.string.invalid_value_message)
@@ -598,20 +581,13 @@ class SourceComposeSettingsFragment : Fragment() {
         sourceSettings[key] = trimmed
     }
 
-    private fun buildUserAgentPresetOptions(currentValue: String): List<SettingsChoiceOption<String>> {
-        val options = mutableListOf(
-            SettingsChoiceOption(USER_AGENT_CUSTOM_VALUE, getString(R.string.custom)),
-        )
-        options += userAgentPresets().map { preset ->
+    private fun buildUserAgentPresetOptions(): List<SettingsChoiceOption<String>> {
+        return userAgentPresets().map { preset ->
             SettingsChoiceOption(
                 value = preset.value,
                 label = preset.label,
             )
         }
-        if (currentValue.isNotBlank() && options.none { it.value == currentValue }) {
-            options.add(1, SettingsChoiceOption(currentValue, currentValue))
-        }
-        return options
     }
 
     private fun buildAuthRows(
@@ -1336,7 +1312,6 @@ class SourceComposeSettingsFragment : Fragment() {
         private const val LEGADO_SOURCE_PREFS = "legado_source_store"
         private const val LEGADO_BOOK_PREFS = "legado_book_store"
         private val SIGNED_INT_PATTERN = Pattern.compile("^-?\\d+$")
-        private const val USER_AGENT_CUSTOM_VALUE = "__custom__"
 
         fun newInstance(source: org.skepsun.kototoro.parsers.model.ContentSource) =
             SourceComposeSettingsFragment().withArgs(1) {
