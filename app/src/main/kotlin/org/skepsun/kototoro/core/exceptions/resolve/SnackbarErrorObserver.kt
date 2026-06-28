@@ -28,7 +28,7 @@ class SnackbarErrorObserver(
 		val message = value.getDisplayMessage(host.context.resources)
 		val snackbar = try {
 			Snackbar.make(host, message, Snackbar.LENGTH_SHORT)
-		} catch (_: IllegalArgumentException) {
+		} catch (_: RuntimeException) {
 			Toast.makeText(host.context, message, Toast.LENGTH_SHORT).show()
 			return
 		}

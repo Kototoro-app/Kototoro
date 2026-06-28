@@ -99,7 +99,7 @@
 		<item name="materialButtonElevatedStyle">@style/Widget.Material3Expressive.Button.ElevatedButton</item>
 		<item name="borderlessButtonStyle">@style/Widget.Material3Expressive.Button.TextButton</item>
 		<item name="buttonBarButtonStyle">@style/Widget.Material3Expressive.Button.TextButton.Dialog</item>
-		<item name="snackbarButtonStyle">@style/Widget.Material3Expressive.Button.TextButton.Snackbar</item>
+		<item name="snackbarButtonStyle">@style/Widget.Material3.Button.TextButton.Snackbar</item>
 		<item name="materialIconButtonStyle">@style/Widget.Material3Expressive.Button.IconButton.Standard</item>
 		<item name="materialIconButtonOutlinedStyle">@style/Widget.Material3Expressive.Button.IconButton.Outlined</item>
 		<item name="materialIconButtonFilledStyle">@style/Widget.Material3Expressive.Button.IconButton.Filled</item>
@@ -147,7 +147,7 @@
 		<item name="materialButtonElevatedStyle">@style/Widget.Material3Expressive.Button.ElevatedButton</item>
 		<item name="borderlessButtonStyle">@style/Widget.Material3Expressive.Button.TextButton</item>
 		<item name="buttonBarButtonStyle">@style/Widget.Material3Expressive.Button.TextButton.Dialog</item>
-		<item name="snackbarButtonStyle">@style/Widget.Material3Expressive.Button.TextButton.Snackbar</item>
+		<item name="snackbarButtonStyle">@style/Widget.Material3.Button.TextButton.Snackbar</item>
 		<item name="materialIconButtonStyle">@style/Widget.Material3Expressive.Button.IconButton.Standard</item>
 		<item name="materialIconButtonOutlinedStyle">@style/Widget.Material3Expressive.Button.IconButton.Outlined</item>
 		<item name="materialIconButtonFilledStyle">@style/Widget.Material3Expressive.Button.IconButton.Filled</item>
