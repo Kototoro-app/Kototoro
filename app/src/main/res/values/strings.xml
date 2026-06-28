@@ -1261,7 +1261,7 @@
     <string name="entity_organize_repair_split_member">Split out</string>
     <string name="entity_organize_repair_detach_member">Detach</string>
     <string name="entity_organize_repair_split_confirm">Move this local projection into a standalone entity. The favorite/history item is kept.</string>
-    <string name="entity_organize_repair_detach_confirm">Remove only this local projection\'s entity binding. The favorite/history item is kept and can be rebound later.</string>
+    <string name="entity_organize_repair_detach_confirm">Remove this projection from the current work without creating a standalone favorite work. If another projection remains, normal entries switch to it; otherwise this projection leaves normal favorites/history until you bind it again.</string>
     <string name="entity_organize_repair_split_suspect_title">Split suspect mismerged works</string>
     <string name="entity_organize_repair_split_suspect_confirm">Split %1$d local projections whose titles no longer match the entity primary name or aliases. The favorite/history items are kept.</string>
     <string name="entity_organize_repair_split_suspect_action">Split suspect works</string>

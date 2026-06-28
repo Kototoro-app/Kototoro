@@ -4,6 +4,7 @@ import dagger.Reusable
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
@@ -64,7 +65,7 @@ class WorkAggregateRepository @Inject constructor(
 		return WorkAggregate(
 			identity = resolvedIdentity,
 			displayProjection = displayProjection,
-			projections = projectionSet.projectionsById.values.toList(),
+			projections = projectionSet.projectionsFor(resolvedIdentity, mangaId),
 			categories = findCategoriesByEntityId(listOf(entityId))[entityId].orEmpty(),
 			history = db.getWorkHistoryDao().find(entityId)?.takeIf { it.deletedAt == 0L },
 			favourite = db.getWorkFavouritesDao().findActiveForEntity(entityId),
@@ -397,12 +398,22 @@ class WorkAggregateRepository @Inject constructor(
 		val identitiesByEntityId: Map<Long, WorkIdentity?>,
 		val projectionsById: Map<Long, Content>,
 	) {
-		fun projectionsFor(identity: WorkIdentity): List<Content> {
+		fun projectionsFor(identity: WorkIdentity, anchorId: Long? = null): List<Content> {
 			val projectionIds = buildList {
 				identity.preferredMangaId?.let(::add)
+				anchorId?.let(::add)
 				addAll(identity.localMangaIds)
 			}.distinct()
-			return projectionIds.mapNotNull(projectionsById::get)
+			return projectionIds
+				.mapNotNull(projectionsById::get)
+				.distinctBy { content ->
+					ProjectionIdentityKeys.contentCompactKey(
+						source = content.source.name,
+						id = content.id,
+						url = content.url,
+						publicUrl = content.publicUrl,
+					)
+				}
 		}
 	}
 

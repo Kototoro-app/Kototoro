@@ -20,6 +20,9 @@ abstract class WorkStatsDao {
 	@Query("SELECT * FROM work_stats WHERE entity_id = :entityId ORDER BY started_at")
 	abstract suspend fun findAll(entityId: Long): List<WorkStatsEntity>
 
+	@Query("SELECT * FROM work_stats WHERE entity_id = :entityId AND anchor_manga_id = :anchorMangaId ORDER BY started_at")
+	protected abstract suspend fun findAllForEntityAndAnchor(entityId: Long, anchorMangaId: Long): List<WorkStatsEntity>
+
 	@Query("SELECT IFNULL(SUM(pages),0) FROM work_stats WHERE entity_id = :entityId")
 	abstract suspend fun getReadPagesCount(entityId: Long): Int
 
@@ -57,6 +60,16 @@ abstract class WorkStatsDao {
 	@Query("DELETE FROM work_stats WHERE entity_id = :entityId AND started_at = :startedAt")
 	protected abstract suspend fun deleteRow(entityId: Long, startedAt: Long)
 
+	@Query(
+		"""
+		UPDATE work_stats
+		SET anchor_manga_id = :newAnchorMangaId
+		WHERE entity_id = :entityId
+			AND anchor_manga_id = :oldAnchorMangaId
+		""",
+	)
+	abstract suspend fun replaceAnchorMangaId(entityId: Long, oldAnchorMangaId: Long, newAnchorMangaId: Long)
+
 	/**
 	 * Move every row from [oldEntityId] to [newEntityId]. Rows that collide on a
 	 * target `(newEntityId, started_at)` key are merged via
@@ -73,6 +86,24 @@ abstract class WorkStatsDao {
 			remapEntityIdRaw(oldEntityId, newEntityId)
 			return
 		}
+		for (source in sources) {
+			val moved = source.copy(entityId = newEntityId)
+			val target = targetsByStartedAt[source.startedAt]
+			deleteRow(oldEntityId, source.startedAt)
+			if (target == null) {
+				upsert(moved)
+			} else {
+				upsert(mergeRestoredWorkStats(target, moved))
+			}
+		}
+	}
+
+	@Transaction
+	open suspend fun moveAnchorToEntity(oldEntityId: Long, newEntityId: Long, anchorMangaId: Long) {
+		if (oldEntityId == newEntityId) return
+		val sources = findAllForEntityAndAnchor(oldEntityId, anchorMangaId)
+		if (sources.isEmpty()) return
+		val targetsByStartedAt = findAll(newEntityId).associateBy { it.startedAt }
 		for (source in sources) {
 			val moved = source.copy(entityId = newEntityId)
 			val target = targetsByStartedAt[source.startedAt]

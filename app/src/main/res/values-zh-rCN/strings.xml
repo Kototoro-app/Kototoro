@@ -2781,7 +2781,7 @@ SHA-256 指纹:
     <string name="entity_organize_repair_split_member">拆出</string>
     <string name="entity_organize_repair_detach_member">解绑</string>
     <string name="entity_organize_repair_split_confirm">把这个本地投影移动到独立实体。收藏/历史里的作品不会被删除。</string>
-    <string name="entity_organize_repair_detach_confirm">只移除这个本地投影的实体绑定。收藏/历史里的作品会保留，之后可以重新绑定。</string>
+    <string name="entity_organize_repair_detach_confirm">从当前作品移除这个投影，但不会创建独立收藏作品。如果还有其它投影，普通入口会切换到其它投影；否则这个投影会离开普通收藏/历史入口，直到你再次绑定它。</string>
     <string name="entity_organize_repair_split_suspect_title">拆出疑似错合作品</string>
     <string name="entity_organize_repair_split_suspect_confirm">将 %1$d 个标题不再命中实体主名或别名的本地投影拆成独立实体。收藏/历史里的作品不会被删除。</string>
     <string name="entity_organize_repair_split_suspect_action">拆出疑似项</string>

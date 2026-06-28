@@ -109,6 +109,22 @@ abstract class WorkFavouritesDao {
 	@Query("UPDATE work_favourites SET deleted_at = :deletedAt, updated_at = :updatedAt WHERE category_id = :categoryId AND deleted_at = 0")
 	abstract suspend fun setDeletedAtAll(categoryId: Long, deletedAt: Long, updatedAt: Long)
 
+	@Query(
+		"""
+		UPDATE work_favourites
+		SET anchor_manga_id = :newAnchorMangaId,
+			updated_at = :updatedAt
+		WHERE entity_id = :entityId
+			AND anchor_manga_id = :oldAnchorMangaId
+		""",
+	)
+	abstract suspend fun replaceAnchorMangaId(
+		entityId: Long,
+		oldAnchorMangaId: Long,
+		newAnchorMangaId: Long?,
+		updatedAt: Long,
+	)
+
 	@Query("DELETE FROM work_favourites")
 	abstract suspend fun deleteAll()
 
@@ -120,6 +136,9 @@ abstract class WorkFavouritesDao {
 
 	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId")
 	protected abstract suspend fun findAllForEntity(entityId: Long): List<WorkFavouriteEntity>
+
+	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId AND anchor_manga_id = :anchorMangaId")
+	protected abstract suspend fun findAllForEntityAndAnchor(entityId: Long, anchorMangaId: Long): List<WorkFavouriteEntity>
 
 	@Query("DELETE FROM work_favourites WHERE entity_id = :entityId AND category_id = :categoryId")
 	protected abstract suspend fun deleteRow(entityId: Long, categoryId: Long)
@@ -149,6 +168,24 @@ abstract class WorkFavouritesDao {
 				upsert(moved)
 			} else {
 				deleteRow(oldEntityId, source.categoryId)
+				upsert(mergeRestoredWorkFavourites(target, moved))
+			}
+		}
+	}
+
+	@Transaction
+	open suspend fun moveAnchorToEntity(oldEntityId: Long, newEntityId: Long, anchorMangaId: Long) {
+		if (oldEntityId == newEntityId) return
+		val sources = findAllForEntityAndAnchor(oldEntityId, anchorMangaId)
+		if (sources.isEmpty()) return
+		val targetsByCategory = findAllForEntity(newEntityId).associateBy { it.categoryId }
+		for (source in sources) {
+			val moved = source.copy(entityId = newEntityId)
+			val target = targetsByCategory[source.categoryId]
+			deleteRow(oldEntityId, source.categoryId)
+			if (target == null) {
+				upsert(moved)
+			} else {
 				upsert(mergeRestoredWorkFavourites(target, moved))
 			}
 		}

@@ -29,7 +29,7 @@ features:
   - title: External Source Ecosystems
     details: Connect Mihon, Aniyomi, IReader, Legado, and TVBox sources from the same in-app source management flow.
   - title: Entity Graph
-    details: Cross-type content relationship management that unifies manga, novels, and video under one entity system.
+    details: Cross-type content relationship management that unifies manga, novels, video, tracking metadata, favorites, and source projections under one entity system.
   - title: Tracking & Discovery
     details: Discover anime and manga from MAL, Kitsu, AniList, Bangumi, Shikimori, and MangaUpdates directly inside the app.
   - title: Video Player
@@ -47,6 +47,7 @@ features:
 
 - Start with [Getting Started](./getting-started.md) if you are new to the project.
 - Read [Source Integrations](./source-integrations.md) if you need Mihon, Aniyomi, IReader, Legado, or TVBox ecosystems.
+- Read [Entity System And Organize Guide](./entity-system.md) to understand works, projections, tracking bindings, duplicate cleanup, and source completion.
 - Read [TVBox Runtime Compatibility](./reference/tvbox-runtime.md) if you need the current TVBox support matrix for direct media, CMS, JavaScript, ordinary JAR, and Guard-native sources.
 - Read [Local Import Guide](./local-import.md) to learn how to import CBZ, EPUB, video files and structured folders.
 - Read [External Extension Integration Guide](./architecture/external-extension-integration-guide.md) if you are a developer looking to integrate Mihon/Tachiyomi extensions into your own app.
@@ -66,7 +67,7 @@ features:
 - Video super-resolution (Anime4K / NCNN), DLNA casting, subtitle and audio track selection
 - Tracking discovery across MAL, Kitsu, AniList, Bangumi, Shikimori, and MangaUpdates
 - Broad source support: built-in, Kotatsu-Redo, Mihon, Aniyomi, IReader, Legado, TVBox
-- Entity graph system — unified cross-type content relationship management
+- Entity system and organize tools for duplicate works, tracking bindings, and replaceable source projections
 - Local file import: CBZ, EPUB, TXT, MKV, MP4 and more
 - Dynamic zero-overhead UI plugins via external classloaders
 - Fast pure-Kotlin OTA delta updates

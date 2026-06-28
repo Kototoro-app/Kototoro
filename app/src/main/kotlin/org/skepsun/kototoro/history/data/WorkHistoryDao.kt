@@ -108,6 +108,35 @@ abstract class WorkHistoryDao {
 
 	suspend fun delete(entityId: Long) = setDeletedAt(entityId, System.currentTimeMillis())
 
+	@Query(
+		"""
+		UPDATE work_history
+		SET anchor_manga_id = :newAnchorMangaId,
+			updated_at = :updatedAt
+		WHERE entity_id = :entityId
+			AND anchor_manga_id = :oldAnchorMangaId
+			AND deleted_at = 0
+		""",
+	)
+	abstract suspend fun replaceActiveAnchorMangaId(
+		entityId: Long,
+		oldAnchorMangaId: Long,
+		newAnchorMangaId: Long,
+		updatedAt: Long,
+	)
+
+	@Query(
+		"""
+		UPDATE work_history
+		SET deleted_at = :deletedAt,
+			updated_at = :deletedAt
+		WHERE entity_id = :entityId
+			AND anchor_manga_id = :anchorMangaId
+			AND deleted_at = 0
+		""",
+	)
+	abstract suspend fun deleteActiveByAnchor(entityId: Long, anchorMangaId: Long, deletedAt: Long)
+
 	@Query("UPDATE work_history SET entity_id = :newEntityId WHERE entity_id = :oldEntityId")
 	protected abstract suspend fun remapEntityIdRaw(oldEntityId: Long, newEntityId: Long)
 
@@ -132,6 +161,20 @@ abstract class WorkHistoryDao {
 		}
 		deleteRow(oldEntityId)
 		upsert(mergeRestoredWorkHistory(target, moved))
+	}
+
+	@Transaction
+	open suspend fun moveAnchorToEntity(oldEntityId: Long, newEntityId: Long, anchorMangaId: Long) {
+		if (oldEntityId == newEntityId) return
+		val source = find(oldEntityId)?.takeIf { it.anchorMangaId == anchorMangaId } ?: return
+		val moved = source.copy(entityId = newEntityId)
+		val target = find(newEntityId)
+		deleteRow(oldEntityId)
+		if (target == null) {
+			upsert(moved)
+		} else {
+			upsert(mergeRestoredWorkHistory(target, moved))
+		}
 	}
 
 	@Query("UPDATE work_history SET deleted_at = 0, updated_at = :updatedAt WHERE entity_id = :entityId")

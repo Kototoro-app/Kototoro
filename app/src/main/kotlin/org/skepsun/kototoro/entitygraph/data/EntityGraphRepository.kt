@@ -226,7 +226,26 @@ class EntityGraphRepository @Inject constructor(
 			val dao = db.getEntityGraphDao()
 			val existing = findEntityByLocalMangaId(localMangaId) ?: return@withTransaction false
 			deleteLocalProjectionBindings(dao, localMangaId)
-			dao.touchEntity(existing.entityId, System.currentTimeMillis())
+			val now = System.currentTimeMillis()
+			val fallbackLocalMangaId = findFallbackLocalProjectionId(
+				dao = dao,
+				entityId = existing.entityId,
+				detachedLocalMangaId = localMangaId,
+			)
+			clearPreferredLocalProjectionIfDetached(
+				dao = dao,
+				entityId = existing.entityId,
+				detachedLocalMangaId = localMangaId,
+				fallbackLocalMangaId = fallbackLocalMangaId,
+				now = now,
+			)
+			reconcileDetachedLocalProjectionAnchors(
+				entityId = existing.entityId,
+				detachedLocalMangaId = localMangaId,
+				fallbackLocalMangaId = fallbackLocalMangaId,
+				now = now,
+			)
+			dao.touchEntity(existing.entityId, now)
 			true
 		}
 	}
@@ -271,6 +290,11 @@ class EntityGraphRepository @Inject constructor(
 				entityId = entity.id,
 				localMangaId = content.id,
 				now = now,
+			)
+			moveDetachedLocalWorkState(
+				oldEntityId = existingEntity.id,
+				newEntityId = entity.id,
+				localMangaId = content.id,
 			)
 			updateEntityAfterLocalProjectionSplit(
 				dao = dao,
@@ -339,6 +363,11 @@ class EntityGraphRepository @Inject constructor(
 				entityId = entity.id,
 				localMangaId = localMangaId,
 				now = now,
+			)
+			moveDetachedLocalWorkState(
+				oldEntityId = existingEntity.id,
+				newEntityId = entity.id,
+				localMangaId = localMangaId,
 			)
 			updateEntityAfterLocalProjectionSplit(
 				dao = dao,
@@ -2431,6 +2460,91 @@ class EntityGraphRepository @Inject constructor(
 				accessCount = entity.accessCount + 1,
 			),
 		)
+	}
+
+	private suspend fun moveDetachedLocalWorkState(
+		oldEntityId: Long,
+		newEntityId: Long,
+		localMangaId: Long,
+	) {
+		db.getWorkFavouritesDao().moveAnchorToEntity(
+			oldEntityId = oldEntityId,
+			newEntityId = newEntityId,
+			anchorMangaId = localMangaId,
+		)
+		db.getWorkHistoryDao().moveAnchorToEntity(
+			oldEntityId = oldEntityId,
+			newEntityId = newEntityId,
+			anchorMangaId = localMangaId,
+		)
+		db.getWorkStatsDao().moveAnchorToEntity(
+			oldEntityId = oldEntityId,
+			newEntityId = newEntityId,
+			anchorMangaId = localMangaId,
+		)
+	}
+
+	private suspend fun clearPreferredLocalProjectionIfDetached(
+		dao: EntityGraphDao,
+		entityId: Long,
+		detachedLocalMangaId: Long,
+		fallbackLocalMangaId: Long?,
+		now: Long,
+	) {
+		val prefs = dao.findEntityPrefs(entityId) ?: return
+		if (prefs.preferredLocalMangaId != detachedLocalMangaId) {
+			return
+		}
+		dao.updateEntityPreferredLocalMangaId(
+			entityId = entityId,
+			preferredLocalMangaId = fallbackLocalMangaId,
+			updatedAt = now,
+		)
+	}
+
+	private suspend fun reconcileDetachedLocalProjectionAnchors(
+		entityId: Long,
+		detachedLocalMangaId: Long,
+		fallbackLocalMangaId: Long?,
+		now: Long,
+	) {
+		db.getWorkFavouritesDao().replaceAnchorMangaId(
+			entityId = entityId,
+			oldAnchorMangaId = detachedLocalMangaId,
+			newAnchorMangaId = fallbackLocalMangaId,
+			updatedAt = now,
+		)
+		val historyDao = db.getWorkHistoryDao()
+		if (fallbackLocalMangaId != null) {
+			historyDao.replaceActiveAnchorMangaId(
+				entityId = entityId,
+				oldAnchorMangaId = detachedLocalMangaId,
+				newAnchorMangaId = fallbackLocalMangaId,
+				updatedAt = now,
+			)
+			db.getWorkStatsDao().replaceAnchorMangaId(
+				entityId = entityId,
+				oldAnchorMangaId = detachedLocalMangaId,
+				newAnchorMangaId = fallbackLocalMangaId,
+			)
+		} else {
+			historyDao.deleteActiveByAnchor(
+				entityId = entityId,
+				anchorMangaId = detachedLocalMangaId,
+				deletedAt = now,
+			)
+		}
+	}
+
+	private suspend fun findFallbackLocalProjectionId(
+		dao: EntityGraphDao,
+		entityId: Long,
+		detachedLocalMangaId: Long,
+	): Long? {
+		return dao.findActiveLocalBindingsByEntity(entityId)
+			.asSequence()
+			.mapNotNull { it.externalId.toLongOrNull() }
+			.firstOrNull { it != detachedLocalMangaId }
 	}
 
 	private fun Content.localProjectionNameKeys(): Set<String> {

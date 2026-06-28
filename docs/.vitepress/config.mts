@@ -40,6 +40,7 @@ export default defineConfig({
         items: [
           { text: "Getting Started", link: "/getting-started" },
           { text: "Reader Features", link: "/reader-features" },
+          { text: "Entity System", link: "/entity-system" },
           { text: "Automatic Translation", link: "/automatic-translation" },
           { text: "Source Integrations", link: "/source-integrations" },
           { text: "WebDAV Sync", link: "/webdav-sync" },
