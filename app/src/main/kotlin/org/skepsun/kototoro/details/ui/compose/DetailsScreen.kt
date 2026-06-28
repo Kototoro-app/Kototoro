@@ -147,6 +147,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
+import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.model.isBroken
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
@@ -196,6 +197,9 @@ import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.download.ui.dialog.DownloadDialogViewModel
 import org.skepsun.kototoro.download.ui.compose.DownloadDialog
 import org.skepsun.kototoro.download.ui.worker.DownloadStartedObserver
+import org.skepsun.kototoro.list.ui.compose.KototoroContentCard
+import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -281,6 +285,7 @@ fun DetailsScreen(
     val historyInfo = detailsPrimaryUiState.historyInfo
     val branches = detailsPrimaryUiState.branches
     val isStatsAvailable = detailsPrimaryUiState.isStatsAvailable
+    val relatedContent = detailsPrimaryUiState.relatedContent
     val trackingSuggestion = detailsPrimaryUiState.trackingSuggestion
     val linkedTrackingItems = detailsPrimaryUiState.linkedTrackingItems
     val readingStatus = detailsPrimaryUiState.readingStatus
@@ -1030,6 +1035,7 @@ fun DetailsScreen(
                                     readingSourceOptions = readingSourceOptions,
                                     activeLocalSourceOptions = activeLocalSourceOptions,
                                     entityChapterSourceInfo = entityChapterSourceInfo,
+                                    relatedContent = relatedContent,
                                     supplementalMetadataProperties = supplementalMetadataProperties,
                                     supplementalSections = supplementalSections,
                                     supplementalActions = supplementalActions,
@@ -1204,6 +1210,7 @@ fun DetailsScreen(
                                 readingSourceOptions = readingSourceOptions,
                                 activeLocalSourceOptions = activeLocalSourceOptions,
                                 entityChapterSourceInfo = entityChapterSourceInfo,
+                                relatedContent = relatedContent,
                                 supplementalMetadataProperties = supplementalMetadataProperties,
                                 supplementalSections = supplementalSections,
                                 supplementalActions = supplementalActions,
@@ -2229,6 +2236,7 @@ private fun DetailsScrollableContent(
     readingSourceOptions: List<DetailsSourceOption>,
     activeLocalSourceOptions: List<ActiveLocalSourceOption>,
     entityChapterSourceInfo: EntityChapterSourceInfo?,
+    relatedContent: List<ContentListModel>,
     supplementalMetadataProperties: List<Pair<String, String>>,
     supplementalSections: List<EntityRelationSection>,
     supplementalActions: List<DetailsSupplementAction>,
@@ -2393,6 +2401,14 @@ private fun DetailsScrollableContent(
                 onActionClick(DetailsAction.ManageTrackingBinding(match.service, match.remoteId, match.title, match.url))
             },
         )
+        if (!preferLightweightFirstFrame && relatedContent.isNotEmpty()) {
+            DetailsRelatedContentSection(
+                items = relatedContent,
+                onItemClick = { item ->
+                    onActionClick(DetailsAction.OpenContent(item.toContentWithOverride()))
+                },
+            )
+        }
         if (!preferLightweightFirstFrame && supplementalMetadataProperties.isNotEmpty()) {
             DetailsSupplementMetadataCard(properties = supplementalMetadataProperties)
         }
@@ -3148,6 +3164,7 @@ internal fun DetailsDockActionButton(
 
 sealed interface DetailsAction {
     data object OpenCover : DetailsAction
+    data class OpenContent(val content: Content) : DetailsAction
     data class OpenSource(val source: ContentSource) : DetailsAction
     data class OpenTrackingDiscover(
         val service: ScrobblerService,
@@ -4273,6 +4290,45 @@ fun DetailsRelationSections(
                         EntityRelationCard(item = item, onClick = { onItemClick(item) })
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailsRelatedContentSection(
+    items: List<ContentListModel>,
+    onItemClick: (ContentListModel) -> Unit,
+) {
+    val cardStyle = compactPosterRailCardStyle(gridScale = 1f)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.details_related_works),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+        ) {
+            items(
+                items = items,
+                key = { "${it.source.name}:${it.id}:${it.manga.url}" },
+            ) { item ->
+                KototoroContentCard(
+                    model = item,
+                    sharedTransitionEnabled = false,
+                    cardStyle = cardStyle,
+                    onClick = { onItemClick(item) },
+                    onLongClick = {},
+                    modifier = Modifier.width(cardStyle.itemWidth + 8.dp),
+                )
             }
         }
     }

@@ -53,6 +53,7 @@ internal fun handleDetailsAction(
         )
 
         DetailsAction.ManageDownloads -> appRouter.openDownloads()
+        is DetailsAction.OpenContent -> appRouter.openDetails(action.content)
         DetailsAction.Favorite -> viewModel.getContentOrNull()?.let(appRouter::showFavoriteDialog)
         DetailsAction.Share -> viewModel.getContentOrNull()?.let(appRouter::showShareDialog)
         DetailsAction.ForgetHistory -> viewModel.removeFromHistory()

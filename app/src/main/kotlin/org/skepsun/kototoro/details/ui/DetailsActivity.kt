@@ -152,6 +152,7 @@ class DetailsActivity :
             DetailsAction.Resume -> openReader()
             DetailsAction.ResumeIncognito -> openReader(isIncognitoMode = true)
             DetailsAction.ManageDownloads -> router.openDownloads()
+            is DetailsAction.OpenContent -> router.openDetails(action.content)
             DetailsAction.Favorite -> viewModel.getContentOrNull()?.let(this.router::showFavoriteDialog)
             DetailsAction.Share -> viewModel.getContentOrNull()?.let(this.router::showShareDialog)
             DetailsAction.ForgetHistory -> viewModel.removeFromHistory()

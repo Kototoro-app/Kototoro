@@ -335,6 +335,7 @@ data class TranslationUiState(
 data class DetailsPrimaryUiState(
 	val mangaDetails: ContentDetails? = null,
 	val remoteContent: Content? = null,
+	val relatedContent: List<ContentListModel> = emptyList(),
 	val favouriteCategories: Set<FavouriteCategory> = emptySet(),
 	val historyInfo: HistoryInfo = HistoryInfo(null, null, null, false, null),
 	val branches: List<ContentBranch> = emptyList(),
@@ -3082,10 +3083,18 @@ class DetailsViewModel @Inject constructor(
 		}
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
-	val relatedContent: StateFlow<List<ContentListModel>> = manga.mapLatest {
-		if (it != null && settings.isRelatedContentEnabled) {
+	val relatedContent: StateFlow<List<ContentListModel>> = combine(
+		currentObservedLocalMangaId,
+		mangaDetails,
+	) { localMangaId, details ->
+		localMangaId to details
+	}.mapLatest { (localMangaId, details) ->
+		val seed = localMangaId
+			?.let { db.getMangaDao().find(it)?.toContent() }
+			?: details?.toContent()
+		if (seed != null && settings.isRelatedContentEnabled) {
 			mangaListMapper.toListModelList(
-				manga = relatedContentUseCase(it).orEmpty(),
+				manga = relatedContentUseCase(seed).orEmpty(),
 				mode = ListMode.GRID,
 			)
 		} else {
@@ -3206,10 +3215,12 @@ class DetailsViewModel @Inject constructor(
 		detailsHeaderUiState,
 		detailsPaneSummaryUiState,
 		entityRelationSections,
-	) { header, pane, entityRelationSections ->
+		relatedContent,
+	) { header, pane, entityRelationSections, relatedContent ->
 		DetailsPrimaryUiState(
 			mangaDetails = header.mangaDetails,
 			remoteContent = pane.remoteContent,
+			relatedContent = relatedContent,
 			favouriteCategories = header.favouriteCategories,
 			historyInfo = header.historyInfo,
 			branches = pane.branches,
