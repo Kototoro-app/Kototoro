@@ -82,6 +82,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), SearchBarFilterViewCon
 						onViewAllUpdatesClick = { /* router.openMangaUpdates(currentBrowseGroupTab()) */ },
 						onViewAllRecommendationsClick = { /* router.openSuggestions(currentBrowseGroupTab()) */ },
 						onRecentSearchClick = { query -> router.openSearch(query) },
+						onSetupWizardClick = { router.showWelcomeSheet() },
 						onManageSourcesClick = { router.openManageSources() },
 						onLibraryOpenClick = { router.openFavorites() },
 						onBookmarksClick = { /* router.openBookmarks() */ },

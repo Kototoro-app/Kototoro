@@ -969,8 +969,9 @@ internal fun HomeTopLevelRouteContent(
                     ),
                 )
             }
-        }
-        val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
+	        }
+	        val onHomeSetupWizardClick = remember(appRouter) { { appRouter.showWelcomeSheet() } }
+	        val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
         val onHomeLibraryOpenClick = remember(mainNavigator) {
             {
                 mainNavigator.openTopLevel(FavoritesNavKey)
@@ -994,9 +995,10 @@ internal fun HomeTopLevelRouteContent(
             onHomeReaderSettingsClick,
             onHomeViewAllRecentClick,
             onHomeViewAllUpdatesClick,
-            onHomeViewAllRecommendationsClick,
-            onHomeRecentSearchClick,
-            onHomeManageSourcesClick,
+	            onHomeViewAllRecommendationsClick,
+	            onHomeRecentSearchClick,
+	            onHomeSetupWizardClick,
+	            onHomeManageSourcesClick,
             onHomeLibraryOpenClick,
             onHomeBookmarksClick,
             onHomeLocalClick,
@@ -1008,10 +1010,11 @@ internal fun HomeTopLevelRouteContent(
                 onSettingsClick = onHomeSettingsClick,
                 onReaderSettingsClick = onHomeReaderSettingsClick,
                 onViewAllRecentClick = onHomeViewAllRecentClick,
-                onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
-                onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
-                onRecentSearchClick = onHomeRecentSearchClick,
-                onManageSourcesClick = onHomeManageSourcesClick,
+	                onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
+	                onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
+	                onRecentSearchClick = onHomeRecentSearchClick,
+	                onSetupWizardClick = onHomeSetupWizardClick,
+	                onManageSourcesClick = onHomeManageSourcesClick,
                 onLibraryOpenClick = onHomeLibraryOpenClick,
                 onBookmarksClick = onHomeBookmarksClick,
                 onLocalClick = onHomeLocalClick,

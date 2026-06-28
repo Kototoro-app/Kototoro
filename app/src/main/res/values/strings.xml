@@ -248,6 +248,25 @@
     <string name="clear_local_novel_storage_prompt">Delete all locally saved and imported novel files? This cannot be undone.</string>
     <string name="clear_local_video_storage_prompt">Delete all locally saved and imported video files? This cannot be undone.</string>
     <string name="welcome">Welcome</string>
+    <string name="welcome_intro_title">Set up Kototoro</string>
+    <string name="welcome_intro_summary">Choose how you want to read and watch. Kototoro now uses plugin-based source families for manga, novels, and video, including JAR, Mihon, Aniyomi, IReader, Legado, TVBox, LNReader, and Cloudstream.</string>
+    <string name="welcome_step_start">Start</string>
+    <string name="welcome_step_sources">Sources</string>
+    <string name="welcome_step_preferences">Preferences</string>
+    <string name="welcome_step_ready">Ready</string>
+    <string name="home_quick_action_wizard">Wizard</string>
+    <string name="welcome_restore_summary">Already used Kototoro before? Restore a backup, sign in to sync, or add local folders first.</string>
+    <string name="welcome_source_formats_title">Pick content formats</string>
+    <string name="welcome_source_formats_summary">These filters decide which source families are enabled after setup.</string>
+    <string name="welcome_ecosystems_title">Source ecosystem</string>
+    <string name="welcome_ecosystems_summary">Kototoro supports multiple plugin source families for reading and watching. Start with the recommended repositories here, then fine-tune them later in extension management.</string>
+    <string name="welcome_ecosystem_manga">Manga: JAR parsers, Mihon, IReader, LNReader</string>
+    <string name="welcome_ecosystem_novel">Novel: Legado, IReader, LNReader</string>
+    <string name="welcome_ecosystem_video">Video: Aniyomi, TVBox, Cloudstream</string>
+    <string name="welcome_plugin_repositories">Plugin repositories</string>
+    <string name="welcome_plugin_acknowledge">I understand these third-party repositories are configured at my own risk.</string>
+    <string name="welcome_preferences_summary">Choose languages and content types. You can change this later in source settings.</string>
+    <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings > Content sources > Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: Successfully fetched and mounted %1$d latest parser engines from cloud network!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: Cloud verification complete, local parsers are up to date! (Loaded %1$d sources in total)</string>
     <string name="welcome_jar_install_failed">Kototoro: Parser network loading failed (%1$s), please try again or go to settings to switch proxy mirrors</string>
@@ -2601,7 +2620,7 @@
     
     <!-- Welcome Init UI -->
     <string name="welcome_plugins_title">Initialize Plugin Sources</string>
-    <string name="welcome_plugins_summary">Kototoro now uses dynamic decoupled plugins. Select preset repositories and a proxy mirror to initialize parsers first.</string>
+    <string name="welcome_plugins_summary">Initialize the recommended plugin repositories now so Explore is usable immediately. Advanced repository changes can be done later in extension management.</string>
     <string name="welcome_plugins_repo_kototoro">Kototoro Parsers</string>
     <string name="welcome_plugins_repo_yakateam">Yakateam Parsers</string>
     <string name="welcome_plugins_repo_redo">Redo Parsers</string>

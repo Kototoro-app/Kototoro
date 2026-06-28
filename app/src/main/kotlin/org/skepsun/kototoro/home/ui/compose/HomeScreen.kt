@@ -149,6 +149,7 @@ data class HomeScreenActions(
     val onViewAllUpdatesClick: () -> Unit,
     val onViewAllRecommendationsClick: () -> Unit,
     val onRecentSearchClick: (String) -> Unit,
+    val onSetupWizardClick: () -> Unit,
     val onManageSourcesClick: () -> Unit,
     val onLibraryOpenClick: () -> Unit,
     val onBookmarksClick: () -> Unit,
@@ -211,6 +212,7 @@ fun HomeScreen(
         )
     }
     val quickActions = listOf(
+        HomeQuickAction(stringResource(R.string.home_quick_action_wizard), R.drawable.ic_welcome, actions.onSetupWizardClick),
         HomeQuickAction(stringResource(R.string.favourites), R.drawable.ic_heart, actions.onLibraryOpenClick),
         HomeQuickAction(stringResource(R.string.bookmarks), R.drawable.ic_bookmark, actions.onBookmarksClick),
         HomeQuickAction(stringResource(R.string.local_storage), R.drawable.ic_storage, actions.onLocalClick),

@@ -241,6 +241,25 @@
     <string name="password_length_hint">密码必须大于或等于4个字符</string>
     <string name="text_clear_search_history_prompt">确定永久清除所有搜索记录？</string>
     <string name="welcome">欢迎</string>
+    <string name="welcome_intro_title">设置 Kototoro</string>
+    <string name="welcome_intro_summary">选择你的阅读和观看方式。Kototoro 现在通过插件化来源族群整合漫画、小说和视频，支持 JAR、Mihon、Aniyomi、IReader、Legado、TVBox、LNReader 和 Cloudstream。</string>
+    <string name="welcome_step_start">开始</string>
+    <string name="welcome_step_sources">来源</string>
+    <string name="welcome_step_preferences">偏好</string>
+    <string name="welcome_step_ready">完成</string>
+    <string name="home_quick_action_wizard">向导</string>
+    <string name="welcome_restore_summary">之前使用过 Kototoro？可以先恢复备份、登录同步账户，或添加本地目录。</string>
+    <string name="welcome_source_formats_title">选择内容形态</string>
+    <string name="welcome_source_formats_summary">这些筛选会决定初始化后启用哪些来源族群。</string>
+    <string name="welcome_ecosystems_title">来源生态</string>
+    <string name="welcome_ecosystems_summary">Kototoro 通过多个插件来源生态支持阅读和观看。这里先初始化推荐仓库，之后可在拓展管理中精细调整。</string>
+    <string name="welcome_ecosystem_manga">漫画：JAR 解析器、Mihon、IReader、LNReader</string>
+    <string name="welcome_ecosystem_novel">小说：Legado、IReader、LNReader</string>
+    <string name="welcome_ecosystem_video">视频：Aniyomi、TVBox、Cloudstream</string>
+    <string name="welcome_plugin_repositories">插件仓库</string>
+    <string name="welcome_plugin_acknowledge">我理解这些第三方仓库由我自行承担配置风险。</string>
+    <string name="welcome_preferences_summary">选择语言和内容类型。之后仍可在来源设置里调整。</string>
+    <string name="welcome_ready_summary">设置已完成。Kototoro 会启用匹配所选语言和形态的来源。之后也可以在“设置 - 内容源 - 设置向导”重新进行引导配置。</string>
     <string name="welcome_jar_install_success">Kototoro: 成功从云端网络抓取并挂载了 %1$d 个最新解析器引擎！</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: 云端校验完成，本地解析器已是最新版本！(总计载入: %1$d 个源)</string>
     <string name="welcome_jar_install_failed">Kototoro: 解析器网络装载失败 (%1$s)，请重试或前往设置切换加速镜像</string>
@@ -1852,7 +1871,7 @@
 
     <!-- Welcome Init UI -->
     <string name="welcome_plugins_title">初始化插件源</string>
-    <string name="welcome_plugins_summary">由于核心代码全面分离，请先勾选要加载的插件仓库并选择网络解析镜像来进行出厂初始化配置。</string>
+    <string name="welcome_plugins_summary">建议现在初始化推荐插件仓库，让探索页立即可用。高级仓库调整之后可在拓展管理中完成。</string>
     <string name="welcome_plugins_repo_kototoro">Kototoro 官方库</string>
     <string name="welcome_plugins_repo_yakateam">Yakateam 官方补存库</string>
     <string name="welcome_plugins_repo_redo">Redo 解析库</string>
