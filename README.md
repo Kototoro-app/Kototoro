@@ -2,7 +2,6 @@
 
 ![App Icon](metadata/en-US/icon.png)
 
-![version](https://img.shields.io/badge/version-1.0.5-blue)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/xBXvPz7tr7)
 [![Docs](https://img.shields.io/badge/docs-hub-blue)](https://kototoro-app.github.io/Kototoro/)
 [![Getting Started](https://img.shields.io/badge/docs-getting--started-blue)](https://kototoro-app.github.io/Kototoro/getting-started)
