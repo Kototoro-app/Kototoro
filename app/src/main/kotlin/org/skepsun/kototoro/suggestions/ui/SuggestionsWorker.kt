@@ -219,6 +219,7 @@ class SuggestionsWorker @AssistedInject constructor(
 			.sortedByDescending { it.relevance }
 			.distinctBy { it.manga.id }
 			.limitPerSource(MAX_RESULTS_PER_SOURCE)
+			.spreadLeadingSources(LEADING_SOURCE_BALANCE_WINDOW, MAX_LEADING_RESULTS_PER_SOURCE)
 			.take(MAX_RESULTS)
 		suggestionRepository.replace(suggestions)
 		if (appSettings.isSuggestionsNotificationAvailable
@@ -492,6 +493,8 @@ class SuggestionsWorker @AssistedInject constructor(
 		const val MAX_SOURCE_RESULTS = 20
 		const val MAX_RAW_RESULTS = 280
 		const val MAX_RESULTS_PER_SOURCE = 12
+		const val LEADING_SOURCE_BALANCE_WINDOW = 32
+		const val MAX_LEADING_RESULTS_PER_SOURCE = 8
 		const val TAG_EQ_THRESHOLD = 0.4f
 		const val RATING_MIN = 0.5f
 		const val SETTINGS_ACTION_CODE = 4
@@ -519,6 +522,43 @@ private fun List<ContentSuggestion>.limitPerSource(limit: Int): List<ContentSugg
 		}
 		perSourceCounts[sourceName] = count + 1
 		result += item
+	}
+	return result
+}
+
+private fun List<ContentSuggestion>.spreadLeadingSources(
+	windowSize: Int,
+	sourceLimit: Int,
+): List<ContentSuggestion> {
+	if (windowSize <= 0 || sourceLimit <= 0 || size <= sourceLimit) {
+		return this
+	}
+
+	val leadingSize = minOf(windowSize, size)
+	val result = ArrayList<ContentSuggestion>(size)
+	val deferred = ArrayDeque<ContentSuggestion>()
+	val leadingSourceCounts = HashMap<String, Int>()
+	var index = 0
+
+	while (index < size && result.size < leadingSize) {
+		val item = this[index++]
+		val sourceName = item.manga.source.name
+		val count = leadingSourceCounts[sourceName] ?: 0
+		if (count < sourceLimit) {
+			leadingSourceCounts[sourceName] = count + 1
+			result += item
+		} else {
+			deferred += item
+		}
+	}
+
+	while (result.size < leadingSize && deferred.isNotEmpty()) {
+		result += deferred.removeFirst()
+	}
+
+	result += deferred
+	while (index < size) {
+		result += this[index++]
 	}
 	return result
 }
