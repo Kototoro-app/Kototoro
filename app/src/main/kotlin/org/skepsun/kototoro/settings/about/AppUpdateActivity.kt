@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
+import android.widget.ArrayAdapter
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
@@ -27,6 +28,7 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.nav.router
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
@@ -63,6 +65,7 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 		viewModel.nextVersion.observe(this, ::onNextVersionChanged)
 		viewBinding.buttonCancel.setOnClickListener(this)
 		viewBinding.buttonUpdate.setOnClickListener(this)
+		setupMirrorSelector()
 
 		ContextCompat.registerReceiver(
 			this,
@@ -73,6 +76,7 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 		combine(viewModel.isLoading, viewModel.downloadProgress, ::Pair)
 			.observe(this, ::onProgressChanged)
 		viewModel.downloadState.observe(this, ::onDownloadStateChanged)
+		viewModel.selectedMirror.observe(this, ::onSelectedMirrorChanged)
 		viewModel.updateMessage.observe(this, ::onUpdateMessageChanged)
 		viewModel.onError.observeEvent(this, ::onError)
 		viewModel.onDownloadDone.observeEvent(this) { intent ->
@@ -151,10 +155,30 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 	}
 
 	private fun openInBrowser() {
-		val latestVersion = viewModel.nextVersion.value ?: return
-		if (!router.openExternalBrowser(latestVersion.url, getString(R.string.open_in_browser))) {
+		val url = viewModel.getReleasePageUrl() ?: return
+		if (!router.openExternalBrowser(url, getString(R.string.open_in_browser))) {
 			Snackbar.make(viewBinding.scrollView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
 		}
+	}
+
+	private fun setupMirrorSelector() {
+		val labels = resources.getStringArray(R.array.pref_github_mirror_entries).toList()
+		val values = resources.getStringArray(R.array.pref_github_mirror_values)
+			.map { AppSettings.GitHubMirror.fromValue(it) }
+		viewBinding.autoCompleteMirror.setAdapter(
+			ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels),
+		)
+		viewBinding.autoCompleteMirror.setOnItemClickListener { _, _, position, _ ->
+			values.getOrNull(position)?.let(viewModel::setMirror)
+		}
+		onSelectedMirrorChanged(viewModel.selectedMirror.value)
+	}
+
+	private fun onSelectedMirrorChanged(mirror: AppSettings.GitHubMirror) {
+		val values = resources.getStringArray(R.array.pref_github_mirror_values)
+		val labels = resources.getStringArray(R.array.pref_github_mirror_entries)
+		val index = values.indexOf(mirror.value).takeIf { it >= 0 } ?: 0
+		viewBinding.autoCompleteMirror.setText(labels.getOrElse(index) { labels.firstOrNull().orEmpty() }, false)
 	}
 
 	private fun onProgressChanged(value: Pair<Boolean, Float>) {

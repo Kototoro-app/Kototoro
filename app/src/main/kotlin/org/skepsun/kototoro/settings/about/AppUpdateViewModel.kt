@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateRepository
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
@@ -23,10 +24,12 @@ import javax.inject.Inject
 @HiltViewModel
 class AppUpdateViewModel @Inject constructor(
 	private val repository: AppUpdateRepository,
+	private val settings: AppSettings,
 	@ApplicationContext private val context: Context,
 ) : BaseViewModel() {
 
 	val nextVersion = repository.observeAvailableUpdate()
+	val selectedMirror = MutableStateFlow(settings.gitHubMirror)
 	val downloadProgress = MutableStateFlow(-1f)
 	val downloadState = MutableStateFlow(DownloadManager.STATUS_PENDING)
 	val installIntent = MutableStateFlow<Intent?>(null)
@@ -47,7 +50,7 @@ class AppUpdateViewModel @Inject constructor(
 	fun startDownload() {
 		launchLoadingJob(Dispatchers.Default) {
 			val version = nextVersion.requireValue()
-			val url = version.apkUrl.toUri()
+			val url = applyMirror(version.apkUrl).toUri()
 			val title = "$appName v${version.name}"
 			val request = DownloadManager.Request(url)
 				.setTitle(title)
@@ -57,6 +60,15 @@ class AppUpdateViewModel @Inject constructor(
 			val downloadId = downloadManager.enqueue(request)
 			observeDownload(downloadId)
 		}
+	}
+
+	fun setMirror(mirror: AppSettings.GitHubMirror) {
+		settings.gitHubMirror = mirror
+		selectedMirror.value = mirror
+	}
+
+	fun getReleasePageUrl(): String? {
+		return nextVersion.value?.url?.let(::applyMirror)
 	}
 
 	fun onDownloadComplete(intent: Intent) {
@@ -100,6 +112,17 @@ class AppUpdateViewModel @Inject constructor(
 				}
 			}
 			delay(100)
+		}
+	}
+
+	private fun applyMirror(url: String): String {
+		return when (selectedMirror.value) {
+			AppSettings.GitHubMirror.NATIVE -> url
+			AppSettings.GitHubMirror.KKGITHUB -> url
+				.replace("https://raw.githubusercontent.com/", "https://raw.kkgithub.com/")
+				.replace("https://github.com/", "https://kkgithub.com/")
+			AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
+			AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
 		}
 	}
 }

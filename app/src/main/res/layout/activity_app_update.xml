@@ -41,6 +41,34 @@
 		tools:text="@string/error_corrupted_file"
 		tools:visibility="visible" />
 
+	<com.google.android.material.textfield.TextInputLayout
+		android:id="@+id/inputLayout_mirror"
+		style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginHorizontal="@dimen/screen_padding"
+		android:layout_marginTop="@dimen/screen_padding"
+		android:hint="@string/pref_github_mirror"
+		app:startIconDrawable="@drawable/ic_web">
+
+		<com.google.android.material.textfield.MaterialAutoCompleteTextView
+			android:id="@+id/autoComplete_mirror"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:inputType="none" />
+
+	</com.google.android.material.textfield.TextInputLayout>
+
+	<TextView
+		android:id="@+id/textView_mirror_summary"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:layout_marginHorizontal="@dimen/screen_padding"
+		android:layout_marginTop="4dp"
+		android:text="@string/app_update_mirror_summary"
+		android:textAppearance="?textAppearanceBodySmall"
+		android:textColor="?android:textColorSecondary" />
+
 	<ScrollView
 		android:id="@+id/scrollView"
 		android:layout_width="match_parent"
