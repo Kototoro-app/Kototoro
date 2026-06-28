@@ -6,6 +6,7 @@
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/xBXvPz7tr7)
 [![Docs](https://img.shields.io/badge/docs-hub-blue)](https://kototoro-app.github.io/Kototoro/)
 [![Getting Started](https://img.shields.io/badge/docs-getting--started-blue)](https://kototoro-app.github.io/Kototoro/getting-started)
+[![Entity System](https://img.shields.io/badge/docs-entity--system-blue)](https://kototoro-app.github.io/Kototoro/entity-system)
 [![Translation Docs](https://img.shields.io/badge/docs-auto--translation-blue)](https://kototoro-app.github.io/Kototoro/automatic-translation)
 
 Kototoro is an open-source Android app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync.
@@ -24,8 +25,8 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
   *(支持 Bangumi 等多平台进度追踪与发现)*
 - Broad source support: Mihon, Aniyomi, IReader, Legado, TVBox extensions + dynamic parsers 
   *(广泛的图源/插件支持：包含 Mihon、阅读、TVBox 等集成)*
-- Entity graph system — unified cross-type content relationship management 
-  *(实体关系图谱：统一管理漫画/小说/视频间的关联)*
+- Entity system and organize tools — keep favorites, history, tracking, and source projections under stable work identities
+  *(实体体系与实体整理：用稳定作品身份统一收藏、历史、追踪与来源投影)*
 - Local file import: CBZ, EPUB, TXT, MKV, MP4 and more 
   *(本地文件导入，支持 CBZ、EPUB、TXT、MKV 等格式)*
 - Dynamic zero-overhead UI plugins via external classloaders
@@ -46,6 +47,7 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
 - Read the [Documentation Website](https://kototoro-app.github.io/Kototoro/)
 - Follow [Getting Started](https://kototoro-app.github.io/Kototoro/getting-started) for detailed wizard instructions and next steps
 - Learn the core product surface in [Reader Features](https://kototoro-app.github.io/Kototoro/reader-features)
+- Understand works, projections, duplicate cleanup, and source binding in [Entity System And Organize Guide](https://kototoro-app.github.io/Kototoro/entity-system)
 - Set up [Automatic Translation](https://kototoro-app.github.io/Kototoro/automatic-translation)
 - Set up [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations)
 - Set up [WebDAV Sync](https://kototoro-app.github.io/Kototoro/webdav-sync)
