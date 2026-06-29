@@ -2274,7 +2274,7 @@
     <string name="details_entity_metadata_sheet_hint">这里决定该实体优先采用哪个元数据绑定来展示标题、简介、标签以及同步追踪状态。</string>
     <string name="details_current_projection_sheet_hint">这里决定该实体当前使用哪个本地%1$s投影；后续搜索并挂入的新投影也会出现在这里。</string>
     <string name="details_temporary_projection_sheet_hint">此设置仅影响本章节和继续阅读视图。</string>
-    <string name="details_remove_projection">移除投影</string>
+    <string name="details_remove_projection">拆出投影</string>
     <string name="details_translate_button_visible">在详情页显示翻译按钮</string>
     <string name="details_translate_button_visible_summary">当翻译可用时，在作品详情页显示翻译操作按钮</string>
     <string name="details_translate_title_and_description_hint">翻译标题和描述</string>

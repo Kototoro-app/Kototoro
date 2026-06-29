@@ -73,8 +73,8 @@ class FavoriteDialogViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			if (initialMangaIds.isEmpty()) return@launchJob
 			val resolved = initialMangaIds.mapNotNull { id ->
-				contentDataRepository.findPreferredLocalContentById(id, withChapters = false)
-					?: contentDataRepository.findContentById(id, withChapters = false)
+				contentDataRepository.findContentById(id, withChapters = false)
+					?: contentDataRepository.findPreferredLocalContentById(id, withChapters = false)
 					?: initialManga.firstOrNull { it.id == id }
 			}
 			if (resolved.isNotEmpty()) {

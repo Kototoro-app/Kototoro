@@ -731,8 +731,17 @@ class EntityGraphRepository @Inject constructor(
 					now = now,
 				)
 			}
-			dao.updateEntity(record)
-			dao.touchEntity(entityId, now)
+			val resolved = updateEntityResolvingNameHashConflict(
+				dao = dao,
+				original = requireNotNull(dao.findEntity(entityId)) {
+					"Entity disappeared during attachLocalWorksToEntity: $entityId"
+				},
+				merged = record,
+				primaryName = record.primaryName,
+				aliases = decodeStringList(record.aliases),
+				now = now,
+			)
+			dao.touchEntity(resolved.id, now)
 			true
 		}
 	}
@@ -747,22 +756,30 @@ class EntityGraphRepository @Inject constructor(
 			val existing = findEntityByLocalMangaId(content.id)
 				?: projectionKey?.let { key ->
 					findBindingBySourceKey(content.source.name, key)
-				}
+			}
 			if (existing != null) {
 				val dao = db.getEntityGraphDao()
 				val record = dao.findEntity(existing.entityId)
-				if (record != null) {
-					dao.updateEntity(
-						mergeEntityRecord(
-							record = record,
-							primaryName = content.title,
-							aliases = content.altTitles.toList(),
-							now = now,
-						),
+				val resolvedEntityId = if (record != null) {
+					val merged = mergeEntityRecord(
+						record = record,
+						primaryName = content.title,
+						aliases = content.altTitles.toList(),
+						now = now,
 					)
+					updateEntityResolvingNameHashConflict(
+						dao = dao,
+						original = record,
+						merged = merged,
+						primaryName = content.title,
+						aliases = content.altTitles.toList(),
+						now = now,
+					).id
+				} else {
+					existing.entityId
 				}
 				dao.upsertBindingForSource(
-					entityId = existing.entityId,
+					entityId = resolvedEntityId,
 					source = "local_manga",
 					externalId = content.id.toString(),
 					confidence = existing.confidence,
@@ -770,7 +787,7 @@ class EntityGraphRepository @Inject constructor(
 				)
 				if (projectionKey != null) {
 					dao.upsertBindingForSource(
-						entityId = existing.entityId,
+						entityId = resolvedEntityId,
 						source = content.source.name,
 						externalId = projectionKey,
 						confidence = existing.confidence,
@@ -778,8 +795,8 @@ class EntityGraphRepository @Inject constructor(
 						sourceKind = EntityBindingSourceKind.READING_SOURCE,
 					)
 				}
-				dao.touchEntity(existing.entityId, now)
-				return@withTransaction requireNotNull(dao.findEntity(existing.entityId)).toModel()
+				dao.touchEntity(resolvedEntityId, now)
+				return@withTransaction requireNotNull(dao.findEntity(resolvedEntityId)).toModel()
 			}
 			val entity = if (projectionKey != null) {
 				resolveOrCreateEntity(
@@ -2216,8 +2233,26 @@ class EntityGraphRepository @Inject constructor(
 		confidence: Float,
 		createdBy: EntityBindingCreatedBy,
 		sourceKind: EntityBindingSourceKind,
+		allowManualMove: Boolean = false,
 	) {
 		val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl) ?: return
+		if (allowManualMove) {
+			upsertBinding(
+				EntityBindingRecord(
+					entityId = entityId,
+					source = content.source.name,
+					externalId = projectionKey,
+					confidence = confidence,
+					isPrimary = false,
+					sourceKind = sourceKind.name,
+					state = EntityBindingState.MANUAL.name,
+					createdBy = createdBy.name,
+					updatedAt = System.currentTimeMillis(),
+				),
+			)
+			reconcileProjectionSyncId(entityId)
+			return
+		}
 		upsertBindingForSource(
 			entityId = entityId,
 			source = content.source.name,
@@ -2334,6 +2369,7 @@ class EntityGraphRepository @Inject constructor(
 			confidence = 1f,
 			createdBy = EntityBindingCreatedBy.USER,
 			sourceKind = EntityBindingSourceKind.READING_SOURCE,
+			allowManualMove = true,
 		)
 		return requireNotNull(dao.findEntity(id)).toModel()
 	}

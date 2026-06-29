@@ -1551,6 +1551,7 @@ class DetailsViewModel @Inject constructor(
 				applyEntityContext(
 					entityId = entityId,
 					preferredLocalMangaId = storedContent.id,
+					initialProjectionLocalMangaId = storedContent.id,
 					populateSyntheticHeader = false,
 				)
 			}
@@ -4016,7 +4017,11 @@ class DetailsViewModel @Inject constructor(
 		pendingEntityRelationSections.tryEmit(sections)
 	}
 
-	private suspend fun resolveEntityChapterSourceInfo(mangaId: Long?): EntityChapterSourceInfo {
+	private suspend fun resolveEntityChapterSourceInfo(
+		mangaId: Long?,
+		activeProjectionMangaId: Long? = null,
+		currentReadingProjectionMangaId: Long? = null,
+	): EntityChapterSourceInfo {
 		val manga = mangaId?.let { localMangaId ->
 			db.getMangaDao().find(localMangaId)?.manga
 		}
@@ -4025,8 +4030,9 @@ class DetailsViewModel @Inject constructor(
 			source = manga?.source?.let(::ContentSource),
 			projectionTitle = manga?.title,
 			projectionCount = activeLocalSourceOptions.value.size.coerceAtLeast(if (manga != null) 1 else 0),
-			activeProjectionMangaId = projectionSnapshot.activeLocalMangaId,
-			currentReadingProjectionMangaId = projectionSnapshot.currentReadingProjectionMangaId,
+			activeProjectionMangaId = activeProjectionMangaId ?: projectionSnapshot.activeLocalMangaId,
+			currentReadingProjectionMangaId = currentReadingProjectionMangaId
+				?: projectionSnapshot.currentReadingProjectionMangaId,
 		)
 	}
 
@@ -4849,8 +4855,7 @@ class DetailsViewModel @Inject constructor(
 				val targetContent = if (currentContent != null && currentContent.id != content.id) {
 					runCatchingCancellable {
 						migrateUseCase(currentContent, content)
-						dataRepository.findPreferredLocalContentById(content.id, withChapters = false)
-							?: dataRepository.findContentById(content.id, withChapters = false)
+						dataRepository.findContentById(content.id, withChapters = false)
 							?: content
 					}.getOrElse { content }
 				} else {
@@ -4888,8 +4893,13 @@ class DetailsViewModel @Inject constructor(
 	private suspend fun refreshEntityBoundLocalSources(activeMangaId: Long) {
 		val entityId = resolveContextualEntityId() ?: return
 		val bindings = entityGraphRepository.getBindings(entityId)
+		sessionReadingProjectionLocalMangaId.value = activeMangaId
 		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, activeMangaId)
-		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(activeMangaId)
+		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(
+			mangaId = activeMangaId,
+			activeProjectionMangaId = activeMangaId,
+			currentReadingProjectionMangaId = activeMangaId,
+		)
 		updateSourceOptions()
 		refreshResolvedPresentationState()
 	}

@@ -55,15 +55,27 @@ constructor(
 		val storedNewDetails = mangaDataRepository.storeContentAndReturn(newDetails, replaceExisting = true)
 		database.withTransaction {
 			val currentTime = System.currentTimeMillis()
-			val localReadingBinding = entityGraphRepository.findLocalReadingBinding(oldDetails.id)
-				?: entityGraphRepository.findLocalReadingBinding(storedNewDetails.id)
-			// keep the migrated content bound to the same entity graph node so source alternatives stay grouped
-			localReadingBinding?.let { binding ->
-				entityGraphRepository.attachLocalReadingBinding(
-					entityId = binding.entityId,
-					localMangaId = storedNewDetails.id,
-					confidence = binding.confidence,
+			val oldLocalReadingBinding = entityGraphRepository.findLocalReadingBinding(oldDetails.id)
+			val newLocalReadingBinding = entityGraphRepository.findLocalReadingBinding(storedNewDetails.id)
+			var targetEntityId = oldLocalReadingBinding?.entityId ?: newLocalReadingBinding?.entityId
+			// Source migration adds the selected projection to the current Work. If the
+			// projection already has a separate Work, merge that identity into the current Work.
+			targetEntityId?.let { entityId ->
+				newLocalReadingBinding
+					?.entityId
+					?.takeIf { it != entityId }
+					?.let { sourceEntityId ->
+						entityGraphRepository.mergeEntities(
+							targetEntityId = entityId,
+							sourceEntityIds = listOf(sourceEntityId),
+						)
+					}
+				entityGraphRepository.attachLocalWorksToEntity(
+					entityId = entityId,
+					contents = listOf(storedNewDetails),
 				)
+				targetEntityId = entityGraphRepository.findLocalReadingBinding(storedNewDetails.id)?.entityId
+					?: entityId
 			}
 			// replace favorites
 			val workFavouritesDao = database.getWorkFavouritesDao()
@@ -110,7 +122,7 @@ constructor(
 				trackingSiteDao = database.getTrackingSiteDao(),
 				oldMangaId = oldDetails.id,
 				newContent = storedNewDetails,
-				entityId = localReadingBinding?.entityId,
+				entityId = targetEntityId,
 				currentTime = currentTime,
 			)
 			// track
@@ -120,9 +132,9 @@ constructor(
 				val lastChapter = storedNewDetails.chapters?.lastOrNull()
 				val newTrack =
 					TrackEntity(
-						ownerId = resolveTrackOwnerId(localReadingBinding?.entityId, storedNewDetails.id),
+						ownerId = resolveTrackOwnerId(targetEntityId, storedNewDetails.id),
 						mangaId = storedNewDetails.id,
-						entityId = localReadingBinding?.entityId,
+						entityId = targetEntityId,
 						lastChapterId = lastChapter?.id ?: 0L,
 						newChapters = 0,
 						lastCheckTime = currentTime,
