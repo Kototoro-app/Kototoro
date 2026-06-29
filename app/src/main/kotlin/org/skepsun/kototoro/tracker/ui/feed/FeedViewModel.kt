@@ -80,6 +80,7 @@ class FeedViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val dataRepository: ContentDataRepository,
 	private val workResolver: WorkResolver,
+	private val db: MangaDatabase,
 ) : BaseViewModel(), QuickFilterListener by quickFilter {
 
 	private data class HeaderParams(
