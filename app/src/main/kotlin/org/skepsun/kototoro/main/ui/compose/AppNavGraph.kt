@@ -1112,6 +1112,7 @@ internal fun FeedTopLevelRouteContent(
     val selectedCategoryId by viewModel.currentCategoryId.collectAsStateWithLifecycle()
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
+    val showAllUpdates by viewModel.showAllUpdates.collectAsStateWithLifecycle()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
@@ -1186,6 +1187,8 @@ internal fun FeedTopLevelRouteContent(
             isRefreshing = isRefreshing,
             onRefresh = { viewModel.update() },
             onLoadMore = { viewModel.requestMoreItems() },
+            showAllUpdates = showAllUpdates,
+            onShowAllUpdatesChanged = { viewModel.setShowAllUpdates(it) },
             onFeedItemClick = { item, _ ->
                 viewModel.onItemClick(item)
                 val content = item.toContentWithOverride()

@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -73,6 +74,8 @@ fun FeedScreen(
 	onCategorySelected: (Long) -> Unit,
 	onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 	showCategoryFilterInline: Boolean = true,
+	showAllUpdates: Boolean = false,
+	onShowAllUpdatesChanged: (Boolean) -> Unit = {},
 	modifier: Modifier = Modifier
 ) {
 	val listState = rememberSaveable(saver = LazyListState.Saver) {
@@ -162,6 +165,13 @@ fun FeedScreen(
 			),
 			modifier = Modifier.fillMaxSize()
 		) {
+			item(key = "show_all_updates_header") {
+				ShowAllUpdatesHeader(
+					showAllUpdates = showAllUpdates,
+					onShowAllUpdatesChanged = onShowAllUpdatesChanged,
+					onTriggerRefresh = onRefresh
+				)
+			}
 			itemsIndexed(
 				items = items,
 				key = { index, item ->
@@ -279,6 +289,67 @@ private fun FeedEmptyState(
 				style = MaterialTheme.typography.bodyMedium,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 			)
+		}
+	}
+}
+
+@Composable
+private fun ShowAllUpdatesHeader(
+	showAllUpdates: Boolean,
+	onShowAllUpdatesChanged: (Boolean) -> Unit,
+	onTriggerRefresh: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	Column(
+		modifier = modifier
+			.fillMaxWidth()
+			.padding(horizontal = 16.dp, vertical = 8.dp)
+	) {
+		Row(
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier
+				.fillMaxWidth()
+				.padding(vertical = 4.dp)
+		) {
+			Text(
+				text = stringResource(R.string.show_all_updates),
+				style = MaterialTheme.typography.titleMedium,
+				color = MaterialTheme.colorScheme.onBackground,
+				modifier = Modifier.weight(1f)
+			)
+			androidx.compose.material3.Switch(
+				checked = showAllUpdates,
+				onCheckedChange = onShowAllUpdatesChanged
+			)
+		}
+		
+		androidx.compose.animation.AnimatedVisibility(visible = showAllUpdates) {
+			androidx.compose.material3.ElevatedCard(
+				colors = androidx.compose.material3.CardDefaults.elevatedCardColors(
+					containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+				),
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(top = 8.dp)
+			) {
+				Column(
+					modifier = Modifier
+						.padding(16.dp)
+				) {
+					Text(
+						text = stringResource(R.string.feed_behavior_description),
+						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.onSurfaceVariant
+					)
+					Spacer(modifier = Modifier.height(12.dp))
+					androidx.compose.material3.TextButton(
+						onClick = onTriggerRefresh,
+						modifier = Modifier.align(Alignment.End)
+					) {
+						Text(text = stringResource(R.string.trigger_update_now))
+					}
+				}
+			}
 		}
 	}
 }

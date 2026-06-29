@@ -116,6 +116,15 @@ class TrackingRepository @Inject constructor(
 			.onStart { gcIfNotCalled() }
 	}
 
+	fun observeAllTracks(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<ContentTracking>> {
+		return db.getTracksDao().observeAllTracks(limit, filterOptions)
+			.mapLatest { tracks ->
+				workAggregateRepository.buildTrackingAggregates(tracks)
+					.mapNotNull { aggregate -> aggregate.toContentTracking() }
+			}.distinctUntilChanged()
+			.onStart { gcIfNotCalled() }
+	}
+
 	suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
 		return workAggregateRepository
 			.buildTrackingAggregates(db.getTracksDao().findAll(offset = offset, limit = limit))

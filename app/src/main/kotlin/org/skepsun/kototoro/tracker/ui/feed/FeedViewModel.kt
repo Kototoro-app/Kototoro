@@ -13,8 +13,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import org.skepsun.kototoro.core.db.MangaDatabase
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
@@ -50,6 +52,12 @@ import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
 import org.skepsun.kototoro.tracker.work.TrackWorker
+import org.skepsun.kototoro.core.prefs.TriStateOption
+import org.skepsun.kototoro.download.ui.worker.DownloadTask
+import org.skepsun.kototoro.download.ui.worker.DownloadWorker
+import org.skepsun.kototoro.download.ui.worker.ExecutionChapterRef
+import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
@@ -112,14 +120,101 @@ class FeedViewModel @Inject constructor(
 		valueProducer = { isFeedHeaderVisible },
 	)
 
+	sealed class DownloadPrompt {
+		data class MultipleUpdates(
+			val manga: Content,
+			val lastChapterId: Long,
+			val allNewChaptersIds: LongArray,
+		) : DownloadPrompt() {
+			override fun equals(other: Any?): Boolean {
+				if (this === other) return true
+				if (other !is MultipleUpdates) return false
+				if (manga != other.manga) return false
+				if (lastChapterId != other.lastChapterId) return false
+				return allNewChaptersIds contentEquals other.allNewChaptersIds
+			}
+
+			override fun hashCode(): Int {
+				var result = manga.hashCode()
+				result = 31 * result + lastChapterId.hashCode()
+				result = 31 * result + allNewChaptersIds.contentHashCode()
+				return result
+			}
+		}
+
+		data class NoReadHistory(
+			val manga: Content,
+			val lastChapterId: Long,
+			val allChaptersIds: LongArray,
+		) : DownloadPrompt() {
+			override fun equals(other: Any?): Boolean {
+				if (this === other) return true
+				if (other !is NoReadHistory) return false
+				if (manga != other.manga) return false
+				if (lastChapterId != other.lastChapterId) return false
+				return allChaptersIds contentEquals other.allChaptersIds
+			}
+
+			override fun hashCode(): Int {
+				var result = manga.hashCode()
+				result = 31 * result + lastChapterId.hashCode()
+				result = 31 * result + allChaptersIds.contentHashCode()
+				return result
+			}
+		}
+	}
+
+	data class DeleteChapterPrompt(
+		val manga: Content,
+		val chapterId: Long,
+		val chapterTitle: String,
+	)
+
+	val showAllUpdates = settings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.Default,
+		key = AppSettings.KEY_SHOW_ALL_UPDATES,
+		valueProducer = { showAllUpdates },
+	)
+
+	private val logFlow = showAllUpdates.flatMapLatest { showAll ->
+		val combinedSettings = quickFilter.appliedOptions.combineWithSettings()
+		if (showAll) {
+			combine(limit, combinedSettings, ::Pair)
+				.flatMapLatest { repository.observeAllTracks(it.first, it.second) }
+				.mapLatest { tracks ->
+					if (tracks.isEmpty()) return@mapLatest emptyList<TrackingLogItem>()
+					val mangaIds = tracks.map { it.manga.id }
+					val allChapters = db.getChaptersDao().findAllByMangaIds(mangaIds)
+					val chaptersByMangaId = allChapters.groupBy { it.mangaId }
+					tracks.map { track ->
+						val chapters = chaptersByMangaId[track.manga.id].orEmpty()
+							.takeLast(10)
+							.reversed()
+							.map { it.title }
+						TrackingLogItem(
+							id = -track.manga.id,
+							anchorMangaId = track.manga.id,
+							entityId = track.entityId,
+							preferredLocalMangaId = track.preferredLocalMangaId,
+							manga = track.manga,
+							chapters = chapters,
+							createdAt = track.lastChapterDate ?: track.lastCheck ?: java.time.Instant.EPOCH,
+							isNew = track.newChapters > 0,
+						)
+					}
+				}
+		} else {
+			combine(limit, combinedSettings, ::Pair)
+				.flatMapLatest { repository.observeTrackingLog(it.first, it.second) }
+		}
+	}
 	val onActionDone = MutableEventFlow<ReversibleAction>()
 
 	@Suppress("USELESS_CAST")
 	val content = combine(
 		observeHeader(),
 		quickFilter.appliedOptions,
-		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
-			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
+		logFlow,
 		quickFilter.appliedOptions.combineWithSettings()
 			.flatMapLatest { repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, it) },
 		selectedCategoryId,
@@ -238,6 +333,10 @@ class FeedViewModel @Inject constructor(
 
 	fun setHeaderEnabled(value: Boolean) {
 		settings.isFeedHeaderVisible = value
+	}
+
+	fun setShowAllUpdates(value: Boolean) {
+		settings.showAllUpdates = value
 	}
 
 	fun onItemClick(item: FeedItem) {
