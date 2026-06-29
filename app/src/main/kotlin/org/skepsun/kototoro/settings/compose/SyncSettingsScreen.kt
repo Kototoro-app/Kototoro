@@ -28,6 +28,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 
 data class SyncSettingsUiState(
     val isGoogleDriveSignedIn: Boolean,
+    val isGoogleDriveEnabled: Boolean,
+    val isWebDavEnabled: Boolean,
     val googleDriveAccountSummary: String?,
     val googleDriveIntervalMinutes: Int,
     val isGoogleDriveWifiOnly: Boolean,
@@ -47,6 +49,7 @@ fun SyncSettingsScreen(
     onGoogleDriveSyncNowClick: () -> Unit,
     onGoogleDriveDeleteRemoteClick: () -> Unit,
     onGoogleDriveImportLegacyClick: () -> Unit,
+    onGoogleDriveEnabledChange: (Boolean) -> Unit,
     onGoogleDriveIntervalChange: (Int) -> Unit,
     onGoogleDriveWifiOnlyChange: (Boolean) -> Unit,
     onGoogleDriveSyncOnStartChange: (Boolean) -> Unit,
@@ -54,6 +57,7 @@ fun SyncSettingsScreen(
 ) {
     var isDeleteRemoteDialogVisible by rememberSaveable { mutableStateOf(false) }
     var isImportLegacyDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var isEnableGoogleDriveConfirmVisible by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         modifier = modifier,
         snackbarHost = {
@@ -83,6 +87,19 @@ fun SyncSettingsScreen(
                             summary = state.googleDriveAccountSummary ?: stringResource(R.string.google_drive_sync),
                         )
                         SettingsSectionDivider()
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.sync_google_drive_enable),
+                            checked = state.isGoogleDriveEnabled,
+                            summary = stringResource(R.string.sync_google_drive_enable_summary),
+                            onCheckedChange = { enabled ->
+                                if (enabled && state.isWebDavEnabled) {
+                                    isEnableGoogleDriveConfirmVisible = true
+                                } else {
+                                    onGoogleDriveEnabledChange(enabled)
+                                }
+                            },
+                        )
+                        SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_now),
                             summary = when {
@@ -94,7 +111,7 @@ fun SyncSettingsScreen(
                                 )
                                 else -> stringResource(R.string.sync_never)
                             },
-                            enabled = !state.isGoogleDriveSyncing,
+                            enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
                             onClick = onGoogleDriveSyncNowClick,
                         )
                         SettingsSectionDivider()
@@ -108,12 +125,14 @@ fun SyncSettingsScreen(
                                 SettingsChoiceOption(1440, stringResource(R.string.sync_freq_daily)),
                                 SettingsChoiceOption(10080, stringResource(R.string.sync_freq_weekly)),
                             ),
+                            enabled = state.isGoogleDriveEnabled,
                             onValueChange = onGoogleDriveIntervalChange,
                         )
                         SettingsSectionDivider()
                         SettingsSwitchPreference(
                             title = stringResource(R.string.sync_wifi_only),
                             checked = state.isGoogleDriveWifiOnly,
+                            enabled = state.isGoogleDriveEnabled,
                             onCheckedChange = onGoogleDriveWifiOnlyChange,
                         )
                         SettingsSectionDivider()
@@ -121,20 +140,21 @@ fun SyncSettingsScreen(
                             title = stringResource(R.string.sync_on_start),
                             checked = state.isGoogleDriveSyncOnStart,
                             summary = stringResource(R.string.sync_on_start_summary),
+                            enabled = state.isGoogleDriveEnabled,
                             onCheckedChange = onGoogleDriveSyncOnStartChange,
                         )
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_delete_remote_data),
                             summary = stringResource(R.string.sync_delete_remote_data_summary),
-                            enabled = !state.isGoogleDriveSyncing,
+                            enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
                             onClick = { isDeleteRemoteDialogVisible = true },
                         )
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_import_legacy_remote_data),
                             summary = stringResource(R.string.sync_import_legacy_remote_data_summary),
-                            enabled = !state.isGoogleDriveSyncing,
+                            enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
                             onClick = { isImportLegacyDialogVisible = true },
                         )
                         SettingsSectionDivider()
@@ -170,6 +190,28 @@ fun SyncSettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { isDeleteRemoteDialogVisible = false }) {
+                    Text(text = stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+    if (isEnableGoogleDriveConfirmVisible) {
+        AlertDialog(
+            onDismissRequest = { isEnableGoogleDriveConfirmVisible = false },
+            title = { Text(text = stringResource(R.string.sync_backend_switch_google_drive_title)) },
+            text = { Text(text = stringResource(R.string.sync_backend_switch_google_drive_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isEnableGoogleDriveConfirmVisible = false
+                        onGoogleDriveEnabledChange(true)
+                    },
+                ) {
+                    Text(text = stringResource(R.string.enable))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isEnableGoogleDriveConfirmVisible = false }) {
                     Text(text = stringResource(android.R.string.cancel))
                 }
             },

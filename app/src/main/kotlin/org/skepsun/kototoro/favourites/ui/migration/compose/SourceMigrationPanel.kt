@@ -384,6 +384,24 @@ fun SourceMigrationPanel(
                 )
             }
 
+            if ((uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) > 0) {
+                item {
+                    DanglingWorkAnchorsRepairCard(
+                        uiState = uiState,
+                        onRepairClick = viewModel::repairDanglingWorkProjectionAnchors,
+                    )
+                }
+            }
+
+            if ((uiState.repairReport?.workEntityMissingSyncIdCount ?: 0) > 0) {
+                item {
+                    MissingWorkSyncIdsRepairCard(
+                        uiState = uiState,
+                        onRepairClick = viewModel::repairWorkEntitiesMissingSyncId,
+                    )
+                }
+            }
+
             item {
                 EntityIdentityResetCard(
                     uiState = uiState,
@@ -561,6 +579,130 @@ private fun EntityOrganizeScopeSummary(
                 value = if (selectedCount > 0) selectedCount.toString() else stringResource(R.string.entity_organize_entry_count_all),
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+@Composable
+private fun MissingWorkSyncIdsRepairCard(
+    uiState: MigrationUiState,
+    onRepairClick: () -> Unit,
+) {
+    val issueCount = uiState.repairReport?.workEntityMissingSyncIdCount ?: 0
+    OutlinedCard(
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.14f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.26f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_work_sync_ids_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_work_sync_ids_summary, issueCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                OutlinedButton(
+                    onClick = onRepairClick,
+                    enabled = !uiState.isExecuting,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_work_sync_ids_action))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DanglingWorkAnchorsRepairCard(
+    uiState: MigrationUiState,
+    onRepairClick: () -> Unit,
+) {
+    val issueCount = uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0
+    OutlinedCard(
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.14f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.26f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Link,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_dangling_work_anchors_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_dangling_work_anchors_summary, issueCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                OutlinedButton(
+                    onClick = onRepairClick,
+                    enabled = !uiState.isExecuting,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_dangling_work_anchors_action))
+                }
+            }
         }
     }
 }

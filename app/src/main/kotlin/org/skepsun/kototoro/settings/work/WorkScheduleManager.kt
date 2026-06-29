@@ -45,9 +45,14 @@ class WorkScheduleManager @Inject constructor(
 		processLifecycleScope.launch(Dispatchers.Default) {
 			updateWorkerImpl(trackerScheduler, settings.isTrackerEnabled, true) // always force due to adaptive interval
 			updateWorkerImpl(suggestionScheduler, settings.isSuggestionsEnabled, false)
+			if (settings.isBackupWebDavUploadEnabled && googleDriveSyncSettings.isSyncEnabled) {
+				googleDriveSyncSettings.isSyncEnabled = false
+			}
 			updateWorkerImpl(
 				scheduler = googleDriveSyncScheduler,
-				isEnabled = googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.intervalMinutes > 0,
+				isEnabled = googleDriveSyncSettings.isSyncEnabled &&
+					googleDriveSyncSettings.isSignedIn &&
+					googleDriveSyncSettings.intervalMinutes > 0,
 				force = false,
 			)
 			googleDriveSyncScheduler.enqueueStartSyncIfAllowed()

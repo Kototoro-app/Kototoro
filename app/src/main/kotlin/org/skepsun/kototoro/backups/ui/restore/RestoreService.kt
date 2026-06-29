@@ -18,7 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.backups.ui.BaseBackupRestoreService
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
@@ -28,7 +30,10 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.withPartialWakeLock
 import org.skepsun.kototoro.core.util.progress.Progress
+import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
+import java.io.File
 import java.io.FileNotFoundException
+import java.io.FileInputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
@@ -43,6 +48,12 @@ class RestoreService : BaseBackupRestoreService() {
 	@Inject
 	lateinit var repository: BackupRepository
 
+	@Inject
+	lateinit var settings: AppSettings
+
+	@Inject
+	lateinit var googleDriveSyncSettings: GoogleDriveSyncSettings
+
 	override suspend fun IntentJobContext.processIntent(intent: Intent) {
 		val notification = buildNotification(Progress.INDETERMINATE)
 		setForeground(
@@ -54,6 +65,7 @@ class RestoreService : BaseBackupRestoreService() {
 		val sections =
 			requireNotNull(intent.getSerializableExtraCompat<Array<BackupSection>>(AppRouter.KEY_ENTRIES)?.toSet())
 		powerManager.withPartialWakeLock(TAG) {
+			val wasGoogleDriveSyncEnabled = googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.isSyncEnabled
 			val progress = MutableStateFlow(Progress.INDETERMINATE)
 			val progressUpdateJob = if (checkNotificationPermission(CHANNEL_ID)) {
 				launch {
@@ -64,8 +76,28 @@ class RestoreService : BaseBackupRestoreService() {
 			} else {
 				null
 			}
-			val restoreResult = ZipInputStream(contentResolver.openInputStream(source)).use { input ->
-				repository.restoreBackup(input, sections, progress)
+			val tempFile = File.createTempFile("manual_backup_restore", ".bk.zip", cacheDir)
+			val restoreResult = try {
+				contentResolver.openInputStream(source)?.use { input ->
+					tempFile.outputStream().use { output -> input.copyTo(output) }
+				} ?: throw FileNotFoundException()
+				BackupPayloadGuard.requireRestorableWorkSnapshot(
+					file = tempFile,
+					operation = "manual backup restore",
+				)
+				ZipInputStream(FileInputStream(tempFile)).use { input ->
+					repository.restoreBackup(
+						input = input,
+						sections = sections,
+						progress = progress,
+						restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+					)
+				}
+			} finally {
+				if (tempFile.exists()) tempFile.delete()
+				if (wasGoogleDriveSyncEnabled) {
+					disableWebDavSync()
+				}
 			}
 			val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
 			progressUpdateJob?.cancelAndJoin()
@@ -85,6 +117,12 @@ class RestoreService : BaseBackupRestoreService() {
 				}
 			}
 		}
+	}
+
+	private fun disableWebDavSync() {
+		settings.isBackupWebDavUploadEnabled = false
+		settings.isBackupWebDavAutoSyncEnabled = false
+		settings.isBackupWebDavAutoRestoreEnabled = false
 	}
 
 	private fun IntentJobContext.buildNotification(progress: Progress): Notification {

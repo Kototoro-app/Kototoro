@@ -40,6 +40,7 @@ data class BackupsSettingsUiState(
     val lastBackupSummary: String?,
     val isExternalImportDialogVisible: Boolean,
     val isWebDavEnabled: Boolean,
+    val isGoogleDriveSyncEnabled: Boolean,
     val webDavServerUrl: String,
     val webDavUsername: String,
     val webDavPassword: String,
@@ -106,6 +107,7 @@ fun BackupsSettingsScreen(
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         var selectedRemoteBackup by remember { mutableStateOf<WebDavRemoteBackupUiItem?>(null) }
         var isClearRemoteBackupsConfirmVisible by rememberSaveable { mutableStateOf(false) }
+        var isEnableWebDavConfirmVisible by rememberSaveable { mutableStateOf(false) }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
@@ -211,7 +213,13 @@ fun BackupsSettingsScreen(
                         title = stringResource(R.string.sync_webdav_enable),
                         checked = state.isWebDavEnabled,
                         summary = stringResource(R.string.sync_webdav_enable_summary),
-                        onCheckedChange = onWebDavEnabledChange,
+                        onCheckedChange = { enabled ->
+                            if (enabled && state.isGoogleDriveSyncEnabled) {
+                                isEnableWebDavConfirmVisible = true
+                            } else {
+                                onWebDavEnabledChange(enabled)
+                            }
+                        },
                     )
                     SettingsSectionDivider()
                     SettingsTextInputPreference(
@@ -420,6 +428,28 @@ fun BackupsSettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { isClearRemoteBackupsConfirmVisible = false }) {
+                        Text(text = stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
+        if (isEnableWebDavConfirmVisible) {
+            AlertDialog(
+                onDismissRequest = { isEnableWebDavConfirmVisible = false },
+                title = { Text(text = stringResource(R.string.sync_backend_switch_webdav_title)) },
+                text = { Text(text = stringResource(R.string.sync_backend_switch_webdav_confirm)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            isEnableWebDavConfirmVisible = false
+                            onWebDavEnabledChange(true)
+                        },
+                    ) {
+                        Text(text = stringResource(R.string.enable))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { isEnableWebDavConfirmVisible = false }) {
                         Text(text = stringResource(android.R.string.cancel))
                     }
                 },

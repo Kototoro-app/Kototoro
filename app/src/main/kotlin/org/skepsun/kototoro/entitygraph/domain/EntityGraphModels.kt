@@ -152,6 +152,8 @@ enum class EntityGraphRepairIssueKind {
 	SUSPECT_MISMERGED_LOCAL_WORK,
 	SUSPECT_TRACKING_BINDING,
 	SUSPECT_METADATA_SOURCE,
+	DANGLING_WORK_PROJECTION_ANCHOR,
+	WORK_ENTITY_MISSING_SYNC_ID,
 }
 
 data class EntityGraphRepairIssue(
@@ -189,6 +191,10 @@ data class EntityGraphRepairReport(
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.SUSPECT_TRACKING_BINDING }
 	val suspectMetadataSourceCount: Int
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.SUSPECT_METADATA_SOURCE }
+	val danglingWorkProjectionAnchorCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR }
+	val workEntityMissingSyncIdCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.WORK_ENTITY_MISSING_SYNC_ID }
 	val hasIssues: Boolean
 		get() = issues.isNotEmpty()
 }

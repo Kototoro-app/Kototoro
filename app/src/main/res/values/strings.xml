@@ -331,6 +331,8 @@
     <string name="discover_local_linked">Linked to local content</string>
     <string name="discover_local_unlinked">No local content linked yet</string>
     <string name="backup_saved">Backup saved</string>
+    <string name="backup_guard_missing_projection_anchors">Backup blocked: some work state refers to missing local projections (%1$s). Open Entity organize and repair dangling projection anchors, then try again.</string>
+    <string name="backup_guard_work_entity_missing_sync_id">Backup blocked: work entity %1$d is missing its sync identity. Open Entity organize and repair missing work sync identities, then try again.</string>
     <string name="tracker_warning">Some devices have different system behavior, which may break background tasks.</string>
     <string name="read_more">Read more</string>
     <string name="queued">Queued</string>
@@ -1303,6 +1305,12 @@
     <string name="entity_organize_repair_prune_projection_reading_status_title">Prune redundant projection reading status mirrors</string>
     <string name="entity_organize_repair_prune_projection_reading_status_confirm">Clear manga-level reading status values that exactly duplicate the current entity-level reading status. This keeps the effective work-level status unchanged and only removes redundant projection shadow copies.</string>
     <string name="entity_organize_repair_prune_projection_reading_status_action">Prune reading status mirrors</string>
+    <string name="entity_organize_repair_dangling_work_anchors_title">Repair dangling projection anchors</string>
+    <string name="entity_organize_repair_dangling_work_anchors_summary">%1$d work state entries point to local projections that no longer exist. This can block backup and sync. The repair will move those anchors to another active projection in the same entity when one is available.</string>
+    <string name="entity_organize_repair_dangling_work_anchors_action">Repair anchors</string>
+    <string name="entity_organize_repair_work_sync_ids_title">Repair missing work sync identities</string>
+    <string name="entity_organize_repair_work_sync_ids_summary">%1$d work entities do not have a sync identity. This can block backup and cross-device sync. The repair assigns stable local sync identities without rebuilding entities.</string>
+    <string name="entity_organize_repair_work_sync_ids_action">Repair sync identities</string>
     <string name="entity_organize_repair_confirm">Confirm</string>
     <string name="entity_organize_repair_split_feedback">Local projection was split into a standalone entity.</string>
     <string name="entity_organize_repair_detach_feedback">Local projection entity binding was detached.</string>
@@ -1313,6 +1321,8 @@
     <string name="entity_organize_repair_prune_projection_metadata_feedback">Pruned %1$d redundant projection metadata mirrors.</string>
     <string name="entity_organize_repair_prune_projection_override_feedback">Pruned %1$d redundant projection override mirrors.</string>
     <string name="entity_organize_repair_prune_projection_reading_status_feedback">Pruned %1$d redundant projection reading status mirrors.</string>
+    <string name="entity_organize_repair_dangling_work_anchors_feedback">Repaired %1$d dangling projection anchors.</string>
+    <string name="entity_organize_repair_work_sync_ids_feedback">Repaired %1$d missing work sync identities.</string>
     <string name="entity_organize_repair_action_failed">Repair action failed. The projection may no longer have an active entity binding.</string>
     <string name="entity_organize_reset_title">Rebuild entity identities</string>
     <string name="entity_organize_reset_summary">Advanced maintenance action. It creates a local backup first, rebuilds work identities from strong source URL evidence, and blocks WebDAV auto upload until you confirm the result.</string>
@@ -2148,6 +2158,12 @@
     <string name="sync_webdav_enable">Enable WebDAV backup</string>
     <string name="sync_webdav_enable_summary">Upload and restore full backup packages manually or during the daily backup task.</string>
     <string name="google_drive_sync">Google Drive sync</string>
+    <string name="sync_google_drive_enable">Enable Google Drive sync</string>
+    <string name="sync_google_drive_enable_summary">Use Google Drive as the active sync backend. Turning it on disables WebDAV sync actions to avoid mixing remote snapshots. Your Google sign-in is kept when this is off.</string>
+    <string name="sync_backend_switch_google_drive_title">Switch to Google Drive sync?</string>
+    <string name="sync_backend_switch_google_drive_confirm">WebDAV backup is currently enabled. Enabling Google Drive sync will turn off WebDAV backup, auto backup, and auto restore so the app does not mix two remote snapshots.</string>
+    <string name="sync_backend_switch_webdav_title">Switch to WebDAV backup?</string>
+    <string name="sync_backend_switch_webdav_confirm">Google Drive sync is currently enabled. Enabling WebDAV backup will turn off Google Drive sync while keeping your Google sign-in.</string>
     <string name="sync_sign_in">Prepare Google Drive sync</string>
     <string name="sync_sign_in_summary">Uses Google Drive app data with the minimum Drive appdata permission to sync subscriptions and update records. Kototoro cannot access your Drive files.</string>
     <string name="sync_sign_out">Sign out</string>

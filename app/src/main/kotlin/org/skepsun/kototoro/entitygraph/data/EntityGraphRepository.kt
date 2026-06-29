@@ -1222,6 +1222,51 @@ class EntityGraphRepository @Inject constructor(
 		}
 	}
 
+	suspend fun repairDanglingWorkProjectionAnchors(): Int = withContext(Dispatchers.Default) {
+		val report = inspectRepairIssues()
+		val issues = report.issues
+			.asSequence()
+			.filter { it.kind == EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR }
+			.filter { it.localMangaId != null }
+			.distinctBy { "${it.entityId}:${it.localMangaId}" }
+			.toList()
+		if (issues.isEmpty()) {
+			return@withContext 0
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val now = System.currentTimeMillis()
+			var repaired = 0
+			issues.forEach { issue ->
+				val danglingAnchorId = issue.localMangaId ?: return@forEach
+				val fallbackLocalMangaId = findFallbackLocalProjectionId(
+					dao = dao,
+					entityId = issue.entityId,
+					detachedLocalMangaId = danglingAnchorId,
+				) ?: return@forEach
+				reconcileDetachedLocalProjectionAnchors(
+					entityId = issue.entityId,
+					detachedLocalMangaId = danglingAnchorId,
+					fallbackLocalMangaId = fallbackLocalMangaId,
+					now = now,
+				)
+				repaired++
+			}
+			repaired
+		}
+	}
+
+	suspend fun repairWorkEntitiesMissingSyncId(): Int = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val entityIds = dao.findWorkEntityIdsMissingSyncId()
+			entityIds.forEach { entityId ->
+				dao.updateEntitySyncId(entityId, java.util.UUID.randomUUID().toString())
+			}
+			entityIds.size
+		}
+	}
+
 	private suspend fun updateRelationState(
 		relationId: Long,
 		state: EntityRelationState,
@@ -1260,6 +1305,55 @@ class EntityGraphRepository @Inject constructor(
 		val issues = ArrayList<EntityGraphRepairIssue>()
 		val entitiesById = dao.dumpEntities().associateBy { it.id }
 		val trackingDiagnostics = EntityRepairDiagnosticCollector()
+		dao.findWorkEntityIdsMissingSyncId()
+			.forEach { entityId ->
+				issues += EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.WORK_ENTITY_MISSING_SYNC_ID,
+					entityId = entityId,
+				)
+			}
+		val workAnchorIds = (
+				db.getWorkHistoryDao().findActiveAnchorMangaIds() +
+					db.getWorkFavouritesDao().findActiveAnchorMangaIds() +
+					db.getWorkStatsDao().findAnchorMangaIds()
+				).filterTo(LinkedHashSet<Long>()) { it > 0L }
+			val existingLocalMangaIds = db.getMangaDao().findEntitiesByIds(workAnchorIds)
+				.mapTo(LinkedHashSet<Long>()) { it.id }
+
+		suspend fun addDanglingAnchorIssues(anchorIds: Iterable<Long>) {
+			anchorIds
+				.asSequence()
+				.filter { it > 0L && it !in existingLocalMangaIds }
+				.distinct()
+				.forEach { anchorId ->
+					val entityIds = buildList {
+						db.getWorkHistoryDao().findActiveByAnchorMangaId(anchorId)?.let { add(it.entityId) }
+						db.getWorkFavouritesDao().findActiveByAnchorMangaId(anchorId).forEach { add(it.entityId) }
+						db.getWorkStatsDao().findAllByAnchorMangaId(anchorId).forEach { add(it.entityId) }
+					}.distinct()
+					if (entityIds.isEmpty()) {
+						issues += EntityGraphRepairIssue(
+							kind = EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR,
+							entityId = 0L,
+							source = "local_manga",
+							externalId = anchorId.toString(),
+							localMangaId = anchorId,
+						)
+					} else {
+						entityIds.forEach { entityId ->
+							issues += EntityGraphRepairIssue(
+								kind = EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR,
+								entityId = entityId,
+								source = "local_manga",
+								externalId = anchorId.toString(),
+								localMangaId = anchorId,
+							)
+						}
+					}
+				}
+		}
+
+		addDanglingAnchorIssues(workAnchorIds)
 
 		dao.dumpPrefs().forEach { prefs ->
 			val entityBindings = activeBindingsByEntity[prefs.entityId].orEmpty()
@@ -1806,17 +1900,20 @@ class EntityGraphRepository @Inject constructor(
 		selection: TrackingSelection?,
 		now: Long,
 	) {
-		dao.findEntity(entityId) ?: return
-		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId, now))
-		dao.updateEntityMetadataSourceSelection(
-			entityId = entityId,
-			metadataSourceKind = if (selection == null) "base" else "tracking",
-			metadataBindingSource = selection?.serviceId?.toString(),
-			metadataBindingExternalId = selection?.remoteId?.toString(),
-			metadataSourceService = selection?.serviceId,
-			metadataSourceRemoteId = selection?.remoteId,
-			updatedAt = now,
-		)
+		db.withTransaction {
+			val transactionDao = db.getEntityGraphDao()
+			transactionDao.findEntity(entityId) ?: return@withTransaction
+			transactionDao.insertEntityPrefsIgnore(newEntityPrefs(entityId, now))
+			transactionDao.updateEntityMetadataSourceSelection(
+				entityId = entityId,
+				metadataSourceKind = if (selection == null) "base" else "tracking",
+				metadataBindingSource = selection?.serviceId?.toString(),
+				metadataBindingExternalId = selection?.remoteId?.toString(),
+				metadataSourceService = selection?.serviceId,
+				metadataSourceRemoteId = selection?.remoteId,
+				updatedAt = now,
+			)
+		}
 	}
 
 	private fun newEntityPrefs(entityId: Long, now: Long) = EntityPrefsRecord(

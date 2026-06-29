@@ -60,6 +60,7 @@ sealed interface GoogleDriveSyncResult {
 	data object Success : GoogleDriveSyncResult
 	data class AuthorizationRequired(val error: GoogleDriveSyncAuthorizationException) : GoogleDriveSyncResult
 	data class Error(val message: String?, val retryable: Boolean = true) : GoogleDriveSyncResult
+	data object Disabled : GoogleDriveSyncResult
 }
 
 @Singleton
@@ -91,12 +92,16 @@ class GoogleDriveSyncRepository @Inject constructor(
 	}
 
 	fun shouldSyncOnStart(now: Long = System.currentTimeMillis()): Boolean {
-		return settings.isSignedIn &&
+		return settings.isSyncEnabled &&
+			settings.isSignedIn &&
 			settings.isSyncOnStart &&
 			now - settings.lastSyncAttemptTimestamp >= GoogleDriveSyncSettings.START_SYNC_COOLDOWN_MS
 	}
 
 	suspend fun sync(): GoogleDriveSyncResult {
+		if (!settings.isSyncEnabled) {
+			return GoogleDriveSyncResult.Disabled
+		}
 		if (!settings.isSignedIn) {
 			return GoogleDriveSyncResult.AuthorizationRequired(GoogleDriveSyncAuthorizationException())
 		}
@@ -137,22 +142,30 @@ class GoogleDriveSyncRepository @Inject constructor(
 		}
 	}
 
-	suspend fun deleteRemoteData(): GoogleDriveSyncResult = try {
-		val token = auth.requireAccessToken()
-		api.findCurrentSyncFiles(token).forEach { file ->
-			runCatching { api.delete(token, file.id) }
+	suspend fun deleteRemoteData(): GoogleDriveSyncResult {
+		if (!settings.isSyncEnabled) {
+			return GoogleDriveSyncResult.Disabled
 		}
-		settings.lastSyncTimestamp = 0L
-		settings.lastSyncError = null
-		settings.isDirty = false
-		GoogleDriveSyncResult.Success
-	} catch (e: GoogleDriveSyncAuthorizationException) {
-		GoogleDriveSyncResult.AuthorizationRequired(e)
-	} catch (e: Exception) {
-		GoogleDriveSyncResult.Error(e.message)
+		return try {
+			val token = auth.requireAccessToken()
+			api.findCurrentSyncFiles(token).forEach { file ->
+				runCatching { api.delete(token, file.id) }
+			}
+			settings.lastSyncTimestamp = 0L
+			settings.lastSyncError = null
+			settings.isDirty = false
+			GoogleDriveSyncResult.Success
+		} catch (e: GoogleDriveSyncAuthorizationException) {
+			GoogleDriveSyncResult.AuthorizationRequired(e)
+		} catch (e: Exception) {
+			GoogleDriveSyncResult.Error(e.message)
+		}
 	}
 
 	suspend fun importLegacyRemoteData(): GoogleDriveSyncResult {
+		if (!settings.isSyncEnabled) {
+			return GoogleDriveSyncResult.Disabled
+		}
 		if (!settings.isSignedIn) {
 			return GoogleDriveSyncResult.AuthorizationRequired(GoogleDriveSyncAuthorizationException())
 		}

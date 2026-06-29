@@ -10,11 +10,13 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import org.skepsun.kototoro.backups.data.model.BackupIndex
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 import java.util.Date
@@ -36,6 +38,7 @@ class RestoreViewModel @Inject constructor(
 
 	val uri = savedStateHandle.get<String>(AppRouter.KEY_FILE)?.toUriOrNull()
 	private val contentResolver = context.contentResolver
+	private val cacheDir = context.cacheDir
 
 	val availableEntries = MutableStateFlow<List<BackupSectionModel>>(emptyList())
 	val backupDate = MutableStateFlow<Date?>(null)
@@ -49,6 +52,18 @@ class RestoreViewModel @Inject constructor(
 	private suspend fun loadBackupInfo() {
 		val sections = runInterruptible(Dispatchers.IO) {
 			if (uri == null) throw FileNotFoundException()
+			val tempFile = File.createTempFile("manual_backup_restore_inspect", ".bk.zip", cacheDir)
+			try {
+				contentResolver.openInputStream(uri)?.use { input ->
+					tempFile.outputStream().use { output -> input.copyTo(output) }
+				} ?: throw FileNotFoundException()
+				BackupPayloadGuard.requireRestorableWorkSnapshot(
+					file = tempFile,
+					operation = "manual backup restore inspection",
+				)
+			} finally {
+				if (tempFile.exists()) tempFile.delete()
+			}
 			ZipInputStream(contentResolver.openInputStream(uri)).use { stream ->
 				val result = EnumSet.noneOf(BackupSection::class.java)
 				var entry = stream.nextEntry
@@ -94,6 +109,7 @@ class RestoreViewModel @Inject constructor(
 		.mapNotNullTo(EnumSet.noneOf(BackupSection::class.java)) {
 			if (it.isChecked) it.section else null
 		}
+		.apply { add(BackupSection.INDEX) }
 
 	/**
 	 * Check for inconsistent user selection

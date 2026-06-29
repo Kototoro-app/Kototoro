@@ -1,8 +1,13 @@
 package org.skepsun.kototoro.sync.google.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.onStart
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,6 +33,10 @@ class GoogleDriveSyncSettings @Inject constructor(
 
 	val isSignedIn: Boolean
 		get() = !accountEmail.isNullOrBlank()
+
+	var isSyncEnabled: Boolean
+		get() = prefs.getBoolean(KEY_SYNC_ENABLED, true)
+		set(value) = prefs.edit { putBoolean(KEY_SYNC_ENABLED, value) }
 
 	val deviceId: String
 		get() = prefs.getString(KEY_DEVICE_ID, null) ?: UUID.randomUUID().toString().also {
@@ -63,6 +72,21 @@ class GoogleDriveSyncSettings @Inject constructor(
 		get() = prefs.getBoolean(KEY_DIRTY, false)
 		set(value) = prefs.edit { putBoolean(KEY_DIRTY, value) }
 
+	fun changes(vararg keys: String): Flow<String?> {
+		val observedKeys = keys.toSet()
+		return callbackFlow {
+			val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+				if (observedKeys.isEmpty() || key in observedKeys) {
+					trySend(key)
+				}
+			}
+			prefs.registerOnSharedPreferenceChangeListener(listener)
+			awaitClose {
+				prefs.unregisterOnSharedPreferenceChangeListener(listener)
+			}
+		}.onStart { emit(null) }
+	}
+
 	fun clearAccount() = prefs.edit {
 		remove(KEY_ACCOUNT_EMAIL)
 		remove(KEY_ACCOUNT_NAME)
@@ -79,6 +103,7 @@ class GoogleDriveSyncSettings @Inject constructor(
 		private const val KEY_ACCOUNT_EMAIL = "account_email"
 		private const val KEY_ACCOUNT_NAME = "account_name"
 		private const val KEY_GOOGLE_ACCOUNT_NAME = "google_account_name"
+		const val KEY_SYNC_ENABLED = "sync_enabled"
 		private const val KEY_DEVICE_ID = "device_id"
 		const val KEY_INTERVAL_MINUTES = "interval_minutes"
 		const val KEY_WIFI_ONLY = "wifi_only"

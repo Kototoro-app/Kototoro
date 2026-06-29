@@ -45,6 +45,7 @@ import org.skepsun.kototoro.settings.compose.BackupsSettingsScreen
 import org.skepsun.kototoro.settings.compose.BackupsSettingsUiState
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.WebDavRemoteBackupUiItem
+import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -52,6 +53,9 @@ class BackupsSettingsFragment : Fragment() {
 
     @Inject
     lateinit var settings: AppSettings
+
+    @Inject
+    lateinit var googleDriveSyncSettings: GoogleDriveSyncSettings
 
     private val viewModel by viewModels<PeriodicalBackupSettingsViewModel>()
 
@@ -129,6 +133,7 @@ class BackupsSettingsFragment : Fragment() {
             KototoroTheme {
                 BackupsSettingsRoute(
                     settings = settings,
+                    googleDriveSyncSettings = googleDriveSyncSettings,
                     viewModel = viewModel,
                     onBackupOutputClick = {
                         if (!outputSelectCall.tryLaunch(null)) {
@@ -181,6 +186,7 @@ class BackupsSettingsFragment : Fragment() {
 @Composable
 fun BackupsSettingsRoute(
     settings: AppSettings,
+    googleDriveSyncSettings: GoogleDriveSyncSettings,
     viewModel: PeriodicalBackupSettingsViewModel,
     onBackupOutputClick: () -> Unit,
     onCreateBackupClick: () -> Unit,
@@ -219,6 +225,9 @@ fun BackupsSettingsRoute(
     val isWebDavKeepLocalCopyEnabled =
         settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_KEEP_LOCAL_COPY) { isBackupWebDavKeepLocalCopyEnabled }.value
     val snackbarHostState = remember { SnackbarHostState() }
+    var isGoogleDriveSyncEnabled by remember {
+        mutableStateOf(googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.isSyncEnabled)
+    }
     val backupFrequencyLabels = context.resources.getStringArray(R.array.backup_frequency)
     val backupFrequencyValues = context.resources.getStringArray(R.array.values_backup_frequency)
     val backupFrequencyOptions = backupFrequencyLabels.zip(backupFrequencyValues).mapNotNull { (label, value) ->
@@ -293,6 +302,7 @@ fun BackupsSettingsRoute(
         lastBackupSummary = lastBackupSummary,
         isExternalImportDialogVisible = isExternalImportDialogVisible,
         isWebDavEnabled = isWebDavEnabled,
+        isGoogleDriveSyncEnabled = isGoogleDriveSyncEnabled,
         webDavServerUrl = webDavServerUrl,
         webDavUsername = webDavUsername,
         webDavPassword = webDavPassword,
@@ -332,7 +342,12 @@ fun BackupsSettingsRoute(
             isExternalImportDialogVisible = false
             onImportExternalBackupFilePick(app)
         },
-        onWebDavEnabledChange = { settings.isBackupWebDavUploadEnabled = it },
+        onWebDavEnabledChange = {
+            viewModel.setWebDavEnabled(it)
+            if (it) {
+                isGoogleDriveSyncEnabled = false
+            }
+        },
         onWebDavServerUrlChange = { settings.backupWebDavServerUrl = it },
         onWebDavUsernameChange = { settings.backupWebDavUsername = it },
         onWebDavPasswordChange = { settings.backupWebDavPassword = it },

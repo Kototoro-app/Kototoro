@@ -10,15 +10,25 @@ class BackupIndex(
 	@SerialName("app_version") val appVersion: Int,
 	@SerialName("transport_generation") val transportGeneration: Int = WRITER_GENERATION_V1,
 	@SerialName("semantic_schema_version") val semanticSchemaVersion: Int = 1,
+	@SerialName("device_id") val deviceId: String = "",
+	@SerialName("data_version") val dataVersion: Int = 0,
 	@SerialName("created_at") val createdAt: Long,
+	@SerialName("exported_at") val exportedAt: Long = createdAt,
 ) {
 
-	constructor() : this(
+	constructor(
+		deviceId: String = "",
+		dataVersion: Int = 0,
+		exportedAt: Long = System.currentTimeMillis(),
+	) : this(
 		appId = BuildConfig.APPLICATION_ID,
 		appVersion = BuildConfig.VERSION_CODE,
 		transportGeneration = WRITER_GENERATION_V3,
 		semanticSchemaVersion = CURRENT_SYNC_SCHEMA_VERSION,
-		createdAt = System.currentTimeMillis(),
+		deviceId = deviceId,
+		dataVersion = dataVersion,
+		createdAt = exportedAt,
+		exportedAt = exportedAt,
 	)
 
 	companion object {

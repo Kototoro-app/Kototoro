@@ -19,9 +19,11 @@ import org.skepsun.kototoro.sync.google.domain.GoogleDriveSyncAuthorizationExcep
 import org.skepsun.kototoro.sync.google.domain.GoogleDriveSyncRepository
 import org.skepsun.kototoro.sync.google.domain.GoogleDriveSyncResult
 import org.skepsun.kototoro.sync.google.work.GoogleDriveSyncWorker
+import org.skepsun.kototoro.core.prefs.AppSettings
 import javax.inject.Inject
 
 data class GoogleDriveSyncUiState(
+	val isEnabled: Boolean = true,
 	val isSignedIn: Boolean = false,
 	val accountEmail: String? = null,
 	val accountName: String? = null,
@@ -38,6 +40,7 @@ data class GoogleDriveSyncUiState(
 class GoogleDriveSyncSettingsViewModel @Inject constructor(
 	private val auth: GoogleDriveSyncAuth,
 	private val settings: GoogleDriveSyncSettings,
+	private val appSettings: AppSettings,
 	private val repository: GoogleDriveSyncRepository,
 	private val scheduler: GoogleDriveSyncWorker.Scheduler,
 ) : ViewModel() {
@@ -53,9 +56,23 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 				_uiState.value = readState().copy(isSyncing = syncing)
 			}
 		}
+		viewModelScope.launch {
+			settings.changes(
+				GoogleDriveSyncSettings.KEY_SYNC_ENABLED,
+				GoogleDriveSyncSettings.KEY_INTERVAL_MINUTES,
+				GoogleDriveSyncSettings.KEY_WIFI_ONLY,
+				GoogleDriveSyncSettings.KEY_SYNC_ON_START,
+			).collect {
+				refresh()
+			}
+		}
 	}
 
 	fun syncNow() {
+		if (!settings.isSyncEnabled) {
+			refresh()
+			return
+		}
 		if (!settings.isSignedIn) {
 			requestSignIn()
 			return
@@ -67,6 +84,10 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 	}
 
 	fun deleteRemoteData() {
+		if (!settings.isSyncEnabled) {
+			refresh()
+			return
+		}
 		if (!settings.isSignedIn) {
 			requestSignIn()
 			return
@@ -78,6 +99,10 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 	}
 
 	fun importLegacyRemoteData() {
+		if (!settings.isSyncEnabled) {
+			refresh()
+			return
+		}
 		if (!settings.isSignedIn) {
 			requestSignIn()
 			return
@@ -93,6 +118,8 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 			try {
 				val authorization = auth.authorize(promptSelectAccount = true)
 				repository.onSignedIn(authorization.email, authorization.displayName, authorization.account)
+				setWebDavEnabled(false)
+				settings.isSyncEnabled = true
 				scheduler.schedule()
 			} catch (e: GoogleDriveSyncAuthorizationException) {
 				val pendingIntent = e.authorizationIntent
@@ -113,6 +140,8 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 			try {
 				val authorization = auth.authorizationFromIntent(data)
 				repository.onSignedIn(authorization.email, authorization.displayName, authorization.account)
+				setWebDavEnabled(false)
+				settings.isSyncEnabled = true
 				scheduler.schedule()
 			} catch (e: Exception) {
 				settings.lastSyncError = e.message ?: e.javaClass.simpleName
@@ -150,6 +179,19 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 		refresh()
 	}
 
+	fun setEnabled(value: Boolean) {
+		settings.isSyncEnabled = value
+		viewModelScope.launch(Dispatchers.Default) {
+			if (value) {
+				setWebDavEnabled(false)
+				scheduler.schedule()
+			} else {
+				scheduler.unschedule()
+			}
+			refresh()
+		}
+	}
+
 	private fun refresh() {
 		_uiState.value = readState()
 	}
@@ -164,10 +206,20 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
 				}
 			}
 			is GoogleDriveSyncResult.Error -> settings.lastSyncError = result.message
+			is GoogleDriveSyncResult.Disabled -> Unit
+		}
+	}
+
+	private fun setWebDavEnabled(value: Boolean) {
+		appSettings.isBackupWebDavUploadEnabled = value
+		if (!value) {
+			appSettings.isBackupWebDavAutoSyncEnabled = false
+			appSettings.isBackupWebDavAutoRestoreEnabled = false
 		}
 	}
 
 	private fun readState() = GoogleDriveSyncUiState(
+		isEnabled = settings.isSyncEnabled,
 		isSignedIn = settings.isSignedIn,
 		accountEmail = settings.accountEmail,
 		accountName = settings.accountName,

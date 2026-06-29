@@ -16,6 +16,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.settings.compose.SyncSettingsScreen
 import org.skepsun.kototoro.settings.compose.SyncSettingsUiState
 import org.skepsun.kototoro.sync.google.ui.GoogleDriveSyncSettingsViewModel
@@ -28,6 +29,9 @@ fun SyncSettingsRoute(
 ) {
     val context = LocalContext.current
     val googleDriveState = googleDriveSyncViewModel.uiState.collectAsStateWithLifecycle().value
+    val isWebDavEnabled = settings.observeAsState(AppSettings.KEY_BACKUP_WEBDAV_ENABLED) {
+        isBackupWebDavUploadEnabled
+    }.value
     val snackbarHostState = remember { SnackbarHostState() }
     val googleDriveAuthorizationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
@@ -49,6 +53,8 @@ fun SyncSettingsRoute(
         settings = settings,
         state = SyncSettingsUiState(
             isGoogleDriveSignedIn = googleDriveState.isSignedIn,
+            isGoogleDriveEnabled = googleDriveState.isEnabled,
+            isWebDavEnabled = isWebDavEnabled,
             googleDriveAccountSummary = googleDriveState.accountName ?: googleDriveState.accountEmail,
             googleDriveIntervalMinutes = googleDriveState.intervalMinutes,
             isGoogleDriveWifiOnly = googleDriveState.isWifiOnly,
@@ -65,6 +71,7 @@ fun SyncSettingsRoute(
         onGoogleDriveSyncNowClick = { googleDriveSyncViewModel.syncNow() },
         onGoogleDriveDeleteRemoteClick = { googleDriveSyncViewModel.deleteRemoteData() },
         onGoogleDriveImportLegacyClick = { googleDriveSyncViewModel.importLegacyRemoteData() },
+        onGoogleDriveEnabledChange = { googleDriveSyncViewModel.setEnabled(it) },
         onGoogleDriveIntervalChange = { googleDriveSyncViewModel.setIntervalMinutes(it) },
         onGoogleDriveWifiOnlyChange = { googleDriveSyncViewModel.setWifiOnly(it) },
         onGoogleDriveSyncOnStartChange = { googleDriveSyncViewModel.setSyncOnStart(it) },

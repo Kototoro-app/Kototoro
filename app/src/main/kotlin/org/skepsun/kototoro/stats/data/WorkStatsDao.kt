@@ -23,6 +23,9 @@ abstract class WorkStatsDao {
 	@Query("SELECT * FROM work_stats WHERE entity_id = :entityId AND anchor_manga_id = :anchorMangaId ORDER BY started_at")
 	protected abstract suspend fun findAllForEntityAndAnchor(entityId: Long, anchorMangaId: Long): List<WorkStatsEntity>
 
+	@Query("SELECT * FROM work_stats WHERE anchor_manga_id = :anchorMangaId ORDER BY started_at")
+	abstract suspend fun findAllByAnchorMangaId(anchorMangaId: Long): List<WorkStatsEntity>
+
 	@Query("SELECT IFNULL(SUM(pages),0) FROM work_stats WHERE entity_id = :entityId")
 	abstract suspend fun getReadPagesCount(entityId: Long): Int
 

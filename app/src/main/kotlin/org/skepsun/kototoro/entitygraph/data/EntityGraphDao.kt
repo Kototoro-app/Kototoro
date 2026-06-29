@@ -29,8 +29,21 @@ abstract class EntityGraphDao {
 	@Query("SELECT * FROM `entity` WHERE id IN (:entityIds)")
 	abstract suspend fun findEntitiesByIds(entityIds: List<Long>): List<EntityRecord>
 
-	@Query("SELECT * FROM `entity` ORDER BY id ASC")
+	@Query(
+		"""
+		SELECT id, type, IFNULL(sync_id, '') AS sync_id, primary_name, name_hash, aliases,
+			created_at, last_accessed, access_count
+		FROM `entity`
+		ORDER BY id ASC
+		"""
+	)
 	abstract suspend fun dumpEntities(): List<EntityRecord>
+
+	@Query("SELECT id FROM `entity` WHERE type = 'WORK' AND (sync_id IS NULL OR TRIM(sync_id) = '') ORDER BY id ASC")
+	abstract suspend fun findWorkEntityIdsMissingSyncId(): List<Long>
+
+	@Query("UPDATE `entity` SET sync_id = :syncId WHERE id = :entityId")
+	abstract suspend fun updateEntitySyncId(entityId: Long, syncId: String)
 
 	@Query("SELECT * FROM entity_binding ORDER BY source ASC, external_id ASC")
 	abstract suspend fun dumpBindings(): List<EntityBindingRecord>

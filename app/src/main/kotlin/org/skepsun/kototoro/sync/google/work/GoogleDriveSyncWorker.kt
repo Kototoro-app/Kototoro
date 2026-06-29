@@ -35,6 +35,7 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
 		return when (val result = repository.sync()) {
 			is GoogleDriveSyncResult.Success -> Result.success()
 			is GoogleDriveSyncResult.AuthorizationRequired -> Result.failure()
+			is GoogleDriveSyncResult.Disabled -> Result.success()
 			is GoogleDriveSyncResult.Error -> {
 				if (result.retryable && runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
 			}
@@ -49,7 +50,7 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
 
 		override suspend fun schedule() {
 			val intervalMinutes = settings.intervalMinutes
-			if (!settings.isSignedIn || intervalMinutes <= 0) {
+			if (!settings.isSyncEnabled || !settings.isSignedIn || intervalMinutes <= 0) {
 				unschedule()
 				return
 			}
@@ -61,6 +62,7 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
 				TimeUnit.MINUTES,
 			)
 				.setConstraints(constraints)
+				.setInitialDelay(intervalMinutes.toLong(), TimeUnit.MINUTES)
 				.addTag(TAG_PERIODIC)
 				.setBackoffCriteria(BackoffPolicy.LINEAR, 30, TimeUnit.MINUTES)
 				.build()
@@ -76,6 +78,9 @@ class GoogleDriveSyncWorker @AssistedInject constructor(
 		}
 
 		fun enqueueManual() {
+			if (!settings.isSyncEnabled) {
+				return
+			}
 			val request = OneTimeWorkRequestBuilder<GoogleDriveSyncWorker>()
 				.setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
 				.addTag(TAG_MANUAL)

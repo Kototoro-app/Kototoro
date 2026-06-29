@@ -73,6 +73,7 @@ import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
@@ -201,6 +202,9 @@ class SettingsActivity :
 
 	@Inject
 	lateinit var suggestionsScheduler: SuggestionsWorker.Scheduler
+
+	@Inject
+	lateinit var googleDriveSyncSettings: GoogleDriveSyncSettings
 
 	@Inject
 	lateinit var onnxModelManager: OnnxModelManager
@@ -1177,6 +1181,7 @@ class SettingsActivity :
 			SettingsDestination.BackupsSettings -> RenderComposeSection(title = getString(R.string.backup_restore)) {
 				BackupsSettingsRoute(
 					settings = kototoroAppSettings,
+					googleDriveSyncSettings = googleDriveSyncSettings,
 					viewModel = periodicalBackupSettingsViewModel,
 					onBackupOutputClick = {
 						if (!backupOutputSelectCall.tryLaunch(null)) {

@@ -63,6 +63,7 @@ import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
@@ -100,10 +101,16 @@ import javax.inject.Inject
 
 private const val TAG = "BackupRepo"
 private const val RESTORE_TRANSACTION_BATCH_SIZE = 100
+private const val RESTORE_PLACEHOLDER_SOURCE = "RESTORE_PLACEHOLDER"
 private val RESTORE_PROTECTED_BINDING_STATES = setOf(
     EntityBindingState.MANUAL,
     EntityBindingState.CANDIDATE,
     EntityBindingState.REJECTED,
+)
+private val ACTIVE_RESTORE_BINDING_STATES = setOf(
+    EntityBindingState.MANUAL,
+    EntityBindingState.CONFIRMED,
+    EntityBindingState.LEGACY,
 )
 private val DEFERRED_RESTORE_ORDER = listOf(
     BackupSection.ENTITY_GRAPH_BINDINGS,
@@ -132,7 +139,7 @@ private val BackupSection.requiresDeferredRestore: Boolean
 
 private data class RestoredLocalBindingEvidence(
     val remoteMangaId: Long,
-    val localEntityId: Long,
+    val remoteEntityId: Long,
 )
 
 private enum class ProjectionKeyKind {
@@ -270,17 +277,64 @@ class BackupRepository @Inject constructor(
         )
     }
 
+    private suspend fun requireBackupExportableWorkSnapshot() {
+        if (settings.isWorkMigrationSyncWriteBlocked || settings.requiresWorkMigrationNormalization) {
+            throw IllegalStateException(
+                "Refusing backup creation: Work identity normalization is not complete.",
+            )
+        }
+        val dao = database.getEntityGraphDao()
+        val missingSyncId = dao.findWorkEntityIdsMissingSyncId().firstOrNull()
+        if (missingSyncId != null) {
+            throw IllegalStateException(
+                "Refusing backup creation: WORK entity $missingSyncId has no sync_id.",
+            )
+        }
+        val activeFavouriteWithoutAnchor = database.getWorkFavouritesDao().findActiveWithoutAnchor(limit = 1)
+            .firstOrNull()
+        if (activeFavouriteWithoutAnchor != null) {
+            throw IllegalStateException(
+                "Refusing backup creation: active work favourite has no projection anchor " +
+                    "entityId=${activeFavouriteWithoutAnchor.entityId} " +
+                    "categoryId=${activeFavouriteWithoutAnchor.categoryId}.",
+            )
+        }
+        val anchorIds = (
+            database.getWorkHistoryDao().findActiveAnchorMangaIds() +
+                database.getWorkFavouritesDao().findActiveAnchorMangaIds() +
+                database.getWorkStatsDao().findAnchorMangaIds()
+            ).filterTo(LinkedHashSet<Long>()) { it > 0L }
+        if (anchorIds.isNotEmpty()) {
+            val existingAnchorIds = database.getMangaDao().findEntitiesByIds(anchorIds)
+                .mapTo(LinkedHashSet<Long>()) { it.id }
+            val missingAnchor = anchorIds.firstOrNull { it !in existingAnchorIds }
+            if (missingAnchor != null) {
+                throw IllegalStateException(
+                    "Refusing backup creation: work state references missing projection anchor $missingAnchor.",
+                )
+            }
+        }
+    }
+
     suspend fun createBackup(
         output: ZipOutputStream,
         progress: FlowCollector<Progress>?,
     ) {
+        requireBackupExportableWorkSnapshot()
         progress?.emit(Progress.INDETERMINATE)
         var commonProgress = Progress(0, BackupSection.entries.size)
+        val exportedAt = System.currentTimeMillis()
         for (section in BackupSection.entries) {
             when (section) {
                 BackupSection.INDEX -> output.writeJsonArray(
                     section = BackupSection.INDEX,
-                    data = flowOf(BackupIndex()),
+                    data = flowOf(
+                        BackupIndex(
+                            deviceId = settings.backupDeviceId,
+                            dataVersion = settings.backupWebDavDataVersion + 1,
+                            exportedAt = exportedAt,
+                        ),
+                    ),
                     serializer = serializer(),
                 )
 
@@ -539,16 +593,16 @@ class BackupRepository @Inject constructor(
                     upsertContent(it, restoreContext)
                 }
 
-                BackupSection.WORK_HISTORY -> sectionInput.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
-                    restoreWorkHistory(it.toEntity(entityIdMapping, projectionAnchorMapping), restoreMode)
+                BackupSection.WORK_HISTORY -> sectionInput.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY", failFast = true) {
+                    restoreWorkHistoryFromBackup(restoreEntity(it, entityIdMapping, projectionAnchorMapping), restoreMode)
                 }
 
-                BackupSection.WORK_FAVOURITES -> sectionInput.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb("WORK_FAVOURITES") {
-                    getWorkFavouritesDao().upsert(it.toEntity(entityIdMapping, projectionAnchorMapping))
+                BackupSection.WORK_FAVOURITES -> sectionInput.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb("WORK_FAVOURITES", failFast = true) {
+                    restoreWorkFavourite(restoreEntity(it, entityIdMapping, projectionAnchorMapping))
                 }
 
-                BackupSection.WORK_STATS -> sectionInput.readJsonArray<WorkStatisticBackup>(serializer()).restoreToDb("WORK_STATS") {
-                    getWorkStatsDao().upsert(it.toEntity(entityIdMapping, projectionAnchorMapping))
+                BackupSection.WORK_STATS -> sectionInput.readJsonArray<WorkStatisticBackup>(serializer()).restoreToDb("WORK_STATS", failFast = true) {
+                    restoreWorkStats(restoreEntity(it, entityIdMapping, projectionAnchorMapping))
                 }
 
                 BackupSection.SAVED_FILTERS -> sectionInput.readJsonArray<PersistableFilter>(serializer())
@@ -610,7 +664,7 @@ class BackupRepository @Inject constructor(
         for (section in DEFERRED_RESTORE_ORDER) {
             val bytes = deferredEntries[section] ?: continue
             if (!projectionAnchorsReconciled && section in WORK_STATE_RESTORE_SECTIONS) {
-                projectionAnchorMapping += database.reconcileRestoredProjectionAnchors(remoteLocalBindings)
+                projectionAnchorMapping += database.reconcileRestoredProjectionAnchors(remoteLocalBindings, entityIdMapping)
                 projectionAnchorsReconciled = true
             }
             result += restoreSection(section, ByteArrayInputStream(bytes))
@@ -659,51 +713,21 @@ class BackupRepository @Inject constructor(
 
     private suspend fun normalizeRestoredWorkState(
         requestedSections: Set<BackupSection>,
-        entityIdMapping: Map<Long, Long>,
+        entityIdMapping: MutableMap<Long, Long>,
     ) {
         database.withTransaction {
             database.logRestoredWorkState("beforeNormalize", requestedSections, entityIdMapping)
-            if (entityIdMapping.isNotEmpty()) {
-                database.remapWorkEntityIds(requestedSections, entityIdMapping)
-            } else if (
+            if (entityIdMapping.isEmpty() && (
                 BackupSection.WORK_HISTORY in requestedSections ||
                 BackupSection.WORK_FAVOURITES in requestedSections ||
                 BackupSection.WORK_STATS in requestedSections
-            ) {
+            )) {
                 Log.w(TAG, "restore work normalize: entityIdMapping is empty for requested work sections")
             }
             if (BackupSection.SCROBBLING in requestedSections) {
                 database.normalizeRestoredScrobblingState()
             }
             database.logRestoredWorkState("afterNormalize", requestedSections, entityIdMapping)
-        }
-    }
-
-    private suspend fun MangaDatabase.remapWorkEntityIds(
-        requestedSections: Set<BackupSection>,
-        entityIdMapping: Map<Long, Long>,
-    ) {
-        val remaps = entityIdMapping.entries.filter { (old, new) -> old != new }
-        if (remaps.isEmpty()) {
-            Log.d(TAG, "restore work remap: no entity id remaps mappingSize=${entityIdMapping.size}")
-            return
-        }
-        Log.d(
-            TAG,
-            "restore work remap: requested=${requestedSections.joinToString()} " +
-                "mappingSize=${entityIdMapping.size} remaps=${remaps.size}",
-        )
-        if (BackupSection.WORK_FAVOURITES in requestedSections) {
-            val dao = getWorkFavouritesDao()
-            for ((oldId, newId) in remaps) dao.remapEntityId(oldId, newId)
-        }
-        if (BackupSection.WORK_HISTORY in requestedSections) {
-            val dao = getWorkHistoryDao()
-            for ((oldId, newId) in remaps) dao.remapEntityId(oldId, newId)
-        }
-        if (BackupSection.WORK_STATS in requestedSections) {
-            val dao = getWorkStatsDao()
-            for ((oldId, newId) in remaps) dao.remapEntityId(oldId, newId)
         }
     }
 
@@ -849,6 +873,7 @@ class BackupRepository @Inject constructor(
 
     private fun Set<BackupSection>.withImplicitRestoreSections(): Set<BackupSection> {
         val expanded = LinkedHashSet(this)
+        expanded += BackupSection.INDEX
         if (BackupSection.HISTORY in this) {
             expanded += BackupSection.WORK_HISTORY
         }
@@ -959,34 +984,84 @@ class BackupRepository @Inject constructor(
 
     private fun InputStream.readString(): String = readBytes().decodeToString()
 
-    private fun WorkHistoryBackup.toEntity(
+    private suspend fun MangaDatabase.restoreEntity(
+        backup: WorkHistoryBackup,
         entityIdMapping: Map<Long, Long>,
         projectionAnchorMapping: Map<Long, Long>,
     ): WorkHistoryEntity {
-        return toEntity().copy(
-            entityId = entityIdMapping[entityId] ?: entityId,
-            anchorMangaId = projectionAnchorMapping[anchorMangaId] ?: anchorMangaId,
+        val localEntityId = entityIdMapping[backup.entityId] ?: backup.entityId
+        return backup.toEntity().copy(
+            entityId = localEntityId,
+            anchorMangaId = resolveRestoredWorkAnchor(
+                remoteAnchorMangaId = backup.anchorMangaId,
+                localEntityId = localEntityId,
+                projectionAnchorMapping = projectionAnchorMapping,
+            ),
         )
     }
 
-    private fun WorkFavouriteBackup.toEntity(
+    private suspend fun MangaDatabase.restoreEntity(
+        backup: WorkFavouriteBackup,
         entityIdMapping: Map<Long, Long>,
         projectionAnchorMapping: Map<Long, Long>,
     ): WorkFavouriteEntity {
-        return toEntity().copy(
-            entityId = entityIdMapping[entityId] ?: entityId,
-            anchorMangaId = anchorMangaId?.let { projectionAnchorMapping[it] ?: it },
+        val localEntityId = entityIdMapping[backup.entityId] ?: backup.entityId
+        return backup.toEntity().copy(
+            entityId = localEntityId,
+            anchorMangaId = backup.anchorMangaId?.let {
+                resolveRestoredWorkAnchorOrNull(
+                    remoteAnchorMangaId = it,
+                    localEntityId = localEntityId,
+                    projectionAnchorMapping = projectionAnchorMapping,
+                    createPlaceholderIfMissing = backup.deletedAt == 0L,
+                )
+            },
         )
     }
 
-    private fun WorkStatisticBackup.toEntity(
+    private suspend fun MangaDatabase.restoreEntity(
+        backup: WorkStatisticBackup,
         entityIdMapping: Map<Long, Long>,
         projectionAnchorMapping: Map<Long, Long>,
     ): WorkStatsEntity {
-        return toEntity().copy(
-            entityId = entityIdMapping[entityId] ?: entityId,
-            anchorMangaId = projectionAnchorMapping[anchorMangaId] ?: anchorMangaId,
+        val localEntityId = entityIdMapping[backup.entityId] ?: backup.entityId
+        return backup.toEntity().copy(
+            entityId = localEntityId,
+            anchorMangaId = resolveRestoredWorkAnchor(
+                remoteAnchorMangaId = backup.anchorMangaId,
+                localEntityId = localEntityId,
+                projectionAnchorMapping = projectionAnchorMapping,
+            ),
         )
+    }
+
+    private suspend fun MangaDatabase.resolveRestoredWorkAnchor(
+        remoteAnchorMangaId: Long,
+        localEntityId: Long,
+        projectionAnchorMapping: Map<Long, Long>,
+        createPlaceholderIfMissing: Boolean = false,
+    ): Long {
+        return resolveRestoredWorkAnchorOrNull(
+            remoteAnchorMangaId = remoteAnchorMangaId,
+            localEntityId = localEntityId,
+            projectionAnchorMapping = projectionAnchorMapping,
+            createPlaceholderIfMissing = createPlaceholderIfMissing,
+        ) ?: remoteAnchorMangaId
+    }
+
+    private suspend fun MangaDatabase.resolveRestoredWorkAnchorOrNull(
+        remoteAnchorMangaId: Long,
+        localEntityId: Long,
+        projectionAnchorMapping: Map<Long, Long>,
+        createPlaceholderIfMissing: Boolean = false,
+    ): Long? {
+        projectionAnchorMapping[remoteAnchorMangaId]?.let { return it }
+        resolveExistingLocalProjectionForEntity(localEntityId)?.let { return it }
+        return if (createPlaceholderIfMissing) {
+            createRestorePlaceholderProjection(localEntityId, remoteAnchorMangaId)
+        } else {
+            null
+        }
     }
 
     private fun dumpSettings(): String {
@@ -1102,7 +1177,8 @@ class BackupRepository @Inject constructor(
     }
 
     private suspend fun MangaDatabase.resolveWorkEntityIdForLocalManga(mangaId: Long): Long? {
-        return workResolver.resolveByMangaId(mangaId).entityId
+        return getEntityGraphDao().findActiveBinding("local_manga", mangaId.toString())?.entityId
+            ?: getEntityGraphDao().findActiveBinding("0", mangaId.toString())?.entityId
     }
 
     private suspend fun MangaDatabase.upsertWorkHistoryFromLegacy(
@@ -1149,6 +1225,63 @@ class BackupRepository @Inject constructor(
             }
         }
         getWorkHistoryDao().upsert(entity)
+    }
+
+    private suspend fun MangaDatabase.restoreWorkHistoryFromBackup(
+        entity: WorkHistoryEntity,
+        restoreMode: RestoreMode,
+    ) {
+        val localEntityId = resolveWorkEntityIdForLocalManga(entity.anchorMangaId)
+            ?: throw IllegalStateException(
+                "Refusing restore: work history anchor ${entity.anchorMangaId} has no local WORK identity. " +
+                    describeLocalMangaAnchor(entity.anchorMangaId),
+            )
+        restoreWorkHistory(
+            entity = entity.copy(entityId = localEntityId),
+            restoreMode = restoreMode,
+        )
+    }
+
+    private suspend fun MangaDatabase.restoreWorkFavourite(entity: WorkFavouriteEntity) {
+        val anchorMangaId = entity.anchorMangaId ?: run {
+            if (entity.deletedAt != 0L) {
+                getWorkFavouritesDao().upsert(entity)
+                return
+            }
+            throw IllegalStateException(
+                "Refusing restore: work favourite entity ${entity.entityId} has no projection anchor.",
+            )
+        }
+        val localEntityId = resolveWorkEntityIdForLocalManga(anchorMangaId)
+        if (localEntityId == null) {
+            if (entity.deletedAt != 0L) {
+                getWorkFavouritesDao().upsert(entity.copy(anchorMangaId = null))
+                return
+            }
+            throw IllegalStateException(
+                "Refusing restore: work favourite anchor $anchorMangaId has no local WORK identity. " +
+                    describeLocalMangaAnchor(anchorMangaId),
+            )
+        }
+        getWorkFavouritesDao().upsert(entity.copy(entityId = localEntityId))
+    }
+
+    private suspend fun MangaDatabase.restoreWorkStats(entity: WorkStatsEntity) {
+        val localEntityId = resolveWorkEntityIdForLocalManga(entity.anchorMangaId)
+            ?: throw IllegalStateException(
+                "Refusing restore: work stats anchor ${entity.anchorMangaId} has no local WORK identity. " +
+                    describeLocalMangaAnchor(entity.anchorMangaId),
+            )
+        getWorkStatsDao().upsert(entity.copy(entityId = localEntityId))
+    }
+
+    private suspend fun MangaDatabase.describeLocalMangaAnchor(mangaId: Long): String {
+        val dao = getEntityGraphDao()
+        val local = dao.findBinding("local_manga", mangaId.toString())
+        val legacy = dao.findBinding("0", mangaId.toString())
+        return "mangaExists=${mangaId in getMangaDao()} " +
+            "local_manga=${local?.let { "entityId=${it.entityId},state=${it.state}" } ?: "missing"} " +
+            "legacy=${legacy?.let { "entityId=${it.entityId},state=${it.state}" } ?: "missing"}"
     }
 
     private suspend fun MangaDatabase.upsertWorkFavouriteFromLegacy(
@@ -1234,14 +1367,66 @@ class BackupRepository @Inject constructor(
     }
 
     private suspend fun MangaDatabase.resolveExistingLocalProjectionForEntity(entityId: Long): Long? {
-        val identity = workResolver.resolveByEntityId(entityId) ?: return null
-        val preferredMangaId = identity.preferredMangaId
+        val prefs = getEntityGraphDao().findEntityPrefs(entityId)
+        val preferredMangaId = prefs?.preferredLocalMangaId
         if (preferredMangaId != null && getMangaDao().contains(preferredMangaId)) {
             return preferredMangaId
         }
-        return identity.localMangaIds.firstOrNull { localId ->
-            getMangaDao().contains(localId)
+        return getEntityGraphDao().findActiveLocalBindingsByEntity(entityId)
+            .mapNotNull { it.externalId.toLongOrNull() }
+            .firstOrNull { localId -> getMangaDao().contains(localId) }
+    }
+
+    private suspend fun MangaDatabase.createRestorePlaceholderProjection(
+        entityId: Long,
+        remoteAnchorMangaId: Long,
+    ): Long {
+        resolveExistingLocalProjectionForEntity(entityId)?.let { return it }
+        val entity = getEntityGraphDao().findEntity(entityId)
+            ?: throw IllegalStateException(
+                "Refusing restore: cannot create placeholder projection for missing WORK entity $entityId.",
+            )
+        val existingPlaceholder = getEntityGraphDao().findActiveBindingsByEntity(entityId)
+            .asSequence()
+            .filter { it.source == "local_manga" || it.source == "0" }
+            .mapNotNull { it.externalId.toLongOrNull() }
+            .firstOrNull { localId ->
+                val manga = getMangaDao().find(localId)?.manga
+                manga?.source == RESTORE_PLACEHOLDER_SOURCE
+            }
+        if (existingPlaceholder != null) {
+            return existingPlaceholder
         }
+        var candidateId = (getMangaDao().findMinId() ?: 0L).coerceAtMost(0L) - 1L
+        while (candidateId in getMangaDao()) {
+            candidateId--
+        }
+        val placeholderUrl = "restore://work/$entityId/anchor/$remoteAnchorMangaId"
+        getMangaDao().upsert(
+            MangaEntity(
+                id = candidateId,
+                title = entity.primaryName.ifBlank { "Restored work $entityId" },
+                altTitles = null,
+                url = placeholderUrl,
+                publicUrl = placeholderUrl,
+                rating = -1f,
+                isNsfw = false,
+                contentRating = null,
+                coverUrl = getEntityGraphDao().findEntityPrefs(entityId)?.coverUrlOverride.orEmpty(),
+                largeCoverUrl = null,
+                state = null,
+                authors = null,
+                source = RESTORE_PLACEHOLDER_SOURCE,
+            ),
+            tags = null,
+        )
+        ensureRestoredLocalMangaBinding(entityId, candidateId)
+        Log.d(
+            TAG,
+            "restore: created placeholder projection mangaId=$candidateId entityId=$entityId " +
+                "remoteAnchorMangaId=$remoteAnchorMangaId",
+        )
+        return candidateId
     }
 
     private fun choosePreferredScrobblingRestoreEntity(
@@ -1325,21 +1510,21 @@ class BackupRepository @Inject constructor(
     ) {
         val dao = getEntityGraphDao()
         val trimmedName = remote.primaryName.trim()
+        val syncId = remote.syncId.trim()
+        if (remote.type == EntityType.WORK.name && syncId.isEmpty()) {
+            throw IllegalStateException(
+                "Refusing restore: WORK entity ${remote.id} has no sync_id; restore cannot map it safely.",
+            )
+        }
         val computedHash = computeNameHash(trimmedName)
-        // Prefer the stable cross-device identity (sync_id) when the backup carries
-        // one. Backups written before the sync_id identity system have a blank
-        // sync_id and fall through to the legacy id / name-hash resolution.
-        val syncIdOwner = remote.syncId.trim()
+        val existing = syncId
             .takeIf { it.isNotEmpty() }
             ?.let { dao.findEntityBySyncId(it) }
             ?.takeIf { it.type == remote.type }
-        val existing = syncIdOwner
-            ?: dao.findEntity(remote.id)?.takeIf { it.type == remote.type }
-            ?: dao.findEntityByTypeAndPrimaryName(remote.type, trimmedName)
         val localId = if (existing == null) {
             val newRecord = EntityRecord(
                 type = remote.type,
-                syncId = remote.syncId.trim().ifEmpty { java.util.UUID.randomUUID().toString() },
+                syncId = syncId.ifEmpty { java.util.UUID.randomUUID().toString() },
                 primaryName = trimmedName,
                 nameHash = computedHash,
                 aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),
@@ -1351,13 +1536,11 @@ class BackupRepository @Inject constructor(
             if (insertedId != -1L) {
                 insertedId
             } else {
-                // Hash collision — another entity already has this name hash. Try to merge.
-                dao.findEntityByTypeAndNameHash(remote.type, computedHash)?.id
-                    ?: dao.insertEntity(
-                        newRecord.copy(
-                            nameHash = remote.id.takeIf { it > 0L } ?: -(remote.id + 1),
-                        ),
-                    )
+                dao.insertEntity(
+                    newRecord.copy(
+                        nameHash = remote.id.takeIf { it > 0L } ?: -(remote.id + 1),
+                    ),
+                )
             }
         } else {
             val mergedNames = mergeAliases(
@@ -1381,7 +1564,7 @@ class BackupRepository @Inject constructor(
 
     private suspend fun MangaDatabase.restoreEntityBinding(
         remote: EntityBindingRecord,
-        entityIdMapping: Map<Long, Long>,
+        entityIdMapping: MutableMap<Long, Long>,
         restoreContext: RestoreSemanticContext,
         remoteLocalBindings: MutableList<RestoredLocalBindingEvidence>,
     ) {
@@ -1398,7 +1581,7 @@ class BackupRepository @Inject constructor(
             }
             remoteLocalBindings += RestoredLocalBindingEvidence(
                 remoteMangaId = remoteMangaId,
-                localEntityId = localEntityId,
+                remoteEntityId = remote.entityId,
             )
             if (remoteMangaId !in getMangaDao()) {
                 Log.d(
@@ -1410,6 +1593,23 @@ class BackupRepository @Inject constructor(
         }
         val dao = getEntityGraphDao()
         val existing = dao.findBinding(remote.source, remote.externalId)
+        if (
+            existing != null &&
+            existing.entityId != localEntityId &&
+            existing.state.toEntityBindingStateOrNull() in ACTIVE_RESTORE_BINDING_STATES &&
+            remote.isStrongRestoreBinding()
+        ) {
+            val target = dao.findEntity(existing.entityId)
+            if (target?.type == EntityType.WORK.name) {
+                entityIdMapping[remote.entityId] = existing.entityId
+                Log.d(
+                    TAG,
+                    "restore: remap remote WORK ${remote.entityId} to local WORK ${existing.entityId} " +
+                        "from binding source=${remote.source}, externalId=${remote.externalId}",
+                )
+                return
+            }
+        }
         if (existing != null && existing.shouldKeepOverRestored(remote)) {
             Log.d(TAG, "restore: keep local entity_binding source=${remote.source}, externalId=${remote.externalId}")
             return
@@ -1419,19 +1619,25 @@ class BackupRepository @Inject constructor(
 
     private suspend fun MangaDatabase.reconcileRestoredProjectionAnchors(
         remoteLocalBindings: List<RestoredLocalBindingEvidence>,
+        entityIdMapping: MutableMap<Long, Long>,
     ): Map<Long, Long> {
         if (remoteLocalBindings.isEmpty()) {
             Log.d(TAG, "restore projection anchors: no remote local bindings")
             return emptyMap()
         }
+        val entityIds = remoteLocalBindings.mapNotNull { entityIdMapping[it.remoteEntityId] }.distinct()
+        if (entityIds.isEmpty()) {
+            Log.d(TAG, "restore projection anchors: no resolved remote local bindings")
+            return emptyMap()
+        }
         val dao = getEntityGraphDao()
-        val entityIds = remoteLocalBindings.map { it.localEntityId }.distinct()
         val localProjectionIdsByEntity = LinkedHashMap<Long, LinkedHashSet<Long>>()
         var nextRestoredProjectionId = (getMangaDao().findMinId() ?: 0L).coerceAtMost(0L) - 1L
         var projectionBindingCount = 0
         var matchedProjectionCount = 0
         var createdProjectionCount = 0
         var attachedLocalBindingCount = 0
+        var remappedProjectionOwnerCount = 0
         entityIds.chunked(RESTORE_TRANSACTION_BATCH_SIZE).forEach { chunk ->
             dao.findActiveBindingsByEntities(chunk)
                 .asSequence()
@@ -1448,8 +1654,16 @@ class BackupRepository @Inject constructor(
                     }
                     val localMangaId = resolved.localMangaId
                     matchedProjectionCount++
-                    localProjectionIdsByEntity.getOrPut(binding.entityId) { linkedSetOf() } += localMangaId
-                    if (attachRestoredLocalMangaBindingIfAllowed(binding.entityId, localMangaId)) {
+                    val ownerEntityId = resolveRestoredProjectionOwner(
+                        entityId = binding.entityId,
+                        localMangaId = localMangaId,
+                        entityIdMapping = entityIdMapping,
+                    )
+                    if (ownerEntityId != binding.entityId) {
+                        remappedProjectionOwnerCount++
+                    }
+                    localProjectionIdsByEntity.getOrPut(ownerEntityId) { linkedSetOf() } += localMangaId
+                    if (ensureRestoredLocalMangaBinding(ownerEntityId, localMangaId)) {
                         attachedLocalBindingCount++
                     }
                 }
@@ -1460,15 +1674,39 @@ class BackupRepository @Inject constructor(
         var singleProjectionMapCount = 0
         var unresolvedCount = 0
         for (evidence in remoteLocalBindings) {
+            val localEntityId = entityIdMapping[evidence.remoteEntityId]
+            if (localEntityId == null) {
+                Log.w(
+                    TAG,
+                    "restore projection anchors: skip local binding evidence with unmapped remoteEntityId=${evidence.remoteEntityId}",
+                )
+                unresolvedCount++
+                continue
+            }
             if (evidence.remoteMangaId in getMangaDao()) {
                 mapping[evidence.remoteMangaId] = evidence.remoteMangaId
+                val ownerEntityId = resolveRestoredProjectionOwner(
+                    entityId = localEntityId,
+                    localMangaId = evidence.remoteMangaId,
+                    entityIdMapping = entityIdMapping,
+                )
+                if (ownerEntityId != localEntityId) {
+                    remappedProjectionOwnerCount++
+                }
+                if (ensureRestoredLocalMangaBinding(ownerEntityId, evidence.remoteMangaId)) {
+                    attachedLocalBindingCount++
+                }
                 existingSameIdCount++
                 continue
             }
-            val localProjectionIds = localProjectionIdsByEntity[evidence.localEntityId].orEmpty()
+            val latestLocalEntityId = entityIdMapping[evidence.remoteEntityId] ?: localEntityId
+            val localProjectionIds = localProjectionIdsByEntity[latestLocalEntityId].orEmpty()
             val localMangaId = localProjectionIds.singleOrNull()
             if (localMangaId != null) {
                 mapping[evidence.remoteMangaId] = localMangaId
+                if (ensureRestoredLocalMangaBinding(latestLocalEntityId, localMangaId)) {
+                    attachedLocalBindingCount++
+                }
                 singleProjectionMapCount++
             } else {
                 unresolvedCount++
@@ -1477,8 +1715,10 @@ class BackupRepository @Inject constructor(
         Log.d(
             TAG,
             "restore projection anchors: remoteLocalBindings=${remoteLocalBindings.size} " +
+                "resolvedRemoteLocalBindings=${entityIds.size} " +
                 "projectionBindings=$projectionBindingCount matchedProjections=$matchedProjectionCount " +
                 "createdProjections=$createdProjectionCount attachedLocalBindings=$attachedLocalBindingCount " +
+                "remappedProjectionOwners=$remappedProjectionOwnerCount " +
                 "mappingSize=${mapping.size} " +
                 "existingSameId=$existingSameIdCount singleProjectionMapped=$singleProjectionMapCount " +
                 "unresolved=$unresolvedCount",
@@ -1528,7 +1768,34 @@ class BackupRepository @Inject constructor(
         )
     }
 
-    private suspend fun MangaDatabase.attachRestoredLocalMangaBindingIfAllowed(
+    private suspend fun MangaDatabase.resolveRestoredProjectionOwner(
+        entityId: Long,
+        localMangaId: Long,
+        entityIdMapping: MutableMap<Long, Long>,
+    ): Long {
+        val existing = getEntityGraphDao().findActiveBinding("local_manga", localMangaId.toString())
+            ?: return entityId
+        if (existing.entityId == entityId) {
+            return entityId
+        }
+        val target = getEntityGraphDao().findEntity(existing.entityId)
+        if (target?.type != EntityType.WORK.name) {
+            return entityId
+        }
+        entityIdMapping.entries
+            .filter { it.value == entityId }
+            .forEach { (remoteEntityId, _) ->
+                entityIdMapping[remoteEntityId] = existing.entityId
+            }
+        Log.d(
+            TAG,
+            "restore projection anchors: remap local WORK $entityId to ${existing.entityId} " +
+                "from local_manga anchor $localMangaId",
+        )
+        return existing.entityId
+    }
+
+    private suspend fun MangaDatabase.ensureRestoredLocalMangaBinding(
         entityId: Long,
         localMangaId: Long,
     ): Boolean {
@@ -1536,7 +1803,16 @@ class BackupRepository @Inject constructor(
         val externalId = localMangaId.toString()
         val existing = dao.findBinding("local_manga", externalId)
         if (existing != null) {
-            return false
+            val existingState = existing.state.toEntityBindingStateOrNull()
+            if (existing.entityId == entityId && existingState in ACTIVE_RESTORE_BINDING_STATES) {
+                return false
+            }
+            if (existing.entityId != entityId && existingState in ACTIVE_RESTORE_BINDING_STATES) {
+                throw IllegalStateException(
+                    "Refusing restore: local_manga anchor $localMangaId is already bound to WORK " +
+                        "${existing.entityId}, cannot bind to WORK $entityId.",
+                )
+            }
         }
         dao.upsertBinding(
             EntityBindingRecord(
@@ -1602,6 +1878,10 @@ class BackupRepository @Inject constructor(
             return false
         }
         return externalId.toProjectionKeyParts() != null
+    }
+
+    private fun EntityBindingRecord.isStrongRestoreBinding(): Boolean {
+        return isRestorableProjectionBinding()
     }
 
     private fun String.isLocalMangaBindingSource(): Boolean {
@@ -1706,6 +1986,7 @@ class BackupRepository @Inject constructor(
     private suspend fun <T> Sequence<T>.restoreToDb(
         label: String,
         batchSize: Int = RESTORE_TRANSACTION_BATCH_SIZE,
+        failFast: Boolean = false,
         block: suspend MangaDatabase.(T) -> Unit,
     ): CompositeResult {
         val startedAt = SystemClock.elapsedRealtime()
@@ -1719,8 +2000,13 @@ class BackupRepository @Inject constructor(
             var batchResult = CompositeResult.EMPTY
             database.withTransaction {
                 batch.forEach { item ->
-                    batchResult += runCatchingCancellable {
+                    if (failFast) {
                         database.block(item)
+                        batchResult += CompositeResult.success()
+                    } else {
+                        batchResult += runCatchingCancellable {
+                            database.block(item)
+                        }
                     }
                 }
             }

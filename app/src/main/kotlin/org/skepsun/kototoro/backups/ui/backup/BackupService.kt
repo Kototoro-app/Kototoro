@@ -19,16 +19,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.ui.BaseBackupRestoreService
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.powerManager
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.withPartialWakeLock
 import org.skepsun.kototoro.core.util.progress.Progress
+import java.io.File
 import java.io.FileNotFoundException
+import java.io.FileInputStream
+import java.io.IOException
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
@@ -62,9 +67,24 @@ class BackupService : BaseBackupRestoreService() {
 			} else {
 				null
 			}
+			val tempFile = File.createTempFile("manual_backup_", ".bk.zip", cacheDir)
 			try {
-				ZipOutputStream(contentResolver.openOutputStream(destination)).use { output ->
+				ZipOutputStream(tempFile.outputStream()).use { output ->
 					repository.createBackup(output, progress)
+				}
+				BackupPayloadGuard.requireRestorableWorkSnapshot(
+					file = tempFile,
+					operation = "manual backup creation",
+				)
+				val expectedBytes = tempFile.length()
+				FileInputStream(tempFile).use { input ->
+					contentResolver.openOutputStream(destination, "wt")?.use { output ->
+						val copiedBytes = input.copyTo(output)
+						output.flush()
+						if (copiedBytes != expectedBytes) {
+							throw IOException("Backup write was incomplete: copied $copiedBytes of $expectedBytes bytes.")
+						}
+					} ?: throw FileNotFoundException()
 				}
 			} catch (e: Throwable) {
 				try {
@@ -72,7 +92,16 @@ class BackupService : BaseBackupRestoreService() {
 				} catch (e2: Throwable) {
 					e.addSuppressed(e2)
 				}
+				withContext(Dispatchers.Main) {
+					Toast.makeText(
+						this@BackupService,
+						e.getDisplayMessage(resources),
+						Toast.LENGTH_LONG,
+					).show()
+				}
 				throw e
+			} finally {
+				tempFile.delete()
 			}
 			progressUpdateJob?.cancelAndJoin()
 			contentResolver.notifyChange(destination, null)

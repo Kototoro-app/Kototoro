@@ -22,6 +22,8 @@ import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.resolveFile
+import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
+import org.skepsun.kototoro.sync.google.work.GoogleDriveSyncWorker
 import java.util.Date
 import java.io.File
 import java.io.FileInputStream
@@ -47,6 +49,8 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 	private val backupWebDavRestoreCoordinator: BackupWebDavRestoreCoordinator,
 	private val backupStorage: ExternalBackupStorage,
 	private val repository: org.skepsun.kototoro.backups.data.BackupRepository,
+	private val googleDriveSyncSettings: GoogleDriveSyncSettings,
+	private val googleDriveSyncScheduler: GoogleDriveSyncWorker.Scheduler,
 	@ApplicationContext private val appContext: Context,
 ) : BaseViewModel() {
 
@@ -96,6 +100,16 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 			} finally {
 				isWebDavCheckLoading.value = false
 				webDavUploadBusyMessageRes.value = null
+			}
+		}
+	}
+
+	fun setWebDavEnabled(value: Boolean) {
+		settings.isBackupWebDavUploadEnabled = value
+		if (value) {
+			googleDriveSyncSettings.isSyncEnabled = false
+			launchJob(Dispatchers.Default) {
+				googleDriveSyncScheduler.unschedule()
 			}
 		}
 	}

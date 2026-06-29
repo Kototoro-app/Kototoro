@@ -51,6 +51,9 @@ abstract class WorkFavouritesDao {
 	@Query("SELECT * FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0 ORDER BY updated_at DESC")
 	abstract suspend fun findActive(): List<WorkFavouriteEntity>
 
+	@Query("SELECT * FROM work_favourites WHERE anchor_manga_id IS NULL AND deleted_at = 0 ORDER BY updated_at DESC LIMIT :limit")
+	abstract suspend fun findActiveWithoutAnchor(limit: Int): List<WorkFavouriteEntity>
+
 	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId AND anchor_manga_id IS NOT NULL AND deleted_at = 0 ORDER BY updated_at DESC LIMIT 1")
 	abstract suspend fun findActiveForEntity(entityId: Long): WorkFavouriteEntity?
 
@@ -77,6 +80,9 @@ abstract class WorkFavouritesDao {
 
 	@Query("SELECT * FROM work_favourites WHERE anchor_manga_id = :anchorMangaId AND deleted_at = 0 ORDER BY updated_at DESC")
 	abstract suspend fun findActiveByAnchorMangaId(anchorMangaId: Long): List<WorkFavouriteEntity>
+
+	@Query("SELECT DISTINCT anchor_manga_id FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
+	abstract suspend fun findActiveAnchorMangaIds(): List<Long>
 
 	@Query("SELECT MAX(pinned) FROM work_favourites WHERE entity_id IN (:entityIds) AND anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun isPinned(entityIds: List<Long>): Boolean?

@@ -52,6 +52,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import java.io.File
 import java.net.Proxy
 import java.util.EnumSet
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -1622,6 +1623,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeInt(KEY_BACKUP_WEBDAV_DATA_VERSION, 1)
 		set(value) = prefs.edit { putInt(KEY_BACKUP_WEBDAV_DATA_VERSION, value) }
 
+	val backupDeviceId: String
+		get() = prefs.getString(KEY_BACKUP_DEVICE_ID, null) ?: UUID.randomUUID().toString().also {
+			prefs.edit { putString(KEY_BACKUP_DEVICE_ID, it) }
+		}
+
 	var isBackupWebDavAutoRestoreEnabled: Boolean
 		get() = prefs.getBoolean(KEY_BACKUP_WEBDAV_AUTO_RESTORE, false)
 		set(value) = prefs.edit { putBoolean(KEY_BACKUP_WEBDAV_AUTO_RESTORE, value) }
@@ -2355,6 +2361,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		// WebDAV 自动同步与数据版本
 		const val KEY_BACKUP_WEBDAV_AUTO_SYNC = "backup_periodic_webdav_auto_sync"
 		const val KEY_BACKUP_WEBDAV_DATA_VERSION = "backup_periodic_webdav_data_version"
+		const val KEY_BACKUP_DEVICE_ID = "backup_device_id"
 
 		const val KEY_BACKUP_WEBDAV_POLICY_NOTE = "backup_periodic_webdav_policy_note"
 		const val KEY_MANGA_LIST_BADGES = "manga_list_badges"
