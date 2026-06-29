@@ -207,7 +207,7 @@ class ContentListMapper @Inject constructor(
 			metadataSelection = dataRepository.getMetadataSourceSelection(logItem.manga.id),
 			trackingDetailsCache = HashMap(1),
 		),
-		count = logItem.chapters.size,
+		count = logItem.count ?: logItem.chapters.size,
 		manga = logItem.manga,
 		isNew = logItem.isNew,
 	)
@@ -231,7 +231,7 @@ class ContentListMapper @Inject constructor(
 					metadataSelection = metadataSelections[logItem.manga.id],
 					trackingDetailsCache = trackingDetailsCache,
 				),
-				count = logItem.chapters.size,
+				count = logItem.count ?: logItem.chapters.size,
 				manga = logItem.manga,
 				isNew = logItem.isNew,
 			)

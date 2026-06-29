@@ -201,6 +201,7 @@ class FeedViewModel @Inject constructor(
 							chapters = chapters,
 							createdAt = track.lastChapterDate ?: track.lastCheck ?: java.time.Instant.EPOCH,
 							isNew = track.newChapters > 0,
+							count = track.newChapters,
 						)
 					}
 				}
@@ -295,6 +296,7 @@ class FeedViewModel @Inject constructor(
 			chapters = List(newChapters.coerceAtLeast(1)) { "" },
 			createdAt = lastChapterDate ?: lastCheck ?: java.time.Instant.EPOCH,
 			isNew = newChapters > 0,
+			count = newChapters,
 		)
 	}
 
