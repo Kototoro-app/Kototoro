@@ -146,6 +146,10 @@ fun KototoroTopBar(
     sortOrders: List<ListSortOrder> = emptyList(),
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
+    isFeedScreen: Boolean = false,
+    showAllUpdates: Boolean = false,
+    onShowAllUpdatesChanged: (Boolean) -> Unit = {},
+    onFeedRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -423,7 +427,7 @@ fun KototoroTopBar(
                     .padding(top = 8.dp),
             )
         }
-        if (showDisplayOptionsSheet && (supportsDisplayModeMenu || supportsGridSizeSlider || onBrowseTrackingRecommendationsChange != null || sortOrders.isNotEmpty())) {
+        if (showDisplayOptionsSheet && (supportsDisplayModeMenu || supportsGridSizeSlider || onBrowseTrackingRecommendationsChange != null || sortOrders.isNotEmpty() || isFeedScreen)) {
             org.skepsun.kototoro.list.ui.compose.DisplayOptionsSheet(
                 supportsDisplayModeMenu = supportsDisplayModeMenu,
                 currentListMode = pendingListMode,
@@ -440,27 +444,55 @@ fun KototoroTopBar(
                 sortOrders = sortOrders,
                 selectedSortOrder = selectedSortOrder,
                 onSortOrderSelected = onSortOrderSelected,
-                extraContent = if (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null) {
+                extraContent = if (isFeedScreen || (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null)) {
                     {
                         Column {
-                            DisplayOptionsSwitchRow(
-                                title = stringResource(R.string.browse_tracking_recommendations),
-                                summary = stringResource(R.string.browse_tracking_recommendations_summary),
-                                checked = isBrowseTrackingRecommendationsEnabled,
-                                onCheckedChange = onBrowseTrackingRecommendationsChange,
-                            )
-                            if (
-                                isBrowseTrackingRecommendationsEnabled &&
-                                isBrowseMoreTrackingRecommendationsEnabled != null &&
-                                onBrowseMoreTrackingRecommendationsChange != null
-                            ) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            if (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null) {
                                 DisplayOptionsSwitchRow(
-                                    title = stringResource(R.string.browse_more_tracking_recommendations),
-                                    summary = stringResource(R.string.browse_more_tracking_recommendations_summary),
-                                    checked = isBrowseMoreTrackingRecommendationsEnabled,
-                                    onCheckedChange = onBrowseMoreTrackingRecommendationsChange,
+                                    title = stringResource(R.string.browse_tracking_recommendations),
+                                    summary = stringResource(R.string.browse_tracking_recommendations_summary),
+                                    checked = isBrowseTrackingRecommendationsEnabled,
+                                    onCheckedChange = onBrowseTrackingRecommendationsChange,
                                 )
+                                if (
+                                    isBrowseTrackingRecommendationsEnabled &&
+                                    isBrowseMoreTrackingRecommendationsEnabled != null &&
+                                    onBrowseMoreTrackingRecommendationsChange != null
+                                ) {
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                    DisplayOptionsSwitchRow(
+                                        title = stringResource(R.string.browse_more_tracking_recommendations),
+                                        summary = stringResource(R.string.browse_more_tracking_recommendations_summary),
+                                        checked = isBrowseMoreTrackingRecommendationsEnabled,
+                                        onCheckedChange = onBrowseMoreTrackingRecommendationsChange,
+                                    )
+                                }
+                            }
+                            if (isFeedScreen) {
+                                if (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null) {
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                }
+                                Column {
+                                    DisplayOptionsSwitchRow(
+                                        title = stringResource(R.string.show_all_updates),
+                                        summary = stringResource(R.string.feed_behavior_description),
+                                        checked = showAllUpdates,
+                                        onCheckedChange = onShowAllUpdatesChanged,
+                                    )
+                                    androidx.compose.animation.AnimatedVisibility(visible = showAllUpdates) {
+                                        Box(modifier = Modifier.fillMaxWidth()) {
+                                            androidx.compose.material3.TextButton(
+                                                onClick = {
+                                                    onFeedRefresh()
+                                                    showDisplayOptionsSheet = false
+                                                },
+                                                modifier = Modifier.align(Alignment.CenterEnd)
+                                            ) {
+                                                Text(text = stringResource(R.string.trigger_update_now))
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
