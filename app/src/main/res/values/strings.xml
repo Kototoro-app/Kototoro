@@ -163,6 +163,9 @@
     <string name="size_s">Size: %s</string>
     <string name="clear_updates_feed">Clear updates feed</string>
     <string name="updates_feed_cleared">Cleared</string>
+    <string name="show_all_updates">Show all updates</string>
+    <string name="feed_behavior_description">Default: The feed only shows new, unread chapters checked since your last visit.\n\nActive: Displays all cached chapters (up to 10 per item) regardless of reading status, organized by fetch date. Trigger a full update to fetch the latest chapters.</string>
+    <string name="trigger_update_now">Trigger Update</string>
     <string name="rotate_screen">Rotate screen</string>
     <string name="update">Update</string>
     <string name="feed_will_update_soon">Feed update will start soon</string>

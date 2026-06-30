@@ -703,6 +703,9 @@ fun KototoroApp(
     val globalFavoritesSortOrder by appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
         allFavoritesSortOrder
     }
+    val showAllUpdates by appSettings.observeAsState(keys = arrayOf(org.skepsun.kototoro.core.prefs.AppSettings.KEY_SHOW_ALL_UPDATES)) {
+        showAllUpdates
+    }
     val sortOrders = layeredTopBarOverrideState?.sortOrders?.takeIf { it.isNotEmpty() } ?: fallbackFavoritesSortOrders
     val selectedSortOrder = layeredTopBarOverrideState?.selectedSortOrder ?: if (isFavoritesRoute) {
         globalFavoritesSortOrder
@@ -928,6 +931,21 @@ fun KototoroApp(
                         sortOrders = sortOrders,
                         selectedSortOrder = selectedSortOrder,
                         onSortOrderSelected = onDisplaySortOrderSelected,
+                        isFeedScreen = chromeTopLevelKey == org.skepsun.kototoro.main.ui.navigation3.FeedNavKey,
+                        showAllUpdates = showAllUpdates,
+                        onShowAllUpdatesChanged = { appSettings.showAllUpdates = it },
+                        onFeedRefresh = {
+                            val workRequest = androidx.work.OneTimeWorkRequestBuilder<org.skepsun.kototoro.tracker.work.TrackWorker>()
+                                .setConstraints(
+                                    androidx.work.Constraints.Builder()
+                                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                        .build()
+                                )
+                                .addTag("tracking_oneshot")
+                                .build()
+                            androidx.work.WorkManager.getInstance(context)
+                                .enqueueUniqueWork("tracking_oneshot", androidx.work.ExistingWorkPolicy.REPLACE, workRequest)
+                        },
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
@@ -1219,6 +1237,10 @@ private fun BoxScope.MainTopChrome(
     sortOrders: List<org.skepsun.kototoro.list.domain.ListSortOrder> = emptyList(),
     selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
     onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
+    isFeedScreen: Boolean = false,
+    showAllUpdates: Boolean = false,
+    onShowAllUpdatesChanged: (Boolean) -> Unit = {},
+    onFeedRefresh: () -> Unit = {},
 ) {
     val topChromeModifier = Modifier
         .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
@@ -1287,6 +1309,10 @@ private fun BoxScope.MainTopChrome(
             sortOrders = sortOrders,
             selectedSortOrder = selectedSortOrder,
             onSortOrderSelected = onSortOrderSelected,
+            isFeedScreen = isFeedScreen,
+            showAllUpdates = showAllUpdates,
+            onShowAllUpdatesChanged = onShowAllUpdatesChanged,
+            onFeedRefresh = onFeedRefresh,
             modifier = topChromeModifier.offset {
                 androidx.compose.ui.unit.IntOffset(0, (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt())
             },

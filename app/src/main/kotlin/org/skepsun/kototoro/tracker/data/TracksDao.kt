@@ -60,6 +60,17 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 			.build(),
 	)
 
+	fun observeAllTracks(
+		limit: Int,
+		filterOptions: Set<ListFilterOption>,
+	): Flow<List<TrackEntity>> = observeContentImpl(
+		MangaQueryBuilder("tracks", this)
+			.filters(filterOptions)
+			.limit(limit)
+			.orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC")
+			.build(),
+	)
+
 	@Query("DELETE FROM tracks")
 	abstract suspend fun clear()
 

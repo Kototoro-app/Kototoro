@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -162,6 +163,7 @@ fun FeedScreen(
 			),
 			modifier = Modifier.fillMaxSize()
 		) {
+
 			itemsIndexed(
 				items = items,
 				key = { index, item ->
@@ -282,3 +284,5 @@ private fun FeedEmptyState(
 		}
 	}
 }
+
+
