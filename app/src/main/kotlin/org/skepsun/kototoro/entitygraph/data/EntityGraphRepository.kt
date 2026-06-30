@@ -222,32 +222,12 @@ class EntityGraphRepository @Inject constructor(
 		if (localMangaId == 0L) {
 			return@withContext false
 		}
-		db.withTransaction {
-			val dao = db.getEntityGraphDao()
-			val existing = findEntityByLocalMangaId(localMangaId) ?: return@withTransaction false
-			deleteLocalProjectionBindings(dao, localMangaId)
-			val now = System.currentTimeMillis()
-			val fallbackLocalMangaId = findFallbackLocalProjectionId(
-				dao = dao,
-				entityId = existing.entityId,
-				detachedLocalMangaId = localMangaId,
-			)
-			clearPreferredLocalProjectionIfDetached(
-				dao = dao,
-				entityId = existing.entityId,
-				detachedLocalMangaId = localMangaId,
-				fallbackLocalMangaId = fallbackLocalMangaId,
-				now = now,
-			)
-			reconcileDetachedLocalProjectionAnchors(
-				entityId = existing.entityId,
-				detachedLocalMangaId = localMangaId,
-				fallbackLocalMangaId = fallbackLocalMangaId,
-				now = now,
-			)
-			dao.touchEntity(existing.entityId, now)
-			true
-		}
+		val content = db.getMangaDao().find(localMangaId)?.toContent()
+		val split = splitLocalWorkProjectionInTransaction(localMangaId, content)
+		val newEntityId = split.newEntityId ?: return@withContext false
+		db.getWorkFavouritesDao().delete(newEntityId)
+		db.getWorkHistoryDao().delete(newEntityId)
+		true
 	}
 
 	suspend fun splitLocalWorkProjection(content: Content): Long? = withContext(Dispatchers.Default) {
@@ -2600,11 +2580,19 @@ class EntityGraphRepository @Inject constructor(
 		newEntityId: Long,
 		localMangaId: Long,
 	) {
-		db.getWorkFavouritesDao().moveAnchorToEntity(
+		val workFavouritesDao = db.getWorkFavouritesDao()
+		val movedFavouriteRows = workFavouritesDao.moveAnchorToEntity(
 			oldEntityId = oldEntityId,
 			newEntityId = newEntityId,
 			anchorMangaId = localMangaId,
 		)
+		if (movedFavouriteRows == 0) {
+			workFavouritesDao.copyActiveCategoriesToEntity(
+				oldEntityId = oldEntityId,
+				newEntityId = newEntityId,
+				anchorMangaId = localMangaId,
+			)
+		}
 		db.getWorkHistoryDao().moveAnchorToEntity(
 			oldEntityId = oldEntityId,
 			newEntityId = newEntityId,

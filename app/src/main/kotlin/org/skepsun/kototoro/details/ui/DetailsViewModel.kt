@@ -502,6 +502,9 @@ class DetailsViewModel @Inject constructor(
 	val activeExternalOrigin = savedStateHandle.get<org.skepsun.kototoro.details.ui.model.DetailsOrigin>(
 		org.skepsun.kototoro.core.nav.AppRouter.KEY_DETAILS_ORIGIN,
 	) ?: org.skepsun.kototoro.core.nav.PendingDetailsNavigation.consume()
+	private val isTemporaryReadOnly = savedStateHandle.get<Boolean>(
+		org.skepsun.kototoro.core.nav.AppRouter.KEY_TEMPORARY_DETAILS,
+	) == true
 	private val originContent = (activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent)?.manga
 	private val initialLoadIntentOverride = when (val origin = activeExternalOrigin) {
 		is org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent -> ContentIntent.of(origin.manga)
@@ -1534,6 +1537,7 @@ class DetailsViewModel @Inject constructor(
 		}
 
 		if (
+			!isTemporaryReadOnly &&
 			activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph &&
 			activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity &&
 			activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem
@@ -1935,6 +1939,9 @@ class DetailsViewModel @Inject constructor(
 	private suspend fun persistMetadataSourceSelectionForCurrentEntity(
 		fallbackMangaId: Long? = null,
 	) {
+		if (isTemporaryReadOnly) {
+			return
+		}
 		val selection = selectedMetadataSource.value.toPersistedSelection()
 		val entityId = resolveContextualEntityId()
 		val resolvedFallbackMangaId = fallbackMangaId ?: resolveCurrentMetadataPersistenceMangaId()
@@ -1960,6 +1967,9 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private suspend fun persistPreferredLocalSourceForCurrentEntity(mangaId: Long) {
+		if (isTemporaryReadOnly) {
+			return
+		}
 		val entityId = resolveContextualEntityId()
 		if (entityId != null) {
 			dataRepository.setEntityPreferredLocalMangaId(entityId = entityId, mangaId = mangaId)

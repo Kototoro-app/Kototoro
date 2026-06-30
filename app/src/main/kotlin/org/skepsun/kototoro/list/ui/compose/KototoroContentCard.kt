@@ -690,12 +690,33 @@ fun ContentCardCornerBadges(
     val showSource = "source" in badges
     val showLanguage = "language" in badges && !langText.isNullOrBlank()
     val showCounter = "counter" in badges && item.counter > 0
+    val showProjectionCount = "projection_count" in badges && item.projectionCount > 1
     val showScore = "score" in badges && !item.scoreText.isNullOrBlank()
     val showPin = "pin" in badges && item.isPinned
     val showNsfw = "nsfw" in badges && item.manga.isNsfw()
-    val showOnlyNsfw = showNsfw && !showTracker && !showFavorite && !showSaved && !showSource && !showLanguage && !showCounter && !showScore && !showPin
+    val showOnlyNsfw = showNsfw &&
+        !showTracker &&
+        !showFavorite &&
+        !showSaved &&
+        !showSource &&
+        !showLanguage &&
+        !showCounter &&
+        !showProjectionCount &&
+        !showScore &&
+        !showPin
 
-    if (!showTracker && !showFavorite && !showSaved && !showSource && !showLanguage && !showCounter && !showScore && !showNsfw && !showPin) {
+    if (
+        !showTracker &&
+        !showFavorite &&
+        !showSaved &&
+        !showSource &&
+        !showLanguage &&
+        !showCounter &&
+        !showProjectionCount &&
+        !showScore &&
+        !showNsfw &&
+        !showPin
+    ) {
         return
     }
 
@@ -781,6 +802,23 @@ fun ContentCardCornerBadges(
                         Text(
                             text = item.counter.toString(),
                             color = if (showOnlyNsfw) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = metrics.textSize,
+                                lineHeight = metrics.textSize,
+                            ),
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                "projection_count" -> {
+                    if (item.projectionCount > 1) {
+                        Text(
+                            text = "x${item.projectionCount}",
+                            color = if (showOnlyNsfw) {
+                                MaterialTheme.colorScheme.onError
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = metrics.textSize,
                                 lineHeight = metrics.textSize,
@@ -1031,6 +1069,7 @@ fun ContentListModel.asBadgeModel(
         override = override,
         subtitle = null,
         counter = counter,
+        projectionCount = projectionCount,
         id = id,
         progress = null,
         isFavorite = isFavorite,

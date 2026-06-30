@@ -180,10 +180,10 @@ abstract class WorkFavouritesDao {
 	}
 
 	@Transaction
-	open suspend fun moveAnchorToEntity(oldEntityId: Long, newEntityId: Long, anchorMangaId: Long) {
-		if (oldEntityId == newEntityId) return
+	open suspend fun moveAnchorToEntity(oldEntityId: Long, newEntityId: Long, anchorMangaId: Long): Int {
+		if (oldEntityId == newEntityId) return 0
 		val sources = findAllForEntityAndAnchor(oldEntityId, anchorMangaId)
-		if (sources.isEmpty()) return
+		if (sources.isEmpty()) return 0
 		val targetsByCategory = findAllForEntity(newEntityId).associateBy { it.categoryId }
 		for (source in sources) {
 			val moved = source.copy(entityId = newEntityId)
@@ -193,6 +193,34 @@ abstract class WorkFavouritesDao {
 				upsert(moved)
 			} else {
 				upsert(mergeRestoredWorkFavourites(target, moved))
+			}
+		}
+		return sources.size
+	}
+
+	@Transaction
+	open suspend fun copyActiveCategoriesToEntity(
+		oldEntityId: Long,
+		newEntityId: Long,
+		anchorMangaId: Long,
+	) {
+		if (oldEntityId == newEntityId) return
+		val now = System.currentTimeMillis()
+		val sources = findAllForEntity(oldEntityId)
+			.filter { it.anchorMangaId != null && it.deletedAt == 0L }
+		if (sources.isEmpty()) return
+		val targetsByCategory = findAllForEntity(newEntityId).associateBy { it.categoryId }
+		for (source in sources) {
+			val copied = source.copy(
+				entityId = newEntityId,
+				anchorMangaId = anchorMangaId,
+				updatedAt = now,
+			)
+			val target = targetsByCategory[source.categoryId]
+			if (target == null) {
+				upsert(copied)
+			} else {
+				upsert(mergeRestoredWorkFavourites(target, copied))
 			}
 		}
 	}

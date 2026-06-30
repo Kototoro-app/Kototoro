@@ -1179,6 +1179,11 @@ class SourceMigrationViewModel @Inject constructor(
     }
 
     fun detachLocalWorkProjection(mangaId: Long) {
+        val state = _uiState.value
+        if (state.mergeCandidateGroups.any { it.isExecutableMergeCandidate() && mangaId in it.mangaIds }) {
+            splitLocalWorkProjection(mangaId)
+            return
+        }
         repairLocalWorkProjection(
             mangaId = mangaId,
             action = {
@@ -1345,7 +1350,7 @@ class SourceMigrationViewModel @Inject constructor(
         )
         viewModelScope.launch(Dispatchers.IO) {
             val repairedId = action(mangaId)
-            refreshMergeCandidatesNow()
+            loadSourcesNow()
             refreshRepairReportNow()
             val current = _uiState.value
             _uiState.value = current.copy(
@@ -1382,7 +1387,10 @@ class SourceMigrationViewModel @Inject constructor(
             try {
                 val favourites = loadScopedFavouriteContents(state)
                 val contents = favourites.map { it.toContent() }
-                val groups = buildWorkbenchGroups(contents, state)
+                val groups = augmentGroupsWithOrganizableWorkProjections(
+                    groups = buildWorkbenchGroups(contents, state),
+                    organizableWorks = _uiState.value.organizableWorks,
+                )
                 val availableGroupIds = groups.mapTo(HashSet(groups.size)) { it.id }
                 val defaultSelectedGroupIds = resolveDefaultSelectedMergeGroupIds(
                     groups = groups,
@@ -1871,7 +1879,10 @@ class SourceMigrationViewModel @Inject constructor(
     private suspend fun refreshMergeCandidatesNow(requestState: MigrationUiState = _uiState.value) {
         val favourites = loadScopedFavouriteContents(requestState)
         val contents = favourites.map { it.toContent() }
-        val groups = buildWorkbenchGroups(contents, requestState)
+        val groups = augmentGroupsWithOrganizableWorkProjections(
+            groups = buildWorkbenchGroups(contents, requestState),
+            organizableWorks = _uiState.value.organizableWorks,
+        )
         val existingTrackingPreviews = buildExistingTrackingPreviews(groups)
         val selected = requestState.selectedMergeGroupIds.intersect(groups.map { it.id }.toSet())
         val mergePreviewReady = requestState.mergePreviewReady
@@ -2201,6 +2212,69 @@ class SourceMigrationViewModel @Inject constructor(
                 .thenByDescending { it.mangaIds.size }
                 .thenBy { it.title.lowercase() },
         )
+    }
+
+    private fun augmentGroupsWithOrganizableWorkProjections(
+        groups: List<MergeCandidateGroup>,
+        organizableWorks: List<OrganizableWork>,
+    ): List<MergeCandidateGroup> {
+        if (groups.isEmpty() || organizableWorks.isEmpty()) {
+            return groups
+        }
+        val workByEntityId = organizableWorks.associateBy { it.entityId }
+        val entityIdByMangaId = buildMap {
+            organizableWorks.forEach { work ->
+                work.projections.forEach { projection ->
+                    put(projection.mangaId, work.entityId)
+                }
+            }
+        }
+        return groups.map { group ->
+            val relatedWorks = buildList {
+                group.resolvedEntityId
+                    ?.let(workByEntityId::get)
+                    ?.let(::add)
+                group.mangaIds
+                    .mapNotNull(entityIdByMangaId::get)
+                    .distinct()
+                    .mapNotNull(workByEntityId::get)
+                    .forEach(::add)
+            }.distinctBy { it.entityId }
+            if (relatedWorks.isEmpty()) {
+                return@map group
+            }
+            val existingIds = group.mangaIds.toMutableSet()
+            val additionalItems = relatedWorks
+                .asSequence()
+                .flatMap { work -> work.projections.asSequence() }
+                .filterNot { projection -> projection.mangaId in existingIds }
+                .map { projection ->
+                    org.skepsun.kototoro.favourites.domain.MergeCandidateItem(
+                        mangaId = projection.mangaId,
+                        title = projection.title,
+                        normalizedTitle = projection.title.trim().lowercase(),
+                        sourceName = projection.source,
+                        coverUrl = null,
+                        score = group.matchScore,
+                    )
+                }
+                .map(::withResolvedDisplaySourceName)
+                .toList()
+            if (additionalItems.isEmpty()) {
+                return@map group
+            }
+            val preferredLocalMangaId = relatedWorks
+                .mapNotNull(OrganizableWork::preferredMangaId)
+                .firstOrNull { preferredId -> preferredId in (group.mangaIds + additionalItems.map { it.mangaId }) }
+            val mergedItems = sortGroupItems(
+                items = (group.items + additionalItems).distinctBy { it.mangaId },
+                preferredLocalMangaId = preferredLocalMangaId,
+            )
+            group.copy(
+                mangaIds = mergedItems.mapTo(LinkedHashSet(mergedItems.size)) { it.mangaId },
+                items = mergedItems,
+            )
+        }
     }
 
     private fun sortGroupItems(

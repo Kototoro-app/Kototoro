@@ -502,6 +502,7 @@ class HistoryRepository @Inject constructor(
 				ListFilterOption.Downloaded -> true
 				ListFilterOption.Macro.COMPLETED -> ReadingProgress.isCompleted(item.history.percent)
 				ListFilterOption.Macro.NEW_CHAPTERS -> getTrackAggregate(item, trackCache).newChapters > 0
+				ListFilterOption.Macro.MULTI_PROJECTION -> true
 				ListFilterOption.Macro.FAVORITE -> favouriteCategoryIds.isNotEmpty()
 				ListFilterOption.Macro.NSFW -> item.manga.isNsfw()
 				is ListFilterOption.Inverted -> when (option.option) {

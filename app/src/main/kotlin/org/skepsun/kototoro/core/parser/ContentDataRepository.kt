@@ -708,6 +708,9 @@ class ContentDataRepository @Inject constructor(
 			?: db.getEntityGraphDao().findActiveBinding("0", mangaId.toString())?.entityId
 			?: return null
 		val dao = db.getEntityGraphDao()
+		if (dao.findEntity(entityId) == null) {
+			return null
+		}
 		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
 		return dao.findEntityPrefs(entityId)
 	}

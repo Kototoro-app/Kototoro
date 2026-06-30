@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
@@ -117,6 +118,14 @@ class FavouritesRepository @Inject constructor(
 		return observeWorkFavouriteContents(FavouriteCategory.NO_ID, order, filterOptions, limit)
 	}
 
+	fun observeAllProjectionContents(
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption>,
+		limit: Int,
+	): Flow<List<Content>> {
+		return observeWorkFavouriteProjectionContents(FavouriteCategory.NO_ID, order, filterOptions, limit)
+	}
+
 	fun observeFeedCategoryIds(): Flow<Map<String, Set<Long>>> {
 		return db.invalidationTracker.createFlow(
 			TABLE_WORK_FAVOURITES,
@@ -153,9 +162,23 @@ class FavouritesRepository @Inject constructor(
 		return observeWorkFavouriteContents(categoryId, order, filterOptions, limit)
 	}
 
+	fun observeAllProjectionContents(
+		categoryId: Long,
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption>,
+		limit: Int,
+	): Flow<List<Content>> {
+		return observeWorkFavouriteProjectionContents(categoryId, order, filterOptions, limit)
+	}
+
 	fun observeAll(categoryId: Long, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
 		return observeOrder(categoryId)
 			.flatMapLatest { order -> observeAll(categoryId, order, filterOptions, limit) }
+	}
+
+	fun observeAllProjectionContents(categoryId: Long, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
+		return observeOrder(categoryId)
+			.flatMapLatest { order -> observeAllProjectionContents(categoryId, order, filterOptions, limit) }
 	}
 
 	fun observeContentCount(): Flow<Int> {
@@ -295,7 +318,7 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun findPopularSources(categoryId: Long, limit: Int): List<ContentSource> {
-		return buildWorkFavouriteContents(
+		return buildWorkFavouriteProjectionContents(
 			categoryId = categoryId,
 			order = ListSortOrder.NEWEST,
 		)
@@ -309,7 +332,7 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	suspend fun findPopularTags(categoryId: Long, limit: Int): List<ContentTag> {
-		return buildWorkFavouriteContents(
+		return buildWorkFavouriteProjectionContents(
 			categoryId = categoryId,
 			order = ListSortOrder.NEWEST,
 		)
@@ -498,6 +521,29 @@ class FavouritesRepository @Inject constructor(
 		}.distinctUntilChanged()
 	}
 
+	private fun observeWorkFavouriteProjectionContents(
+		categoryId: Long,
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption>,
+		limit: Int,
+	): Flow<List<Content>> {
+		return db.invalidationTracker.createFlow(
+			TABLE_WORK_FAVOURITES,
+			TABLE_FAVOURITE_CATEGORIES,
+			TABLE_ENTITY_GRAPH_BINDING,
+			TABLE_ENTITY_PREFERENCES,
+			TABLE_MANGA,
+			TABLE_TAGS,
+			TABLE_MANGA_TAGS,
+			TABLE_WORK_HISTORY,
+			"tracks",
+			"local_index",
+			emitInitialState = true,
+		).mapLatest {
+			buildWorkFavouriteProjectionContents(categoryId, order, filterOptions, limit)
+		}.distinctUntilChanged()
+	}
+
 	private suspend fun buildWorkFavouriteContents(
 		categoryId: Long,
 		order: ListSortOrder,
@@ -510,6 +556,31 @@ class FavouritesRepository @Inject constructor(
 			filterOptions = filterOptions,
 			limit = limit,
 		)
+	}
+
+	private suspend fun buildWorkFavouriteProjectionContents(
+		categoryId: Long,
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption> = emptySet(),
+		limit: Int = Int.MAX_VALUE,
+	): List<Content> {
+		return workAggregateRepository.findFavouriteAggregates(
+			categoryId = categoryId,
+			order = order,
+			filterOptions = filterOptions,
+			limit = limit,
+		).flatMap { aggregate ->
+			aggregate.projections
+				.ifEmpty { listOfNotNull(aggregate.displayProjection) }
+				.distinctBy { content ->
+					ProjectionIdentityKeys.contentCompactKey(
+						source = content.source.name,
+						id = content.id,
+						url = content.url,
+						publicUrl = content.publicUrl,
+					)
+				}
+		}
 	}
 
 	private suspend fun buildWorkFavouriteCovers(

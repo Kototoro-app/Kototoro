@@ -14,6 +14,7 @@ data class ContentDetailedListModel(
 	val subtitle: String?,
 	val supportingText: String? = null,
 	override val counter: Int,
+	override val projectionCount: Int = 0,
 	override val id: Long = manga.id,
 	val progress: ReadingProgress?,
 	val isFavorite: Boolean,
@@ -30,6 +31,7 @@ data class ContentDetailedListModel(
 		previousState.progress != progress -> PAYLOAD_PROGRESS_CHANGED
 		previousState.subtitle != subtitle ||
 			previousState.supportingText != supportingText ||
+			previousState.projectionCount != projectionCount ||
 			previousState.isFavorite != isFavorite ||
 			previousState.isSaved != isSaved ||
 			previousState.scoreText != scoreText ||

@@ -371,6 +371,7 @@
 	<string-array name="badge_options" translatable="false">
 		<item>@string/badge_tracker</item>
 		<item>@string/badge_score</item>
+		<item>@string/badge_projection_count</item>
 		<item>@string/badge_favorite</item>
 		<item>@string/badge_saved</item>
 		<item>@string/badge_pin</item>
@@ -380,6 +381,7 @@
 	<string-array name="values_badge_options" translatable="false">
 		<item>tracker</item>
 		<item>score</item>
+		<item>projection_count</item>
 		<item>favorite</item>
 		<item>saved</item>
 		<item>pin</item>

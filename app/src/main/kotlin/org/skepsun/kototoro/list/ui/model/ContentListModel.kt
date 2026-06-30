@@ -19,6 +19,7 @@ sealed class ContentListModel : ListModel {
 	abstract val override: ContentOverride?
 	abstract val manga: Content
 	abstract val counter: Int
+	open val projectionCount: Int = 0
 	open val isPinned: Boolean = false
 	open val metadataTrackingService: ScrobblerService? = null
 	open val scoreText: String? = null
@@ -56,6 +57,7 @@ sealed class ContentListModel : ListModel {
 	override fun getChangePayload(previousState: ListModel): Any? = when {
 		previousState !is ContentListModel || previousState.manga != manga -> null
 		previousState.counter != counter -> PAYLOAD_ANYTHING_CHANGED
+		previousState.projectionCount != projectionCount -> PAYLOAD_ANYTHING_CHANGED
 		else -> null
 	}
 }

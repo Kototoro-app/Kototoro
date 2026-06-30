@@ -225,7 +225,7 @@ class WorkAggregateRepository @Inject constructor(
 			WorkAggregate(
 				identity = identity,
 				displayProjection = displayProjection,
-				projections = listOf(displayProjection),
+				projections = projectionSet.projectionsFor(identity, entry.anchorMangaId),
 				categories = categories,
 				favourite = entry,
 				history = historyByEntityId[entry.entityId],

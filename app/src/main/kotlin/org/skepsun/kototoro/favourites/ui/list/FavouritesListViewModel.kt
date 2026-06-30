@@ -381,19 +381,45 @@ class FavouritesListViewModel @AssistedInject constructor(
             return models
         }
 
-        groupedFavoriteIds = visibleGroups.associate { it.uiId to it.mangaIds }
-        groupedEntityIds = visibleGroups.mapNotNull { group ->
+        val filteredGroups = visibleGroups.filter { group ->
+            if (ListFilterOption.Macro.MULTI_PROJECTION !in filters) {
+                true
+            } else {
+                group.projectionCount > 1
+            }
+        }
+
+        if (filteredGroups.isEmpty()) {
+            groupedFavoriteIds = emptyMap()
+            groupedEntityIds = emptyMap()
+            groupedPreferredLocalIds = emptyMap()
+            val models = mutableListOf<ListModel>()
+            quickFilter.filterItem(filters)?.let(models::add)
+            if (hasHiddenAdultItems) {
+                models += InfoModel(
+                    key = "hidden_nsfw_favourites",
+                    title = R.string.favourites_hidden_adult_title,
+                    text = R.string.favourites_hidden_adult_subtitle,
+                    icon = R.drawable.ic_eye_off,
+                )
+            }
+            models += getEmptyState(hasFilters = true)
+            return models
+        }
+
+        groupedFavoriteIds = filteredGroups.associate { it.uiId to it.mangaIds }
+        groupedEntityIds = filteredGroups.mapNotNull { group ->
             group.entityId?.let { group.uiId to it }
         }.toMap()
-        groupedPreferredLocalIds = visibleGroups.mapNotNull { group ->
+        groupedPreferredLocalIds = filteredGroups.mapNotNull { group ->
             group.preferredLocalMangaId?.let { group.uiId to it }
         }.toMap()
 
-        val result = ArrayList<ListModel>(visibleGroups.size + 1)
+        val result = ArrayList<ListModel>(filteredGroups.size + 1)
         quickFilter.filterItem(filters)?.let(result::add)
-        val pinnedIds = repository.getPinnedIds(visibleGroups.map { it.preferredLocalMangaId ?: it.representative.id })
+        val pinnedIds = repository.getPinnedIds(filteredGroups.map { it.preferredLocalMangaId ?: it.representative.id })
         val models = mangaListMapper.toRequestedListModelList(
-            requests = visibleGroups.map { group ->
+            requests = filteredGroups.map { group ->
                 ContentListMapper.ListModelRequest(
                     manga = group.representative,
                     metadataSelectionOverride = group.metadataSourceSelection,
@@ -404,8 +430,8 @@ class FavouritesListViewModel @AssistedInject constructor(
             flags = ContentListMapper.NO_FAVORITE,
             pinnedIds = pinnedIds,
         )
-        for (index in visibleGroups.indices) {
-            val group = visibleGroups[index]
+        for (index in filteredGroups.indices) {
+            val group = filteredGroups[index]
             val model = models[index]
             result += model.toGroupedListModel(
                 group = group,
@@ -473,17 +499,20 @@ class FavouritesListViewModel @AssistedInject constructor(
             is ContentCompactListModel -> copy(
                 id = group.uiId,
                 subtitle = listOfNotNull(subtitle?.takeIf { it.isNotBlank() }, groupSuffix).joinToString(" · "),
+                projectionCount = group.projectionCount,
                 isPinned = isPinned,
             )
 
             is ContentDetailedListModel -> copy(
                 id = group.uiId,
                 subtitle = listOfNotNull(subtitle.takeIf { !it.isNullOrBlank() }, groupSuffix).joinToString(" · "),
+                projectionCount = group.projectionCount,
                 isPinned = isPinned,
             )
 
             is ContentGridModel -> copy(
                 id = group.uiId,
+                projectionCount = group.projectionCount,
                 isPinned = isPinned,
             )
         }
@@ -584,7 +613,7 @@ class FavouritesListViewModel @AssistedInject constructor(
             limit,
         ) { order, filters, limit ->
             isPaginationReady.set(false)
-            repository.observeAll(order, filters, limit)
+            repository.observeAllProjectionContents(order, filters, limit)
         }.flattenLatest()
     } else {
         combine(
@@ -592,7 +621,7 @@ class FavouritesListViewModel @AssistedInject constructor(
             limit,
         ) { filters, limit ->
             isPaginationReady.set(false)
-            repository.observeAll(categoryId, filters, limit)
+            repository.observeAllProjectionContents(categoryId, filters, limit)
         }.flattenLatest()
     }
 

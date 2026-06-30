@@ -375,6 +375,8 @@
     <string name="badge_bottom_right">右下角标记</string>
     <string name="badge_tracker">追踪网站图标</string>
     <string name="badge_score">打分</string>
+    <string name="badge_projection_count">投影数量</string>
+    <string name="filter_multi_projection">多投影</string>
     <string name="badge_source_icon">内容源图标</string>
     <string name="badge_language">语言</string>
     <string name="badge_favorite">收藏</string>
@@ -2825,7 +2827,7 @@ SHA-256 指纹:
     <string name="entity_organize_repair_prune_projection_reading_status_action">清理阅读状态镜像</string>
     <string name="entity_organize_repair_confirm">确认</string>
     <string name="entity_organize_repair_split_feedback">已将本地投影拆出到独立实体。</string>
-    <string name="entity_organize_repair_detach_feedback">已解绑本地投影的实体绑定。</string>
+    <string name="entity_organize_repair_detach_feedback">已将本地投影从当前作品中移除。</string>
     <string name="entity_organize_repair_split_suspect_feedback">已拆出 %1$d 个疑似投影，%2$d 个失败或已被修复。</string>
     <string name="entity_organize_repair_hide_legacy_relations_feedback">已隐藏 %1$d 条旧关系。</string>
     <string name="entity_organize_repair_reject_suspect_tracking_feedback">已拒绝 %1$d 个疑似错误追踪绑定。</string>

@@ -318,6 +318,7 @@ fun SourceMigrationPanel(
 
     val workbenchRows = remember(
         uiState.mergeCandidateGroups,
+        uiState.organizableWorks,
         uiState.existingTrackingPreviews,
         uiState.trackingPreviews,
         uiState.readingSourcePreviews,
@@ -3001,28 +3002,30 @@ private fun EntityWorkbenchRowCard(
                                         state = WorkbenchStageState.WARNING,
                                     )
                                 }
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    TextButton(
-                                        onClick = { pendingSplitMemberId = item.mangaId },
-                                        enabled = !uiState.isExecuting,
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                if (!row.isMergeCandidate) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
-                                        Text(
-                                            text = stringResource(R.string.entity_organize_repair_split_member),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
-                                    }
-                                    TextButton(
-                                        onClick = { pendingDetachMemberId = item.mangaId },
-                                        enabled = !uiState.isExecuting,
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.entity_organize_repair_detach_member),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
+                                        TextButton(
+                                            onClick = { pendingSplitMemberId = item.mangaId },
+                                            enabled = !uiState.isExecuting,
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.entity_organize_repair_split_member),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
+                                        TextButton(
+                                            onClick = { pendingDetachMemberId = item.mangaId },
+                                            enabled = !uiState.isExecuting,
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.entity_organize_repair_detach_member),
+                                                style = MaterialTheme.typography.labelSmall,
+                                            )
+                                        }
                                     }
                                 }
                             }

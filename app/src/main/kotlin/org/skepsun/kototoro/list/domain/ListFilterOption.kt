@@ -48,6 +48,7 @@ sealed interface ListFilterOption {
 
 		COMPLETED(R.string.status_completed, R.drawable.ic_state_finished),
 		NEW_CHAPTERS(R.string.new_chapters, R.drawable.ic_updated),
+		MULTI_PROJECTION(R.string.filter_multi_projection, R.drawable.ic_list_group),
 		FAVORITE(R.string.favourites, R.drawable.ic_heart_outline),
 		NSFW(R.string.nsfw, R.drawable.ic_nsfw),
 		;

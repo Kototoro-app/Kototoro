@@ -598,6 +598,8 @@
     <string name="badge_bottom_right">Bottom-right badges</string>
     <string name="badge_tracker">Tracking site icons</string>
     <string name="badge_score">Score (from tracker)</string>
+    <string name="badge_projection_count">Projection count</string>
+    <string name="filter_multi_projection">Multi-projection</string>
     <string name="badge_source_icon">Source icon</string>
     <string name="badge_language">Language</string>
     <string name="badge_favorite">Favorite</string>
@@ -1313,7 +1315,7 @@
     <string name="entity_organize_repair_work_sync_ids_action">Repair sync identities</string>
     <string name="entity_organize_repair_confirm">Confirm</string>
     <string name="entity_organize_repair_split_feedback">Local projection was split into a standalone entity.</string>
-    <string name="entity_organize_repair_detach_feedback">Local projection entity binding was detached.</string>
+    <string name="entity_organize_repair_detach_feedback">Local projection was removed from the current work.</string>
     <string name="entity_organize_repair_split_suspect_feedback">Split %1$d suspect projections. %2$d failed or were already repaired.</string>
     <string name="entity_organize_repair_hide_legacy_relations_feedback">Hidden %1$d stale legacy relations.</string>
     <string name="entity_organize_repair_reject_suspect_tracking_feedback">Rejected %1$d suspect tracking bindings.</string>

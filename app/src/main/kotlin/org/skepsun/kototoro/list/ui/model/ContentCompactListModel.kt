@@ -10,6 +10,7 @@ data class ContentCompactListModel(
 	val subtitle: String?,
 	val supportingText: String? = null,
 	override val counter: Int,
+	override val projectionCount: Int = 0,
 	override val id: Long = manga.id,
 	override val isPinned: Boolean = false,
 	override val metadataTrackingService: ScrobblerService? = null,

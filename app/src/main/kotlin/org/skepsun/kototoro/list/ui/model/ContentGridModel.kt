@@ -12,6 +12,7 @@ data class ContentGridModel(
 	override val override: ContentOverride?,
 	val subtitle: String? = null,
 	override val counter: Int,
+	override val projectionCount: Int = 0,
 	override val id: Long = manga.id,
 	val progress: ReadingProgress?,
 	val isFavorite: Boolean,
@@ -28,6 +29,7 @@ data class ContentGridModel(
 		previousState.subtitle != subtitle ||
 			previousState.isFavorite != isFavorite ||
 			previousState.isSaved != isSaved ||
+			previousState.projectionCount != projectionCount ||
 			previousState.metadataTrackingService != metadataTrackingService ||
 			previousState.scoreText != scoreText -> PAYLOAD_ANYTHING_CHANGED
 
