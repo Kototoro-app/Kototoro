@@ -2999,4 +2999,7 @@ SHA-256 指纹:
     <string name="glass_material_fluent_acrylic_default">Fluent 亚克力默认</string>
     <string name="glass_material_fluent_mica">Fluent 云母</string>
     <string name="glass_material_fluent_mica_alt">Fluent 云母替代</string>
+    <string name="entity_organize_repair_dangling_work_anchors_title">修复无效投影锚点</string>
+    <string name="entity_organize_repair_dangling_work_anchors_summary">%1$d 条作品状态缺少本地投影锚点，或锚点已失效。这会阻塞备份和同步。修复会优先把锚点迁移到同一实体内的其他可用投影；如果已经没有可安全导出的投影，则会停用或清理这部分状态。</string>
+    <string name="entity_organize_repair_dangling_work_anchors_feedback">已修复 %1$d 条无效投影锚点。</string>
 </resources>

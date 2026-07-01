@@ -73,6 +73,9 @@ abstract class WorkStatsDao {
 	)
 	abstract suspend fun replaceAnchorMangaId(entityId: Long, oldAnchorMangaId: Long, newAnchorMangaId: Long)
 
+	@Query("DELETE FROM work_stats WHERE entity_id = :entityId AND anchor_manga_id = :anchorMangaId")
+	abstract suspend fun deleteByAnchorMangaId(entityId: Long, anchorMangaId: Long): Int
+
 	/**
 	 * Move every row from [oldEntityId] to [newEntityId]. Rows that collide on a
 	 * target `(newEntityId, started_at)` key are merged via

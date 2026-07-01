@@ -20,10 +20,35 @@ fun mergeRestoredWorkFavourites(
 	val newest = if (base.updatedAt >= other.updatedAt) base else other
 	val activePinned = (base.deletedAt == 0L && base.isPinned) ||
 		(other.deletedAt == 0L && other.isPinned)
-	return newest.copy(
-		entityId = base.entityId,
-		categoryId = base.categoryId,
-		createdAt = minOf(base.createdAt, other.createdAt),
-		isPinned = activePinned,
+	return stabilizeActiveWorkFavouriteAnchor(
+		merged = newest.copy(
+			entityId = base.entityId,
+			categoryId = base.categoryId,
+			createdAt = minOf(base.createdAt, other.createdAt),
+			isPinned = activePinned,
+		),
+		base,
+		other,
 	)
+}
+
+fun stabilizeActiveWorkFavouriteAnchor(
+	merged: WorkFavouriteEntity,
+	vararg candidates: WorkFavouriteEntity,
+): WorkFavouriteEntity {
+	if (merged.deletedAt != 0L || merged.anchorMangaId != null) {
+		return merged
+	}
+	val fallbackAnchor = candidates
+		.asSequence()
+		.filter { it.deletedAt == 0L }
+		.sortedByDescending { it.updatedAt }
+		.mapNotNull(WorkFavouriteEntity::anchorMangaId)
+		.firstOrNull()
+		?: candidates.firstOrNull { it.anchorMangaId != null }?.anchorMangaId
+	return if (fallbackAnchor != null) {
+		merged.copy(anchorMangaId = fallbackAnchor)
+	} else {
+		merged
+	}
 }

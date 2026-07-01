@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.favourites.data.stabilizeActiveWorkFavouriteAnchor
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
 import org.skepsun.kototoro.favourites.domain.model.Cover
 import org.skepsun.kototoro.list.domain.ListFilterOption
@@ -763,7 +764,7 @@ class FavouritesRepository @Inject constructor(
 		existing: WorkFavouriteEntity,
 		candidate: WorkFavouriteEntity,
 	): WorkFavouriteEntity {
-		return when {
+		val merged = when {
 			candidate.updatedAt > existing.updatedAt -> candidate.copy(
 				createdAt = minOf(existing.createdAt, candidate.createdAt),
 				isPinned = existing.isPinned || candidate.isPinned,
@@ -781,6 +782,7 @@ class FavouritesRepository @Inject constructor(
 				createdAt = minOf(existing.createdAt, candidate.createdAt),
 			)
 		}
+		return stabilizeActiveWorkFavouriteAnchor(merged, existing, candidate)
 	}
 
 	private suspend fun recoverToFavourites(entityIds: Collection<Long>) {

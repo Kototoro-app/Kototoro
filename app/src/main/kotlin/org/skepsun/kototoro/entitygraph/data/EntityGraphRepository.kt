@@ -276,6 +276,12 @@ class EntityGraphRepository @Inject constructor(
 				newEntityId = entity.id,
 				localMangaId = content.id,
 			)
+			reconcileSourceEntityWorkStateAfterProjectionSplit(
+				dao = dao,
+				entityId = existingEntity.id,
+				detachedLocalMangaId = content.id,
+				now = now,
+			)
 			updateEntityAfterLocalProjectionSplit(
 				dao = dao,
 				entity = existingEntity,
@@ -348,6 +354,12 @@ class EntityGraphRepository @Inject constructor(
 				oldEntityId = existingEntity.id,
 				newEntityId = entity.id,
 				localMangaId = localMangaId,
+			)
+			reconcileSourceEntityWorkStateAfterProjectionSplit(
+				dao = dao,
+				entityId = existingEntity.id,
+				detachedLocalMangaId = localMangaId,
+				now = now,
 			)
 			updateEntityAfterLocalProjectionSplit(
 				dao = dao,
@@ -1207,8 +1219,6 @@ class EntityGraphRepository @Inject constructor(
 		val issues = report.issues
 			.asSequence()
 			.filter { it.kind == EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR }
-			.filter { it.localMangaId != null }
-			.distinctBy { "${it.entityId}:${it.localMangaId}" }
 			.toList()
 		if (issues.isEmpty()) {
 			return@withContext 0
@@ -1217,21 +1227,57 @@ class EntityGraphRepository @Inject constructor(
 			val dao = db.getEntityGraphDao()
 			val now = System.currentTimeMillis()
 			var repaired = 0
-			issues.forEach { issue ->
+			issues
+				.asSequence()
+				.filter { it.localMangaId == null }
+				.map(EntityGraphRepairIssue::entityId)
+				.filter { it > 0L }
+				.distinct()
+				.forEach { entityId ->
+					val fallbackLocalMangaId = findWorkStateAnchorCandidate(
+						dao = dao,
+						entityId = entityId,
+					)
+					repaired += if (fallbackLocalMangaId != null) {
+						db.getWorkFavouritesDao().fillMissingAnchorMangaId(
+							entityId = entityId,
+							anchorMangaId = fallbackLocalMangaId,
+							updatedAt = now,
+						)
+					} else {
+						db.getWorkFavouritesDao().deactivateActiveWithoutAnchor(
+							entityId = entityId,
+							updatedAt = now,
+						)
+					}
+				}
+			issues
+				.asSequence()
+				.filter { it.localMangaId != null }
+				.distinctBy { "${it.entityId}:${it.localMangaId}" }
+				.forEach { issue ->
 				val danglingAnchorId = issue.localMangaId ?: return@forEach
 				val fallbackLocalMangaId = findFallbackLocalProjectionId(
 					dao = dao,
 					entityId = issue.entityId,
 					detachedLocalMangaId = danglingAnchorId,
-				) ?: return@forEach
-				reconcileDetachedLocalProjectionAnchors(
-					entityId = issue.entityId,
-					detachedLocalMangaId = danglingAnchorId,
-					fallbackLocalMangaId = fallbackLocalMangaId,
-					now = now,
 				)
-				repaired++
-			}
+				if (fallbackLocalMangaId != null) {
+					reconcileDetachedLocalProjectionAnchors(
+						entityId = issue.entityId,
+						detachedLocalMangaId = danglingAnchorId,
+						fallbackLocalMangaId = fallbackLocalMangaId,
+						now = now,
+					)
+					repaired++
+				} else {
+					repaired += pruneUnexportableWorkStateByAnchor(
+						entityId = issue.entityId,
+						danglingAnchorId = danglingAnchorId,
+						now = now,
+					)
+				}
+				}
 			repaired
 		}
 	}
@@ -1334,6 +1380,15 @@ class EntityGraphRepository @Inject constructor(
 		}
 
 		addDanglingAnchorIssues(workAnchorIds)
+		db.getWorkFavouritesDao().findActiveWithoutAnchor(limit)
+			.forEach { favourite ->
+				issues += EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR,
+					entityId = favourite.entityId,
+					source = "work_favourites",
+					externalId = favourite.categoryId.toString(),
+				)
+			}
 
 		dao.dumpPrefs().forEach { prefs ->
 			val entityBindings = activeBindingsByEntity[prefs.entityId].orEmpty()
@@ -2626,7 +2681,7 @@ class EntityGraphRepository @Inject constructor(
 	private suspend fun reconcileDetachedLocalProjectionAnchors(
 		entityId: Long,
 		detachedLocalMangaId: Long,
-		fallbackLocalMangaId: Long?,
+		fallbackLocalMangaId: Long,
 		now: Long,
 	) {
 		db.getWorkFavouritesDao().replaceAnchorMangaId(
@@ -2636,25 +2691,74 @@ class EntityGraphRepository @Inject constructor(
 			updatedAt = now,
 		)
 		val historyDao = db.getWorkHistoryDao()
+		historyDao.replaceActiveAnchorMangaId(
+			entityId = entityId,
+			oldAnchorMangaId = detachedLocalMangaId,
+			newAnchorMangaId = fallbackLocalMangaId,
+			updatedAt = now,
+		)
+		db.getWorkStatsDao().replaceAnchorMangaId(
+			entityId = entityId,
+			oldAnchorMangaId = detachedLocalMangaId,
+			newAnchorMangaId = fallbackLocalMangaId,
+		)
+	}
+
+	private suspend fun reconcileSourceEntityWorkStateAfterProjectionSplit(
+		dao: EntityGraphDao,
+		entityId: Long,
+		detachedLocalMangaId: Long,
+		now: Long,
+	) {
+		val fallbackLocalMangaId = findFallbackLocalProjectionId(
+			dao = dao,
+			entityId = entityId,
+			detachedLocalMangaId = detachedLocalMangaId,
+		)
+		clearPreferredLocalProjectionIfDetached(
+			dao = dao,
+			entityId = entityId,
+			detachedLocalMangaId = detachedLocalMangaId,
+			fallbackLocalMangaId = fallbackLocalMangaId,
+			now = now,
+		)
 		if (fallbackLocalMangaId != null) {
-			historyDao.replaceActiveAnchorMangaId(
+			reconcileDetachedLocalProjectionAnchors(
 				entityId = entityId,
-				oldAnchorMangaId = detachedLocalMangaId,
-				newAnchorMangaId = fallbackLocalMangaId,
-				updatedAt = now,
-			)
-			db.getWorkStatsDao().replaceAnchorMangaId(
-				entityId = entityId,
-				oldAnchorMangaId = detachedLocalMangaId,
-				newAnchorMangaId = fallbackLocalMangaId,
+				detachedLocalMangaId = detachedLocalMangaId,
+				fallbackLocalMangaId = fallbackLocalMangaId,
+				now = now,
 			)
 		} else {
-			historyDao.deleteActiveByAnchor(
+			pruneUnexportableWorkStateByAnchor(
 				entityId = entityId,
-				anchorMangaId = detachedLocalMangaId,
-				deletedAt = now,
+				danglingAnchorId = detachedLocalMangaId,
+				now = now,
+			)
+			db.getWorkFavouritesDao().deactivateActiveWithoutAnchor(
+				entityId = entityId,
+				updatedAt = now,
 			)
 		}
+	}
+
+	private suspend fun findWorkStateAnchorCandidate(
+		dao: EntityGraphDao,
+		entityId: Long,
+		excludedLocalMangaId: Long? = null,
+	): Long? {
+		val activeLocalMangaIds = dao.findActiveLocalBindingsByEntity(entityId)
+			.asSequence()
+			.mapNotNull { it.externalId.toLongOrNull() }
+			.filter { it != excludedLocalMangaId }
+			.toList()
+		if (activeLocalMangaIds.isEmpty()) {
+			return null
+		}
+		val preferredLocalMangaId = dao.findEntityPrefs(entityId)?.preferredLocalMangaId
+		return preferredLocalMangaId
+			?.takeIf { it in activeLocalMangaIds }
+			?: activeLocalMangaIds.first()
 	}
 
 	private suspend fun findFallbackLocalProjectionId(
@@ -2662,10 +2766,43 @@ class EntityGraphRepository @Inject constructor(
 		entityId: Long,
 		detachedLocalMangaId: Long,
 	): Long? {
-		return dao.findActiveLocalBindingsByEntity(entityId)
+		return findWorkStateAnchorCandidate(
+			dao = dao,
+			entityId = entityId,
+			excludedLocalMangaId = detachedLocalMangaId,
+		)
+	}
+
+	private suspend fun pruneUnexportableWorkStateByAnchor(
+		entityId: Long,
+		danglingAnchorId: Long,
+		now: Long,
+	): Int {
+		var affected = 0
+		db.getWorkFavouritesDao().findActiveByAnchorMangaId(danglingAnchorId)
 			.asSequence()
-			.mapNotNull { it.externalId.toLongOrNull() }
-			.firstOrNull { it != detachedLocalMangaId }
+			.filter { it.entityId == entityId }
+			.forEach { favourite ->
+				db.getWorkFavouritesDao().delete(
+					entityId = favourite.entityId,
+					categoryId = favourite.categoryId,
+				)
+				affected++
+			}
+		val history = db.getWorkHistoryDao().findActiveByAnchorMangaId(danglingAnchorId)
+		if (history?.entityId == entityId) {
+			db.getWorkHistoryDao().deleteActiveByAnchor(
+				entityId = entityId,
+				anchorMangaId = danglingAnchorId,
+				deletedAt = now,
+			)
+			affected++
+		}
+		affected += db.getWorkStatsDao().deleteByAnchorMangaId(
+			entityId = entityId,
+			anchorMangaId = danglingAnchorId,
+		)
+		return affected
 	}
 
 	private fun Content.localProjectionNameKeys(): Set<String> {

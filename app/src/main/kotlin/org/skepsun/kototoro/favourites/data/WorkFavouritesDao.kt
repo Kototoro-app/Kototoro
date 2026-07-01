@@ -127,9 +127,40 @@ abstract class WorkFavouritesDao {
 	abstract suspend fun replaceAnchorMangaId(
 		entityId: Long,
 		oldAnchorMangaId: Long,
-		newAnchorMangaId: Long?,
+		newAnchorMangaId: Long,
 		updatedAt: Long,
 	)
+
+	@Query(
+		"""
+		UPDATE work_favourites
+		SET anchor_manga_id = :anchorMangaId,
+			updated_at = :updatedAt
+		WHERE entity_id = :entityId
+			AND anchor_manga_id IS NULL
+			AND deleted_at = 0
+		""",
+	)
+	abstract suspend fun fillMissingAnchorMangaId(
+		entityId: Long,
+		anchorMangaId: Long,
+		updatedAt: Long,
+	): Int
+
+	@Query(
+		"""
+		UPDATE work_favourites
+		SET deleted_at = :updatedAt,
+			updated_at = :updatedAt
+		WHERE entity_id = :entityId
+			AND anchor_manga_id IS NULL
+			AND deleted_at = 0
+		""",
+	)
+	abstract suspend fun deactivateActiveWithoutAnchor(
+		entityId: Long,
+		updatedAt: Long,
+	): Int
 
 	@Query("DELETE FROM work_favourites")
 	abstract suspend fun deleteAll()
@@ -245,13 +276,34 @@ abstract class WorkFavouritesDao {
 
 	suspend fun recover(entityId: Long) {
 		val currentTime = System.currentTimeMillis()
-		setDeletedAt(entityId = entityId, deletedAt = 0L, updatedAt = currentTime)
+		recoverAt(entityId = entityId, updatedAt = currentTime)
 	}
 
 	suspend fun recover(entityId: Long, categoryId: Long) {
 		val currentTime = System.currentTimeMillis()
-		setDeletedAt(entityId = entityId, categoryId = categoryId, deletedAt = 0L, updatedAt = currentTime)
+		recoverAt(entityId = entityId, categoryId = categoryId, updatedAt = currentTime)
 	}
+
+	@Query(
+		"""
+		UPDATE work_favourites
+		SET deleted_at = 0, updated_at = :updatedAt
+		WHERE entity_id = :entityId
+			AND anchor_manga_id IS NOT NULL
+		""",
+	)
+	protected abstract suspend fun recoverAt(entityId: Long, updatedAt: Long)
+
+	@Query(
+		"""
+		UPDATE work_favourites
+		SET deleted_at = 0, updated_at = :updatedAt
+		WHERE entity_id = :entityId
+			AND category_id = :categoryId
+			AND anchor_manga_id IS NOT NULL
+		""",
+	)
+	protected abstract suspend fun recoverAt(entityId: Long, categoryId: Long, updatedAt: Long)
 
 	@Query("SELECT * FROM work_favourites ORDER BY updated_at DESC LIMIT :limit OFFSET :offset")
 	protected abstract suspend fun findAll(offset: Int, limit: Int): List<WorkFavouriteEntity>
