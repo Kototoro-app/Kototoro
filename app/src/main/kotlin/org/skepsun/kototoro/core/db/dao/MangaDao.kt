@@ -43,14 +43,26 @@ abstract class MangaDao {
 	abstract suspend fun findAllBySource(source: String): List<MangaWithTags>
 
 	@Query("SELECT * FROM manga WHERE manga_id IN (:ids)")
-	abstract suspend fun findEntitiesByIds(ids: Collection<Long>): List<MangaEntity>
+	protected abstract suspend fun findEntitiesByIdsImpl(ids: Collection<Long>): List<MangaEntity>
+
+	suspend fun findEntitiesByIds(ids: Collection<Long>): List<MangaEntity> {
+		return ids.flatMapSqliteQueryChunks(::findEntitiesByIdsImpl)
+	}
 
 	@Transaction
 	@Query("SELECT * FROM manga WHERE manga_id IN (:ids)")
-	abstract suspend fun findWithTagsByIds(ids: Collection<Long>): List<MangaWithTags>
+	protected abstract suspend fun findWithTagsByIdsImpl(ids: Collection<Long>): List<MangaWithTags>
+
+	suspend fun findWithTagsByIds(ids: Collection<Long>): List<MangaWithTags> {
+		return ids.flatMapSqliteQueryChunks(::findWithTagsByIdsImpl)
+	}
 
 	@Query("SELECT * FROM manga_tags WHERE manga_id IN (:ids)")
-	abstract suspend fun findTagRelationsByMangaIds(ids: Collection<Long>): List<MangaTagsEntity>
+	protected abstract suspend fun findTagRelationsByMangaIdsImpl(ids: Collection<Long>): List<MangaTagsEntity>
+
+	suspend fun findTagRelationsByMangaIds(ids: Collection<Long>): List<MangaTagsEntity> {
+		return ids.flatMapSqliteQueryChunks(::findTagRelationsByMangaIdsImpl)
+	}
 
 	@Query("SELECT author FROM manga WHERE author LIKE :query GROUP BY author ORDER BY COUNT(author) DESC LIMIT :limit")
 	abstract suspend fun findAuthors(query: String, limit: Int): List<String>
