@@ -47,8 +47,10 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
+import org.skepsun.kototoro.core.util.ext.mangaExtra
 
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
@@ -148,9 +150,13 @@ private fun FeedUpdatedPosterCard(
 ) {
 	val model = item.model
 	val context = LocalContext.current
-	val imageRequest = remember(model.id, model.coverUrl) {
+	val imageRequest = remember(context, model.manga.source.name, model.manga.url, model.manga.publicUrl, model.coverUrl) {
+		val cacheKey = contentCoverCacheKey(model.manga, model.coverUrl)
 		ImageRequest.Builder(context)
 			.data(model.coverUrl)
+			.memoryCacheKey(cacheKey)
+			.diskCacheKey(cacheKey)
+			.mangaExtra(model.manga)
 			.crossfade(false)
 			.build()
 	}

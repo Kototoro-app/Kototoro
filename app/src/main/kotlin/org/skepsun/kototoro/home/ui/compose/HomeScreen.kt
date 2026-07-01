@@ -113,10 +113,10 @@ import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
-import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.model.isNsfw
@@ -1814,16 +1814,12 @@ private fun rememberHomeCoverRequest(
 ): ImageRequest? {
     val primaryCoverUrl = content.coverUrl?.takeIfUsableImageUri()
     val fallbackCoverUrl = content.largeCoverUrl?.takeIfUsableImageUri()
-    val ownerKey = remember(content.id, content.url, content.publicUrl) {
-        content.url.takeIf { it.isNotBlank() }
-            ?: content.publicUrl.takeIf { it.isNotBlank() }
-            ?: content.id.toString()
-    }
     return remember(
         context,
         content.id,
         content.source.name,
-        ownerKey,
+        content.url,
+        content.publicUrl,
         primaryCoverUrl,
         fallbackCoverUrl,
         allowCrossfade,
@@ -1831,11 +1827,7 @@ private fun rememberHomeCoverRequest(
     ) {
         val resolvedCoverUrl = primaryCoverUrl ?: fallbackCoverUrl
         if (resolvedCoverUrl != null) {
-            val cacheKey = sharedCoverMemoryCacheKey(
-                sourceName = content.source.name,
-                ownerKey = ownerKey,
-                url = resolvedCoverUrl,
-            )
+            val cacheKey = contentCoverCacheKey(content, resolvedCoverUrl)
             return@remember ImageRequest.Builder(context)
                 .data(resolvedCoverUrl)
                 .memoryCacheKey(cacheKey.withMemoryCacheVariant(memoryCacheVariant))
@@ -1845,11 +1837,7 @@ private fun rememberHomeCoverRequest(
                 .build()
         }
         if (content.url.startsWith("tvbox://item/")) {
-            val fallbackCacheKey = sharedCoverMemoryCacheKey(
-                sourceName = content.source.name,
-                ownerKey = ownerKey,
-                url = "tvbox-search-cover:${content.url}",
-            )
+            val fallbackCacheKey = contentCoverCacheKey(content, "tvbox-search-cover:${content.url}")
             return@remember ImageRequest.Builder(context)
                 .data(tvboxSearchCoverModel(content))
                 .memoryCacheKey(fallbackCacheKey.withMemoryCacheVariant(memoryCacheVariant))

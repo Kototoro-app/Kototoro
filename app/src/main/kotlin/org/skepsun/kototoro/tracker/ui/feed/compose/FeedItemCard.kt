@@ -38,9 +38,11 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.core.util.ext.mangaExtra
 
 import org.skepsun.kototoro.list.ui.compose.ContentCardNsfwBadge
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
@@ -59,6 +61,18 @@ fun FeedItemCard(
 	val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
 	val sharedElementKey = remember(item.id, item.imageUrl, item.manga.source.name) {
 		contentCoverSharedKey(item.manga.source.name, item.imageUrl.orEmpty(), instanceKey = "feed_${item.id}")
+	}
+	val context = LocalContext.current
+	val allowCrossfade = sharedTransitionScope == null || animatedVisibilityScope == null
+	val imageRequest = remember(context, item.manga.source.name, item.manga.url, item.manga.publicUrl, item.imageUrl, allowCrossfade) {
+		val cacheKey = contentCoverCacheKey(item.manga, item.imageUrl)
+		ImageRequest.Builder(context)
+			.data(item.imageUrl)
+			.memoryCacheKey(cacheKey)
+			.diskCacheKey(cacheKey)
+			.mangaExtra(item.manga)
+			.crossfade(allowCrossfade)
+			.build()
 	}
 
 	Row(
@@ -87,10 +101,7 @@ fun FeedItemCard(
 				.clip(MaterialTheme.shapes.medium)
 		) {
 			AsyncImage(
-				model = ImageRequest.Builder(LocalContext.current)
-					.data(item.imageUrl)
-					.crossfade(sharedTransitionScope == null || animatedVisibilityScope == null)
-					.build(),
+				model = imageRequest,
 				contentDescription = item.title,
 				contentScale = ContentScale.Crop,
 				modifier = Modifier.matchParentSize(),

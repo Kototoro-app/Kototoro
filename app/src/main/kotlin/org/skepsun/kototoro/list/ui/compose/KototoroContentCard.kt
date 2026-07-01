@@ -78,9 +78,9 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverIdentity
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
-import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_READ
@@ -1136,11 +1136,7 @@ private fun buildContentCoverRequest(
     onRecoverableFailure: () -> Unit = {},
 ): ImageRequest? {
     val normalizedUrl = coverUrl?.let(::normalizeCoverUrl)
-    val cacheKey = sharedCoverMemoryCacheKey(
-        sourceName = manga.source.name,
-        ownerKey = manga.url,
-        url = normalizedUrl,
-    )
+    val cacheKey = contentCoverCacheKey(manga, normalizedUrl)
     val data = normalizedUrl?.takeUnless {
         isMissingLocalFileCover(it) || cacheKey?.let(ContentCoverFailureRegistry::isSuppressed) == true
     }
@@ -1149,11 +1145,7 @@ private fun buildContentCoverRequest(
         ?.let { tvboxSearchCoverModel(manga) }
     if (data.isNullOrBlank()) {
         if (fallbackTvBoxSearchModel != null) {
-            val fallbackCacheKey = sharedCoverMemoryCacheKey(
-                sourceName = manga.source.name,
-                ownerKey = manga.url,
-                url = "tvbox-search-cover:${manga.url}",
-            )
+            val fallbackCacheKey = contentCoverCacheKey(manga, "tvbox-search-cover:${manga.url}")
             Log.d(
                 TAG,
                 "Using deferred TVBox search cover: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} model=$fallbackTvBoxSearchModel",
