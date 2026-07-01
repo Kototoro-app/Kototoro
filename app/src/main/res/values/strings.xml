@@ -334,7 +334,8 @@
     <string name="discover_local_linked">Linked to local content</string>
     <string name="discover_local_unlinked">No local content linked yet</string>
     <string name="backup_saved">Backup saved</string>
-    <string name="backup_guard_missing_projection_anchors">Backup blocked: some work state refers to missing local projections (%1$s). Open Entity organize and repair dangling projection anchors, then try again.</string>
+    <string name="backup_failed_check_notification">Backup blocked. Check the notification for repair steps.</string>
+    <string name="backup_guard_missing_projection_anchors">Backup blocked: some work state refers to missing or invalid local projection anchors (%1$s). Open Entity organize and repair invalid projection anchors, then try again.</string>
     <string name="backup_guard_work_entity_missing_sync_id">Backup blocked: work entity %1$d is missing its sync identity. Open Entity organize and repair missing work sync identities, then try again.</string>
     <string name="tracker_warning">Some devices have different system behavior, which may break background tasks.</string>
     <string name="read_more">Read more</string>

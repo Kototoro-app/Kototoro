@@ -268,6 +268,9 @@
     <string name="welcome_jar_install_up_to_date">Kototoro: 云端校验完成，本地解析器已是最新版本！(总计载入: %1$d 个源)</string>
     <string name="welcome_jar_install_failed">Kototoro: 解析器网络装载失败 (%1$s)，请重试或前往设置切换加速镜像</string>
     <string name="backup_saved">备份已保存</string>
+    <string name="backup_failed_check_notification">备份已阻止。请查看通知中的修复指引。</string>
+    <string name="backup_guard_missing_projection_anchors">备份已阻止：部分作品状态引用了缺失或失效的本地投影锚点（%1$s）。请打开实体整理，修复无效投影锚点后再试。</string>
+    <string name="backup_guard_work_entity_missing_sync_id">备份已阻止：作品实体 %1$d 缺少同步标识。请打开实体整理，修复缺失的作品同步标识后再试。</string>
     <string name="tracker_warning">不同设备及不同的系统调度可能会杀掉本应用的后台任务</string>
     <string name="read_more">了解详情</string>
     <string name="queued">等待</string>

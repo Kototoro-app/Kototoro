@@ -24,7 +24,6 @@ import org.skepsun.kototoro.backups.ui.BaseBackupRestoreService
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.CompositeResult
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
-import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.powerManager
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
@@ -95,8 +94,8 @@ class BackupService : BaseBackupRestoreService() {
 				withContext(Dispatchers.Main) {
 					Toast.makeText(
 						this@BackupService,
-						e.getDisplayMessage(resources),
-						Toast.LENGTH_LONG,
+						R.string.backup_failed_check_notification,
+						Toast.LENGTH_SHORT,
 					).show()
 				}
 				throw e

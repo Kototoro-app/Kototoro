@@ -8,6 +8,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.app.ShareCompat
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.core.ErrorReporterReceiver
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.CoroutineIntentService
@@ -113,7 +114,13 @@ abstract class BaseBackupRestoreService : CoroutineIntentService() {
 			PendingIntentCompat.getActivity(
 				applicationContext,
 				0,
-				AppRouter.homeIntent(this@BaseBackupRestoreService),
+				when (result.failures.firstOrNull()) {
+					is BackupPayloadGuard.MissingProjectionAnchorsException,
+					is BackupPayloadGuard.WorkEntityMissingSyncIdException,
+						-> AppRouter.entityOrganizeSettingsIntent(applicationContext)
+
+					else -> AppRouter.homeIntent(this@BaseBackupRestoreService)
+				},
 				0,
 				false,
 			),
