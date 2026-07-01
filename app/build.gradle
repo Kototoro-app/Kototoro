@@ -434,6 +434,8 @@ configurations.all {
 	implementation libs.djl.tokenizers
 	implementation files('libs/tokenizer-native-0.33.0.aar')
 	implementation cloudstreamRuntimeJar
+	implementation libs.cryptography.core
+	implementation libs.cryptography.provider.optimal
 	implementation libs.djl.sentencepiece
 	implementation 'com.github.akari39:RealCUGAN-ncnn-Android:1.1'
 

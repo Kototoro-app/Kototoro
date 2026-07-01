@@ -2,9 +2,12 @@ package org.skepsun.kototoro.cloudstream.runtime
 
 import android.content.Context
 import android.util.Log
+import android.webkit.WebSettings
 import com.lagradost.api.setContext
 import com.lagradost.cloudstream3.APIHolder
+import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.MainAPI
+import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.ExtractorApi
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
+import org.skepsun.kototoro.core.network.ContentHttpClient
 import java.io.File
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
@@ -27,10 +31,12 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
 import javax.inject.Inject
 import javax.inject.Singleton
+import okhttp3.OkHttpClient
 
 @Singleton
 class CloudstreamRuntimeManager @Inject constructor(
 	@ApplicationContext private val context: Context,
+	@ContentHttpClient private val contentHttpClient: OkHttpClient,
 ) {
 
 	private val loadedPlugins = ConcurrentHashMap<String, LoadedCloudstreamPlugin>()
@@ -49,6 +55,8 @@ class CloudstreamRuntimeManager @Inject constructor(
 	fun initialize() {
 		writeDiagnostic("initialize:start")
 		setContext(WeakReference(context as Any))
+		CloudStreamApp.context = context
+		configureCloudstreamNetwork()
 		val pluginsDir = File(File(context.filesDir, "cloudstream"), "plugins").apply { mkdirs() }
 		val pluginFiles = pluginsDir.listFiles()
 			?.filter { it.isFile && (it.extension.equals("cs3", ignoreCase = true) || it.extension.equals("zip", ignoreCase = true)) }
@@ -76,6 +84,24 @@ class CloudstreamRuntimeManager @Inject constructor(
 		publishSources()
 		writeDiagnostic(
 			"initialize:done loaded=${loadedPlugins.size} sources=${_sources.value.joinToString(",") { "${it.pluginPackageName}/${it.name}" }}",
+		)
+	}
+
+	private fun configureCloudstreamNetwork() {
+		val cloudstreamUserAgent = runCatching { WebSettings.getDefaultUserAgent(context) }
+			.getOrNull()
+			?: com.lagradost.cloudstream3.USER_AGENT
+		CloudstreamRequestContext.userAgent = cloudstreamUserAgent
+		app.baseClient = contentHttpClient.newBuilder()
+			.apply {
+				interceptors().add(0, CloudstreamRequestContext.interceptor())
+			}
+			.build()
+		app.defaultHeaders = mapOf("User-Agent" to cloudstreamUserAgent)
+		writeDiagnostic(
+			"network:configured interceptors=${contentHttpClient.interceptors.joinToString(",") { it::class.java.simpleName }} " +
+				"networkInterceptors=${contentHttpClient.networkInterceptors.joinToString(",") { it::class.java.simpleName }} " +
+				"userAgent=${cloudstreamUserAgent.take(120)}",
 		)
 	}
 
@@ -149,7 +175,7 @@ class CloudstreamRuntimeManager @Inject constructor(
 			.onFailure { Log.w(TAG, "Cloudstream plugin beforeUnload failed for ${loaded.filePath}", it) }
 
 		synchronized(APIHolder.apis) {
-			APIHolder.apis = APIHolder.apis.filterNot { it.sourcePlugin == loaded.plugin.filename }
+			APIHolder.apis = APIHolder.apis.filter { it.sourcePlugin != loaded.plugin.filename }
 		}
 		synchronized(APIHolder.allProviders) {
 			APIHolder.allProviders.removeIf { it.sourcePlugin == loaded.plugin.filename }

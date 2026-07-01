@@ -256,6 +256,73 @@ fun requestCreator(
 	return builder.build()
 }
 
+fun requestCreator(
+	method: String,
+	url: String,
+	headers: Map<String, String> = emptyMap(),
+	referer: String? = null,
+	cookies: Map<String, String> = emptyMap(),
+	data: Map<String, String> = emptyMap(),
+	files: Map<String, String> = emptyMap(),
+	form: List<Pair<String, String>> = emptyList(),
+	json: Any? = null,
+	requestBody: RequestBody? = null,
+	cacheTime: Int? = null,
+	cacheUnit: TimeUnit? = null,
+	responseParser: ResponseParser? = null,
+): Request {
+	val resolvedUrl = if (method.equals("GET", ignoreCase = true) && data.isNotEmpty()) {
+		url.toHttpUrlOrNull()?.newBuilder()?.apply {
+			data.forEach { (key, value) -> addQueryParameter(key, value) }
+		}?.build()?.toString() ?: url
+	} else {
+		url
+	}
+	val mergedHeaders = buildMap {
+		putAll(headers)
+		val cookieHeader = cookies.takeIf { it.isNotEmpty() }
+			?.entries
+			?.joinToString("; ") { (key, value) -> "$key=$value" }
+		if (!cookieHeader.isNullOrBlank() && keys.none { it.equals("Cookie", ignoreCase = true) }) {
+			put("Cookie", cookieHeader)
+		}
+	}
+	return requestCreator(
+		method = method,
+		url = resolvedUrl,
+		referer = referer,
+		headers = mergedHeaders,
+		requestBody = requestBody ?: buildCompatRequestBody(data, files, form, json, responseParser),
+	)
+}
+
+private fun buildCompatRequestBody(
+	data: Map<String, String>,
+	files: Map<String, String>,
+	form: List<Pair<String, String>>,
+	json: Any?,
+	parser: ResponseParser?,
+): RequestBody? {
+	if (data.isEmpty() && files.isEmpty() && form.isEmpty() && json == null) {
+		return null
+	}
+	if (files.isNotEmpty()) {
+		val multipart = MultipartBody.Builder().setType(MultipartBody.FORM)
+		data.forEach { (key, value) -> multipart.addFormDataPart(key, value) }
+		form.forEach { (key, value) -> multipart.addFormDataPart(key, value) }
+		files.forEach { (key, value) -> multipart.addFormDataPart(key, value) }
+		return multipart.build()
+	}
+	if (data.isNotEmpty() || form.isNotEmpty()) {
+		val body = FormBody.Builder()
+		data.forEach { (key, value) -> body.add(key, value) }
+		form.forEach { (key, value) -> body.add(key, value) }
+		return body.build()
+	}
+	val serialized = parser?.writeValueAsString(json as Any) ?: json.toString()
+	return serialized.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+}
+
 fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
 	val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
 		override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit

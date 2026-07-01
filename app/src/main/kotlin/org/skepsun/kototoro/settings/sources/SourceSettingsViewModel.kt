@@ -124,6 +124,9 @@ class SourceSettingsViewModel @Inject constructor(
 				val httpSource = repository.aniyomiSource as? eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 				browserUrl.value = httpSource?.baseUrl
 			}
+			is org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepository -> {
+				browserUrl.value = repository.source.api.mainUrl.takeIf { it.isNotBlank() }
+			}
 			is KotatsuParserRepository -> {
 				browserUrl.value = "https://${repository.domain}"
 				repository.getConfig().subscribe(this)

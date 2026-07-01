@@ -123,11 +123,15 @@ class WebViewExecutor @Inject constructor(
 			try {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext start: $url")
 				webView.configureForParser(userAgent, blockImages = true)
-				withTimeout(timeoutMs) {
+				withTimeoutOrNull(timeoutMs) {
 					// Ensure browser context is established on the same origin first.
 					suspendCancellableCoroutine<Unit> { cont ->
 						webView.webViewClient = object : WebViewClient() {
 							override fun onPageFinished(view: WebView?, loadedUrl: String?) {
+								android.util.Log.d(
+									"WebViewExecutor",
+									"fetchWithBrowserContext base page finished: $loadedUrl",
+								)
 								if (cont.isActive) {
 									cont.resume(Unit)
 								}
@@ -149,6 +153,10 @@ class WebViewExecutor @Inject constructor(
 					} else {
 						url
 					}
+					android.util.Log.d(
+						"WebViewExecutor",
+						"fetchWithBrowserContext origin ready: currentUrl=${webView.url} targetUrl=$targetUrlToFetch",
+					)
 
 					val allowedHeaders = headers.filterKeys { key ->
 						!key.equals("Referer", ignoreCase = true) && !key.equals("Origin", ignoreCase = true)
@@ -215,14 +223,14 @@ class WebViewExecutor @Inject constructor(
 							"WebViewExecutor",
 							"fetchWithBrowserContext empty JS result"
 						)
-						return@withTimeout tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
+						return@withTimeoutOrNull tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
 					}
 					val json = runCatching { JSONObject(raw) }.onFailure {
 						android.util.Log.w(
 							"WebViewExecutor",
 							"fetchWithBrowserContext JSON parse failed: ${it.message}; rawPreview=${raw.take(200)}",
 						)
-					}.getOrNull() ?: return@withTimeout tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
+					}.getOrNull() ?: return@withTimeoutOrNull tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
 					val fetchStatus = json.optInt("status")
 					val fetchBody = json.optString("body")
 					val isCloudflareBlock = (fetchStatus == 403 || fetchStatus == 503) && 
@@ -236,7 +244,7 @@ class WebViewExecutor @Inject constructor(
 							"WebViewExecutor",
 							"fetchWithBrowserContext failed or hit WAF (ok=${json.optBoolean("ok")}, status=$fetchStatus, isCF=$isCloudflareBlock). Falling back to navigation.",
 						)
-						return@withTimeout tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
+						return@withTimeoutOrNull tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
 					}
 					val responseHeadersObj = json.optJSONObject("headers")
 					val responseHeaders = linkedMapOf<String, String>()
@@ -254,12 +262,71 @@ class WebViewExecutor @Inject constructor(
 						headers = responseHeaders,
 						body = json.optString("body"),
 					)
-				}
+				} ?: snapshotCurrentPage(webView, webView.url ?: url, "timeout")
 			} finally {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext end: $url")
 				webView.reset()
 			}
 		}
+	}
+
+	private suspend fun snapshotCurrentPage(
+		webView: WebView,
+		url: String,
+		reason: String,
+	): BrowserFetchResult? {
+		android.util.Log.w(
+			"WebViewExecutor",
+			"fetchWithBrowserContext snapshot current page: reason=$reason currentUrl=${webView.url}",
+		)
+		val raw = suspendCancellableCoroutine<String> { cont ->
+			webView.evaluateJavascript(
+				"""(function() {
+					const html = document.documentElement ? document.documentElement.outerHTML : '';
+					return JSON.stringify({
+						href: location.href || '',
+						title: document.title || '',
+						readyState: document.readyState || '',
+						contentType: document.contentType || '',
+						bodyText: document.body ? (document.body.innerText || document.body.textContent || '').trim().slice(0, 1000) : '',
+						html: html || ''
+					});
+				})()"""
+			) { result ->
+				if (cont.isActive) {
+					cont.resume(decodeJavascriptString(result))
+				}
+			}
+		}
+		val json = runCatching { JSONObject(raw) }.getOrNull()
+		val body = json?.optString("html").orEmpty()
+		val bodyText = json?.optString("bodyText").orEmpty()
+		if (body.isBlank() && bodyText.isBlank()) {
+			android.util.Log.w("WebViewExecutor", "fetchWithBrowserContext snapshot produced empty body")
+			return null
+		}
+		val contentType = json?.optString("contentType").orEmpty()
+		val responseHeaders = linkedMapOf<String, String>()
+		if (contentType.isNotBlank()) {
+			responseHeaders["content-type"] = contentType
+		}
+		responseHeaders["x-kototoro-snapshot-reason"] = reason
+		responseHeaders["x-kototoro-snapshot-title"] = json?.optString("title").orEmpty()
+		responseHeaders["x-kototoro-snapshot-ready-state"] = json?.optString("readyState").orEmpty()
+		val snapshotBody = body.ifBlank { bodyText }
+		android.util.Log.w(
+			"WebViewExecutor",
+			"fetchWithBrowserContext snapshot success: href=${json?.optString("href")} " +
+				"title=${json?.optString("title")} readyState=${json?.optString("readyState")} " +
+				"contentType=$contentType bodyLength=${snapshotBody.length}",
+		)
+		return BrowserFetchResult(
+			status = 0,
+			statusText = reason,
+			url = json?.optString("href").orEmpty().ifBlank { url },
+			headers = responseHeaders,
+			body = snapshotBody,
+		)
 	}
 
 	private suspend fun tryNavigationFetchFallback(
@@ -870,20 +937,23 @@ class WebViewExecutor @Inject constructor(
 	}
 
     @MainThread
-    private fun attachToHost(webView: WebView, activity: android.app.Activity): ViewGroup? {
+    private fun attachToHost(
+		webView: WebView,
+		activity: android.app.Activity,
+		width: Int = CLOUDFLARE_WEBVIEW_WIDTH,
+		height: Int = CLOUDFLARE_WEBVIEW_HEIGHT,
+	): ViewGroup? {
         val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return null
         runCatching {
             (webView.parent as? ViewGroup)?.removeView(webView)
-            // MATCH_PARENT gives Turnstile a real viewport (1×1 causes flow/ov1 POST to fail
-            // because Cloudflare fingerprints iframe dimensions). Translating off-screen keeps
-            // visibilityState="visible" and full metrics while Android's hit-testing excludes
-            // the translated position, so touches on the visible UI pass through normally.
+            // Turnstile needs a real viewport, but using the full physical display can crash the
+            // WebView renderer on high-resolution devices due to tile memory pressure.
             webView.alpha = 0f
             webView.visibility = View.VISIBLE
             webView.translationY = 10_000f
             content.addView(
                 webView,
-                ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                ViewGroup.LayoutParams(width, height),
             )
         }.onFailure {
             it.printStackTraceDebug()
@@ -921,24 +991,26 @@ class WebViewExecutor @Inject constructor(
                 continuation.resume(result)
             }
         }
-        val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
-        val challengeDeadline = System.currentTimeMillis() + MAX_CHALLENGE_MS
-        val check = object : Runnable {
-            override fun run() {
-                if (finished) return
-                val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
-                if (clearance != null && clearance != initialClearance) {
-                    resumeOnce(true)
-                    return
-                }
-                webView.evaluateJavascript(CF_STATE_JS) { raw ->
-                    if (finished) return@evaluateJavascript
-                    when (raw?.removeSurrounding("\"")) {
-                        "ok" -> resumeOnce(true)
-                        "error" -> resumeOnce(false)
-                        else -> if (System.currentTimeMillis() >= challengeDeadline) {
-                            resumeOnce(false)
-                        } else {
+		val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+		val challengeDeadline = System.currentTimeMillis() + MAX_CHALLENGE_MS
+		val check = object : Runnable {
+			override fun run() {
+				if (finished) return
+				val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+				webView.evaluateJavascript(CF_STATE_JS) { raw ->
+					if (finished) return@evaluateJavascript
+	                    val state = raw?.removeSurrounding("\"")
+	                    when (state) {
+	                        "ok" -> resumeOnce(true)
+	                        "error" -> resumeOnce(false)
+	                        else -> if (System.currentTimeMillis() >= challengeDeadline) {
+	                            Log.w(
+									TAG,
+									"Captcha auto-resolve deadline reached for ${exception.url}, " +
+										"state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
+								)
+	                            resumeOnce(false)
+	                        } else {
                             handler.removeCallbacks(this)
                             handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
                         }
@@ -957,7 +1029,11 @@ class WebViewExecutor @Inject constructor(
                 handler.postDelayed(check, 100L)
             }
 
-            override fun onCheckPassed() = resumeOnce(true)
+            override fun onCheckPassed() {
+				if (finished) return
+				handler.removeCallbacks(check)
+				handler.postDelayed(check, 100L)
+			}
 
             override fun onLoopDetected() = Unit
         }
@@ -1398,11 +1474,13 @@ class WebViewExecutor @Inject constructor(
 	}
 
     companion object {
-        private const val TAG = "WebViewExecutor"
-        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
-        private const val MAX_CHALLENGE_MS = 11_000L
-        private const val FAILURE_COOLDOWN_MS = 30_000L
-		private val CLOUDFLARE_DIAGNOSTIC_MARKERS = listOf(
+	        private const val TAG = "WebViewExecutor"
+	        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
+		        private const val MAX_CHALLENGE_MS = 30_000L
+	        private const val FAILURE_COOLDOWN_MS = 30_000L
+	        private const val CLOUDFLARE_WEBVIEW_WIDTH = 1024
+	        private const val CLOUDFLARE_WEBVIEW_HEIGHT = 768
+			private val CLOUDFLARE_DIAGNOSTIC_MARKERS = listOf(
 			"cloudflare",
 			"challenge",
 			"turnstile",

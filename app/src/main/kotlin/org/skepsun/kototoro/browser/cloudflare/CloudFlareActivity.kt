@@ -18,14 +18,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.yield
+import okhttp3.OkHttpClient
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.browser.BaseBrowserActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.parsers.config.ConfigKey
@@ -45,9 +49,14 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 	private val isAutoResolve: Boolean by lazy { intent?.getBooleanExtra(EXTRA_AUTO_RESOLVE, false) == true }
 	private var resultNotified = false
 	private var hiddenTimeoutJob: Job? = null
+	private var clearanceVerificationJob: Job? = null
 
 	@Inject
 	lateinit var cookieJar: MutableCookieJar
+
+	@Inject
+	@ContentHttpClient
+	lateinit var okHttpClient: OkHttpClient
 
 	@Inject
 	lateinit var captchaHandler: CaptchaHandler
@@ -146,12 +155,31 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 	}
 
 	override fun onLoopDetected() {
-		restartCheck()
+		if (isHidden || isAutoResolve) {
+			restartCheck()
+		} else {
+			cfClient.reset()
+			android.util.Log.w(TAG, "Cloudflare loop detected; keeping manual browser open for user action")
+		}
 	}
 
 	override fun onCheckPassed() {
-		pendingResult = RESULT_OK
-		lifecycleScope.launch {
+		if (clearanceVerificationJob?.isActive == true) {
+			return
+		}
+		clearanceVerificationJob = lifecycleScope.launch {
+			val url = intent?.dataString
+			if (url.isNullOrBlank() || !verifyClearance(url)) {
+				if (!isHidden) {
+					Snackbar.make(
+						viewBinding.webView,
+						R.string.captcha_required_message,
+						Snackbar.LENGTH_LONG,
+					).show()
+				}
+				return@launch
+			}
+			pendingResult = RESULT_OK
 			val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
 			if (source != null) {
 				runCatchingCancellable {
@@ -163,6 +191,37 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			finishAfterTransition()
 		}
 	}
+
+	private suspend fun verifyClearance(url: String): Boolean = runCatchingCancellable {
+		runInterruptible(Dispatchers.IO) {
+			val request = Request.Builder()
+				.url(url)
+				.get()
+				.apply {
+					intent?.getStringExtra(AppRouter.KEY_USER_AGENT)?.takeIf { it.isNotBlank() }?.let {
+						header(CommonHeaders.USER_AGENT, it)
+					}
+					intent?.getStringExtra(AppRouter.KEY_SOURCE)?.takeIf { it.isNotBlank() }?.let {
+						header(CommonHeaders.MANGA_SOURCE, it)
+					}
+				}
+				.build()
+			okHttpClient.newCall(request).execute().use { response ->
+				val success = response.isSuccessful
+				android.util.Log.i(
+					TAG,
+					"verify clearance: url=$url status=${response.code} success=$success " +
+						"source=${intent?.getStringExtra(AppRouter.KEY_SOURCE)} " +
+						"hasCfClearance=${url.toHttpUrlOrNull()?.let { httpUrl ->
+							cookieJar.loadForRequest(httpUrl).any { it.name == "cf_clearance" }
+						}}",
+				)
+				success
+			}
+		}
+	}.onFailure { error ->
+		android.util.Log.w(TAG, "verify clearance failed: url=$url", error)
+	}.getOrDefault(false)
 
 	override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) {
 		setTitle(title)

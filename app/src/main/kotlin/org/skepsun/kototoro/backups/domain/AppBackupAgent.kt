@@ -112,6 +112,7 @@ class AppBackupAgent : BackupAgent() {
 					),
 					cloudstreamRuntimeManager = org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager(
 						context = applicationContext,
+						contentHttpClient = okhttp3.OkHttpClient(),
 					),
 				),
 				savedFiltersRepository = SavedFiltersRepository(
@@ -208,6 +209,7 @@ class AppBackupAgent : BackupAgent() {
 						),
 						cloudstreamRuntimeManager = org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager(
 							context = applicationContext,
+							contentHttpClient = okhttp3.OkHttpClient(),
 						),
 					),
 					savedFiltersRepository = SavedFiltersRepository(
