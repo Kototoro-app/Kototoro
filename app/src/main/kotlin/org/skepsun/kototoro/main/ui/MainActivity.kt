@@ -59,6 +59,7 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
+import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
@@ -90,6 +91,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
+
+    @Inject
+    lateinit var trackWorkerScheduler: TrackWorker.Scheduler
 
     private val viewModel by viewModels<MainViewModel>()
     private val searchSuggestionViewModel by viewModels<SearchSuggestionViewModel>()
@@ -254,6 +258,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 query = searchQuery,
                 isResumeEnabled = isResumeEnabledState,
                 onResumeClick = viewModel::openLastReader,
+                onFeedRefresh = trackWorkerScheduler::startNow,
                 onContentSuggestionClick = { content ->
                     resolveDetailsOriginForContent(content) { origin ->
                         when (origin) {

@@ -146,10 +146,7 @@ fun KototoroTopBar(
     sortOrders: List<ListSortOrder> = emptyList(),
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
-    isFeedScreen: Boolean = false,
-    showAllUpdates: Boolean = false,
-    onShowAllUpdatesChanged: (Boolean) -> Unit = {},
-    onFeedRefresh: () -> Unit = {},
+    displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -289,7 +286,7 @@ fun KototoroTopBar(
                                         shape = CompactTopBarPillShape,
                                         style = GlassDefaults.subtleStyle(),
                                     ) {
-                                    if (supportsDisplayModeMenu || supportsGridSizeSlider) {
+                                    if (supportsDisplayModeMenu || supportsGridSizeSlider || displayOptionsExtraContent != null) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.display_options)) },
                                             onClick = {
@@ -427,7 +424,16 @@ fun KototoroTopBar(
                     .padding(top = 8.dp),
             )
         }
-        if (showDisplayOptionsSheet && (supportsDisplayModeMenu || supportsGridSizeSlider || onBrowseTrackingRecommendationsChange != null || sortOrders.isNotEmpty() || isFeedScreen)) {
+        if (
+            showDisplayOptionsSheet &&
+            (
+                supportsDisplayModeMenu ||
+                    supportsGridSizeSlider ||
+                    onBrowseTrackingRecommendationsChange != null ||
+                    sortOrders.isNotEmpty() ||
+                    displayOptionsExtraContent != null
+                )
+        ) {
             org.skepsun.kototoro.list.ui.compose.DisplayOptionsSheet(
                 supportsDisplayModeMenu = supportsDisplayModeMenu,
                 currentListMode = pendingListMode,
@@ -444,7 +450,10 @@ fun KototoroTopBar(
                 sortOrders = sortOrders,
                 selectedSortOrder = selectedSortOrder,
                 onSortOrderSelected = onSortOrderSelected,
-                extraContent = if (isFeedScreen || (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null)) {
+                extraContent = if (
+                    displayOptionsExtraContent != null ||
+                    (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null)
+                ) {
                     {
                         Column {
                             if (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null) {
@@ -468,31 +477,11 @@ fun KototoroTopBar(
                                     )
                                 }
                             }
-                            if (isFeedScreen) {
+                            displayOptionsExtraContent?.let { content ->
                                 if (onBrowseTrackingRecommendationsChange != null && isBrowseTrackingRecommendationsEnabled != null) {
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                                 }
-                                Column {
-                                    DisplayOptionsSwitchRow(
-                                        title = stringResource(R.string.show_all_updates),
-                                        summary = stringResource(R.string.feed_behavior_description),
-                                        checked = showAllUpdates,
-                                        onCheckedChange = onShowAllUpdatesChanged,
-                                    )
-                                    androidx.compose.animation.AnimatedVisibility(visible = showAllUpdates) {
-                                        Box(modifier = Modifier.fillMaxWidth()) {
-                                            androidx.compose.material3.TextButton(
-                                                onClick = {
-                                                    onFeedRefresh()
-                                                    showDisplayOptionsSheet = false
-                                                },
-                                                modifier = Modifier.align(Alignment.CenterEnd)
-                                            ) {
-                                                Text(text = stringResource(R.string.trigger_update_now))
-                                            }
-                                        }
-                                    }
-                                }
+                                content { showDisplayOptionsSheet = false }
                             }
                         }
                     }

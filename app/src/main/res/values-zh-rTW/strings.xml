@@ -118,6 +118,9 @@
     <string name="size_s">大小: %s</string>
     <string name="updates_feed_cleared">已清除</string>
     <string name="clear_updates_feed">清除更新訂閱</string>
+    <string name="show_all_updates">顯示所有更新</string>
+    <string name="feed_behavior_description">預設只顯示新的未讀章節。\n\n啟用後，更新頁會顯示已快取的訂閱項目，每個項目最多顯示 10 個章節。使用「立即觸發更新」重新整理已訂閱收藏。</string>
+    <string name="trigger_update_now">立即觸發更新</string>
     <string name="rotate_screen">旋轉畫面</string>
     <string name="update">更新</string>
     <string name="track_sources">尋找更新</string>

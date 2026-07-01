@@ -195,6 +195,9 @@
     <string name="new_version_s">新版本：%s</string>
     <string name="clear_updates_feed">清除订阅更新记录</string>
     <string name="updates_feed_cleared">订阅更新记录已清除</string>
+    <string name="show_all_updates">显示所有更新</string>
+    <string name="feed_behavior_description">默认只显示新的未读章节。\n\n启用后，更新页会显示已缓存的订阅条目，每个条目最多显示 10 个章节。使用“立即触发更新”刷新已订阅收藏。</string>
+    <string name="trigger_update_now">立即触发更新</string>
     <string name="rotate_screen">旋转屏幕</string>
     <string name="update">开始更新</string>
     <string name="feed_will_update_soon">订阅更新即将开始</string>

@@ -13,10 +13,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
-import org.skepsun.kototoro.core.db.MangaDatabase
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
@@ -80,7 +78,6 @@ class FeedViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val dataRepository: ContentDataRepository,
 	private val workResolver: WorkResolver,
-	private val db: MangaDatabase,
 ) : BaseViewModel(), QuickFilterListener by quickFilter {
 
 	private data class HeaderParams(
@@ -181,30 +178,7 @@ class FeedViewModel @Inject constructor(
 		val combinedSettings = quickFilter.appliedOptions.combineWithSettings()
 		if (showAll) {
 			combine(limit, combinedSettings, ::Pair)
-				.flatMapLatest { repository.observeAllTracks(it.first, it.second) }
-				.mapLatest { tracks ->
-					if (tracks.isEmpty()) return@mapLatest emptyList<TrackingLogItem>()
-					val mangaIds = tracks.map { it.manga.id }
-					val allChapters = db.getChaptersDao().findAllByMangaIds(mangaIds)
-					val chaptersByMangaId = allChapters.groupBy { it.mangaId }
-					tracks.map { track ->
-						val chapters = chaptersByMangaId[track.manga.id].orEmpty()
-							.takeLast(10)
-							.reversed()
-							.map { it.title }
-						TrackingLogItem(
-							id = -track.manga.id,
-							anchorMangaId = track.manga.id,
-							entityId = track.entityId,
-							preferredLocalMangaId = track.preferredLocalMangaId,
-							manga = track.manga,
-							chapters = chapters,
-							createdAt = track.lastChapterDate ?: track.lastCheck ?: java.time.Instant.EPOCH,
-							isNew = track.newChapters > 0,
-							count = track.newChapters,
-						)
-					}
-				}
+				.flatMapLatest { repository.observeAllTrackingLogItems(it.first, it.second) }
 		} else {
 			combine(limit, combinedSettings, ::Pair)
 				.flatMapLatest { repository.observeTrackingLog(it.first, it.second) }

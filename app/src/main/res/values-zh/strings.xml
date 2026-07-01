@@ -578,6 +578,9 @@
     <string name="clear_translation_cache">清除翻译缓存</string>
     <string name="clear_tts_audio_cache">清除 TTS 音频缓存</string>
     <string name="clear_updates_feed">清除订阅更新记录</string>
+    <string name="show_all_updates">显示所有更新</string>
+    <string name="feed_behavior_description">默认只显示新的未读章节。\n\n启用后，更新页会显示已缓存的订阅条目，每个条目最多显示 10 个章节。使用“立即触发更新”刷新已订阅收藏。</string>
+    <string name="trigger_update_now">立即触发更新</string>
     <string name="clear_video_proxy_cache">清除视频代理缓存</string>
     <string name="close">关闭</string>
     <string name="cloudstream_extension_repositories">Cloudstream 仓库</string>

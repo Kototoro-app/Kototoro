@@ -1112,7 +1112,6 @@ internal fun FeedTopLevelRouteContent(
     val selectedCategoryId by viewModel.currentCategoryId.collectAsStateWithLifecycle()
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
-    val showAllUpdates by viewModel.showAllUpdates.collectAsStateWithLifecycle()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 

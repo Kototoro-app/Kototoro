@@ -3,13 +3,17 @@ package org.skepsun.kototoro.main.ui.compose
 import android.app.Activity
 import android.view.MotionEvent
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +56,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
@@ -96,6 +101,9 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.mutableLongStateOf
@@ -321,6 +329,7 @@ fun KototoroApp(
     onSearchNavigationHandled: () -> Unit = {},
     isResumeEnabled: Boolean = false,
     onResumeClick: () -> Unit = {},
+    onFeedRefresh: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -717,6 +726,20 @@ fun KototoroApp(
             appSettings.allFavoritesSortOrder = order
         }
     }
+    val displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = if (chromeTopLevelKey == FeedNavKey) {
+        { dismiss ->
+            FeedDisplayOptionsContent(
+                showAllUpdates = showAllUpdates,
+                onShowAllUpdatesChanged = { appSettings.showAllUpdates = it },
+                onFeedRefresh = {
+                    onFeedRefresh()
+                    dismiss()
+                },
+            )
+        }
+    } else {
+        null
+    }
 
     LaunchedEffect(currentTopLevelKey) {
         val mappedId = currentTopLevelKey?.let(::bottomNavItemIdForTopLevelKey) ?: -1
@@ -931,21 +954,7 @@ fun KototoroApp(
                         sortOrders = sortOrders,
                         selectedSortOrder = selectedSortOrder,
                         onSortOrderSelected = onDisplaySortOrderSelected,
-                        isFeedScreen = chromeTopLevelKey == org.skepsun.kototoro.main.ui.navigation3.FeedNavKey,
-                        showAllUpdates = showAllUpdates,
-                        onShowAllUpdatesChanged = { appSettings.showAllUpdates = it },
-                        onFeedRefresh = {
-                            val workRequest = androidx.work.OneTimeWorkRequestBuilder<org.skepsun.kototoro.tracker.work.TrackWorker>()
-                                .setConstraints(
-                                    androidx.work.Constraints.Builder()
-                                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                        .build()
-                                )
-                                .addTag("tracking_oneshot")
-                                .build()
-                            androidx.work.WorkManager.getInstance(context)
-                                .enqueueUniqueWork("tracking_oneshot", androidx.work.ExistingWorkPolicy.REPLACE, workRequest)
-                        },
+                        displayOptionsExtraContent = displayOptionsExtraContent,
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
@@ -1237,10 +1246,7 @@ private fun BoxScope.MainTopChrome(
     sortOrders: List<org.skepsun.kototoro.list.domain.ListSortOrder> = emptyList(),
     selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
     onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
-    isFeedScreen: Boolean = false,
-    showAllUpdates: Boolean = false,
-    onShowAllUpdatesChanged: (Boolean) -> Unit = {},
-    onFeedRefresh: () -> Unit = {},
+    displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
 ) {
     val topChromeModifier = Modifier
         .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
@@ -1309,14 +1315,58 @@ private fun BoxScope.MainTopChrome(
             sortOrders = sortOrders,
             selectedSortOrder = selectedSortOrder,
             onSortOrderSelected = onSortOrderSelected,
-            isFeedScreen = isFeedScreen,
-            showAllUpdates = showAllUpdates,
-            onShowAllUpdatesChanged = onShowAllUpdatesChanged,
-            onFeedRefresh = onFeedRefresh,
+            displayOptionsExtraContent = displayOptionsExtraContent,
             modifier = topChromeModifier.offset {
                 androidx.compose.ui.unit.IntOffset(0, (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt())
             },
         )
+    }
+}
+
+@Composable
+private fun FeedDisplayOptionsContent(
+    showAllUpdates: Boolean,
+    onShowAllUpdatesChanged: (Boolean) -> Unit,
+    onFeedRefresh: () -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.show_all_updates),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = showAllUpdates,
+                onCheckedChange = onShowAllUpdatesChanged,
+            )
+        }
+        AnimatedVisibility(visible = showAllUpdates) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.feed_behavior_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(
+                    onClick = onFeedRefresh,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(text = stringResource(R.string.trigger_update_now))
+                }
+            }
+        }
     }
 }
 

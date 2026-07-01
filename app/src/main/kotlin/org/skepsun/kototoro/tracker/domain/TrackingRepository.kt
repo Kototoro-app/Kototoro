@@ -125,6 +125,11 @@ class TrackingRepository @Inject constructor(
 			.onStart { gcIfNotCalled() }
 	}
 
+	fun observeAllTrackingLogItems(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<TrackingLogItem>> {
+		return observeAllTracks(limit, filterOptions)
+			.mapLatest { tracks -> resolveAllTrackingLogItems(tracks) }
+	}
+
 	suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
 		return workAggregateRepository
 			.buildTrackingAggregates(db.getTracksDao().findAll(offset = offset, limit = limit))
@@ -460,6 +465,15 @@ class TrackingRepository @Inject constructor(
 				isNew = item.isUnread,
 			)
 		}
+	}
+
+	private suspend fun resolveAllTrackingLogItems(tracks: List<ContentTracking>): List<TrackingLogItem> {
+		if (tracks.isEmpty()) {
+			return emptyList()
+		}
+		val chapters = db.getChaptersDao()
+			.findAllByMangaIds(tracks.map { it.manga.id })
+		return TrackingLogItemMapper.fromAllTrackedContent(tracks, chapters)
 	}
 
 	private suspend fun buildFallbackContentByAnchorId(anchorIds: Collection<Long>): Map<Long, Content> {
