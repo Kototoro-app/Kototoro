@@ -23,6 +23,7 @@ import org.skepsun.kototoro.core.db.entity.toContentChapters
 import org.skepsun.kototoro.core.db.entity.toContentTags
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.prefs.ReaderMode
@@ -310,7 +311,7 @@ class ContentDataRepository @Inject constructor(
 			// Sync the manga table's nsfw/content_rating columns so SQL-level filters
 			// (e.g. HistoryDao "manga.nsfw = 1") respect the manual override.
 			val effectiveRating = normalizedOverride?.contentRating ?: stored.contentRating
-			val effectiveNsfw = effectiveRating == org.skepsun.kototoro.parsers.model.ContentRating.ADULT
+			val effectiveNsfw = stored.copy(contentRating = effectiveRating).isNsfw()
 			db.getMangaDao().updateContentRating(stored.id, effectiveNsfw, effectiveRating?.name)
 		}
 	}
