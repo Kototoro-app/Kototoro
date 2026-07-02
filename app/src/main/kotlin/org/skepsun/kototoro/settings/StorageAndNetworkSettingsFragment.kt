@@ -192,7 +192,8 @@ fun StorageAndNetworkSettingsRoute(
         SettingsChoiceOption(AppSettings.HuggingFaceMirror.HF_MIRROR, "hf-mirror.com"),
     )
     val bangumiMirrorOptions = listOf(
-        SettingsChoiceOption(AppSettings.BangumiMirror.BANGUMI_ONE, "bangumi.one (Default)"),
+        SettingsChoiceOption(AppSettings.BangumiMirror.BGMMI_ANIBT, "bangumi.rdd.moe (Default)"),
+        SettingsChoiceOption(AppSettings.BangumiMirror.BANGUMI_LOL, "bangumi.lol"),
         SettingsChoiceOption(AppSettings.BangumiMirror.NATIVE, "Official"),
         SettingsChoiceOption(AppSettings.BangumiMirror.CUSTOM, "Custom"),
     )
@@ -417,7 +418,7 @@ fun StorageAndNetworkSettingsRoute(
                     title = context.getString(R.string.pref_bangumi_mirror_custom_base),
                     value = bangumiMirrorCustomBase,
                     summary = context.getString(R.string.pref_bangumi_mirror_custom_base_summary),
-                    placeholder = "https://bangumi.one",
+                    placeholder = "https://bangumi.rdd.moe",
                     onValueChange = { settings.bangumiMirrorCustomBase = it },
                 )
             }

@@ -417,18 +417,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_HUGGINGFACE_MIRROR, value.value) }
 
 	enum class BangumiMirror(val value: String) {
-		BANGUMI_ONE("bangumi_one"),
+		BGMMI_ANIBT("bgmmi_anibt"),
+		BANGUMI_LOL("bangumi_lol"),
 		NATIVE("native"),
 		CUSTOM("custom");
 
 		companion object {
-			fun fromValue(value: String?): BangumiMirror =
-				entries.find { it.value == value } ?: BANGUMI_ONE
+			fun fromValue(value: String?): BangumiMirror = when (value) {
+				"bangumi_one" -> BGMMI_ANIBT
+				else -> entries.find { it.value == value } ?: BGMMI_ANIBT
+			}
 		}
 	}
 
 	var bangumiMirror: BangumiMirror
-		get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.BANGUMI_ONE.value))
+		get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.BGMMI_ANIBT.value))
 		set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR, value.value) }
 
 	var bangumiMirrorCustomBase: String?
