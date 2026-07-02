@@ -3,6 +3,7 @@ package org.skepsun.kototoro.core.db.entity
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.looksLikeVideoUrl
+import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -93,7 +94,7 @@ fun Content.toEntity() = MangaEntity(
 	coverUrl = coverUrl.orEmpty(),
 	altTitles = altTitles.joinToString(VALUES_DIVIDER.toString()),
 	rating = rating,
-	isNsfw = isNsfw,
+	isNsfw = isNsfw(),
 	contentRating = contentRating?.name,
 	state = state?.name,
 	title = title,
