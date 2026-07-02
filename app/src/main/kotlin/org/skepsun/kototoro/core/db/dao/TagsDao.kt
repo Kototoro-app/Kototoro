@@ -12,7 +12,11 @@ abstract class TagsDao {
 	abstract suspend fun findTags(source: String): List<TagEntity>
 
 	@Query("SELECT * FROM tags WHERE tag_id IN (:ids)")
-	abstract suspend fun findByIds(ids: Collection<Long>): List<TagEntity>
+	protected abstract suspend fun findByIdsImpl(ids: Collection<Long>): List<TagEntity>
+
+	suspend fun findByIds(ids: Collection<Long>): List<TagEntity> {
+		return ids.flatMapSqliteQueryChunks(::findByIdsImpl)
+	}
 
 	@Query(
 		"""SELECT tags.* FROM tags

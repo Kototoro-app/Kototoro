@@ -33,6 +33,20 @@ interface WorkMigrationLedgerDao {
 
 	@Query(
 		"""
+		SELECT * FROM work_migration_ledger
+		WHERE legacy_table = :legacyTable
+			AND legacy_key = :legacyKey
+		ORDER BY migrated_at DESC
+		LIMIT 1
+		""",
+	)
+	suspend fun findLatest(
+		legacyTable: String,
+		legacyKey: String,
+	): WorkMigrationLedgerEntity?
+
+	@Query(
+		"""
 		SELECT EXISTS(
 			SELECT 1 FROM work_migration_ledger
 			WHERE legacy_table = :legacyTable

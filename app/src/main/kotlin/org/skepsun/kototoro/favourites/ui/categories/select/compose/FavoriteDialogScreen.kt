@@ -32,6 +32,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
+import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDuplicatePrompt
 import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDialogViewModel
 import org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -123,12 +124,19 @@ fun FavoriteCategoryDialogRoute(
     }
 
     val items by viewModel.content.collectAsStateWithLifecycle()
+    val duplicatePrompt by viewModel.duplicatePrompt.collectAsStateWithLifecycle()
     FavoriteCategoryDialog(
         contentTitle = manga.joinToStringWithLimit(LocalContext.current, 92) { it.title },
         items = items,
         onCategoryToggle = viewModel::setChecked,
         onManageCategories = onManageCategories,
         onDismiss = onDismiss,
+    )
+    DuplicateFavoritePromptDialog(
+        prompt = duplicatePrompt,
+        onConfirm = viewModel::confirmDuplicatePrompt,
+        onMergeBack = viewModel::mergeBackDuplicatePrompt,
+        onDismiss = viewModel::dismissDuplicatePrompt,
     )
 }
 
@@ -212,6 +220,56 @@ private fun FavoriteCategoryDialogContent(
             )
         }
     }
+}
+
+@Composable
+fun DuplicateFavoritePromptDialog(
+    prompt: FavoriteDuplicatePrompt?,
+    onConfirm: () -> Unit,
+    onMergeBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (prompt == null) {
+        return
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(R.string.favourite_duplicate_candidate_title))
+        },
+        text = {
+            Text(
+                text = stringResource(
+                    R.string.favourite_duplicate_candidate_message,
+                    prompt.contentTitle,
+                    prompt.candidates.joinToString(separator = "\n") { candidate ->
+                        val suffix = candidate.sourceLabels
+                            .takeIf { it.isNotEmpty() }
+                            ?.joinToString(prefix = " (", postfix = ")")
+                            .orEmpty()
+                        "• ${candidate.title}$suffix"
+                    },
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.continue_action))
+            }
+        },
+        dismissButton = {
+            if (prompt.mergeBackTargetEntityId != null) {
+                TextButton(onClick = onMergeBack) {
+                    Text(stringResource(R.string.favourite_duplicate_merge_back))
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        },
+    )
 }
 
 @Composable

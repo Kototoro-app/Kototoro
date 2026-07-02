@@ -16,26 +16,24 @@ public object CloudFlareHelper {
     private const val CF_CLEARANCE = "cf_clearance"
 
     public fun checkResponseForProtection(response: Response): Int {
-        if (response.code != HTTP_FORBIDDEN && response.code != HTTP_UNAVAILABLE) {
-            return PROTECTION_NOT_DETECTED
-        }
-        
-        // Check headers for CloudFlare indicators first
         val cfRay = response.header("cf-ray")
         val server = response.header("server")
         val cfMitigated = response.header("cf-mitigated")
         val isCloudFlareServer = cfRay != null || server?.contains("cloudflare", ignoreCase = true) == true
-        
-        // If no CloudFlare headers, it's likely not CloudFlare protection
         if (!isCloudFlareServer) {
             return PROTECTION_NOT_DETECTED
         }
-        
-        // If cf-mitigated header is present with "challenge", it's definitely a CloudFlare challenge
+
         if (cfMitigated?.contains("challenge", ignoreCase = true) == true) {
             return PROTECTION_CAPTCHA
         }
-        
+
+        val hasChallengeStatus = response.code == HTTP_FORBIDDEN || response.code == HTTP_UNAVAILABLE
+        val contentType = response.header("content-type").orEmpty()
+        if (!hasChallengeStatus && !contentType.contains("html", ignoreCase = true)) {
+            return PROTECTION_NOT_DETECTED
+        }
+
         val content = try {
             response.peekBody(Long.MAX_VALUE).use {
                 Jsoup.parse(it.byteStream(), Charsets.UTF_8.name(), response.request.url.toString())
@@ -43,16 +41,21 @@ public object CloudFlareHelper {
         } catch (_: IllegalStateException) {
             return PROTECTION_NOT_DETECTED
         }
+        val html = content.html()
         return when {
             content.selectFirst("h2[data-translate=\"blocked_why_headline\"]") != null -> PROTECTION_BLOCKED
-            // CloudFlare "Just a moment" challenge page
+            content.selectFirst(".cf-error-details, #cf-error-details") != null -> PROTECTION_BLOCKED
             content.title().contains("Just a moment", ignoreCase = true) -> PROTECTION_CAPTCHA
-            // More specific CloudFlare challenge detection
-            (content.getElementById("challenge-error-title") != null || 
-             content.getElementById("challenge-error-text") != null) &&
-            (content.selectFirst("script[src*=\"/cdn-cgi/\"]") != null ||
-             content.html().contains("cf-browser-verification") ||
-             content.html().contains("__cf_chl_opt")) -> PROTECTION_CAPTCHA
+            content.getElementById("challenge-error-title") != null -> PROTECTION_CAPTCHA
+            content.getElementById("challenge-error-text") != null -> PROTECTION_CAPTCHA
+            hasChallengeStatus -> when {
+                html.contains("/cdn-cgi/challenge-platform/", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("cf-browser-verification", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("__cf_chl_opt", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("cf_chl_", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("challenge-form", ignoreCase = true) -> PROTECTION_CAPTCHA
+                else -> PROTECTION_NOT_DETECTED
+            }
 
             else -> PROTECTION_NOT_DETECTED
         }

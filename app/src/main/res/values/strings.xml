@@ -37,6 +37,10 @@
     <string name="favourites_entity_current_projection_with_count">Current projection: %1$s · %2$d projections</string>
     <string name="search_local_entity_suggestion_meta">%1$d projections · %2$d sources</string>
     <string name="add_to_favourites">Favorite this</string>
+    <string name="favourite_duplicate_candidate_title">Possible duplicate</string>
+    <string name="favourite_duplicate_candidate_message">"%1$s" may already exist in your library:\n\n%2$s\n\nContinue adding it as a separate source entry?</string>
+    <string name="favourite_duplicate_merge_back">Merge</string>
+    <string name="continue_action">Continue</string>
     <string name="add_new_category">New category</string>
     <string name="add">Add</string>
     <string name="recommended_repositories">Recommended Repositories</string>

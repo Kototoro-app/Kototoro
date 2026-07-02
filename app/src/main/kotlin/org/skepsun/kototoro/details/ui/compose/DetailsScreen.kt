@@ -209,6 +209,7 @@ import org.skepsun.kototoro.readingrecord.data.ReadingRecordEntity
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordSnapshot
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.favourites.ui.categories.select.compose.DuplicateFavoritePromptDialog
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
@@ -1450,6 +1451,7 @@ fun DetailsScreen(
 
             if (showFavoriteDialog && content != null) {
             val allCategories by viewModel.allCategories.collectAsStateWithLifecycle()
+            val duplicateFavoritePrompt by viewModel.duplicateFavoritePrompt.collectAsStateWithLifecycle()
             val memberCategoryIds = remember(favouriteCategories) {
                 favouriteCategories.mapTo(mutableSetOf()) { it.id }
             }
@@ -1465,6 +1467,12 @@ fun DetailsScreen(
                     handleActionClick(DetailsAction.ManageCategories)
                 },
                 onDismiss = { showFavoriteDialog = false },
+            )
+            DuplicateFavoritePromptDialog(
+                prompt = duplicateFavoritePrompt,
+                onConfirm = viewModel::confirmDuplicateFavourite,
+                onMergeBack = viewModel::mergeBackDuplicateFavourite,
+                onDismiss = viewModel::dismissDuplicateFavourite,
             )
             }
 

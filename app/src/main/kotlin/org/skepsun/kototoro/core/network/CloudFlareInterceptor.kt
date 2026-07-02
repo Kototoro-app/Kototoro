@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.network
 
+import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.Response
 import okio.IOException
@@ -16,12 +17,23 @@ class CloudFlareInterceptor : Interceptor {
 		val source = request.tag(ContentSource::class.java) 
 			?: request.headers[org.skepsun.kototoro.core.network.CommonHeaders.MANGA_SOURCE]?.let { org.skepsun.kototoro.core.model.ContentSource(it) }
 		return when (CloudFlareHelper.checkResponseForProtection(response)) {
-			CloudFlareHelper.PROTECTION_BLOCKED -> response.closeThrowing(
-				CloudFlareBlockedException(
-					url = request.url.toString(),
-					source = source,
-				),
-			)
+			CloudFlareHelper.PROTECTION_BLOCKED -> {
+				val policy = request.tag(CloudFlareHandlingPolicy::class.java)
+				if (policy?.allowBlockedResponse == true) {
+					Log.w(
+						TAG,
+						"CloudFlare blocked response allowed by request policy: url=${request.url} source=${source?.name}",
+					)
+					response
+				} else {
+					response.closeThrowing(
+						CloudFlareBlockedException(
+							url = request.url.toString(),
+							source = source,
+						),
+					)
+				}
+			}
 
 			CloudFlareHelper.PROTECTION_CAPTCHA -> response.closeThrowing(
 				CloudFlareProtectedException(
@@ -42,5 +54,9 @@ class CloudFlareInterceptor : Interceptor {
 			error.addSuppressed(e)
 		}
 		throw error
+	}
+
+	private companion object {
+		const val TAG = "CloudFlareInterceptor"
 	}
 }

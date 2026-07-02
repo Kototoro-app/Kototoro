@@ -39,8 +39,8 @@ android {
 		applicationId 'org.skepsun.kototoro'
 		minSdk = 26
 		targetSdk = 36
-        versionCode = 1179
-        versionName = '1.4.8'
+        versionCode = 1180
+        versionName = '1.4.9'
 		manifestPlaceholders = [
 			appClassName: 'org.skepsun.kototoro.KototoroApp'
 		]
@@ -434,6 +434,8 @@ configurations.all {
 	implementation libs.djl.tokenizers
 	implementation files('libs/tokenizer-native-0.33.0.aar')
 	implementation cloudstreamRuntimeJar
+	implementation libs.cryptography.core
+	implementation libs.cryptography.provider.optimal
 	implementation libs.djl.sentencepiece
 	implementation 'com.github.akari39:RealCUGAN-ncnn-Android:1.1'
 

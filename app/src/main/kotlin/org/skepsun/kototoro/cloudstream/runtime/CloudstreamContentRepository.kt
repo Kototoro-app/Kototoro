@@ -4,7 +4,6 @@ import android.util.Log
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.AnimeSearchResponse
 import com.lagradost.cloudstream3.DubStatus
-import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.MovieLoadResponse
@@ -17,11 +16,18 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.isMovieType
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.extractorApis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.cache.MemoryContentCache
+import org.skepsun.kototoro.core.exceptions.CloudFlareException
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
+import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.CachingContentRepository
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentExternalTrack
@@ -35,11 +41,16 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentTagGroup
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Headers
 
 @OptIn(Prerelease::class)
 class CloudstreamContentRepository(
 	override val source: CloudstreamSource,
 	cache: MemoryContentCache,
+	private val webViewExecutor: WebViewExecutor,
+	private val cookieJar: MutableCookieJar,
 ) : CachingContentRepository(cache) {
 
 	override val sortOrders: Set<SortOrder> = setOf(SortOrder.RELEVANCE)
@@ -68,9 +79,11 @@ class CloudstreamContentRepository(
 			return emptyList()
 		}
 		val page = (offset + 1).coerceAtLeast(1)
-		val result = runCatching {
-			withContext(Dispatchers.IO) {
-				source.api.search(query, page)
+		val result = runCatchingCancellable {
+			CloudstreamRequestContext.withSource(source) {
+				withContext(Dispatchers.IO) {
+					source.api.search(query, page)
+				}
 			}
 		}.onFailure { error ->
 			Log.e(TAG, "search exception source=${source.displayName} query=$query page=$page", error)
@@ -89,8 +102,10 @@ class CloudstreamContentRepository(
 	}
 
 	override suspend fun getDetailsImpl(manga: Content): Content {
-		val response = runCatching {
-			withContext(Dispatchers.IO) { source.api.load(manga.url) }
+		val response = runCatchingCancellable {
+			CloudstreamRequestContext.withSource(source) {
+				withContext(Dispatchers.IO) { source.api.load(manga.url) }
+			}
 		}.onFailure { error ->
 			Log.e(TAG, "load exception source=${source.displayName} url=${manga.url}", error)
 		}.getOrNull() ?: run {
@@ -326,38 +341,73 @@ class CloudstreamContentRepository(
 			"loadLinks start source=${source.displayName} chapterId=${chapter.id} chapterTitle=${chapter.title} " +
 				"locator=${chapter.url} branch=${chapter.branch}",
 		)
+		Log.d(
+			TAG,
+			"loadLinks extractors source=${source.displayName} total=${synchronized(extractorApis) { extractorApis.size }} " +
+				"sample=${cloudstreamExtractorSummary()}",
+		)
 		val subtitles = ArrayList<SubtitleFile>()
 		val links = ArrayList<ExtractorLink>()
-		val success = runCatching {
-			withContext(Dispatchers.IO) {
-				source.api.loadLinks(
-					data = chapter.url,
-					isCasting = false,
-					subtitleCallback = { subtitle ->
-						subtitles += subtitle
-						Log.d(
-							TAG,
-							"loadLinks subtitle source=${source.displayName} chapterId=${chapter.id} " +
-								"lang=${subtitle.lang} url=${subtitle.url}",
+		suspend fun loadLinksOnce(): Boolean {
+			return withContext(Dispatchers.IO) {
+				CloudstreamRequestContext.withSource(source) {
+					CloudstreamRequestContext.withLoadLinksCompatibility {
+						source.api.loadLinks(
+							data = chapter.url,
+							isCasting = false,
+							subtitleCallback = { subtitle ->
+								subtitles += subtitle
+								Log.d(
+									TAG,
+									"loadLinks subtitle source=${source.displayName} chapterId=${chapter.id} " +
+										"lang=${subtitle.lang} url=${subtitle.url}",
+								)
+							},
+							callback = { link ->
+								links += link
+								Log.d(
+									TAG,
+									"loadLinks link source=${source.displayName} chapterId=${chapter.id} name=${link.name} " +
+										"type=${link.type} quality=${link.quality} url=${link.url} headers=${link.getAllHeaders().keys}",
+								)
+							},
 						)
-					},
-					callback = { link ->
-						links += link
-						Log.d(
-							TAG,
-							"loadLinks link source=${source.displayName} chapterId=${chapter.id} name=${link.name} " +
-								"type=${link.type} quality=${link.quality} url=${link.url} headers=${link.getAllHeaders().keys}",
-						)
-					},
-				)
+					}
+				}
 			}
-		}.onFailure { error ->
+		}
+		var success = false
+		val firstError = runCatchingCancellable {
+			success = loadLinksOnce()
+		}.exceptionOrNull()
+		if (firstError != null) {
 			Log.e(
 				TAG,
 				"loadLinks failed source=${source.displayName} chapterId=${chapter.id} url=${chapter.url}",
-				error,
+				firstError,
 			)
-		}.getOrDefault(false)
+			val cfError = firstError.findCloudFlareException()?.withCloudstreamSource(firstError)
+			if (cfError != null) {
+				Log.w(
+					TAG,
+					"loadLinks cloudflare detected source=${source.displayName} chapterId=${chapter.id} " +
+						"url=${chapter.url} cfUrl=${cfError.url} cookies=${cookieSummary(chapter.url)}",
+				)
+				if (resolveCloudflare(cfError, chapter.url, "loadLinks")) {
+					links.clear()
+					subtitles.clear()
+					success = runCatchingCancellable {
+						loadLinksOnce()
+					}.onFailure { retryError ->
+						Log.e(
+							TAG,
+							"loadLinks retry failed source=${source.displayName} chapterId=${chapter.id} url=${chapter.url}",
+							retryError,
+						)
+					}.getOrDefault(false)
+				}
+			}
+		}
 		val pages = links
 			.distinctBy { it.url to it.getAllHeaders() }
 			.sortedWith(compareByDescending<ExtractorLink> { it.url.contains("/config-", ignoreCase = true) }
@@ -372,7 +422,9 @@ class CloudstreamContentRepository(
 					headers = link.getAllHeaders()
 						.toMutableMap()
 						.apply {
-							putIfAbsent("User-Agent", USER_AGENT)
+							(CloudstreamRequestContext.userAgent ?: webViewExecutor.defaultUserAgent)?.takeIf { it.isNotBlank() }?.let {
+								putIfAbsent("User-Agent", it)
+							}
 						}
 						.takeIf { it.isNotEmpty() },
 						externalSubtitleTracks = subtitles.map { subtitle ->
@@ -408,28 +460,27 @@ class CloudstreamContentRepository(
 			lower.contains(".mpd")
 	}
 
-	private suspend fun logMainPageProbe(requestIndex: Int) {
-		val request = source.api.mainPage.getOrNull(requestIndex)?.let { page ->
-			MainPageRequest(page.name, page.data, page.horizontalImages)
-		} ?: source.api.mainPage.firstOrNull()?.let { page ->
-			MainPageRequest(page.name, page.data, page.horizontalImages)
-		}
-		if (request == null) {
-			Log.w(TAG, "main page probe skipped source=${source.displayName} because mainPage is empty")
-			return
-		}
-		runCatching {
-			withContext(Dispatchers.IO) {
-				source.api.getMainPage(1, request)
-			}
-		}.onSuccess { response ->
-			logMainPageProbeResult(request, response)
-		}.onFailure { error ->
-			Log.e(
-				TAG,
-				"main page probe failed source=${source.displayName} requestName=${request.name} requestData=${request.data}",
-				error,
-			)
+	private fun cloudstreamExtractorSummary(): String {
+		val names = setOf(
+			"Sbface",
+			"StreamSB",
+			"Rpmvip",
+			"Nontonanimeid",
+			"EmbedKotakAnimeid",
+			"KotakAnimeid",
+			"Kotaksb",
+			"Gdplayer",
+			"Vidhidepre",
+		)
+		return synchronized(extractorApis) {
+			extractorApis
+				.filter { extractor ->
+					extractor.name in names || names.any { name ->
+						extractor.mainUrl.contains(name, ignoreCase = true)
+					}
+				}
+				.joinToString(limit = 20) { "${it.name}=${it.mainUrl}" }
+				.ifBlank { "<none>" }
 		}
 	}
 
@@ -450,28 +501,34 @@ class CloudstreamContentRepository(
 		} else {
 			(offset / mainPages.size) + 1
 		}
-		logMainPageProbe(requestIndex)
 		val requests = listOf(mainPages[requestIndex])
 		val aggregated = ArrayList<SearchResponse>()
 		requests.forEachIndexed { requestIndex, page ->
 			val request = MainPageRequest(page.name, page.data, page.horizontalImages)
-			val response = runCatching {
-				withContext(Dispatchers.IO) {
-					source.api.getMainPage(page = requestPage, request = request)
-				}
-			}.onFailure { error ->
+			val response = try {
+				loadMainPageResponse(request, requestIndex, requestPage)
+			} catch (error: Throwable) {
 				Log.e(
 					TAG,
 					"main page load failed source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
 						"slot=$requestIndex page=$requestPage",
 					error,
 				)
-			}.getOrNull() ?: return@forEachIndexed
+				if (error.findCloudFlareException() != null) {
+					throw error
+				}
+				return@forEachIndexed
+			} ?: return@forEachIndexed
 			Log.d(
 				TAG,
 				"main page load source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
 					"slot=$requestIndex page=$requestPage rows=${response.items.size} hasNext=${response.hasNext}",
 			)
+			if (response.items.isEmpty()) {
+				logMainPageEmptyResponse(request, requestIndex, requestPage, response.hasNext)
+			} else {
+				logMainPageRows(request, requestIndex, requestPage, response.items)
+			}
 			response.items.forEach { row ->
 				aggregated += row.list
 			}
@@ -492,33 +549,220 @@ class CloudstreamContentRepository(
 						"slotPage=$requestPage requestCount=${requests.size} selectedSectionIndex=$selectedSectionIndex " +
 						"aggregatedRaw=${aggregated.size}",
 				)
+				requests.forEachIndexed { index, page ->
+					val request = MainPageRequest(page.name, page.data, page.horizontalImages)
+					logMainPageBrowserContext(request, index, requestPage)
+				}
 			}
 		}
 	}
 
-	private fun logMainPageProbeResult(request: MainPageRequest, response: HomePageResponse?) {
-		if (response == null) {
+	private suspend fun loadMainPageResponse(
+		request: MainPageRequest,
+		slot: Int,
+		requestPage: Int,
+	): com.lagradost.cloudstream3.HomePageResponse? {
+		return try {
+			getMainPageResponse(request, requestPage)
+		} catch (error: Throwable) {
+			val cfError = error.findCloudFlareException()?.withCloudstreamSource(error)
+			if (cfError == null) {
+				throw error
+			}
 			Log.w(
 				TAG,
-				"main page probe returned null source=${source.displayName} requestName=${request.name} requestData=${request.data}",
+				"main page cloudflare detected source=${source.displayName} requestName=${request.name} " +
+					"requestData=${request.data} slot=$slot page=$requestPage url=${cfError.url}",
+				error,
 			)
-			return
+			val resolved = resolveCloudflare(cfError, request, slot, requestPage)
+			if (!resolved) {
+				throw cfError
+			}
+			Log.i(
+				TAG,
+				"main page retry after cloudflare source=${source.displayName} requestName=${request.name} " +
+					"requestData=${request.data} slot=$slot page=$requestPage cookies=${cookieSummary(request.data)}",
+			)
+			getMainPageResponse(request, requestPage)
 		}
-		val rowSummary = response.items.joinToString(limit = 3) { row ->
-			"${row.name}:${row.list.size}"
+	}
+
+	private suspend fun getMainPageResponse(
+		request: MainPageRequest,
+		requestPage: Int,
+	): com.lagradost.cloudstream3.HomePageResponse? = CloudstreamRequestContext.withSource(source) {
+		withContext(Dispatchers.IO) {
+			source.api.getMainPage(page = requestPage, request = request)
+		}
+	}
+
+	private fun CloudFlareException.withCloudstreamSource(cause: Throwable): CloudFlareException {
+		val headers = (this as? CloudFlareProtectedException)?.headers
+			?: Headers.Builder().build()
+		val enriched = CloudFlareProtectedException(
+			url = url,
+			source = this@CloudstreamContentRepository.source,
+			headers = headers.newBuilder()
+				.apply {
+					(CloudstreamRequestContext.userAgent ?: webViewExecutor.defaultUserAgent)?.takeIf { it.isNotBlank() }?.let {
+						set(CommonHeaders.USER_AGENT, it)
+					}
+				}
+				.set(CommonHeaders.MANGA_SOURCE, this@CloudstreamContentRepository.source.name)
+				.build(),
+		)
+		if (cause !== this) {
+			enriched.addSuppressed(cause)
+		}
+		return enriched
+	}
+
+	private suspend fun resolveCloudflare(
+		error: CloudFlareException,
+		request: MainPageRequest,
+		slot: Int,
+		requestPage: Int,
+	): Boolean {
+		val resolved = webViewExecutor.tryResolveCaptcha(error, timeout = 30_000)
+		Log.w(
+			TAG,
+			"main page cloudflare resolve result source=${source.displayName} requestName=${request.name} " +
+				"requestData=${request.data} slot=$slot page=$requestPage resolved=$resolved cookies=${cookieSummary(request.data)}",
+		)
+		return resolved
+	}
+
+	private suspend fun resolveCloudflare(
+		error: CloudFlareException,
+		url: String,
+		stage: String,
+	): Boolean {
+		val resolved = webViewExecutor.tryResolveCaptcha(error, timeout = 30_000)
+		Log.w(
+			TAG,
+			"$stage cloudflare resolve result source=${source.displayName} url=$url " +
+				"resolved=$resolved cookies=${cookieSummary(url)}",
+		)
+		return resolved
+	}
+
+	private fun logMainPageRows(
+		request: MainPageRequest,
+		slot: Int,
+		requestPage: Int,
+		rows: List<com.lagradost.cloudstream3.HomePageList>,
+	) {
+		val summary = rows.mapIndexed { index, row ->
+			"#$index name=${row.name} list=${row.list.size}"
 		}
 		Log.d(
 			TAG,
-			"main page probe source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
-				"rows=${response.items.size} hasNext=${response.hasNext} sample=$rowSummary",
+			"main page rows source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
+				"slot=$slot page=$requestPage rows=${rows.size} rowSummary=$summary",
 		)
+	}
+
+	private fun logMainPageEmptyResponse(
+		request: MainPageRequest,
+		slot: Int,
+		requestPage: Int,
+		hasNext: Boolean,
+	) {
+		Log.w(
+			TAG,
+			"main page empty response source=${source.displayName} api=${source.api.name} mainUrl=${source.api.mainUrl} " +
+				"usesWebView=${source.api.usesWebView} requestName=${request.name} requestData=${request.data} " +
+				"slot=$slot page=$requestPage hasNext=$hasNext cookies=${cookieSummary(request.data)}",
+		)
+	}
+
+	private suspend fun logMainPageBrowserContext(
+		request: MainPageRequest,
+		slot: Int,
+		requestPage: Int,
+	) {
+		val diagnosticUrl = request.data.takeIf { it.isNotBlank() } ?: source.api.mainUrl
+		val result = runCatchingCancellable {
+			webViewExecutor.fetchWithBrowserContext(
+				url = diagnosticUrl,
+				userAgent = CloudstreamRequestContext.userAgent ?: webViewExecutor.defaultUserAgent,
+				settleDelayMs = 2_000,
+				timeoutMs = 15_000,
+			)
+		}.onFailure { error ->
+			Log.e(
+				TAG,
+				"main page browserContext failed source=${source.displayName} requestName=${request.name} " +
+					"requestData=${request.data} slot=$slot page=$requestPage",
+				error,
+			)
+		}.getOrNull()
+		if (result == null) {
+			Log.w(
+				TAG,
+				"main page browserContext returned null source=${source.displayName} requestName=${request.name} " +
+					"requestData=${request.data} slot=$slot page=$requestPage",
+			)
+			return
+		}
+		val headers = result.headers
+		val markers = cloudflareMarkers(result.body)
+		val server = headers.firstHeaderValue("server")
+		val contentType = headers.firstHeaderValue("content-type")
+		val cookieSummary = cookieSummary(diagnosticUrl)
+		val bodyPreview = sanitizePreview(result.body)
+		Log.w(
+			TAG,
+			"main page browserContext source=${source.displayName} api=${source.api.name} mainUrl=${source.api.mainUrl} " +
+				"usesWebView=${source.api.usesWebView} requestName=${request.name} requestData=${request.data} diagnosticUrl=$diagnosticUrl " +
+				"slot=$slot page=$requestPage status=${result.status} finalUrl=${result.url} " +
+				"server=$server contentType=$contentType " +
+				"bodyLength=${result.body.length} cfMarkers=$markers siteMarkers=${siteMarkers(result.body)} " +
+				"cookies=$cookieSummary bodyPreview=$bodyPreview",
+		)
+	}
+
+	private fun cookieSummary(url: String): String {
+		val httpUrl = url.toHttpUrlOrNull() ?: return "invalid-url"
+		val cookies = runCatching { cookieJar.loadForRequest(httpUrl) }.getOrElse { return "error=${it::class.simpleName}" }
+		if (cookies.isEmpty()) return "count=0 names=[] hasCfClearance=false"
+		val hasCfClearance = cookies.any { it.name == "cf_clearance" }
+		return "count=${cookies.size} names=${cookies.map { it.name }} hasCfClearance=$hasCfClearance"
+	}
+
+	private fun Map<String, String>.firstHeaderValue(name: String): String? {
+		return entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
+	}
+
+	private fun cloudflareMarkers(body: String): List<String> {
+		return listOf(
+			"cf-browser-verification",
+			"__cf_chl_opt",
+			"cf_chl",
+			"turnstile",
+			"Cloudflare",
+			"Ray ID",
+		).filter { body.contains(it, ignoreCase = true) }
+	}
+
+	private fun siteMarkers(body: String): List<String> {
+		return listOf(
+			"anime",
+			"series",
+			"NontonAnimeID",
+		).filter { body.contains(it, ignoreCase = true) }
+	}
+
+	private fun sanitizePreview(body: String): String {
+		return body
+			.replace(Regex("\\s+"), " ")
+			.take(1_000)
 	}
 
 	private suspend fun probeMainPageSize(page: com.lagradost.cloudstream3.MainPageData): Int {
 		val request = MainPageRequest(page.name, page.data, page.horizontalImages)
-		val response = withContext(Dispatchers.IO) {
-			source.api.getMainPage(1, request)
-		}
+		val response = getMainPageResponse(request, 1)
 		return response?.items?.sumOf { it.list.size } ?: 0
 	}
 

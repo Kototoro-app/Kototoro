@@ -49,6 +49,7 @@ import org.skepsun.kototoro.stats.data.mergeRestoredWorkStats
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.malsync.data.MALSyncMappingRepository
 import org.skepsun.kototoro.parsers.util.longHashCode
+import org.skepsun.kototoro.work.data.WorkMigrationLedgerEntity
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -61,6 +62,12 @@ private const val MAX_ENTITY_ALIASES = 50
 private const val TAG = "EntityGraphRepository"
 private const val MAX_REPAIR_DIAGNOSTIC_LOGS = 80
 private const val LOCAL_MANGA_BINDING_SOURCE = "local_manga"
+internal const val WORK_PROJECTION_IDENTITY_ACTION_TABLE = "work_projection_identity_action"
+internal const val WORK_PROJECTION_IDENTITY_ACTION_VERSION = 1
+internal const val WORK_PROJECTION_IDENTITY_STATUS_ACTIVE = "ACTIVE"
+internal const val WORK_PROJECTION_IDENTITY_STATUS_MERGED_BACK = "MERGED_BACK"
+internal const val WORK_PROJECTION_IDENTITY_ACTION_SPLIT = "SPLIT"
+internal const val WORK_PROJECTION_IDENTITY_ACTION_DETACH = "DETACH"
 
 @Singleton
 class EntityGraphRepository @Inject constructor(
@@ -225,6 +232,13 @@ class EntityGraphRepository @Inject constructor(
 		val content = db.getMangaDao().find(localMangaId)?.toContent()
 		val split = splitLocalWorkProjectionInTransaction(localMangaId, content)
 		val newEntityId = split.newEntityId ?: return@withContext false
+		recordProjectionIdentityAction(
+			localMangaId = localMangaId,
+			oldEntityId = split.oldEntityId,
+			newEntityId = newEntityId,
+			action = WORK_PROJECTION_IDENTITY_ACTION_DETACH,
+			status = WORK_PROJECTION_IDENTITY_STATUS_ACTIVE,
+		)
 		db.getWorkFavouritesDao().delete(newEntityId)
 		db.getWorkHistoryDao().delete(newEntityId)
 		true
@@ -234,11 +248,41 @@ class EntityGraphRepository @Inject constructor(
 		if (content.id == 0L) {
 			return@withContext null
 		}
-		splitLocalWorkProjectionInTransaction(content)
+		splitLocalWorkProjectionInTransaction(content)?.also { newEntityId ->
+			val ledger = db.getWorkMigrationLedgerDao().findLatest(
+				legacyTable = WORK_PROJECTION_IDENTITY_ACTION_TABLE,
+				legacyKey = content.id.toString(),
+			)
+			if (ledger == null || ledger.targetEntityId != newEntityId) {
+				recordProjectionIdentityAction(
+					localMangaId = content.id,
+					oldEntityId = null,
+					newEntityId = newEntityId,
+					action = WORK_PROJECTION_IDENTITY_ACTION_SPLIT,
+					status = WORK_PROJECTION_IDENTITY_STATUS_ACTIVE,
+				)
+			}
+		}
 	}
 
 	suspend fun splitLocalWorkProjection(localMangaId: Long): Long? = withContext(Dispatchers.Default) {
 		splitLocalWorkProjectionWithDiagnostics(localMangaId).newEntityId
+	}
+
+	suspend fun ensureIndependentLocalWorkEntity(content: Content): Entity = withContext(Dispatchers.Default) {
+		require(content.id != 0L) { "Cannot create an independent Work entity for a transient projection" }
+		splitLocalWorkProjectionInTransaction(content)?.let { newEntityId ->
+			return@withContext requireNotNull(db.getEntityGraphDao().findEntity(newEntityId)).toModel()
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val now = System.currentTimeMillis()
+			deleteLocalProjectionBindings(dao, content)
+			createDetachedLocalWorkEntity(
+				content = content,
+				now = now,
+			)
+		}
 	}
 
 	suspend fun splitLocalWorkProjectionWithDiagnostics(
@@ -275,6 +319,14 @@ class EntityGraphRepository @Inject constructor(
 				oldEntityId = existingEntity.id,
 				newEntityId = entity.id,
 				localMangaId = content.id,
+			)
+			recordProjectionIdentityActionInTransaction(
+				localMangaId = content.id,
+				oldEntityId = existingEntity.id,
+				newEntityId = entity.id,
+				action = WORK_PROJECTION_IDENTITY_ACTION_SPLIT,
+				status = WORK_PROJECTION_IDENTITY_STATUS_ACTIVE,
+				now = now,
 			)
 			reconcileSourceEntityWorkStateAfterProjectionSplit(
 				dao = dao,
@@ -355,6 +407,14 @@ class EntityGraphRepository @Inject constructor(
 				newEntityId = entity.id,
 				localMangaId = localMangaId,
 			)
+			recordProjectionIdentityActionInTransaction(
+				localMangaId = localMangaId,
+				oldEntityId = existingEntity.id,
+				newEntityId = entity.id,
+				action = WORK_PROJECTION_IDENTITY_ACTION_SPLIT,
+				status = WORK_PROJECTION_IDENTITY_STATUS_ACTIVE,
+				now = now,
+			)
 			reconcileSourceEntityWorkStateAfterProjectionSplit(
 				dao = dao,
 				entityId = existingEntity.id,
@@ -374,6 +434,78 @@ class EntityGraphRepository @Inject constructor(
 				oldSource = existingBinding.source,
 				hadLocalContent = content != null,
 			)
+		}
+	}
+
+	suspend fun mergeDetachedProjectionBack(
+		localMangaId: Long,
+		targetEntityId: Long,
+	): Boolean = withContext(Dispatchers.Default) {
+		if (localMangaId == 0L || targetEntityId == 0L) {
+			return@withContext false
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val content = db.getMangaDao().find(localMangaId)?.toContent() ?: return@withTransaction false
+			val sourceEntityId = findEntityByLocalMangaId(localMangaId)?.entityId
+			if (sourceEntityId == targetEntityId) {
+				return@withTransaction true
+			}
+			dao.findEntity(targetEntityId) ?: return@withTransaction false
+			val now = System.currentTimeMillis()
+			deleteLocalProjectionBindings(dao, content)
+			dao.attachLocalWorkBindingForMerge(
+				entityId = targetEntityId,
+				externalId = localMangaId.toString(),
+				now = now,
+			)
+			dao.attachProjectionBindingWithoutSyncIdRewrite(
+				entityId = targetEntityId,
+				content = content,
+				now = now,
+			)
+			if (sourceEntityId != null) {
+				db.getWorkFavouritesDao().moveAnchorToEntity(
+					oldEntityId = sourceEntityId,
+					newEntityId = targetEntityId,
+					anchorMangaId = localMangaId,
+				)
+				db.getWorkHistoryDao().moveAnchorToEntity(
+					oldEntityId = sourceEntityId,
+					newEntityId = targetEntityId,
+					anchorMangaId = localMangaId,
+				)
+				db.getWorkStatsDao().moveAnchorToEntity(
+					oldEntityId = sourceEntityId,
+					newEntityId = targetEntityId,
+					anchorMangaId = localMangaId,
+				)
+				reconcileSourceEntityWorkStateAfterProjectionSplit(
+					dao = dao,
+					entityId = sourceEntityId,
+					detachedLocalMangaId = localMangaId,
+					now = now,
+				)
+			}
+			dao.touchEntity(targetEntityId, now)
+			if (sourceEntityId != null) {
+				recordProjectionIdentityActionInTransaction(
+					localMangaId = localMangaId,
+					oldEntityId = targetEntityId,
+					newEntityId = sourceEntityId,
+					action = WORK_PROJECTION_IDENTITY_ACTION_DETACH,
+					status = WORK_PROJECTION_IDENTITY_STATUS_MERGED_BACK,
+					now = now,
+				)
+				val remainingLocalBindings = dao.findActiveLocalBindingsByEntity(sourceEntityId)
+				val hasState = db.getWorkFavouritesDao().findActiveForEntity(sourceEntityId) != null ||
+					db.getWorkHistoryDao().find(sourceEntityId)?.deletedAt == 0L ||
+					db.getWorkStatsDao().getRowCount(sourceEntityId) > 0
+				if (remainingLocalBindings.isEmpty() && !hasState) {
+					dao.deleteEntitiesByIds(listOf(sourceEntityId))
+				}
+			}
+			true
 		}
 	}
 
@@ -2657,6 +2789,48 @@ class EntityGraphRepository @Inject constructor(
 			oldEntityId = oldEntityId,
 			newEntityId = newEntityId,
 			anchorMangaId = localMangaId,
+		)
+	}
+
+	private suspend fun recordProjectionIdentityAction(
+		localMangaId: Long,
+		oldEntityId: Long?,
+		newEntityId: Long,
+		action: String,
+		status: String,
+	) {
+		recordProjectionIdentityActionInTransaction(
+			localMangaId = localMangaId,
+			oldEntityId = oldEntityId,
+			newEntityId = newEntityId,
+			action = action,
+			status = status,
+			now = System.currentTimeMillis(),
+		)
+	}
+
+	private suspend fun recordProjectionIdentityActionInTransaction(
+		localMangaId: Long,
+		oldEntityId: Long?,
+		newEntityId: Long,
+		action: String,
+		status: String,
+		now: Long,
+	) {
+		db.getWorkMigrationLedgerDao().upsert(
+			WorkMigrationLedgerEntity(
+				legacyTable = WORK_PROJECTION_IDENTITY_ACTION_TABLE,
+				legacyKey = localMangaId.toString(),
+				legacyChecksum = listOf(
+					oldEntityId?.toString().orEmpty(),
+					newEntityId.toString(),
+					action,
+				).joinToString(separator = ":"),
+				targetEntityId = newEntityId,
+				migrationVersion = WORK_PROJECTION_IDENTITY_ACTION_VERSION,
+				status = status,
+				migratedAt = now,
+			),
 		)
 	}
 

@@ -16,7 +16,19 @@ public object CloudFlareHelper {
     private const val CF_CLEARANCE = "cf_clearance"
 
     public fun checkResponseForProtection(response: Response): Int {
-        if (response.code != HTTP_FORBIDDEN && response.code != HTTP_UNAVAILABLE) {
+        val cfRay = response.header("cf-ray")
+        val server = response.header("server")
+        val cfMitigated = response.header("cf-mitigated")
+        val isCloudFlareServer = cfRay != null || server?.contains("cloudflare", ignoreCase = true) == true
+        if (!isCloudFlareServer) {
+            return PROTECTION_NOT_DETECTED
+        }
+        if (cfMitigated?.contains("challenge", ignoreCase = true) == true) {
+            return PROTECTION_CAPTCHA
+        }
+        val hasChallengeStatus = response.code == HTTP_FORBIDDEN || response.code == HTTP_UNAVAILABLE
+        val contentType = response.header("content-type").orEmpty()
+        if (!hasChallengeStatus && !contentType.contains("html", ignoreCase = true)) {
             return PROTECTION_NOT_DETECTED
         }
         val content = try {
@@ -26,9 +38,20 @@ public object CloudFlareHelper {
         } catch (_: IllegalStateException) {
             return PROTECTION_NOT_DETECTED
         }
+        val html = content.html()
         return when {
             content.selectFirst("h2[data-translate=\"blocked_why_headline\"]") != null -> PROTECTION_BLOCKED
+            content.selectFirst(".cf-error-details, #cf-error-details") != null -> PROTECTION_BLOCKED
             content.getElementById("challenge-error-title") != null || content.getElementById("challenge-error-text") != null -> PROTECTION_CAPTCHA
+            content.title().contains("Just a moment", ignoreCase = true) -> PROTECTION_CAPTCHA
+            hasChallengeStatus -> when {
+                html.contains("/cdn-cgi/challenge-platform/", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("cf-browser-verification", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("__cf_chl_opt", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("cf_chl_", ignoreCase = true) -> PROTECTION_CAPTCHA
+                html.contains("challenge-form", ignoreCase = true) -> PROTECTION_CAPTCHA
+                else -> PROTECTION_NOT_DETECTED
+            }
 
             else -> PROTECTION_NOT_DETECTED
         }
