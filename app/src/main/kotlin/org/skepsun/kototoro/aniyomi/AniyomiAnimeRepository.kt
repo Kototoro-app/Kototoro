@@ -4,8 +4,13 @@ import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
+import eu.kanade.tachiyomi.network.GET
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.skepsun.kototoro.core.exceptions.CloudFlareException
+import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
@@ -97,6 +102,7 @@ class AniyomiAnimeRepository(
         val details = try {
             aniyomiSource.getAnimeDetails(sAnime)
         } catch (e: Exception) {
+            rethrowAniyomiWrappedExceptions(e)
             val ioException = when {
                 e is java.io.IOException -> e
                 e.cause is java.io.IOException -> e.cause as java.io.IOException
@@ -104,7 +110,12 @@ class AniyomiAnimeRepository(
             }
             if (ioException != null) {
                 kotlinx.coroutines.delay(500)
-                aniyomiSource.getAnimeDetails(sAnime)
+                try {
+                    aniyomiSource.getAnimeDetails(sAnime)
+                } catch (retryError: Exception) {
+                    rethrowAniyomiWrappedExceptions(retryError)
+                    throw retryError
+                }
             } else {
                 throw e
             }
@@ -113,6 +124,7 @@ class AniyomiAnimeRepository(
         val rawEpisodes = try {
             aniyomiSource.getEpisodeList(sAnime)
         } catch (e: Exception) {
+            rethrowAniyomiWrappedExceptions(e)
             val ioException = when {
                 e is java.io.IOException -> e
                 e.cause is java.io.IOException -> e.cause as java.io.IOException
@@ -120,7 +132,12 @@ class AniyomiAnimeRepository(
             }
             if (ioException != null) {
                 kotlinx.coroutines.delay(500)
-                aniyomiSource.getEpisodeList(sAnime)
+                try {
+                    aniyomiSource.getEpisodeList(sAnime)
+                } catch (retryError: Exception) {
+                    rethrowAniyomiWrappedExceptions(retryError)
+                    throw retryError
+                }
             } else {
                 throw e
             }
@@ -217,6 +234,18 @@ class AniyomiAnimeRepository(
         return map
     }
 
+    override fun createCoverRequest(imageUrl: String): Request {
+        val httpSource = aniyomiSource as? AnimeHttpSource ?: return super.createCoverRequest(imageUrl)
+        return GET(imageUrl, httpSource.headers)
+            .newBuilder()
+            .tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java, source)
+            .build()
+    }
+
+    override fun getImageClient(): OkHttpClient? {
+        return (aniyomiSource as? AnimeHttpSource)?.client
+    }
+
     private suspend fun fetchVideoList(sEpisode: SEpisode): List<Video> {
         return try {
             android.util.Log.d("AniyomiRepo", "Calling getVideoList...")
@@ -225,6 +254,7 @@ class AniyomiAnimeRepository(
             result
         } catch (e: Exception) {
             android.util.Log.e("AniyomiRepo", "getVideoList failed: ${e.message}", e)
+            rethrowAniyomiWrappedExceptions(e)
             val ioException = when {
                 e is java.io.IOException -> e
                 e.cause is java.io.IOException -> e.cause as java.io.IOException
@@ -232,10 +262,23 @@ class AniyomiAnimeRepository(
             }
             if (ioException != null) {
                 kotlinx.coroutines.delay(500)
-                aniyomiSource.getVideoList(sEpisode)
+                try {
+                    aniyomiSource.getVideoList(sEpisode)
+                } catch (retryError: Exception) {
+                    rethrowAniyomiWrappedExceptions(retryError)
+                    throw retryError
+                }
             } else {
                 throw e
             }
+        }
+    }
+
+    private fun rethrowAniyomiWrappedExceptions(error: Throwable) {
+        when (val cause = error.cause) {
+            is CloudFlareException -> throw cause
+            is InteractiveActionRequiredException -> throw cause
+            is java.io.IOException -> throw cause
         }
     }
 }

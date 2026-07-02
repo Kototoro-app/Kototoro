@@ -41,6 +41,7 @@ import org.skepsun.kototoro.aniyomi.AniyomiAnimeRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxPlayback
 import org.skepsun.kototoro.core.ui.BaseFullscreenActivity
@@ -1204,7 +1205,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
                     if (currentChapter != null) {
                         android.util.Log.d("VideoPlayer", "Loading current chapter: ${currentChapter.title} (id=${currentChapter.id})")
-                        val resolved = runCatching {
+                        val resolved = try {
                             if (currentChapter.url.startsWith("file://") || currentChapter.url.startsWith("content://") || currentChapter.url.endsWith(".cbz", ignoreCase = true) || currentChapter.url.endsWith(".zip", ignoreCase = true)) {
                                 throw IllegalStateException("Local downloaded video format is unsupported or corrupted (possibly downloaded as .cbz). Please delete the download and re-download it.")
                             }
@@ -1227,53 +1228,64 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                                         mergedHeaders,
                                         startMs = startMs,
                                     )
-                                    return@runCatching true
+                                    true
+                                } else {
+                                    null
+                                }
+                            } else {
+                                null
+                            } ?: run {
+                                val pages = repo.getPages(currentChapter)
+                                val fallbackVideos = pages.toFallbackVideos(repo)
+                                if (fallbackVideos.isNotEmpty()) {
+                                    availableVideos = fallbackVideos
+                                    updateQualityButtonVisibility()
+                                    currentVideoSource = manga.source
+                                    currentVideoIndex = 0
+                                    val selected = fallbackVideos[currentVideoIndex]
+                                    val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
+                                    pendingExternalSubtitles = selected.subtitleTracks
+                                    pendingExternalAudio = selected.audioTracks
+                                    Log.d(
+                                        "VideoPlayerActivity",
+                                        "Selected fallback video for chapter=${currentChapter.id} url=${selected.videoUrl} title=${selected.videoTitle} source=${manga.source.name} subtitles=${selected.subtitleTracks.size}",
+                                    )
+                                    startMpvPlayback(
+                                        selected.videoUrl,
+                                        manga.source,
+                                        mergedHeaders,
+                                        startMs = startMs,
+                                    )
+                                    true
+                                } else {
+                                    val page = pages.firstOrNull()
+                                    if (page != null) {
+                                        val streamUrl = repo.getPageUrl(page)
+                                        val streamHeaders = mergeHeaders(repo.getRequestHeaders(), page.headers)
+                                        pendingExternalSubtitles = emptyList()
+                                        pendingExternalAudio = emptyList()
+                                        Log.d(
+                                            "VideoPlayerActivity",
+                                            "Selected fallback page for chapter=${currentChapter.id} url=$streamUrl headers=${streamHeaders.keys} source=${manga.source.name}",
+                                        )
+                                        availableVideos = emptyList()
+                                        currentVideoIndex = 0
+                                        updateQualityButtonVisibility()
+                                        currentVideoSource = manga.source
+                                        prepareAndPlay(streamUrl, manga.source, streamHeaders, startMs = startMs)
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 }
                             }
-                            val pages = repo.getPages(currentChapter)
-                            val fallbackVideos = pages.toFallbackVideos(repo)
-                            if (fallbackVideos.isNotEmpty()) {
-                                availableVideos = fallbackVideos
-                                updateQualityButtonVisibility()
-                                currentVideoSource = manga.source
-                                currentVideoIndex = 0
-                                val selected = fallbackVideos[currentVideoIndex]
-                                val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
-                                pendingExternalSubtitles = selected.subtitleTracks
-                                pendingExternalAudio = selected.audioTracks
-                                Log.d(
-                                    "VideoPlayerActivity",
-                                    "Selected fallback video for chapter=${currentChapter.id} url=${selected.videoUrl} title=${selected.videoTitle} source=${manga.source.name} subtitles=${selected.subtitleTracks.size}",
-                                )
-                                startMpvPlayback(
-                                    selected.videoUrl,
-                                    manga.source,
-                                    mergedHeaders,
-                                    startMs = startMs,
-                                )
-                                return@runCatching true
-                            }
-                            val page = pages.firstOrNull()
-                            if (page != null) {
-                                val streamUrl = repo.getPageUrl(page)
-                                val streamHeaders = mergeHeaders(repo.getRequestHeaders(), page.headers)
-                                pendingExternalSubtitles = emptyList()
-                                pendingExternalAudio = emptyList()
-                                Log.d(
-                                    "VideoPlayerActivity",
-                                    "Selected fallback page for chapter=${currentChapter.id} url=$streamUrl headers=${streamHeaders.keys} source=${manga.source.name}",
-                                )
-                                availableVideos = emptyList()
-                                currentVideoIndex = 0
-                                updateQualityButtonVisibility()
-                                currentVideoSource = manga.source
-                                prepareAndPlay(streamUrl, manga.source, streamHeaders, startMs = startMs)
-                                return@runCatching true
+                        } catch (e: Exception) {
+                            android.util.Log.e("VideoPlayer", "Failed to get stream URL", e)
+                            if (resolvePlaybackException(e, normalizedUrl, source, headers, startMs)) {
+                                return@launch
                             }
                             false
-                        }.onFailure { e ->
-                            android.util.Log.e("VideoPlayer", "Failed to get stream URL", e)
-                        }.getOrNull() ?: false
+                        }
 
                         if (resolved) {
                             readerState = ReaderState(currentChapter.id, 0, 0)
@@ -1297,6 +1309,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("VideoPlayer", "Failed to load video", e)
+                    if (resolvePlaybackException(e, normalizedUrl, source, headers, startMs)) {
+                        return@launch
+                    }
                     Snackbar.make(
                         viewBinding.root,
                         org.skepsun.kototoro.R.string.error_occurred,
@@ -1312,6 +1327,23 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 Snackbar.LENGTH_LONG
             ).show()
         }
+    }
+
+    private suspend fun resolvePlaybackException(
+        error: Throwable,
+        retryUrl: String,
+        source: ParsersContentSource?,
+        headers: Map<String, String>?,
+        startMs: Long?,
+    ): Boolean {
+        if (!ExceptionResolver.canResolve(error)) {
+            return false
+        }
+        val resolved = exceptionResolver.resolve(error, tryAutoResolve = false)
+        if (resolved) {
+            prepareAndPlay(retryUrl, source, headers, startMs)
+        }
+        return resolved
     }
 
     private fun extractTvBoxChapterPlaybackUrl(url: String): String? {
@@ -1450,7 +1482,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             dynamicCloudstreamPlaylistUrl to emptyMap<String, String>()
         } else if (useProxy) {
             runCatching {
-                val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, mergedHeaders)
+                val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, mergedHeaders, source)
                 proxyUrl to emptyMap<String, String>()
             }.getOrElse {
                 Log.w("VideoPlayerActivity", "Proxy cache unavailable, fallback to origin URL", it)
@@ -2412,7 +2444,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val resolvedHeaders = headers.orEmpty()
         if (resolvedHeaders.isEmpty()) return url
         return runCatching {
-            videoLocalCacheProxy.getProxyUrl(url, resolvedHeaders)
+            videoLocalCacheProxy.getProxyUrl(url, resolvedHeaders, currentVideoSource)
         }.onFailure { error ->
             Log.w("VideoPlayerActivity", "Failed to proxy external subtitle: $url", error)
         }.getOrDefault(url)
@@ -3889,7 +3921,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             return
         }
         val headers = currentMediaHeaders.orEmpty()
-        val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, headers)
+        val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, headers, currentVideoSource)
         val title = viewBinding.toolbar.title?.toString()
         ExternalPlayerHelper.openInExternalPlayer(this, proxyUrl, title)
     }

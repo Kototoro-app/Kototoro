@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.GZipOptions
 import org.skepsun.kototoro.video.dlna.NetworkUtils
 import java.io.ByteArrayInputStream
@@ -98,10 +99,10 @@ class VideoLocalCacheProxy @Inject constructor(
     @Volatile
     private var server: ProxyServer? = null
 
-    fun getProxyUrl(url: String, headers: Map<String, String>): String {
+    fun getProxyUrl(url: String, headers: Map<String, String>, source: ContentSource? = null): String {
         val normalizedHeaders = normalizeHeaders(headers)
         val key = buildKey(url, normalizedHeaders)
-        sourceMap[key] = SourceEntry(url = url, headers = normalizedHeaders)
+        sourceMap[key] = SourceEntry(url = url, headers = normalizedHeaders, source = source)
         if (url.lowercase(Locale.ROOT).contains(".m3u8")) {
             // Playlists are rewritten dynamically; stale cached playlist content can break child URL proxying.
             File(cacheRoot, "$key.bin").delete()
@@ -116,11 +117,11 @@ class VideoLocalCacheProxy @Inject constructor(
      * Returns a proxy URL accessible from the local network (for DLNA casting).
      * Returns null if the device's WiFi IP cannot be determined.
      */
-    fun getLanProxyUrl(url: String, headers: Map<String, String>): String? {
+    fun getLanProxyUrl(url: String, headers: Map<String, String>, source: ContentSource? = null): String? {
         val lanIp = NetworkUtils.getWifiIpAddress(appContext) ?: return null
         val normalizedHeaders = normalizeHeaders(headers)
         val key = buildKey(url, normalizedHeaders)
-        sourceMap[key] = SourceEntry(url = url, headers = normalizedHeaders)
+        sourceMap[key] = SourceEntry(url = url, headers = normalizedHeaders, source = source)
         if (url.lowercase(java.util.Locale.ROOT).contains(".m3u8")) {
             java.io.File(cacheRoot, "$key.bin").delete()
             java.io.File(cacheRoot, "$key.meta").delete()
@@ -290,7 +291,7 @@ class VideoLocalCacheProxy @Inject constructor(
     private fun mapChildUrl(parent: SourceEntry, rawUri: String, hostOverride: String? = null): String {
         val abs = resolveAbsoluteUrl(parent.url, rawUri)
         val childKey = buildKey(abs, parent.headers)
-        sourceMap[childKey] = SourceEntry(url = abs, headers = parent.headers)
+        sourceMap[childKey] = SourceEntry(url = abs, headers = parent.headers, source = parent.source)
         val runningServer = ensureServer()
         val host = hostOverride ?: "127.0.0.1"
         return "http://$host:${runningServer.listeningPort}/video/$childKey"
@@ -395,6 +396,7 @@ class VideoLocalCacheProxy @Inject constructor(
 
             val upstreamRequest = Request.Builder().url(source.url).apply {
                 tag(GZipOptions::class.java, GZipOptions(skip = true))
+                source.source?.let { tag(ContentSource::class.java, it) }
                 source.headers.forEach { (k, v) -> header(k, v) }
                 if (!isPlaylistByUrl) {
                     requestRange?.let {
@@ -565,6 +567,7 @@ class VideoLocalCacheProxy @Inject constructor(
     private data class SourceEntry(
         val url: String,
         val headers: Map<String, String>,
+        val source: ContentSource?,
     )
 
     private data class DynamicSourceEntry(
