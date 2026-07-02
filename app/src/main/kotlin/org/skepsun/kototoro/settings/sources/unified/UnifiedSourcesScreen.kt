@@ -360,6 +360,24 @@ fun UnifiedSourcesRoute(
 						)
 					}
 				}
+				FilterSection(title = stringResource(R.string.availability_filter_title)) {
+					items(UnifiedAvailabilityFilter.entries) { filter ->
+						CompactFilterChip(
+							selected = readyState.filters.availabilityFilter == filter,
+							onClick = { viewModel.setAvailabilityFilter(filter) },
+							text = filter.displayLabel(),
+						)
+					}
+				}
+				FilterSection(title = stringResource(R.string.nsfw_filter_title)) {
+					items(UnifiedNsfwFilter.entries) { filter ->
+						CompactFilterChip(
+							selected = readyState.filters.nsfwFilter == filter,
+							onClick = { viewModel.setNsfwFilter(filter) },
+							text = filter.displayLabel(),
+						)
+					}
+				}
 				FilterSection(title = stringResource(R.string.repository_source)) {
 					items(readyState.availableLocationTypes) { type ->
 						CompactFilterChip(
@@ -2211,8 +2229,29 @@ private fun UnifiedEnabledFilter.displayLabel(): String {
 	}
 }
 
+@Composable
+private fun UnifiedAvailabilityFilter.displayLabel(): String {
+	return when (this) {
+		UnifiedAvailabilityFilter.ALL -> stringResource(R.string.all)
+		UnifiedAvailabilityFilter.AVAILABLE -> stringResource(R.string.available)
+		UnifiedAvailabilityFilter.UNAVAILABLE -> stringResource(R.string.unavailable)
+	}
+}
+
+@Composable
+private fun UnifiedNsfwFilter.displayLabel(): String {
+	return when (this) {
+		UnifiedNsfwFilter.ALL -> stringResource(R.string.all)
+		UnifiedNsfwFilter.SFW -> stringResource(R.string.sfw)
+		UnifiedNsfwFilter.NSFW -> stringResource(R.string.nsfw)
+	}
+}
+
 private fun UnifiedSourcesFilterState.otherFilterCount(): Int {
-	return locationTypes.size + if (enabledFilter == UnifiedEnabledFilter.ALL) 0 else 1
+	return locationTypes.size +
+		(if (enabledFilter == UnifiedEnabledFilter.ALL) 0 else 1) +
+		(if (availabilityFilter == UnifiedAvailabilityFilter.ALL) 0 else 1) +
+		(if (nsfwFilter == UnifiedNsfwFilter.ALL) 0 else 1)
 }
 
 private val topBarContentTypes = linkedSetOf(

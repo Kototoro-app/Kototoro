@@ -2478,6 +2478,8 @@
     <string name="all_content">All content</string>
     <string name="all_sources">All sources</string>
     <string name="more_filters">More filters</string>
+    <string name="availability_filter_title">Availability</string>
+    <string name="nsfw_filter_title">Adult content</string>
     <string name="repository_source">Repository source</string>
     <string name="repository_url">Repository URL</string>
     <string name="paste_content">Paste content</string>

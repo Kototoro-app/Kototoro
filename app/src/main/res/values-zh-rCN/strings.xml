@@ -1353,6 +1353,8 @@
     <string name="filter_extensions_by_selected_content_languages">按语言过滤扩展：已选内容语言</string>
     <string name="filter_extensions_by_language_with_value">按语言过滤扩展：%1$s</string>
     <string name="use_setup_wizard_languages">使用向导语言</string>
+    <string name="availability_filter_title">可用性</string>
+    <string name="nsfw_filter_title">成人内容</string>
     <string name="unified_sources_refresh_timeout">刷新超时，请检查网络后重试。</string>
     <string name="unified_sources_refresh_partial_failed">部分仓库刷新失败：%1$s</string>
     <string name="unified_sources_repository_last_refresh_failed">最近刷新失败：%1$s</string>
