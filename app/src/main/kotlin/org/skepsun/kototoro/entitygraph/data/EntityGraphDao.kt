@@ -90,6 +90,15 @@ abstract class EntityGraphDao {
 	)
 	abstract suspend fun findEntityByTypeAndNameHash(type: String, nameHash: Long): EntityRecord?
 
+	@Query(
+		"""
+		SELECT * FROM `entity`
+		WHERE type = :type AND name_hash IN (:nameHashes)
+		ORDER BY access_count DESC, last_accessed DESC, id DESC
+		"""
+	)
+	abstract suspend fun findEntitiesByTypeAndNameHashes(type: String, nameHashes: List<Long>): List<EntityRecord>
+
 	@Upsert
 	abstract suspend fun upsertEntityRecord(entity: EntityRecord)
 

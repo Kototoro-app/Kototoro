@@ -28,11 +28,14 @@ import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.favourites.domain.MergeBackAndAddFavouriteUseCase
 import org.skepsun.kototoro.favourites.ui.categories.select.model.ContentCategoryItem
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.work.domain.WorkDuplicateCandidate
+import org.skepsun.kototoro.work.domain.WorkDuplicateCandidateRepository
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,6 +43,8 @@ class FavoriteDialogViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
 	private val favouritesRepository: FavouritesRepository,
 	private val contentDataRepository: ContentDataRepository,
+	private val duplicateCandidateRepository: WorkDuplicateCandidateRepository,
+	private val mergeBackAndAddFavouriteUseCase: MergeBackAndAddFavouriteUseCase,
 	settings: AppSettings,
 	@LocalizedAppContext private val context: Context,
 ) : BaseViewModel() {
@@ -52,6 +57,8 @@ class FavoriteDialogViewModel @Inject constructor(
 
 	val manga: List<Content>
 		get() = mangaState.value
+
+	val duplicatePrompt = MutableStateFlow<FavoriteDuplicatePrompt?>(null)
 
 	private val refreshTrigger = MutableStateFlow(Any())
 	val content = mangaState.flatMapLatest { currentManga ->
@@ -97,10 +104,55 @@ class FavoriteDialogViewModel @Inject constructor(
 		}
 		launchJob(Dispatchers.Default) {
 			if (isChecked) {
+				val candidates = snapshot
+					.takeIf { it.size == 1 }
+					?.firstOrNull()
+					?.let { duplicateCandidateRepository.findCandidates(it) }
+					.orEmpty()
+				if (candidates.isNotEmpty()) {
+					duplicatePrompt.value = FavoriteDuplicatePrompt(
+						categoryId = categoryId,
+						contentTitle = snapshot.first().title,
+						candidates = candidates.take(MAX_DUPLICATE_PROMPT_CANDIDATES),
+					)
+					return@launchJob
+				}
 				favouritesRepository.addToCategory(categoryId, snapshot)
 			} else {
 				favouritesRepository.removeFromCategory(categoryId, snapshot.ids())
 			}
+			refreshTrigger.value = Any()
+		}
+	}
+
+	fun confirmDuplicatePrompt() {
+		val prompt = duplicatePrompt.value ?: return
+		duplicatePrompt.value = null
+		val snapshot = mangaState.value
+		if (snapshot.isEmpty()) {
+			return
+		}
+		launchJob(Dispatchers.Default) {
+			favouritesRepository.addToCategoryAsSeparateWorks(prompt.categoryId, snapshot)
+			refreshTrigger.value = Any()
+		}
+	}
+
+	fun dismissDuplicatePrompt() {
+		duplicatePrompt.value = null
+	}
+
+	fun mergeBackDuplicatePrompt() {
+		val prompt = duplicatePrompt.value ?: return
+		val targetEntityId = prompt.mergeBackTargetEntityId ?: return
+		duplicatePrompt.value = null
+		val content = mangaState.value.singleOrNull() ?: return
+		launchJob(Dispatchers.Default) {
+			mergeBackAndAddFavouriteUseCase(
+				categoryId = prompt.categoryId,
+				content = content,
+				targetEntityId = targetEntityId,
+			)
 			refreshTrigger.value = Any()
 		}
 	}
@@ -139,4 +191,17 @@ class FavoriteDialogViewModel @Inject constructor(
 			)
 		}
 	}
+
+	private companion object {
+		private const val MAX_DUPLICATE_PROMPT_CANDIDATES = 3
+	}
+}
+
+data class FavoriteDuplicatePrompt(
+	val categoryId: Long,
+	val contentTitle: String,
+	val candidates: List<WorkDuplicateCandidate>,
+) {
+	val mergeBackTargetEntityId: Long?
+		get() = candidates.firstNotNullOfOrNull { it.mergeBackTargetEntityId }
 }

@@ -98,6 +98,8 @@ import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
+import org.skepsun.kototoro.favourites.domain.MergeBackAndAddFavouriteUseCase
+import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDuplicatePrompt
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.ids
 import org.skepsun.kototoro.parsers.model.Content
@@ -149,6 +151,7 @@ import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.matches
+import org.skepsun.kototoro.work.domain.WorkDuplicateCandidateRepository
 import kotlinx.coroutines.channels.BufferOverflow
 import java.io.File
 import java.util.Locale
@@ -161,6 +164,7 @@ private const val SOURCE_SEARCH_TIMEOUT_MS = 12_000L
 private const val READING_SEARCH_MAX_PARALLELISM = 4
 private const val READING_SEARCH_LOG_TAG = "ReadingSourceSearch"
 private const val ENTITY_TRACKING_SEARCH_RESULT_LIMIT = 3
+private const val MAX_DUPLICATE_PROMPT_CANDIDATES = 3
 private val ENTITY_TRACKING_SEARCH_SERVICES = listOf(
 	ScrobblerService.ANILIST,
 	ScrobblerService.BANGUMI,
@@ -475,6 +479,8 @@ class DetailsViewModel @Inject constructor(
 	private val epubStorageManager: org.skepsun.kototoro.local.epub.EpubStorageManager,
 	private val videoDownloadIndex: VideoDownloadIndex,
 	private val favouritesRepository: FavouritesRepository,
+	private val duplicateCandidateRepository: WorkDuplicateCandidateRepository,
+	private val mergeBackAndAddFavouriteUseCase: MergeBackAndAddFavouriteUseCase,
 	mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
 	private val contentSourcesRepository: ContentSourcesRepository,
 	private val sourcePresetsRepository: SourcePresetsRepository,
@@ -5077,14 +5083,52 @@ class DetailsViewModel @Inject constructor(
 		.withErrorHandling()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
 
+	val duplicateFavoritePrompt = MutableStateFlow<FavoriteDuplicatePrompt?>(null)
+
 	fun setFavouriteCategory(categoryId: Long, isChecked: Boolean) {
 		launchJob(Dispatchers.Default) {
 			val content = getContentOrNull() ?: return@launchJob
 			if (isChecked) {
+				val candidates = duplicateCandidateRepository.findCandidates(content)
+				if (candidates.isNotEmpty()) {
+					duplicateFavoritePrompt.value = FavoriteDuplicatePrompt(
+						categoryId = categoryId,
+						contentTitle = content.title,
+						candidates = candidates.take(MAX_DUPLICATE_PROMPT_CANDIDATES),
+					)
+					return@launchJob
+				}
 				favouritesRepository.addToCategory(categoryId, listOf(content))
 			} else {
 				favouritesRepository.removeFromCategory(categoryId, listOf(content.id))
 			}
+		}
+	}
+
+	fun confirmDuplicateFavourite() {
+		val prompt = duplicateFavoritePrompt.value ?: return
+		duplicateFavoritePrompt.value = null
+		launchJob(Dispatchers.Default) {
+			val content = getContentOrNull() ?: return@launchJob
+			favouritesRepository.addToCategoryAsSeparateWorks(prompt.categoryId, listOf(content))
+		}
+	}
+
+	fun dismissDuplicateFavourite() {
+		duplicateFavoritePrompt.value = null
+	}
+
+	fun mergeBackDuplicateFavourite() {
+		val prompt = duplicateFavoritePrompt.value ?: return
+		val targetEntityId = prompt.mergeBackTargetEntityId ?: return
+		duplicateFavoritePrompt.value = null
+		launchJob(Dispatchers.Default) {
+			val content = getContentOrNull() ?: return@launchJob
+			mergeBackAndAddFavouriteUseCase(
+				categoryId = prompt.categoryId,
+				content = content,
+				targetEntityId = targetEntityId,
+			)
 		}
 	}
 

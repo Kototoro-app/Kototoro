@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
@@ -49,6 +50,7 @@ import javax.inject.Inject
 class FavouritesRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val workResolver: WorkResolver,
+	private val entityGraphRepository: EntityGraphRepository,
 	private val workAggregateRepository: WorkAggregateRepository,
 	private val settings: AppSettings,
 ) {
@@ -418,6 +420,22 @@ class FavouritesRepository @Inject constructor(
 				).entityId,
 			)
 		}
+		addResolvedAnchorsToCategory(categoryId, anchorContents, entityIdsByMangaId)
+	}
+
+	suspend fun addToCategoryAsSeparateWorks(categoryId: Long, mangas: Collection<Content>) {
+		val anchorContents = resolveWorkAnchorContents(mangas)
+		val entityIdsByMangaId = anchorContents.associate { manga ->
+			manga.id to entityGraphRepository.ensureIndependentLocalWorkEntity(manga).id
+		}
+		addResolvedAnchorsToCategory(categoryId, anchorContents, entityIdsByMangaId)
+	}
+
+	private suspend fun addResolvedAnchorsToCategory(
+		categoryId: Long,
+		anchorContents: Collection<Content>,
+		entityIdsByMangaId: Map<Long, Long>,
+	) {
 		db.withTransaction {
 			val currentTime = System.currentTimeMillis()
 			for (manga in anchorContents) {
