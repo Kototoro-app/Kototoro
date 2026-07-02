@@ -203,6 +203,7 @@ class SettingsSearchHelper @Inject constructor(
 			"no_nsfw" to R.string.disable_nsfw,
 			"history_exclude_nsfw" to R.string.disable_history_nsfw,
 			"favourites_exclude_nsfw" to R.string.disable_favourites_nsfw,
+			"feed_exclude_nsfw" to R.string.disable_feed_nsfw,
 			"tracker_no_nsfw" to R.string.disable_updates_nsfw,
 			"suggestions_exclude_nsfw" to R.string.disable_suggestions_nsfw,
 			"incognito_nsfw" to R.string.incognito_for_nsfw,

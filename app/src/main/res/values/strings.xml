@@ -1441,6 +1441,8 @@
     <string name="disable_history_nsfw_summary">Hide adult contents from History</string>
     <string name="disable_favourites_nsfw">Hide from Favourites</string>
     <string name="disable_favourites_nsfw_summary">Hide adult contents from Favourites</string>
+    <string name="disable_feed_nsfw">Hide from Feed</string>
+    <string name="disable_feed_nsfw_summary">Hide adult contents from Feed</string>
     <string name="disable_updates_nsfw">Hide from Updates</string>
     <string name="disable_updates_nsfw_summary">Hide adult contents from Updates</string>
     <string name="disable_suggestions_nsfw">Hide from Suggestions</string>

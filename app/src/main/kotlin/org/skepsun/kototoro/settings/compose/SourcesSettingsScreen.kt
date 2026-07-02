@@ -30,6 +30,7 @@ data class SourcesSettingsUiState(
     val isNsfwContentDisabled: Boolean,
     val isHistoryExcludeNsfw: Boolean,
     val isFavouritesExcludeNsfw: Boolean,
+    val isFeedExcludeNsfw: Boolean,
     val isTrackerNsfwDisabled: Boolean,
     val isSuggestionsExcludeNsfw: Boolean,
     val incognitoModeForNsfw: TriStateOption,
@@ -57,6 +58,7 @@ fun SourcesSettingsScreen(
     onNsfwContentDisabledChange: (Boolean) -> Unit,
     onHistoryExcludeNsfwChange: (Boolean) -> Unit,
     onFavouritesExcludeNsfwChange: (Boolean) -> Unit,
+    onFeedExcludeNsfwChange: (Boolean) -> Unit,
     onTrackerNsfwDisabledChange: (Boolean) -> Unit,
     onSuggestionsExcludeNsfwChange: (Boolean) -> Unit,
     onIncognitoModeForNsfwChange: (TriStateOption) -> Unit,
@@ -152,6 +154,13 @@ fun SourcesSettingsScreen(
                         checked = state.isFavouritesExcludeNsfw,
                         summary = stringResource(R.string.disable_favourites_nsfw_summary),
                         onCheckedChange = onFavouritesExcludeNsfwChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.disable_feed_nsfw),
+                        checked = state.isFeedExcludeNsfw,
+                        summary = stringResource(R.string.disable_feed_nsfw_summary),
+                        onCheckedChange = onFeedExcludeNsfwChange,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(

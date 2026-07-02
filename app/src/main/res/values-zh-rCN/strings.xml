@@ -2292,6 +2292,8 @@
     <string name="disable_favourites_nsfw_summary">从收藏中隐藏成人内容</string>
     <string name="disable_history_nsfw">从历史中隐藏</string>
     <string name="disable_history_nsfw_summary">从历史中隐藏成人内容</string>
+    <string name="disable_feed_nsfw">从订阅中隐藏</string>
+    <string name="disable_feed_nsfw_summary">从订阅页隐藏成人内容</string>
     <string name="disable_suggestions_nsfw">从推荐中隐藏</string>
     <string name="disable_suggestions_nsfw_summary">从推荐中隐藏成人内容</string>
     <string name="disable_updates_nsfw">从更新中隐藏</string>

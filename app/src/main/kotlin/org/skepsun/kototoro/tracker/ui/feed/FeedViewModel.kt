@@ -478,13 +478,19 @@ class FeedViewModel @Inject constructor(
 		val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
 	)
 
-	private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> = combine(
-		settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
-	) { filters, skipNsfw ->
-		if (skipNsfw) {
-			filters + ListFilterOption.SFW
-		} else {
-			filters
+	private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> {
+		val skipNsfwInFeed = combine(
+			settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
+			settings.observeAsFlow(AppSettings.KEY_FEED_EXCLUDE_NSFW) { isFeedExcludeNsfw },
+		) { skipNsfwGlobally, skipNsfwInFeed ->
+			skipNsfwGlobally || skipNsfwInFeed
+		}
+		return combine(skipNsfwInFeed) { filters, skipNsfw ->
+			if (skipNsfw) {
+				filters + ListFilterOption.SFW
+			} else {
+				filters
+			}
 		}
 	}
 }

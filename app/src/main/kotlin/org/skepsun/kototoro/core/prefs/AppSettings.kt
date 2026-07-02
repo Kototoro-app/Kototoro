@@ -373,6 +373,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_FAVOURITES_EXCLUDE_NSFW, false)
 		set(value) = prefs.edit { putBoolean(KEY_FAVOURITES_EXCLUDE_NSFW, value) }
 
+	var isFeedExcludeNsfw: Boolean
+		get() = prefs.getBoolean(KEY_FEED_EXCLUDE_NSFW, false)
+		set(value) = prefs.edit { putBoolean(KEY_FEED_EXCLUDE_NSFW, value) }
+
 	var appLocales: LocaleListCompat
 		get() {
 			val raw = prefs.getString(KEY_APP_LOCALE, null)
@@ -2269,6 +2273,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_LOCAL_MANGA_DIRS = "local_manga_dirs"
 		const val KEY_HISTORY_EXCLUDE_NSFW = "history_exclude_nsfw"
 		const val KEY_FAVOURITES_EXCLUDE_NSFW = "favourites_exclude_nsfw"
+		const val KEY_FEED_EXCLUDE_NSFW = "feed_exclude_nsfw"
 		const val KEY_DISABLE_NSFW = "no_nsfw"
 		const val KEY_RELATED_MANGA = "related_manga"
 		const val KEY_NAV_MAIN = "nav_main"
