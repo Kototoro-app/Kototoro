@@ -873,7 +873,7 @@ class SettingsActivity :
 		return !isMasterDetails || (hasFragment && !isFromRoot)
 	}
 
-	private fun shouldKeepComposeHistory(): Boolean = !isMasterDetails
+	private fun shouldKeepComposeHistory(): Boolean = true
 
 	private fun openComposeDestination(
 		destination: SettingsDestination,
@@ -1725,7 +1725,12 @@ class SettingsActivity :
 		}
 		val shouldRestore = shouldRestoreFragmentOnComposeExit && supportFragmentManager.backStackEntryCount > 0
 		if (isMasterDetails && !shouldRestore) {
-			finishFromComposeDestination(currentDestination)
+			onLeavingComposeDestination(currentDestination)
+			openComposeDestination(
+				destination = SettingsDestination.Root,
+				shouldRestoreFragment = false,
+				pushCurrentToStack = false,
+			)
 			return
 		}
 		closeComposeDestination(restorePreviousFragment = false)
