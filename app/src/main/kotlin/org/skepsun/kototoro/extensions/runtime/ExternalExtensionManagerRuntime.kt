@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, WrappedSourceT>(
 	private val context: Context,
@@ -24,8 +25,10 @@ class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, Wrappe
 	private val _changes = MutableStateFlow(0)
 	val changes: StateFlow<Int> = _changes.asStateFlow()
 
-	private val sourceCache = mutableMapOf<Long, SourceT>()
-	private val wrappedSourceCache = mutableMapOf<Long, WrappedSourceT>()
+	private val loadMutex = Mutex()
+
+	@Volatile
+	private var sourceSnapshot = SourceSnapshot<SourceT, WrappedSourceT>()
 
 	@Volatile
 	private var isPackageObserverRegistered = false
@@ -39,32 +42,33 @@ class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, Wrappe
 		loadResults: suspend (Context) -> List<ResultT>,
 		processResults: (List<ResultT>) -> ProcessedExternalExtensions<SuccessT, ErrorT, SourceT, WrappedSourceT>,
 	) {
-		if (_isLoading.value) return
+		if (!loadMutex.tryLock()) return
 
 		_isLoading.value = true
 		try {
-			sourceCache.clear()
-			wrappedSourceCache.clear()
 			val processed = processResults(loadResults(context))
-			sourceCache.putAll(processed.sourceById)
-			wrappedSourceCache.putAll(processed.wrappedSourceById)
+			sourceSnapshot = SourceSnapshot(
+				sourceById = processed.sourceById,
+				wrappedSourceById = processed.wrappedSourceById,
+			)
 			_installedExtensions.value = processed.successful
 			_failedExtensions.value = processed.failed
 			_changes.value++
 		} finally {
 			_isLoading.value = false
+			loadMutex.unlock()
 		}
 	}
 
 	fun getInstalledExtensions(): List<SuccessT> = installedExtensions.value
 
-	fun getSourceById(sourceId: Long): SourceT? = sourceCache[sourceId]
+	fun getSourceById(sourceId: Long): SourceT? = sourceSnapshot.sourceById[sourceId]
 
-	fun getWrappedSourceById(sourceId: Long): WrappedSourceT? = wrappedSourceCache[sourceId]
+	fun getWrappedSourceById(sourceId: Long): WrappedSourceT? = sourceSnapshot.wrappedSourceById[sourceId]
 
-	fun getWrappedSources(): List<WrappedSourceT> = wrappedSourceCache.values.toList()
+	fun getWrappedSources(): List<WrappedSourceT> = sourceSnapshot.wrappedSourceById.values.toList()
 
-	fun getSourceCount(): Int = sourceCache.size
+	fun getSourceCount(): Int = sourceSnapshot.sourceById.size
 
 	fun hasExtensions(): Boolean = installedExtensions.value.isNotEmpty()
 
@@ -81,4 +85,9 @@ class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, Wrappe
 			loadAction()
 		}
 	}
+
+	private data class SourceSnapshot<SourceT, WrappedSourceT>(
+		val sourceById: Map<Long, SourceT> = emptyMap(),
+		val wrappedSourceById: Map<Long, WrappedSourceT> = emptyMap(),
+	)
 }
