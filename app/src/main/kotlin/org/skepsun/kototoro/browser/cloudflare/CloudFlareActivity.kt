@@ -93,7 +93,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			try {
 				proxyProvider.applyWebViewConfig()
 			} catch (e: Exception) {
-				Snackbar.make(viewBinding.webView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+				showSnackbar(e.getDisplayMessage(resources))
 			}
 			cfClient = if (shouldUseInterception(repository)) {
 				CloudFlareInterceptClient(cookieJar, this@CloudFlareActivity, adBlock, url)
@@ -171,11 +171,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			val url = intent?.dataString
 			if (url.isNullOrBlank() || !verifyClearance(url)) {
 				if (!isHidden) {
-					Snackbar.make(
-						viewBinding.webView,
-						R.string.captcha_required_message,
-						Snackbar.LENGTH_LONG,
-					).show()
+					showSnackbar(getString(R.string.captcha_required_message))
 				}
 				return@launch
 			}
@@ -190,6 +186,13 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			}
 			finishAfterTransition()
 		}
+	}
+
+	private fun showSnackbar(message: CharSequence) {
+		if (isFinishing || isDestroyed || !viewBinding.root.isAttachedToWindow) {
+			return
+		}
+		Snackbar.make(viewBinding.root, message, Snackbar.LENGTH_LONG).show()
 	}
 
 	private suspend fun verifyClearance(url: String): Boolean = runCatchingCancellable {

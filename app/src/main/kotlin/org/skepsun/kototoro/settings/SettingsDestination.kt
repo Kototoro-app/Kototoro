@@ -34,6 +34,10 @@ sealed interface SettingsDestination {
 	data object ChangelogSettings : SettingsDestination
 	data object AboutSettings : SettingsDestination
 
+	data class SourceSettings(
+		val sourceName: String,
+	) : SettingsDestination
+
 	data class UnifiedSources(
 		val initialRepositoryKind: UnifiedSourceKind? = null,
 		val initialRepositoryUrl: String? = null,
