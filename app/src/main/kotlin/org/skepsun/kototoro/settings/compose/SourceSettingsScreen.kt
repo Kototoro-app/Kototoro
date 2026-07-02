@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
@@ -14,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.max
 
 sealed interface SourceSettingsRowUiState {
     val id: String
@@ -98,15 +101,17 @@ fun SourceSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        val systemBarsBottom = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+        val navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val bottomInset = max(systemBarsBottom, navigationBarsBottom)
         LazyColumn(state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
                 top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() +
-                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+                bottom = innerPadding.calculateBottomPadding() + bottomInset + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -196,3 +201,5 @@ fun SourceSettingsScreen(
         }
     }
 }
+
+private fun max(first: Dp, second: Dp): Dp = max(first.value, second.value).dp

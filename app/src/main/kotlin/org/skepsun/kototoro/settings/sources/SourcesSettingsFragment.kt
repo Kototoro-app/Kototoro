@@ -92,6 +92,8 @@ fun SourcesSettingsRoute(
         settings.observeAsState(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw }.value
     val isFavouritesExcludeNsfw =
         settings.observeAsState(AppSettings.KEY_FAVOURITES_EXCLUDE_NSFW) { isFavouritesExcludeNsfw }.value
+    val isFeedExcludeNsfw =
+        settings.observeAsState(AppSettings.KEY_FEED_EXCLUDE_NSFW) { isFeedExcludeNsfw }.value
     val isTrackerNsfwDisabled =
         settings.observeAsState(AppSettings.KEY_TRACKER_NO_NSFW) { isTrackerNsfwDisabled }.value
     val isSuggestionsExcludeNsfw =
@@ -124,6 +126,7 @@ fun SourcesSettingsRoute(
         isNsfwContentDisabled = isNsfwContentDisabled,
         isHistoryExcludeNsfw = isHistoryExcludeNsfw,
         isFavouritesExcludeNsfw = isFavouritesExcludeNsfw,
+        isFeedExcludeNsfw = isFeedExcludeNsfw,
         isTrackerNsfwDisabled = isTrackerNsfwDisabled,
         isSuggestionsExcludeNsfw = isSuggestionsExcludeNsfw,
         incognitoModeForNsfw = incognitoModeForNsfw,
@@ -150,6 +153,7 @@ fun SourcesSettingsRoute(
         onNsfwContentDisabledChange = { settings.isNsfwContentDisabled = it },
         onHistoryExcludeNsfwChange = { settings.isHistoryExcludeNsfw = it },
         onFavouritesExcludeNsfwChange = { settings.isFavouritesExcludeNsfw = it },
+        onFeedExcludeNsfwChange = { settings.isFeedExcludeNsfw = it },
         onTrackerNsfwDisabledChange = { settings.isTrackerNsfwDisabled = it },
         onSuggestionsExcludeNsfwChange = { settings.isSuggestionsExcludeNsfw = it },
         onIncognitoModeForNsfwChange = { settings.incognitoModeForNsfw = it },

@@ -65,6 +65,7 @@ import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewMo
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
 import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.applyHorizontalRouteCloseTransition
 import org.skepsun.kototoro.core.nav.router
@@ -124,6 +125,7 @@ import org.skepsun.kototoro.settings.search.SettingsSearchViewModel
 import org.skepsun.kototoro.settings.support.TranslationApiSettingsSupport
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.settings.sources.SourceComposeSettingsFragment
+import org.skepsun.kototoro.settings.sources.SourceSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourceSettingsFragment
 import org.skepsun.kototoro.settings.sources.SourcesSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsViewModel
@@ -624,6 +626,11 @@ class SettingsActivity :
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_ABOUT_SETTINGS)
 					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
+				is SettingsDestination.SourceSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SOURCE_SETTINGS)
+					outState.putString(STATE_SOURCE_SETTINGS_SOURCE, destination.sourceName)
+					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
+				}
 				is SettingsDestination.UnifiedSources -> {
 					val unifiedDestination = composeDestination as? SettingsDestination.UnifiedSources ?: return
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_UNIFIED_SOURCES)
@@ -772,6 +779,7 @@ class SettingsActivity :
 			SettingsDestination.NavConfigSettings,
 			SettingsDestination.ChangelogSettings,
 			SettingsDestination.AboutSettings,
+			is SettingsDestination.SourceSettings,
 			is SettingsDestination.UnifiedSources -> openComposeDestination(
 				destination,
 				shouldRestoreFragment = shouldRestoreFragmentForNextDestination(isFromRoot),
@@ -824,7 +832,9 @@ class SettingsActivity :
 			AppRouter.ACTION_ENTITY_ORGANIZE -> SettingsDestination.EntityOrganizeSettings
 			AppRouter.ACTION_MANAGE_DOWNLOADS -> SettingsDestination.DownloadsSettings
 			AppRouter.ACTION_MANAGE_SOURCES -> null
-			AppRouter.ACTION_SOURCE -> null
+			AppRouter.ACTION_SOURCE -> intent.getStringExtra(AppRouter.KEY_SOURCE)
+				?.takeIf { it.isNotBlank() }
+				?.let(SettingsDestination::SourceSettings)
 			Intent.ACTION_VIEW -> when (intent.data?.host) {
 				HOST_ADD_REPO -> null
 				HOST_ABOUT -> SettingsDestination.AboutSettings
@@ -863,7 +873,7 @@ class SettingsActivity :
 		return !isMasterDetails || (hasFragment && !isFromRoot)
 	}
 
-	private fun shouldKeepComposeHistory(): Boolean = !isMasterDetails
+	private fun shouldKeepComposeHistory(): Boolean = true
 
 	private fun openComposeDestination(
 		destination: SettingsDestination,
@@ -953,6 +963,9 @@ class SettingsActivity :
 				downloadsStorageTick.update { it + 1 }
 				downloadsDozeTick.update { it + 1 }
 			}
+			is SettingsDestination.SourceSettings -> {
+				intent.putExtra(AppRouter.KEY_SOURCE, destination.sourceName)
+			}
 			SettingsDestination.TrackerSettings -> {
 				trackerDozeTick.update { it + 1 }
 				trackerNotificationTick.update { it + 1 }
@@ -992,6 +1005,7 @@ class SettingsActivity :
 			SettingsDestination.NavConfigSettings -> COMPOSE_DESTINATION_NAV_CONFIG_SETTINGS
 			SettingsDestination.ChangelogSettings -> COMPOSE_DESTINATION_CHANGELOG_SETTINGS
 			SettingsDestination.AboutSettings -> COMPOSE_DESTINATION_ABOUT_SETTINGS
+			is SettingsDestination.SourceSettings -> "source:${destination.sourceName}"
 			is SettingsDestination.UnifiedSources -> "unified:${destination.initialRepositoryKind}:${destination.initialRepositoryUrl}"
 		}
 	}
@@ -1027,6 +1041,9 @@ class SettingsActivity :
 			SettingsDestination.NavConfigSettings -> getString(R.string.main_screen_sections)
 			SettingsDestination.ChangelogSettings -> getString(R.string.changelog)
 			SettingsDestination.AboutSettings -> getString(R.string.about)
+			is SettingsDestination.SourceSettings -> org.skepsun.kototoro.core.model.ContentSource(
+				destination.sourceName,
+			).getTitle(this)
 			is SettingsDestination.UnifiedSources -> getString(R.string.extension_management)
 		}
 	}
@@ -1367,6 +1384,11 @@ class SettingsActivity :
 					},
 				)
 			}
+			is SettingsDestination.SourceSettings -> RenderComposeSection(
+				title = composeDestinationTitle(destination),
+			) {
+				SourceSettingsRoute(appRouter = router)
+			}
 			SettingsDestination.SourcesSettings -> RenderComposeSection(title = getString(R.string.remote_sources)) {
 				SourcesSettingsRoute(
 					settings = kototoroAppSettings,
@@ -1703,7 +1725,12 @@ class SettingsActivity :
 		}
 		val shouldRestore = shouldRestoreFragmentOnComposeExit && supportFragmentManager.backStackEntryCount > 0
 		if (isMasterDetails && !shouldRestore) {
-			finishFromComposeDestination(currentDestination)
+			onLeavingComposeDestination(currentDestination)
+			openComposeDestination(
+				destination = SettingsDestination.Root,
+				shouldRestoreFragment = false,
+				pushCurrentToStack = false,
+			)
 			return
 		}
 		closeComposeDestination(restorePreviousFragment = false)
@@ -2049,6 +2076,7 @@ class SettingsActivity :
 		private const val STATE_COMPOSE_DESTINATION = "compose_destination"
 		private const val STATE_COMPOSE_RESTORE_FRAGMENT = "compose_restore_fragment"
 		private const val STATE_PENDING_RESTORE_ROOT = "pending_restore_root"
+		private const val STATE_SOURCE_SETTINGS_SOURCE = "source_settings_source"
 		private const val STATE_UNIFIED_SOURCES_KIND = "unified_sources_kind"
 		private const val STATE_UNIFIED_SOURCES_URL = "unified_sources_url"
 		private const val COMPOSE_DESTINATION_ROOT = "root"
@@ -2080,6 +2108,7 @@ class SettingsActivity :
 		private const val COMPOSE_DESTINATION_NAV_CONFIG_SETTINGS = "nav_config_settings"
 		private const val COMPOSE_DESTINATION_CHANGELOG_SETTINGS = "changelog_settings"
 		private const val COMPOSE_DESTINATION_ABOUT_SETTINGS = "about_settings"
+		private const val COMPOSE_DESTINATION_SOURCE_SETTINGS = "source_settings"
 		private const val COMPOSE_DESTINATION_UNIFIED_SOURCES = "unified_sources"
 		private const val EXTRA_ENTITY_ORGANIZE_SELECTION = "entity_organize_selection"
 
@@ -2155,6 +2184,9 @@ class SettingsActivity :
 			COMPOSE_DESTINATION_NAV_CONFIG_SETTINGS -> SettingsDestination.NavConfigSettings
 			COMPOSE_DESTINATION_CHANGELOG_SETTINGS -> SettingsDestination.ChangelogSettings
 			COMPOSE_DESTINATION_ABOUT_SETTINGS -> SettingsDestination.AboutSettings
+			COMPOSE_DESTINATION_SOURCE_SETTINGS -> getString(STATE_SOURCE_SETTINGS_SOURCE)
+				?.takeIf { it.isNotBlank() }
+				?.let(SettingsDestination::SourceSettings)
 			COMPOSE_DESTINATION_UNIFIED_SOURCES -> SettingsDestination.UnifiedSources(
 				initialRepositoryKind = getString(STATE_UNIFIED_SOURCES_KIND)
 					?.let { runCatching { enumValueOf<UnifiedSourceKind>(it) }.getOrNull() },

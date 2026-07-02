@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -299,14 +300,10 @@ fun KototoroContentCardGrid(
                 .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            AsyncImage(
-                model = coverRequest,
+            ContentCardCoverImage(
+                coverRequest = coverRequest,
                 contentDescription = manga.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedKey, state.result.image)
-                },
+                sharedKey = sharedKey,
             )
 
             if (isSelected) {
@@ -587,14 +584,10 @@ fun KototoroContentCardList(
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            AsyncImage(
-                model = coverRequest,
+            ContentCardCoverImage(
+                coverRequest = coverRequest,
                 contentDescription = item.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedKey, state.result.image)
-                },
+                sharedKey = sharedKey,
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesTopLeft,
@@ -953,14 +946,10 @@ fun KototoroContentCardDetailedList(
                 .clip(MaterialTheme.shapes.medium)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            AsyncImage(
-                model = coverRequest,
+            ContentCardCoverImage(
+                coverRequest = coverRequest,
                 contentDescription = item.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize(),
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedKey, state.result.image)
-                },
+                sharedKey = sharedKey,
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesTopLeft,
@@ -1107,6 +1096,26 @@ fun ContentCardNsfwBadge(
             color = MaterialTheme.colorScheme.onError,
         )
     }
+}
+
+@Composable
+private fun BoxScope.ContentCardCoverImage(
+    coverRequest: ImageRequest?,
+    contentDescription: String,
+    sharedKey: String,
+) {
+    if (coverRequest == null) {
+        return
+    }
+    AsyncImage(
+        model = coverRequest,
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.matchParentSize(),
+        onSuccess = { state ->
+            HeroCoverSnapshotStore.put(sharedKey, state.result.image)
+        },
+    )
 }
 
 @Composable

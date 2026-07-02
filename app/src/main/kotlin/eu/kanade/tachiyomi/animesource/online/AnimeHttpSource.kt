@@ -13,6 +13,7 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.skepsun.kototoro.mihon.compat.MihonRequestContext
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.net.URI
@@ -84,8 +85,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", ReplaceWith("getPopularAnime"))
     override fun fetchPopularAnime(page: Int): Observable<AnimesPage> {
-        return Observable.fromCallable {
-            val response = client.newCall(popularAnimeRequest(page)).execute()
+        return sourceObservable {
+            val response = client.newCall(tagRequest(popularAnimeRequest(page))).execute()
             popularAnimeParse(response)
         }
     }
@@ -100,8 +101,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
     override fun fetchSearchAnime(page: Int, query: String, filters: AnimeFilterList): Observable<AnimesPage> {
         return Observable.defer {
             try {
-                Observable.fromCallable {
-                    val response = client.newCall(searchAnimeRequest(page, query, filters)).execute()
+                sourceObservable {
+                    val response = client.newCall(tagRequest(searchAnimeRequest(page, query, filters))).execute()
                     searchAnimeParse(response)
                 }
             } catch (e: NoClassDefFoundError) {
@@ -118,8 +119,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", ReplaceWith("getLatestUpdates"))
     override fun fetchLatestUpdates(page: Int): Observable<AnimesPage> {
-        return Observable.fromCallable {
-            val response = client.newCall(latestUpdatesRequest(page)).execute()
+        return sourceObservable {
+            val response = client.newCall(tagRequest(latestUpdatesRequest(page))).execute()
             latestUpdatesParse(response)
         }
     }
@@ -137,8 +138,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", ReplaceWith("getAnimeDetails"))
     override fun fetchAnimeDetails(anime: SAnime): Observable<SAnime> {
-        return Observable.fromCallable {
-            val response = client.newCall(animeDetailsRequest(anime)).execute()
+        return sourceObservable {
+            val response = client.newCall(tagRequest(animeDetailsRequest(anime))).execute()
             animeDetailsParse(response).apply { initialized = true }
         }
     }
@@ -158,8 +159,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", ReplaceWith("getEpisodeList"))
     override fun fetchEpisodeList(anime: SAnime): Observable<List<SEpisode>> {
-        return Observable.fromCallable {
-            val response = client.newCall(episodeListRequest(anime)).execute()
+        return sourceObservable {
+            val response = client.newCall(tagRequest(episodeListRequest(anime))).execute()
             episodeListParse(response)
         }
     }
@@ -174,7 +175,7 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     override suspend fun getSeasonList(anime: SAnime): List<SAnime> {
         return try {
-            val response = client.newCall(seasonListRequest(anime)).execute()
+            val response = client.newCall(tagRequest(seasonListRequest(anime))).execute()
             seasonListParse(response)
         } catch (e: Exception) {
             emptyList()
@@ -198,8 +199,8 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", ReplaceWith("getVideoList"))
     override fun fetchVideoList(episode: SEpisode): Observable<List<Video>> {
-        return Observable.fromCallable {
-            val response = client.newCall(videoListRequest(episode)).execute()
+        return sourceObservable {
+            val response = client.newCall(tagRequest(videoListRequest(episode))).execute()
             videoListParse(response)
         }
     }
@@ -214,7 +215,7 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         return try {
-            val response = client.newCall(hosterListRequest(episode)).execute()
+            val response = client.newCall(tagRequest(hosterListRequest(episode))).execute()
             hosterListParse(response)
         } catch (e: Exception) {
             emptyList()
@@ -231,7 +232,7 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     override suspend fun getVideoList(hoster: Hoster): List<Video> {
         return try {
-            val response = client.newCall(videoListRequest(hoster)).execute()
+            val response = client.newCall(tagRequest(videoListRequest(hoster))).execute()
             videoListParse(response, hoster)
         } catch (e: Exception) {
             emptyList()
@@ -293,4 +294,26 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
     open fun prepareNewEpisode(episode: SEpisode, anime: SAnime) {}
 
     override fun getFilterList() = AnimeFilterList()
+
+    private fun <T> sourceObservable(block: () -> T): Observable<T> {
+        return Observable.fromCallable {
+            MihonRequestContext.withSourceBlocking(aniyomiContentSource(), block)
+        }
+    }
+
+    private fun aniyomiContentSource(): org.skepsun.kototoro.parsers.model.ContentSource {
+        return org.skepsun.kototoro.core.model.ContentSource("ANIYOMI_$id")
+    }
+
+    private fun tagRequest(request: Request): Request {
+        if (request.tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java) != null) {
+            return request
+        }
+        return request.newBuilder()
+            .tag(
+                org.skepsun.kototoro.parsers.model.ContentSource::class.java,
+                aniyomiContentSource(),
+            )
+            .build()
+    }
 }

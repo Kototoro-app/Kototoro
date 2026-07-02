@@ -174,6 +174,14 @@ class UnifiedSourcesViewModel @Inject constructor(
 		filterState.update { it.copy(enabledFilter = filter) }
 	}
 
+	fun setAvailabilityFilter(filter: UnifiedAvailabilityFilter) {
+		filterState.update { it.copy(availabilityFilter = filter) }
+	}
+
+	fun setNsfwFilter(filter: UnifiedNsfwFilter) {
+		filterState.update { it.copy(nsfwFilter = filter) }
+	}
+
 	fun clearLanguages() {
 		filterState.update { it.copy(languages = emptySet()) }
 	}
@@ -192,7 +200,9 @@ class UnifiedSourcesViewModel @Inject constructor(
 	}
 
 	fun clearFilters() {
-		filterState.value = UnifiedSourcesFilterState()
+		filterState.value = UnifiedSourcesFilterState(
+			availabilityFilter = UnifiedAvailabilityFilter.AVAILABLE,
+		)
 	}
 
 	fun refreshPackages(
@@ -1280,6 +1290,13 @@ class UnifiedSourcesViewModel @Inject constructor(
 			.filter { filters.kinds.isEmpty() || it.kind in filters.kinds }
 			.filter { filters.locationTypes.isEmpty() || it.repositoryLocationType(repositoriesById) in filters.locationTypes }
 			.filter { filters.languages.isEmpty() || it.language.matchesLanguageFilter(filters.languages) }
+			.filter {
+				when (filters.nsfwFilter) {
+					UnifiedNsfwFilter.ALL -> true
+					UnifiedNsfwFilter.SFW -> !it.isNsfw
+					UnifiedNsfwFilter.NSFW -> it.isNsfw
+				}
+			}
 			.filter { filters.query.isBlank() || it.matchesQuery(filters.query) }
 			.sortedWith(packageItemComparator)
 			.toList()
@@ -1299,6 +1316,20 @@ class UnifiedSourcesViewModel @Inject constructor(
 					UnifiedEnabledFilter.ALL -> true
 					UnifiedEnabledFilter.ENABLED -> it.isEnabled
 					UnifiedEnabledFilter.DISABLED -> !it.isEnabled
+				}
+			}
+			.filter {
+				when (filters.availabilityFilter) {
+					UnifiedAvailabilityFilter.ALL -> true
+					UnifiedAvailabilityFilter.AVAILABLE -> it.isAvailable && !it.isBroken
+					UnifiedAvailabilityFilter.UNAVAILABLE -> !it.isAvailable || it.isBroken
+				}
+			}
+			.filter {
+				when (filters.nsfwFilter) {
+					UnifiedNsfwFilter.ALL -> true
+					UnifiedNsfwFilter.SFW -> !it.isNsfw
+					UnifiedNsfwFilter.NSFW -> it.isNsfw
 				}
 			}
 			.filter { filters.locationTypes.isEmpty() || it.repositoryLocationType(repositoriesById, packagesById) in filters.locationTypes }
@@ -1323,12 +1354,26 @@ data class UnifiedSourcesFilterState(
 	val languages: Set<String> = emptySet(),
 	val locationTypes: Set<UnifiedRepositoryLocationType> = emptySet(),
 	val enabledFilter: UnifiedEnabledFilter = UnifiedEnabledFilter.ALL,
+	val availabilityFilter: UnifiedAvailabilityFilter = UnifiedAvailabilityFilter.AVAILABLE,
+	val nsfwFilter: UnifiedNsfwFilter = UnifiedNsfwFilter.ALL,
 )
 
 enum class UnifiedEnabledFilter {
 	ALL,
 	ENABLED,
 	DISABLED,
+}
+
+enum class UnifiedAvailabilityFilter {
+	ALL,
+	AVAILABLE,
+	UNAVAILABLE,
+}
+
+enum class UnifiedNsfwFilter {
+	ALL,
+	SFW,
+	NSFW,
 }
 
 sealed interface UnifiedSourcesUiState {
