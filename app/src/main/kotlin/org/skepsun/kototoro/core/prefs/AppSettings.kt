@@ -923,6 +923,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_HIDE_READ_CHAPTERS, false)
 		set(value) = prefs.edit { putBoolean(KEY_HIDE_READ_CHAPTERS, value) }
 
+	var isMergeRepeatedChapters: Boolean
+		get() = prefs.getBoolean(KEY_MERGE_REPEATED_CHAPTERS, false)
+		set(value) = prefs.edit { putBoolean(KEY_MERGE_REPEATED_CHAPTERS, value) }
+
 	val zoomMode: ZoomMode
 		get() = prefs.getEnumValue(KEY_ZOOM_MODE, ZoomMode.FIT_CENTER)
 
@@ -2069,6 +2073,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_REVERSE_CHAPTERS = "reverse_chapters"
 		const val KEY_GRID_VIEW_CHAPTERS = "grid_view_chapters"
 		const val KEY_HIDE_READ_CHAPTERS = "hide_read_chapters"
+		const val KEY_MERGE_REPEATED_CHAPTERS = "merge_repeated_chapters"
 		const val KEY_INCOGNITO_NSFW = "incognito_nsfw"
 		const val KEY_PAGES_NUMBERS = "pages_numbers"
 		const val KEY_READER_TRANSLATION_ENABLED = "reader_translation_enabled"

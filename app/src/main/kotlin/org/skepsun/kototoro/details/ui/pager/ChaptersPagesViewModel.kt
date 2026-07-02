@@ -111,6 +111,15 @@ abstract class ChaptersPagesViewModel(
 		valueProducer = { isHideReadChapters },
 	)
 
+	val isMergeRepeatedChapters = settings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.Default,
+		key = AppSettings.KEY_MERGE_REPEATED_CHAPTERS,
+		valueProducer = { isMergeRepeatedChapters },
+	)
+
+	val showMergeRepeatedChapters = mangaDetails.map { it?.chapters?.size ?: 0 > 1 }
+		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
+
 	val isDownloadedOnly = MutableStateFlow(false)
 
 	val newChaptersCount = mangaDetails.flatMapLatest { d ->
@@ -153,15 +162,41 @@ abstract class ChaptersPagesViewModel(
 		bookmarks,
 		isChaptersInGridView,
 		isDownloadedOnly,
-	) { manga, currentChapterId, branch, news, bookmarks, grid, downloadedOnly ->
-		val baseChapters = manga?.mapChapters(
-			currentChapterId = currentChapterId,
-			newCount = news,
-			branch = branch,
-			bookmarks = bookmarks,
-			isGrid = grid,
-			isDownloadedOnly = downloadedOnly,
-		).orEmpty()
+		isMergeRepeatedChapters,
+	) { manga, currentChapterId, branch, news, bookmarks, grid, downloadedOnly, mergeRepeated ->
+		val baseChapters = if (mergeRepeated && manga != null) {
+			val allBranches = manga.chapters.keys.toList()
+			if (allBranches.size > 1) {
+				allBranches.flatMap { b ->
+					manga.mapChapters(
+						currentChapterId = currentChapterId,
+						newCount = news,
+						branch = b,
+						bookmarks = bookmarks,
+						isGrid = grid,
+						isDownloadedOnly = downloadedOnly,
+					)
+				}
+			} else {
+				manga.mapChapters(
+					currentChapterId = currentChapterId,
+					newCount = news,
+					branch = branch,
+					bookmarks = bookmarks,
+					isGrid = grid,
+					isDownloadedOnly = downloadedOnly,
+				)
+			}
+		} else {
+			manga?.mapChapters(
+				currentChapterId = currentChapterId,
+				newCount = news,
+				branch = branch,
+				bookmarks = bookmarks,
+				isGrid = grid,
+				isDownloadedOnly = downloadedOnly,
+			).orEmpty()
+		}
 		expandEpubChaptersIfNeeded(baseChapters)
 	}
 
@@ -169,11 +204,13 @@ abstract class ChaptersPagesViewModel(
 		combine(baseChaptersFlow, downloadInvalidation) { list, _ -> list },
 		isChaptersReversed,
 		isHideReadChapters,
+		isMergeRepeatedChapters,
 		chaptersQuery,
-	) { list, reversed, hideReadChapters, query ->
+	) { list, reversed, hideReadChapters, mergeRepeatedChapters, query ->
 		val ordered = if (reversed) list.asReversed() else list
 		val filtered = if (hideReadChapters) ordered.filterReadBeforeCurrent() else ordered
-		filtered.filterSearch(query)
+		val merged = if (mergeRepeatedChapters) filtered.mergeRepeated() else filtered
+		merged.filterSearch(query)
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
 	protected fun notifyDownloadChanged() {
@@ -248,6 +285,10 @@ abstract class ChaptersPagesViewModel(
 
 	fun setHideReadChapters(newValue: Boolean) {
 		settings.isHideReadChapters = newValue
+	}
+
+	fun setMergeRepeatedChapters(newValue: Boolean) {
+		settings.isMergeRepeatedChapters = newValue
 	}
 
 	fun setSelectedBranch(branch: String?) {
@@ -418,6 +459,8 @@ abstract class ChaptersPagesViewModel(
 		}
 	}
 
+
+
 	private suspend fun onDownloadComplete(downloadedContent: LocalContent?) {
 		downloadedContent ?: return
 		mangaDetails.update {
@@ -453,6 +496,36 @@ abstract class ChaptersPagesViewModel(
 			is DetailsActivity -> DetailsViewModel::class.java
 			is VideoPlayerActivity -> VideoChaptersViewModel::class.java
 			else -> error("Wrong activity ${activity.javaClass.simpleName} for ${ChaptersPagesViewModel::class.java.simpleName}")
+		}
+	}
+}
+
+internal fun List<ChapterListItem>.mergeRepeated(): List<ChapterListItem> {
+	if (this.isEmpty()) return this
+	val groups = this.groupBy { item ->
+		val ch = item.chapter
+		if (ch.number > 0f) {
+			val volKey = if (ch.volume > 0) ch.volume else null
+			"num_${volKey}_${ch.number}"
+		} else {
+			val titleKey = ch.title?.lowercase()?.trim()
+			if (!titleKey.isNullOrBlank()) {
+				"title_$titleKey"
+			} else {
+				"unique_${ch.id}_${ch.url}"
+			}
+		}
+	}
+	return groups.map { (_, groupList) ->
+		if (groupList.size == 1) {
+			groupList.first()
+		} else {
+			groupList.maxWithOrNull(
+				compareBy<ChapterListItem> { it.chapter.uploadDate }
+					.thenBy { it.isDownloaded }
+					.thenBy { it.chapter.scanlator?.isNotBlank() == true }
+					.thenBy { it.chapter.title?.length ?: 0 }
+			) ?: groupList.first()
 		}
 	}
 }
