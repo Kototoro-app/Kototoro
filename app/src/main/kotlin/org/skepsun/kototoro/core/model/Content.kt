@@ -183,6 +183,9 @@ fun Content.isNsfw(): Boolean {
 	
 	if (contentRating == org.skepsun.kototoro.parsers.model.ContentRating.ADULT) return true
 	
+	val hasAdultTag = tags.any { it.title.isAdultTagKeyword() || it.title.containsAdultTagKeyword() }
+	if (hasAdultTag) return true
+	
 	return source.isNsfw()
 }
 
