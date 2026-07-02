@@ -29,6 +29,7 @@ import org.skepsun.kototoro.parsers.util.ifZero
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.TRACK_LOG_RETAINED_SIZE
+import org.skepsun.kototoro.tracker.data.canBeClearedBy
 import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.MangaUpdates
@@ -208,11 +209,17 @@ class TrackingRepository @Inject constructor(
 
 	suspend fun clearCounters() = db.withTransaction {
 		for (id in currentTrackAnchorIds()) {
-			db.getTracksDao().clearCounter(id)
+			clearTrackUpdates(id)
 		}
 	}
 
-	suspend fun markAsRead(trackLogId: Long) = db.getTrackLogsDao().markAsRead(trackLogId)
+	suspend fun markAsRead(trackLogId: Long) = db.withTransaction {
+		val log = db.getTrackLogsDao().find(trackLogId) ?: return@withTransaction
+		db.getTrackLogsDao().markAsRead(trackLogId)
+		db.getTracksDao().findByOwnerId(log.ownerId)
+			?.takeIf { it.canBeClearedBy(log) }
+			?.let { clearTrackUpdates(it.mangaId) }
+	}
 
 	suspend fun gc() = db.withTransaction {
 		db.getTrackLogsDao().ensureUnreadUpdateLogs()
@@ -254,19 +261,30 @@ class TrackingRepository @Inject constructor(
 				ids.isEmpty() -> return
 				ids.size == 1 -> {
 					val anchorMangaId = resolvePersistableTrackAnchorMangaId(ids.single()) ?: return
-					db.getTracksDao().clearCounter(anchorMangaId)
+					db.withTransaction {
+						clearTrackUpdates(anchorMangaId)
+					}
 				}
 				else -> db.withTransaction {
 					for (id in resolvePersistableTrackAnchorMangaIds(ids)) {
-						db.getTracksDao().clearCounter(id)
+						clearTrackUpdates(id)
 					}
 				}
 			}
 	}
 
+	private suspend fun clearTrackUpdates(anchorMangaId: Long) {
+		val track = db.getTracksDao().find(anchorMangaId)
+		db.getTracksDao().clearCounter(anchorMangaId)
+		track?.let {
+			db.getTrackLogsDao().markUnreadAsReadByOwner(it.ownerId)
+		}
+	}
+
 	suspend fun mergeWith(tracking: ContentTracking) {
 		val anchorMangaId = resolvePersistableTrackAnchorMangaId(tracking.anchorMangaId) ?: return
 		val entityId = resolveTrackIdentity(anchorMangaId).entityId
+		val existing = db.getTracksDao().find(anchorMangaId)
 		val entity = TrackEntity(
 			ownerId = resolveTrackOwnerId(entityId, anchorMangaId),
 			mangaId = anchorMangaId,
@@ -278,7 +296,12 @@ class TrackingRepository @Inject constructor(
 			lastResult = TrackEntity.RESULT_EXTERNAL_MODIFICATION,
 			lastError = null,
 		)
-		db.getTracksDao().upsert(entity)
+		db.withTransaction {
+			db.getTracksDao().upsert(entity)
+			if (tracking.newChapters == 0 && existing?.newChapters != 0) {
+				db.getTrackLogsDao().markUnreadAsReadByOwner(entity.ownerId)
+			}
+		}
 	}
 
 	suspend fun getCategoriesCount(): IntArray {
