@@ -125,8 +125,10 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.details.ui.compose.AnimatedPanoramaBackdrop
 import org.skepsun.kototoro.details.ui.compose.PanoramaBackdropPrefs
 import org.skepsun.kototoro.details.ui.compose.rememberPanoramaBackdropPrefs
-import org.skepsun.kototoro.home.ui.HOME_HERO_SECTION_LIMIT
+import org.skepsun.kototoro.home.ui.HOME_HERO_HISTORY_LIMIT
+import org.skepsun.kototoro.home.ui.HOME_HERO_RECOMMENDATIONS_LIMIT
 import org.skepsun.kototoro.home.ui.HOME_HERO_TOTAL_LIMIT
+import org.skepsun.kototoro.home.ui.HOME_HERO_UPDATES_LIMIT
 import org.skepsun.kototoro.home.ui.HomeRecentItem
 import org.skepsun.kototoro.home.ui.HomeRecommendationItem
 import org.skepsun.kototoro.home.ui.HomeSummaryState
@@ -1743,10 +1745,24 @@ private fun buildHomeHeroEntries(
             )
         }
 
+    historyItems
+        .asSequence()
+        .filterNot { it.groupKey == resumeGroupKey }
+        .take(HOME_HERO_HISTORY_LIMIT)
+        .forEach { item ->
+            addEntry(
+                HomeHeroEntry(
+                    kind = HomeHeroKind.HISTORY,
+                    content = item.content,
+                    groupKey = item.groupKey,
+                ),
+            )
+        }
+
     updateItems
         .asSequence()
         .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_SECTION_LIMIT)
+        .take(HOME_HERO_UPDATES_LIMIT)
         .forEach { item ->
             addEntry(
                 HomeHeroEntry(
@@ -1761,25 +1777,11 @@ private fun buildHomeHeroEntries(
     recommendationItems
         .asSequence()
         .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_SECTION_LIMIT)
+        .take(HOME_HERO_RECOMMENDATIONS_LIMIT)
         .forEach { item ->
             addEntry(
                 HomeHeroEntry(
                     kind = HomeHeroKind.RECOMMENDATION,
-                    content = item.content,
-                    groupKey = item.groupKey,
-                ),
-            )
-        }
-
-    historyItems
-        .asSequence()
-        .filterNot { it.groupKey == resumeGroupKey }
-        .take(HOME_HERO_SECTION_LIMIT)
-        .forEach { item ->
-            addEntry(
-                HomeHeroEntry(
-                    kind = HomeHeroKind.HISTORY,
                     content = item.content,
                     groupKey = item.groupKey,
                 ),
