@@ -77,10 +77,9 @@ data class ChapterListItem(
 		uploadDate?.let { date ->
 			joiner.add(date.toString())
 		}
-		chapter.scanlator?.let { scanlator ->
-			if (scanlator.isNotBlank()) {
-				joiner.add(scanlator)
-			}
+		val scanlator = chapter.scanlator?.takeIf { it.isNotBlank() } ?: chapter.branch?.takeIf { it.isNotBlank() }
+		scanlator?.let {
+			joiner.add(it)
 		}
 		return joiner.complete()
 	}

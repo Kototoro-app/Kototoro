@@ -298,6 +298,8 @@ fun DetailsScreen(
     val isChaptersReversed = chaptersPaneControlsUiState.isChaptersReversed
     val isChaptersInGridView = chaptersPaneControlsUiState.isChaptersInGridView
     val isHideReadChapters = chaptersPaneControlsUiState.isHideReadChapters
+    val isMergeRepeatedChapters = chaptersPaneControlsUiState.isMergeRepeatedChapters
+    val showMergeRepeatedChapters = chaptersPaneControlsUiState.showMergeRepeatedChapters
     val isDownloadedOnly = chaptersPaneControlsUiState.isDownloadedOnly
     val chapterEmptyReason = chaptersPaneControlsUiState.emptyReason
     val activeLocalSourceOptions = sourceBindingUiState.activeLocalSourceOptions
@@ -1150,6 +1152,8 @@ fun DetailsScreen(
                                 isChaptersReversed = isChaptersReversed,
                                 isChaptersInGridView = isChaptersInGridView,
                                 isHideReadChapters = isHideReadChapters,
+                                isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                showMergeRepeatedChapters = showMergeRepeatedChapters,
                                 isDownloadedOnly = isDownloadedOnly,
                                 isDownloadedFilterVisible = mangaDetails?.local != null,
                                 pageGridSizeValue = pageGridSizeValue,
@@ -1158,6 +1162,7 @@ fun DetailsScreen(
                                 onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
                                 onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
                                 onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
+                                onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                                 onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                                 onPageGridSizeChange = updatePageGridSize,
                                 showCollapsedHandle = false,
@@ -1325,6 +1330,8 @@ fun DetailsScreen(
                         isChaptersReversed = isChaptersReversed,
                         isChaptersInGridView = isChaptersInGridView,
                         isHideReadChapters = isHideReadChapters,
+                        isMergeRepeatedChapters = isMergeRepeatedChapters,
+                        showMergeRepeatedChapters = showMergeRepeatedChapters,
                         isDownloadedOnly = isDownloadedOnly,
                         isDownloadedFilterVisible = mangaDetails?.local != null,
                         pageGridSizeValue = pageGridSizeValue,
@@ -1333,6 +1340,7 @@ fun DetailsScreen(
                         onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
                         onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
                         onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
+                        onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                         onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                         onPageGridSizeChange = updatePageGridSize,
                         showCollapsedHandle = true,
@@ -2515,6 +2523,8 @@ private fun DetailsPaneContent(
     isChaptersReversed: Boolean,
     isChaptersInGridView: Boolean,
     isHideReadChapters: Boolean,
+    isMergeRepeatedChapters: Boolean,
+    showMergeRepeatedChapters: Boolean,
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
@@ -2523,6 +2533,7 @@ private fun DetailsPaneContent(
     onToggleChaptersReversed: () -> Unit,
     onToggleChaptersGrid: () -> Unit,
     onToggleHideReadChapters: () -> Unit,
+    onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
     showCollapsedHandle: Boolean,
@@ -2582,6 +2593,8 @@ private fun DetailsPaneContent(
                             isChaptersReversed = isChaptersReversed,
                             isChaptersInGridView = isChaptersInGridView,
                             isHideReadChapters = isHideReadChapters,
+                            isMergeRepeatedChapters = isMergeRepeatedChapters,
+                            showMergeRepeatedChapters = showMergeRepeatedChapters,
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = isDownloadedFilterVisible,
                             pageGridSizeValue = pageGridSizeValue,
@@ -2589,6 +2602,7 @@ private fun DetailsPaneContent(
                             onToggleChaptersReversed = onToggleChaptersReversed,
                             onToggleChaptersGrid = onToggleChaptersGrid,
                             onToggleHideReadChapters = onToggleHideReadChapters,
+                            onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                             onToggleDownloadedOnly = onToggleDownloadedOnly,
                             onPageGridSizeChange = onPageGridSizeChange,
                             showCollapsedHandle = showCollapsedHandle,
@@ -2615,6 +2629,7 @@ private fun DetailsPaneContent(
                                 readingChapterTabs = readingChapterTabs,
                                 onSelectMetadataChapterTab = onSelectMetadataChapterTab,
                                 onSelectReadingChapterTab = onSelectReadingChapterTab,
+                                isMergeRepeatedChapters = isMergeRepeatedChapters,
                                 selectedTabId = resolveDetailsTabSelection(selectedTabId, availableTabIds),
                                 showTabStrip = false,
                                 isSheetFullyExpanded = isSheetFullyExpanded,
@@ -2649,6 +2664,8 @@ private fun DetailsPaneActionsRow(
     isChaptersReversed: Boolean,
     isChaptersInGridView: Boolean,
     isHideReadChapters: Boolean,
+    isMergeRepeatedChapters: Boolean,
+    showMergeRepeatedChapters: Boolean,
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
@@ -2656,6 +2673,7 @@ private fun DetailsPaneActionsRow(
     onToggleChaptersReversed: () -> Unit,
     onToggleChaptersGrid: () -> Unit,
     onToggleHideReadChapters: () -> Unit,
+    onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
     showCollapsedHandle: Boolean,
@@ -2792,12 +2810,15 @@ private fun DetailsPaneActionsRow(
                                 isChaptersReversed = isChaptersReversed,
                                 isChaptersInGridView = isChaptersInGridView,
                                 isHideReadChapters = isHideReadChapters,
+                                isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                showMergeRepeatedChapters = showMergeRepeatedChapters,
                                 isDownloadedOnly = isDownloadedOnly,
                                 isDownloadedFilterVisible = isDownloadedFilterVisible,
                                 onSearchClick = onChapterSearchToggle,
                                 onToggleChaptersReversed = onToggleChaptersReversed,
                                 onToggleChaptersGrid = onToggleChaptersGrid,
                                 onToggleHideReadChapters = onToggleHideReadChapters,
+                                onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                                 onToggleDownloadedOnly = onToggleDownloadedOnly,
                                 onShowGridSizeControls = detailsPaneState::showGridSizeControls,
                             )
@@ -2813,6 +2834,9 @@ private fun DetailsPaneActionsRow(
                                 historyInfo = historyInfo,
                                 isDownloadAvailable = historyInfo.canDownload,
                                 isEnabled = !isLoading && historyInfo.isValid,
+                                isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                showMergeRepeatedChapters = showMergeRepeatedChapters,
+                                onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                                 onReadClick = { onActionClick(DetailsAction.Resume) },
                                 onIncognitoClick = { onActionClick(DetailsAction.ResumeIncognito) },
                                 onForgetClick = { onActionClick(DetailsAction.ForgetHistory) },
@@ -2828,12 +2852,15 @@ private fun DetailsPaneActionsRow(
                                 isChaptersReversed = isChaptersReversed,
                                 isChaptersInGridView = isChaptersInGridView,
                                 isHideReadChapters = isHideReadChapters,
+                                isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                showMergeRepeatedChapters = showMergeRepeatedChapters,
                                 isDownloadedOnly = isDownloadedOnly,
                                 isDownloadedFilterVisible = isDownloadedFilterVisible,
                                 onSearchClick = onChapterSearchToggle,
                                 onToggleChaptersReversed = onToggleChaptersReversed,
                                 onToggleChaptersGrid = onToggleChaptersGrid,
                                 onToggleHideReadChapters = onToggleHideReadChapters,
+                                onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                                 onToggleDownloadedOnly = onToggleDownloadedOnly,
                                 onShowGridSizeControls = detailsPaneState::showGridSizeControls,
                             )
@@ -2865,6 +2892,9 @@ private fun DetailsPaneActionsRow(
                             historyInfo = historyInfo,
                             isDownloadAvailable = historyInfo.canDownload,
                             isEnabled = !isLoading && historyInfo.isValid,
+                            isMergeRepeatedChapters = isMergeRepeatedChapters,
+                            showMergeRepeatedChapters = showMergeRepeatedChapters,
+                            onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                             onReadClick = { onActionClick(DetailsAction.Resume) },
                             onIncognitoClick = { onActionClick(DetailsAction.ResumeIncognito) },
                             onForgetClick = { onActionClick(DetailsAction.ForgetHistory) },
@@ -3000,12 +3030,15 @@ private fun ExpandedPaneUtilityDock(
     isChaptersReversed: Boolean,
     isChaptersInGridView: Boolean,
     isHideReadChapters: Boolean,
+    isMergeRepeatedChapters: Boolean,
+    showMergeRepeatedChapters: Boolean,
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     onSearchClick: () -> Unit,
     onToggleChaptersReversed: () -> Unit,
     onToggleChaptersGrid: () -> Unit,
     onToggleHideReadChapters: () -> Unit,
+    onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onShowGridSizeControls: () -> Unit,
 ) {
@@ -3081,6 +3114,18 @@ private fun ExpandedPaneUtilityDock(
                             onToggleHideReadChapters()
                         },
                     )
+                    if (showMergeRepeatedChapters) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.merge_repeated_chapters)) },
+                            leadingIcon = {
+                                MenuSelectionIndicator(selected = isMergeRepeatedChapters)
+                            },
+                            onClick = {
+                                expanded = false
+                                onToggleMergeRepeatedChapters()
+                            },
+                        )
+                    }
                     if (isChaptersInGridView) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.display_options)) },
@@ -3250,6 +3295,9 @@ private fun ReadDock(
     historyInfo: HistoryInfo,
     isDownloadAvailable: Boolean,
     isEnabled: Boolean,
+    isMergeRepeatedChapters: Boolean,
+    showMergeRepeatedChapters: Boolean,
+    onToggleMergeRepeatedChapters: () -> Unit,
     onReadClick: () -> Unit,
     onIncognitoClick: () -> Unit,
     onForgetClick: () -> Unit,
@@ -3374,33 +3422,50 @@ private fun ReadDock(
                         },
                     )
                 }
-                if (hasQuickActions && hasBranchOptions) {
+                if (hasQuickActions && (showMergeRepeatedChapters || hasBranchOptions)) {
                     HorizontalDivider()
                 }
-                branches.forEach { branch ->
+                if (showMergeRepeatedChapters) {
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = buildString {
-                                    append(branch.name ?: stringResource(R.string.system_default))
-                                    append(" / ")
-                                    append(branch.count)
-                                },
-                            )
-                        },
+                        text = { Text(stringResource(R.string.merge_repeated_chapters)) },
                         leadingIcon = {
-                            if (branch.isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                )
-                            }
+                            MenuSelectionIndicator(selected = isMergeRepeatedChapters)
                         },
                         onClick = {
                             expanded = false
-                            onBranchSelected(branch.name)
+                            onToggleMergeRepeatedChapters()
                         },
                     )
+                    if (!isMergeRepeatedChapters && hasBranchOptions) {
+                        HorizontalDivider()
+                    }
+                }
+                if (!isMergeRepeatedChapters) {
+                    branches.forEach { branch ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = buildString {
+                                        append(branch.name ?: stringResource(R.string.system_default))
+                                        append(" / ")
+                                        append(branch.count)
+                                    },
+                                )
+                            },
+                            leadingIcon = {
+                                if (branch.isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                    )
+                                }
+                            },
+                            onClick = {
+                                expanded = false
+                                onBranchSelected(branch.name)
+                            },
+                        )
+                    }
                 }
             }
         }

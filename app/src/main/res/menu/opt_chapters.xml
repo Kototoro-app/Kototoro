@@ -28,6 +28,13 @@
 		app:showAsAction="never" />
 
 	<item
+		android:id="@+id/action_merge_repeated_chapters"
+		android:checkable="true"
+		android:orderInCategory="21"
+		android:title="@string/merge_repeated_chapters"
+		app:showAsAction="never" />
+
+	<item
 		android:id="@+id/action_reversed"
 		android:checkable="true"
 		android:orderInCategory="20"

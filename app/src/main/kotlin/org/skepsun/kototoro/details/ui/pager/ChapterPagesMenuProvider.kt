@@ -43,6 +43,10 @@ class ChapterPagesMenuProvider(
 				menu.findItem(R.id.action_reversed)?.isChecked = viewModel.isChaptersReversed.value == true
 				menu.findItem(R.id.action_grid_view)?.isChecked = viewModel.isChaptersInGridView.value == true
 				menu.findItem(R.id.action_hide_read_chapters)?.isChecked = viewModel.isHideReadChapters.value == true
+				menu.findItem(R.id.action_merge_repeated_chapters)?.run {
+					isVisible = viewModel.showMergeRepeatedChapters.value
+					isChecked = viewModel.isMergeRepeatedChapters.value
+				}
 				menu.findItem(R.id.action_downloaded)?.let { menuItem ->
 					menuItem.isVisible = viewModel.mangaDetails.value?.local != null
 					menuItem.isChecked = viewModel.isDownloadedOnly.value == true
@@ -72,6 +76,11 @@ class ChapterPagesMenuProvider(
 
 		R.id.action_hide_read_chapters -> {
 			viewModel.setHideReadChapters(!menuItem.isChecked)
+			true
+		}
+
+		R.id.action_merge_repeated_chapters -> {
+			viewModel.setMergeRepeatedChapters(!menuItem.isChecked)
 			true
 		}
 
