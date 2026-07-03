@@ -3,6 +3,7 @@ package org.skepsun.kototoro.mihon.model
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.toFloatOrNullCompat
 import eu.kanade.tachiyomi.source.online.HttpSource
 import org.skepsun.kototoro.core.model.isAdultTagKeyword
 import org.skepsun.kototoro.parsers.model.ContentRating
@@ -40,37 +41,88 @@ fun SManga.toKotoContent(
     
     // Safely access lateinit properties
     val safeTitle = try { title } catch (e: UninitializedPropertyAccessException) { "Unknown" }
-    val safeGenres = try { getGenres() } catch (e: UninitializedPropertyAccessException) { null }
+    
+    // Try accessing genres property, which falls back to legacy genre property internally
+    val safeGenres = try {
+        genres
+    } catch (e: Exception) {
+        null
+    }
+    
     val safeAuthor = try { author } catch (e: UninitializedPropertyAccessException) { null }
     val safeArtist = try { artist } catch (e: UninitializedPropertyAccessException) { null }
     val safeDescription = try { description } catch (e: UninitializedPropertyAccessException) { null }
     val safeStatus = try { status } catch (e: UninitializedPropertyAccessException) { SManga.UNKNOWN }
+    
+    // Try accessing altTitles
+    val safeAltTitles = try {
+        altTitles.toSet()
+    } catch (e: NoSuchMethodError) {
+        emptySet()
+    }
+    
+    // Try accessing banner cover
+    val safeBanner = try {
+        banner?.let { resolveUrl(baseUrl, it) }
+    } catch (e: NoSuchMethodError) {
+        null
+    }
+    
+    // Parse rating from score
+    val calculatedRating = try {
+        val safeScore = score
+        if (safeScore != null && safeScore > 0) {
+            if (safeScore <= 10) safeScore / 10f
+            else if (safeScore <= 100) safeScore / 100f
+            else RATING_UNKNOWN
+        } else {
+            RATING_UNKNOWN
+        }
+    } catch (e: NoSuchMethodError) {
+        RATING_UNKNOWN
+    }
     
     val generatedId = generateContentId(stableUrl, source.name, safeTitle)
 
     return Content(
         id = generatedId,
         title = safeTitle,
-        altTitles = emptySet(),
+        altTitles = safeAltTitles,
         url = stableUrl,
         publicUrl = if (publicUrl.isNotBlank()) publicUrl else absolutePublicUrl,
-        rating = RATING_UNKNOWN,
+        rating = calculatedRating,
         contentRating = run {
-            val safeTags = setOf("safe", "all ages", "non-h", "sfw", "非h", "正常向", "全年龄", "全年龄向")
-            val isExplicitlySafe = safeGenres?.any { it.lowercase() in safeTags } == true
-            
-            val isContentNsfw = (!isExplicitlySafe && source.isNsfw) || safeGenres?.any { it.isAdultTagKeyword() } == true
-            
-            if (isExplicitlySafe) {
-                ContentRating.SAFE
-            } else if (isContentNsfw) {
-                ContentRating.ADULT
-            } else {
+            val explicitRating = try {
+                when (contentRating) {
+                    SManga.ContentRating.SAFE -> ContentRating.SAFE
+                    SManga.ContentRating.SUGGESTIVE -> ContentRating.SUGGESTIVE
+                    SManga.ContentRating.ADULT -> ContentRating.ADULT
+                    else -> null
+                }
+            } catch (e: NoSuchMethodError) {
                 null
+            }
+            
+            if (source.isNsfw) {
+                ContentRating.ADULT
+            } else if (explicitRating != null) {
+                explicitRating
+            } else {
+                val safeTags = setOf("safe", "all ages", "non-h", "sfw", "非h", "正常向", "全年龄", "全年龄向")
+                val isExplicitlySafe = safeGenres?.any { it.lowercase() in safeTags } == true
+                val isContentNsfw = (!isExplicitlySafe && source.isNsfw) || safeGenres?.any { it.isAdultTagKeyword() } == true
+                
+                if (isExplicitlySafe) {
+                    ContentRating.SAFE
+                } else if (isContentNsfw) {
+                    ContentRating.ADULT
+                } else {
+                    null
+                }
             }
         },
         coverUrl = absoluteThumbnailUrl,
-        largeCoverUrl = absoluteThumbnailUrl, // Also set largeCoverUrl for details page
+        largeCoverUrl = safeBanner ?: absoluteThumbnailUrl,
         tags = safeGenres?.mapNotNull { genreName: String ->
             val clean = genreName.cleanMihonGenre()
             if (clean.isEmpty()) null
@@ -85,7 +137,7 @@ fun SManga.toKotoContent(
             SManga.COMPLETED -> ContentState.FINISHED
             SManga.ON_HIATUS -> ContentState.PAUSED
             SManga.CANCELLED -> ContentState.ABANDONED
-            SManga.LICENSED -> ContentState.RESTRICTED  // Map LICENSED to RESTRICTED
+            SManga.LICENSED -> ContentState.RESTRICTED
             SManga.PUBLISHING_FINISHED -> ContentState.FINISHED
             else -> null
         },
@@ -158,11 +210,24 @@ fun Content.toMihonManga(): SManga {
             ContentState.FINISHED -> SManga.COMPLETED
             ContentState.PAUSED -> SManga.ON_HIATUS
             ContentState.ABANDONED -> SManga.CANCELLED
-            ContentState.RESTRICTED -> SManga.LICENSED  // Map RESTRICTED to LICENSED
+            ContentState.RESTRICTED -> SManga.LICENSED
             else -> SManga.UNKNOWN
         }
         this.thumbnail_url = this@toMihonManga.coverUrl
         this.initialized = true
+        try {
+            this.genres = this@toMihonManga.tags.map { it.title }
+            this.altTitles = this@toMihonManga.altTitles.toList()
+            this.banner = this@toMihonManga.largeCoverUrl
+            this.contentRating = when (this@toMihonManga.contentRating) {
+                ContentRating.SAFE -> SManga.ContentRating.SAFE
+                ContentRating.SUGGESTIVE -> SManga.ContentRating.SUGGESTIVE
+                ContentRating.ADULT -> SManga.ContentRating.ADULT
+                else -> SManga.ContentRating.SAFE
+            }
+        } catch (e: NoSuchMethodError) {
+            // Fallback
+        }
     }
 }
 
@@ -173,19 +238,35 @@ fun Content.toMihonManga(): SManga {
  */
 fun SChapter.toKotoChapter(source: ContentSource, overrideNumber: Float? = null): ContentChapter {
     val chapterId = generateChapterId(url, source.name)
-    val finalNumber = overrideNumber ?: (if (chapter_number >= 0) chapter_number else 0f)
+    val finalNumber = overrideNumber ?: try {
+        number?.toFloatOrNullCompat() ?: (if (chapter_number >= 0) chapter_number else 0f)
+    } catch (e: NoSuchMethodError) {
+        if (chapter_number >= 0) chapter_number else 0f
+    }
     
-    android.util.Log.d("MihonDataConverters", "toKotoChapter: name='$name' url='$url' -> id=$chapterId number=$finalNumber")
+    val finalVolume = try {
+        volume?.toIntOrNull() ?: 0
+    } catch (e: NoSuchMethodError) {
+        0
+    }
+    
+    val finalScanlator = try {
+        scanlators.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: scanlator
+    } catch (e: NoSuchMethodError) {
+        scanlator
+    }
+    
+    android.util.Log.d("MihonDataConverters", "toKotoChapter: name='$name' url='$url' -> id=$chapterId number=$finalNumber volume=$finalVolume")
     
     return ContentChapter(
         id = chapterId,
         title = name.takeIf { it.isNotBlank() },
         number = finalNumber,
-        volume = 0, // Mihon doesn't have volume numbers in SChapter
+        volume = finalVolume,
         url = url,
-        scanlator = scanlator,
+        scanlator = finalScanlator,
         uploadDate = date_upload,
-        branch = scanlator, // Use scanlator as branch for grouping
+        branch = finalScanlator, // Use scanlator as branch for grouping
         source = source,
     )
 }
@@ -200,6 +281,13 @@ fun ContentChapter.toMihonChapter(): SChapter {
         this.chapter_number = this@toMihonChapter.number
         this.date_upload = this@toMihonChapter.uploadDate
         this.scanlator = this@toMihonChapter.scanlator
+        try {
+            this.number = this@toMihonChapter.number.toString()
+            this.volume = this@toMihonChapter.volume.takeIf { it > 0 }?.toString()
+            this.scanlators = this@toMihonChapter.scanlator?.let { listOf(it) } ?: emptyList()
+        } catch (e: NoSuchMethodError) {
+            // Fallback
+        }
     }
 }
 
