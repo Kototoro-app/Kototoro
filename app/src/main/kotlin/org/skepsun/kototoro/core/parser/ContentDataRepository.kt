@@ -487,8 +487,13 @@ class ContentDataRepository @Inject constructor(
 
 	suspend fun updateChapters(manga: Content) {
 		val chapters = manga.chapters
-		if (!chapters.isNullOrEmpty() && manga.id in db.getMangaDao()) {
-			db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
+		if (manga.id in db.getMangaDao()) {
+			if (!chapters.isNullOrEmpty()) {
+				db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
+			}
+			val tags = manga.tags.toEntities()
+			db.getTagsDao().upsert(tags)
+			db.getMangaDao().upsert(manga.toEntity(), tags)
 		}
 	}
 

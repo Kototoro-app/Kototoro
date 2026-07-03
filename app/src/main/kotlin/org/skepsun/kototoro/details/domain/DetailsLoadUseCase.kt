@@ -132,23 +132,40 @@ class DetailsLoadUseCase @Inject constructor(
 		force: Boolean
 	) = coroutineScope {
 		val localContent = localContentRepository.findSavedContent(manga, withDetails = true)
-		val skipNetworkLoad = !force && networkState.isOfflineOrRestricted()
+		val hasCachedDetails = !force && manga.id != 0L && 
+			!manga.chapters.isNullOrEmpty() &&
+			mangaDatabase.getMangaDao().contains(manga.id)
+
+		val skipNetworkLoad = !force && (networkState.isOfflineOrRestricted() || hasCachedDetails)
 		android.util.Log.d(
 			"DetailsLoadUseCase",
-			"loadRemote: mangaId=${manga.id}, localContentChapters=${localContent?.manga?.chapters?.size ?: 0}, skipNetworkLoad=$skipNetworkLoad, force=$force",
+			"loadRemote: mangaId=${manga.id}, localContentChapters=${localContent?.manga?.chapters?.size ?: 0}, skipNetworkLoad=$skipNetworkLoad, hasCachedDetails=$hasCachedDetails, force=$force",
 		)
 
-		if (skipNetworkLoad && localContent != null) {
-			emit(
-				ContentDetails(
-					manga = manga,
-					localContent = localContent,
-					override = override,
-					description = localContent.manga.description?.parseAsHtml(withImages = true),
-					isLoaded = true,
-				),
-			)
-			return@coroutineScope
+		if (skipNetworkLoad) {
+			if (localContent != null) {
+				emit(
+					ContentDetails(
+						manga = manga,
+						localContent = localContent,
+						override = override,
+						description = localContent.manga.description?.parseAsHtml(withImages = true),
+						isLoaded = true,
+					),
+				)
+				return@coroutineScope
+			} else if (hasCachedDetails) {
+				emit(
+					ContentDetails(
+						manga = manga,
+						localContent = null,
+						override = override,
+						description = manga.description?.parseAsHtml(withImages = true),
+						isLoaded = true,
+					),
+				)
+				return@coroutineScope
+			}
 		}
 
 		val remoteDeferred = async {
