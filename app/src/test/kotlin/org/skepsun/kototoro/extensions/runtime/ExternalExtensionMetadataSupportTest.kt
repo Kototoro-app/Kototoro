@@ -102,16 +102,20 @@ class ExternalExtensionMetadataSupportTest {
 	@Test
 	fun `getDeclaredSourceMetadataOrNull returns grouped manifest values`() {
 		val metaData = mockk<Bundle>()
+		every { metaData.containsKey(any()) } returns false
 		every { metaData.getString("source.class") } returns "org.example.Source"
 		every { metaData.getString("source.factory") } returns null
 		every { metaData.getInt("ext.nsfw", 0) } returns 1
 		val emptyMeta = mockk<Bundle>()
+		every { emptyMeta.containsKey(any()) } returns false
 		every { emptyMeta.getString(any()) } returns null
 
 		assertEquals(
 			ExternalExtensionMetadataSupport.DeclaredSourceMetadata(
 				sourceClassName = "org.example.Source",
 				isNsfw = true,
+				contentWarning = null,
+				libVersionOverride = null,
 			),
 			ExternalExtensionMetadataSupport.getDeclaredSourceMetadataOrNull(
 				metaData = metaData,
@@ -128,5 +132,28 @@ class ExternalExtensionMetadataSupportTest {
 				nsfwKey = "ext.nsfw",
 			),
 		)
+	}
+
+	@Test
+	fun `getDeclaredSourceMetadataOrNull handles TachiyomiX 1_6 metadata`() {
+		val metaData = mockk<Bundle>()
+		every { metaData.containsKey(any()) } returns false
+		every { metaData.getString("source.class") } returns "org.example.Source"
+		every { metaData.getString("source.factory") } returns null
+		every { metaData.containsKey("tachiyomix.contentWarning") } returns true
+		every { metaData.getInt("tachiyomix.contentWarning") } returns 2
+		every { metaData.containsKey("tachiyomix.extensionLib") } returns true
+		every { metaData.get("tachiyomix.extensionLib") } returns "1.6"
+
+		val result = ExternalExtensionMetadataSupport.getDeclaredSourceMetadataOrNull(
+			metaData = metaData,
+			sourceClassKey = "source.class",
+			sourceFactoryKey = "source.factory",
+			nsfwKey = "ext.nsfw",
+		)
+		assertEquals("org.example.Source", result?.sourceClassName)
+		assertTrue(result?.isNsfw == true)
+		assertEquals(2, result?.contentWarning)
+		assertEquals(1.6, result?.libVersionOverride)
 	}
 }
