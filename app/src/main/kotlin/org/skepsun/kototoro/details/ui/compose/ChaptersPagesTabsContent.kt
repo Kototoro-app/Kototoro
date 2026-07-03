@@ -103,6 +103,7 @@ fun ChaptersPagesTabsContent(
     onChapterQueryChange: ((String) -> Unit)? = null,
     onChapterSelectionStateChange: (ChapterSelectionUiState?) -> Unit = {},
 	onSelectedTabIdChange: ((Int) -> Unit)? = null,
+	isMergeRepeatedChapters: Boolean = false,
 ) {
 	val mangaDetails by viewModel.mangaDetails.collectAsStateWithLifecycle()
 	val source = mangaDetails?.toContent()?.source
@@ -218,6 +219,7 @@ fun ChaptersPagesTabsContent(
 						detailsPaneState = detailsPaneState,
                         handleSelectionBackPressInternally = handleSelectionBackPressInternally,
                         onChapterSelectionStateChange = onChapterSelectionStateChange,
+						isMergeRepeatedChapters = isMergeRepeatedChapters,
 					)
 					DETAILS_TAB_PAGES -> PagesScreenRoot(
 						activityViewModel = viewModel,
@@ -263,6 +265,7 @@ private fun DetailsChapterPanels(
     detailsPaneState: DetailsPaneState? = null,
     handleSelectionBackPressInternally: Boolean,
     onChapterSelectionStateChange: (ChapterSelectionUiState?) -> Unit,
+	isMergeRepeatedChapters: Boolean,
 ) {
 	val availableModes = remember(metadataChapterTabs, readingChapterTabs) {
 		buildList {
@@ -310,7 +313,7 @@ private fun DetailsChapterPanels(
 			)
 
 			ChapterPanelMode.READING -> {
-				if (readingChapterTabs.size > 1) {
+				if (readingChapterTabs.size > 1 && !isMergeRepeatedChapters) {
 					ChapterSourceTabsRow(
 						tabs = readingChapterTabs,
 						onSelectTab = onSelectReadingChapterTab,
