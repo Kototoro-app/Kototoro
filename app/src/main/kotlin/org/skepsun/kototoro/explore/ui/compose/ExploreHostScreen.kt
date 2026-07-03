@@ -1461,7 +1461,6 @@ private fun SourceQuickAccessCard(
     val iconShape = RoundedCornerShape(if (expressive) 14.dp else if (isGridCard) 14.dp else 12.dp)
     val cardBackground = when {
         isSelected -> MaterialTheme.colorScheme.secondaryContainer
-        expressive -> MaterialTheme.colorScheme.surfaceContainerLow
         else -> MaterialTheme.colorScheme.background
     }
     val iconBackground = MaterialTheme.colorScheme.surfaceVariant.copy(
@@ -1475,17 +1474,6 @@ private fun SourceQuickAccessCard(
                 .height(metrics.cardHeight)
                 .clip(cardShape)
                 .background(cardBackground)
-                .then(
-                    if (expressive && !isSelected) {
-                        Modifier.border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
-                            shape = cardShape,
-                        )
-                    } else {
-                        Modifier
-                    },
-                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
@@ -1548,17 +1536,6 @@ private fun SourceQuickAccessCard(
                 .height(56.dp)
                 .clip(cardShape)
                 .background(cardBackground)
-                .then(
-                    if (expressive && !isSelected) {
-                        Modifier.border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
-                            shape = cardShape,
-                        )
-                    } else {
-                        Modifier
-                    },
-                )
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,

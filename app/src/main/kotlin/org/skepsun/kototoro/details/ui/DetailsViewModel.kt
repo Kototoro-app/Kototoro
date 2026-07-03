@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import org.skepsun.kototoro.core.util.ext.combine as extCombine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
@@ -358,6 +359,8 @@ data class ChaptersPaneControlsUiState(
 	val isChaptersReversed: Boolean = false,
 	val isChaptersInGridView: Boolean = false,
 	val isHideReadChapters: Boolean = false,
+	val isMergeRepeatedChapters: Boolean = false,
+	val showMergeRepeatedChapters: Boolean = false,
 	val isDownloadedOnly: Boolean = false,
 	val emptyReason: EmptyContentReason? = null,
 )
@@ -705,17 +708,21 @@ class DetailsViewModel @Inject constructor(
 		key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
 		valueProducer = { settings.activeSourcePresetId },
 	)
-	val chaptersPaneControlsUiState: StateFlow<ChaptersPaneControlsUiState> = combine(
+	val chaptersPaneControlsUiState: StateFlow<ChaptersPaneControlsUiState> = extCombine(
 		isChaptersReversed,
 		isChaptersInGridView,
 		isHideReadChapters,
+		isMergeRepeatedChapters,
+		showMergeRepeatedChapters,
 		isDownloadedOnly,
 		emptyReason,
-	) { isChaptersReversed, isChaptersInGridView, isHideReadChapters, isDownloadedOnly, emptyReason ->
+	) { isChaptersReversed, isChaptersInGridView, isHideReadChapters, isMergeRepeatedChapters, showMergeRepeatedChapters, isDownloadedOnly, emptyReason ->
 		ChaptersPaneControlsUiState(
 			isChaptersReversed = isChaptersReversed,
 			isChaptersInGridView = isChaptersInGridView,
 			isHideReadChapters = isHideReadChapters,
+			isMergeRepeatedChapters = isMergeRepeatedChapters,
+			showMergeRepeatedChapters = showMergeRepeatedChapters,
 			isDownloadedOnly = isDownloadedOnly,
 			emptyReason = emptyReason,
 		)

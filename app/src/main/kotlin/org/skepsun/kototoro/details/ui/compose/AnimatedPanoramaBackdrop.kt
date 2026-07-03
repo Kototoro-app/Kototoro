@@ -11,12 +11,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
@@ -104,6 +107,7 @@ fun AnimatedPanoramaBackdrop(
     onLoadError: (() -> Unit)? = null,
     fullOpacityAtY: Float? = null,
     fullOpacityFadeDistancePx: Float = 0f,
+    maxHeightPx: Float? = null,
     scrollLinkedTranslationYPx: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
@@ -210,8 +214,21 @@ fun AnimatedPanoramaBackdrop(
     val stablePlaceholderImage = placeholderImage ?: lastResolvedImage
     val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
     var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
-    val backgroundModifier = modifier
-        .fillMaxSize()
+    val boundedMaxHeightPx = maxHeightPx?.takeIf { it.isFinite() }
+    val backdropBoundsModifier = if (boundedMaxHeightPx != null) {
+        modifier
+            .fillMaxWidth()
+            .height(with(density) { boundedMaxHeightPx.coerceAtLeast(1f).toDp() })
+            .clipToBounds()
+    } else {
+        modifier.fillMaxSize()
+    }
+    val scrimModifier = if (fullOpacityAtY != null && fullOpacityAtY.isFinite()) {
+        modifier.fillMaxSize()
+    } else {
+        backdropBoundsModifier
+    }
+    val backgroundModifier = backdropBoundsModifier
         .then(
             if (useRealtimeBlur) {
                 Modifier.blur(
@@ -259,8 +276,7 @@ fun AnimatedPanoramaBackdrop(
         )
     }
     Box(
-        modifier = modifier
-            .fillMaxSize()
+        modifier = scrimModifier
             .background(
                 if (fullOpacityAtY != null && fullOpacityAtY.isFinite()) {
                     Brush.verticalGradient(
