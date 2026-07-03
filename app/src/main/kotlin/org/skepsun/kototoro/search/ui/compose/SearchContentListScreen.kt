@@ -785,6 +785,12 @@ fun AppSearchContentListRoute(
                                     showTagsCatalog = groupTitle to excludeMode
                                 },
                                 modifier = Modifier.fillMaxHeight(),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp,
+                                    top = statusBarTopPadding,
+                                    end = 16.dp,
+                                    bottom = 12.dp,
+                                ),
                                 savedFilters = savedFiltersProperty,
                                 isSaveEnabled = isFilterSaveEnabled,
                                 onToggleSavedFilter = viewModel.filterCoordinator::toggleSavedFilter,
@@ -1876,6 +1882,7 @@ private fun SearchFilterPanel(
     onOpenTagCatalog: (String?, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     fillAvailableHeight: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     savedFilters: FilterProperty<PersistableFilter> = FilterProperty.EMPTY,
     isSaveEnabled: Boolean = false,
     onToggleSavedFilter: (PersistableFilter) -> Unit = {},
@@ -1896,7 +1903,7 @@ private fun SearchFilterPanel(
         modifier = modifier
             .then(if (fillAvailableHeight) Modifier.fillMaxHeight() else Modifier)
             .verticalScroll(scrollState)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(

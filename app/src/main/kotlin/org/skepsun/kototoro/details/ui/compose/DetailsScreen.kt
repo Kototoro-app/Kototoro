@@ -717,20 +717,25 @@ fun DetailsScreen(
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
     val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val shouldApplyPanoramaScrollFade = panoramaPrefs.limitToInfoCardMidpoint && !panoramaPrefs.isScrollLinkedEnabled
-    val panoramaFullOpacityAtY = if (shouldApplyPanoramaScrollFade && infoCardMidPx.isFinite()) {
+    val shouldLimitPanoramaToInfoCardMidpoint = panoramaPrefs.limitToInfoCardMidpoint && infoCardMidPx.isFinite()
+    val panoramaFullOpacityAtY = if (shouldLimitPanoramaToInfoCardMidpoint) {
         infoCardMidPx
     } else {
         null
     }
     val panoramaFullOpacityFadeDistancePx = if (
-        shouldApplyPanoramaScrollFade &&
+        shouldLimitPanoramaToInfoCardMidpoint &&
         infoCardTopPx.isFinite() &&
         infoCardMidPx.isFinite()
     ) {
         (infoCardMidPx - infoCardTopPx).coerceAtLeast(with(density) { 48.dp.toPx() })
     } else {
         0f
+    }
+    val panoramaMaxHeightPx = if (shouldLimitPanoramaToInfoCardMidpoint) {
+        infoCardMidPx
+    } else {
+        null
     }
     val panoramaScrollLinkedTranslationPx = if (panoramaPrefs.isScrollLinkedEnabled) {
         if (isWideAdaptiveLayout) {
@@ -824,6 +829,7 @@ fun DetailsScreen(
                             },
                             fullOpacityAtY = panoramaFullOpacityAtY,
                             fullOpacityFadeDistancePx = panoramaFullOpacityFadeDistancePx,
+                            maxHeightPx = panoramaMaxHeightPx,
                             scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
                             modifier = Modifier,
                         )

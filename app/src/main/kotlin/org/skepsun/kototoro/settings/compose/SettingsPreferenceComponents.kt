@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -80,17 +80,7 @@ fun SettingsPreferenceSection(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
-        if (expressive) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-            ) {
-                Column(content = { content() })
-            }
-        } else {
-            content()
-        }
+        content()
     }
 }
 
@@ -914,10 +904,7 @@ fun SettingsReorderPreference(
 @Composable
 fun SettingsSectionDivider() {
     if (LocalMaterialExpressiveComponentsEnabled.current) {
-        HorizontalDivider(
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
-        )
+        Spacer(modifier = Modifier.height(2.dp))
     } else {
         HorizontalDivider(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp),
@@ -933,7 +920,13 @@ private fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
         .alpha(if (enabled) 1f else 0.5f)
         .then(
             if (expressive) {
-                Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                Modifier
+                    .padding(horizontal = 8.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(18.dp),
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
             } else {
                 Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
             },
