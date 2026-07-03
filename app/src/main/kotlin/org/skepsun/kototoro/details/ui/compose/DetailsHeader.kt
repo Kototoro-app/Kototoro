@@ -198,6 +198,7 @@ fun DetailsHeader(
     coverUrl: String?,
     fallbackCoverUrl: String?,
     sharedElementKey: String? = null,
+    showWorkActions: Boolean = true,
     onInfoCardBoundsSync: (Float, Float) -> Unit,
     onCoverClick: (String?) -> Unit,
     onFavoriteClick: () -> Unit,
@@ -502,18 +503,20 @@ fun DetailsHeader(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    DetailsHeaderIconButton(
-                        iconRes = if (isFavourite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
-                        onClick = onFavoriteClick,
-                        filled = isFavourite,
-                    )
-                    DetailsHeaderIconButton(
-                        iconRes = R.drawable.ic_timeline,
-                        onClick = onReadingRecordClick,
-                        onLongClick = {
-                            Toast.makeText(context, R.string.reading_record, Toast.LENGTH_SHORT).show()
-                        },
-                    )
+                    if (showWorkActions) {
+                        DetailsHeaderIconButton(
+                            iconRes = if (isFavourite) R.drawable.ic_heart else R.drawable.ic_heart_outline,
+                            onClick = onFavoriteClick,
+                            filled = isFavourite,
+                        )
+                        DetailsHeaderIconButton(
+                            iconRes = R.drawable.ic_timeline,
+                            onClick = onReadingRecordClick,
+                            onLongClick = {
+                                Toast.makeText(context, R.string.reading_record, Toast.LENGTH_SHORT).show()
+                            },
+                        )
+                    }
                     if (showCommentsAction) {
                         DetailsHeaderIconButton(
                             iconRes = R.drawable.ic_comment,
@@ -550,7 +553,9 @@ fun DetailsHeader(
             }
         }
 
-        val showInfoCard = metadataSourceOptions.isNotEmpty() || readingSourceOptions.isNotEmpty() || infoItems.isNotEmpty()
+        val showInfoCard = metadataSourceOptions.isNotEmpty() ||
+            (showWorkActions && readingSourceOptions.isNotEmpty()) ||
+            infoItems.isNotEmpty()
         if (showInfoCard) {
             DetailsInfoPanelSurface(
                 modifier = Modifier
@@ -566,7 +571,7 @@ fun DetailsHeader(
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    if (metadataSourceOptions.isNotEmpty() || readingSourceOptions.isNotEmpty()) {
+                    if (metadataSourceOptions.isNotEmpty() || (showWorkActions && readingSourceOptions.isNotEmpty())) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -603,41 +608,45 @@ fun DetailsHeader(
                             } else {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
-                            DetailsSourceSelectorButton(
-                                label = stringResource(R.string.details_current_projection),
-                                currentDisplayModel = readingSourceOption?.resolveDisplayModel(
-                                    role = DetailsSourceRole.READING_PROJECTION,
-                                    currentContent = content,
-                                    linkedTrackingItem = null,
-                                    strings = DetailsSourceDisplayStrings(
-                                        unavailableText = stringResource(R.string.details_reading_source_unavailable),
-                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                        currentProjectionLabel = stringResource(readingSourceLabelRes),
-                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                            if (showWorkActions) {
+                                DetailsSourceSelectorButton(
+                                    label = stringResource(R.string.details_current_projection),
+                                    currentDisplayModel = readingSourceOption?.resolveDisplayModel(
+                                        role = DetailsSourceRole.READING_PROJECTION,
+                                        currentContent = content,
+                                        linkedTrackingItem = null,
+                                        strings = DetailsSourceDisplayStrings(
+                                            unavailableText = stringResource(R.string.details_reading_source_unavailable),
+                                            metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                            currentProjectionLabel = stringResource(readingSourceLabelRes),
+                                            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
+                                        ),
+                                        isSelected = true,
                                     ),
-                                    isSelected = true,
-                                ),
-                                onPrimaryClick = {
-                                    when {
-                                        readingSourceOption?.source != null -> onSourceClick(readingSourceOption.source)
-                                        readingSourceOption?.trackingService != null -> onTrackingSourceClick(readingSourceOption)
-                                    }
-                                },
-                                isMenuEnabled = true,
-                                onMenuClick = onOpenReadingSourceSheet,
-                                modifier = Modifier.weight(1f),
-                            )
+                                    onPrimaryClick = {
+                                        when {
+                                            readingSourceOption?.source != null -> onSourceClick(readingSourceOption.source)
+                                            readingSourceOption?.trackingService != null -> onTrackingSourceClick(readingSourceOption)
+                                        }
+                                    },
+                                    isMenuEnabled = true,
+                                    onMenuClick = onOpenReadingSourceSheet,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
                     }
-                    UnifiedTrackingRow(
-                        rating = unifiedRating,
-                        canEditRating = canEditUnifiedRating,
-                        status = readingStatus,
-                        scrobblingStatuses = scrobblingStatuses,
-                        linkedTrackingItems = linkedTrackingItems,
-                        onUpdateRating = onUpdateUnifiedRating,
-                        onUpdateStatus = onUpdateReadingStatus,
-                    )
+                    if (showWorkActions) {
+                        UnifiedTrackingRow(
+                            rating = unifiedRating,
+                            canEditRating = canEditUnifiedRating,
+                            status = readingStatus,
+                            scrobblingStatuses = scrobblingStatuses,
+                            linkedTrackingItems = linkedTrackingItems,
+                            onUpdateRating = onUpdateUnifiedRating,
+                            onUpdateStatus = onUpdateReadingStatus,
+                        )
+                    }
                     if (infoItems.isNotEmpty()) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 4.dp),

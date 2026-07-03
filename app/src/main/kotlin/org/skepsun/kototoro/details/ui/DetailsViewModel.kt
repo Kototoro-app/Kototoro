@@ -353,6 +353,7 @@ data class DetailsPrimaryUiState(
 	val isLoading: Boolean = false,
 	val entityRelationSections: List<EntityRelationSection> = emptyList(),
 	val activeLocalBrowserContent: Content? = null,
+	val isWorkDetails: Boolean = true,
 )
 
 data class ChaptersPaneControlsUiState(
@@ -782,6 +783,7 @@ class DetailsViewModel @Inject constructor(
 	}.stateIn(viewModelScope, SharingStarted.Eagerly, SourceBindingUiState())
 	val showTranslateAction = MutableStateFlow(false)
 	val activeLocalBrowserContent = MutableStateFlow<Content?>(null)
+	private val isWorkDetails = MutableStateFlow(initialIsWorkDetails())
 	private val allEnabledSourceInfos = MutableStateFlow<List<ContentSourceInfo>>(emptyList())
 	private val activeSourcePreset = settings.observeAsFlow(
 		AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
@@ -866,6 +868,12 @@ class DetailsViewModel @Inject constructor(
 			remoteId = trackingOrigin.remoteId,
 			url = trackingOrigin.url,
 		)
+	}
+
+	private fun initialIsWorkDetails(): Boolean {
+		val origin = activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity
+			?: return true
+		return origin.entityTypeName == EntityType.WORK.name
 	}
 
 	private fun isTrackingOriginSelectionPinned(): Boolean {
@@ -1052,6 +1060,22 @@ class DetailsViewModel @Inject constructor(
 			selectedReadingSearchSource.value = null
 			readingSearchFilterState.value = ReadingSearchFilterState()
 		}
+	}
+
+	private fun maybeAutoSearchReadingSourcesForTrackingWork() {
+		if (activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingItem) {
+			return
+		}
+		if (!allEnabledSourcesLoaded || !isWorkDetails.value || activeLocalSourceOptions.value.isNotEmpty()) {
+			return
+		}
+		val canRetryEmptySearch = readingSearchHasSearched.value &&
+			readingSearchSections.value.isEmpty() &&
+			readingSearchSources.value.isNotEmpty()
+		if ((readingSearchHasSearched.value && !canRetryEmptySearch) || readingSearchLoading.value) {
+			return
+		}
+		searchReadingBindings()
 	}
 
 	private fun List<ContentSourceInfo>.filterByPreset(
@@ -1390,6 +1414,7 @@ class DetailsViewModel @Inject constructor(
 		populateSyntheticHeader: Boolean,
 	) {
 		val entity = entityGraphRepository.getEntity(entityId) ?: return
+		isWorkDetails.value = entity.type == EntityType.WORK
 		val entityTrackingDetails = if (populateSyntheticHeader) {
 			loadEntityTrackingDetails(entity)
 		} else {
@@ -1419,6 +1444,17 @@ class DetailsViewModel @Inject constructor(
 			syncDisplayedState()
 		}
 		val bindings = entityGraphRepository.getBindings(entityId)
+		if (entity.type != EntityType.WORK) {
+			activeLocalSourceOptions.value = emptyList()
+			sessionReadingProjectionLocalMangaId.value = null
+			updateSourceOptions()
+			entityChapterSourceInfo.value = null
+			if (!isTrackingOriginSelectionPinned()) {
+				restoreEntityMetadataSourceSelection(entityId = entityId)
+			}
+			submitEntityRelationSections(buildEntityRelationSections(entityId))
+			return
+		}
 		val persistedPreferredLocalId = workResolver.selectPreferredProjection(entityId)
 		val requestedProjectionLocalId = initialProjectionLocalMangaId?.takeIf { projectionId ->
 			bindings.any { binding ->
@@ -1524,6 +1560,7 @@ class DetailsViewModel @Inject constructor(
 				allEnabledSourceInfos.value = sources
 				refreshReadingSearchSources()
 				allEnabledSourcesLoaded = true
+				maybeAutoSearchReadingSourcesForTrackingWork()
 			}
 		}
 
@@ -1592,6 +1629,7 @@ class DetailsViewModel @Inject constructor(
 				val entityType = runCatching {
 					EntityType.valueOf(activeExternalOrigin.entityTypeName)
 				}.getOrNull() ?: return@launchJob
+				isWorkDetails.value = entityType == EntityType.WORK
 				val cached = trackingSiteCacheRepository.readEntityDetails(
 					service = service,
 					entityType = entityType,
@@ -2330,6 +2368,7 @@ class DetailsViewModel @Inject constructor(
 		)
 		updateSourceOptions()
 		refreshReadingSearchSources()
+		maybeAutoSearchReadingSourcesForTrackingWork()
 		updateSupplementalDetailsState(supplementalTrackingDetails)
 		refreshResolvedPresentationState()
 		if (activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph) {
@@ -2605,11 +2644,14 @@ class DetailsViewModel @Inject constructor(
 									stableKey = "tracking:${details.service.id}:character:${character.id}",
 									name = character.name,
 									coverUrl = character.coverUrl.normalizedImageUrl(),
+									type = EntityType.CHARACTER,
 									subtitle = character.role?.takeIf { it.isNotBlank() },
 									supportingText = buildTrackingCharacterVoiceActorsText(character),
 									detailLines = character.voiceActors
 										.mapNotNull { it.name.takeIf(String::isNotBlank) }
 										.distinct(),
+									trackingService = details.service.takeIf { character.id > 0L },
+									remoteId = character.id.takeIf { it > 0L },
 									url = character.url,
 								)
 							}.distinctBy(EntityRelationItem::stableKey),
@@ -3240,7 +3282,8 @@ class DetailsViewModel @Inject constructor(
 		detailsPaneSummaryUiState,
 		entityRelationSections,
 		relatedContent,
-	) { header, pane, entityRelationSections, relatedContent ->
+		isWorkDetails,
+	) { header, pane, entityRelationSections, relatedContent, isWorkDetails ->
 		DetailsPrimaryUiState(
 			mangaDetails = header.mangaDetails,
 			remoteContent = pane.remoteContent,
@@ -3257,6 +3300,7 @@ class DetailsViewModel @Inject constructor(
 			isLoading = pane.isLoading,
 			entityRelationSections = entityRelationSections,
 			activeLocalBrowserContent = pane.activeLocalBrowserContent,
+			isWorkDetails = isWorkDetails,
 		)
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, DetailsPrimaryUiState())
 
@@ -3633,6 +3677,7 @@ class DetailsViewModel @Inject constructor(
 							stableKey = "tracking:${details.service.id}:${work.id}:entity-person",
 							name = work.title,
 							coverUrl = work.coverUrl.normalizedImageUrl(),
+							type = if (isCharacterLikeSection) EntityType.CHARACTER else EntityType.WORK,
 							trackingService = when {
 								!isCharacterLikeSection -> details.service
 								supportsCharacterDetails && work.id > 0L -> details.service
@@ -3673,6 +3718,7 @@ class DetailsViewModel @Inject constructor(
 							stableKey = "tracking:${details.service.id}:character-actor:${actor.id}:$index",
 							name = actor.title,
 							coverUrl = actor.coverUrl.normalizedImageUrl(),
+							type = EntityType.PERSON,
 							trackingService = details.service.takeIf { actor.id > 0L },
 							remoteId = actor.id.takeIf { it > 0L },
 							subtitle = actor.relationship,
@@ -3691,6 +3737,7 @@ class DetailsViewModel @Inject constructor(
 							stableKey = "tracking:${details.service.id}:${work.id}:entity-character",
 							name = work.title,
 							coverUrl = work.coverUrl.normalizedImageUrl(),
+							type = EntityType.WORK,
 							trackingService = details.service,
 							remoteId = work.id,
 							subtitle = work.relationship,

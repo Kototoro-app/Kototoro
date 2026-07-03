@@ -295,6 +295,8 @@ fun DetailsScreen(
     val isLoading = detailsPrimaryUiState.isLoading
     val entityRelationSections = detailsPrimaryUiState.entityRelationSections
     val activeLocalBrowserContent = detailsPrimaryUiState.activeLocalBrowserContent
+    val isWorkDetails = detailsPrimaryUiState.isWorkDetails
+    val isWorkActionEnabled = isWorkDetails && !isTemporaryReadOnly
     val isChaptersReversed = chaptersPaneControlsUiState.isChaptersReversed
     val isChaptersInGridView = chaptersPaneControlsUiState.isChaptersInGridView
     val isHideReadChapters = chaptersPaneControlsUiState.isHideReadChapters
@@ -414,8 +416,8 @@ fun DetailsScreen(
             viewModel.searchMetadataBindings()
         }
     }
-    LaunchedEffect(showReadingSourceDialog) {
-        if (showReadingSourceDialog && !readingSearchHasSearched && !readingSearchLoading) {
+    LaunchedEffect(showReadingSourceDialog, isWorkDetails) {
+        if (showReadingSourceDialog && isWorkDetails && !readingSearchHasSearched && !readingSearchLoading) {
             viewModel.searchReadingBindings()
         }
     }
@@ -692,7 +694,10 @@ fun DetailsScreen(
             }
         }
     }
-    val handleActionClick: (DetailsAction) -> Unit = { action ->
+    val handleActionClick: (DetailsAction) -> Unit = handleDetailsAction@{ action ->
+        if (!isWorkActionEnabled && action.isWorkOnlyAction()) {
+            return@handleDetailsAction
+        }
         when (action) {
             DetailsAction.ToggleList -> {
                 openPaneTab(DETAILS_TAB_CHAPTERS)
@@ -710,9 +715,51 @@ fun DetailsScreen(
                 showReadingRecordSheet = true
             }
             DetailsAction.OpenAlternatives -> {
-                showReadingSourceDialog = true
+                if (isWorkActionEnabled) showReadingSourceDialog = true
             }
             else -> onActionClick(action)
+        }
+    }
+    val openEntityRelationItem: (EntityRelationItem) -> Unit = { item ->
+        val entityType = item.type
+        val service = item.trackingService
+        val remoteId = item.remoteId
+        when {
+            entityType == org.skepsun.kototoro.entitygraph.domain.EntityType.WORK && item.entityId != null -> {
+                appRouter.openEntityDetails(
+                    entityId = item.entityId,
+                    service = service,
+                    remoteId = remoteId,
+                    url = item.url,
+                )
+            }
+            entityType != null &&
+                entityType != org.skepsun.kototoro.entitygraph.domain.EntityType.WORK &&
+                service != null &&
+                remoteId != null -> {
+                appRouter.openTrackingEntityDetails(
+                    service = service,
+                    entityType = entityType,
+                    remoteId = remoteId,
+                    name = item.name,
+                    coverUrl = item.coverUrl,
+                    url = item.url,
+                )
+            }
+            service != null && remoteId != null -> {
+                handleActionClick(DetailsAction.OpenTrackingDetails(service, remoteId, item.url))
+            }
+            item.entityId != null -> {
+                appRouter.openEntityDetails(
+                    entityId = item.entityId,
+                    service = service,
+                    remoteId = remoteId,
+                    url = item.url,
+                )
+            }
+            !item.url.isNullOrBlank() -> {
+                handleActionClick(DetailsAction.OpenWebUrl(item.url))
+            }
         }
     }
 
@@ -926,18 +973,19 @@ fun DetailsScreen(
                                             modifier = Modifier.size(DetailsTopActionIconSize),
                                         )
                                     }
-                                    DetailsChromeButton(
-                                        onClick = {
-                                            handleActionClick(DetailsAction.Download)
-                                            showDownloadDialog = true
-                                        },
-                                        modifier = Modifier.size(DetailsTopCompactActionButtonSize),
-                                    ) {
-                                        Icon(
-                                            painter = rememberSafePainter(R.drawable.ic_download),
-                                            contentDescription = stringResource(R.string.download),
-                                            modifier = Modifier.size(DetailsTopActionIconSize),
-                                        )
+                                    if (isWorkActionEnabled) {
+                                        DetailsChromeButton(
+                                            onClick = {
+                                                handleActionClick(DetailsAction.Download)
+                                            },
+                                            modifier = Modifier.size(DetailsTopCompactActionButtonSize),
+                                        ) {
+                                            Icon(
+                                                painter = rememberSafePainter(R.drawable.ic_download),
+                                                contentDescription = stringResource(R.string.download),
+                                                modifier = Modifier.size(DetailsTopActionIconSize),
+                                            )
+                                        }
                                     }
                                     DetailsOverflowMenu(
                                         contentTitle = content?.title,
@@ -945,18 +993,18 @@ fun DetailsScreen(
                                         hasTranslationCache = hasTranslationCache,
                                         isShowingTranslation = isShowingTranslation,
                                         isTranslating = isTranslating,
-                                        isStatsAvailable = isStatsAvailable,
+                                        isStatsAvailable = isWorkActionEnabled && isStatsAvailable,
                                         hasMetadataBrowserTarget = metadataBrowserTarget != null,
-                                        hasLocalBrowserTarget = localBrowserTarget != null,
+                                        hasLocalBrowserTarget = isWorkActionEnabled && localBrowserTarget != null,
                                         localBrowserTitleRes = when (contentType) {
                                             ContentType.VIDEO,
                                             ContentType.HENTAI_VIDEO -> R.string.open_playback_page_in_browser
                                             else -> R.string.open_reading_page_in_browser
                                         },
-                                        hasOnlineVariant = remoteContent != null,
-                                        isDeleteLocalAvailable = content?.source == LocalMangaSource,
-                                        isEditOverrideAvailable = content != null,
-                                        isShortcutSupported = isShortcutSupported && content != null,
+                                        hasOnlineVariant = isWorkActionEnabled && remoteContent != null,
+                                        isDeleteLocalAvailable = isWorkActionEnabled && content?.source == LocalMangaSource,
+                                        isEditOverrideAvailable = isWorkActionEnabled && content != null,
+                                        isShortcutSupported = isWorkActionEnabled && isShortcutSupported && content != null,
                                         isNsfw = content?.isNsfw() == true,
                                         onDeleteLocalRequest = { handleActionClick(DetailsAction.DeleteLocal) },
                                         onActionClick = { action ->
@@ -1068,6 +1116,7 @@ fun DetailsScreen(
                                     showReviewsAction = supplementalReviews.isNotEmpty(),
                                     content = content,
                                     isTemporaryReadOnly = isTemporaryReadOnly,
+                                    isWorkDetails = isWorkDetails,
                                     sharedElementKey = sharedElementKey,
                                     pendingTagSearch = { pendingTagSearch = it },
                                     pendingAuthorSearch = { author, source ->
@@ -1093,7 +1142,7 @@ fun DetailsScreen(
                                         if (!isTemporaryReadOnly) showMetadataSourceDialog = true
                                     },
                                     onOpenReadingSourceSheet = {
-                                        if (!isTemporaryReadOnly) showReadingSourceDialog = true
+                                        if (isWorkActionEnabled) showReadingSourceDialog = true
                                     },
                                     onUpdateLinkedTrackingStatus = { linked, status ->
                                         viewModel.updateScrobbling(
@@ -1104,77 +1153,69 @@ fun DetailsScreen(
                                     },
                                     onUpdateReadingStatus = viewModel::updateUnifiedReadingStatus,
                                     onUpdateUnifiedRating = viewModel::updateUnifiedRating,
-                                    onEntityClick = { item ->
-                                        val entityId = item.entityId
-                                        if (entityId != null) {
-                                            appRouter.openEntityDetails(
-                                                entityId = entityId,
-                                                service = item.trackingService,
-                                                remoteId = item.remoteId,
-                                                url = item.url,
-                                            )
-                                        }
-                                    },
+                                    onEntityClick = openEntityRelationItem,
                                     onActionClick = handleActionClick,
                                 )
                             }
                         }
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .weight(1f)
-                                .padding(top = statusBarTopPadding),
-                            color = Color.Transparent,
-                            shape = RoundedCornerShape(28.dp),
-                            tonalElevation = 0.dp,
-                        ) {
-                            DetailsPaneContent(
-                                detailsPaneState = detailsPaneState,
-                                contentType = contentType,
-                                historyInfo = historyInfo,
-                                branches = branches,
-                                isLoading = isLoading,
-                                viewModel = viewModel,
-                                pagesViewModel = pagesViewModel,
-                                bookmarksViewModel = bookmarksViewModel,
-                                settings = settings,
-                                appRouter = appRouter,
-                                pageSaveHelper = pageSaveHelper,
-                                metadataChapterTabs = metadataChapterTabs,
-                                readingChapterTabs = readingChapterTabs,
-                                onSelectMetadataChapterTab = { tab ->
-                                    val matchingOption = metadataSourceOptions.firstOrNull { option -> option.key == tab.key }
-                                        ?: return@DetailsPaneContent
-                                    viewModel.selectMetadataSource(matchingOption)
-                                },
-                                onSelectReadingChapterTab = { tab ->
-                                    tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
-                                },
-                                selectedTabId = sheetTabSelection,
-                                availableTabIds = availableTabIds,
-                                isSheetFullyExpanded = false,
-                                sheetExpansionProgress = 0f,
-                                isChapterSearchAvailable = chapterEmptyReason == null,
-                                isChaptersReversed = isChaptersReversed,
-                                isChaptersInGridView = isChaptersInGridView,
-                                isHideReadChapters = isHideReadChapters,
-                                isMergeRepeatedChapters = isMergeRepeatedChapters,
-                                showMergeRepeatedChapters = showMergeRepeatedChapters,
-                                isDownloadedOnly = isDownloadedOnly,
-                                isDownloadedFilterVisible = mangaDetails?.local != null,
-                                pageGridSizeValue = pageGridSizeValue,
-                                onChapterQueryChange = updateChapterQuery,
-                                onChapterSearchToggle = toggleChapterSearch,
-                                onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
-                                onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
-                                onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
-                                onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
-                                onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
-                                onPageGridSizeChange = updatePageGridSize,
-                                showCollapsedHandle = false,
-                                onSelectedTabIdChange = persistSelectedPaneTab,
-                                onActionClick = handleActionClick,
-                            )
+                        if (isWorkDetails) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .weight(1f)
+                                    .padding(top = statusBarTopPadding),
+                                color = Color.Transparent,
+                                shape = RoundedCornerShape(28.dp),
+                                tonalElevation = 0.dp,
+                            ) {
+                                DetailsPaneContent(
+                                    detailsPaneState = detailsPaneState,
+                                    contentType = contentType,
+                                    historyInfo = historyInfo,
+                                    branches = branches,
+                                    isLoading = isLoading,
+                                    viewModel = viewModel,
+                                    pagesViewModel = pagesViewModel,
+                                    bookmarksViewModel = bookmarksViewModel,
+                                    settings = settings,
+                                    appRouter = appRouter,
+                                    pageSaveHelper = pageSaveHelper,
+                                    metadataChapterTabs = metadataChapterTabs,
+                                    readingChapterTabs = readingChapterTabs,
+                                    onSelectMetadataChapterTab = { tab ->
+                                        val matchingOption = metadataSourceOptions.firstOrNull { option -> option.key == tab.key }
+                                            ?: return@DetailsPaneContent
+                                        viewModel.selectMetadataSource(matchingOption)
+                                    },
+                                    onSelectReadingChapterTab = { tab ->
+                                        tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
+                                    },
+                                    selectedTabId = sheetTabSelection,
+                                    availableTabIds = availableTabIds,
+                                    isSheetFullyExpanded = false,
+                                    sheetExpansionProgress = 0f,
+                                    isChapterSearchAvailable = chapterEmptyReason == null,
+                                    isChaptersReversed = isChaptersReversed,
+                                    isChaptersInGridView = isChaptersInGridView,
+                                    isHideReadChapters = isHideReadChapters,
+                                    isMergeRepeatedChapters = isMergeRepeatedChapters,
+                                    showMergeRepeatedChapters = showMergeRepeatedChapters,
+                                    isDownloadedOnly = isDownloadedOnly,
+                                    isDownloadedFilterVisible = mangaDetails?.local != null,
+                                    pageGridSizeValue = pageGridSizeValue,
+                                    onChapterQueryChange = updateChapterQuery,
+                                    onChapterSearchToggle = toggleChapterSearch,
+                                    onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
+                                    onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
+                                    onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
+                                    onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
+                                    onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
+                                    onPageGridSizeChange = updatePageGridSize,
+                                    showCollapsedHandle = false,
+                                    onSelectedTabIdChange = persistSelectedPaneTab,
+                                    onActionClick = handleActionClick,
+                                )
+                            }
                         }
                     }
                 }
@@ -1208,7 +1249,7 @@ fun DetailsScreen(
                                 scrollState = scrollState,
                                 contentPadding = paddingValues,
                                 headerTopSpacing = detailsHeaderTopSpacing,
-                                bottomSpacerHeight = compactPaneCollapsedHeight + 28.dp,
+                                bottomSpacerHeight = if (isWorkDetails) compactPaneCollapsedHeight + 28.dp else 28.dp,
                                 preferLightweightFirstFrame = false,
                                 mangaDetails = mangaDetails,
                                 favouriteCategories = favouriteCategories,
@@ -1246,6 +1287,7 @@ fun DetailsScreen(
                                 showReviewsAction = supplementalReviews.isNotEmpty(),
                                 content = content,
                                 isTemporaryReadOnly = isTemporaryReadOnly,
+                                isWorkDetails = isWorkDetails,
                                 sharedElementKey = sharedElementKey,
                                 pendingTagSearch = { pendingTagSearch = it },
                                 pendingAuthorSearch = { author, source ->
@@ -1271,7 +1313,7 @@ fun DetailsScreen(
                                     if (!isTemporaryReadOnly) showMetadataSourceDialog = true
                                 },
                                 onOpenReadingSourceSheet = {
-                                    if (!isTemporaryReadOnly) showReadingSourceDialog = true
+                                    if (isWorkActionEnabled) showReadingSourceDialog = true
                                 },
                                 onUpdateLinkedTrackingStatus = { linked, status ->
                                     viewModel.updateScrobbling(
@@ -1282,77 +1324,69 @@ fun DetailsScreen(
                                 },
                                 onUpdateReadingStatus = viewModel::updateUnifiedReadingStatus,
                                 onUpdateUnifiedRating = viewModel::updateUnifiedRating,
-                                onEntityClick = { item ->
-                                    val entityId = item.entityId
-                                    if (entityId != null) {
-                                        appRouter.openEntityDetails(
-                                            entityId = entityId,
-                                            service = item.trackingService,
-                                            remoteId = item.remoteId,
-                                            url = item.url,
-                                        )
-                                    }
-                                },
+                                onEntityClick = openEntityRelationItem,
                                 onActionClick = handleActionClick,
                             )
                         }
                     }
                 }
-                DetailsPaneHost(
-                    state = detailsPaneState,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                ) {
-                    DetailsPaneContent(
-                        detailsPaneState = detailsPaneState,
+                if (isWorkDetails) {
+                    DetailsPaneHost(
+                        state = detailsPaneState,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(compactPaneHeight),
-                        contentType = contentType,
-                        historyInfo = historyInfo,
-                        branches = branches,
-                        isLoading = isLoading,
-                        viewModel = viewModel,
-                        pagesViewModel = pagesViewModel,
-                        bookmarksViewModel = bookmarksViewModel,
-                        settings = settings,
-                        appRouter = appRouter,
-                        pageSaveHelper = pageSaveHelper,
-                        metadataChapterTabs = metadataChapterTabs,
-                        readingChapterTabs = readingChapterTabs,
-                        onSelectMetadataChapterTab = { tab ->
-                            val matchingOption = metadataSourceOptions.firstOrNull { option -> option.key == tab.key } ?: return@DetailsPaneContent
-                            viewModel.selectMetadataSource(matchingOption)
-                        },
-                        onSelectReadingChapterTab = { tab ->
-                            tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
-                        },
-                        selectedTabId = sheetTabSelection,
-                        availableTabIds = availableTabIds,
-                        isSheetFullyExpanded = isCompactPaneFullyExpanded,
-                        sheetExpansionProgress = compactSheetExpansionProgress,
-                        isChapterSearchAvailable = chapterEmptyReason == null,
-                        isChaptersReversed = isChaptersReversed,
-                        isChaptersInGridView = isChaptersInGridView,
-                        isHideReadChapters = isHideReadChapters,
-                        isMergeRepeatedChapters = isMergeRepeatedChapters,
-                        showMergeRepeatedChapters = showMergeRepeatedChapters,
-                        isDownloadedOnly = isDownloadedOnly,
-                        isDownloadedFilterVisible = mangaDetails?.local != null,
-                        pageGridSizeValue = pageGridSizeValue,
-                        onChapterQueryChange = updateChapterQuery,
-                        onChapterSearchToggle = toggleChapterSearch,
-                        onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
-                        onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
-                        onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
-                        onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
-                        onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
-                        onPageGridSizeChange = updatePageGridSize,
-                        showCollapsedHandle = true,
-                        onSelectedTabIdChange = persistSelectedPaneTab,
-                        onActionClick = handleActionClick,
-                    )
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth(),
+                    ) {
+                        DetailsPaneContent(
+                            detailsPaneState = detailsPaneState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(compactPaneHeight),
+                            contentType = contentType,
+                            historyInfo = historyInfo,
+                            branches = branches,
+                            isLoading = isLoading,
+                            viewModel = viewModel,
+                            pagesViewModel = pagesViewModel,
+                            bookmarksViewModel = bookmarksViewModel,
+                            settings = settings,
+                            appRouter = appRouter,
+                            pageSaveHelper = pageSaveHelper,
+                            metadataChapterTabs = metadataChapterTabs,
+                            readingChapterTabs = readingChapterTabs,
+                            onSelectMetadataChapterTab = { tab ->
+                                val matchingOption = metadataSourceOptions.firstOrNull { option -> option.key == tab.key } ?: return@DetailsPaneContent
+                                viewModel.selectMetadataSource(matchingOption)
+                            },
+                            onSelectReadingChapterTab = { tab ->
+                                tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
+                            },
+                            selectedTabId = sheetTabSelection,
+                            availableTabIds = availableTabIds,
+                            isSheetFullyExpanded = isCompactPaneFullyExpanded,
+                            sheetExpansionProgress = compactSheetExpansionProgress,
+                            isChapterSearchAvailable = chapterEmptyReason == null,
+                            isChaptersReversed = isChaptersReversed,
+                            isChaptersInGridView = isChaptersInGridView,
+                            isHideReadChapters = isHideReadChapters,
+                            isMergeRepeatedChapters = isMergeRepeatedChapters,
+                            showMergeRepeatedChapters = showMergeRepeatedChapters,
+                            isDownloadedOnly = isDownloadedOnly,
+                            isDownloadedFilterVisible = mangaDetails?.local != null,
+                            pageGridSizeValue = pageGridSizeValue,
+                            onChapterQueryChange = updateChapterQuery,
+                            onChapterSearchToggle = toggleChapterSearch,
+                            onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
+                            onToggleChaptersGrid = { viewModel.setChaptersInGridView(!isChaptersInGridView) },
+                            onToggleHideReadChapters = { viewModel.setHideReadChapters(!isHideReadChapters) },
+                            onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
+                            onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
+                            onPageGridSizeChange = updatePageGridSize,
+                            showCollapsedHandle = true,
+                            onSelectedTabIdChange = persistSelectedPaneTab,
+                            onActionClick = handleActionClick,
+                        )
+                    }
                 }
             }
             val detailsImmersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
@@ -1463,7 +1497,7 @@ fun DetailsScreen(
             )
             }
 
-            if (showFavoriteDialog && content != null) {
+            if (showFavoriteDialog && isWorkActionEnabled && content != null) {
             val allCategories by viewModel.allCategories.collectAsStateWithLifecycle()
             val duplicateFavoritePrompt by viewModel.duplicateFavoritePrompt.collectAsStateWithLifecycle()
             val memberCategoryIds = remember(favouriteCategories) {
@@ -1490,7 +1524,7 @@ fun DetailsScreen(
             )
             }
 
-            if (showDownloadDialog && content != null) {
+            if (showDownloadDialog && isWorkActionEnabled && content != null) {
             DownloadDialog(
                 mangaList = listOf(content),
                 snackbarHostState = snackbarHostState,
@@ -1500,7 +1534,7 @@ fun DetailsScreen(
             )
             }
 
-            if (showStatsDialog && content != null) {
+            if (showStatsDialog && isWorkActionEnabled && content != null) {
                 val statsViewModel: ContentStatsViewModel = hiltViewModel()
                 LaunchedEffect(content.id) {
                     statsViewModel.initialize(content)
@@ -1512,7 +1546,7 @@ fun DetailsScreen(
                 )
             }
 
-            if (showReadingRecordSheet && content != null) {
+            if (showReadingRecordSheet && isWorkActionEnabled && content != null) {
                 ReadingRecordSheet(
                     snapshot = readingRecordSnapshot,
                     chapterTitle = { chapterId ->
@@ -1578,7 +1612,7 @@ fun DetailsScreen(
                 )
             }
 
-            if (showReadingSourceDialog) {
+            if (showReadingSourceDialog && isWorkActionEnabled) {
                 ReadingSourceSheet(
                     currentOptions = readingSourceOptions,
                     selectedOption = readingSourceOptions.firstOrNull { it.isSelected },
@@ -2281,6 +2315,7 @@ private fun DetailsScrollableContent(
     showReviewsAction: Boolean,
     content: org.skepsun.kototoro.parsers.model.Content?,
     isTemporaryReadOnly: Boolean,
+    isWorkDetails: Boolean,
     scrollState: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -2306,6 +2341,7 @@ private fun DetailsScrollableContent(
     sharedElementKey: String? = null,
 ) {
     val context = LocalContext.current
+    val isWorkActionEnabled = isWorkDetails && !isTemporaryReadOnly
     val source = content?.source
     val visibleSupplementalSections = remember(preferLightweightFirstFrame, supplementalSections, entityRelationSections) {
         if (preferLightweightFirstFrame) {
@@ -2326,7 +2362,7 @@ private fun DetailsScrollableContent(
         if (headerTopSpacing > 0.dp) {
             Spacer(modifier = Modifier.height(headerTopSpacing))
         }
-        if (isTemporaryReadOnly) {
+        if (isTemporaryReadOnly || !isWorkDetails) {
             TemporaryDetailsReadOnlyNotice(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2360,6 +2396,7 @@ private fun DetailsScrollableContent(
             coverUrl = coverUrl,
             fallbackCoverUrl = fallbackCoverUrl,
             sharedElementKey = sharedElementKey,
+            showWorkActions = isWorkActionEnabled,
             showCommentsAction = showCommentsAction,
             showReviewsAction = showReviewsAction,
 
@@ -2384,7 +2421,7 @@ private fun DetailsScrollableContent(
                 if (!isTemporaryReadOnly) onOpenMetadataSourceSheet()
             },
             onOpenReadingSourceSheet = {
-                if (!isTemporaryReadOnly) onOpenReadingSourceSheet()
+                if (isWorkActionEnabled) onOpenReadingSourceSheet()
             },
             onOpenSupplementalAction = { action ->
                 onActionClick(DetailsAction.OpenWebUrl(action.url))
@@ -2441,6 +2478,9 @@ private fun DetailsScrollableContent(
                     val service = item.trackingService
                     val remoteId = item.remoteId
                     when {
+                        item.type != null -> {
+                            onEntityClick(item)
+                        }
                         service != null && remoteId != null -> {
                             onActionClick(DetailsAction.OpenTrackingDetails(service, remoteId, item.url))
                         }
@@ -2461,7 +2501,7 @@ private fun DetailsScrollableContent(
                     val service = item.trackingService
                     val remoteId = item.remoteId
                     when {
-                        item.entityId != null -> {
+                        item.entityId != null || item.type != null -> {
                             onEntityClick(item)
                         }
                         service != null && remoteId != null -> {
@@ -3285,6 +3325,34 @@ sealed interface DetailsAction {
     data class RemoveTrackingMatch(
         val match: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult,
     ) : DetailsAction
+}
+
+private fun DetailsAction.isWorkOnlyAction(): Boolean = when (this) {
+    is DetailsAction.SelectBranch,
+    DetailsAction.ManageCategories,
+    DetailsAction.ManageDownloads,
+    DetailsAction.Favorite,
+    DetailsAction.Download,
+    DetailsAction.DeleteLocal,
+    DetailsAction.EditOverride,
+    DetailsAction.CreateShortcut,
+    DetailsAction.FindSimilar,
+    DetailsAction.OpenAlternatives,
+    DetailsAction.OpenOnlineVariant,
+    DetailsAction.OpenLocalSourceInBrowser,
+    DetailsAction.OpenStatistics,
+    DetailsAction.OpenReadingRecord,
+    DetailsAction.ToggleList,
+    DetailsAction.ToggleGrid,
+    DetailsAction.ToggleBookmarkView,
+    DetailsAction.Resume,
+    DetailsAction.ResumeIncognito,
+    DetailsAction.ForgetHistory,
+    is DetailsAction.ManageTrackingBinding,
+    is DetailsAction.BindTrackingMatch,
+    is DetailsAction.IgnoreTrackingSuggestion,
+    is DetailsAction.RemoveTrackingMatch -> true
+    else -> false
 }
 
 private data class BrowserTarget(
