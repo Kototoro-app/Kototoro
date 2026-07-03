@@ -52,3 +52,4 @@ docs/.vitepress/dist/
 policy
 chroma
 reasonix.toml
+/.vscode

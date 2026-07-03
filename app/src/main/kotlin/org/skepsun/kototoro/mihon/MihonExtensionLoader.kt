@@ -48,6 +48,9 @@ class MihonExtensionLoader @Inject constructor(
         private const val METADATA_SOURCE_FACTORY = "tachiyomi.extension.factory"
         private const val METADATA_NSFW = "tachiyomi.extension.nsfw"
         
+        // TachiyomiX additions
+        private const val METADATA_NEW_NAME = "tachiyomix.name"
+        
         // Supported library version range
         const val LIB_VERSION_MIN = 1.2
         const val LIB_VERSION_MAX = 1.9
@@ -181,17 +184,6 @@ class MihonExtensionLoader @Inject constructor(
             return null
         }
         
-        // Extract library version - handles different version formats
-        val libVersion = try {
-            versionName.split('.').let { parts ->
-                if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDouble()
-                else parts[0].toDouble()
-            }
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "extractExtensionInfo($pkgName): Failed to parse libVersion from $versionName, defaulting to 1.4")
-            1.4 // Default to 1.4 if parsing fails
-        }
-        
         val declaredSource = ExternalExtensionMetadataSupport.getDeclaredSourceMetadataOrNull(
             metaData = metaData,
             sourceClassKey = METADATA_SOURCE_CLASS,
@@ -202,8 +194,19 @@ class MihonExtensionLoader @Inject constructor(
             return null
         }
         
+        // Extract library version - handles different version formats
+        val libVersion = declaredSource.libVersionOverride ?: try {
+            versionName.split('.').let { parts ->
+                if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDouble()
+                else parts[0].toDouble()
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "extractExtensionInfo($pkgName): Failed to parse libVersion from $versionName, defaulting to 1.4")
+            1.4 // Default to 1.4 if parsing fails
+        }
+        
         // Get app name safely
-        val appName = try {
+        val appName = metaData.getString(METADATA_NEW_NAME) ?: try {
             ExternalExtensionLoaderSupport.getAppLabel(applicationContext, appInfo)
         } catch (e: Exception) {
             null
@@ -243,25 +246,6 @@ class MihonExtensionLoader @Inject constructor(
             }
         val versionCode = PackageInfoCompat.getLongVersionCode(completePkgInfo)
         
-        // Extract library version - match Mihon's logic (substringBeforeLast)
-        val libVersion = versionName.substringBeforeLast('.').toDoubleOrNull()
-            ?: try {
-                versionName.split('.').let { parts ->
-                    if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDouble()
-                    else parts[0].toDouble()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: Invalid lib version format ($versionName)")
-                return MihonLoadResult.Error(pkgName, "Invalid lib version format: $versionName")
-            }
-        
-        // Check library version compatibility
-        if (libVersion < LIB_VERSION_MIN || libVersion > LIB_VERSION_MAX) {
-            val err = "Incompatible lib version: $libVersion (supported: $LIB_VERSION_MIN-$LIB_VERSION_MAX) for versionName=$versionName"
-            android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: $err")
-            return MihonLoadResult.Error(pkgName, err)
-        }
-        
         val metaData = ExternalExtensionMetadataSupport.getMetaDataOrNull(appInfo)
             ?: run {
                 android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: No meta-data in manifest")
@@ -279,8 +263,27 @@ class MihonExtensionLoader @Inject constructor(
             return MihonLoadResult.Error(pkgName, "No source class specified in manifest")
         }
         
+        // Extract library version - match Mihon's logic (substringBeforeLast)
+        val libVersion = declaredSource.libVersionOverride ?: versionName.substringBeforeLast('.').toDoubleOrNull()
+            ?: try {
+                versionName.split('.').let { parts ->
+                    if (parts.size >= 2) "${parts[0]}.${parts[1]}".toDouble()
+                    else parts[0].toDouble()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: Invalid lib version format ($versionName)")
+                return MihonLoadResult.Error(pkgName, "Invalid lib version format: $versionName")
+            }
+        
+        // Check library version compatibility
+        if (libVersion < LIB_VERSION_MIN || libVersion > LIB_VERSION_MAX) {
+            val err = "Incompatible lib version: $libVersion (supported: $LIB_VERSION_MIN-$LIB_VERSION_MAX) for versionName=$versionName"
+            android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: $err")
+            return MihonLoadResult.Error(pkgName, err)
+        }
+        
         // Get app name and language
-        val appName = ExternalExtensionLoaderSupport.getAppLabel(context, appInfo)
+        val appName = metaData.getString(METADATA_NEW_NAME) ?: ExternalExtensionLoaderSupport.getAppLabel(context, appInfo)
         val lang = ExternalExtensionLoaderSupport.extractLanguage(pkgName, "extension")
         
         // Create ClassLoader for this extension
