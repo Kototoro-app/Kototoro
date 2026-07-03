@@ -58,6 +58,7 @@ import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
 import org.skepsun.kototoro.settings.sources.extensions.ExtensionBatchUpdateStateMachine
+import org.skepsun.kototoro.settings.sources.extensions.isNewerThanInstalled
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
 import org.skepsun.kototoro.settings.sources.extensions.normalizePackageNameForMatching
 import org.skepsun.kototoro.settings.sources.extensions.toInstalledIReaderPackageName
@@ -123,7 +124,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 	)
 
 	fun setSearchQuery(query: String) {
-		filterState.update { it.copy(query = query.trim()) }
+		filterState.update { it.copy(query = query) }
 	}
 
 	fun toggleKind(kind: UnifiedSourceKind) {
@@ -1143,8 +1144,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 			isInstalled && !isTrusted -> UnifiedSourcePackageState.UNTRUSTED
 			!isCompatible -> UnifiedSourcePackageState.INCOMPATIBLE
 			!isInstalled -> UnifiedSourcePackageState.AVAILABLE
-			versionCode > (installedPackage.versionCode ?: 0L) ||
-				libVersion > (installedPackage.libVersion ?: 0.0) -> UnifiedSourcePackageState.UPDATE_AVAILABLE
+			isNewerThanInstalled(installedPackage.versionCode) -> UnifiedSourcePackageState.UPDATE_AVAILABLE
 			else -> UnifiedSourcePackageState.INSTALLED
 		}
 		val kind = type.toUnifiedKindForPackage()
@@ -1274,10 +1274,11 @@ class UnifiedSourcesViewModel @Inject constructor(
 	private fun List<UnifiedSourceRepositoryItem>.filterBy(
 		filters: UnifiedSourcesFilterState,
 	): List<UnifiedSourceRepositoryItem> {
+		val query = filters.query.trim()
 		return asSequence()
 			.filter { filters.kinds.isEmpty() || it.kind in filters.kinds }
 			.filter { filters.locationTypes.isEmpty() || it.locationType in filters.locationTypes }
-			.filter { filters.query.isBlank() || it.matchesQuery(filters.query) }
+			.filter { query.isBlank() || it.matchesQuery(query) }
 			.sortedWith(compareBy({ it.kind.ordinal }, { !it.isConfigured }, { it.name.lowercase() }))
 			.toList()
 	}
@@ -1286,6 +1287,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 		filters: UnifiedSourcesFilterState,
 		repositoriesById: Map<String, UnifiedSourceRepositoryItem>,
 	): List<UnifiedSourcePackageItem> {
+		val query = filters.query.trim()
 		return asSequence()
 			.filter { filters.kinds.isEmpty() || it.kind in filters.kinds }
 			.filter { filters.locationTypes.isEmpty() || it.repositoryLocationType(repositoriesById) in filters.locationTypes }
@@ -1297,7 +1299,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 					UnifiedNsfwFilter.NSFW -> it.isNsfw
 				}
 			}
-			.filter { filters.query.isBlank() || it.matchesQuery(filters.query) }
+			.filter { query.isBlank() || it.matchesQuery(query) }
 			.sortedWith(packageItemComparator)
 			.toList()
 	}
@@ -1307,6 +1309,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 		repositoriesById: Map<String, UnifiedSourceRepositoryItem>,
 		packagesById: Map<String, UnifiedSourcePackageItem>,
 	): List<UnifiedSourceItem> {
+		val query = filters.query.trim()
 		return asSequence()
 			.filter { filters.kinds.isEmpty() || it.kind in filters.kinds }
 			.filter { filters.contentTypes.isEmpty() || it.contentType in filters.contentTypes }
@@ -1333,7 +1336,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 				}
 			}
 			.filter { filters.locationTypes.isEmpty() || it.repositoryLocationType(repositoriesById, packagesById) in filters.locationTypes }
-			.filter { filters.query.isBlank() || it.matchesQuery(filters.query) }
+			.filter { query.isBlank() || it.matchesQuery(query) }
 			.sortedWith(compareByDescending<UnifiedSourceItem> { it.isPinned }.thenBy { it.title.lowercase() })
 			.toList()
 	}

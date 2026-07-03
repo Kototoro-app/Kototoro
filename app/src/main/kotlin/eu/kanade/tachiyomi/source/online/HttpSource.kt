@@ -2,18 +2,21 @@ package eu.kanade.tachiyomi.source.online
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
 import org.skepsun.kototoro.parsers.model.ContentSource
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -83,13 +86,31 @@ abstract class HttpSource : CatalogueSource {
      */
     override fun toString() = "$name (${lang.uppercase()})"
 
+    /**
+     * URL opened when browsing the source in a WebView.
+     */
+    open fun getHomeUrl(): String = baseUrl
+
     // ======== Popular manga ========
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPopularManga"))
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return Observable.fromCallable {
-            val response = client.newCall(tagRequest(popularMangaRequest(page))).execute()
-            popularMangaParse(response)
+            runBlocking { getPopularManga(page) }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        return try {
+            val request = tagRequest(popularMangaRequest(page))
+            client.newCall(request).awaitSuccess().use { response ->
+                popularMangaParse(response)
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchPopularManga", Integer.TYPE) {
+                fetchPopularManga(page).toBlocking().first()
+            }
         }
     }
 
@@ -105,26 +126,34 @@ abstract class HttpSource : CatalogueSource {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
-        return Observable.defer {
-            try {
-                Observable.fromCallable {
-                    val response = client.newCall(tagRequest(searchMangaRequest(page, query, filters))).execute()
-                    val responseBody = response.body.string()
-                    val contentType = response.body.contentType()
-                    val parseResponse = response.newBuilder()
+        return Observable.fromCallable {
+            runBlocking { getSearchManga(page, query, filters) }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        return try {
+            val request = tagRequest(searchMangaRequest(page, query, filters))
+            val response = client.newCall(request).awaitSuccess()
+            val responseBody = response.body.string()
+            val contentType = response.body.contentType()
+            response.use {
+                val parseResponse = response.newBuilder()
+                    .body(responseBody.toResponseBody(contentType))
+                    .build()
+                runCatching {
+                    searchMangaParse(parseResponse)
+                }.getOrElse { error ->
+                    val fallbackResponse = response.newBuilder()
                         .body(responseBody.toResponseBody(contentType))
                         .build()
-                    runCatching {
-                        searchMangaParse(parseResponse)
-                    }.getOrElse { error ->
-                        val fallbackResponse = response.newBuilder()
-                            .body(responseBody.toResponseBody(contentType))
-                            .build()
-                        parseSearchRedirectedToDetails(fallbackResponse, error)
-                    }
+                    parseSearchRedirectedToDetails(fallbackResponse, error)
                 }
-            } catch (e: NoClassDefFoundError) {
-                throw RuntimeException(e)
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchSearchManga", Integer.TYPE, String::class.java, FilterList::class.java) {
+                fetchSearchManga(page, query, filters).toBlocking().first()
             }
         }
     }
@@ -164,8 +193,21 @@ abstract class HttpSource : CatalogueSource {
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getLatestUpdates"))
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
         return Observable.fromCallable {
-            val response = client.newCall(tagRequest(latestUpdatesRequest(page))).execute()
-            latestUpdatesParse(response)
+            runBlocking { getLatestUpdates(page) }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        return try {
+            val request = tagRequest(latestUpdatesRequest(page))
+            client.newCall(request).awaitSuccess().use { response ->
+                latestUpdatesParse(response)
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchLatestUpdates", Integer.TYPE) {
+                fetchLatestUpdates(page).toBlocking().first()
+            }
         }
     }
 
@@ -177,14 +219,22 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getMangaDetails(manga: SManga): SManga {
-        return fetchMangaDetails(manga).toBlocking().first()
+        return try {
+            val request = tagRequest(mangaDetailsRequest(manga))
+            client.newCall(request).awaitSuccess().use { response ->
+                mangaDetailsParse(response).apply { initialized = true }
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchMangaDetails", SManga::class.java) {
+                fetchMangaDetails(manga).toBlocking().first()
+            }
+        }
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getMangaDetails"))
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return Observable.fromCallable {
-            val response = client.newCall(tagRequest(mangaDetailsRequest(manga))).execute()
-            mangaDetailsParse(response).apply { initialized = true }
+            runBlocking { getMangaDetails(manga) }
         }
     }
 
@@ -198,14 +248,33 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        return fetchChapterList(manga).toBlocking().first()
+        return try {
+            val request = tagRequest(chapterListRequest(manga))
+            client.newCall(request).awaitSuccess().use { response ->
+                chapterListParse(response)
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchChapterList", SManga::class.java) {
+                fetchChapterList(manga).toBlocking().first()
+            }
+        }
+    }
+
+    override suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) getMangaDetails(manga) else manga
+        val updatedChapters = if (fetchChapters) getChapterList(manga) else chapters
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getChapterList"))
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return Observable.fromCallable {
-            val response = client.newCall(tagRequest(chapterListRequest(manga))).execute()
-            chapterListParse(response)
+            runBlocking { getChapterList(manga) }
         }
     }
 
@@ -219,14 +288,28 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        return fetchPageList(chapter).toBlocking().first()
+        if (
+            overridesMethod("fetchPageList", SChapter::class.java) &&
+            !overridesMethod("pageListRequest", SChapter::class.java)
+        ) {
+            return fetchPageList(chapter).toBlocking().first()
+        }
+        return try {
+            val request = tagRequest(pageListRequest(chapter))
+            client.newCall(request).awaitSuccess().use { response ->
+                pageListParse(response)
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchPageList", SChapter::class.java) {
+                fetchPageList(chapter).toBlocking().first()
+            }
+        }
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPageList"))
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.fromCallable {
-            val response = client.newCall(tagRequest(pageListRequest(chapter))).execute()
-            pageListParse(response)
+            runBlocking { getPageList(chapter) }
         }
     }
 
@@ -238,15 +321,24 @@ abstract class HttpSource : CatalogueSource {
 
     // ======== Image URL ========
 
+    @Suppress("DEPRECATION")
     open suspend fun getImageUrl(page: Page): String {
-        return fetchImageUrl(page).toBlocking().first()
+        return try {
+            val request = tagRequest(imageUrlRequest(page))
+            client.newCall(request).awaitSuccess().use { response ->
+                imageUrlParse(response)
+            }
+        } catch (e: UnsupportedOperationException) {
+            customFetchFallback(e, "fetchImageUrl", Page::class.java) {
+                fetchImageUrl(page).toBlocking().first()
+            }
+        }
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getImageUrl"))
     open fun fetchImageUrl(page: Page): Observable<String> {
         return Observable.fromCallable {
-            val response = client.newCall(tagRequest(imageUrlRequest(page))).execute()
-            imageUrlParse(response)
+            runBlocking { getImageUrl(page) }
         }
     }
 
@@ -268,10 +360,44 @@ abstract class HttpSource : CatalogueSource {
             .build()
     }
 
+    @Suppress("DEPRECATION")
+    private fun <T> customFetchFallback(
+        error: UnsupportedOperationException,
+        methodName: String,
+        vararg parameterTypes: Class<*>,
+        fallback: () -> T,
+    ): T {
+        val declaringClass = findMethodDeclaringClass(methodName, *parameterTypes)
+        if (declaringClass != null && declaringClass != HttpSource::class.java) {
+            return fallback()
+        }
+        throw error
+    }
+
+    private fun overridesMethod(methodName: String, vararg parameterTypes: Class<*>): Boolean {
+        val declaringClass = findMethodDeclaringClass(methodName, *parameterTypes)
+        return declaringClass != null && declaringClass != HttpSource::class.java
+    }
+
+    private fun findMethodDeclaringClass(methodName: String, vararg parameterTypes: Class<*>): Class<*>? {
+        var current: Class<*>? = javaClass
+        while (current != null && current != Any::class.java) {
+            val method = current.declaredMethods.firstOrNull { candidate ->
+                candidate.name == methodName && candidate.parameterTypes.contentEquals(parameterTypes)
+            }
+            if (method != null) {
+                return current
+            }
+            current = current.superclass
+        }
+        return null
+    }
+
     // ======== Image request ========
 
     open suspend fun getImage(page: Page): Response {
-        return client.newCall(imageRequest(page)).execute()
+        val request = tagRequest(imageRequest(page))
+        return client.newCall(request).awaitSuccess()
     }
 
     open fun imageRequest(page: Page): Request {

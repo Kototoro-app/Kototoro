@@ -144,7 +144,7 @@ internal fun buildExtensionsBrowserItems(
 				)
 			}
 
-			extension.versionCode > installedEntry.versionCode || extension.libVersion > installedEntry.libVersion -> {
+			extension.isNewerThanInstalled(installedEntry.versionCode) -> {
 				handledPackages += installedSearchKey
 				updates += ExtensionsBrowserListItem.Entry(
 					pkgName = extension.pkgName,

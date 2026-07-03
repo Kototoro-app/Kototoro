@@ -1,8 +1,11 @@
 package eu.kanade.tachiyomi.source
 
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import rx.Observable
 
 /**
@@ -23,6 +26,48 @@ interface Source {
 
     val lang: String
         get() = ""
+
+    /**
+     * Whether the source has support for latest updates.
+     *
+     * @since tachiyomix 1.6
+     */
+    val supportsLatest: Boolean
+        get() = false
+
+    /**
+     * Returns the list of filters for the source.
+     *
+     * @since tachiyomix 1.6
+     */
+    fun getFilterList(): FilterList = FilterList()
+
+    /**
+     * Get a page with a list of manga.
+     *
+     * @since tachiyomix 1.6
+     */
+    suspend fun getPopularManga(page: Int): MangasPage {
+        throw IllegalStateException("Not used")
+    }
+
+    /**
+     * Get a page with a list of latest manga updates.
+     *
+     * @since tachiyomix 1.6
+     */
+    suspend fun getLatestUpdates(page: Int): MangasPage {
+        throw IllegalStateException("Not used")
+    }
+
+    /**
+     * Get a page with a list of manga.
+     *
+     * @since tachiyomix 1.6
+     */
+    suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        throw IllegalStateException("Not used")
+    }
 
     /**
      * Get the updated details for a manga.
@@ -46,6 +91,22 @@ interface Source {
     @Suppress("DEPRECATION")
     suspend fun getChapterList(manga: SManga): List<SChapter> {
         return fetchChapterList(manga).toBlocking().first()
+    }
+
+    /**
+     * Fetch updated manga details and/or chapters using the TachiyomiX 1.6 combined API.
+     *
+     * @since tachiyomix 1.6
+     */
+    suspend fun getMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate {
+        val updatedManga = if (fetchDetails) getMangaDetails(manga) else manga
+        val updatedChapters = if (fetchChapters) getChapterList(manga) else chapters
+        return SMangaUpdate(updatedManga, updatedChapters)
     }
 
     /**

@@ -120,6 +120,34 @@ class ExtensionsBrowserModelsTest : FunSpec({
 		entries.single().state shouldBe ExtensionsBrowserEntryState.UNTRUSTED
 	}
 
+	test("same versionCode with newer extension lib is still installed") {
+		val items = buildExtensionsBrowserItems(
+			type = ExternalExtensionType.MIHON,
+			installed = listOf(
+				installedEntry(
+					packageName = "pkg.same",
+					libVersion = 1.4,
+				),
+			),
+			available = listOf(
+				availableExtension(
+					packageName = "pkg.same",
+					name = "Same Source",
+					versionCode = 1L,
+					libVersion = 1.6,
+				),
+			),
+			downloadStates = emptyMap(),
+			selectedExtensionLanguages = setOf("en"),
+			collapsedLanguageGroups = emptySet(),
+			query = "",
+			isTrustedPackage = { _, _ -> true },
+		)
+
+		val entry = items.filterIsInstance<ExtensionsBrowserListItem.Entry>().single()
+		entry.state shouldBe ExtensionsBrowserEntryState.INSTALLED
+	}
+
 	test("normalizeExtensionLanguageCode maps all to multi-language bucket") {
 		"all".normalizeExtensionLanguageCode() shouldBe ""
 		"ALL".normalizeExtensionLanguageCode() shouldBe ""
@@ -186,13 +214,14 @@ private fun installedEntry(
 	name: String = packageName.substringAfter('.'),
 	lang: String = "en",
 	sourceNames: List<String> = listOf("Source $packageName"),
+	libVersion: Double = 1.2,
 ): InstalledExtensionEntry {
 	return InstalledExtensionEntry(
 		pkgName = packageName,
 		name = name,
 		versionName = "1.2.0",
 		versionCode = 1L,
-		libVersion = 1.2,
+		libVersion = libVersion,
 		lang = lang,
 		isNsfw = false,
 		sourceNames = sourceNames,
@@ -209,6 +238,7 @@ private fun availableExtension(
 	repoName: String = "Repo",
 	lang: String = "en",
 	sourceNames: List<String> = listOf(name),
+	libVersion: Double = versionName.substringBeforeLast('.').toDouble(),
 ): RepoAvailableExtension {
 	return RepoAvailableExtension(
 		type = type,
@@ -216,7 +246,7 @@ private fun availableExtension(
 		pkgName = packageName,
 		versionName = versionName,
 		versionCode = versionCode,
-		libVersion = versionName.substringBeforeLast('.').toDouble(),
+		libVersion = libVersion,
 		lang = lang,
 		isNsfw = false,
 		sourceNames = sourceNames,

@@ -212,7 +212,7 @@ internal fun RepoAvailableExtension.resolveAvailableState(
 	return when {
 		isInstalling -> AvailableExtensionState.INSTALLING
 		installedInfo == null -> AvailableExtensionState.AVAILABLE
-		versionCode > installedInfo.versionCode || libVersion > installedInfo.libVersion -> AvailableExtensionState.UPDATE_AVAILABLE
+		isNewerThanInstalled(installedInfo.versionCode) -> AvailableExtensionState.UPDATE_AVAILABLE
 		else -> AvailableExtensionState.INSTALLED
 	}
 }

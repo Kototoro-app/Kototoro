@@ -907,7 +907,7 @@ private fun ToolbarSearchField(
 					)
 					Spacer(modifier = Modifier.width(8.dp))
 					Box(modifier = Modifier.weight(1f)) {
-						if (query.isBlank()) {
+						if (query.isEmpty()) {
 								Text(
 									text = stringResource(R.string.search),
 								style = MaterialTheme.typography.bodyMedium,
@@ -1902,7 +1902,10 @@ private fun UnifiedPackageRow(
 				when (item.state) {
 					UnifiedSourcePackageState.AVAILABLE,
 					UnifiedSourcePackageState.UPDATE_AVAILABLE -> {
-						if (item.kind.isSideloadKind()) {
+						if (
+							item.kind.isSideloadKind() &&
+							item.installLocation != UnifiedSourcePackageInstallLocation.LOCAL_APK
+						) {
 							CompactActionChip(
 								onClick = onSystemInstall,
 								label = { Text(stringResource(R.string.install_extension)) },
@@ -2086,12 +2089,13 @@ private val UnifiedSourcePackageState.isWarning: Boolean
 
 @Composable
 private fun UnifiedSourcePackageItem.primaryActionLabel(): String {
+	val isLocalApkAction = kind.isSideloadKind()
 	return when (state) {
 		UnifiedSourcePackageState.AVAILABLE -> stringResource(
-			if (kind.isSideloadKind()) R.string.sideload_extension else R.string.install_extension,
+			if (isLocalApkAction) R.string.sideload_extension else R.string.install_extension,
 		)
 		UnifiedSourcePackageState.UPDATE_AVAILABLE -> stringResource(
-			if (kind.isSideloadKind()) R.string.update_sideload_extension else R.string.update_extension,
+			if (isLocalApkAction) R.string.update_sideload_extension else R.string.update_extension,
 		)
 		UnifiedSourcePackageState.UNTRUSTED,
 		UnifiedSourcePackageState.INCOMPATIBLE -> stringResource(R.string.details)
