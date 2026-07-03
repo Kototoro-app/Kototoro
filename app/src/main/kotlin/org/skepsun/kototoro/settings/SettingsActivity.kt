@@ -586,6 +586,10 @@ class SettingsActivity :
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS)
 					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
+				SettingsDestination.CacheLimitsSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS)
+					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
+				}
 				SettingsDestination.DataCleanupSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS)
 					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
@@ -769,6 +773,7 @@ class SettingsActivity :
 			SettingsDestination.TranslationApiSettings,
 			SettingsDestination.TranslationE2EApiSettings,
 			SettingsDestination.StorageAndNetworkSettings,
+			SettingsDestination.CacheLimitsSettings,
 			SettingsDestination.DataCleanupSettings,
 			SettingsDestination.DownloadsSettings,
 			SettingsDestination.TrackerSettings,
@@ -995,6 +1000,7 @@ class SettingsActivity :
 			SettingsDestination.TranslationApiSettings -> COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS
 			SettingsDestination.TranslationE2EApiSettings -> COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS
 			SettingsDestination.StorageAndNetworkSettings -> COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS
+			SettingsDestination.CacheLimitsSettings -> COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS
 			SettingsDestination.DataCleanupSettings -> COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS
 			SettingsDestination.DownloadsSettings -> COMPOSE_DESTINATION_DOWNLOADS_SETTINGS
 			SettingsDestination.TrackerSettings -> COMPOSE_DESTINATION_TRACKER_SETTINGS
@@ -1031,6 +1037,7 @@ class SettingsActivity :
 			SettingsDestination.TranslationApiSettings -> getString(R.string.ai_api_settings)
 			SettingsDestination.TranslationE2EApiSettings -> getString(R.string.reader_translation_e2e_api_settings_title)
 			SettingsDestination.StorageAndNetworkSettings -> getString(R.string.storage_and_network)
+			SettingsDestination.CacheLimitsSettings -> getString(R.string.cache_limits)
 			SettingsDestination.DataCleanupSettings -> getString(R.string.data_removal)
 			SettingsDestination.DownloadsSettings -> getString(R.string.downloads)
 			SettingsDestination.TrackerSettings -> getString(R.string.check_for_new_chapters)
@@ -1157,6 +1164,12 @@ class SettingsActivity :
 					settings = kototoroAppSettings,
 					viewModel = storageAndNetworkSettingsViewModel,
 					dataCleanupViewModel = dataCleanupSettingsViewModel,
+					onOpenCacheLimits = {
+						openDestination(SettingsDestination.CacheLimitsSettings, null, false)
+					},
+					onOpenDataRemoval = {
+						openDestination(SettingsDestination.DataCleanupSettings, null, false)
+					},
 					onOpenProxySettings = {
 						openDestination(SettingsDestination.ProxySettings, null, false)
 					},
@@ -1168,10 +1181,19 @@ class SettingsActivity :
 					onConfirmClearLocalVideos = ::confirmClearLocalVideos,
 				)
 			}
+			SettingsDestination.CacheLimitsSettings -> RenderComposeSection(title = getString(R.string.cache_limits)) {
+				CacheLimitsSettingsRoute(
+					settings = kototoroAppSettings,
+					modifier = Modifier.fillMaxSize(),
+				)
+			}
 			SettingsDestination.DataCleanupSettings -> RenderComposeSection(title = getString(R.string.data_removal)) {
 				DataCleanupSettingsRoute(
 					settings = kototoroAppSettings,
 					viewModel = dataCleanupSettingsViewModel,
+					onClearLocalManga = ::confirmClearLocalManga,
+					onClearLocalNovels = ::confirmClearLocalNovels,
+					onClearLocalVideos = ::confirmClearLocalVideos,
 					onClearSearchHistory = ::confirmClearSearchHistory,
 					onClearCookies = ::confirmClearCookies,
 					onDeleteReadChapters = ::confirmCleanupChapters,
@@ -2098,6 +2120,7 @@ class SettingsActivity :
 		private const val COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS = "translation_api_settings"
 		private const val COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS = "translation_e2e_api_settings"
 		private const val COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS = "storage_and_network_settings"
+		private const val COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS = "cache_limits_settings"
 		private const val COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS = "data_cleanup_settings"
 		private const val COMPOSE_DESTINATION_DOWNLOADS_SETTINGS = "downloads_settings"
 		private const val COMPOSE_DESTINATION_TRACKER_SETTINGS = "tracker_settings"
@@ -2174,6 +2197,7 @@ class SettingsActivity :
 			COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS -> SettingsDestination.TranslationApiSettings
 			COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS -> SettingsDestination.TranslationE2EApiSettings
 			COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS -> SettingsDestination.StorageAndNetworkSettings
+			COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS -> SettingsDestination.CacheLimitsSettings
 			COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS -> SettingsDestination.DataCleanupSettings
 			COMPOSE_DESTINATION_DOWNLOADS_SETTINGS -> SettingsDestination.DownloadsSettings
 			COMPOSE_DESTINATION_TRACKER_SETTINGS -> SettingsDestination.TrackerSettings

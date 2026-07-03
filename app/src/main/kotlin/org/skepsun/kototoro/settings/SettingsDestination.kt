@@ -23,6 +23,7 @@ sealed interface SettingsDestination {
 	data object TranslationApiSettings : SettingsDestination
 	data object TranslationE2EApiSettings : SettingsDestination
 	data object StorageAndNetworkSettings : SettingsDestination
+	data object CacheLimitsSettings : SettingsDestination
 	data object DataCleanupSettings : SettingsDestination
 	data object DownloadsSettings : SettingsDestination
 	data object TrackerSettings : SettingsDestination

@@ -201,6 +201,22 @@ class MangaBakaMetadataRepository @Inject constructor(
         )
     }
 
+    suspend fun deleteLocalDataset() = withContext(Dispatchers.IO) {
+        listOf(
+            File(rootDir, "series.sqlite.tar.gz.download"),
+            File(rootDir, "series.sqlite.tmp"),
+            File(rootDir, "series.lookup.sqlite.tmp"),
+            databaseFile,
+            extractedDatabaseFile,
+            indexedDatabaseFile,
+            metaFile,
+        ).forEach { file ->
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+    }
+
     suspend fun searchSeriesLocal(
         query: String,
         limit: Int = 5,

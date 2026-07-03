@@ -122,6 +122,22 @@ class AnimeOfflineRepository @Inject constructor(
         writeMeta(readMeta().copy(lastCheckedAt = now))
     }
 
+    suspend fun deleteLocalDataset() = withContext(Dispatchers.IO) {
+        listOf(
+            File(rootDir, "anime-offline-download.tmp"),
+            File(rootDir, "anime-offline-index.tmp"),
+            indexFile,
+            metaFile,
+        ).forEach { file ->
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+        mutex.withLock {
+            cachedState = null
+        }
+    }
+
     suspend fun downloadAndInstall(
         release: ReleaseInfo,
         onProgress: suspend (downloadedBytes: Long, totalBytes: Long) -> Unit,

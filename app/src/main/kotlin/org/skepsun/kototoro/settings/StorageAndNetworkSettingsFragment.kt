@@ -4,6 +4,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.core.content.edit
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -14,6 +20,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,7 +42,9 @@ import org.skepsun.kototoro.local.data.CacheDir
 import org.skepsun.kototoro.settings.compose.SettingsActionPreference
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SettingsChoicePreference
+import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
 import org.skepsun.kototoro.settings.compose.SettingsGroupLabel
+import org.skepsun.kototoro.settings.compose.SettingsPreferenceSection
 import org.skepsun.kototoro.settings.compose.SettingsSectionDivider
 import org.skepsun.kototoro.settings.compose.SettingsSliderPreference
 import org.skepsun.kototoro.settings.compose.SettingsSwitchPreference
@@ -71,6 +81,12 @@ class StorageAndNetworkSettingsFragment : Fragment() {
                     settings = settings,
                     viewModel = viewModel,
                     dataCleanupViewModel = dataCleanupViewModel,
+                    onOpenCacheLimits = {
+                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.CacheLimitsSettings, null, false)
+                    },
+                    onOpenDataRemoval = {
+                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.DataCleanupSettings, null, false)
+                    },
                     onOpenProxySettings = {
                         (activity as? SettingsActivity)?.openDestination(SettingsDestination.ProxySettings, null, false)
                     },
@@ -96,6 +112,8 @@ fun StorageAndNetworkSettingsRoute(
     settings: AppSettings,
     viewModel: StorageAndNetworkSettingsViewModel,
     dataCleanupViewModel: DataCleanupSettingsViewModel,
+    onOpenCacheLimits: () -> Unit,
+    onOpenDataRemoval: () -> Unit,
     onOpenProxySettings: () -> Unit,
     onConfirmClearSearchHistory: () -> Unit,
     onConfirmClearCookies: () -> Unit,
@@ -205,6 +223,8 @@ fun StorageAndNetworkSettingsRoute(
         networkTitle = context.getString(R.string.network),
         storageUsage = storageUsage,
         snackbarHostState = snackbarHostState,
+        onCacheLimitsClick = onOpenCacheLimits,
+        onDataRemovalClick = onOpenDataRemoval,
         cacheLimits = {
             SettingsGroupLabel(text = context.getString(R.string.image_caches))
             SettingsSliderPreference(
@@ -638,6 +658,160 @@ fun StorageAndNetworkSettingsRoute(
             )
         },
     )
+}
+
+@Composable
+fun CacheLimitsSettingsRoute(
+    settings: AppSettings,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val videoCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value
+    val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value
+    val videoDanmakuCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) {
+        videoDanmakuCacheSizeMb
+    }.value
+    val thumbsCacheMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value
+    val faviconCacheMb = settings.observeAsState(AppSettings.KEY_FAVICON_CACHE_MB) { faviconCacheSizeMb }.value
+    val pagesCacheMb = settings.observeAsState(AppSettings.KEY_PAGES_CACHE_MB) { pagesCacheSizeMb }.value
+    val novelCacheMb = settings.observeAsState(AppSettings.KEY_NOVEL_CACHE_MB) { novelCacheSizeMb }.value
+    val httpCacheMb = settings.observeAsState(AppSettings.KEY_HTTP_CACHE_MB_LIMIT) { httpCacheSizeMb }.value
+    val ttsCacheMb = settings.observeAsState(AppSettings.KEY_TTS_CACHE_MB) { ttsCacheSizeMb }.value
+    val srCacheLimit = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT) {
+        settings.prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512") ?: "512"
+    }.value
+    val srCacheLabels = context.resources.getStringArray(R.array.reader_super_resolution_cache_limits)
+    val srCacheValues = context.resources.getStringArray(R.array.values_reader_super_resolution_cache_limits)
+    val showRestartRequired = {
+        Toast.makeText(context, R.string.settings_apply_restart_required, Toast.LENGTH_SHORT).show()
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
+    ) {
+        SettingsPreferenceSection(title = context.getString(R.string.image_caches)) {
+            SettingsSliderPreference(
+                title = context.getString(R.string.thumbnails_cache_limit),
+                summary = context.getString(R.string.cache_limit_applies_on_restart),
+                value = thumbsCacheMb,
+                valueRange = 32..2048,
+                step = 32,
+                valueText = { "$it MB" },
+                onValueChange = {
+                    settings.thumbsCacheSizeMb = it
+                    showRestartRequired()
+                },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.favicons_cache_limit),
+                summary = context.getString(R.string.cache_limit_applies_on_restart),
+                value = faviconCacheMb,
+                valueRange = 4..128,
+                step = 4,
+                valueText = { "$it MB" },
+                onValueChange = {
+                    settings.faviconCacheSizeMb = it
+                    showRestartRequired()
+                },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.pages_cache_limit),
+                summary = context.getString(R.string.cache_limit_applies_on_restart),
+                value = pagesCacheMb,
+                valueRange = 64..4096,
+                step = 64,
+                valueText = { "$it MB" },
+                onValueChange = {
+                    settings.pagesCacheSizeMb = it
+                    showRestartRequired()
+                },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.novel_cache_limit),
+                summary = context.getString(R.string.cache_limit_applies_on_restart),
+                value = novelCacheMb,
+                valueRange = 32..2048,
+                step = 32,
+                valueText = { "$it MB" },
+                onValueChange = {
+                    settings.novelCacheSizeMb = it
+                    showRestartRequired()
+                },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.tts_audio_cache_limit),
+                summary = context.getString(R.string.cache_limit_applies_on_restart),
+                value = ttsCacheMb,
+                valueRange = 32..2048,
+                step = 32,
+                valueText = { "$it MB" },
+                onValueChange = {
+                    settings.ttsCacheSizeMb = it
+                    showRestartRequired()
+                },
+            )
+            SettingsSectionDivider()
+            SettingsChoicePreference(
+                title = context.getString(R.string.reader_super_resolution_cache_limit),
+                value = srCacheLimit,
+                options = srCacheLabels.mapIndexed { index, label ->
+                    SettingsChoiceOption(srCacheValues[index], label)
+                },
+                onValueChange = {
+                    settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, it).apply()
+                },
+            )
+        }
+        SettingsPreferenceSection(title = context.getString(R.string.video_caches)) {
+            SettingsSliderPreference(
+                title = context.getString(R.string.video_playback_cache_limit),
+                value = videoCacheMb,
+                valueRange = 256..4096,
+                step = 128,
+                valueText = { "$it MB" },
+                onValueChange = { settings.videoCacheSizeMb = it },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.video_proxy_cache_limit),
+                value = videoProxyCacheMb,
+                valueRange = 128..4096,
+                step = 128,
+                valueText = { "$it MB" },
+                onValueChange = { settings.videoProxyCacheSizeMb = it },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.danmaku_cache_limit),
+                value = videoDanmakuCacheMb,
+                valueRange = 16..1024,
+                step = 16,
+                valueText = { "$it MB" },
+                onValueChange = { settings.videoDanmakuCacheSizeMb = it },
+            )
+        }
+        SettingsPreferenceSection(title = context.getString(R.string.network)) {
+            SettingsSliderPreference(
+                title = context.getString(R.string.network_cache_limit),
+                summary = context.getString(R.string.cache_limit_applies_on_restart),
+                value = httpCacheMb,
+                valueRange = 32..2048,
+                step = 32,
+                valueText = { "$it MB" },
+                onValueChange = {
+                    settings.httpCacheSizeMb = it
+                    showRestartRequired()
+                },
+            )
+        }
+    }
 }
 
 private fun storageSummary(

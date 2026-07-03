@@ -135,7 +135,7 @@ fun buildSettingsRootSections(
 					key = "services",
 					iconRes = R.drawable.ic_services,
 					title = context.getString(R.string.services),
-					summary = context.summaryOf(R.string.anime_offline_database, R.string.suggestions, R.string.reading_stats),
+					summary = context.summaryOf(R.string.suggestions, R.string.reading_stats),
 					onClick = { onOpenDestination(SettingsDestination.ServicesSettings) },
 				),
 			)

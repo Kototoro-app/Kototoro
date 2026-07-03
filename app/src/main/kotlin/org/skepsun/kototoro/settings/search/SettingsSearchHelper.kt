@@ -395,8 +395,11 @@ class SettingsSearchHelper @Inject constructor(
 			)
 		}
 
-		val dataCleanupBreadcrumbs = listOf(context.getString(R.string.storage_and_network))
-		val dataCleanupKeys = listOf(
+		val cacheLimitsBreadcrumbs = listOf(
+			context.getString(R.string.storage_and_network),
+			context.getString(R.string.cache_limits),
+		)
+		val cacheLimitsKeys = listOf(
 			"video_cache_mb" to R.string.video_playback_cache_limit,
 			"video_proxy_cache_mb" to R.string.video_proxy_cache_limit,
 			"video_danmaku_cache_mb" to R.string.danmaku_cache_limit,
@@ -407,6 +410,23 @@ class SettingsSearchHelper @Inject constructor(
 			"http_cache_mb_limit" to R.string.network_cache_limit,
 			"tts_cache_mb" to R.string.tts_audio_cache_limit,
 			"reader_super_resolution_cache_limit" to R.string.reader_super_resolution_cache_limit,
+		)
+		cacheLimitsKeys.forEach { (key, titleRes) ->
+			result.add(
+				SettingsItem(
+					key = key,
+					title = context.getString(titleRes),
+					breadcrumbs = cacheLimitsBreadcrumbs,
+					destination = SettingsDestination.CacheLimitsSettings,
+				),
+			)
+		}
+
+		val dataCleanupBreadcrumbs = listOf(
+			context.getString(R.string.storage_and_network),
+			context.getString(R.string.data_removal),
+		)
+		val dataCleanupKeys = listOf(
 			"local_manga_clear" to R.string.clear_local_manga_storage,
 			"local_novels_clear" to R.string.clear_local_novel_storage,
 			"local_videos_clear" to R.string.clear_local_video_storage,
@@ -434,7 +454,7 @@ class SettingsSearchHelper @Inject constructor(
 					key = key,
 					title = context.getString(titleRes),
 					breadcrumbs = dataCleanupBreadcrumbs,
-					destination = SettingsDestination.StorageAndNetworkSettings,
+					destination = SettingsDestination.DataCleanupSettings,
 				),
 			)
 		}

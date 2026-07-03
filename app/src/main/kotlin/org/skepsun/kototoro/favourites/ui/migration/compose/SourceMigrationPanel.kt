@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.PlaylistAddCheck
@@ -50,9 +51,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -419,8 +422,10 @@ fun SourceMigrationPanel(
                     onBridgeSelected = { selectedDatasetBridge = it },
                     onRefreshAnime = viewModel::refreshAnimeDatasetStatus,
                     onUpdateAnime = viewModel::updateAnimeDataset,
+                    onDeleteAnime = viewModel::deleteAnimeDataset,
                     onRefreshMangaBaka = viewModel::refreshMangaBakaDatasetStatus,
                     onUpdateMangaBaka = viewModel::updateMangaBakaDataset,
+                    onDeleteMangaBaka = viewModel::deleteMangaBakaDataset,
                     onBuildMangaBakaIndex = viewModel::buildMangaBakaSearchIndex,
                 )
             }
@@ -838,13 +843,21 @@ private fun DatasetBridgeCard(
     onBridgeSelected: (EntityOrganizeDatasetBridge) -> Unit,
     onRefreshAnime: () -> Unit,
     onUpdateAnime: () -> Unit,
+    onDeleteAnime: () -> Unit,
     onRefreshMangaBaka: () -> Unit,
     onUpdateMangaBaka: () -> Unit,
+    onDeleteMangaBaka: () -> Unit,
     onBuildMangaBakaIndex: () -> Unit,
 ) {
     val status = when (selectedBridge) {
         EntityOrganizeDatasetBridge.ANIME_OFFLINE -> animeStatus
         EntityOrganizeDatasetBridge.MANGABAKA -> mangaBakaStatus
+    }
+    val canDeleteDataset = !status.isLoading &&
+        (status.isInstalled || status.hasSearchIndex || status.version != null || status.searchIndexVersion != null)
+    val onDeleteDataset = when (selectedBridge) {
+        EntityOrganizeDatasetBridge.ANIME_OFFLINE -> onDeleteAnime
+        EntityOrganizeDatasetBridge.MANGABAKA -> onDeleteMangaBaka
     }
     OutlinedCard(
         shape = RoundedCornerShape(24.dp),
@@ -877,6 +890,22 @@ private fun DatasetBridgeCard(
                         text = status.summary,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                FilledIconButton(
+                    onClick = onDeleteDataset,
+                    enabled = canDeleteDataset,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = stringResource(R.string.delete),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }

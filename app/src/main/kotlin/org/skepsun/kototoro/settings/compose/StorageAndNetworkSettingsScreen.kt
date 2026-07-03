@@ -39,7 +39,9 @@ fun StorageAndNetworkSettingsScreen(
     dataRemovalTitle: String,
     networkTitle: String,
     storageUsage: StorageUsage?,
-    cacheLimits: @Composable () -> Unit,
+    onCacheLimitsClick: () -> Unit,
+    onDataRemovalClick: () -> Unit,
+    cacheLimits: @Composable () -> Unit = {},
     prefetchContent: @Composable () -> Unit,
     preloadPages: @Composable () -> Unit,
     proxy: @Composable () -> Unit,
@@ -54,7 +56,7 @@ fun StorageAndNetworkSettingsScreen(
     sslBypass: @Composable () -> Unit,
     offlineCheck: @Composable () -> Unit,
     adBlock: @Composable () -> Unit,
-    dataRemoval: @Composable () -> Unit,
+    dataRemoval: @Composable () -> Unit = {},
     snackbarHostState: SnackbarHostState,
 ) {
     Scaffold(
@@ -85,12 +87,19 @@ fun StorageAndNetworkSettingsScreen(
             }
             item(key = "cache_limits") {
                 SettingsPreferenceSection(title = cacheLimitsTitle) {
-                    cacheLimits()
+                    SettingsActionPreference(
+                        title = cacheLimitsTitle,
+                        summary = LocalContext.current.getString(R.string.cache_limit_applies_on_restart),
+                        onClick = onCacheLimitsClick,
+                    )
                 }
             }
             item(key = "data_removal") {
                 SettingsPreferenceSection(title = dataRemovalTitle) {
-                    dataRemoval()
+                    SettingsActionPreference(
+                        title = dataRemovalTitle,
+                        onClick = onDataRemovalClick,
+                    )
                 }
             }
             item(key = "network") {

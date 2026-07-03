@@ -726,6 +726,46 @@ class SourceMigrationViewModel @Inject constructor(
         )
     }
 
+    fun deleteAnimeDataset() {
+        _uiState.value = _uiState.value.copy(
+            animeDatasetStatus = _uiState.value.animeDatasetStatus.copy(
+                isLoading = true,
+                downloadProgress = null,
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+            ),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val nextStatus = runCatching {
+                animeOfflineRepository.deleteLocalDataset()
+                val local = animeOfflineRepository.readStatus()
+                val latest = animeOfflineRepository.fetchLatestRelease()
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = buildAnimeDatasetSummary(local, latest?.tag),
+                    version = local.releaseTag,
+                    latestVersion = latest?.tag,
+                    hasUpdate = latest?.let { animeOfflineRepository.isUpdateRequired(it) } ?: false,
+                    sizeBytes = local.installedBytes,
+                    entryCount = local.entryCount,
+                    isInstalled = local.isInstalled,
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }.getOrElse { error ->
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = error.getDisplayMessage(getApplication<Application>().resources),
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }
+            _uiState.value = _uiState.value.copy(animeDatasetStatus = nextStatus)
+        }
+    }
+
     fun updateMangaBakaDataset() {
         _uiState.value = _uiState.value.copy(
             mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(
@@ -756,6 +796,48 @@ class SourceMigrationViewModel @Inject constructor(
                         ),
                     )
                 }
+                val status = mangaBakaMetadataRepository.readStatus()
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = buildMangaBakaDatasetSummary(status),
+                    version = status.version,
+                    latestVersion = status.latestVersion,
+                    hasUpdate = status.hasUpdate,
+                    sizeBytes = status.sizeBytes,
+                    entryCount = status.entryCount,
+                    isInstalled = status.isInstalled,
+                    hasSearchIndex = status.hasSearchIndex,
+                    searchIndexVersion = status.searchIndexVersion,
+                    searchIndexEntries = status.searchIndexEntries,
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }.getOrElse { error ->
+                EntityOrganizeDatasetStatus(
+                    isLoading = false,
+                    summary = error.getDisplayMessage(getApplication<Application>().resources),
+                    downloadProgress = null,
+                    downloadedBytes = 0L,
+                    totalBytes = 0L,
+                )
+            }
+            _uiState.value = _uiState.value.copy(mangaBakaDatasetStatus = nextStatus)
+        }
+    }
+
+    fun deleteMangaBakaDataset() {
+        _uiState.value = _uiState.value.copy(
+            mangaBakaDatasetStatus = _uiState.value.mangaBakaDatasetStatus.copy(
+                isLoading = true,
+                downloadProgress = null,
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+            ),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val nextStatus = runCatching {
+                mangaBakaMetadataRepository.deleteLocalDataset()
                 val status = mangaBakaMetadataRepository.readStatus()
                 EntityOrganizeDatasetStatus(
                     isLoading = false,

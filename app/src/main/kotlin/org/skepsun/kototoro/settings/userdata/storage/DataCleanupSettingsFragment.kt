@@ -46,6 +46,9 @@ class DataCleanupSettingsFragment : Fragment() {
                     DataCleanupSettingsRoute(
                         settings = appSettings,
                         viewModel = viewModel,
+                        onClearLocalManga = ::clearLocalManga,
+                        onClearLocalNovels = ::clearLocalNovels,
+                        onClearLocalVideos = ::clearLocalVideos,
                         onClearSearchHistory = ::clearSearchHistory,
                         onClearCookies = ::clearCookies,
                         onDeleteReadChapters = ::cleanupChapters,
@@ -111,12 +114,48 @@ class DataCleanupSettingsFragment : Fragment() {
             }
         }.show()
     }
+
+    private fun clearLocalManga() {
+        buildAlertDialog(context ?: return) {
+            setTitle(R.string.clear_local_manga_storage)
+            setMessage(R.string.clear_local_manga_storage_prompt)
+            setNegativeButton(android.R.string.cancel, null)
+            setPositiveButton(R.string.clear) { _, _ ->
+                viewModel.clearLocalMangaContent()
+            }
+        }.show()
+    }
+
+    private fun clearLocalNovels() {
+        buildAlertDialog(context ?: return) {
+            setTitle(R.string.clear_local_novel_storage)
+            setMessage(R.string.clear_local_novel_storage_prompt)
+            setNegativeButton(android.R.string.cancel, null)
+            setPositiveButton(R.string.clear) { _, _ ->
+                viewModel.clearLocalNovelContent()
+            }
+        }.show()
+    }
+
+    private fun clearLocalVideos() {
+        buildAlertDialog(context ?: return) {
+            setTitle(R.string.clear_local_video_storage)
+            setMessage(R.string.clear_local_video_storage_prompt)
+            setNegativeButton(android.R.string.cancel, null)
+            setPositiveButton(R.string.clear) { _, _ ->
+                viewModel.clearLocalVideoContent()
+            }
+        }.show()
+    }
 }
 
 @Composable
 fun DataCleanupSettingsRoute(
     settings: AppSettings,
     viewModel: DataCleanupSettingsViewModel,
+    onClearLocalManga: () -> Unit,
+    onClearLocalNovels: () -> Unit,
+    onClearLocalVideos: () -> Unit,
     onClearSearchHistory: () -> Unit,
     onClearCookies: () -> Unit,
     onDeleteReadChapters: () -> Unit,
@@ -147,6 +186,13 @@ fun DataCleanupSettingsRoute(
         FileSize.BYTES.format(context, thumbsCacheSize)
     }
 
+    val faviconsCacheSize by viewModel.cacheSizes[CacheDir.FAVICONS]!!.collectAsState(initial = -1L)
+    val faviconsCacheSummary = if (faviconsCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, faviconsCacheSize)
+    }
+
     val pagesCacheSize by viewModel.cacheSizes[CacheDir.PAGES]!!.collectAsState(initial = -1L)
     val pagesCacheSummary = if (pagesCacheSize < 0) {
         context.getString(R.string.computing_)
@@ -154,11 +200,46 @@ fun DataCleanupSettingsRoute(
         FileSize.BYTES.format(context, pagesCacheSize)
     }
 
+    val novelCacheSize by viewModel.cacheSizes[CacheDir.NOVELS]!!.collectAsState(initial = -1L)
+    val novelCacheSummary = if (novelCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, novelCacheSize)
+    }
+
     val videoCacheSize by viewModel.cacheSizes[CacheDir.VIDEO]!!.collectAsState(initial = -1L)
     val videoCacheSummary = if (videoCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, videoCacheSize)
+    }
+
+    val videoProxyCacheSize by viewModel.cacheSizes[CacheDir.VIDEO_PROXY]!!.collectAsState(initial = -1L)
+    val videoProxyCacheSummary = if (videoProxyCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, videoProxyCacheSize)
+    }
+
+    val danmakuCacheSize by viewModel.cacheSizes[CacheDir.DANMAKU]!!.collectAsState(initial = -1L)
+    val danmakuCacheSummary = if (danmakuCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, danmakuCacheSize)
+    }
+
+    val ttsCacheSize by viewModel.cacheSizes[CacheDir.TtsAudio]!!.collectAsState(initial = -1L)
+    val ttsCacheSummary = if (ttsCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, ttsCacheSize)
+    }
+
+    val superResolutionCacheSize by viewModel.cacheSizes[CacheDir.SUPER_RESOLUTION]!!.collectAsState(initial = -1L)
+    val superResolutionCacheSummary = if (superResolutionCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, superResolutionCacheSize)
     }
 
     val httpCacheSize by viewModel.httpCacheSize.collectAsState(initial = -1L)
@@ -175,19 +256,37 @@ fun DataCleanupSettingsRoute(
         searchHistorySummary = searchHistorySummary,
         updatesFeedSummary = updatesFeedSummary,
         thumbsCacheSummary = thumbsCacheSummary,
+        faviconsCacheSummary = faviconsCacheSummary,
         pagesCacheSummary = pagesCacheSummary,
+        novelCacheSummary = novelCacheSummary,
         videoCacheSummary = videoCacheSummary,
+        videoProxyCacheSummary = videoProxyCacheSummary,
+        danmakuCacheSummary = danmakuCacheSummary,
+        ttsCacheSummary = ttsCacheSummary,
+        superResolutionCacheSummary = superResolutionCacheSummary,
         networkCacheSummary = networkCacheSummary,
         isBrowserVisible = viewModel.isBrowserDataCleanupEnabled,
+        isLocalMangaEnabled = AppSettings.KEY_LOCAL_MANGA_CLEAR !in loadingKeys,
+        isLocalNovelsEnabled = AppSettings.KEY_LOCAL_NOVELS_CLEAR !in loadingKeys,
+        isLocalVideosEnabled = AppSettings.KEY_LOCAL_VIDEOS_CLEAR !in loadingKeys,
         isSearchHistoryEnabled = AppSettings.KEY_SEARCH_HISTORY_CLEAR !in loadingKeys,
         isUpdatesFeedEnabled = AppSettings.KEY_UPDATES_FEED_CLEAR !in loadingKeys,
         isThumbsCacheEnabled = AppSettings.KEY_THUMBS_CACHE_CLEAR !in loadingKeys,
+        isFaviconsCacheEnabled = AppSettings.KEY_FAVICONS_CACHE_CLEAR !in loadingKeys,
         isPagesCacheEnabled = AppSettings.KEY_PAGES_CACHE_CLEAR !in loadingKeys,
+        isNovelCacheEnabled = AppSettings.KEY_NOVEL_CACHE_CLEAR !in loadingKeys,
         isVideoCacheEnabled = AppSettings.KEY_VIDEO_CACHE_CLEAR !in loadingKeys,
+        isVideoProxyCacheEnabled = AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR !in loadingKeys,
+        isDanmakuCacheEnabled = AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR !in loadingKeys,
+        isTtsCacheEnabled = AppSettings.KEY_TTS_CACHE_CLEAR !in loadingKeys,
+        isSuperResolutionCacheEnabled = AppSettings.KEY_SR_CACHE_CLEAR !in loadingKeys,
         isNetworkCacheEnabled = AppSettings.KEY_HTTP_CACHE_CLEAR !in loadingKeys,
         isChaptersClearEnabled = AppSettings.KEY_CHAPTERS_CLEAR !in loadingKeys,
         isWebviewClearEnabled = AppSettings.KEY_WEBVIEW_CLEAR !in loadingKeys,
         isMangaDataEnabled = AppSettings.KEY_CLEAR_MANGA_DATA !in loadingKeys,
+        onClearLocalManga = onClearLocalManga,
+        onClearLocalNovels = onClearLocalNovels,
+        onClearLocalVideos = onClearLocalVideos,
         onClearSearchHistory = onClearSearchHistory,
         onClearUpdatesFeed = viewModel::clearUpdatesFeed,
         onClearThumbsCache = {
@@ -197,11 +296,29 @@ fun DataCleanupSettingsRoute(
                 CacheDir.FAVICONS,
             )
         },
+        onClearFaviconsCache = {
+            viewModel.clearCache(AppSettings.KEY_FAVICONS_CACHE_CLEAR, CacheDir.FAVICONS)
+        },
         onClearPagesCache = {
             viewModel.clearCache(AppSettings.KEY_PAGES_CACHE_CLEAR, CacheDir.PAGES)
         },
+        onClearNovelCache = {
+            viewModel.clearCache(AppSettings.KEY_NOVEL_CACHE_CLEAR, CacheDir.NOVELS)
+        },
         onClearVideoCache = {
             viewModel.clearCache(AppSettings.KEY_VIDEO_CACHE_CLEAR, CacheDir.VIDEO)
+        },
+        onClearVideoProxyCache = {
+            viewModel.clearCache(AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR, CacheDir.VIDEO_PROXY)
+        },
+        onClearDanmakuCache = {
+            viewModel.clearCache(AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR, CacheDir.DANMAKU)
+        },
+        onClearTtsCache = {
+            viewModel.clearCache(AppSettings.KEY_TTS_CACHE_CLEAR, CacheDir.TtsAudio)
+        },
+        onClearSuperResolutionCache = {
+            viewModel.clearCache(AppSettings.KEY_SR_CACHE_CLEAR, CacheDir.SUPER_RESOLUTION)
         },
         onClearNetworkCache = viewModel::clearHttpCache,
         onClearDatabase = viewModel::clearContentData,
