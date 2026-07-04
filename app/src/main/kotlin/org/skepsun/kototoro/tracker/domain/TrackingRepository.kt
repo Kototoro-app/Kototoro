@@ -246,13 +246,9 @@ class TrackingRepository @Inject constructor(
 			db.getTracksDao().upsert(track)
 			
 			val updatedManga = updates.manga
-			if (db.getMangaDao().contains(updatedManga.id)) {
-				val tags = updatedManga.tags.toEntities()
-				db.getTagsDao().upsert(tags)
-				db.getMangaDao().upsert(updatedManga.toEntity(), tags)
-				updatedManga.chapters?.let { chapters ->
-					db.getChaptersDao().replaceAll(updatedManga.id, chapters.withIndex().toEntities(updatedManga.id))
-				}
+			val resolvedManga = contentDataRepository.resolveStoredProjection(updatedManga)
+			if (db.getMangaDao().contains(resolvedManga.id)) {
+				contentDataRepository.updateProjectionSnapshot(resolvedManga)
 			}
 
 			if (updates is MangaUpdates.Success && updates.isValid && updates.newChapters.isNotEmpty()) {

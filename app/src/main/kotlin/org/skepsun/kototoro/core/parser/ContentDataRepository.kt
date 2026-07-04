@@ -485,15 +485,22 @@ class ContentDataRepository @Inject constructor(
 		}
 	}
 
-	suspend fun updateChapters(manga: Content) {
-		val chapters = manga.chapters
-		if (manga.id in db.getMangaDao()) {
-			if (!chapters.isNullOrEmpty()) {
-				db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
-			}
-			val tags = manga.tags.toEntities()
+	suspend fun resolveStoredProjection(content: Content): Content {
+		return projectionIdentityResolver.resolveStoredProjection(content)
+	}
+
+	suspend fun updateProjectionSnapshot(manga: Content): Content {
+		return db.withTransaction {
+			val stored = resolveStoredProjection(manga)
+			val tags = stored.tags.toEntities()
 			db.getTagsDao().upsert(tags)
-			db.getMangaDao().upsert(manga.toEntity(), tags)
+			db.getMangaDao().upsert(stored.toEntity(), tags)
+			if (!stored.isLocal) {
+				stored.chapters?.let { chapters ->
+					db.getChaptersDao().replaceAll(stored.id, chapters.withIndex().toEntities(stored.id))
+				}
+			}
+			stored
 		}
 	}
 

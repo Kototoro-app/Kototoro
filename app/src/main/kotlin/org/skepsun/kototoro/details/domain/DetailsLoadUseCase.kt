@@ -48,9 +48,10 @@ class DetailsLoadUseCase @Inject constructor(
 ) {
 
 	operator fun invoke(intent: ContentIntent, force: Boolean): Flow<ContentDetails> = flow {
-		val manga = requireNotNull(mangaDataRepository.resolveIntent(intent, withChapters = true)) {
+		val intentManga = requireNotNull(mangaDataRepository.resolveIntent(intent, withChapters = true)) {
 			"Cannot resolve intent $intent"
 		}
+		val manga = mangaDataRepository.resolveStoredProjection(intentManga)
 		val override = mangaDataRepository.getOverride(manga.id)
 		emit(
 			ContentDetails(
@@ -101,24 +102,26 @@ class DetailsLoadUseCase @Inject constructor(
 			)
 		} else {
 			val remoteDetails = getDetails(remoteContent, force).getOrNull()
-			if (remoteDetails != null) {
+			val storedDetails = if (remoteDetails != null) {
+				mangaDataRepository.updateProjectionSnapshot(remoteDetails)
+			} else {
+				null
+			}
+			if (storedDetails != null) {
 				android.util.Log.d(
 					"DetailsLoadUseCase",
-					"loadLocal: remote fallback details ready, mangaId=${remoteDetails.id}, chapters=${remoteDetails.chapters?.size ?: 0}, localChapters=${localDetails.chapters?.size ?: 0}",
+					"loadLocal: remote fallback details ready, mangaId=${storedDetails.id}, chapters=${storedDetails.chapters?.size ?: 0}, localChapters=${localDetails.chapters?.size ?: 0}",
 				)
 			}
 			emit(
 				ContentDetails(
-					manga = remoteDetails ?: remoteContent,
+					manga = storedDetails ?: remoteDetails ?: remoteContent,
 					localContent = LocalContent(localDetails),
 					override = override,
-					description = (remoteDetails ?: localDetails).description?.parseAsHtml(withImages = true),
+					description = (storedDetails ?: remoteDetails ?: localDetails).description?.parseAsHtml(withImages = true),
 					isLoaded = true,
 				),
 			)
-			if (remoteDetails != null) {
-				mangaDataRepository.updateChapters(remoteDetails)
-			}
 		}
 	}
 
@@ -132,9 +135,12 @@ class DetailsLoadUseCase @Inject constructor(
 		force: Boolean
 	) = coroutineScope {
 		val localContent = localContentRepository.findSavedContent(manga, withDetails = true)
-		val hasCachedDetails = !force && manga.id != 0L && 
-			!manga.chapters.isNullOrEmpty() &&
-			mangaDatabase.getMangaDao().contains(manga.id)
+		val cachedProjection = if (!force && manga.id != 0L) {
+			mangaDataRepository.findContentById(manga.id, withChapters = true)
+		} else {
+			null
+		}
+		val hasCachedDetails = !force && cachedProjection != null && !cachedProjection.chapters.isNullOrEmpty()
 
 		val skipNetworkLoad = !force && (networkState.isOfflineOrRestricted() || hasCachedDetails)
 		android.util.Log.d(
@@ -146,21 +152,21 @@ class DetailsLoadUseCase @Inject constructor(
 			if (localContent != null) {
 				emit(
 					ContentDetails(
-						manga = manga,
+						manga = cachedProjection ?: manga,
 						localContent = localContent,
 						override = override,
-						description = localContent.manga.description?.parseAsHtml(withImages = true),
+						description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
 						isLoaded = true,
 					),
 				)
 				return@coroutineScope
-			} else if (hasCachedDetails) {
+			} else if (hasCachedDetails && cachedProjection != null) {
 				emit(
 					ContentDetails(
-						manga = manga,
+						manga = cachedProjection,
 						localContent = null,
 						override = override,
-						description = manga.description?.parseAsHtml(withImages = true),
+						description = cachedProjection.description?.parseAsHtml(withImages = true),
 						isLoaded = true,
 					),
 				)
@@ -174,10 +180,10 @@ class DetailsLoadUseCase @Inject constructor(
 		if (localContent != null) {
 			emit(
 				ContentDetails(
-					manga = manga,
+					manga = cachedProjection ?: manga,
 					localContent = localContent,
 					override = override,
-					description = localContent.manga.description?.parseAsHtml(withImages = true),
+					description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
 					isLoaded = false,
 				),
 			)
@@ -195,29 +201,29 @@ class DetailsLoadUseCase @Inject constructor(
 			remoteResult.getOrThrow()
 		}
 		if (remoteDetails != null) {
+			val storedDetails = mangaDataRepository.updateProjectionSnapshot(remoteDetails)
 			android.util.Log.d(
 				"DetailsLoadUseCase",
-				"loadRemote: remote details ready, mangaId=${remoteDetails.id}, chapters=${remoteDetails.chapters?.size ?: 0}, localChapters=${localContent?.manga?.chapters?.size ?: 0}",
+				"loadRemote: remote details ready, mangaId=${storedDetails.id}, chapters=${storedDetails.chapters?.size ?: 0}, localChapters=${localContent?.manga?.chapters?.size ?: 0}",
 			)
 			emit(
 				ContentDetails(
-					manga = remoteDetails,
+					manga = storedDetails,
 					localContent = localContent,
 					override = override,
-					description = (remoteDetails.description
+					description = (storedDetails.description
 						?: localContent?.manga?.description)?.parseAsHtml(withImages = true),
 					isLoaded = true,
 				),
 			)
-			mangaDataRepository.updateChapters(remoteDetails)
 		} else if (localContent != null) {
 			// Network failed but we have local content — mark as loaded with local data
 			emit(
 				ContentDetails(
-					manga = manga,
+					manga = cachedProjection ?: manga,
 					localContent = localContent,
 					override = override,
-					description = localContent.manga.description?.parseAsHtml(withImages = true),
+					description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
 					isLoaded = true,
 				),
 			)
