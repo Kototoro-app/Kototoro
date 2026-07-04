@@ -817,7 +817,8 @@ class HistoryListViewModel @Inject constructor(
 				isSaved = manga.isLocal,
 				tags = emptyList(),
 			)
-			ListMode.GRID -> ContentGridModel(
+			ListMode.GRID,
+			ListMode.COMPACT_GRID -> ContentGridModel(
 				manga = manga,
 				override = null,
 				subtitle = manga.altTitles.firstOrNull(),

@@ -896,7 +896,8 @@ private fun HomeContentRowSection(
     val showMoreButton = true
     val railPages = remember(items, listMode) {
         when (listMode) {
-            ListMode.GRID -> emptyList()
+            ListMode.GRID,
+            ListMode.COMPACT_GRID -> emptyList()
             ListMode.LIST,
             ListMode.DETAILED_LIST -> items.chunked(HOME_LIST_RAIL_PAGE_SIZE)
         }
@@ -961,7 +962,8 @@ private fun HomeContentRowSection(
 
         val railAnimationFactor = rememberRailAnimationFactor()
         when (listMode) {
-            ListMode.GRID -> {
+            ListMode.GRID,
+            ListMode.COMPACT_GRID -> {
                 LazyRow(
                     state = rowState,
                     flingBehavior = rememberSnapFlingBehavior(rowState),
@@ -1088,7 +1090,8 @@ private fun HomeListRailRowItem(
     val coverSize = when (listMode) {
         ListMode.LIST -> HomeListRailCoverSize(52.dp, 78.dp)
         ListMode.DETAILED_LIST -> HomeListRailCoverSize(72.dp, 108.dp)
-        ListMode.GRID -> HomeListRailCoverSize(52.dp, 78.dp)
+        ListMode.GRID,
+        ListMode.COMPACT_GRID -> HomeListRailCoverSize(52.dp, 78.dp)
     }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -1318,7 +1321,8 @@ private fun calculateHomeListRailPageWidth(maxWidth: Dp, listMode: ListMode): Dp
     val targetWidth = when (listMode) {
         ListMode.DETAILED_LIST -> referenceWidth * HOME_DETAILED_RAIL_PAGE_WIDTH_RATIO
         ListMode.LIST -> referenceWidth * HOME_LIST_RAIL_PAGE_WIDTH_RATIO
-        ListMode.GRID -> referenceWidth * HOME_LIST_RAIL_PAGE_WIDTH_RATIO
+        ListMode.GRID,
+        ListMode.COMPACT_GRID -> referenceWidth * HOME_LIST_RAIL_PAGE_WIDTH_RATIO
     }
     val maxPageWidth = if (listMode == ListMode.DETAILED_LIST) {
         HOME_DETAILED_RAIL_PAGE_MAX_WIDTH

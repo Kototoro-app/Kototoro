@@ -323,7 +323,8 @@ class ContentListMapper @Inject constructor(
 			metadataTrackingService,
 			override,
 		)
-		ListMode.GRID -> toGridModel(manga, options, pinnedIds, counters, progress, metadataTrackingService, override)
+		ListMode.GRID,
+		ListMode.COMPACT_GRID -> toGridModel(manga, options, pinnedIds, counters, progress, metadataTrackingService, override)
 	}
 
 	private suspend fun getCounters(mangaIds: Collection<Long>): Map<Long, Int>? {

@@ -709,7 +709,11 @@ fun AppSearchContentListRoute(
                                 selectedItemsIds = selectedItemsIds,
                                 showInlineSelectionTopBar = false,
                                 onRetry = ::resolveErrorAndRetry,
-                                gridState = if (listMode == ListMode.GRID) wideGridState else null,
+                                gridState = if (listMode == ListMode.GRID || listMode == ListMode.COMPACT_GRID) {
+                                    wideGridState
+                                } else {
+                                    null
+                                },
                                 listState = if (listMode == ListMode.LIST) wideListState else null,
                                 detailedListState = if (listMode == ListMode.DETAILED_LIST) wideDetailedListState else null,
                             )
@@ -2631,5 +2635,6 @@ private fun SearchPanelChip(
 private fun ListMode.iconRes(): Int = when (this) {
     ListMode.LIST -> R.drawable.ic_list
     ListMode.DETAILED_LIST -> R.drawable.ic_list_detailed
-    ListMode.GRID -> R.drawable.ic_grid
+    ListMode.GRID,
+    ListMode.COMPACT_GRID -> R.drawable.ic_grid
 }

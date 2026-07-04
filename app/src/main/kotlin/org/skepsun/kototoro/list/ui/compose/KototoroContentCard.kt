@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -222,6 +223,7 @@ fun KototoroContentCardGrid(
     sharedTransitionEnabled: Boolean = true,
     sharedElementInstanceKey: String? = null,
     cardStyle: CompactPosterCardStyle? = null,
+    compactOverlay: Boolean = false,
     uiPrefs: ContentCardUiPrefs? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
@@ -247,6 +249,13 @@ fun KototoroContentCardGrid(
     }
     var coverBounds by remember { mutableStateOf<Rect?>(null) }
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
+    val compactTitleHeight = remember(posterStyle.itemWidth) {
+        (posterStyle.itemWidth.value * 0.42f).dp.coerceIn(42.dp, 58.dp)
+    }
+    val compactTitleTextClearance = remember(posterStyle.itemWidth) {
+        (posterStyle.itemWidth.value * 0.30f).dp.coerceIn(32.dp, 44.dp)
+    }
+    val bottomBadgeLift = if (compactOverlay) compactTitleTextClearance else 0.dp
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val sharedIdentity = remember(manga.id, manga.url, manga.publicUrl, item.coverUrl) {
@@ -347,6 +356,12 @@ fun KototoroContentCardGrid(
                 modifier = Modifier.align(Alignment.TopEnd),
             )
 
+            val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, item.manga) {
+                "nsfw" in resolvedUiPrefs.badgesBottomRight && item.manga.isNsfw()
+            }
+            val bottomBadgeHeight = with(density) { badgeMetrics.textSize.toDp() } +
+                (badgeMetrics.containerVerticalPadding * 2)
+
             // Bottom Left Badges
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesBottomLeft,
@@ -354,16 +369,14 @@ fun KototoroContentCardGrid(
                 corner = Alignment.BottomStart,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomStart),
+                attachedToTitleEdge = compactOverlay,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(bottom = bottomBadgeLift),
             )
 
-            val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, item.manga) {
-                "nsfw" in resolvedUiPrefs.badgesBottomRight && item.manga.isNsfw()
-            }
             val badgeReservedHeight = if (showBottomRightBadge) {
-                with(density) { badgeMetrics.textSize.toDp() } +
-                    (badgeMetrics.containerVerticalPadding * 2) +
-                    badgeMetrics.progressSpacing
+                bottomBadgeHeight + badgeMetrics.progressSpacing
             } else {
                 0.dp
             }
@@ -374,9 +387,13 @@ fun KototoroContentCardGrid(
                     corner = Alignment.BottomEnd,
                     cardRadius = cardRadius,
                     metrics = badgeMetrics,
+                    attachedToTitleEdge = compactOverlay,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(badgeMetrics.badgeEdgePadding),
+                        .padding(
+                            end = badgeMetrics.badgeEdgePadding,
+                            bottom = bottomBadgeLift + badgeMetrics.badgeEdgePadding,
+                        ),
                 )
             }
             if (item.progress != null) {
@@ -386,24 +403,34 @@ fun KototoroContentCardGrid(
                         .align(Alignment.BottomEnd)
                         .padding(
                             end = badgeMetrics.progressAnchorInset,
-                            bottom = badgeMetrics.progressAnchorInset + badgeReservedHeight,
+                            bottom = badgeMetrics.progressAnchorInset + badgeReservedHeight + bottomBadgeLift,
                         )
                         .size(badgeMetrics.progressSize),
                 )
             }
+
+            if (compactOverlay) {
+                CompactGridTitleOverlay(
+                    title = item.title,
+                    height = compactTitleHeight,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
 
-        Text(
-            text = item.title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-        )
-        if (resolvedUiPrefs.showExtraInfo) {
+        if (!compactOverlay) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            )
+        }
+        if (!compactOverlay && resolvedUiPrefs.showExtraInfo) {
             val infoText = remember(item.manga.state, item.manga.chapters?.size, item.manga.tags, item.scoreText, context) {
                 item.buildInfoText(context)
             }
@@ -433,6 +460,38 @@ fun KototoroContentCardGrid(
             )
         }
         }
+    }
+}
+
+@Composable
+private fun CompactGridTitleOverlay(
+    title: String,
+    height: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+) {
+    val overlayBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                Color.Black.copy(alpha = 0.72f),
+            ),
+        )
+    }
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(overlayBrush)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -666,6 +725,7 @@ fun ContentCardCornerBadges(
     corner: Alignment,
     cardRadius: androidx.compose.ui.unit.Dp,
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
+    attachedToTitleEdge: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (badges.isEmpty()) return
@@ -713,12 +773,26 @@ fun ContentCardCornerBadges(
         return
     }
 
-    val shape = when (corner) {
-        Alignment.TopStart -> RoundedCornerShape(topStart = cardRadius, bottomEnd = metrics.innerCornerRadius)
-        Alignment.TopEnd -> RoundedCornerShape(topEnd = cardRadius, bottomStart = metrics.innerCornerRadius)
-        Alignment.BottomStart -> RoundedCornerShape(bottomStart = cardRadius, topEnd = metrics.innerCornerRadius)
-        Alignment.BottomEnd -> RoundedCornerShape(bottomEnd = cardRadius, topStart = metrics.innerCornerRadius)
-        else -> RoundedCornerShape(metrics.innerCornerRadius)
+    val shape = if (attachedToTitleEdge) {
+        when (corner) {
+            Alignment.BottomStart -> RoundedCornerShape(
+                topEnd = metrics.innerCornerRadius,
+                bottomEnd = metrics.innerCornerRadius,
+            )
+            Alignment.BottomEnd -> RoundedCornerShape(
+                topStart = metrics.innerCornerRadius,
+                bottomStart = metrics.innerCornerRadius,
+            )
+            else -> RoundedCornerShape(metrics.innerCornerRadius)
+        }
+    } else {
+        when (corner) {
+            Alignment.TopStart -> RoundedCornerShape(topStart = cardRadius, bottomEnd = metrics.innerCornerRadius)
+            Alignment.TopEnd -> RoundedCornerShape(topEnd = cardRadius, bottomStart = metrics.innerCornerRadius)
+            Alignment.BottomStart -> RoundedCornerShape(bottomStart = cardRadius, topEnd = metrics.innerCornerRadius)
+            Alignment.BottomEnd -> RoundedCornerShape(bottomEnd = cardRadius, topStart = metrics.innerCornerRadius)
+            else -> RoundedCornerShape(metrics.innerCornerRadius)
+        }
     }
 
     Row(

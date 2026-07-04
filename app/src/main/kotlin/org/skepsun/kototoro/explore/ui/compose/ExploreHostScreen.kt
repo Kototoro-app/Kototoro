@@ -259,7 +259,7 @@ private fun calculateSourceGridColumns(
     metrics: SourceQuickAccessMetrics,
     browseListMode: ListMode,
 ): Int {
-    if (browseListMode != ListMode.GRID) {
+    if (browseListMode != ListMode.GRID && browseListMode != ListMode.COMPACT_GRID) {
         return 1
     }
     val spacing = metrics.gridSpacing
@@ -1448,7 +1448,7 @@ private fun SourceQuickAccessCard(
     val context = LocalContext.current
     val actualSource = source.source.mangaSource
     val title = actualSource.getTitle(context)
-    val isGridCard = browseListMode == ListMode.GRID
+    val isGridCard = browseListMode == ListMode.GRID || browseListMode == ListMode.COMPACT_GRID
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val cardShape = RoundedCornerShape(
         when {

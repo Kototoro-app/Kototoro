@@ -234,7 +234,8 @@ fun KototoroContentListScreen(
                     }
                 } else {
                 when (listMode) {
-                    ListMode.GRID -> {
+                    ListMode.GRID,
+                    ListMode.COMPACT_GRID -> {
                         val posterStyle = compactPosterCardStyle(gridScale)
                         val actualGridState = gridState ?: rememberLazyGridState()
                         LoadMoreOnNearEndEffect(
@@ -333,6 +334,7 @@ fun KototoroContentListScreen(
                                                 sharedElementInstanceKey = sharedElementInstanceKey,
                                                 showSourceInfo = showSourceOnCards,
                                                 cardStyle = effectivePosterStyle,
+                                                compactOverlay = listMode == ListMode.COMPACT_GRID,
                                                 uiPrefs = cardUiPrefs,
                                                 modifier = Modifier.width(effectivePosterStyle.itemWidth),
                                             )
@@ -851,7 +853,8 @@ private fun LoadingStateItem(
     gridScale: Float,
 ) {
     when (listMode) {
-        ListMode.GRID -> GridLoadingSkeleton(gridScale = gridScale)
+        ListMode.GRID,
+        ListMode.COMPACT_GRID -> GridLoadingSkeleton(gridScale = gridScale)
         ListMode.LIST,
         ListMode.DETAILED_LIST -> LinearLoadingSkeleton(isDetailed = listMode == ListMode.DETAILED_LIST)
     }

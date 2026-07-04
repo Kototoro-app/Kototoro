@@ -19,6 +19,7 @@
 		<item>@string/list</item>
 		<item>@string/detailed_list</item>
 		<item>@string/grid</item>
+		<item>@string/compact_grid</item>
 	</string-array>
 	<string-array name="screenshots_policy" translatable="false">
 		<item>@string/screenshots_allow</item>

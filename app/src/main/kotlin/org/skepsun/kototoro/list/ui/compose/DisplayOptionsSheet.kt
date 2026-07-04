@@ -160,11 +160,23 @@ fun DisplayOptionsSheet(
                                 onClick = { onListModeSelected(ListMode.DETAILED_LIST) },
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
                             DisplayModeChip(
                                 iconRes = R.drawable.ic_grid,
                                 label = stringResource(R.string.grid),
                                 selected = currentListMode == ListMode.GRID,
                                 onClick = { onListModeSelected(ListMode.GRID) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            DisplayModeChip(
+                                iconRes = R.drawable.ic_grid,
+                                label = stringResource(R.string.compact_grid),
+                                selected = currentListMode == ListMode.COMPACT_GRID,
+                                onClick = { onListModeSelected(ListMode.COMPACT_GRID) },
                                 modifier = Modifier.weight(1f)
                             )
                         }

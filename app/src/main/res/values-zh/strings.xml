@@ -686,6 +686,7 @@
     <string name="destination_directory">目标目录</string>
     <string name="detailed_list">详情</string>
     <string name="details">详情</string>
+    <string name="compact_grid">紧凑网格</string>
     <string name="details_additional_metadata">额外元数据</string>
     <string name="details_chapter_number_label">章节: %1$s</string>
     <string name="details_character_role_label">角色</string>

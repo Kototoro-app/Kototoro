@@ -72,6 +72,7 @@
     <string name="details">详情</string>
     <string name="detailed_list">详情</string>
     <string name="grid">网格</string>
+    <string name="compact_grid">紧凑网格</string>
     <string name="list_mode">视图选项</string>
     <string name="remote_sources">内容源</string>
     <string name="loading_">加载中…</string>

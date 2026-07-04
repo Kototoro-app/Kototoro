@@ -62,7 +62,7 @@ fun ListConfigRoute(
 			pendingListMode = it
 			viewModel.updateListMode(it)
 		},
-        supportsGridSizeSlider = pendingListMode == ListMode.GRID,
+        supportsGridSizeSlider = pendingListMode == ListMode.GRID || pendingListMode == ListMode.COMPACT_GRID,
         gridSize = pendingGridSize,
         onGridSizeChange = {
 			pendingGridSize = it
