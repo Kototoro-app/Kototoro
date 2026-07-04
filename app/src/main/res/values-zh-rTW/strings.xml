@@ -2492,7 +2492,7 @@ SHA-256 指紋:
     <string name="video_volume_boost">音量增強</string>
     <string name="view_all">查看全部</string>
     <string name="webdav_auto_restore">啓動時自動恢復</string>
-    <string name="webdav_auto_restore_summary">應用每天首次啓動時檢查並恢復 WebDAV 上最新備份；這是整包還原，不是即時合併同步。</string>
+    <string name="webdav_auto_restore_summary">應用每天首次啓動時合併恢復 WebDAV 上最新備份一次，恢復完成後立即把合併後的快照上傳回 WebDAV。</string>
     <string name="webdav_auto_sync">自動備份到 WebDAV</string>
     <string name="webdav_auto_sync_summary">僅在非計量網絡下自動上傳整包備份到 WebDAV，每天最多一次。</string>
     <string name="webdav_integration">WebDAV 備份</string>
@@ -2501,6 +2501,10 @@ SHA-256 指紋:
     <string name="webdav_password">WebDAV 密碼</string>
     <string name="webdav_remote_path">遠端路徑</string>
     <string name="webdav_restore_now">恢復最新備份</string>
+    <string name="webdav_restore_mode_title">選擇恢復模式</string>
+    <string name="webdav_restore_mode_summary">整包替換會先清空對應本地恢復目標；合併恢復會保留本地狀態，並整合 WebDAV 中較新的相容狀態。</string>
+    <string name="webdav_restore_mode_replace">整包替換</string>
+    <string name="webdav_restore_mode_merge">合併恢復</string>
     <string name="webdav_restore_success">數據已從 WebDAV 恢復</string>
     <string name="webdav_restore_success_legacy_jar_hint">已從 WebDAV 恢復數據。檢測到舊版備份，已補充兼容的 JAR 倉庫。</string>
     <string name="webdav_server_url">WebDAV 服務器 URL</string>

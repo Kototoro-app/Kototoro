@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.ui.periodical.BackupFileInfo
+import org.skepsun.kototoro.backups.ui.periodical.ManualWebDavRestoreMode
 import org.skepsun.kototoro.backups.ui.periodical.WebDavRemoteBackupRestoreStatus
 
 data class BackupsSettingsUiState(
@@ -88,10 +89,10 @@ fun BackupsSettingsScreen(
     onWebDavRemotePathChange: (String) -> Unit,
     onWebDavTestClick: () -> Unit,
     onWebDavUploadNowClick: () -> Unit,
-    onWebDavRestoreNowClick: () -> Unit,
+    onWebDavRestoreNowClick: (ManualWebDavRestoreMode) -> Unit,
     onWebDavRefreshRemoteBackupsClick: () -> Unit,
     onWebDavInspectRemoteBackupsClick: () -> Unit,
-    onWebDavRestoreRemoteBackupClick: (BackupFileInfo) -> Unit,
+    onWebDavRestoreRemoteBackupClick: (BackupFileInfo, ManualWebDavRestoreMode) -> Unit,
     onWebDavDeleteRemoteBackupClick: (BackupFileInfo) -> Unit,
     onWebDavClearRemoteBackupsClick: () -> Unit,
     onWebDavAutoRestoreChange: (Boolean) -> Unit,
@@ -106,6 +107,8 @@ fun BackupsSettingsScreen(
     ) { innerPadding ->
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         var selectedRemoteBackup by remember { mutableStateOf<WebDavRemoteBackupUiItem?>(null) }
+        var pendingRestoreRemoteBackup by remember { mutableStateOf<WebDavRemoteBackupUiItem?>(null) }
+        var isRestoreLatestModeDialogVisible by rememberSaveable { mutableStateOf(false) }
         var isClearRemoteBackupsConfirmVisible by rememberSaveable { mutableStateOf(false) }
         var isEnableWebDavConfirmVisible by rememberSaveable { mutableStateOf(false) }
         LazyColumn(
@@ -272,7 +275,7 @@ fun BackupsSettingsScreen(
                         title = stringResource(R.string.webdav_restore_now),
                         summary = state.webDavRestoreBusySummary ?: stringResource(R.string.restore_backup),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
-                        onClick = onWebDavRestoreNowClick,
+                        onClick = { isRestoreLatestModeDialogVisible = true },
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
@@ -389,7 +392,7 @@ fun BackupsSettingsScreen(
                     TextButton(
                         onClick = {
                             selectedRemoteBackup = null
-                            onWebDavRestoreRemoteBackupClick(backup.file)
+                            pendingRestoreRemoteBackup = backup
                         },
                         enabled = backup.restoreStatus != WebDavRemoteBackupRestoreStatus.UNRESTORABLE,
                     ) {
@@ -408,6 +411,24 @@ fun BackupsSettingsScreen(
                     TextButton(onClick = { selectedRemoteBackup = null }) {
                         Text(text = stringResource(android.R.string.cancel))
                     }
+                },
+            )
+        }
+        if (isRestoreLatestModeDialogVisible) {
+            WebDavRestoreModeDialog(
+                onDismissRequest = { isRestoreLatestModeDialogVisible = false },
+                onModeSelected = { mode ->
+                    isRestoreLatestModeDialogVisible = false
+                    onWebDavRestoreNowClick(mode)
+                },
+            )
+        }
+        pendingRestoreRemoteBackup?.let { backup ->
+            WebDavRestoreModeDialog(
+                onDismissRequest = { pendingRestoreRemoteBackup = null },
+                onModeSelected = { mode ->
+                    pendingRestoreRemoteBackup = null
+                    onWebDavRestoreRemoteBackupClick(backup.file, mode)
                 },
             )
         }
@@ -465,4 +486,42 @@ private fun ExternalBackupApp.displayName(): String = when (this) {
     ExternalBackupApp.ANIYOMI -> "Aniyomi"
     ExternalBackupApp.ANIKKU -> "Anikku"
     ExternalBackupApp.ANIMIRU -> "Animiru"
+}
+
+@Composable
+private fun WebDavRestoreModeDialog(
+    onDismissRequest: () -> Unit,
+    onModeSelected: (ManualWebDavRestoreMode) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(text = stringResource(R.string.webdav_restore_mode_title)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(text = stringResource(R.string.webdav_restore_mode_summary))
+                HorizontalDivider()
+                TextButton(
+                    onClick = { onModeSelected(ManualWebDavRestoreMode.SNAPSHOT_REPLACE) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(R.string.webdav_restore_mode_replace))
+                }
+                TextButton(
+                    onClick = { onModeSelected(ManualWebDavRestoreMode.MERGE) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(R.string.webdav_restore_mode_merge))
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(text = stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }
