@@ -224,6 +224,7 @@ class TrackingRepository @Inject constructor(
 	}
 
 	suspend fun gc() = db.withTransaction {
+		syncTrackAnchors()
 		db.getTrackLogsDao().ensureUnreadUpdateLogs()
 		db.getTracksDao().insertTracksFromUnreadLogs()
 		db.getTracksDao().restoreCountersFromUnreadLogs()

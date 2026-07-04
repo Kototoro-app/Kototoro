@@ -42,6 +42,7 @@ import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.parsers.util.nullIfEmpty
 import org.skepsun.kototoro.core.util.ext.connectivityManager
 import org.skepsun.kototoro.core.util.ext.getEnumValue
+import org.skepsun.kototoro.core.util.ext.getSafeFloat
 import org.skepsun.kototoro.core.util.ext.observeChanges
 import org.skepsun.kototoro.core.util.ext.putAll
 import org.skepsun.kototoro.core.util.ext.putEnumValue
@@ -79,22 +80,6 @@ private fun SharedPreferences.getSafeLong(key: String, defValue: Long): Long {
 			else -> defValue
 		}.also {
 			edit { putLong(key, it) }
-		}
-	}
-}
-
-private fun SharedPreferences.getSafeFloat(key: String, defValue: Float): Float {
-	return try {
-		getFloat(key, defValue)
-	} catch (_: ClassCastException) {
-		when (val raw = all[key]) {
-			is Int -> raw.toFloat()
-			is Long -> raw.toFloat()
-			is Double -> raw.toFloat()
-			is String -> raw.toFloatOrNull() ?: defValue
-			else -> defValue
-		}.also {
-			edit { putFloat(key, it) }
 		}
 	}
 }
@@ -735,7 +720,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putBoolean(KEY_VIDEO_DOUBLE_TAP_SEEK_ENABLED, value) }
 
 	var videoSubtitleFontSize: Float
-		get() = prefs.getFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, 18f)
+		get() = prefs.getSafeFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, 18f)
 		set(value) = prefs.edit { putFloat(KEY_VIDEO_SUBTITLE_FONT_SIZE, value) }
 
 	var videoSubtitleBold: Boolean
@@ -755,7 +740,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putInt(KEY_VIDEO_SUBTITLE_BORDER_COLOR, value) }
 
 	var videoSubtitleBorderSize: Float
-		get() = prefs.getFloat(KEY_VIDEO_SUBTITLE_BORDER_SIZE, 8f)
+		get() = prefs.getSafeFloat(KEY_VIDEO_SUBTITLE_BORDER_SIZE, 8f)
 		set(value) = prefs.edit { putFloat(KEY_VIDEO_SUBTITLE_BORDER_SIZE, value) }
 
 	var videoSubtitleBgColor: Int
@@ -1417,8 +1402,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var readerColorFilter: ReaderColorFilter?
 		get() = runCatching {
 			ReaderColorFilter(
-				brightness = prefs.getFloat(KEY_CF_BRIGHTNESS, ReaderColorFilter.EMPTY.brightness),
-				contrast = prefs.getFloat(KEY_CF_CONTRAST, ReaderColorFilter.EMPTY.contrast),
+				brightness = prefs.getSafeFloat(KEY_CF_BRIGHTNESS, ReaderColorFilter.EMPTY.brightness),
+				contrast = prefs.getSafeFloat(KEY_CF_CONTRAST, ReaderColorFilter.EMPTY.contrast),
 				isInverted = prefs.getBoolean(KEY_CF_INVERTED, ReaderColorFilter.EMPTY.isInverted),
 				isGrayscale = prefs.getBoolean(KEY_CF_GRAYSCALE, ReaderColorFilter.EMPTY.isGrayscale),
 				isBookBackground = prefs.getBoolean(KEY_CF_BOOK, ReaderColorFilter.EMPTY.isBookBackground),
@@ -1517,7 +1502,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	@get:FloatRange(from = 0.0, to = 1.0)
 	var readerAutoscrollSpeed: Float
-		get() = prefs.getFloat(KEY_READER_AUTOSCROLL_SPEED, 0f)
+		get() = prefs.getSafeFloat(KEY_READER_AUTOSCROLL_SPEED, 0f)
 		set(@FloatRange(from = 0.0, to = 1.0) value) = prefs.edit {
 			putFloat(
 				KEY_READER_AUTOSCROLL_SPEED,

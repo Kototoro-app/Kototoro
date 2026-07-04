@@ -6,7 +6,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
+import org.skepsun.kototoro.backups.domain.BackupUtils
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
+import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.ui.periodical.BackupFileInfo
 import org.skepsun.kototoro.backups.ui.periodical.RemoteNamespace
 import org.skepsun.kototoro.backups.ui.periodical.WebDavBackupUploader
@@ -19,6 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,6 +32,7 @@ class WebDavAutoRestoreRunner @Inject constructor(
     private val backupRepository: BackupRepository,
     private val webDavUploader: WebDavBackupUploader,
     private val backupWebDavRestoreCoordinator: BackupWebDavRestoreCoordinator,
+    private val backupWebDavUploadCoordinator: BackupWebDavUploadCoordinator,
 ) {
 
     suspend fun run() {
@@ -98,7 +102,7 @@ class WebDavAutoRestoreRunner @Inject constructor(
                     input = zis,
                     sections = buildRestoreSections(candidate.writerGeneration),
                     progress = null,
-                    restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+                    restoreMode = BackupRepository.RestoreMode.MERGE,
                 )
             }
             val restoreContext = backupRepository.resolveRestoreSemanticContext(restoreResult.backupIndex)
@@ -126,11 +130,47 @@ class WebDavAutoRestoreRunner @Inject constructor(
                 "legacyMigration" to false,
             )
 
+            if (restoreContext.isAuthoritativeWorkSchema && !restoreResultCommit.writeBlocked) {
+                uploadMergedSnapshot(currentTime)
+            } else {
+                logBackupFlow(
+                    TAG,
+                    flow = BackupFlow.WEBDAV_AUTO_RESTORE,
+                    event = "merged_snapshot_upload_skipped",
+                    reason = "non_authoritative_restore",
+                    "semanticSchemaVersion" to restoreResultCommit.semanticSchemaVersion,
+                    "transportGeneration" to restoreResultCommit.transportGeneration,
+                    "writeBlocked" to restoreResultCommit.writeBlocked,
+                )
+            }
             settings.hasCompletedBackupWebDavV2Migration = true
         } finally {
             if (tempFile.exists()) {
                 tempFile.delete()
             }
+        }
+    }
+
+    private suspend fun uploadMergedSnapshot(currentTime: Long) {
+        val output = BackupUtils.createTempFile(appContext)
+        try {
+            ZipOutputStream(output.outputStream()).use { zip ->
+                backupRepository.createBackup(zip, null)
+            }
+            val uploadResult = backupWebDavUploadCoordinator.uploadAndCommit(
+                file = output,
+                uploadKind = "auto_restore_merge",
+                now = currentTime,
+            )
+            logBackupFlow(
+                TAG,
+                flow = BackupFlow.WEBDAV_AUTO_RESTORE,
+                event = "merged_snapshot_uploaded",
+                reason = null,
+                "nextVersion" to uploadResult.targetVersion,
+            )
+        } finally {
+            output.delete()
         }
     }
 

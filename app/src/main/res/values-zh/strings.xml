@@ -27,9 +27,13 @@
     <string name="webdav_password">WebDAV 密码</string>
     <string name="webdav_remote_path">远端路径</string>
 <string name="webdav_auto_restore">启动时自动恢复</string>
-<string name="webdav_auto_restore_summary">应用每天首次启动时检查并恢复 WebDAV 上最新备份；这是整包恢复，不是实时合并同步。</string>
+<string name="webdav_auto_restore_summary">应用每天首次启动时合并恢复 WebDAV 上最新备份一次，恢复完成后立即把合并后的快照上传回 WebDAV。</string>
     <string name="webdav_upload_now">立即上传备份</string>
     <string name="webdav_restore_now">恢复最新备份</string>
+    <string name="webdav_restore_mode_title">选择恢复模式</string>
+    <string name="webdav_restore_mode_summary">整包替换会先清空对应本地恢复目标；合并恢复会保留本地状态，并整合 WebDAV 中较新的兼容状态。</string>
+    <string name="webdav_restore_mode_replace">整包替换</string>
+    <string name="webdav_restore_mode_merge">合并恢复</string>
 
     <!-- 内容类型：视频（用于来源筛选标签） -->
     <string name="content_type_video">视频</string>

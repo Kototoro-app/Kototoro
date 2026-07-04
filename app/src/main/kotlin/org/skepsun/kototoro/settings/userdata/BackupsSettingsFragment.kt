@@ -30,6 +30,7 @@ import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.ui.backup.AniyomiBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.BackupService
 import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
+import org.skepsun.kototoro.backups.ui.periodical.ManualWebDavRestoreMode
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.periodical.WebDavRemoteBackupRestoreStatus
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
@@ -354,10 +355,10 @@ fun BackupsSettingsRoute(
         onWebDavRemotePathChange = { settings.backupWebDavRemotePath = it },
         onWebDavTestClick = { viewModel.checkWebDav() },
         onWebDavUploadNowClick = { viewModel.uploadWebDavNow() },
-        onWebDavRestoreNowClick = { viewModel.restoreWebDavNow() },
+        onWebDavRestoreNowClick = { mode -> viewModel.restoreWebDavNow(mode) },
         onWebDavRefreshRemoteBackupsClick = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = false) },
         onWebDavInspectRemoteBackupsClick = { viewModel.refreshWebDavRemoteBackups(inspectPayloads = true) },
-        onWebDavRestoreRemoteBackupClick = { viewModel.restoreWebDavRemoteBackup(it) },
+        onWebDavRestoreRemoteBackupClick = { file, mode -> viewModel.restoreWebDavRemoteBackup(file, mode) },
         onWebDavDeleteRemoteBackupClick = { viewModel.deleteWebDavRemoteBackup(it) },
         onWebDavClearRemoteBackupsClick = { viewModel.clearWebDavRemoteBackups() },
         onWebDavAutoRestoreChange = { settings.isBackupWebDavAutoRestoreEnabled = it },

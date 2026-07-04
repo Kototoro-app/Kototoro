@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupWebDavRestoreCoordinator
 import org.skepsun.kototoro.backups.domain.BackupWebDavUploadCoordinator
 import org.skepsun.kototoro.backups.domain.ExternalBackupStorage
@@ -778,7 +779,15 @@ class HomeViewModel @Inject constructor(
                 try {
                     Log.d(TAG, "restoreWebDavNow: downloading ${latest.name}...")
                     webDavUploader.downloadBackup(latest.name, tempFile, latest.namespace)
-                    Log.d(TAG, "restoreWebDavNow: downloaded, starting restore from zip...")
+                    val inspection = BackupPayloadGuard.requireRestorableWorkSnapshot(
+                        file = tempFile,
+                        operation = "manual WebDAV restore",
+                    )
+                    Log.d(
+                        TAG,
+                        "restoreWebDavNow: downloaded name=${latest.name} size=${tempFile.length()}b " +
+                            "entries=${inspection.describe()}, starting restore from zip...",
+                    )
                     val allSections = setOf(
                         org.skepsun.kototoro.backups.domain.BackupSection.INDEX,
                         org.skepsun.kototoro.backups.domain.BackupSection.HISTORY,

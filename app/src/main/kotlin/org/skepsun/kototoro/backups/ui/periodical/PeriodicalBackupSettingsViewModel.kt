@@ -40,6 +40,11 @@ enum class WebDavRemoteBackupRestoreStatus {
 	UNRESTORABLE,
 }
 
+enum class ManualWebDavRestoreMode {
+	SNAPSHOT_REPLACE,
+	MERGE,
+}
+
 @HiltViewModel
 class PeriodicalBackupSettingsViewModel @Inject constructor(
 	private val settings: AppSettings,
@@ -156,7 +161,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		}
 	}
 
-	fun restoreWebDavNow() {
+	fun restoreWebDavNow(restoreMode: ManualWebDavRestoreMode = ManualWebDavRestoreMode.SNAPSHOT_REPLACE) {
 		launchJob(Dispatchers.Default) {
 			try {
 				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
@@ -167,7 +172,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 					throw IllegalStateException("No current WebDAV work backups found")
 				}
 				Log.d(TAG, "restoreWebDavNow: found ${latest.name} (ns=${latest.namespace}, ${latest.size}b)")
-				restoreWebDavBackup(latest)
+				restoreWebDavBackup(latest, restoreMode)
 			} catch (e: Exception) {
 				Log.e(TAG, "restoreWebDavNow: failed", e)
 				errorEvent.call(e)
@@ -198,11 +203,14 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		}
 	}
 
-	fun restoreWebDavRemoteBackup(file: BackupFileInfo) {
+	fun restoreWebDavRemoteBackup(
+		file: BackupFileInfo,
+		restoreMode: ManualWebDavRestoreMode = ManualWebDavRestoreMode.SNAPSHOT_REPLACE,
+	) {
 		launchJob(Dispatchers.Default) {
 			try {
 				webDavRestoreBusyMessageRes.value = R.string.webdav_restore_in_progress
-				restoreWebDavBackup(file)
+				restoreWebDavBackup(file, restoreMode)
 			} catch (e: Exception) {
 				Log.e(TAG, "restoreWebDavRemoteBackup: failed name=${file.name}", e)
 				errorEvent.call(e)
@@ -266,7 +274,10 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 		webDavRemoteBackups.value = inspected
 	}
 
-	private suspend fun restoreWebDavBackup(file: BackupFileInfo) {
+	private suspend fun restoreWebDavBackup(
+		file: BackupFileInfo,
+		restoreMode: ManualWebDavRestoreMode,
+	) {
 		val tempFile = File.createTempFile("webdav_backup_manual", ".bk.zip", appContext.cacheDir)
 		try {
 			Log.d(TAG, "restoreWebDavBackup: downloading ${file.name}...")
@@ -286,7 +297,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 					input = zis,
 					sections = buildManualRestoreSections(),
 					progress = null,
-					restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+					restoreMode = restoreMode.toRepositoryRestoreMode(),
 				)
 			}
 			Log.d(TAG, "restoreWebDavBackup: restore complete, committing...")
@@ -315,6 +326,13 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
 			updateWebDavLastAction()
 		} finally {
 			if (tempFile.exists()) tempFile.delete()
+		}
+	}
+
+	private fun ManualWebDavRestoreMode.toRepositoryRestoreMode(): BackupRepository.RestoreMode {
+		return when (this) {
+			ManualWebDavRestoreMode.SNAPSHOT_REPLACE -> BackupRepository.RestoreMode.SNAPSHOT_REPLACE
+			ManualWebDavRestoreMode.MERGE -> BackupRepository.RestoreMode.MERGE
 		}
 	}
 

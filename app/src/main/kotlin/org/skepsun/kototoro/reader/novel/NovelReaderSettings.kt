@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 import androidx.core.content.edit
+import org.skepsun.kototoro.core.util.ext.getSafeFloat
 
 /**
  * 小说阅读器设置
@@ -110,9 +111,9 @@ data class NovelReaderSettings(
         fun load(context: Context): NovelReaderSettings {
             val prefs = getPrefs(context)
             return NovelReaderSettings(
-                fontSizeSp = prefs.getFloat(KEY_FONT_SIZE, 17f),
-                lineSpacing = prefs.getFloat(KEY_LINE_SPACING, 1.6f),
-                paragraphSpacing = prefs.getFloat(KEY_PARAGRAPH_SPACING, 0f),
+                fontSizeSp = prefs.getSafeFloat(KEY_FONT_SIZE, 17f),
+                lineSpacing = prefs.getSafeFloat(KEY_LINE_SPACING, 1.6f),
+                paragraphSpacing = prefs.getSafeFloat(KEY_PARAGRAPH_SPACING, 0f),
                 marginHorizontal = prefs.getInt(KEY_MARGIN_HORIZONTAL, 36),
                 marginVertical = prefs.getInt(KEY_MARGIN_VERTICAL, 36),
                 themePreset = runCatching {
