@@ -2,6 +2,7 @@ package org.skepsun.kototoro.core.util.ext
 
 import android.content.SharedPreferences
 import androidx.collection.ArraySet
+import androidx.core.content.edit
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import kotlinx.coroutines.channels.awaitClose
@@ -73,6 +74,22 @@ fun SharedPreferences.Editor.putAll(values: Map<String, *>) {
 			is Float -> putFloat(e.key, v)
 			is String -> putString(e.key, v)
 			is JSONArray -> putStringSet(e.key, v.toStringSet())
+		}
+	}
+}
+
+fun SharedPreferences.getSafeFloat(key: String, defaultValue: Float): Float {
+	return try {
+		getFloat(key, defaultValue)
+	} catch (_: ClassCastException) {
+		when (val raw = all[key]) {
+			is Int -> raw.toFloat()
+			is Long -> raw.toFloat()
+			is Double -> raw.toFloat()
+			is String -> raw.toFloatOrNull() ?: defaultValue
+			else -> defaultValue
+		}.also {
+			edit { putFloat(key, it) }
 		}
 	}
 }
