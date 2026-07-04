@@ -53,3 +53,5 @@ policy
 chroma
 reasonix.toml
 /.vscode
+.pi-weave
+
