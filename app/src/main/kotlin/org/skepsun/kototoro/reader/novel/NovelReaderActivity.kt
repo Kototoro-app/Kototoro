@@ -3090,6 +3090,12 @@ class NovelReaderActivity :
         val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
         if (isScrollMode) {
             val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return 0f
+            if (
+                layoutManager.findLastVisibleItemPosition() >= layoutManager.itemCount - 1 &&
+                !viewBinding.continuousScrollView.canScrollVertically(1)
+            ) {
+                return 1f
+            }
             val firstVisible = layoutManager.findFirstVisibleItemPosition()
             if (firstVisible == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return 0f
             val firstView = layoutManager.findViewByPosition(firstVisible) as? org.skepsun.kototoro.reader.novel.NovelChapterView ?: return 0f
@@ -3100,6 +3106,11 @@ class NovelReaderActivity :
             return (charPos.toFloat() / textLen).coerceIn(0f, 1f)
         }
 
+        val currentPage = viewBinding.readerView.getCurrentPage()
+        val totalPages = viewBinding.readerView.getTotalPages()
+        if (totalPages > 0 && currentPage >= totalPages - 1) {
+            return 1f
+        }
         val totalChars = viewBinding.readerView.getChapterLength()
         if (totalChars <= 0) return 0f
         val offset = viewBinding.readerView.getCurrentCharOffset().coerceIn(0, totalChars)

@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.source.online
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
+import eu.kanade.tachiyomi.network.newCachelessCallWithProgress
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -397,7 +398,7 @@ abstract class HttpSource : CatalogueSource {
 
     open suspend fun getImage(page: Page): Response {
         val request = tagRequest(imageRequest(page))
-        return client.newCall(request).awaitSuccess()
+        return client.newCachelessCallWithProgress(request, page).awaitSuccess()
     }
 
     open fun imageRequest(page: Page): Request {

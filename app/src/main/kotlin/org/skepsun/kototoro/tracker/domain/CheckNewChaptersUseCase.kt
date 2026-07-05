@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.util.MultiMutex
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.findById
@@ -44,6 +45,14 @@ class CheckNewChaptersUseCase @Inject constructor(
 		invokeImpl(track)
 	}
 
+	suspend operator fun invoke(manga: Content, currentChapterId: Long, percent: Float) {
+		if (ReadingProgress.isCompleted(percent)) {
+			markCompleted(manga)
+		} else {
+			invoke(manga, currentChapterId)
+		}
+	}
+
 	suspend operator fun invoke(manga: Content, currentChapterId: Long) = mutex.withLock(manga.id) {
 		runCatchingCancellable {
 			repository.updateTracks()
@@ -70,6 +79,30 @@ class CheckNewChaptersUseCase @Inject constructor(
 				},
 			)
 			repository.mergeWith(tracking)
+		}.onFailure { e ->
+			e.printStackTraceDebug()
+		}.isSuccess
+	}
+
+	private suspend fun markCompleted(manga: Content) = mutex.withLock(manga.id) {
+		runCatchingCancellable {
+			repository.updateTracks()
+			val details = getFullContent(manga)
+			val track = repository.getTrackOrNull(manga) ?: return@withLock
+			val branch = getBranch(details, track.lastChapterId)
+			val lastChapter = details.getChapters(branch)?.lastOrNull()
+			val tracking = ContentTracking(
+				anchorMangaId = track.anchorMangaId,
+				entityId = track.entityId,
+				preferredLocalMangaId = track.preferredLocalMangaId,
+				manga = details,
+				lastChapterId = lastChapter?.id ?: track.lastChapterId,
+				lastCheck = Instant.now(),
+				lastChapterDate = lastChapter?.uploadDate?.toInstantOrNull() ?: track.lastChapterDate,
+				newChapters = 0,
+			)
+			repository.mergeWith(tracking)
+			repository.clearReadUpdates(manga.id)
 		}.onFailure { e ->
 			e.printStackTraceDebug()
 		}.isSuccess

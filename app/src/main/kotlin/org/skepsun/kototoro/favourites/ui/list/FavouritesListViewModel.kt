@@ -46,6 +46,7 @@ import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.QuickFilterListener
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
@@ -59,6 +60,8 @@ import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.work.domain.WorkAggregate
+import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -73,13 +76,14 @@ class FavouritesListViewModel @AssistedInject constructor(
     quickFilterFactory: FavoritesListQuickFilter.Factory,
     private val sourceGroupManager: SourceGroupManager,
     private val workResolver: WorkResolver,
-    settings: AppSettings,
+    private val workAggregateRepository: WorkAggregateRepository,
+    private val appSettings: AppSettings,
     private val dataRepository: ContentDataRepository,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
     @ApplicationContext private val appContext: Context,
-) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
+) : ContentListViewModel(appSettings, dataRepository, localStorageChanges), QuickFilterListener {
 
     @AssistedFactory
     interface Factory {
@@ -117,8 +121,8 @@ class FavouritesListViewModel @AssistedInject constructor(
     override val availableCategories = flowOf(emptyList<FavouriteCategory>())
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
+    override val listMode = appSettings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, appSettings.listMode)
 
     val topQuickFilter = quickFilter.appliedOptions
         .combineWithSettings()
@@ -133,7 +137,7 @@ class FavouritesListViewModel @AssistedInject constructor(
             .map { it?.order }
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-    private val activeSourcePreset = settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
+    private val activeSourcePreset = appSettings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
         .flatMapLatest { id ->
             if (id == -1L) {
                 flowOf(null)
@@ -418,6 +422,9 @@ class FavouritesListViewModel @AssistedInject constructor(
         val result = ArrayList<ListModel>(filteredGroups.size + 1)
         quickFilter.filterItem(filters)?.let(result::add)
         val pinnedIds = repository.getPinnedIds(filteredGroups.map { it.preferredLocalMangaId ?: it.representative.id })
+        val aggregatesByEntityId = workAggregateRepository.findAggregatesByEntityIds(
+            filteredGroups.mapNotNull(VisibleFavouriteGroup::entityId),
+        )
         val models = mangaListMapper.toRequestedListModelList(
             requests = filteredGroups.map { group ->
                 ContentListMapper.ListModelRequest(
@@ -433,9 +440,18 @@ class FavouritesListViewModel @AssistedInject constructor(
         for (index in filteredGroups.indices) {
             val group = filteredGroups[index]
             val model = models[index]
+            val aggregate = group.entityId?.let(aggregatesByEntityId::get)
+            val progress = aggregate?.toReadingProgress() ?: model.progressOrNull()
+            val counter = if (progress?.isCompleted() == true) {
+                0
+            } else {
+                aggregate?.tracking?.newChapters ?: model.counter
+            }
             result += model.toGroupedListModel(
                 group = group,
                 isPinned = (group.preferredLocalMangaId ?: group.representative.id) in pinnedIds,
+                progress = progress,
+                counter = counter,
             )
         }
         return result
@@ -493,12 +509,16 @@ class FavouritesListViewModel @AssistedInject constructor(
     private suspend fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(
         group: VisibleFavouriteGroup,
         isPinned: Boolean,
+        progress: ReadingProgress?,
+        counter: Int,
     ): ListModel {
         val groupSuffix = group.groupSuffix()
         return when (this) {
             is ContentCompactListModel -> copy(
                 id = group.uiId,
                 subtitle = listOfNotNull(subtitle?.takeIf { it.isNotBlank() }, groupSuffix).joinToString(" · "),
+                counter = counter,
+                progress = progress,
                 projectionCount = group.projectionCount,
                 isPinned = isPinned,
             )
@@ -506,16 +526,36 @@ class FavouritesListViewModel @AssistedInject constructor(
             is ContentDetailedListModel -> copy(
                 id = group.uiId,
                 subtitle = listOfNotNull(subtitle.takeIf { !it.isNullOrBlank() }, groupSuffix).joinToString(" · "),
+                counter = counter,
+                progress = progress,
                 projectionCount = group.projectionCount,
                 isPinned = isPinned,
             )
 
             is ContentGridModel -> copy(
                 id = group.uiId,
+                counter = counter,
+                progress = progress,
                 projectionCount = group.projectionCount,
                 isPinned = isPinned,
             )
         }
+    }
+
+    private fun WorkAggregate.toReadingProgress(): ReadingProgress? {
+        val history = history ?: return null
+        val fixedPercent = if (ReadingProgress.isCompleted(history.percent)) 1f else history.percent
+        return ReadingProgress(
+            percent = fixedPercent,
+            totalChapters = history.chaptersCount,
+            mode = appSettings.progressIndicatorMode,
+        ).takeIf { it.isValid() }
+    }
+
+    private fun org.skepsun.kototoro.list.ui.model.ContentListModel.progressOrNull(): ReadingProgress? = when (this) {
+        is ContentDetailedListModel -> progress
+        is ContentGridModel -> progress
+        is ContentCompactListModel -> null
     }
 
     private fun VisibleFavouriteGroup.groupSuffix(): String? {

@@ -397,7 +397,7 @@ fun KototoroContentCardGrid(
                 )
             }
             if (item.progress != null) {
-                ReadingProgressIndicator(
+                ContentCardReadingProgressIndicator(
                     progress = item.progress,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -498,7 +498,7 @@ private fun CompactGridTitleOverlay(
 }
 
 @Composable
-private fun ReadingProgressIndicator(
+fun ContentCardReadingProgressIndicator(
     progress: ReadingProgress,
     modifier: Modifier = Modifier,
 ) {
@@ -679,6 +679,12 @@ fun KototoroContentCardList(
                 item = badgeModel,
                 corner = Alignment.BottomEnd,
                 cardRadius = 8.dp,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
+            ContentCardCoverProgressIndicator(
+                progress = badgeModel.progress,
+                bottomRightBadges = resolvedUiPrefs.badgesBottomRight,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
             )
@@ -1059,6 +1065,12 @@ fun KototoroContentCardDetailedList(
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
             )
+            ContentCardCoverProgressIndicator(
+                progress = badgeModel.progress,
+                bottomRightBadges = resolvedUiPrefs.badgesBottomRight,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
 
         Column(
@@ -1136,12 +1148,43 @@ fun ContentListModel.asBadgeModel(
         counter = counter,
         projectionCount = projectionCount,
         id = id,
-        progress = null,
+        progress = when (this) {
+            is ContentGridModel -> progress
+            is ContentDetailedListModel -> progress
+            is ContentCompactListModel -> progress
+            else -> null
+        },
         isFavorite = isFavorite,
         isSaved = isSaved,
         isPinned = isPinned,
         metadataTrackingService = metadataTrackingService,
         scoreText = scoreText,
+    )
+}
+
+@Composable
+fun ContentCardCoverProgressIndicator(
+    progress: ReadingProgress?,
+    bottomRightBadges: Set<String>,
+    metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
+    modifier: Modifier = Modifier,
+) {
+    progress ?: return
+    val badgeReservedHeight = if (bottomRightBadges.isNotEmpty()) {
+        with(androidx.compose.ui.platform.LocalDensity.current) { metrics.textSize.toDp() } +
+            (metrics.containerVerticalPadding * 2) +
+            metrics.progressSpacing
+    } else {
+        0.dp
+    }
+    ContentCardReadingProgressIndicator(
+        progress = progress,
+        modifier = modifier
+            .padding(
+                end = metrics.progressAnchorInset,
+                bottom = metrics.progressAnchorInset + badgeReservedHeight,
+            )
+            .size(metrics.progressSize),
     )
 }
 

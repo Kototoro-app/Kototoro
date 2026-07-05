@@ -49,6 +49,7 @@ import javax.inject.Singleton
 
 private const val MAX_PARALLELISM = 4
 private const val FILENAME_SKIP = ".notamanga"
+private const val BACKUP_SUFFIX = ".bk"
 
 @Singleton
 class LocalMangaRepository @Inject constructor(
@@ -334,11 +335,14 @@ class LocalMangaRepository @Inject constructor(
 		.asSequence()
 		.flatMap { dir ->
 			dir.withChildren { children -> 
-				children.filterNot { it.isHidden || it.shouldSkip() }.toList() 
+				children.filterNot { it.isHidden || it.shouldSkip() }.toList()
 			}
 		}
 
 	private fun Collection<LocalContent>.unwrap(): List<Content> = map { it.manga }
 
-	private fun File.shouldSkip(): Boolean = isDirectory && File(this, FILENAME_SKIP).exists()
+	private fun File.shouldSkip(): Boolean {
+		return name.endsWith(BACKUP_SUFFIX, ignoreCase = true) ||
+			(isDirectory && File(this, FILENAME_SKIP).exists())
+	}
 }

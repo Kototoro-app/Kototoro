@@ -4,7 +4,9 @@ import dagger.Reusable
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
@@ -72,6 +74,38 @@ class WorkAggregateRepository @Inject constructor(
 			stats = findStatsByEntityId(listOf(entityId))[entityId],
 			tracking = findTrackingByEntityId(listOf(entityId))[entityId],
 		)
+	}
+
+	suspend fun findAggregatesByEntityIds(entityIds: Collection<Long>): Map<Long, WorkAggregate> {
+		val distinctEntityIds = entityIds.distinct()
+		if (distinctEntityIds.isEmpty()) {
+			return emptyMap()
+		}
+		val projectionSet = resolveProjectionSet(
+			entityIds = distinctEntityIds,
+			anchorIds = emptyList(),
+		)
+		val categoriesByEntityId = findCategoriesByEntityId(distinctEntityIds)
+		val historyByEntityId = findHistoryByEntityId(distinctEntityIds)
+		val statsByEntityId = findStatsByEntityId(distinctEntityIds)
+		val trackingByEntityId = findTrackingByEntityId(distinctEntityIds)
+		return distinctEntityIds.mapNotNull { entityId ->
+			val identity = projectionSet.identitiesByEntityId[entityId] ?: return@mapNotNull null
+			val displayProjection = resolveDisplayProjection(
+				identity = identity,
+				anchorId = historyByEntityId[entityId]?.anchorMangaId ?: trackingByEntityId[entityId]?.anchorMangaId,
+				cachedProjectionsById = projectionSet.projectionsById,
+			)
+			entityId to WorkAggregate(
+				identity = identity,
+				displayProjection = displayProjection,
+				projections = projectionSet.projectionsFor(identity),
+				categories = categoriesByEntityId[entityId].orEmpty(),
+				history = historyByEntityId[entityId],
+				stats = statsByEntityId[entityId],
+				tracking = trackingByEntityId[entityId],
+			)
+		}.toMap()
 	}
 
 	suspend fun buildTrackingAggregates(tracks: List<TrackEntity>): List<WorkAggregate> {
@@ -382,16 +416,28 @@ class WorkAggregateRepository @Inject constructor(
 		anchorId: Long?,
 		cachedProjectionsById: Map<Long, Content>,
 	): Content? {
+		val anchorProjection = anchorId?.let { mangaId ->
+			cachedProjectionsById[mangaId] ?: db.getMangaDao().find(mangaId)?.toContent()
+		}
 		val candidateIds = buildList {
 			identity.preferredMangaId?.let(::add)
 			anchorId?.let(::add)
 			identity.localMangaIds.forEach(::add)
 		}.distinct()
 		for (mangaId in candidateIds) {
-			cachedProjectionsById[mangaId]?.let { return it }
-			db.getMangaDao().find(mangaId)?.toContent()?.let { return it }
+			val candidate = cachedProjectionsById[mangaId] ?: db.getMangaDao().find(mangaId)?.toContent()
+			if (candidate != null) {
+				return candidate.takeUnless { it.isStaleLocalMangaProjectionFor(anchorProjection) } ?: anchorProjection
+			}
 		}
 		return null
+	}
+
+	private fun Content.isStaleLocalMangaProjectionFor(anchorProjection: Content?): Boolean {
+		return source == LocalMangaSource &&
+			anchorProjection != null &&
+			anchorProjection.source != LocalMangaSource &&
+			anchorProjection.source.getContentType() != source.getContentType()
 	}
 
 	private data class WorkProjectionSet(

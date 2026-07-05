@@ -251,6 +251,7 @@ class ContentListMapper @Inject constructor(
 		@Options options: Int,
 		pinnedIds: Set<Long>?,
 		counters: Map<Long, Int>?,
+		progress: Map<Long, ReadingProgress>?,
 		metadataTrackingService: ScrobblerService?,
 		override: ContentOverride?,
 	) = ContentCompactListModel(
@@ -258,6 +259,7 @@ class ContentListMapper @Inject constructor(
 		override = override,
 		subtitle = manga.tags.joinToString(", ") { it.title }.ifBlank { null },
 		counter = getCounter(manga.id, options, counters),
+		progress = getProgress(manga.id, options, progress),
 		isPinned = isPinned(manga.id, options, pinnedIds),
 		metadataTrackingService = metadataTrackingService,
 	)
@@ -313,7 +315,7 @@ class ContentListMapper @Inject constructor(
 		metadataTrackingService: ScrobblerService? = null,
 		override: ContentOverride?,
 	): ContentListModel = when (mode) {
-		ListMode.LIST -> toCompactListModel(manga, options, pinnedIds, counters, metadataTrackingService, override)
+		ListMode.LIST -> toCompactListModel(manga, options, pinnedIds, counters, progress, metadataTrackingService, override)
 		ListMode.DETAILED_LIST -> toDetailedListModel(
 			manga,
 			options,

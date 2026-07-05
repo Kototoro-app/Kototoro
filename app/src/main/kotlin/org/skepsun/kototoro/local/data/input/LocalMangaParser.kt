@@ -478,10 +478,17 @@ class LocalContentParser {
 		private val REGEX_PARENT_PATH_PREFIX = Regex("^(/\\.\\.)+")
 
 		@Blocking
-		fun getOrNull(file: File): LocalContentParser? = if ((file.isDirectory || file.isZipArchive) && file.canRead()) {
-			LocalContentParser(file)
-		} else {
-			null
+		fun getOrNull(file: File): LocalContentParser? {
+			if (!file.canRead()) {
+				return null
+			}
+			if (file.isZipArchive) {
+				return LocalContentParser(file)
+			}
+			if (!file.isDirectory) {
+				return null
+			}
+			return LocalContentParser(file).takeIf { file.hasSupportedLocalContent() }
 		}
 
 		suspend fun find(roots: Iterable<File>, manga: Content): LocalContentParser? = channelFlow {
@@ -506,6 +513,33 @@ class LocalContentParser {
 		private fun Path.isImage(): Boolean = MimeTypes.getMimeTypeFromExtension(name)?.isImage == true
 
 		private fun Path.isZip(): Boolean = hasZipExtension(name)
+
+		private fun File.hasSupportedLocalContent(): Boolean {
+			if (File(this, ENTRY_NAME_INDEX).isFile) {
+				return true
+			}
+			return walkTopDown()
+				.onEnter { dir -> dir == this || !dir.isHidden }
+				.any { child ->
+					child.isFile && (
+						child.name.hasSupportedLocalContentExtension() ||
+							MimeTypes.getMimeTypeFromExtension(child.extension)?.isImage == true
+						)
+				}
+		}
+
+		private fun String.hasSupportedLocalContentExtension(): Boolean {
+			return endsWith(".epub", ignoreCase = true) ||
+				endsWith(".txt", ignoreCase = true) ||
+				endsWith(".cbz", ignoreCase = true) ||
+				endsWith(".zip", ignoreCase = true) ||
+				endsWith(".mp4", ignoreCase = true) ||
+				endsWith(".mkv", ignoreCase = true) ||
+				endsWith(".ts", ignoreCase = true) ||
+				endsWith(".webm", ignoreCase = true) ||
+				endsWith(".avi", ignoreCase = true) ||
+				endsWith(".m3u8", ignoreCase = true)
+		}
 
 		private fun Uri.resolve(): Uri = if (isFileUri()) {
 			val file = toFile()

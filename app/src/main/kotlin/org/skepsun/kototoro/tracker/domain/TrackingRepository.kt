@@ -283,6 +283,12 @@ class TrackingRepository @Inject constructor(
 			}
 	}
 
+	suspend fun clearReadUpdates(mangaId: Long) = db.withTransaction {
+		for (anchorMangaId in resolveTrackAnchorMangaIdsForRead(mangaId)) {
+			clearTrackUpdates(anchorMangaId)
+		}
+	}
+
 	private suspend fun clearTrackUpdates(anchorMangaId: Long) {
 		val track = db.getTracksDao().find(anchorMangaId)
 		db.getTracksDao().clearCounter(anchorMangaId)

@@ -240,7 +240,7 @@ class HistoryRepository @Inject constructor(
 					),
 				)
 			}
-			newChaptersUseCaseProvider.get()(manga, chapterId)
+			newChaptersUseCaseProvider.get()(manga, chapterId, percent)
 			scrobblers.forEach { it.tryScrobble(manga, chapterId) }
 		}
 	}
