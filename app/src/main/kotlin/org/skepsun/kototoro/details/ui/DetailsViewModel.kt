@@ -2880,17 +2880,32 @@ class DetailsViewModel @Inject constructor(
 		.withErrorHandling()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-	@Suppress("unused")
 	private val readingStateSync: StateFlow<ReaderState?> = combine(
 		mangaDetails,
 		history,
-	) { details, h ->
-		if (h != null && org.skepsun.kototoro.list.domain.ReadingProgress.isCompleted(h.percent)) {
-			return@combine null
-		}
+		selectedBranch,
+	) { details, h, branch ->
 		val chapter = details?.allChapters?.findChapterByHistory(h)
 		if (h != null && chapter != null) {
-			ReaderState(h.copy(chapterId = chapter.id))
+			val isCompleted = h.percent >= 0.99999f
+			if (isCompleted && details != null) {
+				val branchChapters = details.allChapters
+					.filter { it.branch == branch }
+					.sortedBy { it.number }
+				val index = branchChapters.indexOfFirst { it.id == chapter.id }
+				if (index != -1 && index + 1 < branchChapters.size) {
+					val nextChapter = branchChapters[index + 1]
+					ReaderState(
+						chapterId = nextChapter.id,
+						page = 0,
+						scroll = 0,
+					)
+				} else {
+					null
+				}
+			} else {
+				ReaderState(h.copy(chapterId = chapter.id))
+			}
 		} else {
 			null
 		}
