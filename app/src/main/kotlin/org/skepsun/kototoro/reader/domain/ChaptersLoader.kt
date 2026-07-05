@@ -97,6 +97,10 @@ class ChaptersLoader @Inject constructor(
 
 	fun peekChapter(chapterId: Long): ContentChapter? = chapters[chapterId]
 
+	fun isChapterLocal(chapterId: Long): Boolean {
+		return chapters[chapterId]?.isLocalPageSource() ?: false
+	}
+
 	fun hasPages(chapterId: Long): Boolean {
 		return chapterId in chapterPages
 	}

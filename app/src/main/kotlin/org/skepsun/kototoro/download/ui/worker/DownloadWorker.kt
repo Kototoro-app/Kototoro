@@ -843,6 +843,11 @@ class DownloadWorker @AssistedInject constructor(
 				println("DownloadWorker: Not EPUB, using normal download")
 			}
 
+			val tempDir = File(destination, "tmp_${chapter.value.id}")
+			if (!tempDir.exists()) {
+				tempDir.mkdirs()
+			}
+
 			val pageCounter = AtomicInteger(0)
 			val successCounter = AtomicInteger(0)
 			channelFlow {
@@ -857,18 +862,28 @@ class DownloadWorker @AssistedInject constructor(
 					launch {
 						semaphore.withPermit {
 							val success = runFailsafe {
-								val url = repo.getPageUrl(page)
-								val file = cache[url]
-									?: downloadFile(repo, url, destination, page = page)
+								val prefix = String.format("%04d.", pageIndex)
+								val existingFile = tempDir.listFiles { _, name -> name.startsWith(prefix) }?.firstOrNull()
+								val file = if (existingFile != null && existingFile.length() > 0) {
+									existingFile
+								} else {
+									val url = repo.getPageUrl(page)
+									val downloadedFile = cache[url]
+										?: downloadFile(repo, url, destination, page = page)
+									val ext = downloadedFile.extension.takeIf { it != "tmp" } ?: "jpg"
+									val targetFile = File(tempDir, prefix + ext)
+									downloadedFile.copyTo(targetFile, overwrite = true)
+									if (downloadedFile.extension == "tmp") {
+										downloadedFile.deleteAwait()
+									}
+									targetFile
+								}
 								output.addPage(
 									chapter = chapter,
 									file = file,
 									pageNumber = pageIndex,
-									type = getMediaType(url, file),
+									type = getMediaType(file.name, file),
 								)
-								if (file.extension == "tmp") {
-									file.deleteAwait()
-								}
 								true
 							} ?: false
 							if (success) {
@@ -902,6 +917,7 @@ class DownloadWorker @AssistedInject constructor(
 				throw IOException("No pages downloaded for chapter: ${chapter.value.title ?: chapter.value.id}")
 			}
 			if (output.flushChapter(chapter.value)) {
+				tempDir.deleteRecursively()
 				runCatchingCancellable {
 					localStorageChanges.emit(LocalContentParser(output.rootFile).getContent(withDetails = false))
 				}.onFailure(Throwable::printStackTraceDebug)
@@ -1232,6 +1248,35 @@ class DownloadWorker @AssistedInject constructor(
 				cr.openSource(uri).use { input ->
 					file.sink(append = false).buffer().use {
 						it.writeAllCancellable(input)
+					}
+				}
+			} catch (e: Exception) {
+				file.delete()
+				throw e
+			}
+			return file
+		}
+		if (url.startsWith("zip:", ignoreCase = true) || url.startsWith("file+zip:", ignoreCase = true)) {
+			val uri = url.toUri()
+			val zipFile = when (uri.scheme) {
+				"zip" -> File(uri.schemeSpecificPart)
+				"file+zip" -> File(uri.host.orEmpty() + uri.path.orEmpty())
+				else -> throw IllegalArgumentException("Unsupported scheme: ${uri.scheme}")
+			}
+			val fragment = uri.fragment ?: ""
+			val ext = MimeTypes.getNormalizedExtension(fragment)
+			val file = destination.createTempFile(ext)
+			try {
+				runInterruptible(Dispatchers.IO) {
+					java.util.zip.ZipFile(zipFile).use { zip ->
+						val entry = checkNotNull(zip.getEntry(fragment)) {
+							"Zip entry not found: $fragment in ${zipFile.absolutePath}"
+						}
+						zip.getInputStream(entry).use { input ->
+							file.outputStream().use { output ->
+								input.copyTo(output)
+							}
+						}
 					}
 				}
 			} catch (e: Exception) {
