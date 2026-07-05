@@ -464,6 +464,7 @@ class SettingsSearchHelper @Inject constructor(
 			"downloads_align_reader" to R.string.download_align_reader,
 			"downloads_auto_retry" to R.string.download_auto_retry,
 			"downloads_threads" to R.string.download_threads,
+			"downloads_max_active_series" to R.string.download_max_active_series,
 			"downloads_request_delay" to R.string.download_request_delay,
 			"downloads_retry_count" to R.string.download_retry_count,
 			"downloads_retry_delay" to R.string.download_retry_delay,

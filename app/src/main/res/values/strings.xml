@@ -2666,6 +2666,11 @@
 
     <string name="download_threads">Download threads</string>
     <string name="download_threads_summary">Number of concurrent image downloads (1-10)</string>
+    <string name="download_max_active_series">Concurrent series downloads</string>
+    <string name="download_max_active_series_summary">Limit the number of active downloading series</string>
+    <string name="download_max_active_series_uncapped">Uncapped</string>
+    <string name="download_max_active_series_warning_title">⚠️ DANGER: Risk of Permanent Ban</string>
+    <string name="download_max_active_series_warning_message">Activating uncapped concurrent downloads will cause aggressive, rapid requests to the source\'s website. This behavior is often detected as a DDoS attack and HIGHLY increases the risk of:\n\n1. Immediate and severe rate limiting\n2. Permanent IP bans from the source\n3. Blacklisting your device from accessing their content entirely.\n\nDo NOT proceed unless you fully understand the consequences and accept the risk of losing access to this source.</string>
     <string name="download_request_delay">Download request delay</string>
     <string name="download_request_delay_summary">Delay between image requests in milliseconds (0-5000)</string>
     <string name="download_retry_count">Download retry count</string>

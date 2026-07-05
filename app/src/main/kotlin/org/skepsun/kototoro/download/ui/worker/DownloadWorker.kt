@@ -251,12 +251,25 @@ class DownloadWorker @AssistedInject constructor(
 				"displayMangaId=${executionContext.displayMangaId} kind=${task.kind} " +
 				"chapters=${executionContext.executionManga.chapters?.size ?: 0} taskChapters=${task.executionChapterIds?.size ?: -1}",
 		)
+		
+		ActiveDownloadRegistry.register(id, isPaused = task.isPaused)
+		
+		val pausingHandle = PausingHandle()
+		if (task.isPaused) {
+			Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${executionContext.executionManga.id}")
+			pausingHandle.pause()
+		}
+		
+		val pausingReceiver = PausingReceiver(id, pausingHandle)
+		ContextCompat.registerReceiver(
+			applicationContext,
+			pausingReceiver,
+			PausingReceiver.createIntentFilter(id),
+			ContextCompat.RECEIVER_NOT_EXPORTED,
+		)
+		
 		try {
-			val pausingHandle = PausingHandle()
-			if (task.isPaused) {
-				Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${executionContext.executionManga.id}")
-				pausingHandle.pause()
-			}
+			checkIsPaused()
 			withContext(pausingHandle) {
 				when (task.kind) {
 					DownloadTaskKind.DOWNLOAD -> {
@@ -325,6 +338,11 @@ class DownloadWorker @AssistedInject constructor(
 				).toWorkData(),
 			)
 		} finally {
+			ActiveDownloadRegistry.unregister(id)
+			try {
+				applicationContext.unregisterReceiver(pausingReceiver)
+			} catch (_: Exception) {
+			}
 			notificationManager.cancel(id.hashCode())
 		}
 	}
@@ -355,14 +373,7 @@ class DownloadWorker @AssistedInject constructor(
 		}
 		Log.d("DownloadWorker", "downloadContentImpl start: mangaId=${subject.id} title=${subject.title} excluded=${excludedIds.size}")
 		val chaptersToSkip = excludedIds.toMutableSet()
-		val pausingReceiver = PausingReceiver(id, PausingHandle.current())
 		mangaLock.withLock(subject) {
-			ContextCompat.registerReceiver(
-				applicationContext,
-				pausingReceiver,
-				PausingReceiver.createIntentFilter(id),
-				ContextCompat.RECEIVER_NOT_EXPORTED,
-			)
 			var destination = localContentRepository.getOutputDir(subject, task.destination)
 			checkNotNull(destination) { applicationContext.getString(R.string.cannot_find_available_storage) }
 			Log.d("DownloadWorker", "downloadContentImpl outputDir=${destination.absolutePath}")
@@ -465,7 +476,6 @@ class DownloadWorker @AssistedInject constructor(
 				throw e
 			} finally {
 				withContext(NonCancellable) {
-					applicationContext.unregisterReceiver(pausingReceiver)
 					output?.closeQuietly()
 					output?.cleanup()
 					val tempFiles = destination.listFiles(TempFileFilter())
@@ -983,13 +993,20 @@ class DownloadWorker @AssistedInject constructor(
 
 	private suspend fun checkIsPaused() {
 		val pausingHandle = PausingHandle.current()
-		if (pausingHandle.isPaused) {
-			publishState(currentState.copy(isPaused = true, eta = -1L, isStuck = false))
-			try {
-				pausingHandle.awaitResumed()
-			} finally {
-				publishState(currentState.copy(isPaused = false))
+		while (true) {
+			if (pausingHandle.isPaused) {
+				publishState(currentState.copy(isPaused = true, eta = -1L, isStuck = false))
+				try {
+					pausingHandle.awaitResumed()
+				} finally {
+					publishState(currentState.copy(isPaused = false))
+				}
 			}
+			val limit = settings.downloadMaxActiveSeries
+			if (ActiveDownloadRegistry.isTurn(id, limit)) {
+				break
+			}
+			delay(1000)
 		}
 	}
 

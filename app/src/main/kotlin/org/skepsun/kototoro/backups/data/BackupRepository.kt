@@ -546,8 +546,16 @@ class BackupRepository @Inject constructor(
                     }
                 }
 
-                BackupSection.SETTINGS -> sectionInput.readMap().let {
-                    settings.upsertAll(it)
+                BackupSection.SETTINGS -> sectionInput.readMap().let { map ->
+                    val isKototoro = backupIndex?.appId == org.skepsun.kototoro.BuildConfig.APPLICATION_ID
+                    val finalMap = if (isKototoro) {
+                        map
+                    } else {
+                        map.toMutableMap().apply {
+                            this[AppSettings.KEY_DOWNLOADS_MAX_ACTIVE_SERIES] = 5
+                        }
+                    }
+                    settings.upsertAll(finalMap)
                     CompositeResult.success()
                 }
 

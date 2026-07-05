@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.prefs.TriStateOption
 
@@ -30,6 +31,7 @@ data class DownloadsSettingsUiState(
     val isDownloadAlignedWithReader: Boolean,
     val isDownloadAutoRetryOnNetworkError: Boolean,
     val downloadThreads: Int,
+    val downloadMaxActiveSeries: Int,
     val downloadRequestDelayMs: Int,
     val downloadRetryCount: Int,
     val downloadRetryDelayMs: Int,
@@ -55,6 +57,7 @@ fun DownloadsSettingsScreen(
     onDownloadAlignReaderChange: (Boolean) -> Unit,
     onDownloadAutoRetryChange: (Boolean) -> Unit,
     onDownloadThreadsChange: (Int) -> Unit,
+    onDownloadMaxActiveSeriesChange: (Int) -> Unit,
     onDownloadRequestDelayChange: (Int) -> Unit,
     onDownloadRetryCountChange: (Int) -> Unit,
     onDownloadRetryDelayChange: (Int) -> Unit,
@@ -137,6 +140,23 @@ fun DownloadsSettingsScreen(
                         summary = stringResource(R.string.download_threads_summary),
                         valueText = { it.toString() },
                         onValueChange = onDownloadThreadsChange,
+                    )
+                    SettingsSectionDivider()
+                    val uncappedText = stringResource(R.string.download_max_active_series_uncapped)
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.download_max_active_series),
+                        value = state.downloadMaxActiveSeries,
+                        valueRange = 1..AppSettings.UNLIMITED_SERIES,
+                        step = 1,
+                        summary = stringResource(R.string.download_max_active_series_summary),
+                        valueText = {
+                            if (it == AppSettings.UNLIMITED_SERIES) {
+                                uncappedText
+                            } else {
+                                it.toString()
+                            }
+                        },
+                        onValueChange = onDownloadMaxActiveSeriesChange,
                     )
                     SettingsSectionDivider()
                     SettingsSliderPreference(
