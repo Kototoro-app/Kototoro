@@ -93,6 +93,39 @@ class MangaDatabaseTest {
 		}
 	}
 
+	@Test
+	fun migrate69To70AddsDescriptionColumn() {
+		helper.createDatabase(TEST_DB, 69).use { db ->
+			db.execSQL(
+				"""
+				INSERT INTO manga (
+					manga_id,
+					title,
+					url,
+					public_url,
+					rating,
+					nsfw,
+					cover_url,
+					source
+				) VALUES (1, 'Test Title', 'http://example.com', '', 0.0, 0, '', 'Source')
+				""".trimIndent()
+			)
+		}
+
+		helper.runMigrationsAndValidate(
+			TEST_DB,
+			70,
+			true,
+			migrations.single { it.startVersion == 69 && it.endVersion == 70 },
+		).use { db ->
+			db.query("SELECT manga_id, description FROM manga WHERE manga_id = 1").use { cursor ->
+				cursor.moveToFirst()
+				assertEquals(1L, cursor.getLong(0))
+				assertEquals(null, cursor.getString(1))
+			}
+		}
+	}
+
 	private companion object {
 
 		const val TEST_DB = "test-db"

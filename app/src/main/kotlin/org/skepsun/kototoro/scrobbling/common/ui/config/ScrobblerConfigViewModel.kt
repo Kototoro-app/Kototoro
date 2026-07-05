@@ -176,7 +176,7 @@ class ScrobblerConfigViewModel @Inject constructor(
 						val repo = mangaRepositoryFactory.create(mangaToSync.source)
 						val details = repo.getDetails(mangaToSync)
 						mangaToSync = details.copy(chapters = details.chapters)
-						mangaDataRepository.updateChapters(mangaToSync)
+						mangaToSync = mangaDataRepository.updateProjectionSnapshot(mangaToSync)
 					}
 					
 					val chapters = mangaToSync.chapters ?: emptyList()

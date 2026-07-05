@@ -62,9 +62,9 @@ fun MangaEntity.toContent(tags: Set<ContentTag>, chapters: List<ChapterEntity>?)
                 chapter
             }
         },
+        description = this.description,
     )
 }
-
 fun MangaWithTags.toContent(chapters: List<ChapterEntity>? = null) = manga.toContent(tags.toContentTags(), chapters)
 
 fun Collection<MangaWithTags>.toContentList() = map { it.toContent() }
@@ -99,6 +99,7 @@ fun Content.toEntity() = MangaEntity(
 	state = state?.name,
 	title = title,
 	authors = authors.joinToString(VALUES_DIVIDER.toString()),
+	description = description,
 )
 
 fun ContentTag.toEntity() = TagEntity(

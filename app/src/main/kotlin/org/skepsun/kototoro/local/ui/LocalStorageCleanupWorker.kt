@@ -45,6 +45,7 @@ class LocalStorageCleanupWorker @AssistedInject constructor(
 		if (settings.isAutoLocalChaptersCleanupEnabled) {
 			deleteReadChaptersUseCase.invoke()
 		}
+		dataRepository.cleanupDatabase()
 		return if (localContentRepository.cleanup()) {
 			dataRepository.cleanupLocalContent()
 			Result.success()
