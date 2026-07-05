@@ -108,7 +108,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
-import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
+import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -134,7 +134,9 @@ import org.skepsun.kototoro.home.ui.HomeRecommendationItem
 import org.skepsun.kototoro.home.ui.HomeSummaryState
 import org.skepsun.kototoro.home.ui.HomeUpdateItem
 import org.skepsun.kototoro.list.ui.compose.ContentCardNsfwBadge
+import org.skepsun.kototoro.list.ui.compose.KototoroContentCardGrid
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
 
 @Immutable
@@ -190,7 +192,7 @@ fun HomeScreen(
     }
     val gridScale = screenPrefs.gridScale
     val listMode = screenPrefs.listMode
-    val posterStyle = remember(gridScale) { compactPosterRailCardStyle(gridScale) }
+    val posterStyle = remember(gridScale) { compactPosterCardStyle(gridScale) }
     val panoramaPrefs = rememberPanoramaBackdropPrefs(settings)
     val homeHeroPanoramaPrefs = remember(panoramaPrefs) {
         panoramaPrefs.copy(isAnimationEnabled = false)
@@ -968,7 +970,7 @@ private fun HomeContentRowSection(
                     state = rowState,
                     flingBehavior = rememberSnapFlingBehavior(rowState),
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                     contentPadding = PaddingValues(horizontal = 4.dp),
                 ) {
                     itemsIndexed(
@@ -987,6 +989,7 @@ private fun HomeContentRowSection(
                             HomeCoverRowItem(
                                 item = item,
                                 posterStyle = posterStyle,
+                                listMode = listMode,
                                 onClick = { coverBounds, sharedElementKey ->
                                     onItemClick(item.content, coverBounds, sharedElementKey)
                                 },
@@ -1214,94 +1217,39 @@ private fun HomeListRailRowItem(
 private fun HomeCoverRowItem(
     item: HomeCoverDisplayItem,
     posterStyle: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
+    listMode: ListMode,
     onClick: (Rect?, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val cardShape = MaterialTheme.shapes.medium
     val content = item.content
-    var coverBounds by remember(item.sectionKey, item.stableKey) { mutableStateOf<Rect?>(null) }
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
-    val imageRequest = rememberHomeCoverRequest(
-        context = context,
-        content = content,
-        allowCrossfade = shouldCrossfadeCover,
-        memoryCacheVariant = "home_grid_cover",
-    )
-    val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val sharedElementKey = remember(item.sectionKey, item.stableKey, content.coverUrl, content.source.name) {
         contentCoverSharedKey(
-            content.source.name,
-            content.coverUrl.orEmpty(),
+            content,
+            content.coverUrl,
             instanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
         )
     }
-
-    Column(
-        modifier = modifier
-            .width(posterStyle.itemWidth)
-            .clickable { onClick(coverBounds, sharedElementKey) },
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(posterStyle.posterHeight)
-                .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.unclippedBoundsInWindow()
-                }
-                .then(
-                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(key = sharedElementKey),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                            )
-                        }
-                    } else Modifier
-                )
-                .clip(cardShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            if (imageRequest != null) {
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = content.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    onSuccess = { state ->
-                        HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                    },
-                )
-            }
-            if (content.isNsfw()) {
-                ContentCardNsfwBadge(
-                    metrics = badgeMetrics,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(badgeMetrics.outerPadding),
-                )
-            }
-        }
-        Text(
-            text = content.title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+    val model = remember(content, item.supportingText) {
+        ContentGridModel(
+            manga = content,
+            override = null,
+            subtitle = item.supportingText?.text,
+            counter = 0,
+            progress = null,
+            isFavorite = false,
+            isSaved = false,
         )
-        item.supportingText?.let { supportingText ->
-            Text(
-                text = supportingText.text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
+
+    KototoroContentCardGrid(
+        item = model,
+        sharedElementInstanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
+        cardStyle = posterStyle,
+        compactOverlay = listMode == ListMode.COMPACT_GRID,
+        onClick = { coverBounds -> onClick(coverBounds, sharedElementKey) },
+        onLongClick = {},
+        modifier = modifier.width(posterStyle.itemWidth),
+    )
 }
 
 private fun itemNewChaptersText(label: String, count: Int): String = "$label $count"
