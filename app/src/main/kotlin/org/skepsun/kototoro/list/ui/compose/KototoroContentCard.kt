@@ -250,10 +250,10 @@ fun KototoroContentCardGrid(
     var coverBounds by remember { mutableStateOf<Rect?>(null) }
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val compactTitleHeight = remember(posterStyle.itemWidth) {
-        (posterStyle.itemWidth.value * 0.42f).dp.coerceIn(42.dp, 58.dp)
+        (posterStyle.itemWidth.value * 0.48f).dp.coerceIn(50.dp, 66.dp)
     }
     val compactTitleTextClearance = remember(posterStyle.itemWidth) {
-        (posterStyle.itemWidth.value * 0.30f).dp.coerceIn(32.dp, 44.dp)
+        (posterStyle.itemWidth.value * 0.34f).dp.coerceIn(36.dp, 48.dp)
     }
     val bottomBadgeLift = if (compactOverlay) compactTitleTextClearance else 0.dp
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -486,9 +486,11 @@ private fun CompactGridTitleOverlay(
         contentAlignment = Alignment.BottomStart,
     ) {
         Text(
+            modifier = Modifier.fillMaxWidth(),
             text = title,
             style = MaterialTheme.typography.labelMedium,
             color = Color.White,
+            softWrap = true,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
