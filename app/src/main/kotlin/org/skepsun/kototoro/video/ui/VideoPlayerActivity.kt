@@ -5,9 +5,11 @@ import android.view.View
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.content.res.ColorStateList
 import android.content.ContentValues
 import android.os.Build
+import android.view.Gravity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.core.view.WindowInsetsCompat
@@ -16,6 +18,10 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.os.Handler
 import android.os.Looper
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.PopupWindow
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.TimeBar
@@ -27,8 +33,8 @@ import android.app.PictureInPictureParams
 import android.provider.MediaStore
 import android.util.Rational
 import android.view.PixelCopy
-import androidx.appcompat.widget.PopupMenu
 import android.util.Log
+import androidx.core.content.ContextCompat
 import org.skepsun.kototoro.core.util.ext.consumeAll
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -59,7 +65,6 @@ import javax.inject.Inject
 import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.reader.ui.ScreenOrientationHelper
 import org.skepsun.kototoro.core.util.FoldableUtils
-import org.skepsun.kototoro.video.ui.VideoSettingsSheet
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import androidx.core.view.updateLayoutParams
@@ -117,6 +122,20 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     companion object {
         private const val ENABLE_M3U8_PROXY_CACHE = true
     }
+
+    private data class PlayerOverflowAction(
+        val title: String,
+        val iconRes: Int,
+        val onClick: () -> Unit,
+    )
+
+    private data class PlayerSettingsAction(
+        val title: String,
+        val subtitle: String? = null,
+        val iconRes: Int,
+        val isChecked: Boolean? = null,
+        val onClick: () -> Unit,
+    )
 
     private enum class PlayerUiState {
         Hidden,
@@ -601,6 +620,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                     openVideoDetails()
                     true
                 }
+                org.skepsun.kototoro.R.id.action_settings -> {
+                    showVideoSettingsPanel()
+                    true
+                }
                 org.skepsun.kototoro.R.id.action_more -> {
                     showOverflowMenu()
                     true
@@ -941,7 +964,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_pages_thumbs)?.let { btn ->
                 btn.isVisible = currentContent != null
                 btn.setOnClickListener {
-                    AppRouter(this).showChapterPagesSheet()
+                    showChapterSelectionPanel(btn)
                 }
             }
             ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_quality)?.setOnClickListener {
@@ -2071,48 +2094,509 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 ?: viewBinding.toolbar
         }
         val anchor = toolbar.menuView?.findViewById<View>(org.skepsun.kototoro.R.id.action_more) ?: toolbar
-        val popup = PopupMenu(this, anchor)
         val showMarkerActions = !isLandscapeOrientation()
-        var order = 0
-        if (showMarkerActions) {
-            popup.menu.add(0, 1, order++, buildIntroMenuTitle())
-            popup.menu.add(0, 2, order++, buildOutroMenuTitle())
+        val actions = buildList {
+            if (showMarkerActions) {
+                add(
+                    PlayerOverflowAction(
+                        title = buildIntroMenuTitle(),
+                        iconRes = org.skepsun.kototoro.R.drawable.ic_prev,
+                        onClick = ::toggleIntroMarker,
+                    ),
+                )
+                add(
+                    PlayerOverflowAction(
+                        title = buildOutroMenuTitle(),
+                        iconRes = org.skepsun.kototoro.R.drawable.ic_next,
+                        onClick = ::toggleOutroMarker,
+                    ),
+                )
+            }
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.rotate_screen),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_screen_rotation,
+                    onClick = { orientationHelper.isLandscape = !orientationHelper.isLandscape },
+                ),
+            )
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.video_aspect_ratio),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_aspect_ratio,
+                    onClick = ::showAspectRatioDialog,
+                ),
+            )
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.save_manga_video),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_download,
+                    onClick = ::downloadCurrentChapter,
+                ),
+            )
         }
-        popup.menu.add(0, 3, order++, getString(R.string.rotate_screen))
-        popup.menu.add(0, 4, order++, getString(R.string.video_aspect_ratio))
-        popup.menu.add(0, 6, order++, getString(R.string.save_manga_video))
-        popup.menu.add(0, 5, order, getString(R.string.video_more_settings))
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> {
-                    toggleIntroMarker()
-                    true
-                }
-                2 -> {
-                    toggleOutroMarker()
-                    true
-                }
-                3 -> {
-                    orientationHelper.isLandscape = !orientationHelper.isLandscape
-                    true
-                }
-                4 -> {
-                    showAspectRatioDialog()
-                    true
-                }
-                5 -> {
-                    showVideoSettingsSheet()
-                    true
-                }
-                6 -> {
-                    downloadCurrentChapter()
-                    true
-                }
-                else -> false
+        showPlayerOverflowPopup(anchor, actions)
+    }
+
+    private fun showPlayerOverflowPopup(anchor: View, actions: List<PlayerOverflowAction>) {
+        if (actions.isEmpty()) return
+
+        lateinit var popup: PopupWindow
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(
+                this@VideoPlayerActivity,
+                org.skepsun.kototoro.R.drawable.bg_video_player_popup_menu,
+            )
+            actions.forEach { action ->
+                addView(createPlayerOverflowRow(action) { popup.dismiss() })
             }
         }
-        popup.show()
+        popup = PopupWindow(
+            content,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true,
+        ).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                elevation = dp(10).toFloat()
+            }
+        }
+
+        content.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        val xOffset = anchor.width - content.measuredWidth
+        popup.showAsDropDown(anchor, xOffset, dp(8), Gravity.NO_GRAVITY)
     }
+
+    private fun createPlayerOverflowRow(
+        action: PlayerOverflowAction,
+        dismissPopup: () -> Unit,
+    ): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumWidth = dp(220)
+            minimumHeight = dp(48)
+            setPadding(dp(14), 0, dp(16), 0)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                dismissPopup()
+                action.onClick()
+            }
+            addView(
+                ImageView(context).apply {
+                    setImageResource(action.iconRes)
+                    setColorFilter(Color.WHITE)
+                },
+                LinearLayout.LayoutParams(dp(22), dp(22)).apply {
+                    marginEnd = dp(14)
+                },
+            )
+            addView(
+                TextView(context).apply {
+                    text = action.title
+                    setTextColor(Color.WHITE)
+                    textSize = 15f
+                    maxLines = 1
+                    includeFontPadding = false
+                },
+                LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1f,
+                ),
+            )
+        }
+    }
+
+    private fun buildPlayerSettingsActions(): List<PlayerSettingsAction> {
+        val enabledText = getString(R.string.enabled)
+        val disabledText = getString(R.string.disabled)
+        return listOf(
+            PlayerSettingsAction(
+                title = getString(R.string.video_reload),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_retry,
+                onClick = ::reloadPlayback,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_quality),
+                subtitle = currentQualityLabel(),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_network_cellular,
+                onClick = ::showQualityDialog,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_super_resolution),
+                subtitle = appSettings.videoSuperResolutionMode.name,
+                iconRes = org.skepsun.kototoro.R.drawable.ic_auto_fix,
+                onClick = ::showVideoSuperResolutionSheet,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_screenshot),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_save,
+                onClick = ::takeScreenshot,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_playback_speed),
+                subtitle = "%.2fx".format(appSettings.videoPlaybackSpeed),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_timer,
+                onClick = ::showPlaybackSpeedDialog,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_default_speed),
+                subtitle = "%.2fx".format(appSettings.videoDefaultSpeed),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_timelapse,
+                onClick = ::showDefaultPlaybackSpeedDialog,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_seek_forward_time),
+                subtitle = "${appSettings.videoSeekForwardMs / 1000}s",
+                iconRes = org.skepsun.kototoro.R.drawable.ic_fast_forward,
+                onClick = {
+                    showSeekIntervalDialog(
+                        titleRes = R.string.video_seek_forward_time,
+                        currentMs = appSettings.videoSeekForwardMs,
+                    ) { appSettings.videoSeekForwardMs = it }
+                },
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_seek_backward_time),
+                subtitle = "${appSettings.videoSeekBackwardMs / 1000}s",
+                iconRes = org.skepsun.kototoro.R.drawable.ic_fast_rewind,
+                onClick = {
+                    showSeekIntervalDialog(
+                        titleRes = R.string.video_seek_backward_time,
+                        currentMs = appSettings.videoSeekBackwardMs,
+                    ) { appSettings.videoSeekBackwardMs = it }
+                },
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_aspect_ratio),
+                subtitle = currentAspectRatioLabel(),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_aspect_ratio,
+                onClick = ::showAspectRatioDialog,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_danmaku_enabled),
+                subtitle = if (appSettings.videoDanmakuEnabled) enabledText else disabledText,
+                iconRes = org.skepsun.kototoro.R.drawable.ic_danmaku,
+                isChecked = appSettings.videoDanmakuEnabled,
+                onClick = {
+                    appSettings.videoDanmakuEnabled = !appSettings.videoDanmakuEnabled
+                    applyDanmakuSettings()
+                },
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_double_tap_seek),
+                subtitle = if (appSettings.videoDoubleTapSeekEnabled) enabledText else disabledText,
+                iconRes = org.skepsun.kototoro.R.drawable.ic_gesture_double_tap,
+                isChecked = appSettings.videoDoubleTapSeekEnabled,
+                onClick = {
+                    appSettings.videoDoubleTapSeekEnabled = !appSettings.videoDoubleTapSeekEnabled
+                },
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_volume_boost),
+                subtitle = if (appSettings.videoVolumeBoostEnabled) enabledText else disabledText,
+                iconRes = org.skepsun.kototoro.R.drawable.ic_settings,
+                isChecked = appSettings.videoVolumeBoostEnabled,
+                onClick = {
+                    appSettings.videoVolumeBoostEnabled = !appSettings.videoVolumeBoostEnabled
+                    applyPlaybackOptions()
+                },
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_auto_next),
+                subtitle = if (appSettings.videoAutoNextEnabled) enabledText else disabledText,
+                iconRes = org.skepsun.kototoro.R.drawable.ic_action_resume,
+                isChecked = appSettings.videoAutoNextEnabled,
+                onClick = {
+                    appSettings.videoAutoNextEnabled = !appSettings.videoAutoNextEnabled
+                },
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_subtitle_track),
+                subtitle = currentSubtitleTrackLabel(),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_subtitles,
+                onClick = ::showSubtitleTrackDialog,
+            ),
+            PlayerSettingsAction(
+                title = getString(R.string.video_audio_track),
+                subtitle = currentAudioTrackLabel(),
+                iconRes = org.skepsun.kototoro.R.drawable.ic_audiotrack,
+                onClick = ::showAudioTrackDialog,
+            ),
+        )
+    }
+
+    private fun showPlayerSettingsPopup(anchor: View, actions: List<PlayerSettingsAction>) {
+        if (actions.isEmpty()) return
+
+        lateinit var popup: PopupWindow
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(
+                this@VideoPlayerActivity,
+                org.skepsun.kototoro.R.drawable.bg_video_player_popup_menu,
+            )
+            addView(createPlayerPanelHeader(getString(R.string.options)))
+            actions.forEach { action ->
+                addView(createPlayerSettingsRow(action) { popup.dismiss() })
+            }
+        }
+        val content = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(panel)
+        }
+        popup = PopupWindow(
+            content,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true,
+        ).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                elevation = dp(12).toFloat()
+            }
+        }
+
+        val maxHeight = (resources.displayMetrics.heightPixels * 0.72f).roundToInt()
+        content.measure(
+            View.MeasureSpec.makeMeasureSpec(dp(360), View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST),
+        )
+        popup.height = content.measuredHeight.coerceAtMost(maxHeight)
+        val xOffset = anchor.width - content.measuredWidth
+        popup.showAsDropDown(anchor, xOffset, dp(8), Gravity.NO_GRAVITY)
+    }
+
+    private fun createPlayerPanelHeader(title: String): View {
+        return TextView(this).apply {
+            text = title
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            setPadding(dp(16), dp(14), dp(16), dp(10))
+        }
+    }
+
+    private fun createPlayerSettingsRow(
+        action: PlayerSettingsAction,
+        dismissPopup: () -> Unit,
+    ): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumWidth = dp(336)
+            minimumHeight = dp(54)
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                dismissPopup()
+                action.onClick()
+            }
+            addView(
+                ImageView(context).apply {
+                    setImageResource(action.iconRes)
+                    setColorFilter(Color.WHITE)
+                },
+                LinearLayout.LayoutParams(dp(22), dp(22)).apply {
+                    marginEnd = dp(14)
+                },
+            )
+            addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(
+                        TextView(context).apply {
+                            text = action.title
+                            setTextColor(Color.WHITE)
+                            textSize = 15f
+                            maxLines = 1
+                            includeFontPadding = false
+                        },
+                    )
+                    action.subtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
+                        addView(
+                            TextView(context).apply {
+                                text = subtitle
+                                setTextColor(0xB3FFFFFF.toInt())
+                                textSize = 12f
+                                maxLines = 1
+                                includeFontPadding = false
+                            },
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ).apply {
+                                topMargin = dp(4)
+                            },
+                        )
+                    }
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            action.isChecked?.let { checked ->
+                addView(
+                    ImageView(context).apply {
+                        setImageResource(org.skepsun.kototoro.R.drawable.ic_check)
+                        setColorFilter(if (checked) Color.WHITE else 0x40FFFFFF)
+                        alpha = if (checked) 1f else 0.35f
+                    },
+                    LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+                        marginStart = dp(12)
+                    },
+                )
+            }
+        }
+    }
+
+    private fun showChapterSelectionPanel(anchor: View) {
+        val chapters = playerChapterList()
+        if (chapters.isEmpty()) return
+
+        lateinit var popup: PopupWindow
+        val currentId = readerState?.chapterId
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(
+                this@VideoPlayerActivity,
+                org.skepsun.kototoro.R.drawable.bg_video_player_popup_menu,
+            )
+            addView(createPlayerPanelHeader(getString(R.string.chapters)))
+            chapters.forEachIndexed { index, chapter ->
+                addView(
+                    createPlayerChapterRow(
+                        index = index,
+                        chapter = chapter,
+                        isCurrent = chapter.id == currentId,
+                    ) {
+                        popup.dismiss()
+                        onChapterSelected(chapter)
+                    },
+                )
+            }
+        }
+        val content = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(panel)
+        }
+        popup = PopupWindow(
+            content,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            true,
+        ).apply {
+            isOutsideTouchable = true
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                elevation = dp(12).toFloat()
+            }
+        }
+
+        val maxHeight = (resources.displayMetrics.heightPixels * 0.62f).roundToInt()
+        content.measure(
+            View.MeasureSpec.makeMeasureSpec(dp(360), View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST),
+        )
+        popup.height = content.measuredHeight.coerceAtMost(maxHeight)
+        val xOffset = ((anchor.width - content.measuredWidth) / 2).coerceAtMost(0)
+        popup.showAsDropDown(anchor, xOffset, -anchor.height - popup.height - dp(8), Gravity.NO_GRAVITY)
+    }
+
+    private fun createPlayerChapterRow(
+        index: Int,
+        chapter: ContentChapter,
+        isCurrent: Boolean,
+        onClick: () -> Unit,
+    ): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumWidth = dp(336)
+            minimumHeight = dp(54)
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+            isClickable = true
+            isFocusable = true
+            alpha = if (isCurrent) 1f else 0.9f
+            setOnClickListener { onClick() }
+            addView(
+                TextView(context).apply {
+                    text = (index + 1).toString()
+                    setTextColor(0xB3FFFFFF.toInt())
+                    textSize = 12f
+                    gravity = Gravity.CENTER
+                    includeFontPadding = false
+                },
+                LinearLayout.LayoutParams(dp(28), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginEnd = dp(12)
+                },
+            )
+            addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(
+                        TextView(context).apply {
+                            text = chapter.title?.takeIf { it.isNotBlank() }
+                                ?: chapter.url
+                            setTextColor(Color.WHITE)
+                            textSize = 15f
+                            maxLines = 1
+                            includeFontPadding = false
+                        },
+                    )
+                    chapter.branch?.takeIf { it.isNotBlank() }?.let { branch ->
+                        addView(
+                            TextView(context).apply {
+                                text = branch
+                                setTextColor(0x99FFFFFF.toInt())
+                                textSize = 12f
+                                maxLines = 1
+                                includeFontPadding = false
+                            },
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ).apply {
+                                topMargin = dp(4)
+                            },
+                        )
+                    }
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+            )
+            if (isCurrent) {
+                addView(
+                    ImageView(context).apply {
+                        setImageResource(org.skepsun.kototoro.R.drawable.ic_check)
+                        setColorFilter(Color.WHITE)
+                    },
+                    LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+                        marginStart = dp(12)
+                    },
+                )
+            }
+        }
+    }
+
+    private fun playerChapterList(): List<ContentChapter> {
+        return chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
+            currentMangaContent()?.chapters.orEmpty()
+        }
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
     private fun buildIntroMenuTitle(): String {
         return if (introEndMs > 0) {
@@ -2710,7 +3194,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
         Snackbar.make(viewBinding.root, messageRes, Snackbar.LENGTH_LONG)
             .setAction(R.string.settings) {
-                showVideoSettingsSheet()
+                showVideoSettingsPanel()
             }
             .show()
     }
@@ -2724,17 +3208,20 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
         Snackbar.make(viewBinding.root, messageRes, Snackbar.LENGTH_LONG)
             .setAction(R.string.settings) {
-                showVideoSettingsSheet()
+                showVideoSettingsPanel()
             }
             .show()
     }
 
-    private fun showVideoSettingsSheet() {
-        val tag = "VideoSettingsSheet"
-        val fm = supportFragmentManager
-        if (fm.findFragmentByTag(tag) == null) {
-            VideoSettingsSheet().show(fm, tag)
+    private fun showVideoSettingsPanel() {
+        val toolbar = if (isLandscapeOrientation()) {
+            viewBinding.toolbar
+        } else {
+            findViewById<com.google.android.material.appbar.MaterialToolbar>(org.skepsun.kototoro.R.id.toolbar_secondary)
+                ?: viewBinding.toolbar
         }
+        val anchor = toolbar.menuView?.findViewById<View>(org.skepsun.kototoro.R.id.action_settings) ?: toolbar
+        showPlayerSettingsPopup(anchor, buildPlayerSettingsActions())
     }
 
     private fun resolveSubMode(
@@ -2805,6 +3292,29 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                         title = track.title,
                     )
                 }
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showAudioTrackDialog() {
+        val player = mpvPlayer ?: return
+        val tracks = player.getAudioTracks()
+        if (tracks.isEmpty()) {
+            Snackbar.make(
+                viewBinding.root,
+                org.skepsun.kototoro.R.string.video_no_audio_tracks,
+                Snackbar.LENGTH_SHORT,
+            ).show()
+            return
+        }
+        val labels = tracks.map { it.displayName() }.toTypedArray()
+        val checked = tracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(org.skepsun.kototoro.R.string.video_audio_track)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                player.setAudioTrack(tracks[which].id)
                 dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -2889,6 +3399,77 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun showDefaultPlaybackSpeedDialog() {
+        val options = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+        val labels = options.map { "%.2fx".format(it) }.toTypedArray()
+        val current = appSettings.videoDefaultSpeed
+        val checked = options.indexOfFirst { kotlin.math.abs(it - current) < 0.01f }
+            .takeIf { it >= 0 } ?: 2
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.video_default_speed)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                appSettings.videoDefaultSpeed = options[which]
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showSeekIntervalDialog(
+        titleRes: Int,
+        currentMs: Int,
+        onSelect: (Int) -> Unit,
+    ) {
+        val options = listOf(5, 10, 15, 30)
+        val labels = options.map { "${it}s" }.toTypedArray()
+        val checked = options.indexOfFirst { it * 1000 == currentMs }
+            .takeIf { it >= 0 } ?: 1
+        MaterialAlertDialogBuilder(this)
+            .setTitle(titleRes)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                onSelect(options[which] * 1000)
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showVideoSuperResolutionSheet() {
+        val tag = "VideoSuperResolutionSheet"
+        val fm = supportFragmentManager
+        if (fm.findFragmentByTag(tag) == null) {
+            VideoSuperResolutionSheet().show(fm, tag)
+        }
+    }
+
+    private fun currentQualityLabel(): String? {
+        if (availableVideos.isEmpty()) return null
+        val index = currentVideoIndex.coerceIn(availableVideos.indices)
+        return availableVideos[index].qualityDisplayLabel(index)
+    }
+
+    private fun currentAspectRatioLabel(): String {
+        val labelRes = when (appSettings.videoAspectRatio) {
+            1 -> R.string.video_aspect_ratio_fill
+            2 -> R.string.video_aspect_ratio_16_9
+            3 -> R.string.video_aspect_ratio_4_3
+            4 -> R.string.video_aspect_ratio_stretch
+            else -> R.string.video_aspect_ratio_fit
+        }
+        return getString(labelRes)
+    }
+
+    private fun currentSubtitleTrackLabel(): String {
+        val player = mpvPlayer ?: return getString(R.string.video_subtitle_off)
+        return player.getSubtitleTracks().find { it.isSelected }?.displayName()
+            ?: getString(R.string.video_subtitle_off)
+    }
+
+    private fun currentAudioTrackLabel(): String? {
+        val player = mpvPlayer ?: return null
+        return player.getAudioTracks().find { it.isSelected }?.displayName()
     }
 
     private fun updatePlaybackSpeedButton() {

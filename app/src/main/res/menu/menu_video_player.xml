@@ -33,8 +33,14 @@
         app:showAsAction="always" />
 
     <item
-        android:id="@+id/action_more"
+        android:id="@+id/action_settings"
         android:title="@string/video_more_settings"
+        android:icon="@drawable/ic_settings"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_more"
+        android:title="@string/more"
         android:icon="@drawable/ic_more_vert"
         app:showAsAction="always" />
 

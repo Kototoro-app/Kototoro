@@ -140,7 +140,7 @@ class DetailsLoadUseCase @Inject constructor(
 		} else {
 			null
 		}
-		val hasCachedDetails = !force && cachedProjection != null && !cachedProjection.chapters.isNullOrEmpty()
+		val hasCachedDetails = !force && cachedProjection?.hasCompleteDetailsSnapshot() == true
 
 		val skipNetworkLoad = !force && (networkState.isOfflineOrRestricted() || hasCachedDetails)
 		android.util.Log.d(
@@ -160,13 +160,14 @@ class DetailsLoadUseCase @Inject constructor(
 					),
 				)
 				return@coroutineScope
-			} else if (hasCachedDetails && cachedProjection != null) {
+			} else if (hasCachedDetails) {
+				val cachedDetails = checkNotNull(cachedProjection)
 				emit(
 					ContentDetails(
-						manga = cachedProjection,
+						manga = cachedDetails,
 						localContent = null,
 						override = override,
-						description = cachedProjection.description?.parseAsHtml(withImages = true),
+						description = cachedDetails.description?.parseAsHtml(withImages = true),
 						isLoaded = true,
 					),
 				)
@@ -274,6 +275,10 @@ class DetailsLoadUseCase @Inject constructor(
 		} else {
 			null
 		}
+	}
+
+	private fun Content.hasCompleteDetailsSnapshot(): Boolean {
+		return !chapters.isNullOrEmpty() && description != null
 	}
 	
 	/**
