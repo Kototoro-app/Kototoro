@@ -18,6 +18,8 @@ import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.db.entity.toContentTags
+import org.skepsun.kototoro.core.db.entity.toEntity
+import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.mapItems
@@ -242,6 +244,13 @@ class TrackingRepository @Inject constructor(
 			val entityId = resolveTrackIdentity(anchorMangaId).entityId
 			val track = getOrCreateTrack(anchorMangaId).mergeWith(updates, anchorMangaId)
 			db.getTracksDao().upsert(track)
+			
+			val updatedManga = updates.manga
+			val resolvedManga = contentDataRepository.resolveStoredProjection(updatedManga)
+			if (db.getMangaDao().contains(resolvedManga.id)) {
+				contentDataRepository.updateProjectionSnapshot(resolvedManga)
+			}
+
 			if (updates is MangaUpdates.Success && updates.isValid && updates.newChapters.isNotEmpty()) {
 				progressUpdateUseCase(updates.manga)
 				val logEntity = TrackLogEntity(

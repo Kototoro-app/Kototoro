@@ -24,7 +24,7 @@ class BackupWebDavUploadCoordinatorTest {
 		every { settings.backupWebDavLastUploadKind = any() } returns Unit
 		every { settings.backupWebDavDataVersion = any() } returns Unit
 		coEvery { uploader.uploadBackup(any(), any()) } returns Unit
-		val file = mockk<File>(relaxed = true)
+		val file = File.createTempFile("test_backup", ".zip").apply { deleteOnExit() }
 
 		val result = kotlinx.coroutines.runBlocking {
 			coordinator.uploadAndCommit(
