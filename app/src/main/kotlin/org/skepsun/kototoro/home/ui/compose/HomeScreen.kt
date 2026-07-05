@@ -86,8 +86,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import coil3.Image as CoilImage
 import coil3.asDrawable
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
 import coil3.memory.MemoryCache
-import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.crossfade
@@ -133,9 +133,13 @@ import org.skepsun.kototoro.home.ui.HomeRecentItem
 import org.skepsun.kototoro.home.ui.HomeRecommendationItem
 import org.skepsun.kototoro.home.ui.HomeSummaryState
 import org.skepsun.kototoro.home.ui.HomeUpdateItem
+import org.skepsun.kototoro.list.domain.ReadingProgress
+import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
+import org.skepsun.kototoro.list.ui.compose.ContentCardCoverProgressIndicator
 import org.skepsun.kototoro.list.ui.compose.ContentCardNsfwBadge
 import org.skepsun.kototoro.list.ui.compose.KototoroContentCardGrid
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
+import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
 
@@ -355,6 +359,8 @@ private fun HomeHighlightsSections(
                 content = it.content,
                 sectionKey = "recent_history",
                 stableKey = it.groupKey,
+                counter = it.counter,
+                progress = it.progress,
             )
         }
     }
@@ -364,6 +370,8 @@ private fun HomeHighlightsSections(
                 content = it.content,
                 sectionKey = "recent_updates",
                 stableKey = it.groupKey,
+                counter = it.counter,
+                progress = it.progress,
                 supportingText = if (it.newChapters > 0) {
                     HomeCoverSupportingText.Text(
                         itemNewChaptersText(newChaptersLabel, it.newChapters),
@@ -380,6 +388,8 @@ private fun HomeHighlightsSections(
                 content = it.content,
                 sectionKey = "recommendations",
                 stableKey = it.groupKey,
+                counter = it.counter,
+                progress = it.progress,
             )
         }
     }
@@ -766,7 +776,7 @@ private fun HomeHeroCoverImage(
     contentDescription: String,
     modifier: Modifier = Modifier,
     onSuccess: (SuccessResult) -> Unit,
-    onError: (Throwable) -> Unit = {},
+    onError: (AsyncImagePainter.State.Error) -> Unit = {},
 ) {
     val context = LocalContext.current
     val imageLoader = remember(context.applicationContext) {
@@ -783,28 +793,20 @@ private fun HomeHeroCoverImage(
     var stableImage by remember(cacheKey, snapshotKey) { mutableStateOf<CoilImage?>(cachedImage) }
     val stablePainter = rememberDrawablePainter(stableImage?.asDrawable(context.resources))
 
-    LaunchedEffect(imageLoader, request, cacheKey, snapshotKey) {
-        if (stableImage != null) {
-            return@LaunchedEffect
-        }
-        when (val result = imageLoader.execute(request)) {
-            is SuccessResult -> {
-                stableImage = result.image
-                onSuccess(result)
-            }
-            is ErrorResult -> {
-                onError(result.throwable)
-            }
-        }
-    }
-    if (stableImage != null) {
-        Image(
-            painter = stablePainter,
-            contentDescription = contentDescription,
-            contentScale = ContentScale.Crop,
-            modifier = modifier,
-        )
-    }
+    AsyncImage(
+        model = request,
+        imageLoader = imageLoader,
+        placeholder = stablePainter,
+        error = stablePainter,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        contentScale = ContentScale.Crop,
+        onSuccess = { result ->
+            stableImage = result.result.image
+            onSuccess(result.result)
+        },
+        onError = onError,
+    )
 }
 
 @Composable
@@ -1089,6 +1091,9 @@ private fun HomeListRailRowItem(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val cardUiPrefs = rememberContentCardUiPrefs(
+        remember(context.applicationContext) { AppSettings(context.applicationContext) },
+    )
     val content = item.content
     val coverSize = when (listMode) {
         ListMode.LIST -> HomeListRailCoverSize(52.dp, 78.dp)
@@ -1153,14 +1158,66 @@ private fun HomeListRailRowItem(
                     },
                 )
             }
-            if (content.isNsfw()) {
-                ContentCardNsfwBadge(
-                    metrics = badgeMetrics,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(badgeMetrics.outerPadding),
+            val badgeModel = remember(content, item.counter, item.progress) {
+                ContentGridModel(
+                    manga = content,
+                    override = null,
+                    subtitle = null,
+                    counter = item.counter,
+                    progress = item.progress,
+                    isFavorite = false,
+                    isSaved = false,
                 )
             }
+            val effectiveTopRightBadges = remember(cardUiPrefs.badgesTopRight, item.counter, badgeModel.scoreText) {
+                buildSet {
+                    addAll(cardUiPrefs.badgesTopRight)
+                    if (item.counter > 0) {
+                        add("counter")
+                    }
+                    if (!badgeModel.scoreText.isNullOrBlank()) {
+                        add("score")
+                    }
+                }
+            }
+            ContentCardCornerBadges(
+                badges = cardUiPrefs.badgesTopLeft,
+                item = badgeModel,
+                corner = Alignment.TopStart,
+                cardRadius = 8.dp,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+            ContentCardCornerBadges(
+                badges = effectiveTopRightBadges,
+                item = badgeModel,
+                corner = Alignment.TopEnd,
+                cardRadius = 8.dp,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
+            ContentCardCornerBadges(
+                badges = cardUiPrefs.badgesBottomLeft,
+                item = badgeModel,
+                corner = Alignment.BottomStart,
+                cardRadius = 8.dp,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.BottomStart),
+            )
+            ContentCardCornerBadges(
+                badges = cardUiPrefs.badgesBottomRight,
+                item = badgeModel,
+                corner = Alignment.BottomEnd,
+                cardRadius = 8.dp,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
+            ContentCardCoverProgressIndicator(
+                progress = item.progress,
+                bottomRightBadges = cardUiPrefs.badgesBottomRight,
+                metrics = badgeMetrics,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
 
         Column(
@@ -1229,13 +1286,13 @@ private fun HomeCoverRowItem(
             instanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
         )
     }
-    val model = remember(content, item.supportingText) {
+    val model = remember(content, item.supportingText, item.counter, item.progress) {
         ContentGridModel(
             manga = content,
             override = null,
             subtitle = item.supportingText?.text,
-            counter = 0,
-            progress = null,
+            counter = item.counter,
+            progress = item.progress,
             isFavorite = false,
             isSaved = false,
         )
@@ -1285,6 +1342,8 @@ private data class HomeCoverDisplayItem(
     val content: Content,
     val sectionKey: String,
     val stableKey: Long,
+    val counter: Int = 0,
+    val progress: ReadingProgress? = null,
     val supportingText: HomeCoverSupportingText? = null,
 )
 

@@ -247,8 +247,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
 
         override fun onPlaybackEnded() {
-            savePlaybackProgress()
-            saveHistoryProgressAsync()
             val dur = mpvPlayer?.durationMs ?: 0L
             if (dur in 1L..90_000L && suspiciousAdRetryCount < 1) {
                 if (currentVideoSource != null) {
@@ -277,6 +275,8 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                     return
                 }
             }
+            savePlaybackProgress(completed = true)
+            saveHistoryProgressAsync(completed = true)
             suspiciousAdRetryCount = 0
             runOnUiThread {
                 maybeAutoPlayNext()
@@ -3874,10 +3874,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         danmakuController.addLiveDanmaku(message, timeMs)
     }
 
-    private fun savePlaybackProgress() {
+    private fun savePlaybackProgress(completed: Boolean = false) {
         val currentUrl = currentMediaUrl ?: return
-        val pos = mpvPlayer?.positionMs ?: return
+        val player = mpvPlayer ?: return
         val dur = mpvPlayer?.durationMs ?: return
+        val pos = if (completed && dur > 0L) dur else player.positionMs
         runCatching {
             getSharedPreferences("video_progress", MODE_PRIVATE)
                 .edit()
@@ -3988,13 +3989,15 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
     }
 
-    private fun saveHistoryProgressAsync() {
+    private fun saveHistoryProgressAsync(completed: Boolean = false) {
         val exo = mpvPlayer ?: return
         val mangaSeed = currentMangaContent() ?: return
         val dur = exo.durationMs
         val pos = exo.positionMs
         // 当时长未知（直播或刚开始播放）时，也保存一个有效百分比以建立历史记?
-        val episodePercent = if (dur > 0) {
+        val episodePercent = if (completed) {
+            1f
+        } else if (dur > 0) {
             (pos.toFloat() / dur).coerceIn(0f, 1f)
         } else 0f
 
@@ -4065,11 +4068,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 val overall = computeSeriesPercent(manga, state, episodePercent)
                 android.util.Log.d("VideoPlayer", "Saving history with ReaderState: chapterId=${state.chapterId}, overall=$overall")
                 val timedState = state.copy(
-                    page = pos.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                    page = (if (completed && dur > 0L) dur else pos).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
                     scroll = episodePercentToScroll(episodePercent),
                 )
                 ensureReadingSession(timedState, overall)
-                historyUpdateUseCase.invokeAsync(manga, state, overall)
+                historyUpdateUseCase.invokeAsync(manga, timedState, overall)
             } else {
                 // ?ReaderState：优先使用已有历史，否则用首章构?
                 val history = runCatching { historyRepository.getOne(manga) }.getOrNull()
@@ -4081,11 +4084,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                     android.util.Log.d("VideoPlayer", "Using fallback ReaderState: chapterId=${fallbackState.chapterId}")
                     val overall = computeSeriesPercent(manga, fallbackState, episodePercent)
                     val timedState = fallbackState.copy(
-                        page = pos.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                        page = (if (completed && dur > 0L) dur else pos).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
                         scroll = episodePercentToScroll(episodePercent),
                     )
                     ensureReadingSession(timedState, overall)
-                    historyUpdateUseCase.invokeAsync(manga, fallbackState, overall)
+                    historyUpdateUseCase.invokeAsync(manga, timedState, overall)
                 } else {
                     android.util.Log.w("VideoPlayer", "Cannot create fallback ReaderState")
                 }

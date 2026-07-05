@@ -805,6 +805,7 @@ class HistoryListViewModel @Inject constructor(
 				subtitle = subtitle,
 				counter = 0,
 				id = uiId,
+				progress = progress,
 			)
 			ListMode.DETAILED_LIST -> ContentDetailedListModel(
 				manga = manga,

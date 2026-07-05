@@ -96,12 +96,12 @@ class KotoNetworkHelper(
         // the copied base interceptor chain is not always enough to surface Kototoro's CF flow.
         builder.addInterceptor { chain ->
             val originalRequest = chain.request()
-                .withCurrentSourceTagIfAbsent()
+                .withCurrentSourceTagIfCompatible()
                 .withCloudflareUserAgent()
             val request = enrichApiRequestHeadersIfNeeded(originalRequest)
             val response = chain.proceed(request)
             val challengeUrl = request.toChallengeUrl()
-            val browserChallengeUrl = request.toBrowserChallengeUrl()
+            val browserChallengeUrl = request.toBrowserChallengeUrlForSource()
             val successCookieUrl = request.toSuccessCookieUrl()
             val protection = CloudFlareHelper.checkResponseForProtection(response)
             rememberAcceptedCloudflareUserAgent(request, response, protection)
@@ -124,13 +124,15 @@ class KotoNetworkHelper(
                     val clearance = cookieJar.loadForRequest(request.url)
                         .firstOrNull { it.name == "cf_clearance" }
                         ?.value
+                    val shouldRefreshMihonClearance = shouldRefreshMihonClearance(request, clearance)
                     android.util.Log.w(
                         "MihonNetwork",
                         "Cloudflare captcha flow start: host=$host, method=${request.method}, " +
                             "sourceTagged=${request.tag(ContentSource::class.java) != null}, " +
                             "challengeUrl=$challengeUrl, browserChallengeUrl=$browserChallengeUrl, successCookieUrl=$successCookieUrl, " +
                             "ua=${maskUserAgent(request.header("User-Agent"))}, " +
-                            "oldClearance=${maskCookieValue(clearance)}, cookiesBefore=[${cookieDebugString(request.url)}]",
+                            "oldClearance=${maskCookieValue(clearance)}, refreshMihonClearance=$shouldRefreshMihonClearance, " +
+                            "cookiesBefore=[${cookieDebugString(request.url)}]",
                     )
                     if (shouldSkipInteractiveAction(host, clearance)) {
                         android.util.Log.w(
@@ -159,6 +161,9 @@ class KotoNetworkHelper(
                         }
                     }
 
+                    if (shouldRefreshMihonClearance) {
+                        clearCloudflareCookieIfPossible(request, clearance)
+                    }
                     if (trySolveCloudflareWithWebView(request, browserChallengeUrl, clearance)) {
                         android.util.Log.i(
                             "MihonNetwork",
@@ -354,6 +359,14 @@ class KotoNetworkHelper(
             .toString()
     }
 
+    private fun Request.toBrowserChallengeUrlForSource(): String {
+        return if (isMihonRequest()) {
+            url.toString()
+        } else {
+            toBrowserChallengeUrl()
+        }
+    }
+
     private fun okhttp3.Request.toSuccessCookieUrl(): String {
         return url.newBuilder()
             .encodedPath("/")
@@ -363,9 +376,10 @@ class KotoNetworkHelper(
             .toString()
     }
 
-    private fun Request.withCurrentSourceTagIfAbsent(): Request {
-        if (tag(ContentSource::class.java) != null) return this
+    private fun Request.withCurrentSourceTagIfCompatible(): Request {
         val source = MihonRequestContext.currentSource() ?: return this
+        val taggedSource = tag(ContentSource::class.java)
+        if (taggedSource != null && taggedSource.name != source.name) return this
         return newBuilder().tag(ContentSource::class.java, source).build()
     }
 
@@ -399,6 +413,7 @@ class KotoNetworkHelper(
         if (!request.hasCloudflareClearance()) return
         val userAgent = request.header("User-Agent")?.takeIf { it.isNotBlank() } ?: return
         val host = request.url.host.lowercase()
+        recentWebViewSolveFailureAt.remove(host)
         val previous = acceptedCloudflareUserAgents.put(host, userAgent)
         if (previous != userAgent) {
             android.util.Log.d(
@@ -461,6 +476,15 @@ class KotoNetworkHelper(
         return if (modified) builder.build() else request
     }
 
+    private fun shouldRefreshMihonClearance(request: Request, clearance: String?): Boolean {
+        if (clearance.isNullOrBlank()) return false
+        return request.isMihonRequest()
+    }
+
+    private fun Request.isMihonRequest(): Boolean {
+        return tag(ContentSource::class.java)?.name?.startsWith("MIHON_") == true
+    }
+
     private fun trySolveCloudflareWithWebView(request: Request, challengeUrl: String, oldClearance: String?): Boolean {
         if (request.method != "GET") {
             android.util.Log.d("MihonNetwork", "Cloudflare WebView solve skipped: non-GET ${request.method}")
@@ -472,9 +496,17 @@ class KotoNetworkHelper(
             return false
         }
         val host = request.url.host.lowercase()
+        val shouldRefreshMihonClearance = shouldRefreshMihonClearance(request, oldClearance)
         return runBlocking {
             val mutex = webViewFallbackMutexes.computeIfAbsent(host) { Mutex() }
             mutex.withLock {
+                if (shouldSkipAutoSolveAfterFailure(request, host)) {
+                    android.util.Log.w(
+                        "MihonNetwork",
+                        "Cloudflare WebView solve skipped: recent auto solve failed for host=$host",
+                    )
+                    return@withLock false
+                }
                 if (shouldReuseRecentWebViewSolve(host)) {
                     android.util.Log.i("MihonNetwork", "Cloudflare WebView solve reused recent success for host=$host")
                     return@withLock true
@@ -483,7 +515,8 @@ class KotoNetworkHelper(
                     "MihonNetwork",
                     "Cloudflare WebView solve start: host=$host, challengeUrl=$challengeUrl, " +
                         "ua=${maskUserAgent(request.header("User-Agent"))}, headerNames=${buildWebViewHeaders(request).keys}, " +
-                        "oldClearance=${maskCookieValue(oldClearance)}, cookiesBefore=[${cookieDebugString(request.url)}]",
+                        "oldClearance=${maskCookieValue(oldClearance)}, refreshMihonClearance=$shouldRefreshMihonClearance, " +
+                        "cookiesBefore=[${cookieDebugString(request.url)}]",
                 )
                 val solved = executor.loginAndCheck(
                     loginUrl = challengeUrl,
@@ -504,11 +537,14 @@ class KotoNetworkHelper(
                     timeoutMs = CLOUDFLARE_WEBVIEW_SOLVE_TIMEOUT_MS,
                     userAgent = request.header("User-Agent") ?: defaultUserAgentProvider(),
                     headers = buildWebViewHeaders(request),
-                    clearAllWebViewCookies = false,
+                    clearCookieNames = if (shouldRefreshMihonClearance) setOf("cf_clearance") else emptySet(),
+                    clearAllWebViewCookies = shouldRefreshMihonClearance,
                 )
                 if (solved) {
                     recentWebViewSolveSuccessAt[host] = System.currentTimeMillis()
+                    recentWebViewSolveFailureAt.remove(host)
                 } else {
+                    recentWebViewSolveFailureAt[host] = System.currentTimeMillis()
                     android.util.Log.w(
                         "MihonNetwork",
                         "Cloudflare WebView solve failed for host=$host, cookiesAfter=[${cookieDebugString(request.url)}]",
@@ -811,6 +847,12 @@ class KotoNetworkHelper(
         return System.currentTimeMillis() - lastSuccessAt < WEBVIEW_SOLVE_REUSE_WINDOW_MS
     }
 
+    private fun shouldSkipAutoSolveAfterFailure(request: Request, host: String): Boolean {
+        if (!request.isMihonRequest()) return false
+        val lastFailureAt = recentWebViewSolveFailureAt[host] ?: return false
+        return System.currentTimeMillis() - lastFailureAt < WEBVIEW_SOLVE_FAILURE_COOLDOWN_MS
+    }
+
     private fun shouldSkipInteractiveAction(host: String, clearance: String?): Boolean {
         if (clearance.isNullOrBlank()) return false
         val now = System.currentTimeMillis()
@@ -847,6 +889,7 @@ class KotoNetworkHelper(
         const val WEBVIEW_FINAL_URL_HEADER = "X-Kototoro-WebView-Final-Url"
         private const val INTERACTIVE_RETRY_WINDOW_MS = 10 * 60 * 1000L
         private const val WEBVIEW_SOLVE_REUSE_WINDOW_MS = 10_000L
+        private const val WEBVIEW_SOLVE_FAILURE_COOLDOWN_MS = 10 * 60 * 1000L
         private const val CLOUDFLARE_WEBVIEW_SOLVE_TIMEOUT_MS = 30_000L
         private val WEBVIEW_UNSAFE_HEADER_NAMES = setOf(
             "content-length",
@@ -861,6 +904,7 @@ class KotoNetworkHelper(
         )
         private val recentChallengeAttempts = ConcurrentHashMap<String, ChallengeAttempt>()
         private val recentWebViewSolveSuccessAt = ConcurrentHashMap<String, Long>()
+        private val recentWebViewSolveFailureAt = ConcurrentHashMap<String, Long>()
         private val webViewFallbackMutexes = ConcurrentHashMap<String, Mutex>()
         private val acceptedCloudflareUserAgents = ConcurrentHashMap<String, String>()
 

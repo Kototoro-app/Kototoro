@@ -55,6 +55,7 @@ import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.history.ui.HistoryPreviewCache
 import org.skepsun.kototoro.history.ui.HistoryPreviewSnapshot
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -64,6 +65,8 @@ import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
+import org.skepsun.kototoro.work.domain.WorkAggregate
+import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
@@ -71,6 +74,8 @@ import javax.inject.Inject
 data class HomeRecentItem(
     val content: Content,
     val groupKey: Long = content.id,
+    val counter: Int = 0,
+    val progress: ReadingProgress? = null,
 ) {
     val title: String
         get() = content.title
@@ -85,6 +90,8 @@ data class HomeUpdateItem(
     val content: Content,
     val newChapters: Int,
     val groupKey: Long = content.id,
+    val counter: Int = newChapters,
+    val progress: ReadingProgress? = null,
 ) {
     val title: String
         get() = content.title
@@ -94,6 +101,8 @@ data class HomeUpdateItem(
 data class HomeRecommendationItem(
     val content: Content,
     val groupKey: Long = content.id,
+    val counter: Int = 0,
+    val progress: ReadingProgress? = null,
 ) {
     val title: String
         get() = content.title
@@ -179,6 +188,7 @@ class HomeViewModel @Inject constructor(
     private val contentDataRepository: ContentDataRepository,
     private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
     private val workResolver: WorkResolver,
+    private val workAggregateRepository: WorkAggregateRepository,
     @ApplicationContext private val appContext: Context,
     private val historyPreviewCache: HistoryPreviewCache,
     private val historyQuickFilter: HistoryListQuickFilter,
@@ -541,7 +551,9 @@ class HomeViewModel @Inject constructor(
             } else {
                 contentData.recommendations
             }
+            val progressIndicatorMode = settings.progressIndicatorMode
             val preferredLocalIdsByEntity = resolvePreferredMangaIdsByEntityIds(entityIdsByMangaId.values)
+            val workAggregatesByEntity = workAggregateRepository.findAggregatesByEntityIds(entityIdsByMangaId.values)
             val displayContentOverrides = buildDisplayContentOverrides(
                 resumeContent = contentData.resumeState.content,
                 history = contentData.history,
@@ -563,7 +575,7 @@ class HomeViewModel @Inject constructor(
                 .withGroupKey(entityIdsByMangaId)
             val recentHistory = contentData.history
                 .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-                .aggregateHomeContentByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
+                .aggregateHomeContentByEntity(entityIdsByMangaId, preferredLocalIdsByEntity, workAggregatesByEntity, progressIndicatorMode)
                 .selectHomeHistoryByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
             val recentUpdates = contentData.updates
                 .map { tracking ->
@@ -571,10 +583,11 @@ class HomeViewModel @Inject constructor(
                     if (override == null) tracking else tracking.copy(manga = tracking.manga.withOverride(override))
                 }
                 .aggregateHomeUpdatesByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
+                .withWorkBadges(entityIdsByMangaId, workAggregatesByEntity, progressIndicatorMode)
                 .selectHomeUpdatesByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
             val recommendations = allRecommendations
                 .map { content -> content.withOverride(displayContentOverrides[content.id]) }
-                .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity)
+                .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity, workAggregatesByEntity, progressIndicatorMode)
                 .selectHomeRecommendationsByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
 
             Pair(
@@ -1006,6 +1019,8 @@ private fun Content.matchesHomeFilters(
 private fun List<Content>.aggregateHomeContentByEntity(
     entityIdsByMangaId: Map<Long, Long>,
     preferredLocalIdsByEntity: Map<Long, Long?>,
+    workAggregatesByEntity: Map<Long, WorkAggregate>,
+    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
 ): List<HomeRecentItem> {
     if (isEmpty()) {
         return emptyList()
@@ -1020,7 +1035,13 @@ private fun List<Content>.aggregateHomeContentByEntity(
         val entityId = entityIdsByMangaId[items.first().id]
         val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
         val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
-        result += HomeRecentItem(content = representative, groupKey = groupKey)
+        val aggregate = entityId?.let(workAggregatesByEntity::get)
+        result += HomeRecentItem(
+            content = representative,
+            groupKey = groupKey,
+            counter = aggregate?.homeCounter() ?: 0,
+            progress = aggregate?.toHomeReadingProgress(progressIndicatorMode),
+        )
     }
     return result
 }
@@ -1060,6 +1081,8 @@ private fun List<ContentTracking>.aggregateHomeUpdatesByEntity(
 private fun List<Content>.aggregateHomeRecommendationsByEntity(
     entityIdsByMangaId: Map<Long, Long>,
     preferredLocalIdsByEntity: Map<Long, Long?>,
+    workAggregatesByEntity: Map<Long, WorkAggregate>,
+    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
 ): List<HomeRecommendationItem> {
     if (isEmpty()) {
         return emptyList()
@@ -1074,9 +1097,49 @@ private fun List<Content>.aggregateHomeRecommendationsByEntity(
         val entityId = entityIdsByMangaId[items.first().id]
         val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
         val representative = items.firstOrNull { it.id == preferredLocalId } ?: items.first()
-        result += HomeRecommendationItem(content = representative, groupKey = groupKey)
+        val aggregate = entityId?.let(workAggregatesByEntity::get)
+        result += HomeRecommendationItem(
+            content = representative,
+            groupKey = groupKey,
+            counter = aggregate?.homeCounter() ?: 0,
+            progress = aggregate?.toHomeReadingProgress(progressIndicatorMode),
+        )
     }
     return result
+}
+
+private fun List<HomeUpdateItem>.withWorkBadges(
+    entityIdsByMangaId: Map<Long, Long>,
+    workAggregatesByEntity: Map<Long, WorkAggregate>,
+    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
+): List<HomeUpdateItem> {
+    return map { item ->
+        val aggregate = entityIdsByMangaId[item.content.id]?.let(workAggregatesByEntity::get)
+        item.copy(
+            counter = aggregate?.homeCounter() ?: item.newChapters,
+            progress = aggregate?.toHomeReadingProgress(progressIndicatorMode),
+        )
+    }
+}
+
+private fun WorkAggregate.homeCounter(): Int {
+    return if (history?.percent?.let(ReadingProgress::isCompleted) == true) {
+        0
+    } else {
+        tracking?.newChapters ?: 0
+    }
+}
+
+private fun WorkAggregate.toHomeReadingProgress(
+    progressIndicatorMode: org.skepsun.kototoro.core.prefs.ProgressIndicatorMode,
+): ReadingProgress? {
+    val history = history ?: return null
+    val fixedPercent = if (ReadingProgress.isCompleted(history.percent)) 1f else history.percent
+    return ReadingProgress(
+        percent = fixedPercent,
+        totalChapters = history.chaptersCount,
+        mode = progressIndicatorMode,
+    ).takeIf { it.isValid() }
 }
 
 private fun List<ContentTracking>.isSameForHomeUpdates(other: List<ContentTracking>): Boolean {
@@ -1115,9 +1178,9 @@ private fun HomeSummaryState.homeDiagSignature(): String {
         append("tab=").append(selectedTab)
         append(" initialized=").append(isInitialized)
         append(" resume=").append(resumeState.content?.id).append('@').append(resumeState.groupKey)
-        append(" history=").append(recentHistoryItems.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
-        append(" updates=").append(recentUpdates.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.newChapters}" })
-        append(" recommendations=").append(recommendations.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
+        append(" history=").append(recentHistoryItems.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.counter}:${it.progress?.percent}" })
+        append(" updates=").append(recentUpdates.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.newChapters}:${it.counter}:${it.progress?.percent}" })
+        append(" recommendations=").append(recommendations.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.counter}:${it.progress?.percent}" })
         append(" searches=").append(recentSearches.joinToString(limit = 4) { it.query })
         append(" tags=").append(selectedSourceTags.homeTagSignature())
     }

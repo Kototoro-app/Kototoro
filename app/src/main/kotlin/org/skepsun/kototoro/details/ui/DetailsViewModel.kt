@@ -2885,6 +2885,9 @@ class DetailsViewModel @Inject constructor(
 		mangaDetails,
 		history,
 	) { details, h ->
+		if (h != null && org.skepsun.kototoro.list.domain.ReadingProgress.isCompleted(h.percent)) {
+			return@combine null
+		}
 		val chapter = details?.allChapters?.findChapterByHistory(h)
 		if (h != null && chapter != null) {
 			ReaderState(h.copy(chapterId = chapter.id))
