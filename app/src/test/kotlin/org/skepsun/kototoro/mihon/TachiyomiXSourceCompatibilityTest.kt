@@ -114,6 +114,15 @@ class TachiyomiXSourceCompatibilityTest {
 		assertEquals(listOf("https://images.example.org/1.jpg"), pages.map { it.imageUrl })
 	}
 
+	@Test
+	fun `HttpSource suspend chapter list uses fetchChapterList when both request helper and fetch are overridden`() = runTest {
+		val source = LegacyFetchWithRequestHttpSource()
+
+		val chapters = source.getChapterList(manga("/manga", "Manga"))
+
+		assertEquals(listOf("Legacy Custom Chapter"), chapters.map { it.name })
+	}
+
 	private class LegacyCatalogueSource : CatalogueSource {
 		override val id: Long = 1L
 		override val name: String = "Legacy"
@@ -220,6 +229,35 @@ class TachiyomiXSourceCompatibilityTest {
 		override fun latestUpdatesParse(response: Response): MangasPage = unused()
 		override fun mangaDetailsParse(response: Response): SManga = unused()
 		override fun chapterListParse(response: Response): List<SChapter> = unused()
+		override fun pageListParse(response: Response): List<Page> = unused()
+		override fun imageUrlParse(response: Response): String = unused()
+	}
+
+	private class LegacyFetchWithRequestHttpSource : HttpSource() {
+		override val baseUrl: String = "https://example.org"
+		override val lang: String = "en"
+		override val name: String = "Legacy Fetch With Request"
+		override val supportsLatest: Boolean = false
+
+		override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+			return Observable.just(listOf(chapter("/legacy-custom", "Legacy Custom Chapter")))
+		}
+
+		override fun chapterListRequest(manga: SManga): Request {
+			return Request.Builder().url("$baseUrl/manga/path").build()
+		}
+
+		override fun chapterListParse(response: Response): List<SChapter> {
+			return listOf(chapter("/parsed", "Parsed Chapter"))
+		}
+
+		override fun popularMangaRequest(page: Int): Request = unused()
+		override fun popularMangaParse(response: Response): MangasPage = unused()
+		override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = unused()
+		override fun searchMangaParse(response: Response): MangasPage = unused()
+		override fun latestUpdatesRequest(page: Int): Request = unused()
+		override fun latestUpdatesParse(response: Response): MangasPage = unused()
+		override fun mangaDetailsParse(response: Response): SManga = unused()
 		override fun pageListParse(response: Response): List<Page> = unused()
 		override fun imageUrlParse(response: Response): String = unused()
 	}
