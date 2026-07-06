@@ -32,7 +32,7 @@ class ShikimoriScrobbler @Inject constructor(
 	}
 
 	override suspend fun getContentInfo(entity: ScrobblingEntity) =
-		repository.getContentInfo(entity.targetId, entity.mangaId)
+		repository.getContentInfo(entity.targetId, entity.mangaId, entity.mediaType)
 
 	override suspend fun updateScrobblingInfo(
 		mangaId: Long,

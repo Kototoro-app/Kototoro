@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
+import androidx.core.text.parseAsHtml
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import org.skepsun.kototoro.core.util.ext.combine as extCombine
+import org.skepsun.kototoro.core.util.ext.sanitize
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
@@ -1138,6 +1140,7 @@ class DetailsViewModel @Inject constructor(
 		val authors = resolveTrackingAuthors(details)
 		val chapters = trackingDetailsToSyntheticChapters(details, source).ifEmpty { null }
 		val normalizedCoverUrl = details.coverUrl.normalizedImageUrl()
+		val description = details.description.toDisplayDescription()
 		return Content(
 			id = details.remoteId,
 			title = details.title,
@@ -1157,10 +1160,21 @@ class DetailsViewModel @Inject constructor(
 			},
 			state = resolveTrackingState(details.infoboxProperties),
 			authors = authors,
-			description = details.description,
+			description = description,
 			chapters = chapters,
 			source = source,
 		)
+	}
+
+	private fun String?.toDisplayDescription(): String? {
+		if (isNullOrBlank()) {
+			return null
+		}
+		return runCatching {
+			parseAsHtml().sanitize().toString()
+		}.getOrElse {
+			sanitize().toString()
+		}.takeIf { it.isNotBlank() }
 	}
 
 	private fun syntheticChapterId(
@@ -2247,7 +2261,7 @@ class DetailsViewModel @Inject constructor(
 				manga = trackingContent,
 				localContent = null,
 				override = null,
-				description = trackingDetails.description ?: trackingContent.description,
+				description = trackingDetails.description.toDisplayDescription() ?: trackingContent.description,
 				isLoaded = true,
 			)
 		}
@@ -2271,7 +2285,7 @@ class DetailsViewModel @Inject constructor(
 			manga = mergedManga,
 			localContent = base.local,
 			override = null,
-			description = trackingDetails.description ?: base.description ?: trackingContent.description,
+			description = trackingDetails.description.toDisplayDescription() ?: base.description ?: trackingContent.description,
 			isLoaded = true,
 		)
 	}

@@ -17,11 +17,11 @@ class ScrobblerStorage(context: Context, service: ScrobblerService) {
 
 	var accessToken: String?
 		get() = prefs.getString(KEY_ACCESS_TOKEN, null)
-		set(value) = prefs.edit { putString(KEY_ACCESS_TOKEN, value) }
+		set(value) = prefs.edit(commit = true) { putString(KEY_ACCESS_TOKEN, value) }
 
 	var refreshToken: String?
 		get() = prefs.getString(KEY_REFRESH_TOKEN, null)
-		set(value) = prefs.edit { putString(KEY_REFRESH_TOKEN, value) }
+		set(value) = prefs.edit(commit = true) { putString(KEY_REFRESH_TOKEN, value) }
 
 	var user: ScrobblerUser?
 		get() = prefs.getString(KEY_USER, null)?.let {

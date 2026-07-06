@@ -84,12 +84,11 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 		}
 		viewModel.onSyncResult.observeEvent(this) { count ->
 			viewBinding.swipeRefreshLayout.isRefreshing = false
-			if (count > 0) {
+			if (count >= 0) {
 				Snackbar.make(viewBinding.recyclerView, getString(R.string.sync_complete, count), Snackbar.LENGTH_SHORT).show()
-			} else if (count == 0) {
+			} else {
 				Snackbar.make(viewBinding.recyclerView, R.string.sync_not_supported, Snackbar.LENGTH_SHORT).show()
 			}
-			// count < 0 means sync is not applicable for this service, just dismiss silently
 		}
 		viewModel.onBindResult.observeEvent(this) { title ->
 			Snackbar.make(viewBinding.recyclerView, getString(R.string.bind_manga_success, title), Snackbar.LENGTH_SHORT).show()
