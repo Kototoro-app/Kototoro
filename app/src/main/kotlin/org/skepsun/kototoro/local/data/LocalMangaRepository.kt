@@ -200,7 +200,12 @@ class LocalMangaRepository @Inject constructor(
 
 	suspend fun delete(manga: Content): Boolean {
 		val file = if (manga.isLocal) {
-			manga.url.toUri().toFile()
+			val uri = manga.url.toUri()
+			if (uri.scheme == "file") {
+				File(requireNotNull(uri.path) { "File uri path is null: $uri" })
+			} else {
+				File(uri.schemeSpecificPart)
+			}
 		} else {
 			findSavedContent(manga, withDetails = false)?.file ?: return false
 		}

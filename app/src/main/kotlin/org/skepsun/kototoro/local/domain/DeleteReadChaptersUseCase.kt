@@ -49,7 +49,12 @@ class DeleteReadChaptersUseCase @Inject constructor(
 			for (manga in list) {
 				launch(Dispatchers.Default) {
 					val task = runCatchingCancellable {
-						getDeletionTask(LocalContent(manga))
+						val localContent = if (manga.isLocal) {
+							LocalContent(manga)
+						} else {
+							localContentRepository.findSavedContent(manga)
+						}
+						localContent?.let { getDeletionTask(it) }
 					}.onFailure {
 						it.printStackTraceDebug()
 					}.getOrNull()

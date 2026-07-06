@@ -197,4 +197,74 @@ class DeleteReadChaptersUseCaseTest {
 		assertEquals(2, deletedCount)
 		coVerify { localContentRepository.deleteChapters(manga, setOf(1L, 2L)) }
 	}
+
+	@Test
+	fun `history chapter in database for remote downloaded manga deletes successfully`() = runTest {
+		val remoteSource = mockk<org.skepsun.kototoro.parsers.model.ContentSource>()
+		every { remoteSource.name } returns "RemoteSource"
+		every { remoteSource.contentType } returns org.skepsun.kototoro.parsers.model.ContentType.MANGA
+
+		val localChapters = listOf(
+			ContentChapter(
+				id = 1L,
+				title = "Chapter 1",
+				number = 1f,
+				volume = 0,
+				url = "file:///tmp/manga/chapter/1",
+				scanlator = null,
+				uploadDate = 0L,
+				branch = null,
+				source = remoteSource
+			),
+			ContentChapter(
+				id = 2L,
+				title = "Chapter 2",
+				number = 2f,
+				volume = 0,
+				url = "file:///tmp/manga/chapter/2",
+				scanlator = null,
+				uploadDate = 0L,
+				branch = null,
+				source = remoteSource
+			)
+		)
+		val manga = Content(
+			id = 100L,
+			title = "Remote Manga 100",
+			altTitles = emptySet(),
+			url = "/manga/100",
+			publicUrl = "/manga/100",
+			rating = 0f,
+			contentRating = null,
+			coverUrl = null,
+			tags = emptySet(),
+			state = null,
+			authors = emptySet(),
+			chapters = localChapters,
+			source = remoteSource
+		)
+		val localContent = org.skepsun.kototoro.local.domain.model.LocalContent(
+			manga = manga,
+			file = File("/tmp/manga/100")
+		)
+
+		coEvery { historyRepository.getOne(manga) } returns ContentHistory(
+			createdAt = Instant.now(),
+			updatedAt = Instant.now(),
+			chapterId = 2L, // read up to chapter 2
+			page = 0,
+			scroll = 0,
+			percent = 1f,
+			chaptersCount = 2
+		)
+		coEvery { localContentRepository.getList(0, null, null) } returns listOf(manga)
+		coEvery { localContentRepository.findSavedContent(manga) } returns localContent
+
+		// Act
+		val deletedCount = useCase.invoke()
+
+		// Assert: should delete chapter 1
+		assertEquals(1, deletedCount)
+		coVerify { localContentRepository.deleteChapters(manga, setOf(1L)) }
+	}
 }
