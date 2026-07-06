@@ -71,10 +71,14 @@ class DeleteReadChaptersUseCase @Inject constructor(
 	private suspend fun getDeletionTask(manga: LocalContent): DeletionTask? {
 		val history = historyRepository.getOne(manga.manga) ?: return null
 		val localChapters = getLocalChapters(manga)
+		val remoteMangaId = runCatchingCancellable {
+			localContentRepository.getRemoteContent(manga.manga)?.id
+		}.getOrNull() ?: manga.manga.id
 		val dbChapters = runCatchingCancellable {
-			db.getChaptersDao().findAll(manga.manga.id).toContentChapters()
+			db.getChaptersDao().findAll(remoteMangaId).toContentChapters()
 		}.getOrDefault(emptyList())
 		val combined = (localChapters + dbChapters).distinctBy { it.id }
+
 
 		val chapters = if (combined.any { it.id == history.chapterId }) {
 			combined

@@ -46,6 +46,7 @@ class DeleteReadChaptersUseCaseTest {
 		every { mockUri.scheme } returns "file"
 		every { mockUri.path } returns "/tmp/manga"
 		coEvery { db.getChaptersDao().findAll(any()) } returns emptyList()
+		coEvery { localContentRepository.getRemoteContent(any()) } returns null
 	}
 
 	@AfterEach
@@ -115,7 +116,6 @@ class DeleteReadChaptersUseCaseTest {
 		assertEquals(1, deletedCount)
 		coVerify { localContentRepository.deleteChapters(manga, setOf(1L)) }
 		coVerify(exactly = 0) { mangaRepositoryFactory.create(any()) }
-		coVerify(exactly = 0) { localContentRepository.getRemoteContent(any()) }
 	}
 
 	@Test
