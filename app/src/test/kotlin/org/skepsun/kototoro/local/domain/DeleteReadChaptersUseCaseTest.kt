@@ -14,6 +14,7 @@ import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import java.time.Instant
+import org.skepsun.kototoro.core.db.MangaDatabase
 
 import android.net.Uri
 import io.mockk.every
@@ -28,11 +29,13 @@ class DeleteReadChaptersUseCaseTest {
 	private val localContentRepository = mockk<LocalMangaRepository>(relaxed = true)
 	private val historyRepository = mockk<HistoryRepository>(relaxed = true)
 	private val mangaRepositoryFactory = mockk<ContentRepository.Factory>(relaxed = true)
+	private val db = mockk<MangaDatabase>(relaxed = true)
 
 	private val useCase = DeleteReadChaptersUseCase(
 		localContentRepository,
 		historyRepository,
-		mangaRepositoryFactory
+		mangaRepositoryFactory,
+		db
 	)
 
 	@BeforeEach
@@ -42,6 +45,7 @@ class DeleteReadChaptersUseCaseTest {
 		every { Uri.parse(any()) } returns mockUri
 		every { mockUri.scheme } returns "file"
 		every { mockUri.path } returns "/tmp/manga"
+		coEvery { db.getChaptersDao().findAll(any()) } returns emptyList()
 	}
 
 	@AfterEach
@@ -143,5 +147,54 @@ class DeleteReadChaptersUseCaseTest {
 		assertEquals(1, deletedCount)
 		coVerify { localContentRepository.deleteChapters(manga, setOf(1L)) }
 		coVerify(exactly = 0) { localContentRepository.deleteChapters(manga, setOf(3L)) }
+	}
+
+	@Test
+	fun `history chapter not downloaded but in database deletes successfully`() = runTest {
+		// Arrange: 3 chapters (chronological order)
+		val localChapters = listOf(
+			createChapter(1L, 1f),
+			createChapter(2L, 2f)
+		)
+		// Chapter 3 is not downloaded (online) and is the current history chapter
+		val dbChapters = listOf(
+			createChapter(1L, 1f),
+			createChapter(2L, 2f),
+			createChapter(3L, 3f)
+		).map {
+			org.skepsun.kototoro.core.db.entity.ChapterEntity(
+				chapterId = it.id,
+				mangaId = 100L,
+				title = it.title.orEmpty(),
+				number = it.number,
+				volume = it.volume,
+				url = it.url,
+				scanlator = it.scanlator,
+				uploadDate = it.uploadDate,
+				branch = it.branch,
+				source = it.source.name,
+				index = 0
+			)
+		}
+		val manga = createContent(100L, localChapters)
+
+		coEvery { historyRepository.getOne(manga) } returns ContentHistory(
+			createdAt = Instant.now(),
+			updatedAt = Instant.now(),
+			chapterId = 3L, // read up to chapter 3 (online)
+			page = 0,
+			scroll = 0,
+			percent = 1f,
+			chaptersCount = 3
+		)
+		coEvery { db.getChaptersDao().findAll(100L) } returns dbChapters
+		coEvery { localContentRepository.getList(0, null, null) } returns listOf(manga)
+
+		// Act
+		val deletedCount = useCase.invoke()
+
+		// Assert: should delete chapter 1 and 2, which are the downloaded ones before history chapter 3
+		assertEquals(2, deletedCount)
+		coVerify { localContentRepository.deleteChapters(manga, setOf(1L, 2L)) }
 	}
 }

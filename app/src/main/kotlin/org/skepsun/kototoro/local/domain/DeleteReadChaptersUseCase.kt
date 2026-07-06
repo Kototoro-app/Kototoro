@@ -19,11 +19,14 @@ import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.recoverCatchingCancellable
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import javax.inject.Inject
+import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.toContentChapters
 
 class DeleteReadChaptersUseCase @Inject constructor(
 	private val localContentRepository: LocalMangaRepository,
 	private val historyRepository: HistoryRepository,
 	private val mangaRepositoryFactory: ContentRepository.Factory,
+	private val db: MangaDatabase,
 ) {
 
 	suspend operator fun invoke(manga: Content): Int {
@@ -68,10 +71,15 @@ class DeleteReadChaptersUseCase @Inject constructor(
 	private suspend fun getDeletionTask(manga: LocalContent): DeletionTask? {
 		val history = historyRepository.getOne(manga.manga) ?: return null
 		val localChapters = getLocalChapters(manga)
-		val chapters = if (localChapters.any { it.id == history.chapterId }) {
-			localChapters
+		val dbChapters = runCatchingCancellable {
+			db.getChaptersDao().findAll(manga.manga.id).toContentChapters()
+		}.getOrDefault(emptyList())
+		val combined = (localChapters + dbChapters).distinctBy { it.id }
+
+		val chapters = if (combined.any { it.id == history.chapterId }) {
+			combined
 		} else {
-			getAllChaptersRemote(manga, localChapters)
+			getAllChaptersRemote(manga, combined)
 		}
 		if (chapters.isEmpty()) {
 			return null
@@ -82,12 +90,14 @@ class DeleteReadChaptersUseCase @Inject constructor(
 		val filteredChapters = sortedChapters
 			.filter { x -> x.branch == branch }
 			.takeWhile { it.id != historyChapter.id }
-		return if (filteredChapters.isEmpty()) {
+
+		val toDeleteIds = filteredChapters.ids().intersect(localChapters.ids())
+		return if (toDeleteIds.isEmpty()) {
 			null
 		} else {
 			DeletionTask(
 				manga = manga,
-				chaptersIds = filteredChapters.ids(),
+				chaptersIds = toDeleteIds,
 			)
 		}
 	}
