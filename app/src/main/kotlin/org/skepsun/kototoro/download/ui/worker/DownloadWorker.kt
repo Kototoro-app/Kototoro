@@ -269,8 +269,8 @@ class DownloadWorker @AssistedInject constructor(
 		)
 		
 		try {
-			checkIsPaused()
 			withContext(pausingHandle) {
+				checkIsPaused()
 				when (task.kind) {
 					DownloadTaskKind.DOWNLOAD -> {
 						val resolvedContent = resolveExecutionContent(executionContext.executionManga)

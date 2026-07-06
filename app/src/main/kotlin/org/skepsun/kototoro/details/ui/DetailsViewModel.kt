@@ -2901,7 +2901,7 @@ class DetailsViewModel @Inject constructor(
 						scroll = 0,
 					)
 				} else {
-					null
+					ReaderState(h.copy(chapterId = chapter.id))
 				}
 			} else {
 				ReaderState(h.copy(chapterId = chapter.id))
