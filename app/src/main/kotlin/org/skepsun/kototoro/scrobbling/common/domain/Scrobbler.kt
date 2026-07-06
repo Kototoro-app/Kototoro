@@ -22,6 +22,7 @@ import org.skepsun.kototoro.scrobbling.common.data.findByWorkOrMangaCandidates
 import org.skepsun.kototoro.scrobbling.common.data.observeByWorkOrMangaCandidates
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
+import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingPreview
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -71,7 +72,7 @@ abstract class Scrobbler(
 	 * Sync library from remote service. Returns the count of synced items.
 	 * Override in subclasses that support remote library sync.
 	 */
-	open suspend fun syncLibrary(): Int = 0
+	open suspend fun syncLibrary(): Int = -1
 
 	fun logout() {
 		repository.logout()
@@ -195,7 +196,9 @@ abstract class Scrobbler(
 				"Scrobbler",
 				"toScrobblingInfo: service=${scrobblerService.name}, targetId=$targetId, cachedTitle=${cached?.name}, cachedCover=${cached?.cover}",
 			)
-			cached ?: getContentInfo(this)
+			cached ?: getContentInfo(this).also { info ->
+				cacheContentInfo(this, info)
+			}
 		}.onFailure {
 			android.util.Log.w(
 				"Scrobbler",
@@ -232,6 +235,24 @@ abstract class Scrobbler(
 			externalUrl = externalUrl,
 			mediaType = mediaType.takeIf { it.isNotBlank() },
 		)
+	}
+
+	private suspend fun cacheContentInfo(entity: ScrobblingEntity, info: ScrobblerContentInfo) {
+		runCatchingCancellable {
+			db.upsertScrobblingPreview(
+				entity = entity,
+				workResolver = workResolver,
+				title = info.name.takeIf { it.isNotBlank() },
+				coverUrl = info.cover.takeIf { it.isNotBlank() },
+				url = info.url.takeIf { it.isNotBlank() },
+			)
+		}.onFailure {
+			android.util.Log.w(
+				"Scrobbler",
+				"Failed to cache content info preview: service=${scrobblerService.name}, targetId=${entity.targetId}",
+				it,
+			)
+		}
 	}
 
 	protected open fun cachedContentInfo(entity: ScrobblingEntity): ScrobblerContentInfo? {

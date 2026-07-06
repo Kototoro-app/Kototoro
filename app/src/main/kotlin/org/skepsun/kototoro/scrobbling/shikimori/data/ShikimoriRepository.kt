@@ -20,14 +20,17 @@ import org.skepsun.kototoro.parsers.util.json.mapJSON
 import org.skepsun.kototoro.parsers.util.json.mapJSONNotNull
 import org.skepsun.kototoro.parsers.util.parseJson
 import org.skepsun.kototoro.parsers.util.parseJsonArray
+import org.skepsun.kototoro.parsers.util.parseRaw
 import org.skepsun.kototoro.parsers.util.toAbsoluteUrl
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
+import org.skepsun.kototoro.scrobbling.common.data.ScrobblingTargetKey
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
 import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
 import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
-import org.skepsun.kototoro.scrobbling.common.data.preferredMangaMappingByTargetId
+import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetAndMediaType
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
+import org.skepsun.kototoro.scrobbling.common.domain.ScrobblerAuthRequiredException
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContentInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -37,10 +40,12 @@ import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val DOMAIN = "shikimori.one"
-private const val REDIRECT_URI = "kotatsu://shikimori-auth"
+private const val DOMAIN = "shikimori.io"
+private const val REDIRECT_URI = "kototoro://shikimori-auth"
 private const val BASE_URL = "https://$DOMAIN/"
 private const val MANGA_PAGE_SIZE = 10
+private const val TARGET_TYPE_ANIME = "Anime"
+private const val TARGET_TYPE_MANGA = "Manga"
 private const val SHIKIMORI_DISCUSSION_FORUM = "animanga"
 private const val SHIKIMORI_REVIEW_FORUM = "critiques"
 
@@ -87,7 +92,11 @@ class ShikimoriRepository @Inject constructor(
 		val request = Request.Builder()
 			.get()
 			.url("${BASE_URL}api/users/whoami")
-		val response = okHttp.newCall(request.build()).await().parseJson()
+		val rawResponse = okHttp.newCall(request.build()).await().parseRaw().trim()
+		if (rawResponse.isEmpty() || rawResponse == "null") {
+			throw ScrobblerAuthRequiredException(ScrobblerService.SHIKIMORI)
+		}
+		val response = JSONObject(rawResponse)
 		return ShikimoriUser(response).also { storage.user = it }
 	}
 
@@ -140,7 +149,7 @@ class ShikimoriRepository @Inject constructor(
 			"user_rate",
 			JSONObject().apply {
 				put("target_id", scrobblerContentId)
-				put("target_type", if (isAnimeContent(mangaId)) "Anime" else "Manga")
+				put("target_type", if (isAnimeContent(mangaId)) TARGET_TYPE_ANIME else TARGET_TYPE_MANGA)
 				put("user_id", user.id)
 			},
 		)
@@ -209,6 +218,15 @@ class ShikimoriRepository @Inject constructor(
 		return getContentInfo(id, isAnimeContent(mangaId))
 	}
 
+	suspend fun getContentInfo(id: Long, mangaId: Long, mediaType: String): ScrobblerContentInfo {
+		val isAnime = when {
+			mediaType.equals(TARGET_TYPE_ANIME, ignoreCase = true) -> true
+			mediaType.equals(TARGET_TYPE_MANGA, ignoreCase = true) -> false
+			else -> isAnimeContent(mangaId)
+		}
+		return getContentInfo(id, isAnime)
+	}
+
 	private suspend fun getContentInfo(id: Long, isAnime: Boolean): ScrobblerContentInfo {
 		if (isAnime) return getAnimeInfo(id)
 
@@ -217,12 +235,13 @@ class ShikimoriRepository @Inject constructor(
 			.url("${BASE_URL}api/mangas/$id")
 		val response = okHttp.newCall(request.build()).await().parseJson()
 		val related = fetchRelated("mangas", id)
+		val roles = fetchWorkRoles(id, isAnime = false)
 		val discussion = fetchDiscussionPayload(
 			linkedType = "Manga",
 			linkedId = id,
 			contentUrl = response.getString("url").toAbsoluteUrl(DOMAIN),
 		)
-		return parseDetailJson(response, related, discussion)
+		return parseDetailJson(response, related, discussion, roles = roles)
 	}
 
 	suspend fun getEntityInfo(
@@ -257,12 +276,11 @@ class ShikimoriRepository @Inject constructor(
 		val request = Request.Builder().url(url).get().build()
 		return okHttp.newCall(request).await().parseJsonArray().mapJSON { json ->
 			val name = json.getStringOrNull("name") ?: json.getStringOrNull("russian") ?: "Unknown"
-			val image = json.optJSONObject("image")
 			ScrobblerContent(
 				id = json.getLong("id"),
 				name = name,
 				altName = json.getStringOrNull("russian")?.takeIf { !it.equals(name, ignoreCase = true) },
-				cover = (image?.getStringOrNull("original") ?: image?.getStringOrNull("preview"))?.toAbsoluteUrl(DOMAIN),
+				cover = parseShikimoriImage(json.optJSONObject("image")),
 				url = json.getString("url").toAbsoluteUrl(DOMAIN),
 			)
 		}.take(limit)
@@ -270,14 +288,33 @@ class ShikimoriRepository @Inject constructor(
 
 	/**
 	 * Sync all manga rates from Shikimori to local database.
-	 * Uses Shikimori API: GET /api/v2/user_rates?user_id={id}&target_type=Content
+	 * Uses Shikimori API: GET /api/v2/user_rates?user_id={id}&target_type=Anime|Manga
 	 */
 	suspend fun syncLibraryFromRemote(): Int {
 		val user = cachedUser ?: loadUser()
 		val oldMappings = db.getScrobblingDao()
 			.findAllByScrobbler(ScrobblerService.SHIKIMORI.id)
-			.preferredMangaMappingByTargetId()
+			.preferredScrobblingByTargetAndMediaType()
 
+		val synced = ArrayList<ScrobblingEntity>()
+		for (targetType in listOf(TARGET_TYPE_ANIME, TARGET_TYPE_MANGA)) {
+			synced += fetchUserRates(user.id, targetType, oldMappings)
+		}
+
+		db.withTransaction {
+			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.SHIKIMORI.id)
+			synced.forEach { entity ->
+				db.upsertScrobbling(entity, workResolver)
+			}
+		}
+		return synced.size
+	}
+
+	private suspend fun fetchUserRates(
+		userId: Long,
+		targetType: String,
+		oldMappings: Map<ScrobblingTargetKey, ScrobblingEntity>,
+	): List<ScrobblingEntity> {
 		val synced = ArrayList<ScrobblingEntity>()
 		var page = 1
 		val limit = 50
@@ -286,8 +323,8 @@ class ShikimoriRepository @Inject constructor(
 				.addPathSegment("api")
 				.addPathSegment("v2")
 				.addPathSegment("user_rates")
-				.addEncodedQueryParameter("user_id", user.id.toString())
-				.addEncodedQueryParameter("target_type", "Content")
+				.addEncodedQueryParameter("user_id", userId.toString())
+				.addEncodedQueryParameter("target_type", targetType)
 				.addEncodedQueryParameter("page", page.toString())
 				.addEncodedQueryParameter("limit", limit.toString())
 				.build()
@@ -299,7 +336,9 @@ class ShikimoriRepository @Inject constructor(
 				val json = data.optJSONObject(i) ?: continue
 				val targetId = json.optLong("target_id", 0L)
 				if (targetId == 0L) continue
-				val mappedContentId = oldMappings[targetId] ?: 0L
+				val mappedContentId = oldMappings[ScrobblingTargetKey(targetId, targetType)]?.mangaId
+					?: oldMappings[ScrobblingTargetKey(targetId, "")]?.mangaId
+					?: 0L
 				synced.add(
 					ScrobblingEntity(
 						scrobbler = ScrobblerService.SHIKIMORI.id,
@@ -310,20 +349,14 @@ class ShikimoriRepository @Inject constructor(
 						chapter = json.getInt("chapters"),
 						comment = json.optString("text", ""),
 						rating = (json.getDouble("score").toFloat() / 10f).coerceIn(0f, 1f),
+						mediaType = targetType,
 					),
 				)
 			}
 			if (data.length() < limit) break
 			page++
 		}
-
-		db.withTransaction {
-			db.getScrobblingDao().deleteByScrobbler(ScrobblerService.SHIKIMORI.id)
-			synced.forEach { entity ->
-				db.upsertScrobbling(entity, workResolver)
-			}
-		}
-		return synced.size
+		return synced
 	}
 
 	// ── Discovery API (public, no auth required) ─────────────
@@ -418,12 +451,89 @@ class ShikimoriRepository @Inject constructor(
 			.url("${BASE_URL}api/animes/$id")
 		val response = okHttp.newCall(request.build()).await().parseJson()
 		val related = fetchRelated("animes", id)
+		val roles = fetchWorkRoles(id, isAnime = true)
 		val discussion = fetchDiscussionPayload(
 			linkedType = "Anime",
 			linkedId = id,
 			contentUrl = response.getString("url").toAbsoluteUrl(DOMAIN),
 		)
-		return parseDetailJson(response, related, discussion)
+		val cover = parseShikimoriImage(response.optJSONObject("image")) ?: fetchAnimePoster(id)
+		return parseDetailJson(response, related, discussion, cover, roles)
+	}
+
+	private suspend fun fetchAnimePoster(id: Long): String? {
+		val body = JSONObject()
+			.put(
+				"query",
+				"""
+				{
+				  animes(ids: "${id}", limit: 1) {
+				    poster { mainUrl originalUrl }
+				  }
+				}
+				""".trimIndent(),
+			)
+			.toRequestBody()
+		val request = Request.Builder()
+			.url("${BASE_URL}api/graphql")
+			.post(body)
+			.build()
+		val json = okHttp.newCall(request).await().parseJson()
+		val poster = json.optJSONObject("data")
+			?.optJSONArray("animes")
+			?.optJSONObject(0)
+			?.optJSONObject("poster")
+		return sequenceOf(
+			poster?.getStringOrNull("mainUrl"),
+			poster?.getStringOrNull("originalUrl"),
+		).filterNotNull()
+			.firstOrNull { it.isNotBlank() && !it.contains("/assets/globals/missing_", ignoreCase = true) }
+	}
+
+	private suspend fun fetchWorkRoles(id: Long, isAnime: Boolean): ShikimoriWorkRoles {
+		val root = if (isAnime) "animes" else "mangas"
+		val body = JSONObject()
+			.put(
+				"query",
+				"""
+				{
+				  $root(ids: "${id}", limit: 1) {
+				    personRoles {
+				      rolesEn
+				      rolesRu
+				      person { id name poster { mainUrl originalUrl } }
+				    }
+				    characterRoles {
+				      rolesEn
+				      rolesRu
+				      character { id name poster { mainUrl originalUrl } }
+				    }
+				  }
+				}
+				""".trimIndent(),
+			)
+			.toRequestBody()
+		val request = Request.Builder()
+			.url("${BASE_URL}api/graphql")
+			.post(body)
+			.build()
+		return runCatching {
+			val work = okHttp.newCall(request).await().parseJson()
+				.optJSONObject("data")
+				?.optJSONArray(root)
+				?.optJSONObject(0)
+				?: return@runCatching ShikimoriWorkRoles()
+			ShikimoriWorkRoles(
+				staff = work.optJSONArray("personRoles")
+					?.mapJSONNotNull { it.toShikimoriPersonInfo() }
+					.orEmpty()
+					.distinctBy { it.id ?: it.name },
+				characters = work.optJSONArray("characterRoles")
+					?.mapJSONNotNull { it.toShikimoriCharacterInfo() }
+					.orEmpty()
+					.distinctBy { it.id },
+			)
+		}.getOrDefault(ShikimoriWorkRoles())
 	}
 
 	private suspend fun getPersonInfo(id: Long): ScrobblerContentInfo {
@@ -747,7 +857,7 @@ class ShikimoriRepository @Inject constructor(
 					ScrobblerContentInfo.RelatedWork(
 						id = target.getLong("id"),
 						title = target.getString("name"),
-						coverUrl = target.getJSONObject("image").getString("preview").toAbsoluteUrl(DOMAIN),
+						coverUrl = parseShikimoriImage(target.optJSONObject("image")).orEmpty(),
 						relationship = relation.ifBlank { null },
 						url = target.getString("url").toAbsoluteUrl(DOMAIN),
 					)
@@ -764,6 +874,8 @@ class ShikimoriRepository @Inject constructor(
 		json: JSONObject,
 		relatedWorks: List<ScrobblerContentInfo.RelatedWork>,
 		discussion: ShikimoriDiscussionPayload = ShikimoriDiscussionPayload(),
+		coverOverride: String? = null,
+		roles: ShikimoriWorkRoles = ShikimoriWorkRoles(),
 	): ScrobblerContentInfo {
 		// Genres as tags
 		val genres = json.optJSONArray("genres")
@@ -829,9 +941,7 @@ class ShikimoriRepository @Inject constructor(
 			}
 		}
 
-		// Cover: prefer original over preview
-		val imageObj = json.getJSONObject("image")
-		val cover = (imageObj.getStringOrNull("original") ?: imageObj.getString("preview")).toAbsoluteUrl(DOMAIN)
+		val cover = coverOverride ?: parseShikimoriImage(json.optJSONObject("image")).orEmpty()
 
 		return ScrobblerContentInfo(
 			id = json.getLong("id"),
@@ -840,11 +950,60 @@ class ShikimoriRepository @Inject constructor(
 			url = json.getString("url").toAbsoluteUrl(DOMAIN),
 			descriptionHtml = json.optString("description_html", ""),
 			tags = tags,
+			authors = roles.staff.map { it.name }.distinct(),
+			staff = roles.staff,
 			infoboxProperties = infobox,
+			characters = roles.characters,
 			commentThreads = discussion.commentThreads,
 			reviews = discussion.reviews,
 			relatedWorks = relatedWorks,
 		)
+	}
+
+	private fun JSONObject.toShikimoriPersonInfo(): ScrobblerContentInfo.PersonInfo? {
+		val person = optJSONObject("person") ?: return null
+		val id = person.optLong("id", 0L).takeIf { it > 0L }
+		val name = person.getStringOrNull("name")?.takeIf { it.isNotBlank() } ?: return null
+		return ScrobblerContentInfo.PersonInfo(
+			id = id,
+			name = name,
+			avatarUrl = parseShikimoriPoster(person.optJSONObject("poster")),
+			url = id?.let { "${BASE_URL}people/$it" },
+			role = parseShikimoriRole(),
+		)
+	}
+
+	private fun JSONObject.toShikimoriCharacterInfo(): ScrobblerContentInfo.CharacterInfo? {
+		val character = optJSONObject("character") ?: return null
+		val id = character.optLong("id", 0L)
+		if (id <= 0L) {
+			return null
+		}
+		val name = character.getStringOrNull("name")?.takeIf { it.isNotBlank() } ?: return null
+		return ScrobblerContentInfo.CharacterInfo(
+			id = id,
+			name = name,
+			coverUrl = parseShikimoriPoster(character.optJSONObject("poster")).orEmpty(),
+			role = parseShikimoriRole(),
+			url = "${BASE_URL}characters/$id",
+		)
+	}
+
+	private fun JSONObject.parseShikimoriRole(): String? {
+		return sequenceOf("rolesEn", "rolesRu")
+			.mapNotNull { key ->
+				optJSONArray(key)
+					?.let { roles ->
+						buildList {
+							for (i in 0 until roles.length()) {
+								roles.optString(i).takeIf { it.isNotBlank() }?.let(::add)
+							}
+						}
+					}
+					?.joinToString(", ")
+					?.takeIf { it.isNotBlank() }
+			}
+			.firstOrNull()
 	}
 
 	private fun parseShikimoriRelatedWork(json: JSONObject): ScrobblerContentInfo.RelatedWork? {
@@ -870,6 +1029,14 @@ class ShikimoriRepository @Inject constructor(
 		).filterNotNull()
 			.firstOrNull { it.isNotBlank() && !it.contains("/assets/globals/missing_", ignoreCase = true) }
 			?.toAbsoluteUrl(DOMAIN)
+	}
+
+	private fun parseShikimoriPoster(json: JSONObject?): String? {
+		return sequenceOf(
+			json?.getStringOrNull("mainUrl"),
+			json?.getStringOrNull("originalUrl"),
+		).filterNotNull()
+			.firstOrNull { it.isNotBlank() && !it.contains("/assets/globals/missing_", ignoreCase = true) }
 	}
 
 	private fun formatShikimoriBirthday(json: JSONObject?): String? {
@@ -916,6 +1083,7 @@ class ShikimoriRepository @Inject constructor(
 			chapter = json.getInt("chapters"),
 			comment = json.getString("text"),
 			rating = (json.getDouble("score").toFloat() / 10f).coerceIn(0f, 1f),
+			mediaType = json.getStringOrNull("target_type").orEmpty(),
 		)
 		db.upsertScrobbling(entity, workResolver)
 	}
@@ -950,7 +1118,7 @@ class ShikimoriRepository @Inject constructor(
 			id = json.getLong("id"),
 			name = primaryTitle,
 			altName = secondaryTitle,
-			cover = json.getJSONObject("image").getString("preview").toAbsoluteUrl(DOMAIN),
+			cover = parseShikimoriImage(json.optJSONObject("image")),
 			url = json.getString("url").toAbsoluteUrl(DOMAIN),
 			mediaType = kind,
 			primaryTitle = primaryTitle,
@@ -976,6 +1144,11 @@ class ShikimoriRepository @Inject constructor(
 	private data class ShikimoriDiscussionPayload(
 		val commentThreads: List<ScrobblerContentInfo.CommentThread> = emptyList(),
 		val reviews: List<ScrobblerContentInfo.ReviewEntry> = emptyList(),
+	)
+
+	private data class ShikimoriWorkRoles(
+		val staff: List<ScrobblerContentInfo.PersonInfo> = emptyList(),
+		val characters: List<ScrobblerContentInfo.CharacterInfo> = emptyList(),
 	)
 
 	private data class ShikimoriVoiceRole(
