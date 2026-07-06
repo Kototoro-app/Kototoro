@@ -95,6 +95,7 @@
     <string name="share_image">分享圖片</string>
     <string name="delete">刪除</string>
     <string name="clear_pages_cache">清除頁面快取</string>
+    <string name="fit_page_thumbnails">完整顯示縮略圖</string>
     <string name="network">網路</string>
     <string name="webtoon_zoom_summary">在 webtoon 模式中允許手勢縮放</string>
     <string name="show_pages_numbers_summary">在底部角落顯示頁碼</string>
