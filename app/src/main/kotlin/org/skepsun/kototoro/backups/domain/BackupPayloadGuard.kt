@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -70,7 +69,7 @@ object BackupPayloadGuard {
 		return inspect(file).also { inspection ->
 			if (inspection.isIdentityOnlyWorkSnapshot()) {
 				throw IllegalStateException(
-					"Refusing $operation: WebDAV backup contains entity identity data but no work " +
+					"Refusing $operation: backup snapshot contains entity identity data but no work " +
 						"favourites, history, or statistics. This incomplete snapshot would clear local user state.",
 				)
 			}
@@ -92,7 +91,7 @@ object BackupPayloadGuard {
 		val missingCategoryIds = favouriteCategoryIds - categoryIds
 		if (missingCategoryIds.isNotEmpty()) {
 			throw IllegalStateException(
-				"Refusing $operation: WebDAV backup has work favourites with missing category ids: " +
+				"Refusing $operation: backup snapshot has work favourites with missing category ids: " +
 					missingCategoryIds.take(MAX_REPORTED_IDS).joinToString(),
 			)
 		}
@@ -116,7 +115,7 @@ object BackupPayloadGuard {
 		val missingEntityIds = workStateEntityIds - entityIds
 		if (missingEntityIds.isNotEmpty()) {
 			throw IllegalStateException(
-				"Refusing $operation: WebDAV backup has work state with missing entity ids: " +
+				"Refusing $operation: backup snapshot has work state with missing entity ids: " +
 					missingEntityIds.take(MAX_REPORTED_IDS).joinToString(),
 			)
 		}
@@ -130,18 +129,6 @@ object BackupPayloadGuard {
 			throw MissingProjectionAnchorsException(
 				operation = operation,
 				anchorIds = missingAnchorIds.take(MAX_REPORTED_IDS),
-			)
-		}
-
-		val invalidCompletedHistory = sections[BackupSection.WORK_HISTORY]
-			.orEmpty()
-			.firstOrNull { item ->
-				item.float("percent") >= PROGRESS_COMPLETED_THRESHOLD && item.long("chapters") <= 0L
-			}
-		if (invalidCompletedHistory != null) {
-			throw IllegalStateException(
-				"Refusing $operation: WebDAV backup has completed work history with zero chapters " +
-					"for entity_id=${invalidCompletedHistory.long("entity_id")}.",
 			)
 		}
 
@@ -165,7 +152,7 @@ object BackupPayloadGuard {
 			?.key
 		if (duplicateSyncId != null) {
 			throw IllegalStateException(
-				"Refusing $operation: WebDAV backup has duplicate WORK sync_id: $duplicateSyncId.",
+				"Refusing $operation: backup snapshot has duplicate WORK sync_id: $duplicateSyncId.",
 			)
 		}
 	}
@@ -181,7 +168,7 @@ object BackupPayloadGuard {
 					sections[section!!] = runCatching {
 						json.parseToJsonElement(text).jsonArray
 					}.getOrElse { error ->
-						throw IllegalStateException("Refusing WebDAV restore: invalid JSON in ${section.entryName}.", error)
+						throw IllegalStateException("Refusing backup snapshot inspection: invalid JSON in ${section.entryName}.", error)
 					}
 				} else {
 					input.readBytes()
@@ -222,14 +209,6 @@ object BackupPayloadGuard {
 			}
 	}
 
-	private fun JsonElement.float(name: String): Float {
-		return (this as? JsonObject)
-			?.get(name)
-			?.jsonPrimitive
-			?.floatOrNull
-			?: 0f
-	}
-
 	private fun JsonElement.string(name: String): String {
 		return (this as? JsonObject)
 			?.get(name)
@@ -267,7 +246,6 @@ object BackupPayloadGuard {
 
 	private const val EMPTY_JSON_ARRAY_BYTES = 2
 	private const val MAX_REPORTED_IDS = 8
-	private const val PROGRESS_COMPLETED_THRESHOLD = 0.99999f
 	private val json = Json {
 		ignoreUnknownKeys = true
 		coerceInputValues = true
