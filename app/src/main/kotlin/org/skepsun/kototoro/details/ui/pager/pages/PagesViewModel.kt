@@ -48,6 +48,12 @@ class PagesViewModel @Inject constructor(
 		valueProducer = { gridSizePages / 100f },
 	)
 
+	val fitPreview = settings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.Default,
+		key = AppSettings.KEY_PAGE_THUMBNAILS_FIT_PREVIEW,
+		valueProducer = { isPageThumbnailsFitPreview },
+	)
+
 	init {
 		launchJob(Dispatchers.Default) {
 			state.filterNotNull()

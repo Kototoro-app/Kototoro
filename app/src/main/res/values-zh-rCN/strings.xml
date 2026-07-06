@@ -133,6 +133,7 @@
     <string name="webtoon">条漫</string>
     <string name="read_mode">阅读模式</string>
     <string name="grid_size">网格大小</string>
+    <string name="fit_page_thumbnails">完整显示缩略图</string>
     <string name="search_on_s">在%s上搜索</string>
     <string name="delete_manga">删除漫画</string>
     <string name="text_delete_local_manga">确定从设备中永久删除\"%s\"?</string>

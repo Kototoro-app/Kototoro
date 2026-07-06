@@ -37,6 +37,7 @@ fun PagesScreenRoot(
 	val thumbnails by viewModel.thumbnails.collectAsStateWithLifecycle(initialValue = emptyList())
 	val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
 	val gridScale by viewModel.gridScale.collectAsStateWithLifecycle(initialValue = 1f)
+	val fitPreview by viewModel.fitPreview.collectAsStateWithLifecycle(initialValue = false)
 	val selectedItemIds = remember { mutableStateListOf<Long>() }
 	val selectedIds = remember(selectedItemIds.toList()) {
 		selectedItemIds.toSet()
@@ -72,6 +73,7 @@ fun PagesScreenRoot(
 		items = thumbnails,
 		gridColumns = pagePreviewGridColumns(gridScale),
 		selectedItemIds = selectedIds,
+		fitPreview = fitPreview,
 		emptyMessageResId = null,
 		isLoading = isLoading,
 		detailsPaneState = detailsPaneState,

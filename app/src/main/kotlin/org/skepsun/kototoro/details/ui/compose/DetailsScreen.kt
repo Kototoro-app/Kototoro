@@ -443,6 +443,9 @@ fun DetailsScreen(
     val compactPaneHeight = detailsPaneState.paneHeight
     val compactPaneAnchor = detailsPaneState.anchor
     val pageGridSizeValue = detailsPaneState.pageGridSizeValue
+    val isPageThumbnailsFitPreview by settings.observeAsState(AppSettings.KEY_PAGE_THUMBNAILS_FIT_PREVIEW) {
+        isPageThumbnailsFitPreview
+    }
     val sheetTabSelection = remember(detailsPaneState.selectedTabId, availableTabIds) {
         detailsPaneState.resolvedSelectedTabId(availableTabIds)
     }
@@ -663,6 +666,11 @@ fun DetailsScreen(
             detailsPaneState.updatePageGridSizeValue(value) { updatedValue ->
                 settings.gridSizePages = updatedValue.toInt()
             }
+        }
+    }
+    val togglePageThumbnailsFitPreview: () -> Unit = remember(settings, isPageThumbnailsFitPreview) {
+        {
+            settings.isPageThumbnailsFitPreview = !isPageThumbnailsFitPreview
         }
     }
     val toggleChapterSearch: () -> Unit = remember(detailsPaneState, clearChapterSearch) {
@@ -1203,6 +1211,7 @@ fun DetailsScreen(
                                     isDownloadedOnly = isDownloadedOnly,
                                     isDownloadedFilterVisible = mangaDetails?.local != null,
                                     pageGridSizeValue = pageGridSizeValue,
+                                    isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                                     onChapterQueryChange = updateChapterQuery,
                                     onChapterSearchToggle = toggleChapterSearch,
                                     onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
@@ -1211,6 +1220,7 @@ fun DetailsScreen(
                                     onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                                     onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                                     onPageGridSizeChange = updatePageGridSize,
+                                    onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                                     showCollapsedHandle = false,
                                     onSelectedTabIdChange = persistSelectedPaneTab,
                                     onActionClick = handleActionClick,
@@ -1374,6 +1384,7 @@ fun DetailsScreen(
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = mangaDetails?.local != null,
                             pageGridSizeValue = pageGridSizeValue,
+                            isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                             onChapterQueryChange = updateChapterQuery,
                             onChapterSearchToggle = toggleChapterSearch,
                             onToggleChaptersReversed = { viewModel.setChaptersReversed(!isChaptersReversed) },
@@ -1382,6 +1393,7 @@ fun DetailsScreen(
                             onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                             onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                             onPageGridSizeChange = updatePageGridSize,
+                            onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                             showCollapsedHandle = true,
                             onSelectedTabIdChange = persistSelectedPaneTab,
                             onActionClick = handleActionClick,
@@ -2574,6 +2586,7 @@ private fun DetailsPaneContent(
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
+    isPageThumbnailsFitPreview: Boolean,
     onChapterQueryChange: (String) -> Unit,
     onChapterSearchToggle: () -> Unit,
     onToggleChaptersReversed: () -> Unit,
@@ -2582,6 +2595,7 @@ private fun DetailsPaneContent(
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
+    onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
     onSelectedTabIdChange: (Int) -> Unit,
     onActionClick: (DetailsAction) -> Unit,
@@ -2644,6 +2658,7 @@ private fun DetailsPaneContent(
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = isDownloadedFilterVisible,
                             pageGridSizeValue = pageGridSizeValue,
+                            isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                             onChapterSearchToggle = onChapterSearchToggle,
                             onToggleChaptersReversed = onToggleChaptersReversed,
                             onToggleChaptersGrid = onToggleChaptersGrid,
@@ -2651,6 +2666,7 @@ private fun DetailsPaneContent(
                             onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                             onToggleDownloadedOnly = onToggleDownloadedOnly,
                             onPageGridSizeChange = onPageGridSizeChange,
+                            onTogglePageThumbnailsFitPreview = onTogglePageThumbnailsFitPreview,
                             showCollapsedHandle = showCollapsedHandle,
                             handleTopInset = statusBarTopPadding,
                             contentType = contentType,
@@ -2715,6 +2731,7 @@ private fun DetailsPaneActionsRow(
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
+    isPageThumbnailsFitPreview: Boolean,
     onChapterSearchToggle: () -> Unit,
     onToggleChaptersReversed: () -> Unit,
     onToggleChaptersGrid: () -> Unit,
@@ -2722,6 +2739,7 @@ private fun DetailsPaneActionsRow(
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
+    onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
     handleTopInset: androidx.compose.ui.unit.Dp,
     contentType: ContentType?,
@@ -2915,6 +2933,19 @@ private fun DetailsPaneActionsRow(
 
                     DetailsPaneTopBarMode.ExpandedGridTools -> {
                         Spacer(modifier = Modifier.weight(1f))
+                        DetailsChromeButton(
+                            onClick = onTogglePageThumbnailsFitPreview,
+                        ) {
+                            Icon(
+                                painter = rememberSafePainter(R.drawable.ic_aspect_ratio),
+                                contentDescription = stringResource(R.string.fit_page_thumbnails),
+                                tint = if (isPageThumbnailsFitPreview) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        }
                         DetailsChromeButton(
                             onClick = detailsPaneState::showGridSizeControls,
                         ) {

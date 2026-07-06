@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 fun PageThumbnailCard(
 	thumbnail: PageThumbnail,
 	isSelected: Boolean,
+	fitPreview: Boolean,
 	onClick: () -> Unit,
 	onLongClick: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -75,7 +76,7 @@ fun PageThumbnailCard(
 			AsyncImage(
 				model = model,
 				contentDescription = "Page Thumbnail",
-				contentScale = ContentScale.Crop,
+				contentScale = if (fitPreview) ContentScale.Fit else ContentScale.Crop,
 				modifier = Modifier.fillMaxSize(),
 			)
 
@@ -162,6 +163,7 @@ fun PagesScreen(
 	items: List<org.skepsun.kototoro.list.ui.model.ListModel>,
 	gridColumns: Int,
 	selectedItemIds: Set<Long>,
+	fitPreview: Boolean = false,
 	emptyMessageResId: Int?,
 	isLoading: Boolean,
 	detailsPaneState: DetailsPaneState? = null,
@@ -286,6 +288,7 @@ fun PagesScreen(
                             PageThumbnailCard(
                                 thumbnail = item,
                                 isSelected = selectedItemIds.contains(item.page.id),
+                                fitPreview = fitPreview,
                                 onClick = { onItemClick(item) },
                                 onLongClick = { onItemLongClick(item) },
                             )

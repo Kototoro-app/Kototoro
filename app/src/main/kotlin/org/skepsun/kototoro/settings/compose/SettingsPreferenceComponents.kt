@@ -688,7 +688,6 @@ fun SettingsDialogTextPreference(
                         value = pendingValue,
                         onValueChange = {
                             pendingValue = it
-                            isSuggestionsExpanded = suggestions.isNotEmpty()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = placeholder?.let { { Text(text = it) } },
