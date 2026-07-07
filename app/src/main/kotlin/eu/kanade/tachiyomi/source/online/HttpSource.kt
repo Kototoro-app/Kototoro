@@ -103,6 +103,12 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getPopularManga(page: Int): MangasPage {
+        if (
+            overridesMethod("fetchPopularManga", Integer.TYPE) &&
+            !overridesMethod("popularMangaRequest", Integer.TYPE)
+        ) {
+            return fetchPopularManga(page).toBlocking().first()
+        }
         return try {
             val request = tagRequest(popularMangaRequest(page))
             client.newCall(request).awaitSuccess().use { response ->
@@ -134,6 +140,12 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        if (
+            overridesMethod("fetchSearchManga", Integer.TYPE, String::class.java, FilterList::class.java) &&
+            !overridesMethod("searchMangaRequest", Integer.TYPE, String::class.java, FilterList::class.java)
+        ) {
+            return fetchSearchManga(page, query, filters).toBlocking().first()
+        }
         return try {
             val request = tagRequest(searchMangaRequest(page, query, filters))
             val response = client.newCall(request).awaitSuccess()
@@ -200,6 +212,12 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getLatestUpdates(page: Int): MangasPage {
+        if (
+            overridesMethod("fetchLatestUpdates", Integer.TYPE) &&
+            !overridesMethod("latestUpdatesRequest", Integer.TYPE)
+        ) {
+            return fetchLatestUpdates(page).toBlocking().first()
+        }
         return try {
             val request = tagRequest(latestUpdatesRequest(page))
             client.newCall(request).awaitSuccess().use { response ->
@@ -220,6 +238,12 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getMangaDetails(manga: SManga): SManga {
+        if (
+            overridesMethod("fetchMangaDetails", SManga::class.java) &&
+            !overridesMethod("mangaDetailsRequest", SManga::class.java)
+        ) {
+            return fetchMangaDetails(manga).toBlocking().first()
+        }
         return try {
             val request = tagRequest(mangaDetailsRequest(manga))
             client.newCall(request).awaitSuccess().use { response ->
@@ -249,6 +273,9 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
+        if (overridesMethod("fetchChapterList", SManga::class.java)) {
+            return fetchChapterList(manga).toBlocking().first()
+        }
         return try {
             val request = tagRequest(chapterListRequest(manga))
             client.newCall(request).awaitSuccess().use { response ->
@@ -324,6 +351,12 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     open suspend fun getImageUrl(page: Page): String {
+        if (
+            overridesMethod("fetchImageUrl", Page::class.java) &&
+            !overridesMethod("imageUrlRequest", Page::class.java)
+        ) {
+            return fetchImageUrl(page).toBlocking().first()
+        }
         return try {
             val request = tagRequest(imageUrlRequest(page))
             client.newCall(request).awaitSuccess().use { response ->
