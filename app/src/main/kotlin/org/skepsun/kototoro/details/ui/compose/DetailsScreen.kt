@@ -1171,7 +1171,10 @@ fun DetailsScreen(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .weight(1f)
-                                    .padding(top = statusBarTopPadding),
+                                    .padding(
+                                        top = statusBarTopPadding,
+                                        bottom = navigationBarBottomPadding,
+                                    ),
                                 color = Color.Transparent,
                                 shape = RoundedCornerShape(28.dp),
                                 tonalElevation = 0.dp,
