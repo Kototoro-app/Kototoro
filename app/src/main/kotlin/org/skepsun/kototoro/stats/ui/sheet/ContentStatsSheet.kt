@@ -32,6 +32,7 @@ class ContentStatsSheet : BaseAdaptiveSheet<SheetStatsContentBinding>() {
         binding.composeView.setContent {
             KototoroTheme {
                 ContentStatsSheetContent(
+                    manga = viewModel.manga,
                     viewModel = viewModel,
                     onOpenDetails = {
                         val mainActivity = activity as? MainActivity

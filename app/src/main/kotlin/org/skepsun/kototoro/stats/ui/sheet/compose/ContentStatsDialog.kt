@@ -83,6 +83,7 @@ fun ContentStatsRoute(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
             ContentStatsSheetContent(
+                manga = manga,
                 viewModel = viewModel,
                 onOpenDetails = onOpenDetails,
                 modifier = Modifier,
@@ -175,11 +176,11 @@ fun ContentStatsDialog(
 
 @Composable
 fun ContentStatsSheetContent(
+    manga: Content,
     viewModel: ContentStatsViewModel,
     onOpenDetails: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val manga = viewModel.manga
     val context = LocalContext.current
     val stats by viewModel.stats.collectAsState()
     val startDate by viewModel.startDate.collectAsState()

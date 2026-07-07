@@ -1575,11 +1575,12 @@ fun DetailsScreen(
             }
 
             if (showStatsDialog && isWorkActionEnabled && content != null) {
-                val statsViewModel: ContentStatsViewModel = hiltViewModel()
+                val statsViewModel: ContentStatsViewModel = hiltViewModel(key = "details-content-stats-${content.id}")
                 LaunchedEffect(content.id) {
                     statsViewModel.initialize(content)
                 }
                 DetailsStatsSheet(
+                    manga = content,
                     viewModel = statsViewModel,
                     onDismissRequest = { showStatsDialog = false },
                     onOpenDetails = { showStatsDialog = false },
@@ -1810,6 +1811,7 @@ private fun DetailsTranslucentBottomSheet(
 
 @Composable
 private fun DetailsStatsSheet(
+    manga: Content,
     viewModel: ContentStatsViewModel,
     onDismissRequest: () -> Unit,
     onOpenDetails: () -> Unit,
@@ -1818,6 +1820,7 @@ private fun DetailsStatsSheet(
         onDismissRequest = onDismissRequest,
     ) {
         ContentStatsSheetContent(
+            manga = manga,
             viewModel = viewModel,
             onOpenDetails = onOpenDetails,
             modifier = Modifier,
