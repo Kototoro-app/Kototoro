@@ -103,10 +103,7 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getPopularManga(page: Int): MangasPage {
-        if (
-            overridesMethod("fetchPopularManga", Integer.TYPE) &&
-            !overridesMethod("popularMangaRequest", Integer.TYPE)
-        ) {
+        if (overridesFetchWithoutRequestHelper("fetchPopularManga", "popularMangaRequest", Integer.TYPE)) {
             return fetchPopularManga(page).toBlocking().first()
         }
         return try {
@@ -141,8 +138,13 @@ abstract class HttpSource : CatalogueSource {
     @Suppress("DEPRECATION")
     override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         if (
-            overridesMethod("fetchSearchManga", Integer.TYPE, String::class.java, FilterList::class.java) &&
-            !overridesMethod("searchMangaRequest", Integer.TYPE, String::class.java, FilterList::class.java)
+            overridesFetchWithoutRequestHelper(
+                "fetchSearchManga",
+                "searchMangaRequest",
+                Integer.TYPE,
+                String::class.java,
+                FilterList::class.java,
+            )
         ) {
             return fetchSearchManga(page, query, filters).toBlocking().first()
         }
@@ -212,10 +214,7 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getLatestUpdates(page: Int): MangasPage {
-        if (
-            overridesMethod("fetchLatestUpdates", Integer.TYPE) &&
-            !overridesMethod("latestUpdatesRequest", Integer.TYPE)
-        ) {
+        if (overridesFetchWithoutRequestHelper("fetchLatestUpdates", "latestUpdatesRequest", Integer.TYPE)) {
             return fetchLatestUpdates(page).toBlocking().first()
         }
         return try {
@@ -238,10 +237,7 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getMangaDetails(manga: SManga): SManga {
-        if (
-            overridesMethod("fetchMangaDetails", SManga::class.java) &&
-            !overridesMethod("mangaDetailsRequest", SManga::class.java)
-        ) {
+        if (overridesFetchWithoutRequestHelper("fetchMangaDetails", "mangaDetailsRequest", SManga::class.java)) {
             return fetchMangaDetails(manga).toBlocking().first()
         }
         return try {
@@ -273,7 +269,7 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getChapterList(manga: SManga): List<SChapter> {
-        if (overridesMethod("fetchChapterList", SManga::class.java)) {
+        if (overridesFetchChapterList()) {
             return fetchChapterList(manga).toBlocking().first()
         }
         return try {
@@ -316,10 +312,7 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getPageList(chapter: SChapter): List<Page> {
-        if (
-            overridesMethod("fetchPageList", SChapter::class.java) &&
-            !overridesMethod("pageListRequest", SChapter::class.java)
-        ) {
+        if (overridesFetchWithoutRequestHelper("fetchPageList", "pageListRequest", SChapter::class.java)) {
             return fetchPageList(chapter).toBlocking().first()
         }
         return try {
@@ -351,10 +344,7 @@ abstract class HttpSource : CatalogueSource {
 
     @Suppress("DEPRECATION")
     open suspend fun getImageUrl(page: Page): String {
-        if (
-            overridesMethod("fetchImageUrl", Page::class.java) &&
-            !overridesMethod("imageUrlRequest", Page::class.java)
-        ) {
+        if (overridesFetchWithoutRequestHelper("fetchImageUrl", "imageUrlRequest", Page::class.java)) {
             return fetchImageUrl(page).toBlocking().first()
         }
         return try {
@@ -411,6 +401,21 @@ abstract class HttpSource : CatalogueSource {
     private fun overridesMethod(methodName: String, vararg parameterTypes: Class<*>): Boolean {
         val declaringClass = findMethodDeclaringClass(methodName, *parameterTypes)
         return declaringClass != null && declaringClass != HttpSource::class.java
+    }
+
+    private fun overridesFetchWithoutRequestHelper(
+        fetchMethodName: String,
+        requestMethodName: String,
+        vararg parameterTypes: Class<*>,
+    ): Boolean {
+        return overridesMethod(fetchMethodName, *parameterTypes) &&
+            !overridesMethod(requestMethodName, *parameterTypes)
+    }
+
+    // Some legacy sources keep pagination or normalization in fetchChapterList while still
+    // exposing chapterListRequest/chapterListParse helpers. Preserve that legacy entry point.
+    private fun overridesFetchChapterList(): Boolean {
+        return overridesMethod("fetchChapterList", SManga::class.java)
     }
 
     private fun findMethodDeclaringClass(methodName: String, vararg parameterTypes: Class<*>): Class<*>? {
