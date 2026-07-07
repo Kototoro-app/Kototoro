@@ -21,10 +21,16 @@ class PausingReceiver(
 			return
 		}
 		when (intent.action) {
-			ACTION_RESUME -> pausingHandle.resume()
+			ACTION_RESUME -> {
+				pausingHandle.resume()
+				ActiveDownloadRegistry.setPaused(id, false)
+			}
 			ACTION_SKIP -> pausingHandle.skip()
 			ACTION_SKIP_ALL -> pausingHandle.skipAll()
-			ACTION_PAUSE -> pausingHandle.pause()
+			ACTION_PAUSE -> {
+				pausingHandle.pause()
+				ActiveDownloadRegistry.setPaused(id, true)
+			}
 		}
 	}
 

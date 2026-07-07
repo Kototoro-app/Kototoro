@@ -11,7 +11,13 @@ import java.io.File
 
 data class LocalContent(
 	val manga: Content,
-	val file: File = manga.url.toUri().toFile(),
+	val file: File = manga.url.toUri().let { uri ->
+		if (uri.scheme == "file") {
+			File(requireNotNull(uri.path) { "File uri path is null: $uri" })
+		} else {
+			File(uri.schemeSpecificPart)
+		}
+	},
 ) {
 
 	var createdAt: Long = -1L

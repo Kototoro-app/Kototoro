@@ -10,14 +10,20 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -178,6 +184,9 @@ fun DownloadsSettingsRoute(
     val isDownloadAutoRetryOnNetworkError =
         settings.observeAsState(AppSettings.KEY_DOWNLOADS_AUTO_RETRY) { isDownloadAutoRetryOnNetworkError }.value
     val downloadThreads = settings.observeAsState(AppSettings.KEY_DOWNLOADS_THREADS) { downloadThreads }.value
+    val downloadMaxActiveSeries =
+        settings.observeAsState(AppSettings.KEY_DOWNLOADS_MAX_ACTIVE_SERIES) { downloadMaxActiveSeries }.value
+    var showUncappedWarning by remember { mutableStateOf(false) }
     val downloadRequestDelayMs =
         settings.observeAsState(AppSettings.KEY_DOWNLOADS_REQUEST_DELAY) { downloadRequestDelayMs }.value
     val downloadRetryCount =
@@ -224,6 +233,7 @@ fun DownloadsSettingsRoute(
         isDownloadAlignedWithReader = isDownloadAlignedWithReader,
         isDownloadAutoRetryOnNetworkError = isDownloadAutoRetryOnNetworkError,
         downloadThreads = downloadThreads,
+        downloadMaxActiveSeries = downloadMaxActiveSeries,
         downloadRequestDelayMs = downloadRequestDelayMs,
         downloadRetryCount = downloadRetryCount,
         downloadRetryDelayMs = downloadRetryDelayMs,
@@ -232,6 +242,41 @@ fun DownloadsSettingsRoute(
         pagesDirectorySummary = pagesDirectorySummary,
         isPagesSavingAskEnabled = isPagesSavingAskEnabled,
     )
+
+    if (showUncappedWarning) {
+        AlertDialog(
+            onDismissRequest = {
+                settings.downloadMaxActiveSeries = 10
+                showUncappedWarning = false
+            },
+            title = {
+                Text(stringResource(R.string.download_max_active_series_warning_title))
+            },
+            text = {
+                Text(stringResource(R.string.download_max_active_series_warning_message))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        settings.downloadMaxActiveSeries = AppSettings.UNLIMITED_SERIES
+                        showUncappedWarning = false
+                    }
+                ) {
+                    Text(stringResource(R.string.continue_action))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        settings.downloadMaxActiveSeries = 10
+                        showUncappedWarning = false
+                    }
+                ) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
 
     DownloadsSettingsScreen(
         downloadsTitle = context.getString(R.string.downloads),
@@ -248,6 +293,15 @@ fun DownloadsSettingsRoute(
         onDownloadAlignReaderChange = { settings.isDownloadAlignedWithReader = it },
         onDownloadAutoRetryChange = { settings.isDownloadAutoRetryOnNetworkError = it },
         onDownloadThreadsChange = { settings.downloadThreads = it },
+        onDownloadMaxActiveSeriesChange = { newValue ->
+            if (newValue == AppSettings.UNLIMITED_SERIES) {
+                if (downloadMaxActiveSeries != AppSettings.UNLIMITED_SERIES) {
+                    showUncappedWarning = true
+                }
+            } else {
+                settings.downloadMaxActiveSeries = newValue
+            }
+        },
         onDownloadRequestDelayChange = { settings.downloadRequestDelayMs = it },
         onDownloadRetryCountChange = { settings.downloadRetryCount = it },
         onDownloadRetryDelayChange = { settings.downloadRetryDelayMs = it },

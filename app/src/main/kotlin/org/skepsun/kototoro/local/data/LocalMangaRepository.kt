@@ -199,7 +199,16 @@ class LocalMangaRepository @Inject constructor(
 	}
 
 	suspend fun delete(manga: Content): Boolean {
-		val file = manga.url.toUri().toFile()
+		val file = if (manga.isLocal) {
+			val uri = manga.url.toUri()
+			if (uri.scheme == "file") {
+				File(requireNotNull(uri.path) { "File uri path is null: $uri" })
+			} else {
+				File(uri.schemeSpecificPart)
+			}
+		} else {
+			findSavedContent(manga, withDetails = false)?.file ?: return false
+		}
 		val result = file.deleteAwait()
 		if (result) {
 			localContentIndex.delete(manga.id)

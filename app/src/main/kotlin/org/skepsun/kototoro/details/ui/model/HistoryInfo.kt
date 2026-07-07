@@ -42,10 +42,21 @@ fun HistoryInfo(
 	} else {
 		manga?.chapters?.get(branch)
 	}
-	val currentChapter = if (history != null && !chapters.isNullOrEmpty()) {
+	var currentChapter = if (history != null && !chapters.isNullOrEmpty()) {
 		chapters.findChapterByHistory(history)?.let(chapters::indexOf) ?: -1
 	} else {
 		-2
+	}
+	if (history != null && history.percent >= 0.99999f && !chapters.isNullOrEmpty() && currentChapter >= 0) {
+		val sortedChapters = chapters.sortedBy { it.number }
+		val currentInSorted = sortedChapters.indexOfFirst { it.id == chapters[currentChapter].id }
+		if (currentInSorted != -1 && currentInSorted + 1 < sortedChapters.size) {
+			val nextChapter = sortedChapters[currentInSorted + 1]
+			val nextIndexInRaw = chapters.indexOfFirst { it.id == nextChapter.id }
+			if (nextIndexInRaw != -1) {
+				currentChapter = nextIndexInRaw
+			}
+		}
 	}
 	// Check if chapter is missing
 	// For EPUB chapters, also check if the history chapter ID is a parent chapter ID

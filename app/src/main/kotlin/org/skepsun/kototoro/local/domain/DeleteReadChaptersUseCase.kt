@@ -19,11 +19,14 @@ import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.recoverCatchingCancellable
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import javax.inject.Inject
+import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.toContentChapters
 
 class DeleteReadChaptersUseCase @Inject constructor(
 	private val localContentRepository: LocalMangaRepository,
 	private val historyRepository: HistoryRepository,
 	private val mangaRepositoryFactory: ContentRepository.Factory,
+	private val db: MangaDatabase,
 ) {
 
 	suspend operator fun invoke(manga: Content): Int {
@@ -46,7 +49,12 @@ class DeleteReadChaptersUseCase @Inject constructor(
 			for (manga in list) {
 				launch(Dispatchers.Default) {
 					val task = runCatchingCancellable {
-						getDeletionTask(LocalContent(manga))
+						val localContent = if (manga.isLocal) {
+							LocalContent(manga)
+						} else {
+							localContentRepository.findSavedContent(manga)
+						}
+						localContent?.let { getDeletionTask(it) }
 					}.onFailure {
 						it.printStackTraceDebug()
 					}.getOrNull()
@@ -67,39 +75,58 @@ class DeleteReadChaptersUseCase @Inject constructor(
 
 	private suspend fun getDeletionTask(manga: LocalContent): DeletionTask? {
 		val history = historyRepository.getOne(manga.manga) ?: return null
-		val chapters = getAllChapters(manga)
+		val localChapters = getLocalChapters(manga)
+		val remoteMangaId = runCatchingCancellable {
+			localContentRepository.getRemoteContent(manga.manga)?.id
+		}.getOrNull() ?: manga.manga.id
+		val dbChapters = runCatchingCancellable {
+			db.getChaptersDao().findAll(remoteMangaId).toContentChapters()
+		}.getOrDefault(emptyList())
+		val combined = (localChapters + dbChapters).distinctBy { it.id }
+
+
+		val chapters = if (combined.any { it.id == history.chapterId }) {
+			combined
+		} else {
+			getAllChaptersRemote(manga, combined)
+		}
 		if (chapters.isEmpty()) {
 			return null
 		}
-		val historyChapter = chapters.findById(history.chapterId) ?: return null
+		val sortedChapters = chapters.sortedBy { it.number }
+		val historyChapter = sortedChapters.findById(history.chapterId) ?: return null
 		val branch = historyChapter.branch
-		val filteredChapters = chapters
+		val filteredChapters = sortedChapters
 			.filter { x -> x.branch == branch }
 			.takeWhile { it.id != historyChapter.id }
-		return if (filteredChapters.isEmpty()) {
+
+		val toDeleteIds = filteredChapters.ids().intersect(localChapters.ids())
+		return if (toDeleteIds.isEmpty()) {
 			null
 		} else {
 			DeletionTask(
 				manga = manga,
-				chaptersIds = filteredChapters.ids(),
+				chaptersIds = toDeleteIds,
 			)
 		}
 	}
 
-	private suspend fun getAllChapters(manga: LocalContent): List<ContentChapter> = runCatchingCancellable {
+	private suspend fun getLocalChapters(manga: LocalContent): List<ContentChapter> {
+		return manga.manga.chapters.let {
+			if (it.isNullOrEmpty()) {
+				runCatchingCancellable {
+					localContentRepository.getDetails(manga.manga).chapters
+				}.getOrNull()
+			} else {
+				it
+			}
+		}.orEmpty()
+	}
+
+	private suspend fun getAllChaptersRemote(manga: LocalContent, fallback: List<ContentChapter>): List<ContentChapter> = runCatchingCancellable {
 		val remoteContent = checkNotNull(localContentRepository.getRemoteContent(manga.manga))
 		checkNotNull(mangaRepositoryFactory.create(remoteContent.source).getDetails(remoteContent).chapters)
-	}.recoverCatchingCancellable {
-		checkNotNull(
-			manga.manga.chapters.let {
-				if (it.isNullOrEmpty()) {
-					localContentRepository.getDetails(manga.manga).chapters
-				} else {
-					it
-				}
-			},
-		)
-	}.getOrDefault(manga.manga.chapters.orEmpty())
+	}.getOrDefault(fallback)
 
 	private class DeletionTask(
 		val manga: LocalContent,

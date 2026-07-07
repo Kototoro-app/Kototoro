@@ -794,6 +794,25 @@ class ReaderViewModel @Inject constructor(
                                 exception = e.mergeWith(exception)
                                 return@collect
                             }
+                        } else {
+                            val state = readingState.value!!
+                            if (chaptersLoader.isChapterLocal(state.chapterId)) {
+                                val loadedPages = chaptersLoader.getPages(state.chapterId)
+                                val hasRemotePages = loadedPages.any { 
+                                    val uri = android.net.Uri.parse(it.url)
+                                    val scheme = uri.scheme
+                                    scheme != "file" && scheme != "zip" && scheme != "file+zip" &&
+                                    scheme != "content" && scheme != "epub" && scheme != "localepub"
+                                }
+                                if (hasRemotePages) {
+                                    android.util.Log.d("ReaderViewModel", "Reloading chapter ${state.chapterId} pages from local storage")
+                                    try {
+                                        chaptersLoader.loadSingleChapter(state.chapterId)
+                                    } catch (e: Exception) {
+                                        exception = e.mergeWith(exception)
+                                    }
+                                }
+                            }
                         }
                         mangaDetails.value = details.filterChapters(selectedBranch.value)
 

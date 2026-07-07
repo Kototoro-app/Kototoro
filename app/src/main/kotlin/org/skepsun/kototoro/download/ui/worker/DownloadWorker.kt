@@ -251,13 +251,26 @@ class DownloadWorker @AssistedInject constructor(
 				"displayMangaId=${executionContext.displayMangaId} kind=${task.kind} " +
 				"chapters=${executionContext.executionManga.chapters?.size ?: 0} taskChapters=${task.executionChapterIds?.size ?: -1}",
 		)
+		
+		ActiveDownloadRegistry.register(id, isPaused = task.isPaused)
+		
+		val pausingHandle = PausingHandle()
+		if (task.isPaused) {
+			Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${executionContext.executionManga.id}")
+			pausingHandle.pause()
+		}
+		
+		val pausingReceiver = PausingReceiver(id, pausingHandle)
+		ContextCompat.registerReceiver(
+			applicationContext,
+			pausingReceiver,
+			PausingReceiver.createIntentFilter(id),
+			ContextCompat.RECEIVER_NOT_EXPORTED,
+		)
+		
 		try {
-			val pausingHandle = PausingHandle()
-			if (task.isPaused) {
-				Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${executionContext.executionManga.id}")
-				pausingHandle.pause()
-			}
 			withContext(pausingHandle) {
+				checkIsPaused()
 				when (task.kind) {
 					DownloadTaskKind.DOWNLOAD -> {
 						val resolvedContent = resolveExecutionContent(executionContext.executionManga)
@@ -325,6 +338,11 @@ class DownloadWorker @AssistedInject constructor(
 				).toWorkData(),
 			)
 		} finally {
+			ActiveDownloadRegistry.unregister(id)
+			try {
+				applicationContext.unregisterReceiver(pausingReceiver)
+			} catch (_: Exception) {
+			}
 			notificationManager.cancel(id.hashCode())
 		}
 	}
@@ -355,14 +373,7 @@ class DownloadWorker @AssistedInject constructor(
 		}
 		Log.d("DownloadWorker", "downloadContentImpl start: mangaId=${subject.id} title=${subject.title} excluded=${excludedIds.size}")
 		val chaptersToSkip = excludedIds.toMutableSet()
-		val pausingReceiver = PausingReceiver(id, PausingHandle.current())
 		mangaLock.withLock(subject) {
-			ContextCompat.registerReceiver(
-				applicationContext,
-				pausingReceiver,
-				PausingReceiver.createIntentFilter(id),
-				ContextCompat.RECEIVER_NOT_EXPORTED,
-			)
 			var destination = localContentRepository.getOutputDir(subject, task.destination)
 			checkNotNull(destination) { applicationContext.getString(R.string.cannot_find_available_storage) }
 			Log.d("DownloadWorker", "downloadContentImpl outputDir=${destination.absolutePath}")
@@ -465,7 +476,6 @@ class DownloadWorker @AssistedInject constructor(
 				throw e
 			} finally {
 				withContext(NonCancellable) {
-					applicationContext.unregisterReceiver(pausingReceiver)
 					output?.closeQuietly()
 					output?.cleanup()
 					val tempFiles = destination.listFiles(TempFileFilter())
@@ -843,6 +853,11 @@ class DownloadWorker @AssistedInject constructor(
 				println("DownloadWorker: Not EPUB, using normal download")
 			}
 
+			val tempDir = File(destination, "tmp_${chapter.value.id}")
+			if (!tempDir.exists()) {
+				tempDir.mkdirs()
+			}
+
 			val pageCounter = AtomicInteger(0)
 			val successCounter = AtomicInteger(0)
 			channelFlow {
@@ -857,18 +872,28 @@ class DownloadWorker @AssistedInject constructor(
 					launch {
 						semaphore.withPermit {
 							val success = runFailsafe {
-								val url = repo.getPageUrl(page)
-								val file = cache[url]
-									?: downloadFile(repo, url, destination, page = page)
+								val prefix = String.format("%04d.", pageIndex)
+								val existingFile = tempDir.listFiles { _, name -> name.startsWith(prefix) }?.firstOrNull()
+								val file = if (existingFile != null && existingFile.length() > 0) {
+									existingFile
+								} else {
+									val url = repo.getPageUrl(page)
+									val downloadedFile = cache[url]
+										?: downloadFile(repo, url, destination, page = page)
+									val ext = downloadedFile.extension.takeIf { it != "tmp" } ?: "jpg"
+									val targetFile = File(tempDir, prefix + ext)
+									downloadedFile.copyTo(targetFile, overwrite = true)
+									if (downloadedFile.extension == "tmp") {
+										downloadedFile.deleteAwait()
+									}
+									targetFile
+								}
 								output.addPage(
 									chapter = chapter,
 									file = file,
 									pageNumber = pageIndex,
-									type = getMediaType(url, file),
+									type = getMediaType(file.name, file),
 								)
-								if (file.extension == "tmp") {
-									file.deleteAwait()
-								}
 								true
 							} ?: false
 							if (success) {
@@ -902,6 +927,7 @@ class DownloadWorker @AssistedInject constructor(
 				throw IOException("No pages downloaded for chapter: ${chapter.value.title ?: chapter.value.id}")
 			}
 			if (output.flushChapter(chapter.value)) {
+				tempDir.deleteRecursively()
 				runCatchingCancellable {
 					localStorageChanges.emit(LocalContentParser(output.rootFile).getContent(withDetails = false))
 				}.onFailure(Throwable::printStackTraceDebug)
@@ -967,13 +993,20 @@ class DownloadWorker @AssistedInject constructor(
 
 	private suspend fun checkIsPaused() {
 		val pausingHandle = PausingHandle.current()
-		if (pausingHandle.isPaused) {
-			publishState(currentState.copy(isPaused = true, eta = -1L, isStuck = false))
-			try {
-				pausingHandle.awaitResumed()
-			} finally {
-				publishState(currentState.copy(isPaused = false))
+		while (true) {
+			if (pausingHandle.isPaused) {
+				publishState(currentState.copy(isPaused = true, eta = -1L, isStuck = false))
+				try {
+					pausingHandle.awaitResumed()
+				} finally {
+					publishState(currentState.copy(isPaused = false))
+				}
 			}
+			val limit = settings.downloadMaxActiveSeries
+			if (ActiveDownloadRegistry.isTurn(id, limit)) {
+				break
+			}
+			delay(1000)
 		}
 	}
 
@@ -1232,6 +1265,35 @@ class DownloadWorker @AssistedInject constructor(
 				cr.openSource(uri).use { input ->
 					file.sink(append = false).buffer().use {
 						it.writeAllCancellable(input)
+					}
+				}
+			} catch (e: Exception) {
+				file.delete()
+				throw e
+			}
+			return file
+		}
+		if (url.startsWith("zip:", ignoreCase = true) || url.startsWith("file+zip:", ignoreCase = true)) {
+			val uri = url.toUri()
+			val zipFile = when (uri.scheme) {
+				"zip" -> File(uri.schemeSpecificPart)
+				"file+zip" -> File(uri.host.orEmpty() + uri.path.orEmpty())
+				else -> throw IllegalArgumentException("Unsupported scheme: ${uri.scheme}")
+			}
+			val fragment = uri.fragment ?: ""
+			val ext = MimeTypes.getNormalizedExtension(fragment)
+			val file = destination.createTempFile(ext)
+			try {
+				runInterruptible(Dispatchers.IO) {
+					java.util.zip.ZipFile(zipFile).use { zip ->
+						val entry = checkNotNull(zip.getEntry(fragment)) {
+							"Zip entry not found: $fragment in ${zipFile.absolutePath}"
+						}
+						zip.getInputStream(entry).use { input ->
+							file.outputStream().use { output ->
+								input.copyTo(output)
+							}
+						}
 					}
 				}
 			} catch (e: Exception) {

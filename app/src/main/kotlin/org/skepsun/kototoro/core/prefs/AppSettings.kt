@@ -1313,6 +1313,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeInt(KEY_DOWNLOADS_THREADS, readerThreads).coerceIn(1, 10)
 		set(value) = prefs.edit { putInt(KEY_DOWNLOADS_THREADS, value.coerceIn(1, 10)) }
 
+	var downloadMaxActiveSeries: Int
+		get() = prefs.getSafeInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, 5).coerceIn(1, UNLIMITED_SERIES)
+		set(value) = prefs.edit { putInt(KEY_DOWNLOADS_MAX_ACTIVE_SERIES, value.coerceIn(1, UNLIMITED_SERIES)) }
+
 	var downloadRequestDelayMs: Int
 		get() = prefs.getSafeInt(KEY_DOWNLOADS_REQUEST_DELAY, DOWNLOADS_REQUEST_DELAY_DEFAULT).coerceIn(0, 5000)
 		set(value) = prefs.edit { putInt(KEY_DOWNLOADS_REQUEST_DELAY, value.coerceIn(0, 5000)) }
@@ -2144,6 +2148,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_DOWNLOADS_ALIGN_READER = "downloads_align_reader"
 		const val KEY_DOWNLOADS_AUTO_RETRY = "downloads_auto_retry"
 		const val KEY_DOWNLOADS_THREADS = "downloads_threads"
+		const val KEY_DOWNLOADS_MAX_ACTIVE_SERIES = "downloads_max_active_series"
+		const val UNLIMITED_SERIES = 11
 		const val KEY_DOWNLOADS_REQUEST_DELAY = "downloads_request_delay"
 		const val KEY_DOWNLOADS_RETRY_COUNT = "downloads_retry_count"
 		const val KEY_DOWNLOADS_RETRY_DELAY = "downloads_retry_delay"

@@ -99,7 +99,24 @@ internal fun openDetailsReader(
 			}
 
 			if (matchedChapter != null) {
-				intentBuilder.state(ReaderState(history.copy(chapterId = matchedChapter.id)))
+				val isCompleted = history.percent >= 0.99999f
+				val targetState = if (isCompleted) {
+					val sortedChapters = chapters?.sortedBy { it.number } ?: emptyList()
+					val index = sortedChapters.indexOfFirst { it.id == matchedChapter.id }
+					if (index != -1 && index + 1 < sortedChapters.size) {
+						val nextChapter = sortedChapters[index + 1]
+						ReaderState(
+							chapterId = nextChapter.id,
+							page = 0,
+							scroll = 0,
+						)
+					} else {
+						ReaderState(history.copy(chapterId = matchedChapter.id))
+					}
+				} else {
+					ReaderState(history.copy(chapterId = matchedChapter.id))
+				}
+				intentBuilder.state(targetState)
 			}
 		}
 	}.getOrElse { }
