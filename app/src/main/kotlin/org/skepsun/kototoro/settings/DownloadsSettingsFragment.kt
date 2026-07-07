@@ -246,7 +246,6 @@ fun DownloadsSettingsRoute(
     if (showUncappedWarning) {
         AlertDialog(
             onDismissRequest = {
-                settings.downloadMaxActiveSeries = 10
                 showUncappedWarning = false
             },
             title = {
@@ -268,7 +267,6 @@ fun DownloadsSettingsRoute(
             dismissButton = {
                 TextButton(
                     onClick = {
-                        settings.downloadMaxActiveSeries = 10
                         showUncappedWarning = false
                     }
                 ) {

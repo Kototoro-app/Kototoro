@@ -251,15 +251,15 @@ class DownloadWorker @AssistedInject constructor(
 				"displayMangaId=${executionContext.displayMangaId} kind=${task.kind} " +
 				"chapters=${executionContext.executionManga.chapters?.size ?: 0} taskChapters=${task.executionChapterIds?.size ?: -1}",
 		)
-		
+
 		ActiveDownloadRegistry.register(id, isPaused = task.isPaused)
-		
+
 		val pausingHandle = PausingHandle()
 		if (task.isPaused) {
 			Log.i("DownloadWorker", "doWork start paused: workId=$id mangaId=${executionContext.executionManga.id}")
 			pausingHandle.pause()
 		}
-		
+
 		val pausingReceiver = PausingReceiver(id, pausingHandle)
 		ContextCompat.registerReceiver(
 			applicationContext,
@@ -267,7 +267,7 @@ class DownloadWorker @AssistedInject constructor(
 			PausingReceiver.createIntentFilter(id),
 			ContextCompat.RECEIVER_NOT_EXPORTED,
 		)
-		
+
 		try {
 			withContext(pausingHandle) {
 				checkIsPaused()

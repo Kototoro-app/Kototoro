@@ -798,7 +798,7 @@ class ReaderViewModel @Inject constructor(
                             val state = readingState.value!!
                             if (chaptersLoader.isChapterLocal(state.chapterId)) {
                                 val loadedPages = chaptersLoader.getPages(state.chapterId)
-                                val hasRemotePages = loadedPages.any { 
+                                val hasRemotePages = loadedPages.any {
                                     val uri = android.net.Uri.parse(it.url)
                                     val scheme = uri.scheme
                                     scheme != "file" && scheme != "zip" && scheme != "file+zip" &&
