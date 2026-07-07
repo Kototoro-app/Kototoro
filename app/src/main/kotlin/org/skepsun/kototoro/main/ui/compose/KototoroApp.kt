@@ -766,8 +766,10 @@ fun KototoroApp(
         if (isNavBarPinned && !isFloating) 12.dp.roundToPx() else 0
     }
     val visibleBottomNavInsetPx = (bottomNavHeightPx - effectiveBottomNavOffset).coerceAtLeast(0f).toInt() + extraPinnedBottomInsetPx
-    val contentBottomInsetPx = if (!shouldReserveChromeInsets || isLandscapeNavigation) {
+    val contentBottomInsetPx = if (!shouldReserveChromeInsets) {
         0
+    } else if (isLandscapeNavigation) {
+        navigationBarHeightPx
     } else {
         maxOf(visibleBottomNavInsetPx, navigationBarHeightPx)
     }

@@ -77,7 +77,6 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
-import org.skepsun.kototoro.core.util.ext.consume
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.databinding.SheetWelcomeBinding
@@ -124,7 +123,7 @@ class WelcomeSheet : BaseAdaptiveSheet<SheetWelcomeBinding>(), ActivityResultCal
 	}
 
 	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		return insets.consume(v, WindowInsetsCompat.Type.systemBars(), bottom = true)
+		return insets
 	}
 
 	override fun onActivityResult(result: Uri?) {
