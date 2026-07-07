@@ -98,6 +98,7 @@ fun ChaptersPagesTabsContent(
 	isChapterListScrollEnabled: Boolean = true,
 	handleSelectionBackPressInternally: Boolean = true,
     detailsPaneState: DetailsPaneState? = null,
+    pageThumbnailAspectRatio: Float = 0.7f,
     chapterQuery: String = "",
     isChapterSearchVisible: Boolean = false,
     onChapterQueryChange: ((String) -> Unit)? = null,
@@ -230,6 +231,7 @@ fun ChaptersPagesTabsContent(
 						lifecycleOwner = lifecycleOwner,
 						viewModel = pagesViewModel,
 						detailsPaneState = detailsPaneState,
+						thumbnailAspectRatio = pageThumbnailAspectRatio,
 					)
 					DETAILS_TAB_BOOKMARKS -> BookmarksScreenRoot(
 						activityViewModel = viewModel,

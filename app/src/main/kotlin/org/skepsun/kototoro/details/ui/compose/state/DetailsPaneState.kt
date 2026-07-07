@@ -43,6 +43,7 @@ class DetailsPaneState internal constructor(
     val paneHeight: Dp,
     val hoveredHeight: Dp,
     initialPageGridSizeValue: Float,
+    initialPageThumbnailAspectRatio: Float,
     initialSelectedTabId: Int,
     initialChapterQuery: String = "",
     initialAnchor: CompactDetailsPaneAnchor = CompactDetailsPaneAnchor.Collapsed,
@@ -70,6 +71,9 @@ class DetailsPaneState internal constructor(
         private set
 
     var pageGridSizeValue by mutableFloatStateOf(initialPageGridSizeValue)
+        private set
+
+    var pageThumbnailAspectRatio by mutableFloatStateOf(initialPageThumbnailAspectRatio)
         private set
 
     var selectedTabId by mutableIntStateOf(initialSelectedTabId)
@@ -168,11 +172,23 @@ class DetailsPaneState internal constructor(
         pageGridSizeValue = value
     }
 
+    fun syncPageThumbnailAspectRatio(value: Float) {
+        pageThumbnailAspectRatio = value
+    }
+
     fun updatePageGridSizeValue(
         value: Float,
         onPersist: (Float) -> Unit = {},
     ) {
         pageGridSizeValue = value
+        onPersist(value)
+    }
+
+    fun updatePageThumbnailAspectRatio(
+        value: Float,
+        onPersist: (Float) -> Unit = {},
+    ) {
+        pageThumbnailAspectRatio = value
         onPersist(value)
     }
 
@@ -353,6 +369,7 @@ fun rememberDetailsPaneState(
     screenHeightDp: Int,
     collapsedHeight: Dp = 96.dp,
     initialPageGridSizeValue: Float,
+    initialPageThumbnailAspectRatio: Float,
     initialSelectedTabId: Int,
     initialChapterQuery: String = "",
     initialAnchor: CompactDetailsPaneAnchor = CompactDetailsPaneAnchor.Collapsed,
@@ -382,6 +399,7 @@ fun rememberDetailsPaneState(
             paneHeight = paneHeight,
             hoveredHeight = hoveredHeight,
             initialPageGridSizeValue = initialPageGridSizeValue,
+            initialPageThumbnailAspectRatio = initialPageThumbnailAspectRatio,
             initialSelectedTabId = initialSelectedTabId,
             initialChapterQuery = initialChapterQuery,
             initialAnchor = initialAnchor,

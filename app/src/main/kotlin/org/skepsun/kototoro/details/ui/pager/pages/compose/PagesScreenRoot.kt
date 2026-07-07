@@ -33,6 +33,7 @@ fun PagesScreenRoot(
 	lifecycleOwner: LifecycleOwner,
 	viewModel: PagesViewModel,
 	detailsPaneState: DetailsPaneState? = null,
+	thumbnailAspectRatio: Float = 0.7f,
 ) {
 	val thumbnails by viewModel.thumbnails.collectAsStateWithLifecycle(initialValue = emptyList())
 	val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
@@ -74,6 +75,7 @@ fun PagesScreenRoot(
 		gridColumns = pagePreviewGridColumns(gridScale),
 		selectedItemIds = selectedIds,
 		fitPreview = fitPreview,
+		thumbnailAspectRatio = thumbnailAspectRatio,
 		emptyMessageResId = null,
 		isLoading = isLoading,
 		detailsPaneState = detailsPaneState,

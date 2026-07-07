@@ -325,6 +325,7 @@
     <string name="page_saved">頁面已儲存</string>
     <string name="read_mode">閱讀模式</string>
     <string name="grid_size">網格大小</string>
+    <string name="grid_aspect_ratio">網格比例</string>
     <string name="reader_settings">閱讀設定</string>
     <string name="vibration">震動</string>
     <string name="pages_animation">頁面動畫</string>

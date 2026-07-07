@@ -58,6 +58,10 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT = 0.7f
+private const val PAGE_THUMBNAIL_ASPECT_RATIO_MIN = 0.35f
+private const val PAGE_THUMBNAIL_ASPECT_RATIO_MAX = 1f
+
 private fun SharedPreferences.getSafeInt(key: String, defValue: Int): Int {
 	return try {
 		getInt(key, defValue)
@@ -220,6 +224,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var gridSizePages: Int
 		get() = prefs.getSafeInt(KEY_GRID_SIZE_PAGES, 100).coerceIn(50, 150)
 		set(value) = prefs.edit { putInt(KEY_GRID_SIZE_PAGES, value.coerceIn(50, 150)) }
+
+	var pageThumbnailAspectRatio: Float
+		get() = prefs.getSafeFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, PAGE_THUMBNAIL_ASPECT_RATIO_DEFAULT)
+			.coerceIn(PAGE_THUMBNAIL_ASPECT_RATIO_MIN, PAGE_THUMBNAIL_ASPECT_RATIO_MAX)
+		set(value) = prefs.edit {
+			putFloat(
+				KEY_PAGE_THUMBNAIL_ASPECT_RATIO,
+				value.coerceIn(PAGE_THUMBNAIL_ASPECT_RATIO_MIN, PAGE_THUMBNAIL_ASPECT_RATIO_MAX),
+			)
+		}
 
 	var isPageThumbnailsFitPreview: Boolean
 		get() = prefs.getBoolean(KEY_PAGE_THUMBNAILS_FIT_PREVIEW, false)
@@ -1812,6 +1826,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putInt(KEY_NAV_FLOATING_HEIGHT, navFloatingHeight)
 			putInt(KEY_GRID_SIZE, gridSize)
 			putInt(KEY_GRID_SIZE_PAGES, gridSizePages)
+			putFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, pageThumbnailAspectRatio)
 			putInt(KEY_PANORAMA_BLUR, panoramaCoverBlur)
 			putInt(KEY_PANORAMA_ANIMATION_SPEED, panoramaAnimationSpeed)
 			putInt(KEY_PANORAMA_EXTRA_HEIGHT, panoramaCoverExtraHeight)
@@ -2020,6 +2035,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_UPDATES_FEED_CLEAR = "updates_feed_clear"
 		const val KEY_GRID_SIZE = "grid_size"
 		const val KEY_GRID_SIZE_PAGES = "grid_size_pages"
+		const val KEY_PAGE_THUMBNAIL_ASPECT_RATIO = "page_thumbnail_aspect_ratio"
 		const val KEY_PAGE_THUMBNAILS_FIT_PREVIEW = "page_thumbnails_fit_preview"
 		const val KEY_RAIL_ANIMATION_INTENSITY = "rail_animation_intensity"
 		const val KEY_VERTICAL_LIST_RAIL_ANIMATION = "vertical_list_rail_animation"

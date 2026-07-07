@@ -41,12 +41,16 @@ import org.skepsun.kototoro.details.ui.pager.pages.PageThumbnailPlaceholder
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+private const val PageThumbnailAspectRatioMin = 0.35f
+private const val PageThumbnailAspectRatioMax = 1f
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PageThumbnailCard(
 	thumbnail: PageThumbnail,
 	isSelected: Boolean,
 	fitPreview: Boolean,
+	aspectRatio: Float,
 	onClick: () -> Unit,
 	onLongClick: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -54,7 +58,7 @@ fun PageThumbnailCard(
 	Card(
 		modifier = modifier
 			.fillMaxWidth()
-			.aspectRatio(0.7f)
+			.aspectRatio(aspectRatio)
 			.combinedClickable(
 				onClick = onClick,
 				onLongClick = onLongClick,
@@ -130,12 +134,13 @@ fun PageThumbnailCard(
 
 @Composable
 fun PageThumbnailPlaceholderCard(
+	aspectRatio: Float,
 	modifier: Modifier = Modifier,
 ) {
 	Card(
 		modifier = modifier
 			.fillMaxWidth()
-			.aspectRatio(0.7f),
+			.aspectRatio(aspectRatio),
 		shape = RoundedCornerShape(8.dp),
 		colors = CardDefaults.cardColors(
 			containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
@@ -164,6 +169,7 @@ fun PagesScreen(
 	gridColumns: Int,
 	selectedItemIds: Set<Long>,
 	fitPreview: Boolean = false,
+	thumbnailAspectRatio: Float = 0.7f,
 	emptyMessageResId: Int?,
 	isLoading: Boolean,
 	detailsPaneState: DetailsPaneState? = null,
@@ -198,6 +204,7 @@ fun PagesScreen(
             Modifier
         }
     }
+	val cardAspectRatio = thumbnailAspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
 	Box(modifier = Modifier.fillMaxSize()) {
 		if (isLoading) {
 			CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -289,13 +296,14 @@ fun PagesScreen(
                                 thumbnail = item,
                                 isSelected = selectedItemIds.contains(item.page.id),
                                 fitPreview = fitPreview,
+                                aspectRatio = cardAspectRatio,
                                 onClick = { onItemClick(item) },
                                 onLongClick = { onItemLongClick(item) },
                             )
                         }
 
                         is PageThumbnailPlaceholder -> {
-                            PageThumbnailPlaceholderCard()
+                            PageThumbnailPlaceholderCard(aspectRatio = cardAspectRatio)
                         }
 
                         is ListHeader -> {

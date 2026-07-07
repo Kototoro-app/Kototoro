@@ -256,6 +256,10 @@ private fun rememberDetailsBottomBarGlassPrefs() =
 private val DetailsTopPrimaryActionButtonSize = CompactTopBarPillHeight
 private val DetailsTopCompactActionButtonSize = CompactTopBarCompactButtonSize
 private val DetailsTopActionIconSize = CompactTopBarIconSize
+private const val PageThumbnailAspectRatioMin = 0.35f
+private const val PageThumbnailAspectRatioMax = 1f
+private const val PageThumbnailHeightRatioMin = 1f
+private const val PageThumbnailHeightRatioMax = 1f / PageThumbnailAspectRatioMin
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -276,6 +280,9 @@ fun DetailsScreen(
     val translationUiState by viewModel.translationUiState.collectAsStateWithLifecycle()
     val chaptersPaneControlsUiState by viewModel.chaptersPaneControlsUiState.collectAsStateWithLifecycle()
     val pagesGridScale by pagesViewModel.gridScale.collectAsStateWithLifecycle(initialValue = settings.gridSizePages / 100f)
+    val pageThumbnailAspectRatio by settings.observeAsState(AppSettings.KEY_PAGE_THUMBNAIL_ASPECT_RATIO) {
+        pageThumbnailAspectRatio
+    }
     val sourceBindingUiState by viewModel.sourceBindingUiState.collectAsStateWithLifecycle()
     val detailsSupplementUiState by viewModel.detailsSupplementUiState.collectAsStateWithLifecycle()
     val metadataSearchUiState by viewModel.metadataSearchUiState.collectAsStateWithLifecycle()
@@ -437,12 +444,14 @@ fun DetailsScreen(
         screenHeightDp = configuration.screenHeightDp,
         collapsedHeight = compactPaneCollapsedHeight,
         initialPageGridSizeValue = settings.gridSizePages.toFloat(),
+        initialPageThumbnailAspectRatio = settings.pageThumbnailAspectRatio,
         initialSelectedTabId = settings.defaultDetailsTab,
         initialChapterQuery = "",
     )
     val compactPaneHeight = detailsPaneState.paneHeight
     val compactPaneAnchor = detailsPaneState.anchor
     val pageGridSizeValue = detailsPaneState.pageGridSizeValue
+    val pageThumbnailAspectRatioValue = detailsPaneState.pageThumbnailAspectRatio
     val isPageThumbnailsFitPreview by settings.observeAsState(AppSettings.KEY_PAGE_THUMBNAILS_FIT_PREVIEW) {
         isPageThumbnailsFitPreview
     }
@@ -456,6 +465,11 @@ fun DetailsScreen(
     }
     LaunchedEffect(pagesGridScale) {
         detailsPaneState.syncPageGridSizeValue((pagesGridScale * 100f).coerceIn(50f, 150f))
+    }
+    LaunchedEffect(pageThumbnailAspectRatio) {
+        detailsPaneState.syncPageThumbnailAspectRatio(
+            pageThumbnailAspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax),
+        )
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val toolbarGapPx = with(density) { 12.dp.toPx() }
@@ -665,6 +679,13 @@ fun DetailsScreen(
         { value ->
             detailsPaneState.updatePageGridSizeValue(value) { updatedValue ->
                 settings.gridSizePages = updatedValue.toInt()
+            }
+        }
+    }
+    val updatePageThumbnailAspectRatio: (Float) -> Unit = remember(detailsPaneState, settings) {
+        { value ->
+            detailsPaneState.updatePageThumbnailAspectRatio(value) { updatedValue ->
+                settings.pageThumbnailAspectRatio = updatedValue
             }
         }
     }
@@ -1214,6 +1235,7 @@ fun DetailsScreen(
                                     isDownloadedOnly = isDownloadedOnly,
                                     isDownloadedFilterVisible = mangaDetails?.local != null,
                                     pageGridSizeValue = pageGridSizeValue,
+                                    pageThumbnailAspectRatio = pageThumbnailAspectRatioValue,
                                     isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                                     onChapterQueryChange = updateChapterQuery,
                                     onChapterSearchToggle = toggleChapterSearch,
@@ -1223,6 +1245,7 @@ fun DetailsScreen(
                                     onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                                     onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                                     onPageGridSizeChange = updatePageGridSize,
+                                    onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                                     onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                                     showCollapsedHandle = false,
                                     onSelectedTabIdChange = persistSelectedPaneTab,
@@ -1387,6 +1410,7 @@ fun DetailsScreen(
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = mangaDetails?.local != null,
                             pageGridSizeValue = pageGridSizeValue,
+                            pageThumbnailAspectRatio = pageThumbnailAspectRatioValue,
                             isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                             onChapterQueryChange = updateChapterQuery,
                             onChapterSearchToggle = toggleChapterSearch,
@@ -1396,6 +1420,7 @@ fun DetailsScreen(
                             onToggleMergeRepeatedChapters = { viewModel.setMergeRepeatedChapters(!isMergeRepeatedChapters) },
                             onToggleDownloadedOnly = { viewModel.isDownloadedOnly.value = !isDownloadedOnly },
                             onPageGridSizeChange = updatePageGridSize,
+                            onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                             onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                             showCollapsedHandle = true,
                             onSelectedTabIdChange = persistSelectedPaneTab,
@@ -2589,6 +2614,7 @@ private fun DetailsPaneContent(
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
+    pageThumbnailAspectRatio: Float,
     isPageThumbnailsFitPreview: Boolean,
     onChapterQueryChange: (String) -> Unit,
     onChapterSearchToggle: () -> Unit,
@@ -2598,6 +2624,7 @@ private fun DetailsPaneContent(
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
+    onPageThumbnailAspectRatioChange: (Float) -> Unit,
     onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
     onSelectedTabIdChange: (Int) -> Unit,
@@ -2661,6 +2688,7 @@ private fun DetailsPaneContent(
                             isDownloadedOnly = isDownloadedOnly,
                             isDownloadedFilterVisible = isDownloadedFilterVisible,
                             pageGridSizeValue = pageGridSizeValue,
+                            pageThumbnailAspectRatio = pageThumbnailAspectRatio,
                             isPageThumbnailsFitPreview = isPageThumbnailsFitPreview,
                             onChapterSearchToggle = onChapterSearchToggle,
                             onToggleChaptersReversed = onToggleChaptersReversed,
@@ -2669,6 +2697,7 @@ private fun DetailsPaneContent(
                             onToggleMergeRepeatedChapters = onToggleMergeRepeatedChapters,
                             onToggleDownloadedOnly = onToggleDownloadedOnly,
                             onPageGridSizeChange = onPageGridSizeChange,
+                            onPageThumbnailAspectRatioChange = onPageThumbnailAspectRatioChange,
                             onTogglePageThumbnailsFitPreview = onTogglePageThumbnailsFitPreview,
                             showCollapsedHandle = showCollapsedHandle,
                             handleTopInset = statusBarTopPadding,
@@ -2701,6 +2730,7 @@ private fun DetailsPaneContent(
                                 isChapterListScrollEnabled = true,
                                 handleSelectionBackPressInternally = !showCollapsedHandle,
                                 detailsPaneState = if (showCollapsedHandle) detailsPaneState else null,
+                                pageThumbnailAspectRatio = pageThumbnailAspectRatio,
                                 chapterQuery = chapterQuery,
                                 isChapterSearchVisible = isChapterSearchVisible,
                                 onChapterQueryChange = onChapterQueryChange,
@@ -2734,6 +2764,7 @@ private fun DetailsPaneActionsRow(
     isDownloadedOnly: Boolean,
     isDownloadedFilterVisible: Boolean,
     pageGridSizeValue: Float,
+    pageThumbnailAspectRatio: Float,
     isPageThumbnailsFitPreview: Boolean,
     onChapterSearchToggle: () -> Unit,
     onToggleChaptersReversed: () -> Unit,
@@ -2742,6 +2773,7 @@ private fun DetailsPaneActionsRow(
     onToggleMergeRepeatedChapters: () -> Unit,
     onToggleDownloadedOnly: () -> Unit,
     onPageGridSizeChange: (Float) -> Unit,
+    onPageThumbnailAspectRatioChange: (Float) -> Unit,
     onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
     handleTopInset: androidx.compose.ui.unit.Dp,
@@ -2818,8 +2850,10 @@ private fun DetailsPaneActionsRow(
 
             DetailsPaneTopBarMode.GridSizeControls -> {
                 PageGridSizeControlsRow(
-                    value = pageGridSizeValue,
-                    onValueChange = onPageGridSizeChange,
+                    sizeValue = pageGridSizeValue,
+                    aspectRatio = pageThumbnailAspectRatio,
+                    onSizeValueChange = onPageGridSizeChange,
+                    onAspectRatioChange = onPageThumbnailAspectRatioChange,
                     onBackClick = detailsPaneState::hideGridSizeControls,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -3075,11 +3109,14 @@ private fun ChapterSelectionTopBar(
 
 @Composable
 private fun PageGridSizeControlsRow(
-    value: Float,
-    onValueChange: (Float) -> Unit,
+    sizeValue: Float,
+    aspectRatio: Float,
+    onSizeValueChange: (Float) -> Unit,
+    onAspectRatioChange: (Float) -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val heightRatio = 1f / aspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -3090,13 +3127,49 @@ private fun PageGridSizeControlsRow(
                 contentDescription = stringResource(R.string.back),
             )
         }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = 50f..150f,
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            LabeledGridSlider(
+                label = stringResource(R.string.grid_size),
+                value = sizeValue,
+                onValueChange = onSizeValueChange,
+                valueRange = 50f..150f,
+            )
+            LabeledGridSlider(
+                label = stringResource(R.string.grid_aspect_ratio),
+                value = heightRatio,
+                onValueChange = { heightRatioValue ->
+                    onAspectRatioChange(1f / heightRatioValue.coerceIn(PageThumbnailHeightRatioMin, PageThumbnailHeightRatioMax))
+                },
+                valueRange = PageThumbnailHeightRatioMin..PageThumbnailHeightRatioMax,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LabeledGridSlider(
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

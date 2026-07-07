@@ -1003,6 +1003,7 @@
     <string name="grayscale">灰度</string>
     <string name="grid">网格</string>
     <string name="grid_size">网格大小</string>
+    <string name="grid_aspect_ratio">网格比例</string>
     <string name="group">分组</string>
     <string name="group_sources_by_language">按语言分组来源</string>
     <string name="group_sources_by_language_summary">将内容源按其语言区域进行分组显示，而不是平铺展示。</string>
