@@ -16,6 +16,7 @@ import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.filter.data.SavedFiltersRepository
 import org.skepsun.kototoro.reader.data.TapGridSettings
 import java.io.File
@@ -114,6 +115,7 @@ class AppBackupAgent : BackupAgent() {
 						context = applicationContext,
 						contentHttpClient = okhttp3.OkHttpClient(),
 					),
+					sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
 				),
 				savedFiltersRepository = SavedFiltersRepository(
 					context = applicationContext,
@@ -211,6 +213,7 @@ class AppBackupAgent : BackupAgent() {
 							context = applicationContext,
 							contentHttpClient = okhttp3.OkHttpClient(),
 						),
+						sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
 					),
 					savedFiltersRepository = SavedFiltersRepository(
 						context = applicationContext,

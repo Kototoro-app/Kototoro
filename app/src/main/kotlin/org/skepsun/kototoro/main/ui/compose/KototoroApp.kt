@@ -1386,6 +1386,7 @@ private fun MainSelectionTopChrome(
                 canUnpin = effectiveTopBarOverrideState.canUnpin,
                 canDisable = effectiveTopBarOverrideState.canDisable,
                 canDelete = effectiveTopBarOverrideState.canDelete,
+                markEmptyTitleRes = effectiveTopBarOverrideState.markEmptyTitleRes,
                 onClearSelection = effectiveTopBarOverrideState.onClearSelection,
                 onSettings = effectiveTopBarOverrideState.onSettings,
                 onDisable = effectiveTopBarOverrideState.onDisable,
@@ -1393,6 +1394,7 @@ private fun MainSelectionTopChrome(
                 onShortcut = effectiveTopBarOverrideState.onShortcut,
                 onPin = effectiveTopBarOverrideState.onPin,
                 onUnpin = effectiveTopBarOverrideState.onUnpin,
+                onToggleEmptyAvailability = effectiveTopBarOverrideState.onToggleEmptyAvailability,
                 modifier = modifier,
             )
         }

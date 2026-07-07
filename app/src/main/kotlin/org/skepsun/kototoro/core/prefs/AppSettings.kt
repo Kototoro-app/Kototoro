@@ -1023,6 +1023,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_SOURCES_GRID, true)
 		set(value) = prefs.edit { putBoolean(KEY_SOURCES_GRID, value) }
 
+	var isEmptySourcesHiddenInExplore: Boolean
+		get() = prefs.getBoolean(KEY_EXPLORE_HIDE_EMPTY_SOURCES, false)
+		set(value) = prefs.edit { putBoolean(KEY_EXPLORE_HIDE_EMPTY_SOURCES, value) }
+
 	var isShowSourceOnCards: Boolean
 		get() = prefs.getBoolean(KEY_SHOW_SOURCE_ON_CARDS, false)
 		set(value) {
@@ -1976,6 +1980,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_HIDDEN_SOURCE_TAG = "hidden_source_tag"
 		const val KEY_ACTIVE_SOURCE_PRESET_ID = "active_source_preset_id"
 		const val KEY_SOURCES_GROUPED_BY_LANGUAGE = "sources_grouped_by_language"
+		const val KEY_EXPLORE_HIDE_EMPTY_SOURCES = "explore_hide_empty_sources"
 
 		const val TRACK_HISTORY = "history"
 		const val TRACK_FAVOURITES = "favourites"

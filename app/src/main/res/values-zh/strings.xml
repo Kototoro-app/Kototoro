@@ -1010,6 +1010,11 @@
     <string name="handle_links_summary">处理来自外部程序的漫画链接（如 Web 浏览器）， 可能需要在程序的系统设置中手动启用</string>
     <string name="hide">隐藏</string>
     <string name="hide_empty_sources">隐藏空源</string>
+    <string name="source_mark_empty">标记为空</string>
+    <string name="source_mark_available">标记为可用</string>
+    <string name="source_empty_badge">空源</string>
+    <string name="source_empty_badge_short">空</string>
+    <string name="show_empty_sources">显示空源</string>
     <string name="hide_from_main_screen">从主页面中隐藏</string>
     <string name="hide_search_filter">隐藏搜索栏过滤器</string>
     <string name="hide_search_filter_summary">在主搜索栏中隐藏内容类型和来源类型的筛选图标。</string>

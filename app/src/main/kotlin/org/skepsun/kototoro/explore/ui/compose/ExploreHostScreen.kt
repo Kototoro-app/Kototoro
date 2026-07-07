@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.isLocal
@@ -428,6 +429,11 @@ fun KototoroExploreHostRoute(
                 !unwrapped.isLocal && unwrapped !is ExternalContentSource
             }
             val canDelete = selectedSources.isNotEmpty() && selectedSources.all { it.mangaSource is ExternalContentSource }
+            val markEmptyTitleRes = if (selectedSources.all { it.availability == ContentSourceAvailability.EMPTY }) {
+                R.string.source_mark_available
+            } else {
+                R.string.source_mark_empty
+            }
 
             onSourceSelectionTopBarChanged(
                 ExploreSourceSelectionTopBarState(
@@ -437,6 +443,7 @@ fun KototoroExploreHostRoute(
                     canUnpin = canUnpin,
                     canDisable = canDisable,
                     canDelete = canDelete,
+                    markEmptyTitleRes = markEmptyTitleRes,
                     onClearSelection = { selectedSourceIds = emptySet() },
                     onSettings = {
                         selectedSources.singleOrNull()?.let { appRouter.openSourceSettings(it) }
@@ -468,6 +475,10 @@ fun KototoroExploreHostRoute(
                     },
                     onUnpin = {
                         exploreViewModel.setSourcesPinned(selectedSources, isPinned = false)
+                        selectedSourceIds = emptySet()
+                    },
+                    onToggleEmptyAvailability = {
+                        exploreViewModel.toggleEmptySourceAvailability(selectedSources)
                         selectedSourceIds = emptySet()
                     },
                 ),
@@ -1495,10 +1506,14 @@ private fun SourceQuickAccessCard(
                     throttleNetworkLoad = true,
                     contentDescription = title,
                 )
+                SourceAvailabilityBadge(
+                    availability = source.source.availability,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
                 if (source.source.isPinned) {
                     Surface(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
+                            .align(Alignment.BottomEnd)
                             .padding(4.dp),
                         shape = RoundedCornerShape(999.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
@@ -1557,10 +1572,14 @@ private fun SourceQuickAccessCard(
                     throttleNetworkLoad = true,
                     contentDescription = title,
                 )
+                SourceAvailabilityBadge(
+                    availability = source.source.availability,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
                 if (source.source.isPinned) {
                     Surface(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
+                            .align(Alignment.BottomEnd)
                             .padding(3.dp),
                         shape = RoundedCornerShape(999.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
@@ -1607,6 +1626,29 @@ private fun SourceQuickAccessCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SourceAvailabilityBadge(
+    availability: ContentSourceAvailability,
+    modifier: Modifier = Modifier,
+) {
+    if (availability != ContentSourceAvailability.EMPTY) {
+        return
+    }
+    Surface(
+        modifier = modifier.padding(3.dp),
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.error,
+        tonalElevation = 1.dp,
+    ) {
+        Text(
+            text = stringResource(R.string.source_empty_badge_short),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onError,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+        )
     }
 }
 

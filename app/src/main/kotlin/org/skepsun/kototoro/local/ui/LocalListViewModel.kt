@@ -35,6 +35,7 @@ import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.Content
@@ -56,6 +57,7 @@ class LocalListViewModel @Inject constructor(
 	@param:LocalStorageChanges private val localStorageChanges: SharedFlow<LocalContent?>,
 	private val localStorageManager: LocalStorageManager,
 	sourcesRepository: ContentSourcesRepository,
+	sourceAvailabilityRepository: SourceAvailabilityRepository,
 	mangaDataRepository: ContentDataRepository,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 ) : RemoteListViewModel(
@@ -66,6 +68,7 @@ class LocalListViewModel @Inject constructor(
 	mangaListMapper = mangaListMapper,
 	exploreRepository = exploreRepository,
 	sourcesRepository = sourcesRepository,
+	sourceAvailabilityRepository = sourceAvailabilityRepository,
 	mangaDataRepository = mangaDataRepository,
 	localStorageChanges = localStorageChanges,
 ), SharedPreferences.OnSharedPreferenceChangeListener, QuickFilterListener {

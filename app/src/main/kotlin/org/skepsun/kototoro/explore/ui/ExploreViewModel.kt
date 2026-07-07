@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.os.AppShortcutManager
@@ -28,6 +29,7 @@ import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.combine
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.domain.ExploreRepository
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.explore.ui.model.ExploreButtons
@@ -50,6 +52,7 @@ class ExploreViewModel @Inject constructor(
 	private val sourceGroupManager: SourceGroupManager,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
+	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 ) : BaseViewModel() {
 
 	val isGrid = settings.observeAsStateFlow(
@@ -62,6 +65,12 @@ class ExploreViewModel @Inject constructor(
 		scope = viewModelScope + Dispatchers.IO,
 		key = AppSettings.KEY_SOURCES_ENABLED_ALL,
 		valueProducer = { isAllSourcesEnabled },
+	)
+
+	val isEmptySourcesHidden = settings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.IO,
+		key = AppSettings.KEY_EXPLORE_HIDE_EMPTY_SOURCES,
+		valueProducer = { isEmptySourcesHiddenInExplore },
 	)
 
 	private val isSuggestionsEnabled = settings.observeAsFlow(
@@ -157,6 +166,26 @@ class ExploreViewModel @Inject constructor(
 			}
 			onActionDone.call(ReversibleAction(message, null))
 		}
+	}
+
+	fun toggleEmptySourceAvailability(sources: Collection<ContentSourceInfo>) {
+		if (sources.isEmpty()) {
+			return
+		}
+		val target = if (sources.all { it.availability == ContentSourceAvailability.EMPTY }) {
+			ContentSourceAvailability.AVAILABLE
+		} else {
+			ContentSourceAvailability.EMPTY
+		}
+		launchJob(Dispatchers.Default) {
+			sources.forEach { source ->
+				sourceAvailabilityRepository.setAvailability(source.mangaSource, target)
+			}
+		}
+	}
+
+	fun setEmptySourcesHidden(isHidden: Boolean) {
+		settings.isEmptySourcesHiddenInExplore = isHidden
 	}
 
 	fun respondSuggestionTip(isAccepted: Boolean) {

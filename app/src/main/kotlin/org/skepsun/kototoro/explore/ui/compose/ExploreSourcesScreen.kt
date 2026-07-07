@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.unwrap
@@ -210,6 +211,11 @@ fun KototoroExploreSourcesScreen(
                 !unwrapped.isLocal && unwrapped !is ExternalContentSource 
             }
             val canDelete = selectedSources.all { it.mangaSource is ExternalContentSource }
+            val markEmptyTitleRes = if (selectedSources.all { it.availability == ContentSourceAvailability.EMPTY }) {
+                R.string.source_mark_available
+            } else {
+                R.string.source_mark_empty
+            }
 
             ExploreSelectionTopBar(
                 selectedCount = composeSelectionIds.size,
@@ -218,6 +224,7 @@ fun KototoroExploreSourcesScreen(
                 canUnpin = canUnpin,
                 canDisable = canDisable,
                 canDelete = canDelete,
+                markEmptyTitleRes = markEmptyTitleRes,
                 onClearSelection = { composeSelectionIds = longSetOf() },
                 onSettings = {
                     selectedSources.singleOrNull()?.let { appRouter.openSourceSettings(it) }
@@ -250,7 +257,11 @@ fun KototoroExploreSourcesScreen(
                 onUnpin = {
                     viewModel.setSourcesPinned(selectedSources, isPinned = false)
                     composeSelectionIds = longSetOf()
-                }
+                },
+                onToggleEmptyAvailability = {
+                    viewModel.toggleEmptySourceAvailability(selectedSources)
+                    composeSelectionIds = longSetOf()
+                },
             )
         }
     }
@@ -265,6 +276,7 @@ fun ExploreSelectionTopBar(
     canUnpin: Boolean,
     canDisable: Boolean,
     canDelete: Boolean,
+    markEmptyTitleRes: Int,
     onClearSelection: () -> Unit,
     onSettings: () -> Unit,
     onDisable: () -> Unit,
@@ -272,6 +284,7 @@ fun ExploreSelectionTopBar(
     onShortcut: () -> Unit,
     onPin: () -> Unit,
     onUnpin: () -> Unit,
+    onToggleEmptyAvailability: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     TopAppBar(
@@ -309,6 +322,12 @@ fun ExploreSelectionTopBar(
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete")
                 }
+            }
+            IconButton(onClick = onToggleEmptyAvailability) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_source_empty),
+                    contentDescription = stringResource(markEmptyTitleRes),
+                )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -366,10 +385,15 @@ fun KototoroSourceCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        painter = painterResource(id = item.source.iconResForUi()),
-                        contentDescription = title,
-                        modifier = Modifier.size(30.dp),
+                    ContentSourceIconWithAvailabilityBadge(
+                        source = item,
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = item.source.iconResForUi()),
+                                contentDescription = title,
+                                modifier = Modifier.size(30.dp),
+                            )
+                        },
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -405,6 +429,10 @@ fun KototoroSourceCard(
                     modifier = Modifier.size(28.dp),
                     contentDescription = title,
                 )
+                SourceAvailabilityBadge(
+                    availability = item.source.availability,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(
@@ -429,5 +457,42 @@ fun KototoroSourceCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ContentSourceIconWithAvailabilityBadge(
+    source: ContentSourceItem,
+    icon: @Composable BoxScope.() -> Unit,
+) {
+    Box(contentAlignment = Alignment.Center) {
+        icon()
+        SourceAvailabilityBadge(
+            availability = source.source.availability,
+            modifier = Modifier.align(Alignment.TopEnd),
+        )
+    }
+}
+
+@Composable
+private fun SourceAvailabilityBadge(
+    availability: ContentSourceAvailability,
+    modifier: Modifier = Modifier,
+) {
+    if (availability != ContentSourceAvailability.EMPTY) {
+        return
+    }
+    Surface(
+        modifier = modifier.padding(2.dp),
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.error,
+        tonalElevation = 1.dp,
+    ) {
+        Text(
+            text = stringResource(R.string.source_empty_badge_short),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onError,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+        )
     }
 }

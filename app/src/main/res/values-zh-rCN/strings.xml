@@ -2381,6 +2381,11 @@
     <string name="fraction_pattern">%1$d/%2$d</string>
     <string name="frequency_every_6_hours">每 6 小时</string>
     <string name="hide_empty_sources">隐藏空源</string>
+    <string name="source_mark_empty">标记为空</string>
+    <string name="source_mark_available">标记为可用</string>
+    <string name="source_empty_badge">空源</string>
+    <string name="source_empty_badge_short">空</string>
+    <string name="show_empty_sources">显示空源</string>
     <string name="home_hero_local_subtitle">从上次停止的地方继续，或返回最近浏览的内容。</string>
     <string name="home_recent_searches">最近搜索</string>
     <string name="image_caches">图像与阅读器缓存</string>

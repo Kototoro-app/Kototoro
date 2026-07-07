@@ -9,6 +9,7 @@ data class ExploreSourceSelectionTopBarState(
     val canUnpin: Boolean,
     val canDisable: Boolean,
     val canDelete: Boolean,
+    val markEmptyTitleRes: Int,
     val onClearSelection: () -> Unit,
     val onSettings: () -> Unit,
     val onDisable: () -> Unit,
@@ -16,4 +17,5 @@ data class ExploreSourceSelectionTopBarState(
     val onShortcut: () -> Unit,
     val onPin: () -> Unit,
     val onUnpin: () -> Unit,
+    val onToggleEmptyAvailability: () -> Unit,
 ) : TopBarOverrideState

@@ -31,6 +31,7 @@ import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.jsonsource.JsonSourceListSource
 import org.skepsun.kototoro.core.model.ContentSourceInfo
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.unwrap
@@ -72,6 +73,7 @@ class ContentSourcesRepository @Inject constructor(
 	private val aniyomiExtensionManager: org.skepsun.kototoro.aniyomi.AniyomiExtensionManager,
 	private val ireaderExtensionManager: org.skepsun.kototoro.ireader.IReaderExtensionManager,
 	private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
+	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 ) {
 
 	private val dao get() = db.getSourcesDao()
@@ -708,6 +710,13 @@ class ContentSourcesRepository @Inject constructor(
 			}
 			canonicalizeSourceInfosByName(list)
 		}
+		.combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
+			sources.map { info ->
+				info.copy(
+					availability = availability[info.mangaSource.name] ?: ContentSourceAvailability.UNKNOWN,
+				)
+			}
+		}
 
 	/**
 	 * 对齐 legado-with-MD3：浏览(发现)仅展示具备 exploreUrl 的源；仅提供 searchUrl 的源不应出现在浏览页。
@@ -717,8 +726,15 @@ class ContentSourcesRepository @Inject constructor(
 	 * - 搜索仍使用 `getEnabledSources()`，不受影响。
 	 */
 	fun observeEnabledBrowseSources(): Flow<List<ContentSourceInfo>> {
-		return observeEnabledSources().mapLatest { sources ->
-			sources
+		return combine(
+			observeEnabledSources(),
+			settings.observeAsFlow(AppSettings.KEY_EXPLORE_HIDE_EMPTY_SOURCES) { isEmptySourcesHiddenInExplore },
+		) { sources, hideEmptySources ->
+			if (hideEmptySources) {
+				sources.filterNot { it.availability == ContentSourceAvailability.EMPTY }
+			} else {
+				sources
+			}
 		}
 	}
 	

@@ -12,6 +12,6 @@ data class ContentSourceItem(
 	val id: Long = source.name.longHashCode()
 
 	override fun areItemsTheSame(other: ListModel): Boolean {
-		return other is ContentSourceItem && other.source == source
+		return other is ContentSourceItem && other.source.name == source.name
 	}
 }

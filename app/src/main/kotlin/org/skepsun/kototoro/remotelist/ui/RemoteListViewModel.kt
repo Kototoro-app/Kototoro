@@ -23,6 +23,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 import org.skepsun.kototoro.core.model.distinctById
+import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -32,6 +33,7 @@ import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.explore.domain.ExploreRepository
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.list.domain.ContentListMapper
@@ -62,6 +64,7 @@ open class RemoteListViewModel @Inject constructor(
 	protected val mangaListMapper: ContentListMapper,
 	private val exploreRepository: ExploreRepository,
 	sourcesRepository: ContentSourcesRepository,
+	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 	mangaDataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 ) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), FilterCoordinator.Owner {
@@ -206,6 +209,13 @@ open class RemoteListViewModel @Inject constructor(
 						order = filterState.sortOrder,
 						filter = filterState.listFilter,
 					)
+					if (shouldUpdateSourceAvailability(append)) {
+						if (list.isEmpty()) {
+							sourceAvailabilityRepository.markEmpty(source)
+						} else {
+							sourceAvailabilityRepository.markAvailable(source)
+						}
+					}
 					val prevList = mangaList.value.orEmpty()
 					Log.d(
 						RemoteListPaginationLogTag,
@@ -245,12 +255,19 @@ open class RemoteListViewModel @Inject constructor(
 					)
 					e.printStackTraceDebug()
 					listError.value = e
+				if (shouldUpdateSourceAvailability(append)) {
+					sourceAvailabilityRepository.markEmpty(source)
+				}
 				if (!mangaList.value.isNullOrEmpty()) {
 					errorEvent.call(e)
 				}
 				hasNextPage.value = false
 			}
 		}.also { loadingJob = it }
+	}
+
+	private fun shouldUpdateSourceAvailability(append: Boolean): Boolean {
+		return !append && !filterCoordinator.isFilterApplied && !source.isLocal
 	}
 
 	protected open fun createEmptyState(canResetFilter: Boolean) = EmptyState(

@@ -1256,6 +1256,11 @@
     <string name="handle_links">處理鏈接</string>
     <string name="handle_links_summary">處理來自外部程序的漫畫鏈接（如 Web 瀏覽器）， 可能需要在程序的系統設置中手動啓用</string>
     <string name="hide_empty_sources">隱藏空源</string>
+    <string name="source_mark_empty">標記為空</string>
+    <string name="source_mark_available">標記為可用</string>
+    <string name="source_empty_badge">空源</string>
+    <string name="source_empty_badge_short">空</string>
+    <string name="show_empty_sources">顯示空源</string>
     <string name="hide_from_main_screen">從主頁面中隱藏</string>
     <string name="hide_search_filter">隱藏搜索欄過濾器</string>
     <string name="hide_search_filter_summary">在主搜索欄中隱藏內容類型和來源類型的篩選圖標。</string>

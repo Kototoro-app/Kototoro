@@ -322,6 +322,7 @@ fun AppNavGraph(
                     mainNavigator = mainNavigator,
                     ownerRoute = TOP_BAR_OWNER_DISCOVER,
                     onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                     navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
             }
@@ -393,6 +394,7 @@ fun AppNavGraph(
                     mainNavigator = mainNavigator,
                     ownerRoute = TOP_BAR_OWNER_EXPLORE,
                     onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                     navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                 )
             }
@@ -767,6 +769,7 @@ private fun MainShellTopLevelEntryContent(
             mainNavigator = mainNavigator,
             ownerRoute = TOP_BAR_OWNER_DISCOVER,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
             navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
         )
         org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey -> HistoryTopLevelRouteContent(
@@ -803,6 +806,7 @@ private fun MainShellTopLevelEntryContent(
             mainNavigator = mainNavigator,
             ownerRoute = TOP_BAR_OWNER_EXPLORE,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
             navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
         )
         org.skepsun.kototoro.main.ui.navigation3.FeedNavKey -> FeedTopLevelRouteContent(
@@ -1043,11 +1047,38 @@ internal fun BrowseTopLevelRouteContent(
     mainNavigator: MainNavigator,
     ownerRoute: String,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
+    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
     val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
+    val isEmptySourcesHidden by exploreViewModel.isEmptySourcesHidden.collectAsStateWithLifecycle()
+
+    DisposableEffect(ownerRoute, exploreViewModel, isEmptySourcesHidden) {
+        onContextualMenuActionsChanged(
+            RouteScopedTopBarMenuActions(
+                ownerRoute,
+                listOf(
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.manage_sources) {
+                        appRouter.openManageSources()
+                    },
+                    KototoroTopBarMenuAction(
+                        if (isEmptySourcesHidden) {
+                            org.skepsun.kototoro.R.string.show_empty_sources
+                        } else {
+                            org.skepsun.kototoro.R.string.hide_empty_sources
+                        },
+                    ) {
+                        exploreViewModel.setEmptySourcesHidden(!isEmptySourcesHidden)
+                    },
+                ),
+            ),
+        )
+        onDispose {
+            onContextualMenuActionsChanged(RouteScopedTopBarMenuActions(ownerRoute, emptyList()))
+        }
+    }
 
     DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterViewController.Callback {
