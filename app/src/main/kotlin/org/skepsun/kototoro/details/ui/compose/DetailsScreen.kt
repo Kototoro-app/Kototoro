@@ -478,6 +478,7 @@ fun DetailsScreen(
     var infoCardTopPx by remember { mutableFloatStateOf(Float.NaN) }
     var infoCardMidPx by remember { mutableFloatStateOf(Float.NaN) }
     var initialInfoCardTopPx by remember { mutableFloatStateOf(Float.NaN) }
+    var initialInfoCardMidPx by remember { mutableFloatStateOf(Float.NaN) }
 
     LaunchedEffect(availableTabIds) {
         detailsPaneState.syncSelectedTabs(
@@ -540,10 +541,12 @@ fun DetailsScreen(
     }
     val syncInfoCardBounds: (Float, Float) -> Unit = remember {
         { top, bottom ->
+            val midpoint = (top + bottom) / 2f
             infoCardTopPx = top
-            infoCardMidPx = (top + bottom) / 2f
+            infoCardMidPx = midpoint
             if (top.isFinite() && (!initialInfoCardTopPx.isFinite() || top > initialInfoCardTopPx)) {
                 initialInfoCardTopPx = top
+                initialInfoCardMidPx = midpoint
             }
         }
     }
@@ -795,23 +798,40 @@ fun DetailsScreen(
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
     val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val shouldLimitPanoramaToInfoCardMidpoint = panoramaPrefs.limitToInfoCardMidpoint && infoCardMidPx.isFinite()
-    val panoramaFullOpacityAtY = if (shouldLimitPanoramaToInfoCardMidpoint) {
+    val effectivePanoramaInfoCardMidPx = if (
+        panoramaPrefs.isScrollLinkedEnabled &&
+        initialInfoCardMidPx.isFinite()
+    ) {
+        initialInfoCardMidPx
+    } else {
         infoCardMidPx
+    }
+    val effectivePanoramaInfoCardTopPx = if (
+        panoramaPrefs.isScrollLinkedEnabled &&
+        initialInfoCardTopPx.isFinite()
+    ) {
+        initialInfoCardTopPx
+    } else {
+        infoCardTopPx
+    }
+    val shouldLimitPanoramaToInfoCardMidpoint =
+        panoramaPrefs.limitToInfoCardMidpoint && effectivePanoramaInfoCardMidPx.isFinite()
+    val panoramaFullOpacityAtY = if (shouldLimitPanoramaToInfoCardMidpoint) {
+        effectivePanoramaInfoCardMidPx
     } else {
         null
     }
     val panoramaFullOpacityFadeDistancePx = if (
         shouldLimitPanoramaToInfoCardMidpoint &&
-        infoCardTopPx.isFinite() &&
-        infoCardMidPx.isFinite()
+        effectivePanoramaInfoCardTopPx.isFinite() &&
+        effectivePanoramaInfoCardMidPx.isFinite()
     ) {
-        (infoCardMidPx - infoCardTopPx).coerceAtLeast(with(density) { 48.dp.toPx() })
+        (effectivePanoramaInfoCardMidPx - effectivePanoramaInfoCardTopPx).coerceAtLeast(with(density) { 48.dp.toPx() })
     } else {
         0f
     }
     val panoramaMaxHeightPx = if (shouldLimitPanoramaToInfoCardMidpoint) {
-        infoCardMidPx
+        effectivePanoramaInfoCardMidPx
     } else {
         null
     }

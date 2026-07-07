@@ -215,16 +215,28 @@ fun AnimatedPanoramaBackdrop(
     val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
     var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
     val boundedMaxHeightPx = maxHeightPx?.takeIf { it.isFinite() }
+    val scrollLinkedModifier = if (scrollLinkedTranslationYPx.isFinite() && scrollLinkedTranslationYPx != 0f) {
+        Modifier.graphicsLayer {
+            translationY = scrollLinkedTranslationYPx
+        }
+    } else {
+        Modifier
+    }
     val backdropBoundsModifier = if (boundedMaxHeightPx != null) {
         modifier
+            .then(scrollLinkedModifier)
             .fillMaxWidth()
             .height(with(density) { boundedMaxHeightPx.coerceAtLeast(1f).toDp() })
             .clipToBounds()
     } else {
-        modifier.fillMaxSize()
+        modifier
+            .then(scrollLinkedModifier)
+            .fillMaxSize()
     }
     val scrimModifier = if (fullOpacityAtY != null && fullOpacityAtY.isFinite()) {
-        modifier.fillMaxSize()
+        modifier
+            .then(scrollLinkedModifier)
+            .fillMaxSize()
     } else {
         backdropBoundsModifier
     }
@@ -244,7 +256,6 @@ fun AnimatedPanoramaBackdrop(
             scaleX = backgroundScale
             scaleY = backgroundScale
             translationX = backgroundTranslationXState?.value ?: 0f
-            translationY = scrollLinkedTranslationYPx
             alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
         }
 
