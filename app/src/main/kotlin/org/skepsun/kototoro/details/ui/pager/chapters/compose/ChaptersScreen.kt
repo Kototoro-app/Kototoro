@@ -70,12 +70,21 @@ fun ChaptersScreen(
 ) {
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
+    val itemPositionKeys = remember(items) {
+        items.map { item ->
+            when (item) {
+                is ChapterListItem -> "chapter_${item.chapter.id}_${item.chapter.url}"
+                is CollapsibleListHeader -> "header_${item.groupId}"
+                else -> "item_${item::class.java.simpleName}"
+            }
+        }
+    }
     val fastScrollLabelProvider: (Int) -> String = remember(items) {
         { index ->
             items.chapterFastScrollLabelAt(index).orEmpty()
         }
     }
-    LaunchedEffect(initialChapterId, items, isGridView) {
+    LaunchedEffect(initialChapterId, itemPositionKeys, isGridView) {
         val chapterId = initialChapterId ?: return@LaunchedEffect
         val index = items.indexOfFirst { item ->
             item is ChapterListItem && item.chapter.id == chapterId

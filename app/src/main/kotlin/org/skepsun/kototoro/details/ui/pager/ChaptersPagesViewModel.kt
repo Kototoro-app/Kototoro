@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.plus
 import okio.FileNotFoundException
+import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.bookmarks.domain.BookmarksRepository
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.isLocal
@@ -60,6 +61,7 @@ import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.video.domain.resolveVideoCandidates
 import org.skepsun.kototoro.video.ui.VideoPlayerActivity
 import org.skepsun.kototoro.video.ui.VideoChaptersViewModel
+import java.time.Instant
 
 abstract class ChaptersPagesViewModel(
 	@JvmField protected val settings: AppSettings,
@@ -326,19 +328,34 @@ abstract class ChaptersPagesViewModel(
 		download(setOf(chapterId), isMeteredNetworkAllowed, preferredQuality)
 	}
 
-	fun addBookmarksForChapters(chapterIds: Set<Long>) {
+	fun setBookmarksForChapters(chapterIds: Set<Long>, removeExisting: Boolean) {
 		launchJob(Dispatchers.Default) {
 			val manga = mangaDetails.value?.toContent() ?: return@launchJob
 			val chapterItems = chapters.value.filter { it.chapter.id in chapterIds }
+			val bookmarksByChapter = bookmarks.value
+				.filter { it.chapterId in chapterIds }
+				.groupBy { it.chapterId }
+			if (removeExisting) {
+				val bookmarkIdsToRemove = bookmarksByChapter.values
+					.flatten()
+					.mapTo(LinkedHashSet()) { it.pageId }
+				if (bookmarkIdsToRemove.isNotEmpty()) {
+					bookmarksRepository.removeBookmarks(bookmarkIdsToRemove)
+				}
+				return@launchJob
+			}
 			for (item in chapterItems) {
-				val bookmark = org.skepsun.kototoro.bookmarks.domain.Bookmark(
+				if (item.chapter.id in bookmarksByChapter) {
+					continue
+				}
+				val bookmark = Bookmark(
 					manga = manga,
 					pageId = item.chapter.id,
 					chapterId = item.chapter.id,
 					page = 0,
 					scroll = 0,
 					imageUrl = manga.coverUrl.orEmpty(),
-					createdAt = java.time.Instant.now(),
+					createdAt = Instant.now(),
 					percent = 0f,
 				)
 				bookmarksRepository.addBookmark(bookmark)

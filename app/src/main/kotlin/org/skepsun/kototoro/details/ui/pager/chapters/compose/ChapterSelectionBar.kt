@@ -69,7 +69,9 @@ fun ChapterSelectionBar(
             IconButton(onClick = state.onBookmark) {
                 Icon(
                     painter = painterResource(R.drawable.ic_bookmark),
-                    contentDescription = stringResource(R.string.bookmark_add),
+                    contentDescription = stringResource(
+                        if (state.isBookmarkRemoveAction) R.string.bookmark_remove else R.string.bookmark_add,
+                    ),
                 )
             }
         }

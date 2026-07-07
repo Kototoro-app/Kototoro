@@ -7,6 +7,7 @@ data class ChapterSelectionUiState(
     val canDelete: Boolean,
     val canMarkCurrent: Boolean,
     val canBookmark: Boolean,
+    val isBookmarkRemoveAction: Boolean,
     val onClearSelection: () -> Unit,
     val onSelectAll: () -> Unit,
     val onDownload: () -> Unit,
