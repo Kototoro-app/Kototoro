@@ -1720,6 +1720,9 @@
     <string name="reader_translation_bubble_grouping_tuning_summary">控制翻译前邻近 OCR 文本块的合并强度</string>
     <string name="reader_translation_overlay_compactness">非气泡覆盖层紧凑度</string>
     <string name="reader_translation_overlay_compactness_summary">控制气泡外文字覆盖层与原文的贴合紧密程度</string>
+    <string name="reader_translation_render_style">译文渲染样式</string>
+    <string name="reader_translation_render_style_replace">替换原文区域</string>
+    <string name="reader_translation_render_style_compact_overlay">紧凑深色覆盖层</string>
     <string name="reader_translation_tuning_strict">严格</string>
     <string name="reader_translation_tuning_balanced">平衡</string>
     <string name="reader_translation_tuning_relaxed">宽松</string>

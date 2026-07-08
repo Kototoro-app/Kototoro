@@ -1170,6 +1170,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val readerTranslationOverlayCompactness: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS, "BALANCED") ?: "BALANCED"
 
+	val readerTranslationRenderStyle: String
+		get() = prefs.getString(KEY_READER_TRANSLATION_RENDER_STYLE, "REPLACE") ?: "REPLACE"
+
 	val readerTranslationPaddleModelPath: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_PATH, "") ?: ""
 
@@ -2120,9 +2123,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_E2E_API_CONCURRENCY = "reader_e2e_api_concurrency"
 		const val KEY_READER_TRANSLATION_OCR_PIPELINE_STRATEGY = "reader_translation_ocr_pipeline_strategy"
 		const val KEY_READER_TRANSLATION_BUBBLE_GROUPING_TUNING = "reader_translation_bubble_grouping_tuning"
-			const val KEY_READER_TRANSLATION_BUBBLE_DETECTOR_ENABLED = "reader_translation_bubble_detector_enabled"
-			const val KEY_READER_TRANSLATION_BUBBLE_GROUPING_ENABLED = "reader_translation_bubble_grouping_enabled"
-			const val KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS = "reader_translation_overlay_compactness"
+		const val KEY_READER_TRANSLATION_BUBBLE_DETECTOR_ENABLED = "reader_translation_bubble_detector_enabled"
+		const val KEY_READER_TRANSLATION_BUBBLE_GROUPING_ENABLED = "reader_translation_bubble_grouping_enabled"
+		const val KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS = "reader_translation_overlay_compactness"
+		const val KEY_READER_TRANSLATION_RENDER_STYLE = "reader_translation_render_style"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_PATH = "reader_translation_paddle_model_path"
 		const val KEY_READER_TRANSLATION_PADDLE_OCR_ONLY = "reader_translation_paddle_ocr_only"
 		const val KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID = "reader_translation_paddle_official_model_id"

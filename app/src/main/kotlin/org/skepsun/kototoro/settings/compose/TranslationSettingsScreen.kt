@@ -42,6 +42,7 @@ fun TranslationSettingsScreen(
     val targetLangNames = stringArrayResource(R.array.values_reader_translation_target_languages).toList()
     val ocrPipelineNames = stringArrayResource(R.array.values_reader_translation_ocr_pipeline_strategies).toList()
     val tuningLevelNames = stringArrayResource(R.array.values_reader_translation_tuning_levels).toList()
+    val renderStyleNames = stringArrayResource(R.array.values_reader_translation_render_styles).toList()
 
     val currentMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_MODE) { settings.readerTranslationMode }.value
     val currentPipelineMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PIPELINE_MODE) { settings.readerTranslationPipelineMode }.value
@@ -235,6 +236,15 @@ fun TranslationSettingsScreen(
                         },
                         value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS, "BALANCED") ?: "BALANCED" }.value,
                         onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS, it) } }
+                    )
+
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_render_style),
+                        options = stringArrayResource(R.array.reader_translation_render_styles).mapIndexed { index, label ->
+                            SettingsChoiceOption(renderStyleNames[index], label)
+                        },
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, "REPLACE") ?: "REPLACE" }.value,
+                        onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, it) } }
                     )
                 }
             }

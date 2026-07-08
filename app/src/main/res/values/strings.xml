@@ -2765,6 +2765,9 @@
     <string name="reader_translation_bubble_grouping_enabled_summary_no_detector">After text detection, recognition, and merge, keep merged text units as the translation input. Enable a bubble detector to allow post-OCR bubble-assisted grouping.</string>
     <string name="reader_translation_overlay_compactness">Non-bubble overlay compactness</string>
     <string name="reader_translation_overlay_compactness_summary">Controls how tightly translated overlays fit text outside speech bubbles</string>
+    <string name="reader_translation_render_style">Translation render style</string>
+    <string name="reader_translation_render_style_replace">Replace text area</string>
+    <string name="reader_translation_render_style_compact_overlay">Compact dark overlay</string>
 	<string name="reader_translation_tuning_strict">Strict</string>
 	<string name="reader_translation_tuning_balanced">Balanced</string>
 	<string name="reader_translation_tuning_relaxed">Relaxed</string>

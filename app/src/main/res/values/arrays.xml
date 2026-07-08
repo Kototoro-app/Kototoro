@@ -203,6 +203,10 @@
 		<item>@string/reader_translation_tuning_balanced</item>
 		<item>@string/reader_translation_tuning_relaxed</item>
 	</string-array>
+	<string-array name="reader_translation_render_styles" translatable="false">
+		<item>@string/reader_translation_render_style_replace</item>
+		<item>@string/reader_translation_render_style_compact_overlay</item>
+	</string-array>
 	<string-array name="values_reader_translation_modes" translatable="false">
 		<item>LOCAL_ONLY</item>
 		<item>LOCAL_FIRST</item>
@@ -234,6 +238,10 @@
 		<item>STRICT</item>
 		<item>BALANCED</item>
 		<item>RELAXED</item>
+	</string-array>
+	<string-array name="values_reader_translation_render_styles" translatable="false">
+		<item>REPLACE</item>
+		<item>COMPACT_OVERLAY</item>
 	</string-array>
 	<string-array name="reader_translation_source_languages" translatable="false">
 		<item>Automatic</item>

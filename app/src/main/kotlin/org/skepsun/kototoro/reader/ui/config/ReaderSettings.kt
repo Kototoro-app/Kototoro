@@ -52,6 +52,7 @@ data class ReaderSettings(
 	val translationBubbleGroupingTuning: String,
 	val isTranslationBubbleGroupingEnabled: Boolean,
 	val translationOverlayCompactness: String,
+	val translationRenderStyle: String,
 	val translationPaddleModelPath: String,
 	val translationPaddleOfficialModelId: String,
 	val translationPaddleModelUrl: String,
@@ -100,6 +101,7 @@ data class ReaderSettings(
 		translationBubbleGroupingTuning = settings.readerTranslationBubbleGroupingTuning,
 		isTranslationBubbleGroupingEnabled = settings.isReaderTranslationBubbleGroupingEnabled,
 		translationOverlayCompactness = settings.readerTranslationOverlayCompactness,
+		translationRenderStyle = settings.readerTranslationRenderStyle,
 		translationPaddleModelPath = settings.readerTranslationPaddleModelPath,
 		translationPaddleOfficialModelId = settings.readerTranslationPaddleOfficialModelId,
 		translationPaddleModelUrl = settings.readerTranslationPaddleModelUrl,
@@ -163,6 +165,8 @@ data class ReaderSettings(
 		append('|')
 		append(translationOverlayCompactness)
 		append('|')
+		append(translationRenderStyle)
+		append('|')
 		append(translationPaddleModelPath)
 		append('|')
 		append(translationPaddleOfficialModelId)
@@ -220,6 +224,8 @@ data class ReaderSettings(
 		append(isTranslationBubbleGroupingEnabled)
 		append('|')
 		append(translationOverlayCompactness)
+		append('|')
+		append(translationRenderStyle)
 		append('|')
 		append(translationPaddleModelPath)
 		append('|')

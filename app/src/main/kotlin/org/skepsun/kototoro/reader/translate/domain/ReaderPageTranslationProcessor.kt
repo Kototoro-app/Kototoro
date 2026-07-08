@@ -113,6 +113,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		style = Paint.Style.FILL
 		alpha = 242
 	}
+	private val compactOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+		color = Color.BLACK
+		style = Paint.Style.FILL
+		alpha = 190
+	}
 	private val debugSourceRectPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 		color = Color.argb(220, 255, 160, 0)
 		style = Paint.Style.STROKE
@@ -1214,6 +1219,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return Rect(rect.left - pad, rect.top - pad, rect.right + pad, rect.bottom + pad)
 	}
 
+	private fun clampRect(rect: Rect, bitmapWidth: Int, bitmapHeight: Int): Rect {
+		return Rect(
+			rect.left.coerceIn(0, bitmapWidth - 1),
+			rect.top.coerceIn(0, bitmapHeight - 1),
+			rect.right.coerceIn(1, bitmapWidth),
+			rect.bottom.coerceIn(1, bitmapHeight),
+		)
+	}
+
 	private fun prepareTranslatedBubble(
 		input: BubbleInput,
 		text: String,
@@ -1228,7 +1242,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val verticalPreferred = input.verticalPreferred
 		val detectorAnchored = input.detectorAnchored
 		val sourceContentRect = input.sourceContentRect
-		val padding = dp(4f)
+		val compactOverlay = readerTranslationRenderStyle() == ReaderTranslationRenderStyle.COMPACT_OVERLAY
+		val padding = if (compactOverlay) dp(2f) else dp(4f)
 		val normalizedRect = Rect(
 			rect.left.coerceIn(0, bitmapWidth - 1),
 			rect.top.coerceIn(0, bitmapHeight - 1),
@@ -1251,6 +1266,36 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				contentRect.bottom.coerceIn(1, bitmapHeight),
 			)
 			normalized.takeIf { it.width() > 1 && it.height() > 1 }
+		}
+		if (compactOverlay) {
+			val anchorRect = normalizedContentRect ?: normalizedRect
+			val compactRect = clampRect(
+				rect = expandRect(anchorRect, dp(1f)),
+				bitmapWidth = bitmapWidth,
+				bitmapHeight = bitmapHeight,
+			)
+			val compactOuterRects = resolveRenderOuterRects(
+				baseRect = compactRect,
+				expansionScales = COMPACT_OVERLAY_EXPAND_SCALES,
+				bitmapWidth = bitmapWidth,
+				bitmapHeight = bitmapHeight,
+			)
+			return solveSingleBoxBubble(
+				input = input.copy(
+					sourceContentRect = anchorRect,
+					sourceContentRects = emptyList(),
+				),
+				text = text,
+				outerRects = compactOuterRects,
+				padding = padding,
+				sourceContentRect = anchorRect,
+				bubbleLikeRegion = true,
+				verticalPreferred = false,
+				bitmapWidth = bitmapWidth,
+				bitmapHeight = bitmapHeight,
+				allowLocalExpansion = true,
+				allowEllipsize = false,
+			)
 		}
 		val rawRect = if (detectorAnchored && normalizedContentRect != null) {
 			mergeRects(
@@ -1308,6 +1353,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			verticalPreferred = verticalPreferred,
 			bitmapWidth = bitmapWidth,
 			bitmapHeight = bitmapHeight,
+			allowLocalExpansion = true,
+			allowEllipsize = false,
 		)
 	}
 
@@ -1601,18 +1648,43 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		}
 	}
 
+	private fun readerTranslationRenderStyle(): ReaderTranslationRenderStyle {
+		return when (settings.readerTranslationRenderStyle.trim().uppercase()) {
+			"COMPACT_OVERLAY" -> ReaderTranslationRenderStyle.COMPACT_OVERLAY
+			else -> ReaderTranslationRenderStyle.REPLACE
+		}
+	}
+
 	private fun drawBubbleBackground(canvas: Canvas, bubble: PreparedBubble) {
 		val roundRadius = dp(6f).toFloat()
+		val paint = when (readerTranslationRenderStyle()) {
+			ReaderTranslationRenderStyle.COMPACT_OVERLAY -> compactOverlayPaint
+			ReaderTranslationRenderStyle.REPLACE -> bubblePaint
+		}
 		if (bubble.segments.isNotEmpty()) {
 			for (segment in bubble.segments) {
-				canvas.drawRoundRect(RectF(segment.backgroundRect), roundRadius, roundRadius, bubblePaint)
+				canvas.drawRoundRect(RectF(segment.backgroundRect), roundRadius, roundRadius, paint)
 			}
 			return
 		}
-		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, bubblePaint)
+		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, paint)
+	}
+
+	private fun configureTextPaintForRender() {
+		when (readerTranslationRenderStyle()) {
+			ReaderTranslationRenderStyle.COMPACT_OVERLAY -> {
+				textPaint.color = Color.WHITE
+				textPaint.clearShadowLayer()
+			}
+			ReaderTranslationRenderStyle.REPLACE -> {
+				textPaint.color = Color.BLACK
+				textPaint.clearShadowLayer()
+			}
+		}
 	}
 
 	private fun drawBubbleText(canvas: Canvas, bubble: PreparedBubble) {
+		configureTextPaintForRender()
 		if (bubble.segments.isNotEmpty()) {
 			for (segment in bubble.segments) {
 				val vertical = segment.verticalPlan
@@ -2132,6 +2204,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		verticalPreferred: Boolean,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
+		allowLocalExpansion: Boolean,
+		allowEllipsize: Boolean,
 	): PreparedBubble? {
 		var best: SingleBoxBubbleFit? = null
 		for (outerRect in outerRects) {
@@ -2145,6 +2219,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 					bubbleLikeRegion = bubbleLikeRegion,
 					bitmapWidth = bitmapWidth,
 					bitmapHeight = bitmapHeight,
+					allowLocalExpansion = allowLocalExpansion,
 				)
 			} else {
 				solveHorizontalSingleBoxBubble(
@@ -2156,6 +2231,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 					bubbleLikeRegion = bubbleLikeRegion,
 					bitmapWidth = bitmapWidth,
 					bitmapHeight = bitmapHeight,
+					allowLocalExpansion = allowLocalExpansion,
+					allowEllipsize = allowEllipsize,
 				)
 			} ?: continue
 			if (best == null || candidate.score < best!!.score) {
@@ -2177,6 +2254,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		bubbleLikeRegion: Boolean,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
+		allowLocalExpansion: Boolean,
+		allowEllipsize: Boolean,
 	): SingleBoxBubbleFit? {
 		val initialContentWidth = max(1, outerRect.width() - padding * 2)
 		val initialContentHeight = max(1, outerRect.height() - padding * 2)
@@ -2186,7 +2265,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			width = initialContentWidth,
 			height = initialContentHeight,
 			initialTextSize = initialHorizontalTextSize(text, initialContentWidth, initialContentHeight),
-			allowEllipsize = false,
+			allowEllipsize = allowEllipsize,
 		)
 		var resolvedRect = resolveSingleBoxRect(
 			outerRect = outerRect,
@@ -2204,7 +2283,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				width = contentWidth,
 				height = contentHeight,
 				initialTextSize = initialHorizontalTextSize(text, contentWidth, contentHeight),
-				allowEllipsize = false,
+				allowEllipsize = allowEllipsize,
 			)
 			val nextRect = resolveSingleBoxRect(
 				outerRect = outerRect,
@@ -2217,7 +2296,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			fit = nextFit
 			resolvedRect = nextRect
 		}
-		if (fit.overflow > 0 || fit.truncated) {
+		if (allowLocalExpansion && (fit.overflow > 0 || fit.truncated)) {
 			val expanded = resolveHorizontalExpandedBubble(
 				input = input,
 				text = text,
@@ -2263,6 +2342,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		bubbleLikeRegion: Boolean,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
+		allowLocalExpansion: Boolean,
 	): SingleBoxBubbleFit? {
 		val initialContentWidth = max(1, outerRect.width() - padding * 2)
 		val initialContentHeight = max(1, outerRect.height() - padding * 2)
@@ -2307,7 +2387,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			fit = nextFit
 			resolvedRect = nextRect
 		}
-		if (fit.overflow > 0 || fit.truncated) {
+		if (allowLocalExpansion && (fit.overflow > 0 || fit.truncated)) {
 			val expanded = resolveVerticalExpandedBubble(
 				input = input,
 				text = text,
@@ -3113,6 +3193,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			settings.readerTranslationBubbleGroupingTuning,
 			settings.isReaderTranslationBubbleGroupingEnabled.toString(),
 			settings.readerTranslationOverlayCompactness,
+			settings.readerTranslationRenderStyle,
 			settings.isReaderTranslationQualityFilterEnabled.toString(),
 			settings.readerTranslationPaddleOfficialModelId,
 			settings.readerTranslationPaddleDetModelId,
@@ -3283,6 +3364,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val INLINE_HYPHENATED_WORD_REGEX = Regex("""(?<=\p{L})[\-‐‑‒–—]\s+(?=\p{L})""")
 		val BUBBLE_EXPAND_SCALES = floatArrayOf(1f, 1.12f, 1.24f)
 		val DETECTOR_ANCHORED_EXPAND_SCALES = floatArrayOf(1f, 1.18f, 1.34f, 1.52f)
+		val COMPACT_OVERLAY_EXPAND_SCALES = floatArrayOf(1f, 1.12f, 1.28f, 1.46f)
 		const val TEXT_CACHE_PREFIX = "reader_translate_text_"
 		const val RENDER_CACHE_PREFIX = "reader_translate_render_"
 		const val OCR_CACHE_PREFIX = "reader_translate_ocr_"
@@ -3311,6 +3393,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			MLKIT,
 			PADDLE,
 			MANGA_OCR,
+		}
+
+		private enum class ReaderTranslationRenderStyle {
+			REPLACE,
+			COMPACT_OVERLAY,
 		}
 
 		private data class PageOcrRoute(
