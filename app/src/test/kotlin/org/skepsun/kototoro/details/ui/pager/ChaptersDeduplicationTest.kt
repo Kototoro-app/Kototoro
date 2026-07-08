@@ -2,6 +2,9 @@ package org.skepsun.kototoro.details.ui.pager
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import org.skepsun.kototoro.details.data.ContentDetails
+import org.skepsun.kototoro.details.ui.mapChapters
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.details.ui.TestContentSource
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -102,5 +105,41 @@ class ChaptersDeduplicationTest : StringSpec({
 
         val merged = items.mergeRepeated()
         merged.map { it.chapter.id } shouldBe listOf(1L, 2L, 3L, 4L)
+    }
+
+    "should mark past chapters from other branches as read when currentChapterId is in another branch" {
+        val ch1 = createChapter(id = 1, number = 1.0f, title = "Chapter 1", branch = "BranchA")
+        val ch2 = createChapter(id = 2, number = 2.0f, title = "Chapter 2", branch = "BranchB")
+        val ch3 = createChapter(id = 3, number = 3.0f, title = "Chapter 3", branch = "BranchB")
+
+        val content = Content(
+            id = 100L,
+            title = "Manga",
+            altTitles = emptySet(),
+            url = "http://example.com/manga",
+            publicUrl = "http://example.com/manga",
+            rating = 0f,
+            contentRating = null,
+            coverUrl = null,
+            tags = emptySet(),
+            state = null,
+            authors = emptySet(),
+            chapters = listOf(ch1, ch2, ch3),
+            source = TestContentSource
+        )
+        val contentDetails = ContentDetails(content)
+
+        val mappedA = contentDetails.mapChapters(
+            currentChapterId = 2L,
+            newCount = 0,
+            branch = "BranchA",
+            bookmarks = emptyList(),
+            isGrid = false,
+            isDownloadedOnly = false
+        )
+
+        mappedA.size shouldBe 1
+        mappedA.first().chapter.id shouldBe 1L
+        mappedA.first().isUnread shouldBe false
     }
 })
