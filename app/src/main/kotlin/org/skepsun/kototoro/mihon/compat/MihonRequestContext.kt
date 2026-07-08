@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.mihon.compat
 
+import kotlinx.coroutines.asContextElement
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.parsers.model.ContentSource
 
 /**
@@ -26,16 +28,8 @@ object MihonRequestContext {
     }
 
     suspend fun <T> withSource(source: ContentSource, block: suspend () -> T): T {
-        val previous = currentSource.get()
-        currentSource.set(source)
-        return try {
+        return withContext(currentSource.asContextElement(source)) {
             block()
-        } finally {
-            if (previous == null) {
-                currentSource.remove()
-            } else {
-                currentSource.set(previous)
-            }
         }
     }
 }
