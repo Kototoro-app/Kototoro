@@ -167,6 +167,78 @@ fun TranslationSettingsScreen(
                         onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, it) } }
                     )
 
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.reader_translation_ocr_detection_max_side),
+                        summary = stringResource(R.string.reader_translation_ocr_detection_max_side_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE) {
+                            prefs.getInt(AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE, 1536)
+                        }.value,
+                        valueRange = 512..2048,
+                        step = 32,
+                        valueText = { "$it px" },
+                        onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE, it) } },
+                    )
+
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.reader_translation_ocr_detection_threshold),
+                        summary = stringResource(R.string.reader_translation_ocr_detection_threshold_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_THRESHOLD) {
+                            prefs.getInt(AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_THRESHOLD, 40)
+                        }.value,
+                        valueRange = 10..90,
+                        step = 1,
+                        valueText = { "${it / 100f}" },
+                        onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_THRESHOLD, it) } },
+                    )
+
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.reader_translation_ocr_min_box_size),
+                        summary = stringResource(R.string.reader_translation_ocr_min_box_size_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_MIN_BOX_SIZE) {
+                            prefs.getInt(AppSettings.KEY_READER_TRANSLATION_OCR_MIN_BOX_SIZE, 6)
+                        }.value,
+                        valueRange = 2..48,
+                        step = 1,
+                        valueText = { "$it px" },
+                        onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_TRANSLATION_OCR_MIN_BOX_SIZE, it) } },
+                    )
+
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.reader_translation_ocr_recognition_threshold),
+                        summary = stringResource(R.string.reader_translation_ocr_recognition_threshold_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD) {
+                            prefs.getInt(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD, 10)
+                        }.value,
+                        valueRange = 0..90,
+                        step = 1,
+                        valueText = { "${it / 100f}" },
+                        onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD, it) } },
+                    )
+
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.reader_translation_ocr_recognition_max_width),
+                        summary = stringResource(R.string.reader_translation_ocr_recognition_max_width_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH) {
+                            prefs.getInt(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH, 320)
+                        }.value,
+                        valueRange = 128..1024,
+                        step = 32,
+                        valueText = { "$it px" },
+                        onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH, it) } },
+                    )
+
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.reader_translation_ocr_recognition_batch_size),
+                        summary = stringResource(R.string.reader_translation_ocr_recognition_batch_size_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE) {
+                            prefs.getInt(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE, 16)
+                        }.value,
+                        valueRange = 1..16,
+                        step = 1,
+                        valueText = { it.toString() },
+                        onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE, it) } },
+                    )
+
                 }
             }
         }

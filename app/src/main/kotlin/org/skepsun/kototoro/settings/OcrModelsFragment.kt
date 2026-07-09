@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,10 +19,10 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.translate.data.OnnxModelCategory
+import org.skepsun.kototoro.reader.translate.data.OnnxModelDownloadWorker
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel
 import org.skepsun.kototoro.reader.translate.data.OnnxOfficialModelCatalog
@@ -72,7 +71,6 @@ fun OcrModelsRoute(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val transientStateByModelId = remember { mutableStateMapOf<String, ModelTransientState>() }
     var refreshKey by remember { mutableStateOf(0) }
 
@@ -147,6 +145,7 @@ fun OcrModelsRoute(
                 .setTitle(R.string.delete)
                 .setMessage(context.getString(R.string.reader_translation_model_delete_confirm, model.title))
                 .setPositiveButton(android.R.string.ok) { _, _ ->
+                    OnnxModelDownloadWorker.cancel(context, model.id)
                     if (onnxModelManager.deleteModel(model.id)) {
                         updateTransientState(model.id, null)
                         Toast.makeText(
@@ -159,53 +158,8 @@ fun OcrModelsRoute(
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         } else {
-            coroutineScope.launch {
-                try {
-                    updateTransientState(
-                        model.id,
-                        ModelTransientState(
-                            isBusy = true,
-                            progressText = context.getString(R.string.loading_),
-                        ),
-                    )
-                    onnxModelManager.ensureModelReady(
-                        model = model,
-                        onProgress = { progress ->
-                            val percent = if (progress.totalBytes > 0) {
-                                (progress.downloadedBytes * 100 / progress.totalBytes).toInt()
-                            } else {
-                                -1
-                            }
-                            updateTransientState(
-                                model.id,
-                                ModelTransientState(
-                                    isBusy = true,
-                                    progressText = if (percent >= 0) {
-                                        context.getString(R.string.reader_translation_model_downloading_percent, percent)
-                                    } else {
-                                        context.getString(
-                                            R.string.reader_translation_model_downloading_kb,
-                                            progress.downloadedBytes / 1024,
-                                        )
-                                    },
-                                ),
-                            )
-                        },
-                    )
-                    updateTransientState(model.id, null)
-                    Toast.makeText(context, R.string.reader_translation_onnx_download_success, Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    updateTransientState(
-                        model.id,
-                        ModelTransientState(
-                            errorText = context.getString(
-                                R.string.reader_translation_paddle_download_failed,
-                                e.message ?: "",
-                            ),
-                        ),
-                    )
-                }
-            }
+            OnnxModelDownloadWorker.enqueue(context, model.id)
+            Toast.makeText(context, R.string.reader_translation_model_download_started_background, Toast.LENGTH_LONG).show()
         }
     }
 

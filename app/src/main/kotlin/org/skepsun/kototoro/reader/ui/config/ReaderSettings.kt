@@ -55,6 +55,13 @@ data class ReaderSettings(
 	val translationRenderStyle: String,
 	val translationPaddleModelPath: String,
 	val translationPaddleOfficialModelId: String,
+	val translationPaddleDetModelId: String,
+	val translationOcrDetectionMaxSide: Int,
+	val translationOcrDetectionThreshold: Float,
+	val translationOcrMinBoxSize: Int,
+	val translationOcrRecognitionThreshold: Float,
+	val translationOcrRecognitionMaxWidth: Int,
+	val translationOcrRecognitionBatchSize: Int,
 	val translationPaddleModelUrl: String,
 	val translationPaddleModelVersion: String,
 	val translationPaddleModelSha256: String,
@@ -104,6 +111,13 @@ data class ReaderSettings(
 		translationRenderStyle = settings.readerTranslationRenderStyle,
 		translationPaddleModelPath = settings.readerTranslationPaddleModelPath,
 		translationPaddleOfficialModelId = settings.readerTranslationPaddleOfficialModelId,
+		translationPaddleDetModelId = settings.readerTranslationPaddleDetModelId,
+		translationOcrDetectionMaxSide = settings.readerTranslationOcrDetectionMaxSide,
+		translationOcrDetectionThreshold = settings.readerTranslationOcrDetectionThreshold,
+		translationOcrMinBoxSize = settings.readerTranslationOcrMinBoxSize,
+		translationOcrRecognitionThreshold = settings.readerTranslationOcrRecognitionThreshold,
+		translationOcrRecognitionMaxWidth = settings.readerTranslationOcrRecognitionMaxWidth,
+		translationOcrRecognitionBatchSize = settings.readerTranslationOcrRecognitionBatchSize,
 		translationPaddleModelUrl = settings.readerTranslationPaddleModelUrl,
 		translationPaddleModelVersion = settings.readerTranslationPaddleModelVersion,
 		translationPaddleModelSha256 = settings.readerTranslationPaddleModelSha256,
@@ -171,6 +185,20 @@ data class ReaderSettings(
 		append('|')
 		append(translationPaddleOfficialModelId)
 		append('|')
+		append(translationPaddleDetModelId)
+		append('|')
+		append(translationOcrDetectionMaxSide)
+		append('|')
+		append(translationOcrDetectionThreshold)
+		append('|')
+		append(translationOcrMinBoxSize)
+		append('|')
+		append(translationOcrRecognitionThreshold)
+		append('|')
+		append(translationOcrRecognitionMaxWidth)
+		append('|')
+		append(translationOcrRecognitionBatchSize)
+		append('|')
 		append(translationPaddleModelUrl)
 		append('|')
 		append(translationPaddleModelVersion)
@@ -230,6 +258,20 @@ data class ReaderSettings(
 		append(translationPaddleModelPath)
 		append('|')
 		append(translationPaddleOfficialModelId)
+		append('|')
+		append(translationPaddleDetModelId)
+		append('|')
+		append(translationOcrDetectionMaxSide)
+		append('|')
+		append(translationOcrDetectionThreshold)
+		append('|')
+		append(translationOcrMinBoxSize)
+		append('|')
+		append(translationOcrRecognitionThreshold)
+		append('|')
+		append(translationOcrRecognitionMaxWidth)
+		append('|')
+		append(translationOcrRecognitionBatchSize)
 		append('|')
 		append(translationPaddleModelUrl)
 		append('|')
@@ -305,6 +347,13 @@ data class ReaderSettings(
 			AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS,
 			AppSettings.KEY_READER_TRANSLATION_PADDLE_MODEL_PATH,
 			AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID,
+			AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID,
+			AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE,
+			AppSettings.KEY_READER_TRANSLATION_OCR_DETECTION_THRESHOLD,
+			AppSettings.KEY_READER_TRANSLATION_OCR_MIN_BOX_SIZE,
+			AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD,
+			AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH,
+			AppSettings.KEY_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE,
 			AppSettings.KEY_READER_TRANSLATION_PADDLE_MODEL_URL,
 			AppSettings.KEY_READER_TRANSLATION_PADDLE_MODEL_VERSION,
 			AppSettings.KEY_READER_TRANSLATION_PADDLE_MODEL_SHA256,

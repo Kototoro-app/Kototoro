@@ -55,6 +55,15 @@ class PaddleReaderOcrEngine @Inject constructor(
 		val scaleY: Float,
 	)
 
+	private data class OcrTuning(
+		val detectionMaxSide: Int,
+		val detectionThreshold: Float,
+		val minBoxSize: Int,
+		val recognitionThreshold: Float,
+		val recognitionMaxWidth: Int,
+		val recognitionBatchSize: Int,
+	)
+
 	private enum class DetectorNormalizeMode {
 		UNIT,
 		IMAGENET,
@@ -65,6 +74,17 @@ class PaddleReaderOcrEngine @Inject constructor(
 	private var runtime: Runtime? = null
 	private val textDetector = PaddleTextDetector()
 	private val textRecognizer = PaddleTextRecognizer()
+
+	private fun currentOcrTuning(): OcrTuning {
+		return OcrTuning(
+			detectionMaxSide = settings.readerTranslationOcrDetectionMaxSide.coerceIn(512, 2048),
+			detectionThreshold = settings.readerTranslationOcrDetectionThreshold.coerceIn(0.01f, 0.99f),
+			minBoxSize = settings.readerTranslationOcrMinBoxSize.coerceIn(1, 48),
+			recognitionThreshold = settings.readerTranslationOcrRecognitionThreshold.coerceIn(0f, 0.99f),
+			recognitionMaxWidth = settings.readerTranslationOcrRecognitionMaxWidth.coerceIn(128, 1024),
+			recognitionBatchSize = settings.readerTranslationOcrRecognitionBatchSize.coerceIn(1, 16),
+		)
+	}
 
 	override suspend fun recognize(request: OcrRequest): List<OcrTextBlock> {
 		val modelPair = resolveActiveModelPair() ?: run {
@@ -384,7 +404,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 	}
 
 	private fun detectTextRegions(bitmap: Bitmap, runtime: Runtime): List<TextRegion> {
-		return textDetector.detectTextRegions(bitmap, runtime).map { rect ->
+		return textDetector.detectTextRegions(bitmap, runtime, currentOcrTuning()).map { rect ->
 			TextRegion(
 				rect = rect,
 				confidence = 1f,
@@ -403,9 +423,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 		runtime: Runtime,
 	): List<OcrTextBlock> {
 		if (regions.isEmpty()) return emptyList()
-		return regions.mapNotNull { region ->
-			recognizeSingleRegion(bitmap, region, runtime)
-		}
+		return textRecognizer.recognizeRegions(bitmap, regions, runtime, currentOcrTuning())
 	}
 
 	private fun recognizeSingleRegion(bitmap: Bitmap, region: Rect, runtime: Runtime): OcrTextBlock? {
@@ -426,7 +444,8 @@ class PaddleReaderOcrEngine @Inject constructor(
 		val crop = cropRegionBitmap(bitmap, region)
 		val normalized = textRecognizer.normalizeRecognitionOrientation(crop)
 		return try {
-			val (text, confidence) = textRecognizer.recognizeCrop(normalized, runtime)
+			val tuning = currentOcrTuning()
+			val (text, confidence) = textRecognizer.recognizeCrop(normalized, runtime, tuning)
 			if (text.isBlank()) {
 				null
 			} else {
@@ -495,6 +514,47 @@ class PaddleReaderOcrEngine @Inject constructor(
 		}
 	}
 
+	private fun createRecognitionBatchTensor(
+		bitmaps: List<Bitmap>,
+		widths: List<Int>,
+		targetHeight: Int,
+		canvasWidth: Int,
+	): OnnxTensor {
+		val data = FloatArray(bitmaps.size * 3 * targetHeight * canvasWidth)
+		val imageStride = 3 * targetHeight * canvasWidth
+		val channelStride = targetHeight * canvasWidth
+		bitmaps.forEachIndexed { imageIndex, bitmap ->
+			val readableBitmap = ensureReadableBitmap(bitmap)
+			val width = widths[imageIndex]
+			val pixels = IntArray(width * targetHeight)
+			try {
+				readableBitmap.getPixels(pixels, 0, width, 0, 0, width, targetHeight)
+				val imageOffset = imageIndex * imageStride
+				for (y in 0 until targetHeight) {
+					for (x in 0 until width) {
+						val pixel = pixels[y * width + x]
+						val r = ((pixel shr 16) and 0xFF) / 255f
+						val g = ((pixel shr 8) and 0xFF) / 255f
+						val b = (pixel and 0xFF) / 255f
+						val base = imageOffset + y * canvasWidth + x
+						data[base] = (r - 0.5f) / 0.5f
+						data[imageOffset + channelStride + y * canvasWidth + x] = (g - 0.5f) / 0.5f
+						data[imageOffset + channelStride * 2 + y * canvasWidth + x] = (b - 0.5f) / 0.5f
+					}
+				}
+			} finally {
+				if (readableBitmap !== bitmap) {
+					readableBitmap.recycle()
+				}
+			}
+		}
+		return OnnxTensor.createTensor(
+			OrtEnvironment.getEnvironment(),
+			FloatBuffer.wrap(data),
+			longArrayOf(bitmaps.size.toLong(), 3, targetHeight.toLong(), canvasWidth.toLong()),
+		)
+	}
+
 	private fun decodeRecognitionTensor(
 		tensor: OnnxTensor,
 		dictionary: List<String>,
@@ -505,6 +565,22 @@ class PaddleReaderOcrEngine @Inject constructor(
 		val classes = shape[2].toInt()
 		val values = FloatArray(timeSteps * classes)
 		tensor.floatBuffer.get(values)
+		return decodeRecognitionValues(
+			values = values,
+			offset = 0,
+			timeSteps = timeSteps,
+			classes = classes,
+			dictionary = dictionary,
+		)
+	}
+
+	private fun decodeRecognitionValues(
+		values: FloatArray,
+		offset: Int,
+		timeSteps: Int,
+		classes: Int,
+		dictionary: List<String>,
+	): Pair<String, Float> {
 		val text = StringBuilder()
 		var previousIndex = -1
 		var confidenceSum = 0f
@@ -512,9 +588,9 @@ class PaddleReaderOcrEngine @Inject constructor(
 		for (t in 0 until timeSteps) {
 			var bestIndex = 0
 			var bestValue = Float.NEGATIVE_INFINITY
-			val offset = t * classes
+			val timeStepOffset = offset + t * classes
 			for (i in 0 until classes) {
-				val v = values[offset + i]
+				val v = values[timeStepOffset + i]
 				if (v > bestValue) {
 					bestValue = v
 					bestIndex = i
@@ -628,13 +704,9 @@ class PaddleReaderOcrEngine @Inject constructor(
 	private companion object {
 		const val LOG_TAG = "ReaderOcrPaddleOrt"
 		const val PADDLE_DETECTOR_ID = "paddle_onnx_ppocrv5_det"
-		const val DET_MAX_SIDE = 960
-		const val DET_BIN_THRESHOLD = 0.30f
 		const val DET_MIN_COMPONENT_PIXELS = 8
-		const val DET_MIN_BOX_SIZE = 6
 		const val REC_INPUT_HEIGHT = 48
 		const val REC_MIN_WIDTH = 32
-		const val REC_MAX_WIDTH = 512
 		const val IMAGENET_MEAN_R = 0.485f
 		const val IMAGENET_MEAN_G = 0.456f
 		const val IMAGENET_MEAN_B = 0.406f
@@ -657,8 +729,8 @@ class PaddleReaderOcrEngine @Inject constructor(
 
 	private inner class PaddleTextDetector {
 
-		fun detectTextRegions(bitmap: Bitmap, runtime: Runtime): List<Rect> {
-			val resize = computeDetectionResize(bitmap.width, bitmap.height)
+		fun detectTextRegions(bitmap: Bitmap, runtime: Runtime, tuning: OcrTuning): List<Rect> {
+			val resize = computeDetectionResize(bitmap.width, bitmap.height, tuning)
 			val scaled = Bitmap.createScaledBitmap(bitmap, resize.width, resize.height, true)
 			var inputTensor: OnnxTensor? = null
 			var result: OrtSession.Result? = null
@@ -680,6 +752,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 					sourceHeight = bitmap.height,
 					scaleX = resize.scaleX,
 					scaleY = resize.scaleY,
+					tuning = tuning,
 				)
 			} finally {
 				runCatching { result?.close() }
@@ -688,9 +761,9 @@ class PaddleReaderOcrEngine @Inject constructor(
 			}
 		}
 
-		private fun computeDetectionResize(width: Int, height: Int): DetectionResize {
+		private fun computeDetectionResize(width: Int, height: Int, tuning: OcrTuning): DetectionResize {
 			val maxSide = max(width, height).coerceAtLeast(1)
-			val scale = min(1f, DET_MAX_SIDE.toFloat() / maxSide.toFloat())
+			val scale = min(1f, tuning.detectionMaxSide.toFloat() / maxSide.toFloat())
 			val scaledW = max(32, ((width * scale).roundToInt() / 32).coerceAtLeast(1) * 32)
 			val scaledH = max(32, ((height * scale).roundToInt() / 32).coerceAtLeast(1) * 32)
 			return DetectionResize(
@@ -707,6 +780,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 			sourceHeight: Int,
 			scaleX: Float,
 			scaleY: Float,
+			tuning: OcrTuning,
 		): List<Rect> {
 			val shape = tensor.info.shape
 			if (shape.size != 4) return emptyList()
@@ -720,7 +794,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 			for (y in 0 until height) {
 				for (x in 0 until width) {
 					val idx = y * width + x
-					if (visited[idx] || values[idx] < DET_BIN_THRESHOLD) continue
+					if (visited[idx] || values[idx] < tuning.detectionThreshold) continue
 					var head = 0
 					var tail = 0
 					queue[tail++] = idx
@@ -744,7 +818,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 							val ny = cy + offset.second
 							if (nx !in 0 until width || ny !in 0 until height) continue
 							val nIdx = ny * width + nx
-							if (visited[nIdx] || values[nIdx] < DET_BIN_THRESHOLD) continue
+							if (visited[nIdx] || values[nIdx] < tuning.detectionThreshold) continue
 							visited[nIdx] = true
 							queue[tail++] = nIdx
 						}
@@ -756,7 +830,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 						((maxX + 1) / scaleX).roundToInt().coerceIn(1, sourceWidth),
 						((maxY + 1) / scaleY).roundToInt().coerceIn(1, sourceHeight),
 					)
-					if (rect.width() < DET_MIN_BOX_SIZE || rect.height() < DET_MIN_BOX_SIZE) continue
+					if (rect.width() < tuning.minBoxSize || rect.height() < tuning.minBoxSize) continue
 					regions += rect
 				}
 			}
@@ -774,11 +848,82 @@ class PaddleReaderOcrEngine @Inject constructor(
 			return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 		}
 
-		fun recognizeCrop(bitmap: Bitmap, runtime: Runtime): Pair<String, Float> {
+		fun recognizeRegions(
+			bitmap: Bitmap,
+			regions: List<TextRegion>,
+			runtime: Runtime,
+			tuning: OcrTuning,
+		): List<OcrTextBlock> {
+			val results = mutableListOf<OcrTextBlock>()
+			regions.chunked(tuning.recognitionBatchSize).forEach { chunk ->
+				results += runCatching {
+					recognizeRegionBatch(bitmap, chunk, runtime, tuning)
+				}.getOrElse { error ->
+					if (chunk.size <= 1) {
+						log { "paddle recognizer failed: ${error.message}" }
+						emptyList()
+					} else {
+						log { "paddle recognizer batch failed, fallback to single region: ${error.message}" }
+						chunk.mapNotNull { region ->
+							recognizeSingleRegion(bitmap, region, runtime)
+						}
+					}
+				}
+			}
+			return results
+		}
+
+		private fun recognizeRegionBatch(
+			bitmap: Bitmap,
+			regions: List<TextRegion>,
+			runtime: Runtime,
+			tuning: OcrTuning,
+		): List<OcrTextBlock> {
+			val crops = mutableListOf<Bitmap>()
+			val scaled = mutableListOf<Bitmap>()
+			val normalized = mutableListOf<Bitmap>()
+			var inputTensor: OnnxTensor? = null
+			var result: OrtSession.Result? = null
+			return try {
+				val targetHeight = REC_INPUT_HEIGHT
+				val widths = mutableListOf<Int>()
+				for (region in regions) {
+					val crop = cropRegionBitmap(bitmap, region)
+					crops += crop
+					val normalizedCrop = normalizeRecognitionOrientation(crop)
+					normalized += normalizedCrop
+					val targetWidth = computeRecognitionWidth(normalizedCrop, tuning)
+					widths += targetWidth
+					scaled += Bitmap.createScaledBitmap(normalizedCrop, targetWidth, targetHeight, true)
+				}
+				val canvasWidth = widths.maxOrNull() ?: return emptyList()
+				inputTensor = createRecognitionBatchTensor(
+					bitmaps = scaled,
+					widths = widths,
+					targetHeight = targetHeight,
+					canvasWidth = canvasWidth,
+				)
+				val inputName = runtime.recSession.inputNames.first()
+				result = runtime.recSession.run(mapOf(inputName to inputTensor))
+				val outputName = runtime.recSession.outputNames.first()
+				val tensor = result.get(outputName).orElse(null) as? OnnxTensor ?: return emptyList()
+				decodeRecognitionBatchTensor(tensor, runtime.recDict, regions, tuning)
+			} finally {
+				runCatching { result?.close() }
+				runCatching { inputTensor?.close() }
+				scaled.forEach { it.recycle() }
+				normalized.forEachIndexed { index, normalizedBitmap ->
+					if (normalizedBitmap !== crops[index]) {
+						normalizedBitmap.recycle()
+					}
+				}
+				crops.forEach { it.recycle() }
+			}
+		}
+
+		fun recognizeCrop(bitmap: Bitmap, runtime: Runtime, tuning: OcrTuning): Pair<String, Float> {
 			val targetHeight = REC_INPUT_HEIGHT
-			val targetWidth = (bitmap.width * (targetHeight.toFloat() / bitmap.height.toFloat().coerceAtLeast(1f)))
-				.roundToInt()
-				.coerceIn(REC_MIN_WIDTH, REC_MAX_WIDTH)
+			val targetWidth = computeRecognitionWidth(bitmap, tuning)
 			val scaled = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
 			var inputTensor: OnnxTensor? = null
 			var result: OrtSession.Result? = null
@@ -793,12 +938,56 @@ class PaddleReaderOcrEngine @Inject constructor(
 				result = runtime.recSession.run(mapOf(inputName to inputTensor))
 				val outputName = runtime.recSession.outputNames.first()
 				val tensor = result.get(outputName).orElse(null) as? OnnxTensor ?: return "" to 0f
-				decodeRecognitionTensor(tensor, runtime.recDict)
+				val (text, confidence) = decodeRecognitionTensor(tensor, runtime.recDict)
+				if (confidence < tuning.recognitionThreshold) "" to confidence else text to confidence
 			} finally {
 				runCatching { result?.close() }
 				runCatching { inputTensor?.close() }
 				scaled.recycle()
 			}
+		}
+
+		private fun computeRecognitionWidth(bitmap: Bitmap, tuning: OcrTuning): Int {
+			return (bitmap.width * (REC_INPUT_HEIGHT.toFloat() / bitmap.height.toFloat().coerceAtLeast(1f)))
+				.roundToInt()
+				.coerceIn(REC_MIN_WIDTH, tuning.recognitionMaxWidth)
+		}
+
+		private fun decodeRecognitionBatchTensor(
+			tensor: OnnxTensor,
+			dictionary: List<String>,
+			regions: List<TextRegion>,
+			tuning: OcrTuning,
+		): List<OcrTextBlock> {
+			val shape = tensor.info.shape
+			if (shape.size != 3) return emptyList()
+			val batchSize = shape[0].toInt()
+			val timeSteps = shape[1].toInt()
+			val classes = shape[2].toInt()
+			val values = FloatArray(batchSize * timeSteps * classes)
+			tensor.floatBuffer.get(values)
+			val blocks = mutableListOf<OcrTextBlock>()
+			for (batchIndex in 0 until min(batchSize, regions.size)) {
+				val (text, confidence) = decodeRecognitionValues(
+					values = values,
+					offset = batchIndex * timeSteps * classes,
+					timeSteps = timeSteps,
+					classes = classes,
+					dictionary = dictionary,
+				)
+				if (text.isBlank() || confidence < tuning.recognitionThreshold) continue
+				val region = regions[batchIndex]
+				blocks += OcrTextBlock(
+					text = text,
+					boundingBox = region.rect,
+					confidence = confidence,
+					directionHint = region.directionHint,
+					angleHintDegrees = region.angleHintDegrees,
+					isAxisAligned = region.isAxisAligned,
+					quadPoints = region.quadPoints,
+				)
+			}
+			return blocks
 		}
 	}
 }

@@ -26,7 +26,7 @@ data class OnnxModelFile(
 )
 
 object OnnxOfficialModelCatalog {
-	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/monkt/paddleocr-onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
+	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/monkt/paddleocr-onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
 
 	val models = listOf(
 		OnnxOfficialModel(
@@ -59,11 +59,35 @@ object OnnxOfficialModelCatalog {
 		),
 		OnnxOfficialModel(
 			id = "hy_mt_v1_0_0_beta",
-			title = "HY-MT 1.5 (OnnxModelsEnhancer)",
-			version = "v1.0.0-beta",
-			archiveUrl = "https://github.com/niedev/OnnxModelsEnhancer/releases/download/v1.0.0-beta/HY-MT.zip",
-			sha256 = "52109bad6bb72a5a0c1cf66a62547495f024b795864f8d380bcf46be7977d517",
-			description = "Decoder-only large local translation model optimized for ONNX Runtime.",
+			title = "Hy-MT2 1.8B (Q4 ONNX)",
+			version = "hf-2026-07-01-q4-kquant-tie-cpu",
+			files = listOf(
+				OnnxModelFile(
+					fileName = "model.onnx",
+					downloadUrl = "https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX/resolve/main/Q4_KQuant_tie/cpu/model.onnx",
+				),
+				OnnxModelFile(
+					fileName = "model.onnx.data",
+					downloadUrl = "https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX/resolve/main/Q4_KQuant_tie/cpu/model.onnx.data",
+				),
+				OnnxModelFile(
+					fileName = "tokenizer.json",
+					downloadUrl = "https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX/resolve/main/Q4_KQuant_tie/cpu/tokenizer.json",
+				),
+				OnnxModelFile(
+					fileName = "tokenizer_config.json",
+					downloadUrl = "https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX/resolve/main/Q4_KQuant_tie/cpu/tokenizer_config.json",
+				),
+				OnnxModelFile(
+					fileName = "genai_config.json",
+					downloadUrl = "https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX/resolve/main/Q4_KQuant_tie/cpu/genai_config.json",
+				),
+				OnnxModelFile(
+					fileName = "chat_template.jinja",
+					downloadUrl = "https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX/resolve/main/Q4_KQuant_tie/cpu/chat_template.jinja",
+				),
+			),
+			description = "Hy-MT2 1.8B multilingual translation model converted to ONNX Runtime GenAI format.",
 		),
 		OnnxOfficialModel(
 			id = "madlad_v1_0_0_beta",

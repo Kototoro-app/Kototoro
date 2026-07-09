@@ -129,6 +129,7 @@ class OnnxReaderTranslationEngine @Inject constructor(
 
 	private enum class PromptTemplateFamily {
 		GENERIC_TRANSLATE_ONLY,
+		HY_MT_CHAT,
 		TRANSLATE_GEMMA_TEXT,
 	}
 
@@ -293,7 +294,9 @@ class OnnxReaderTranslationEngine @Inject constructor(
 					tryCreateQwen35Runtime(modelId, modelDir, typeLabel, useGpu)
 				}
 				// 3. Check for TranslateGemma
-				modelDir.walkTopDown().any { it.name.contains("translategemma", true) } || modelId.contains("translategemma", true) -> {
+				modelDir.walkTopDown().any { it.name.contains("translategemma", true) } ||
+					modelId.contains("translategemma", true) ||
+					modelDir.walkTopDown().any { it.name.equals("genai_config.json", true) && modelId.contains("hy_mt", true) } -> {
 					tryCreateTranslateGemmaRuntime(modelId, modelDir, typeLabel, useGpu)
 				}
 				// 4. Fallback to Madlad or Generic
@@ -785,6 +788,11 @@ class OnnxReaderTranslationEngine @Inject constructor(
 		input: String,
 	): String {
 		return when (family) {
+			PromptTemplateFamily.HY_MT_CHAT -> buildHyMtChatPrompt(
+				sourceLang = sourceLang,
+				targetLang = targetLang,
+				input = input,
+			)
 			PromptTemplateFamily.TRANSLATE_GEMMA_TEXT -> buildTranslateGemmaTextPrompt(
 				sourceLang = sourceLang,
 				targetLang = targetLang,
@@ -804,6 +812,26 @@ class OnnxReaderTranslationEngine @Inject constructor(
 		input: String,
 	): String {
 		return "Translate from $sourceLang to $targetLang. Return only translation.\n\n$input"
+	}
+
+	private fun buildHyMtChatPrompt(
+		sourceLang: String,
+		targetLang: String,
+		input: String,
+	): String {
+		return buildString(input.length + 240) {
+			append("<｜hy_begin▁of▁sentence｜>")
+			append("You are a professional manga translator. Return only the translated text.")
+			append("<｜hy_place▁holder▁no▁3｜>")
+			append("<｜hy_User｜>")
+			append("Translate from ")
+			append(sourceLang)
+			append(" to ")
+			append(targetLang)
+			append(".\n")
+			append(input)
+			append("<｜hy_Assistant｜>")
+		}
 	}
 
 	private fun buildTranslateGemmaTextPrompt(
@@ -870,6 +898,12 @@ class OnnxReaderTranslationEngine @Inject constructor(
 				source = "model_id_hint",
 			)
 		}
+		if (modelId.contains("hy_mt", ignoreCase = true)) {
+			return PromptTemplateInfo(
+				family = PromptTemplateFamily.HY_MT_CHAT,
+				source = "model_id_hint",
+			)
+		}
 		return PromptTemplateInfo(family = fallbackFamily, source = "fallback")
 	}
 
@@ -878,6 +912,12 @@ class OnnxReaderTranslationEngine @Inject constructor(
 		fallbackFamily: PromptTemplateFamily,
 	): PromptTemplateFamily {
 		val normalized = templateText.lowercase()
+		if (
+			normalized.contains("hy_user") &&
+			normalized.contains("hy_assistant")
+		) {
+			return PromptTemplateFamily.HY_MT_CHAT
+		}
 		if (
 			normalized.contains("source_lang_code") &&
 			normalized.contains("target_lang_code") &&
@@ -1534,14 +1574,23 @@ class OnnxReaderTranslationEngine @Inject constructor(
 	private fun loadStopTokens(modelDir: File): Set<Long> {
 		val defaults = mutableSetOf(
 			0L, 1L, 2L,
+			HY_EOT_TOKEN_ID, HY_EOS_TOKEN_ID,
 			QWEN_EOS_TOKEN_ID, QWEN_ALT_EOS_TOKEN_ID,
 			QWEN2_EOS_TOKEN_ID, QWEN2_ALT_EOS_TOKEN_ID,
 		)
-		val generationConfig = File(modelDir, "generation_config.json")
-		if (!generationConfig.isFile) return defaults
+		val generationConfig = listOf(
+			File(modelDir, "generation_config.json"),
+			File(modelDir, "genai_config.json"),
+		).firstOrNull { it.isFile } ?: return defaults
 		return runCatching {
 			val root = JSONObject(generationConfig.readText())
-			when (val eos = root.opt("eos_token_id")) {
+			val model = root.optJSONObject("model")
+			val eos = if (root.has("eos_token_id")) {
+				root.opt("eos_token_id")
+			} else {
+				model?.opt("eos_token_id")
+			}
+			when (eos) {
 				is Number -> defaults += eos.toLong()
 				is JSONArray -> {
 					for (i in 0 until eos.length()) {
@@ -1591,6 +1640,8 @@ class OnnxReaderTranslationEngine @Inject constructor(
 		private const val NLLB_DICTIONARY_LENGTH = 256000
 			private const val NLLB_DECODER_START_TOKEN = 2
 			private const val MADLAD_DECODER_START_TOKEN = 0
+			private const val HY_EOT_TOKEN_ID = 120008L
+			private const val HY_EOS_TOKEN_ID = 120020L
 			private const val QWEN_EOS_TOKEN_ID = 248044L
 			private const val QWEN_ALT_EOS_TOKEN_ID = 248046L
 			private const val QWEN2_EOS_TOKEN_ID = 151643L
@@ -1622,5 +1673,3 @@ class OnnxReaderTranslationEngine @Inject constructor(
 		)
 	}
 }
-
-
