@@ -5,8 +5,7 @@ import android.net.Uri
 
 internal class ReaderOcrPipelineCoordinator(
 	private val loadPageText: suspend (Uri, String, Long) -> PageOcrLoadResult,
-	private val mergePageTextBlocks: (List<OcrTextBlock>, Bitmap, String) -> List<TextFragment>,
-	private val groupFragmentsForTranslation: suspend (List<TextFragment>, Bitmap) -> BubbleGroupingResult,
+	private val mergePageTextBlocks: (List<OcrTextBlock>, String) -> List<TextFragment>,
 ) {
 
 	suspend fun execute(
@@ -33,27 +32,23 @@ internal class ReaderOcrPipelineCoordinator(
 		if (pageOcr.textBlocks.isEmpty()) {
 			return OcrPipelineResult(
 				pageTextBlocks = emptyList(),
-				mergedTextFragments = emptyList(),
+				textFragments = emptyList(),
 				pageOcr = pageOcr,
-				groupingResult = null,
 			)
 		}
-		val mergedTextFragments = mergePageTextBlocks(pageOcr.textBlocks, bitmap, sourceLang)
-		val groupingResult = groupFragmentsForTranslation(mergedTextFragments, bitmap)
+		val textFragments = mergePageTextBlocks(pageOcr.textBlocks, sourceLang)
 		return OcrPipelineResult(
 			pageTextBlocks = pageOcr.textBlocks,
-			mergedTextFragments = mergedTextFragments,
+			textFragments = textFragments,
 			pageOcr = pageOcr,
-			groupingResult = groupingResult,
 		)
 	}
 }
 
 internal data class OcrPipelineResult(
 	val pageTextBlocks: List<OcrTextBlock>,
-	val mergedTextFragments: List<TextFragment>,
+	val textFragments: List<TextFragment>,
 	val pageOcr: PageOcrLoadResult?,
-	val groupingResult: BubbleGroupingResult?,
 )
 
 internal data class PageOcrLoadResult(

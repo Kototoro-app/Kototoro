@@ -51,16 +51,6 @@ class ReaderPageEnhancementController @Inject constructor(
 			append('|')
 			append(settings.readerTranslationApiModel)
 			append('|')
-			append(settings.readerTranslationBubbleGroupingTuning)
-			append('|')
-			append(settings.isReaderTranslationBubbleDetectorEnabled)
-			append('|')
-			append(settings.isReaderTranslationBubbleGroupingEnabled)
-			append('|')
-			append(settings.readerTranslationOverlayCompactness)
-			append('|')
-			append(settings.readerTranslationRenderStyle)
-			append('|')
 			append(settings.readerTranslationOnnxModelId)
 			append('|')
 			append(settings.readerTranslationPaddleOfficialModelId)
@@ -72,8 +62,6 @@ class ReaderPageEnhancementController @Inject constructor(
 			append(settings.readerTranslationPaddleRecModelVersion)
 			append('|')
 			append(settings.readerTranslationPaddleRecModelSha256)
-			append('|')
-			append(settings.readerTranslationBubbleDetectorModelId)
 		}
 	}
 

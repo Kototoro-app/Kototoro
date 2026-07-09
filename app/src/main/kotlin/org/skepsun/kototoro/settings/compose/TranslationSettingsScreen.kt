@@ -40,12 +40,9 @@ fun TranslationSettingsScreen(
     val pipelineModeNames = stringArrayResource(R.array.values_reader_translation_pipeline_modes).toList()
     val sourceLangNames = stringArrayResource(R.array.values_reader_translation_source_languages).toList()
     val targetLangNames = stringArrayResource(R.array.values_reader_translation_target_languages).toList()
-    val tuningLevelNames = stringArrayResource(R.array.values_reader_translation_tuning_levels).toList()
-    val renderStyleNames = stringArrayResource(R.array.values_reader_translation_render_styles).toList()
 
     val currentMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_MODE) { settings.readerTranslationMode }.value
     val currentPipelineMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PIPELINE_MODE) { settings.readerTranslationPipelineMode }.value
-    val isBubbleDetectorEnabled = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_BUBBLE_DETECTOR_ENABLED) { settings.isReaderTranslationBubbleDetectorEnabled }.value
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -170,78 +167,6 @@ fun TranslationSettingsScreen(
                         onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, it) } }
                     )
 
-                }
-
-                SettingsPreferenceSection(
-                    title = stringResource(R.string.reader_translation_section_bubble),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (isBubbleDetectorEnabled) {
-                        SettingsChoicePreference(
-                            title = stringResource(R.string.reader_translation_onnx_bubble_model_selection),
-                            options = onnxBubbleModels,
-                            value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_BUBBLE_DETECTOR_MODEL_ID) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_BUBBLE_DETECTOR_MODEL_ID, "AUTO") ?: "AUTO" }.value,
-                            onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_BUBBLE_DETECTOR_MODEL_ID, it) } }
-                        )
-
-                        val rawModelId = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_BUBBLE_DETECTOR_MODEL_ID) { settings.readerTranslationBubbleDetectorModelId }.value
-                        val isDetr = rawModelId.contains("detr", ignoreCase = true) || rawModelId.contains("transformers", ignoreCase = true)
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.reader_translation_bubble_detector_nms),
-                            value = (settings.observeAsState("dummy_nms_ticker") { settings.getBubbleDetectorNms(rawModelId, isDetr) }.value * 100).toInt(),
-                            valueRange = 0..100,
-                            step = 1,
-                            valueText = { it.toString() },
-                            onValueChange = { settings.setBubbleDetectorNms(rawModelId, it / 100f) }
-                        )
-                    }
-
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.reader_translation_bubble_grouping_tuning),
-                        options = stringArrayResource(R.array.reader_translation_tuning_levels).mapIndexed { index, label ->
-                            SettingsChoiceOption(tuningLevelNames[index], label)
-                        },
-                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_BUBBLE_GROUPING_TUNING) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_BUBBLE_GROUPING_TUNING, "BALANCED") ?: "BALANCED" }.value,
-                        onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_BUBBLE_GROUPING_TUNING, it) } }
-                    )
-
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.reader_translation_bubble_detector_enabled),
-                        summary = stringResource(R.string.reader_translation_bubble_detector_enabled_summary),
-                        checked = isBubbleDetectorEnabled,
-                        onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_TRANSLATION_BUBBLE_DETECTOR_ENABLED, it) } }
-                    )
-
-                    SettingsSwitchPreference(
-                        title = stringResource(
-                            if (isBubbleDetectorEnabled) R.string.reader_translation_bubble_grouping_enabled
-                            else R.string.reader_translation_bubble_grouping_enabled_no_detector
-                        ),
-                        summary = stringResource(
-                            if (isBubbleDetectorEnabled) R.string.reader_translation_bubble_grouping_enabled_summary
-                            else R.string.reader_translation_bubble_grouping_enabled_summary_no_detector
-                        ),
-                        checked = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_BUBBLE_GROUPING_ENABLED) { prefs.getBoolean(AppSettings.KEY_READER_TRANSLATION_BUBBLE_GROUPING_ENABLED, true) }.value,
-                        onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_TRANSLATION_BUBBLE_GROUPING_ENABLED, it) } }
-                    )
-
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.reader_translation_overlay_compactness),
-                        options = stringArrayResource(R.array.reader_translation_tuning_levels).mapIndexed { index, label ->
-                            SettingsChoiceOption(tuningLevelNames[index], label)
-                        },
-                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS, "BALANCED") ?: "BALANCED" }.value,
-                        onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS, it) } }
-                    )
-
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.reader_translation_render_style),
-                        options = stringArrayResource(R.array.reader_translation_render_styles).mapIndexed { index, label ->
-                            SettingsChoiceOption(renderStyleNames[index], label)
-                        },
-                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, "COMPACT_OVERLAY") ?: "COMPACT_OVERLAY" }.value,
-                        onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, it) } }
-                    )
                 }
             }
         }

@@ -141,18 +141,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		color = Color.BLACK
 		textAlign = Paint.Align.LEFT
 	}
-	private val bubbleGroupingCoordinator by lazy(LazyThreadSafetyMode.NONE) {
-		ReaderBubbleGroupingCoordinator(
-			settings = settings,
-			onnxBubbleDetectorEngine = onnxBubbleDetectorEngine,
-			mergeRects = ::mergeRects,
-			rectArea = ::rectArea,
-			dp = ::dp,
-			log = ::log,
-			formatError = ::oneLine,
-			maxDetectedGroupFragments = MAX_DETECTED_GROUP_FRAGMENTS,
-		)
-	}
 	private val bubbleRenderCoordinator by lazy(LazyThreadSafetyMode.NONE) {
 		ReaderBubbleRenderCoordinator(
 			isLikelyGarbledText = ::isLikelyGarbledText,
@@ -209,7 +197,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		ReaderOcrPipelineCoordinator(
 			loadPageText = ::loadPageTextWithCache,
 			mergePageTextBlocks = ::mergePageTextBlocks,
-			groupFragmentsForTranslation = ::groupFragmentsForTranslation,
 		)
 	}
 
@@ -339,21 +326,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		var ocrBlocks = 0
 		var bubbleCount = 0
 		var renderedBubbleCount = 0
-		val bubbleGroupingEnabled = settings.isReaderTranslationBubbleGroupingEnabled
-		var bubbleDetectorCandidates = 0
-		var bubbleDetectorMatchedFragments = 0
-		var bubbleDetectorUsedGroups = 0
-		var bubbleDetectorSubdividedGroups = 0
-		var bubbleDetectorSubdividedFragments = 0
-		var bubbleDetectorCoverageRate = 0f
-		var bubbleDetectorEngine = "cv"
-		var bubbleDetectorModel = ""
-		var bubbleDetectorRawBoxes = 0
-		var bubbleDetectorTotalMs = 0L
-		var bubbleDetectorFallbackReason = ""
-		var bubbleGroupingFallbackFragments = 0
-		var bubbleGroupingFallbackGroups = 0
-		var bubbleGroupingFallbackMode = "heuristic"
 		var processResult = "source"
 		appendPageLog(pageId, "metric.render_cache.hit=0")
 
@@ -423,29 +395,14 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			ocrCacheHit = ocrPipeline.pageOcr?.cacheHit ?: false
 			ocrDurationMs = ocrPipeline.pageOcr?.durationMs ?: 0L
 			ocrBlocks = ocrPipeline.pageTextBlocks.size
-			log { "metric.ocr.merged_fragments=${ocrPipeline.mergedTextFragments.size}" }
-			val groupingResult = ocrPipeline.groupingResult
-			if (groupingResult == null) {
+			log { "metric.ocr.fragments=${ocrPipeline.textFragments.size}" }
+			if (ocrPipeline.textFragments.isEmpty()) {
 				log { "fail_code=$FAIL_CODE_OCR_EMPTY" }
 				bitmap.recycle()
 				return sourceUri
 			}
-			bubbleDetectorCandidates = groupingResult.detectorCandidateCount
-			bubbleDetectorMatchedFragments = groupingResult.detectorMatchedFragmentCount
-			bubbleDetectorUsedGroups = groupingResult.detectorUsedGroupCount
-			bubbleDetectorSubdividedGroups = groupingResult.detectorSubdividedGroupCount
-			bubbleDetectorSubdividedFragments = groupingResult.detectorSubdividedFragmentCount
-			bubbleDetectorCoverageRate = groupingResult.detectorCoverageRate
-			bubbleDetectorEngine = groupingResult.detectorEngine
-			bubbleDetectorModel = groupingResult.detectorModelId
-			bubbleDetectorRawBoxes = groupingResult.detectorRawBoxCount
-			bubbleDetectorTotalMs = groupingResult.detectorTotalMs
-			bubbleDetectorFallbackReason = groupingResult.detectorFallbackReason
-			bubbleGroupingFallbackFragments = groupingResult.fallbackFragmentCount
-			bubbleGroupingFallbackGroups = groupingResult.fallbackGroupCount
-			bubbleGroupingFallbackMode = groupingResult.fallbackMode
-			val bubbleInputs = buildBubbleInputs(
-				groups = groupingResult.groups,
+			val bubbleInputs = buildBubbleInputsFromFragments(
+				fragments = ocrPipeline.textFragments,
 				sourceLang = sourceLang,
 				targetLang = targetLang,
 			)
@@ -503,22 +460,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			log { "metric.ocr.pipeline.strategy=$lastResolvedOcrPipelineStrategy" }
 			log { "metric.ocr.blocks=$ocrBlocks" }
 			log { "metric.translation.bubbles=$bubbleCount" }
-			log { "metric.bubble.grouping.enabled=$bubbleGroupingEnabled" }
-			log { "metric.bubble.grouping.detector_groups=$bubbleDetectorUsedGroups" }
-			log { "metric.bubble.grouping.fallback_fragments=$bubbleGroupingFallbackFragments" }
-			log { "metric.bubble.grouping.fallback_groups=$bubbleGroupingFallbackGroups" }
-			log { "metric.bubble.grouping.fallback_mode=$bubbleGroupingFallbackMode" }
-			log { "metric.bubble.detector.candidates=$bubbleDetectorCandidates" }
-			log { "metric.bubble.detector.matched_fragments=$bubbleDetectorMatchedFragments" }
-			log { "metric.bubble.detector.used_groups=$bubbleDetectorUsedGroups" }
-			log { "metric.bubble.detector.subdivided_groups=$bubbleDetectorSubdividedGroups" }
-			log { "metric.bubble.detector.subdivided_fragments=$bubbleDetectorSubdividedFragments" }
-			log { "metric.bubble.detector.coverage_rate=$bubbleDetectorCoverageRate" }
-			log { "metric.bubble.detector.engine=$bubbleDetectorEngine" }
-			log { "metric.bubble.detector.model=${bubbleDetectorModel.ifBlank { "none" }}" }
-			log { "metric.bubble.detector.raw_boxes=$bubbleDetectorRawBoxes" }
-			log { "metric.bubble.detector.total_ms=$bubbleDetectorTotalMs" }
-			log { "metric.bubble.detector.fallback_reason=${bubbleDetectorFallbackReason.ifBlank { "none" }}" }
 			if (translateDurationMs >= 0L) log { "metric.translation.total_ms=$translateDurationMs" }
 			if (renderDurationMs >= 0L) log { "metric.render.total_ms=$renderDurationMs" }
 			log { "metric.render.translated_bubbles=$renderedBubbleCount" }
@@ -559,7 +500,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 
 	private suspend fun recognizeTextWithFallback(sourceUri: Uri, sourceLang: String, pageId: Long): List<OcrTextBlock> {
 		val minAcceptableBlocks = when {
-			sourceLang.startsWith("ja") -> 3
+			isJapaneseSourceLanguage(sourceLang) -> 3
 			sourceLang.startsWith("zh") || sourceLang.startsWith("ko") -> 2
 			else -> 1
 		}
@@ -889,22 +830,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		}.getOrNull()
 	}
 
-	private suspend fun groupFragmentsForTranslation(
-		fragments: List<TextFragment>,
-		bitmap: Bitmap,
-	): BubbleGroupingResult {
-		return bubbleGroupingCoordinator.groupFragmentsForTranslation(
-			fragments = fragments,
-			bitmap = bitmap,
-		)
-	}
-
 	private fun mergePageTextBlocks(
 		textBlocks: List<OcrTextBlock>,
-		bitmap: Bitmap,
 		sourceLang: String,
 	): List<TextFragment> {
-		val sourceFragments = textBlocks.asSequence()
+		val fragments = textBlocks.asSequence()
 			.mapNotNull { block ->
 				val rect = block.boundingBox ?: return@mapNotNull null
 				val text = block.text.trim()
@@ -927,10 +857,29 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			}
 			.toList()
 		return textMergeCoordinator.merge(
-			fragments = sourceFragments,
-			bitmap = bitmap,
+			fragments = fragments,
 			sourceLang = sourceLang,
 		)
+	}
+
+	private fun buildBubbleInputsFromFragments(
+		fragments: List<TextFragment>,
+		sourceLang: String,
+		targetLang: String,
+	): List<BubbleInput> {
+		return fragments.mapNotNull { fragment ->
+			val sourceText = normalizeTextForTranslation(fragment.text, sourceLang)
+			if (sourceText.isBlank()) {
+				return@mapNotNull null
+			}
+			BubbleInput(
+				rect = Rect(fragment.rect),
+				sourceText = sourceText,
+				verticalPreferred = false,
+				sourceContentRect = Rect(fragment.rect),
+				sourceContentRects = listOf(Rect(fragment.rect)),
+			)
+		}
 	}
 
 	private fun buildBubbleInputs(
@@ -948,13 +897,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			if (sourceText.isBlank()) {
 				return@mapIndexedNotNull null
 			}
-			val verticalPreferred = isVerticalTargetLanguage(targetLang) &&
-				sourceLang.startsWith("ja") &&
-				(isLikelyColumnLayout(orderedFragments) || mergedRect.height() > mergedRect.width() * 13 / 10)
 			BubbleInput(
 				rect = mergedRect,
 				sourceText = sourceText,
-				verticalPreferred = verticalPreferred,
+				verticalPreferred = false,
 				classId = group.classId,
 				detectorAnchored = group.detectorAnchored,
 				sourceContentRect = mergeRects(orderedFragments.map { it.rect }),
@@ -963,8 +909,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		}
 	}
 
-	private fun shouldMergeFragments(a: TextFragment, b: TextFragment, bitmap: Bitmap): Boolean {
-		val grouping = groupingTuningLevel()
+	private fun shouldMergeFragments(a: TextFragment, b: TextFragment): Boolean {
 		val aDirection = effectiveDirectionHint(a)
 		val bDirection = effectiveDirectionHint(b)
 		if (a.isAxisAligned && b.isAxisAligned) {
@@ -994,21 +939,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val yOverlapRatio = yOverlap / minH
 		val gapX = axisGap(a.rect.left, a.rect.right, b.rect.left, b.rect.right).toFloat()
 		val gapY = axisGap(a.rect.top, a.rect.bottom, b.rect.top, b.rect.bottom).toFloat()
-		val maxGapScale = when (grouping) {
-			TuningLevel.STRICT -> 0.70f
-			TuningLevel.BALANCED -> 0.85f
-			TuningLevel.RELAXED -> 1.05f
-		}
-		val minOverlapRatio = when (grouping) {
-			TuningLevel.STRICT -> 0.26f
-			TuningLevel.BALANCED -> 0.18f
-			TuningLevel.RELAXED -> 0.12f
-		}
-		val inflationLimit = when (grouping) {
-			TuningLevel.STRICT -> 1.85f
-			TuningLevel.BALANCED -> 2.2f
-			TuningLevel.RELAXED -> 2.8f
-		}
+		val maxGapScale = 0.85f
+		val minOverlapRatio = 0.18f
+		val inflationLimit = 2.2f
 		val maxGapX = minW * maxGapScale + dp(3f)
 		val maxGapY = minH * maxGapScale + dp(3f)
 		val preferColumnMerge = shouldPreferColumnMerge(a, b, aDirection, bDirection)
@@ -1035,21 +968,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			val inflation = mergedArea / sumArea
 			if (inflation > inflationLimit && xOverlapRatio < 0.45f && yOverlapRatio < 0.45f) return false
 		}
-		// Detect separator line between two fragments (panel border / gutter) and block cross-panel merge.
-		// Separator check is only meaningful for fragments with clear gap.
-		val separatorMinGapDp = when (grouping) {
-			TuningLevel.STRICT -> 4f
-			TuningLevel.BALANCED -> 6f
-			TuningLevel.RELAXED -> 8f
-		}
-		if (max(gapX, gapY) >= dp(separatorMinGapDp) && hasStrongSeparatorBetween(bitmap, a.rect, b.rect)) return false
 
 		// Final center-distance guard.
-		val distanceScale = when (grouping) {
-			TuningLevel.STRICT -> 1.9f
-			TuningLevel.BALANCED -> 2.2f
-			TuningLevel.RELAXED -> 2.6f
-		}
+		val distanceScale = 2.2f
 		return dx <= minW * distanceScale && dy <= minH * distanceScale
 	}
 
@@ -1118,54 +1039,17 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return (rect.width().coerceAtLeast(0) * rect.height().coerceAtLeast(0)).toFloat()
 	}
 
-	private fun hasStrongSeparatorBetween(bitmap: Bitmap, a: Rect, b: Rect): Boolean {
-		val grouping = groupingTuningLevel()
-		val x0 = a.centerX().coerceIn(0, bitmap.width - 1)
-		val y0 = a.centerY().coerceIn(0, bitmap.height - 1)
-		val x1 = b.centerX().coerceIn(0, bitmap.width - 1)
-		val y1 = b.centerY().coerceIn(0, bitmap.height - 1)
-		val dx = (x1 - x0).toFloat()
-		val dy = (y1 - y0).toFloat()
-		val dist = kotlin.math.sqrt(dx * dx + dy * dy)
-		if (dist < dp(6f)) return false
-
-		val steps = max(18, (dist / dp(2f).coerceAtLeast(1)).toInt())
-		var brightRun = 0
-		val runThreshold = when (grouping) {
-			TuningLevel.STRICT -> max(6, steps / 4)
-			TuningLevel.BALANCED -> max(8, steps / 3)
-			TuningLevel.RELAXED -> max(10, steps / 2)
-		}
-		for (i in 1 until steps) {
-			val t = i / steps.toFloat()
-			val x = (x0 + dx * t).toInt().coerceIn(0, bitmap.width - 1)
-			val y = (y0 + dy * t).toInt().coerceIn(0, bitmap.height - 1)
-			val pixel = bitmap.getPixel(x, y)
-			val lum = (Color.red(pixel) * 299 + Color.green(pixel) * 587 + Color.blue(pixel) * 114) / 1000
-			if (lum >= 246) {
-				brightRun++
-			} else {
-				brightRun = 0
-			}
-			// Prefer white gutter detection; dark-run is too sensitive to text strokes.
-			if (brightRun >= runThreshold) {
-				return true
-			}
-		}
-		return false
-	}
-
 	private fun composeGroupedText(group: List<TextFragment>, sourceLang: String): String {
 		if (group.isEmpty()) return ""
-		val isJa = sourceLang.startsWith("ja")
+		val isJapanese = isJapaneseSourceLanguage(sourceLang)
 		val sorted = sortFragmentsForReadingOrder(group, sourceLang)
-		val separator = if (isJa && isLikelyColumnLayout(group)) "\n" else ""
+		val separator = if (isJapanese && isLikelyColumnLayout(group)) "\n" else ""
 		return sorted.joinToString(separator) { it.text.trim() }.trim()
 	}
 
 	private fun normalizeTextForTranslation(text: String, sourceLang: String): String {
 		val trimmed = text.trim()
-		if (trimmed.isEmpty() || sourceLang.startsWith("ja")) return trimmed
+		if (trimmed.isEmpty() || isJapaneseSourceLanguage(sourceLang)) return trimmed
 		return trimmed
 			.replace(HYPHENATED_LINE_BREAK_REGEX, "")
 			.replace(INLINE_HYPHENATED_WORD_REGEX, "")
@@ -1178,7 +1062,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		sourceLang: String,
 	): List<TextFragment> {
 		if (group.isEmpty()) return emptyList()
-		return if (sourceLang.startsWith("ja")) {
+		return if (isJapaneseSourceLanguage(sourceLang)) {
 			group.sortedWith(
 				compareByDescending<TextFragment> { it.rect.centerX() }
 					.thenBy { it.rect.centerY() }
@@ -1186,6 +1070,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		} else {
 			group.sortedWith(compareBy<TextFragment> { it.rect.centerY() }.thenBy { it.rect.centerX() })
 		}
+	}
+
+	private fun isJapaneseSourceLanguage(sourceLang: String): Boolean {
+		return sourceLang.trim().lowercase().startsWith("ja")
 	}
 
 	private fun isLikelyColumnLayout(group: List<TextFragment>): Boolean {
@@ -1244,7 +1132,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val verticalPreferred = input.verticalPreferred
 		val detectorAnchored = input.detectorAnchored
 		val sourceContentRect = input.sourceContentRect
-		val compactOverlay = readerTranslationRenderStyle() == ReaderTranslationRenderStyle.COMPACT_OVERLAY
+		val compactOverlay = true
 		val padding = if (compactOverlay) dp(2f) else dp(4f)
 		val normalizedRect = Rect(
 			rect.left.coerceIn(0, bitmapWidth - 1),
@@ -1537,7 +1425,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return min(
 			dp(MAX_RENDER_TEXT_SIZE_DP).toFloat(),
 			min(
-				height * 0.58f,
+				height * 0.82f,
 				width * 0.82f,
 			),
 		).coerceAtLeast(dp(MIN_INITIAL_TEXT_SIZE_DP).toFloat())
@@ -1560,17 +1448,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		padding: Int,
 		sourceContentRect: Rect? = null,
 	): Rect {
-		val compactness = overlayCompactnessLevel()
-		val extraScale = when (compactness) {
-			TuningLevel.STRICT -> 1.02f
-			TuningLevel.BALANCED -> 1.10f
-			TuningLevel.RELAXED -> 1.22f
-		}
-		val minSide = when (compactness) {
-			TuningLevel.STRICT -> dp(10f)
-			TuningLevel.BALANCED -> dp(12f)
-			TuningLevel.RELAXED -> dp(16f)
-		}
+		val extraScale = 1.10f
+		val minSide = dp(12f)
 		val minTargetW = min(minSide, outer.width()).coerceAtLeast(1)
 		val minTargetH = min(minSide, outer.height()).coerceAtLeast(1)
 		// Ensure the rendered rect at least covers the source text area so original text is masked
@@ -1610,7 +1489,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	}
 
 	private fun isLikelySpeechBubbleRegion(bitmap: Bitmap, rect: Rect): Boolean {
-		val compactness = overlayCompactnessLevel()
 		val left = rect.left.coerceIn(0, bitmap.width - 1)
 		val top = rect.top.coerceIn(0, bitmap.height - 1)
 		val right = rect.right.coerceIn(left + 1, bitmap.width)
@@ -1632,63 +1510,23 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		}
 		if (total == 0) return false
 		val brightRatio = bright.toFloat() / total.toFloat()
-		val threshold = when (compactness) {
-			TuningLevel.STRICT -> 0.70f
-			TuningLevel.BALANCED -> 0.62f
-			TuningLevel.RELAXED -> 0.54f
-		}
-		return brightRatio >= threshold
-	}
-
-	private fun groupingTuningLevel(): TuningLevel {
-		return when (settings.readerTranslationBubbleGroupingTuning.trim().uppercase()) {
-			"STRICT" -> TuningLevel.STRICT
-			"RELAXED" -> TuningLevel.RELAXED
-			else -> TuningLevel.BALANCED
-		}
-	}
-
-	private fun overlayCompactnessLevel(): TuningLevel {
-		return when (settings.readerTranslationOverlayCompactness.trim().uppercase()) {
-			"STRICT" -> TuningLevel.STRICT
-			"RELAXED" -> TuningLevel.RELAXED
-			else -> TuningLevel.BALANCED
-		}
-	}
-
-	private fun readerTranslationRenderStyle(): ReaderTranslationRenderStyle {
-		return when (settings.readerTranslationRenderStyle.trim().uppercase()) {
-			"REPLACE" -> ReaderTranslationRenderStyle.REPLACE
-			else -> ReaderTranslationRenderStyle.COMPACT_OVERLAY
-		}
+		return brightRatio >= 0.62f
 	}
 
 	private fun drawBubbleBackground(canvas: Canvas, bubble: PreparedBubble) {
 		val roundRadius = dp(6f).toFloat()
-		val paint = when (readerTranslationRenderStyle()) {
-			ReaderTranslationRenderStyle.COMPACT_OVERLAY -> compactOverlayPaint
-			ReaderTranslationRenderStyle.REPLACE -> bubblePaint
-		}
 		if (bubble.segments.isNotEmpty()) {
 			for (segment in bubble.segments) {
-				canvas.drawRoundRect(RectF(segment.backgroundRect), roundRadius, roundRadius, paint)
+				canvas.drawRoundRect(RectF(segment.backgroundRect), roundRadius, roundRadius, compactOverlayPaint)
 			}
 			return
 		}
-		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, paint)
+		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, compactOverlayPaint)
 	}
 
 	private fun configureTextPaintForRender() {
-		when (readerTranslationRenderStyle()) {
-			ReaderTranslationRenderStyle.COMPACT_OVERLAY -> {
-				textPaint.color = Color.WHITE
-				textPaint.clearShadowLayer()
-			}
-			ReaderTranslationRenderStyle.REPLACE -> {
-				textPaint.color = Color.BLACK
-				textPaint.clearShadowLayer()
-			}
-		}
+		textPaint.color = Color.WHITE
+		textPaint.clearShadowLayer()
 	}
 
 	private fun drawBubbleText(canvas: Canvas, bubble: PreparedBubble) {
@@ -1841,8 +1679,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		contentWidth: Int,
 		contentHeight: Int,
 	) {
-		val previousAlign = textPaint.textAlign
-		textPaint.textAlign = Paint.Align.LEFT
 		val bounds = computeLayoutBounds(layout)
 		val dx = ((contentWidth - bounds.width) / 2f - bounds.left).coerceAtLeast(-bounds.left)
 		val dy = ((contentHeight - layout.height) / 2f).coerceAtLeast(0f)
@@ -1856,7 +1692,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		canvas.translate(contentLeft + dx, contentTop + dy)
 		layout.draw(canvas)
 		canvas.restore()
-		textPaint.textAlign = previousAlign
 	}
 
 	private fun drawVerticalText(
@@ -2048,11 +1883,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		maxLines: Int = Int.MAX_VALUE,
 		ellipsize: TextUtils.TruncateAt? = null,
 	): StaticLayout {
-		textPaint.textSize = textSize
-		textPaint.textAlign = Paint.Align.LEFT
-		return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, max(1, width))
+		val layoutPaint = TextPaint(textPaint).apply {
+			this.textSize = textSize
+			textAlign = Paint.Align.LEFT
+		}
+		return StaticLayout.Builder.obtain(text, 0, text.length, layoutPaint, max(1, width))
 			.setAlignment(Layout.Alignment.ALIGN_NORMAL)
-			.setIncludePad(false)
+			.setIncludePad(true)
 			.setLineSpacing(0f, 1.05f)
 			.setMaxLines(maxLines)
 			.setEllipsize(ellipsize)
@@ -2072,16 +1909,21 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val maxTextSize = resolveHorizontalMaxTextSize(safeWidth, safeHeight)
 		var textSize = initialTextSize.coerceIn(minTextSize, maxTextSize)
 		var layout = buildTextLayout(text, safeWidth, textSize)
-		while (layout.height > safeHeight && textSize > minTextSize) {
+		var bounds = computeLayoutBounds(layout)
+		while ((layout.height > safeHeight || hasHorizontalClipOverflow(bounds, safeWidth)) && textSize > minTextSize) {
 			textSize = max(minTextSize, textSize - 1f)
 			layout = buildTextLayout(text, safeWidth, textSize)
+			bounds = computeLayoutBounds(layout)
 		}
-		val overflow = (layout.height - safeHeight).coerceAtLeast(0)
+		val overflow = max(
+			(layout.height - safeHeight).coerceAtLeast(0),
+			horizontalClipOverflow(bounds, safeWidth),
+		)
 		if (overflow == 0 || !allowEllipsize) {
 			return HorizontalLayoutFit(
 				layout = layout,
 				textSize = textSize,
-				usedWidth = computeLayoutBounds(layout).width,
+				usedWidth = bounds.width,
 				usedHeight = layout.height,
 				overflow = overflow,
 				truncated = overflow > 0,
@@ -2104,6 +1946,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				overflow = overflow,
 				truncated = true,
 			)
+	}
+
+	private fun hasHorizontalClipOverflow(bounds: LayoutBounds, width: Int): Boolean {
+		return horizontalClipOverflow(bounds, width) > 0
+	}
+
+	private fun horizontalClipOverflow(bounds: LayoutBounds, width: Int): Int {
+		val tolerance = max(dp(HORIZONTAL_LAYOUT_WIDTH_OVERFLOW_TOLERANCE_DP), (width * 0.04f).toInt())
+		return (bounds.width - width - tolerance).coerceAtLeast(0)
 	}
 
 	private fun solveCompactOverlayBubble(
@@ -2168,24 +2019,23 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			val contentWidth = max(1, rect.width() - padding * 2)
 			val contentHeight = max(1, rect.height() - padding * 2)
 			for (textSize in buildVisibleTextSizeCandidates(MAX_RENDER_TEXT_SIZE_DP)) {
-				val layout = buildTextLayout(text, contentWidth, textSize)
-				if (layout.height > contentHeight) continue
-				val bounds = computeLayoutBounds(layout)
-				val finalRect = buildTightVisibleRect(
-					containerRect = rect,
-					targetWidth = max(1, bounds.width) + dp(VISIBLE_TEXT_MEASURE_SAFETY_DP) + padding * 2,
-					targetHeight = max(1, layout.height) + dp(VISIBLE_TEXT_MEASURE_SAFETY_DP) + padding * 2,
-					bitmapWidth = bitmapWidth,
-					bitmapHeight = bitmapHeight,
-				)
+				val finalRect = rect
 				val resolvedContentWidth = max(1, finalRect.width() - padding * 2)
 				val resolvedContentHeight = max(1, finalRect.height() - padding * 2)
+				val finalFit = fitHorizontalLayout(
+					text = text,
+					width = resolvedContentWidth,
+					height = resolvedContentHeight,
+					initialTextSize = textSize,
+					allowEllipsize = false,
+				)
+				if (finalFit.overflow > 0 || finalFit.truncated) continue
 				return PreparedBubble(
 					rect = finalRect,
 					padding = padding,
 					contentWidth = resolvedContentWidth,
 					contentHeight = resolvedContentHeight,
-					layout = layout,
+					layout = finalFit.layout,
 					verticalPlan = null,
 					debugOverlay = buildBubbleDebugOverlay(
 						input = input,
@@ -2225,13 +2075,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 					ceil((cellSize * MIN_VERTICAL_READABLE_WIDTH_COLUMNS).toDouble()).toInt(),
 				)
 				if (max(requiredWidth, minReadableWidth) > contentWidth || usedHeight > contentHeight) continue
-				val finalRect = buildTightVisibleRect(
-					containerRect = rect,
-					targetWidth = max(requiredWidth, minReadableWidth) + dp(VISIBLE_TEXT_MEASURE_SAFETY_DP) + padding * 2,
-					targetHeight = usedHeight + dp(VISIBLE_TEXT_MEASURE_SAFETY_DP) + padding * 2,
-					bitmapWidth = bitmapWidth,
-					bitmapHeight = bitmapHeight,
-				)
+				val finalRect = rect
 				val resolvedContentWidth = max(1, finalRect.width() - padding * 2)
 				val resolvedContentHeight = max(1, finalRect.height() - padding * 2)
 				val plan = VerticalLayoutPlan(
@@ -2271,45 +2115,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			size = max(minSize, size - 1f)
 		}
 		return candidates
-	}
-
-	private fun buildTightVisibleRect(
-		containerRect: Rect,
-		targetWidth: Int,
-		targetHeight: Int,
-		bitmapWidth: Int,
-		bitmapHeight: Int,
-	): Rect {
-		val width = targetWidth.coerceIn(1, min(containerRect.width().coerceAtLeast(1), bitmapWidth))
-		val height = targetHeight.coerceIn(1, min(containerRect.height().coerceAtLeast(1), bitmapHeight))
-		val cx = containerRect.centerX()
-		val cy = containerRect.centerY()
-		var left = cx - width / 2
-		var top = cy - height / 2
-		var right = left + width
-		var bottom = top + height
-		if (left < 0) {
-			right -= left
-			left = 0
-		}
-		if (top < 0) {
-			bottom -= top
-			top = 0
-		}
-		if (right > bitmapWidth) {
-			left -= right - bitmapWidth
-			right = bitmapWidth
-		}
-		if (bottom > bitmapHeight) {
-			top -= bottom - bitmapHeight
-			bottom = bitmapHeight
-		}
-		return Rect(
-			left.coerceIn(0, bitmapWidth - 1),
-			top.coerceIn(0, bitmapHeight - 1),
-			right.coerceIn(1, bitmapWidth),
-			bottom.coerceIn(1, bitmapHeight),
-		)
 	}
 
 	private fun buildVisibleScaledRects(
@@ -3505,10 +3310,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			settings.readerTranslationOcrEngine.name,
 			settings.readerTranslationPipelineMode.name,
 			OCR_STRATEGY_PAGE_DET_REC,
-			settings.readerTranslationBubbleGroupingTuning,
-			settings.isReaderTranslationBubbleGroupingEnabled.toString(),
-			settings.readerTranslationOverlayCompactness,
-			settings.readerTranslationRenderStyle,
 			settings.isReaderTranslationQualityFilterEnabled.toString(),
 			settings.readerTranslationPaddleOfficialModelId,
 			settings.readerTranslationPaddleDetModelId,
@@ -3644,16 +3445,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 
 	private companion object {
 
-		private enum class TuningLevel {
-			STRICT,
-			BALANCED,
-			RELAXED,
-		}
-
 		val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 		const val DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 		const val MAX_OPENAI_BATCH_SIZE = 3
-		const val TRANSLATION_PIPELINE_VERSION = "2026-07-09-visible-first-overlay"
+		const val TRANSLATION_PIPELINE_VERSION = "2026-07-09-layout-paint-snapshot"
 		const val OPENAI_TRANSLATION_SYSTEM_PROMPT = """
 		You translate manga OCR text.
 		Output only the translation.
@@ -3666,11 +3461,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		const val DETECTOR_CONTENT_MERGE_PADDING_DP = 8f
 		const val HORIZONTAL_TEXT_SIZE_WIDTH_RATIO = 0.58f
 		const val VERTICAL_TEXT_SIZE_WIDTH_RATIO = 0.78f
-		const val MAX_RENDER_TEXT_SIZE_DP = 15f
+		const val MAX_RENDER_TEXT_SIZE_DP = 24f
 		const val MAX_VERTICAL_RENDER_TEXT_SIZE_DP = 10f
 		const val MIN_INITIAL_TEXT_SIZE_DP = 6f
-		const val MIN_RENDER_TEXT_SIZE_DP = 3f
-		const val VISIBLE_TEXT_MEASURE_SAFETY_DP = 1f
+		const val MIN_RENDER_TEXT_SIZE_DP = 2f
+		const val HORIZONTAL_LAYOUT_WIDTH_OVERFLOW_TOLERANCE_DP = 2f
 		const val MIN_VERTICAL_READABLE_WIDTH_DP = 36f
 		const val MIN_VERTICAL_READABLE_WIDTH_COLUMNS = 2.2f
 		const val LOCAL_EXPANSION_GROWTH_FACTOR = 1.08f
@@ -3682,7 +3477,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val INLINE_HYPHENATED_WORD_REGEX = Regex("""(?<=\p{L})[\-‐‑‒–—]\s+(?=\p{L})""")
 		val BUBBLE_EXPAND_SCALES = floatArrayOf(1f, 1.12f, 1.24f)
 		val DETECTOR_ANCHORED_EXPAND_SCALES = floatArrayOf(1f, 1.18f, 1.34f, 1.52f)
-		val VISIBLE_OVERLAY_EXPAND_SCALES = floatArrayOf(1f, 1.18f, 1.42f, 1.72f, 2.1f, 2.6f, 3.2f, 4f, 6f, 9f)
+		val VISIBLE_OVERLAY_EXPAND_SCALES = floatArrayOf(1f)
 		const val TEXT_CACHE_PREFIX = "reader_translate_text_"
 		const val RENDER_CACHE_PREFIX = "reader_translate_render_"
 		const val OCR_CACHE_PREFIX = "reader_translate_ocr_"
@@ -3710,11 +3505,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			MLKIT,
 			PADDLE,
 			MANGA_OCR,
-		}
-
-		private enum class ReaderTranslationRenderStyle {
-			REPLACE,
-			COMPACT_OVERLAY,
 		}
 
 		private data class OcrQualityStats(

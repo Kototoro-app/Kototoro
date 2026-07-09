@@ -1,17 +1,15 @@
 package org.skepsun.kototoro.reader.translate.domain
 
-import android.graphics.Bitmap
 import android.graphics.Rect
 
 internal class ReaderTextMergeCoordinator(
-	private val shouldMergeFragments: (TextFragment, TextFragment, Bitmap) -> Boolean,
+	private val shouldMergeFragments: (TextFragment, TextFragment) -> Boolean,
 	private val mergeRects: (List<Rect>) -> Rect?,
 	private val composeMergedText: (List<TextFragment>, String) -> String,
 ) {
 
 	fun merge(
 		fragments: List<TextFragment>,
-		bitmap: Bitmap,
 		sourceLang: String,
 	): List<TextFragment> {
 		if (fragments.isEmpty()) return emptyList()
@@ -39,7 +37,7 @@ internal class ReaderTextMergeCoordinator(
 
 		for (i in fragments.indices) {
 			for (j in i + 1 until fragments.size) {
-				if (shouldMergeFragments(fragments[i], fragments[j], bitmap)) {
+				if (shouldMergeFragments(fragments[i], fragments[j])) {
 					edgeDistances[i to j] = normalizedDistance(fragments[i], fragments[j])
 				}
 			}
