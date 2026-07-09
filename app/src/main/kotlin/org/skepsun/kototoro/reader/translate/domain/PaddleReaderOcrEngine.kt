@@ -37,6 +37,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 	private data class Runtime(
 		val detectorModelId: String,
 		val recognizerModelId: String,
+		val detectorNormalizeMode: DetectorNormalizeMode,
 		val detSession: OrtSession,
 		val recSession: OrtSession,
 		val recDict: List<String>,
@@ -53,6 +54,11 @@ class PaddleReaderOcrEngine @Inject constructor(
 		val scaleX: Float,
 		val scaleY: Float,
 	)
+
+	private enum class DetectorNormalizeMode {
+		UNIT,
+		IMAGENET,
+	}
 
 	private val runtimeLock = Mutex()
 	@Volatile
@@ -185,11 +191,14 @@ class PaddleReaderOcrEngine @Inject constructor(
 		// AUTO: select by source language
 		val sourceLang = settings.readerTranslationSourceLanguage
 		val autoResolved = when (sourceLang) {
-			"ja" -> allRecognizers.firstOrNull { it.id == "ppocrv5_server_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
+			"ja" -> resolvePreferredDownloadedRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
+				?: allRecognizers.firstOrNull { it.id == "ppocrv5_server_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
 				?: allRecognizers.firstOrNull { it.id == "ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-			"en" -> allRecognizers.firstOrNull { it.id == "en_ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
+			"en" -> resolvePreferredDownloadedRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
+				?: allRecognizers.firstOrNull { it.id == "en_ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
 			"ko" -> allRecognizers.firstOrNull { it.id == "korean_ppocrv3_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-			"zh" -> allRecognizers.firstOrNull { it.id == "ppocrv5_server_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
+			"zh" -> resolvePreferredDownloadedRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
+				?: allRecognizers.firstOrNull { it.id == "ppocrv5_server_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
 				?: allRecognizers.firstOrNull { it.id == "ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
 			else -> null // "auto" or unrecognized
 		}
@@ -197,10 +206,32 @@ class PaddleReaderOcrEngine @Inject constructor(
 
 		// Fallback: best available downloaded model
 		val downloaded = allRecognizers.filter { onnxModelManager.isModelDownloaded(it.id) }
-		return downloaded.firstOrNull { it.id == "ppocrv5_server_rec_onnx" }
+		return resolvePreferredRecognizer(downloaded, PPOCRV6_RECOGNIZER_PRIORITY)
+			?: downloaded.firstOrNull { it.id == "ppocrv5_server_rec_onnx" }
 			?: downloaded.firstOrNull { it.id == "ppocrv5_mobile_rec_onnx" }
 			?: downloaded.firstOrNull()
+			?: resolvePreferredRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
 			?: allRecognizers.first()
+	}
+
+	private fun resolvePreferredDownloadedRecognizer(
+		models: List<org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel>,
+		priority: List<String>,
+	): org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel? {
+		return resolvePreferredRecognizer(
+			models = models.filter { onnxModelManager.isModelDownloaded(it.id) },
+			priority = priority,
+		)
+	}
+
+	private fun resolvePreferredRecognizer(
+		models: List<org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel>,
+		priority: List<String>,
+	): org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel? {
+		for (modelId in priority) {
+			models.firstOrNull { it.id == modelId }?.let { return it }
+		}
+		return null
 	}
 
 	private suspend fun ensureRuntime(
@@ -236,8 +267,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 				?: error("Missing OCR det model in: ${detectorModelDir.absolutePath}")
 			val recFile = findOnnxFile(recognizerModelDir, recognizerModel)
 				?: error("Missing OCR rec model in: ${recognizerModelDir.absolutePath}")
-			val dictFile = findDictFile(recognizerModelDir)
-				?: error("Missing OCR dict in: ${recognizerModelDir.absolutePath}")
+			val recDict = buildRecDictionary(recognizerModelDir)
 			val env = OrtEnvironment.getEnvironment()
 			val options = OrtSession.SessionOptions().apply {
 				setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
@@ -246,9 +276,10 @@ class PaddleReaderOcrEngine @Inject constructor(
 			val created = Runtime(
 				detectorModelId = detectorModelId,
 				recognizerModelId = recognizerModelId,
+				detectorNormalizeMode = resolveDetectorNormalizeMode(detectorModel),
 				detSession = env.createSession(detFile.absolutePath, options),
 				recSession = env.createSession(recFile.absolutePath, options),
-				recDict = buildRecDictionary(dictFile),
+				recDict = recDict,
 			)
 			runtime = created
 			created
@@ -269,11 +300,17 @@ class PaddleReaderOcrEngine @Inject constructor(
 		return dir.listFiles()?.firstOrNull { it.isFile && it.extension.equals("onnx", ignoreCase = true) }
 	}
 
-	/**
-	 * Find the dictionary .txt file inside the model directory.
-	 * Tries common names, then falls back to the first .txt file found.
-	 */
-	private fun findDictFile(dir: File): File? {
+	private fun resolveDetectorNormalizeMode(
+		model: org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel,
+	): DetectorNormalizeMode {
+		return if (model.id.startsWith("ppocrv6_")) {
+			DetectorNormalizeMode.IMAGENET
+		} else {
+			DetectorNormalizeMode.UNIT
+		}
+	}
+
+	private fun findDictTextFile(dir: File): File? {
 		val candidates = listOf("ppocrv5_dict.txt", "en_dict.txt", "korean_dict.txt")
 		for (name in candidates) {
 			val f = File(dir, name)
@@ -282,11 +319,60 @@ class PaddleReaderOcrEngine @Inject constructor(
 		return dir.listFiles()?.firstOrNull { it.isFile && it.extension.equals("txt", ignoreCase = true) }
 	}
 
-	private fun buildRecDictionary(dictFile: File): List<String> {
+	private fun buildRecDictionary(dir: File): List<String> {
+		val dictFile = findDictTextFile(dir)
+		if (dictFile != null) {
+			return buildRecDictionaryFromTextFile(dictFile)
+		}
+		val yamlFile = File(dir, "inference.yml").takeIf { it.isFile }
+			?: File(dir, "inference.yaml").takeIf { it.isFile }
+			?: error("Missing OCR dict or inference.yml in: ${dir.absolutePath}")
+		return buildRecDictionaryFromYamlFile(yamlFile)
+	}
+
+	private fun buildRecDictionaryFromTextFile(dictFile: File): List<String> {
 		val entries = dictFile.readLines()
 			.map { it.trimEnd('\r') }
 			.filter { it.isNotEmpty() }
 		return entries + " "
+	}
+
+	private fun buildRecDictionaryFromYamlFile(yamlFile: File): List<String> {
+		val entries = mutableListOf<String>()
+		var collecting = false
+		yamlFile.forEachLine { line ->
+			val trimmed = line.trim()
+			if (!collecting) {
+				if (trimmed == "character_dict:") {
+					collecting = true
+				}
+				return@forEachLine
+			}
+			val item = line.trimStart()
+			if (!item.startsWith("- ")) {
+				if (trimmed.isNotEmpty()) {
+					collecting = false
+				}
+				return@forEachLine
+			}
+			entries += parseYamlScalar(item.removePrefix("- ").trim())
+		}
+		check(entries.isNotEmpty()) {
+			"Missing character_dict in: ${yamlFile.absolutePath}"
+		}
+		return entries + " "
+	}
+
+	private fun parseYamlScalar(raw: String): String {
+		if (raw.length >= 2 && raw.first() == '\'' && raw.last() == '\'') {
+			return raw.substring(1, raw.lastIndex).replace("''", "'")
+		}
+		if (raw.length >= 2 && raw.first() == '"' && raw.last() == '"') {
+			return raw.substring(1, raw.lastIndex)
+				.replace("\\\"", "\"")
+				.replace("\\\\", "\\")
+		}
+		return raw
 	}
 
 	private fun normalizeRecognizerModelId(modelId: String): String {
@@ -367,6 +453,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 		height: Int,
 		width: Int,
 		normalizeToSigned: Boolean,
+		normalizeMode: DetectorNormalizeMode? = null,
 	): OnnxTensor {
 		val readableBitmap = ensureReadableBitmap(bitmap)
 		val pixels = IntArray(width * height)
@@ -381,7 +468,11 @@ class PaddleReaderOcrEngine @Inject constructor(
 					val g = ((pixel shr 8) and 0xFF) / 255f
 					val b = (pixel and 0xFF) / 255f
 					val base = y * width + x
-					if (normalizeToSigned) {
+					if (normalizeMode == DetectorNormalizeMode.IMAGENET) {
+						data[base] = (r - IMAGENET_MEAN_R) / IMAGENET_STD_R
+						data[channelStride + base] = (g - IMAGENET_MEAN_G) / IMAGENET_STD_G
+						data[channelStride * 2 + base] = (b - IMAGENET_MEAN_B) / IMAGENET_STD_B
+					} else if (normalizeToSigned) {
 						data[base] = (r - 0.5f) / 0.5f
 						data[channelStride + base] = (g - 0.5f) / 0.5f
 						data[channelStride * 2 + base] = (b - 0.5f) / 0.5f
@@ -544,6 +635,17 @@ class PaddleReaderOcrEngine @Inject constructor(
 		const val REC_INPUT_HEIGHT = 48
 		const val REC_MIN_WIDTH = 32
 		const val REC_MAX_WIDTH = 512
+		const val IMAGENET_MEAN_R = 0.485f
+		const val IMAGENET_MEAN_G = 0.456f
+		const val IMAGENET_MEAN_B = 0.406f
+		const val IMAGENET_STD_R = 0.229f
+		const val IMAGENET_STD_G = 0.224f
+		const val IMAGENET_STD_B = 0.225f
+		val PPOCRV6_RECOGNIZER_PRIORITY = listOf(
+			"ppocrv6_medium_rec_onnx",
+			"ppocrv6_small_rec_onnx",
+			"ppocrv6_tiny_rec_onnx",
+		)
 		val TRANSFORM_PAINT = Paint(Paint.FILTER_BITMAP_FLAG)
 		val NEIGHBOR_OFFSETS = arrayOf(
 			1 to 0,
@@ -566,6 +668,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 					height = resize.height,
 					width = resize.width,
 					normalizeToSigned = false,
+					normalizeMode = runtime.detectorNormalizeMode,
 				)
 				val inputName = runtime.detSession.inputNames.first()
 				result = runtime.detSession.run(mapOf(inputName to inputTensor))

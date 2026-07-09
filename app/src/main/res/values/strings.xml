@@ -1632,7 +1632,7 @@
     <string name="reader_translation_api_provider_preset_summary">Auto-fill endpoint and default model for common OpenAI-compatible providers</string>
     <string name="reader_translation_api_provider_custom">Custom (manual)</string>
     <string name="reader_translation_api_provider_openai">OpenAI: /v1 chat (gpt-4o-mini)</string>
-    <string name="reader_translation_api_provider_deepseek">DeepSeek: DeepSeek-V3 / R1</string>
+    <string name="reader_translation_api_provider_deepseek">DeepSeek: deepseek-v4-flash / deepseek-v4-pro</string>
     <string name="reader_translation_api_provider_zhipu">Zhipu AI: GLM-4 / GLM-5</string>
     <string name="reader_translation_api_provider_alibaba">Alibaba: Qwen</string>
     <string name="reader_translation_api_provider_moonshot">Moonshot AI: Kimi</string>

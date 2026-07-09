@@ -1157,7 +1157,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_READER_TRANSLATION_BUBBLE_GROUPING_TUNING, "BALANCED") ?: "BALANCED"
 
 	val readerTranslationOcrPipelineStrategy: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_OCR_PIPELINE_STRATEGY, "HYBRID") ?: "HYBRID"
+		get() = prefs.getString(KEY_READER_TRANSLATION_OCR_PIPELINE_STRATEGY, "PAGE_TEXT_FIRST") ?: "PAGE_TEXT_FIRST"
 
 	var isReaderTranslationBubbleDetectorEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_TRANSLATION_BUBBLE_DETECTOR_ENABLED, true)
@@ -1180,7 +1180,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, "") ?: ""
 
 	val readerTranslationPaddleDetModelId: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, "MLKIT") ?: "MLKIT"
+		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID)
+			?: DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID
 
 	val readerTranslationPaddleModelUrl: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_URL, null) 
@@ -2131,6 +2132,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_TRANSLATION_PADDLE_OCR_ONLY = "reader_translation_paddle_ocr_only"
 		const val KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID = "reader_translation_paddle_official_model_id"
 		const val KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "reader_translation_paddle_det_model_id"
+		const val DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "ppocrv6_small_det_onnx"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_URL = "reader_translation_paddle_model_url"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_VERSION = "reader_translation_paddle_model_version"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_SHA256 = "reader_translation_paddle_model_sha256"

@@ -107,7 +107,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	@Volatile
 	private var renderCacheEpoch: Int = 0
 	@Volatile
-	private var lastResolvedOcrPipelineStrategy: String = "page_text_first"
+	private var lastResolvedOcrPipelineStrategy: String = OCR_STRATEGY_PAGE_DET_REC
 	private val bubblePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 		color = Color.WHITE
 		style = Paint.Style.FILL
@@ -179,14 +179,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		get() = paddleOcrEngine
 	private val mangaTextRecognizer: ReaderTextRecognizer
 		get() = mangaOcrReaderTextRecognizer
-	private val bubbleDetectorOcrCoordinator by lazy(LazyThreadSafetyMode.NONE) {
-		ReaderBubbleDetectorOcrCoordinator(
-			settings = settings,
-			onnxBubbleDetectorEngine = onnxBubbleDetectorEngine,
-			dp = ::dp,
-			log = ::log,
-		)
-	}
 	private val translationCoordinator by lazy(LazyThreadSafetyMode.NONE) {
 		ReaderTranslationCoordinator(
 			settings = settings,
@@ -566,14 +558,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	}
 
 	private suspend fun recognizeTextWithFallback(sourceUri: Uri, sourceLang: String, pageId: Long): List<OcrTextBlock> {
-		val primary = settings.readerTranslationOcrEngine
 		val minAcceptableBlocks = when {
 			sourceLang.startsWith("ja") -> 3
 			sourceLang.startsWith("zh") || sourceLang.startsWith("ko") -> 2
 			else -> 1
 		}
-		val order = resolvePageOcrRouteOrder(sourceLang)
-		lastResolvedOcrPipelineStrategy = resolveOcrPipelineStrategy(sourceLang).metricKey
+		val order = resolvePageOcrRouteOrder()
+		lastResolvedOcrPipelineStrategy = OCR_STRATEGY_PAGE_DET_REC
 		var bestResult: List<OcrTextBlock> = emptyList()
 		var bestRoute: PageOcrRoute? = null
 		for (route in order) {
@@ -666,10 +657,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return (this * 1000f).roundToInt() / 1000f
 	}
 
-	private fun resolvePageOcrRouteOrder(
-		sourceLang: String,
-	): List<PageOcrRoute> {
-		val strategy = resolveOcrPipelineStrategy(sourceLang)
+	private fun resolvePageOcrRouteOrder(): List<PageOcrRoute> {
 		val detModelId = settings.readerTranslationPaddleDetModelId
 		val recModelId = settings.readerTranslationPaddleOfficialModelId
 		val detBackend = when (detModelId) {
@@ -687,18 +675,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			recognizer = recBackend,
 		)
 		val routes = linkedSetOf<PageOcrRoute>()
-		
-		if (strategy != OcrPipelineStrategy.PAGE_TEXT_FIRST && sourceLang.startsWith("ja") && settings.isReaderTranslationBubbleDetectorEnabled) {
-			routes += PageOcrRoute(
-				detector = OcrDetectorBackend.BUBBLE_DETECTOR,
-				recognizer = OcrRecognizerBackend.MANGA_OCR,
-			)
-		}
-		
-		// If BUBBLE_DETECTOR_FIRST was chosen but the language isn't Japanese, the first block is skipped.
 		// Always push the user's selected effective route as fallback.
 		routes += effectiveRoute
-		
+
 		// Absolute fallback to ensure pipeline never returns empty route list
 		routes += PageOcrRoute(
 			detector = OcrDetectorBackend.MLKIT,
@@ -706,19 +685,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		)
 		
 		return routes.toList()
-	}
-
-	private fun resolveOcrPipelineStrategy(sourceLang: String): OcrPipelineStrategy {
-		return when (settings.readerTranslationOcrPipelineStrategy) {
-			"PAGE_TEXT_FIRST" -> OcrPipelineStrategy.PAGE_TEXT_FIRST
-			"BUBBLE_DETECTOR_FIRST" -> OcrPipelineStrategy.BUBBLE_DETECTOR_FIRST
-			"HYBRID" -> if (sourceLang.startsWith("ja")) {
-				OcrPipelineStrategy.HYBRID
-			} else {
-				OcrPipelineStrategy.PAGE_TEXT_FIRST
-			}
-			else -> OcrPipelineStrategy.HYBRID
-		}
 	}
 
 	private suspend fun recognizeTextByEngine(
@@ -821,23 +787,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				mangaOcrReaderTextRecognizer.consumeLastDiagnostics()
 				log { "metric.ocr.ctd_mangaocr.recognized_blocks=${recognized.size}" }
 				recognized
-			}
-			route.detector == OcrDetectorBackend.BUBBLE_DETECTOR &&
-				route.recognizer == OcrRecognizerBackend.MANGA_OCR -> {
-				val localUri = ensureLocalFileUri(sourceUri) ?: return emptyList()
-				val bitmap = runInterruptible(Dispatchers.IO) {
-					BitmapDecoderCompat.decode(localUri.toFile())
-				}
-				try {
-					bubbleDetectorOcrCoordinator.recognize(
-						bitmap = bitmap,
-						recognizer = mangaTextRecognizer,
-					).textBlocks.also {
-						mangaOcrReaderTextRecognizer.consumeLastDiagnostics()
-					}
-				} finally {
-					bitmap.recycle()
-				}
 			}
 			route.detector == OcrDetectorBackend.MLKIT &&
 				route.recognizer == OcrRecognizerBackend.PADDLE -> {
@@ -3555,7 +3504,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			settings.readerTranslationApiModel,
 			settings.readerTranslationOcrEngine.name,
 			settings.readerTranslationPipelineMode.name,
-			settings.readerTranslationOcrPipelineStrategy,
+			OCR_STRATEGY_PAGE_DET_REC,
 			settings.readerTranslationBubbleGroupingTuning,
 			settings.isReaderTranslationBubbleGroupingEnabled.toString(),
 			settings.readerTranslationOverlayCompactness,
@@ -3566,7 +3515,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			settings.readerTranslationPaddleRecModelUrl,
 			settings.readerTranslationPaddleRecModelVersion,
 			settings.readerTranslationPaddleRecModelSha256,
-			settings.readerTranslationBubbleDetectorModelId,
 		).joinToString("|")
 		return "${RENDER_CACHE_PREFIX}${raw.sha256()}"
 	}
@@ -3602,7 +3550,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			sourceLang,
 			settings.readerTranslationOcrEngine.name,
 			settings.readerTranslationPipelineMode.name,
-			settings.readerTranslationOcrPipelineStrategy,
+			OCR_STRATEGY_PAGE_DET_REC,
 			settings.readerTranslationPaddleOfficialModelId,
 			settings.readerTranslationPaddleDetModelId,
 			settings.readerTranslationPaddleRecModelUrl,
@@ -3756,13 +3704,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			MLKIT,
 			PADDLE,
 			CTD,
-			BUBBLE_DETECTOR,
-		}
-
-		private enum class OcrPipelineStrategy(val metricKey: String) {
-			PAGE_TEXT_FIRST("page_text_first"),
-			BUBBLE_DETECTOR_FIRST("bubble_detector_first"),
-			HYBRID("hybrid"),
 		}
 
 		private enum class OcrRecognizerBackend {
@@ -3796,6 +3737,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			val metricKey: String
 				get() = "${detector.name.lowercase()}_${recognizer.name.lowercase()}"
 		}
+
+		const val OCR_STRATEGY_PAGE_DET_REC = "page_det_rec"
 
 			private fun sanitizeTranslation(text: String): String {
 			if (text.isBlank()) return ""

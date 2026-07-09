@@ -1708,7 +1708,7 @@
     <string name="reader_translation_api_provider_anthropic">Anthropic : Compatible OpenAI SDK (claude-sonnet-4-6)</string>
     <string name="reader_translation_api_provider_baidu">Baidu : ERNIE</string>
     <string name="reader_translation_api_provider_custom">Personnalisé (manuel)</string>
-    <string name="reader_translation_api_provider_deepseek">DeepSeek : DeepSeek-V3 / R1</string>
+    <string name="reader_translation_api_provider_deepseek">DeepSeek : deepseek-v4-flash / deepseek-v4-pro</string>
     <string name="reader_translation_api_provider_gemini">Gemini : Compatible OpenAI (gemini-3-flash-preview)</string>
     <string name="reader_translation_api_provider_minimax">MiniMax : M2.5</string>
     <string name="reader_translation_api_provider_moonshot">Moonshot AI : Kimi</string>

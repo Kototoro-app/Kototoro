@@ -1556,7 +1556,7 @@
     <string name="reader_translation_api_provider_preset_summary">为常见 OpenAI 兼容提供商自动填充 endpoint 和默认 model</string>
     <string name="reader_translation_api_provider_custom">自定义（手动填写）</string>
     <string name="reader_translation_api_provider_openai">OpenAI：/v1 chat（gpt-4o-mini）</string>
-    <string name="reader_translation_api_provider_deepseek">DeepSeek：DeepSeek-V3 / R1</string>
+    <string name="reader_translation_api_provider_deepseek">DeepSeek：deepseek-v4-flash / deepseek-v4-pro</string>
     <string name="reader_translation_api_provider_zhipu">智谱 AI：GLM-4 / GLM-5</string>
     <string name="reader_translation_api_provider_alibaba">阿里云：Qwen</string>
     <string name="reader_translation_api_provider_moonshot">Moonshot AI：Kimi</string>

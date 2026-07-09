@@ -208,7 +208,7 @@ internal class ReaderTranslationCoordinator(
 		sourceLang: String,
 		targetLang: String,
 	): Map<String, String> {
-		val endpoint = settings.readerTranslationApiEndpoint.trim()
+		val endpoint = resolveTranslationApiEndpoint()
 		if (endpoint.isBlank() || texts.isEmpty()) {
 			return texts.associateWith { "" }
 		}
@@ -259,7 +259,7 @@ internal class ReaderTranslationCoordinator(
 		targetLang: String,
 	): Map<String, String> {
 		if (texts.isEmpty()) return emptyMap()
-		val endpoint = settings.readerTranslationApiEndpoint.trim()
+		val endpoint = resolveTranslationApiEndpoint()
 		val apiKey = settings.readerTranslationApiKey.trim()
 		val model = settings.readerTranslationApiModel.trim().ifBlank { defaultOpenAiModel }
 		val userPrompt = buildString {
@@ -331,7 +331,7 @@ internal class ReaderTranslationCoordinator(
 		targetLang: String,
 	): String {
 		if (text.isBlank()) return ""
-		val endpoint = settings.readerTranslationApiEndpoint.trim()
+		val endpoint = resolveTranslationApiEndpoint()
 		val apiKey = settings.readerTranslationApiKey.trim()
 		val model = settings.readerTranslationApiModel.trim().ifBlank { defaultOpenAiModel }
 		val userPrompt = buildString {
@@ -558,7 +558,7 @@ internal class ReaderTranslationCoordinator(
 	}
 
 	private suspend fun translateByApi(text: String, sourceLang: String, targetLang: String): String {
-		val endpoint = settings.readerTranslationApiEndpoint.trim()
+		val endpoint = resolveTranslationApiEndpoint()
 		if (endpoint.isBlank()) {
 			return ""
 		}
@@ -675,6 +675,24 @@ internal class ReaderTranslationCoordinator(
 	private fun isOpenAiCompatibleChatCompletionsEndpoint(endpoint: String): Boolean {
 		val normalized = endpoint.lowercase()
 		return normalized.contains("/v1/chat/completions") || normalized.contains("/chat/completions")
+	}
+
+	private fun resolveTranslationApiEndpoint(): String {
+		val endpoint = settings.readerTranslationApiEndpoint.trim()
+		val preset = settings.readerTranslationApiProviderPreset.trim().uppercase()
+		return when {
+			preset == "DEEPSEEK" && isDeepSeekBaseEndpoint(endpoint) -> "https://api.deepseek.com/chat/completions"
+			preset == "OPENAI" && endpoint.trimEnd('/').equals("https://api.openai.com", ignoreCase = true) -> {
+				"https://api.openai.com/v1/chat/completions"
+			}
+			else -> endpoint
+		}
+	}
+
+	private fun isDeepSeekBaseEndpoint(endpoint: String): Boolean {
+		val normalized = endpoint.trim().trimEnd('/').lowercase()
+		return normalized == "https://api.deepseek.com" ||
+			normalized == "https://api.deepseek.com/v1"
 	}
 
 	private fun isDeepSeekEndpoint(endpoint: String): Boolean {

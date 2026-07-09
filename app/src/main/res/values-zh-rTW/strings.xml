@@ -1723,7 +1723,7 @@
     <string name="reader_translation_api_provider_anthropic">Anthropic 兼容層（claude-sonnet-4-6）</string>
     <string name="reader_translation_api_provider_baidu">百度：ERNIE 文心</string>
     <string name="reader_translation_api_provider_custom">自定義（手動填寫）</string>
-    <string name="reader_translation_api_provider_deepseek">DeepSeek：DeepSeek-V3 / R1</string>
+    <string name="reader_translation_api_provider_deepseek">DeepSeek：deepseek-v4-flash / deepseek-v4-pro</string>
     <string name="reader_translation_api_provider_gemini">Gemini 兼容層（gemini-3-flash-preview）</string>
     <string name="reader_translation_api_provider_minimax">MiniMax：M2.5</string>
     <string name="reader_translation_api_provider_moonshot">Moonshot AI：Kimi</string>

@@ -43,7 +43,7 @@ class ReaderPageEnhancementController @Inject constructor(
 			append('|')
 			append(settings.readerTranslationPipelineMode.name)
 			append('|')
-			append(settings.readerTranslationOcrPipelineStrategy)
+			append("page_det_rec")
 			append('|')
 			append(settings.readerTranslationMode.name)
 			append('|')

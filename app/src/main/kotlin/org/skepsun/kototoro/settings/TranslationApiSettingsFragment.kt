@@ -1,11 +1,13 @@
 package org.skepsun.kototoro.settings
 
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -126,6 +128,22 @@ fun TranslationApiSettingsRoute(
     onFetchModelsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    DisposableEffect(settings) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            if (key == AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET) {
+                TranslationApiSettingsSupport.applyApiProviderPreset(
+                    sharedPreferences = sharedPreferences ?: settings.prefs,
+                    presetInput = settings.readerTranslationApiProviderPreset,
+                    forceOverride = true,
+                )
+            }
+        }
+        settings.prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            settings.prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+
     TranslationApiSettingsScreen(
         settings = settings,
         onFetchModelsClick = onFetchModelsClick,

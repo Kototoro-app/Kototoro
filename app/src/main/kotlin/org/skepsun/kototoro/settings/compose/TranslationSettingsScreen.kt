@@ -40,7 +40,6 @@ fun TranslationSettingsScreen(
     val pipelineModeNames = stringArrayResource(R.array.values_reader_translation_pipeline_modes).toList()
     val sourceLangNames = stringArrayResource(R.array.values_reader_translation_source_languages).toList()
     val targetLangNames = stringArrayResource(R.array.values_reader_translation_target_languages).toList()
-    val ocrPipelineNames = stringArrayResource(R.array.values_reader_translation_ocr_pipeline_strategies).toList()
     val tuningLevelNames = stringArrayResource(R.array.values_reader_translation_tuning_levels).toList()
     val renderStyleNames = stringArrayResource(R.array.values_reader_translation_render_styles).toList()
 
@@ -155,7 +154,12 @@ fun TranslationSettingsScreen(
                     SettingsChoicePreference(
                         title = stringResource(R.string.reader_translation_ocr_det_model_selection),
                         options = paddleDetModels,
-                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, "MLKIT") ?: "MLKIT" }.value,
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID) {
+                            prefs.getString(
+                                AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID,
+                                AppSettings.DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID,
+                            ) ?: AppSettings.DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID
+                        }.value,
                         onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, it) } }
                     )
 
@@ -166,14 +170,6 @@ fun TranslationSettingsScreen(
                         onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, it) } }
                     )
 
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.reader_translation_ocr_pipeline_strategy),
-                        options = stringArrayResource(R.array.reader_translation_ocr_pipeline_strategies).mapIndexed { index, label ->
-                            SettingsChoiceOption(ocrPipelineNames[index], label)
-                        },
-                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_PIPELINE_STRATEGY) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_OCR_PIPELINE_STRATEGY, "HYBRID") ?: "HYBRID" }.value,
-                        onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_OCR_PIPELINE_STRATEGY, it) } }
-                    )
                 }
 
                 SettingsPreferenceSection(

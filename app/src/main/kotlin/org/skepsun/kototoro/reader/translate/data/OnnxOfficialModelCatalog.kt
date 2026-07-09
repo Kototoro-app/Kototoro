@@ -26,7 +26,7 @@ data class OnnxModelFile(
 )
 
 object OnnxOfficialModelCatalog {
-	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/monkt/paddleocr-onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx"
+	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/monkt/paddleocr-onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
 
 	val models = listOf(
 		OnnxOfficialModel(
@@ -126,6 +126,57 @@ object OnnxOfficialModelCatalog {
 			description = "PaddleOCR PP-OCRv5 mobile text detector converted to ONNX Runtime.",
 		),
 		OnnxOfficialModel(
+			id = "ppocrv6_tiny_det_onnx",
+			title = "PP-OCRv6 Tiny Detector",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_DETECTOR,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "inference.onnx",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/resolve/main/inference.onnx",
+				),
+				OnnxModelFile(
+					fileName = "inference.yml",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx/resolve/main/inference.yml",
+				),
+			),
+			description = "Official PP-OCRv6 tiny ONNX text detector for edge/mobile deployments.",
+		),
+		OnnxOfficialModel(
+			id = "ppocrv6_small_det_onnx",
+			title = "PP-OCRv6 Small Detector",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_DETECTOR,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "inference.onnx",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/main/inference.onnx",
+				),
+				OnnxModelFile(
+					fileName = "inference.yml",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/main/inference.yml",
+				),
+			),
+			description = "Official PP-OCRv6 small ONNX text detector balancing speed and accuracy.",
+		),
+		OnnxOfficialModel(
+			id = "ppocrv6_medium_det_onnx",
+			title = "PP-OCRv6 Medium Detector",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_DETECTOR,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "inference.onnx",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.onnx",
+				),
+				OnnxModelFile(
+					fileName = "inference.yml",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.yml",
+				),
+			),
+			description = "Official PP-OCRv6 medium ONNX text detector with higher accuracy for larger devices.",
+		),
+		OnnxOfficialModel(
 			id = "ppocrv5_mobile_rec_onnx",
 			title = "PP-OCRv5 Mobile Recognizer",
 			version = "hf-main",
@@ -158,6 +209,57 @@ object OnnxOfficialModelCatalog {
 				),
 			),
 			description = "PaddleOCR PP-OCRv5 server recognizer. Larger model optimized for Japanese and Chinese text.",
+		),
+		OnnxOfficialModel(
+			id = "ppocrv6_tiny_rec_onnx",
+			title = "PP-OCRv6 Tiny Recognizer",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_RECOGNIZER,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "inference.onnx",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/resolve/main/inference.onnx",
+				),
+				OnnxModelFile(
+					fileName = "inference.yml",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec_onnx/resolve/main/inference.yml",
+				),
+			),
+			description = "Official PP-OCRv6 tiny ONNX recognizer. The character dictionary is loaded from inference.yml.",
+		),
+		OnnxOfficialModel(
+			id = "ppocrv6_small_rec_onnx",
+			title = "PP-OCRv6 Small Recognizer",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_RECOGNIZER,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "inference.onnx",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/main/inference.onnx",
+				),
+				OnnxModelFile(
+					fileName = "inference.yml",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/main/inference.yml",
+				),
+			),
+			description = "Official PP-OCRv6 small ONNX recognizer. The character dictionary is loaded from inference.yml.",
+		),
+		OnnxOfficialModel(
+			id = "ppocrv6_medium_rec_onnx",
+			title = "PP-OCRv6 Medium Recognizer",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_RECOGNIZER,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "inference.onnx",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.onnx",
+				),
+				OnnxModelFile(
+					fileName = "inference.yml",
+					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.yml",
+				),
+			),
+			description = "Official PP-OCRv6 medium ONNX recognizer. The character dictionary is loaded from inference.yml.",
 		),
 		OnnxOfficialModel(
 			id = "en_ppocrv5_mobile_rec_onnx",

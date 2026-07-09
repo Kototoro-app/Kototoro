@@ -18,7 +18,7 @@ object TranslationApiSettingsSupport {
 		if (preset.isBlank() || preset == "CUSTOM") return
 		val endpointAndModel = when (preset) {
 			"OPENAI" -> "https://api.openai.com/v1/chat/completions" to "gpt-4o-mini"
-			"DEEPSEEK" -> "https://api.deepseek.com/chat/completions" to "deepseek-chat"
+			"DEEPSEEK" -> "https://api.deepseek.com/chat/completions" to "deepseek-v4-flash"
 			"ZHIPU" -> "https://open.bigmodel.cn/api/paas/v4/chat/completions" to "glm-4-plus"
 			"ALIBABA" -> "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions" to "qwen-plus"
 			"MOONSHOT" -> "https://api.moonshot.cn/v1/chat/completions" to "moonshot-v1-8k"
