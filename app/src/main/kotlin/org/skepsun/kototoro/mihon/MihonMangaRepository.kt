@@ -187,7 +187,7 @@ class MihonMangaRepository(
         val chapters = rawChapters.asReversed()
             .mapIndexed { index, sChapter ->
                 // 如果插件有提供合法的编号则保留，否则使用我们在反转列表中的索引位置。
-                val chapterNumber = if (sChapter.chapter_number > 0) {
+                val chapterNumber = if (sChapter.chapter_number >= 0) {
                     sChapter.chapter_number
                 } else {
                     (index + 1).toFloat()
