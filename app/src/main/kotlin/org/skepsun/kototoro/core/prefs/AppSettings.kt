@@ -1171,7 +1171,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_READER_TRANSLATION_OVERLAY_COMPACTNESS, "BALANCED") ?: "BALANCED"
 
 	val readerTranslationRenderStyle: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_RENDER_STYLE, "REPLACE") ?: "REPLACE"
+		get() = prefs.getString(KEY_READER_TRANSLATION_RENDER_STYLE, "COMPACT_OVERLAY") ?: "COMPACT_OVERLAY"
 
 	val readerTranslationPaddleModelPath: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_PATH, "") ?: ""

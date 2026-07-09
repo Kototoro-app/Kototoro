@@ -243,7 +243,7 @@ fun TranslationSettingsScreen(
                         options = stringArrayResource(R.array.reader_translation_render_styles).mapIndexed { index, label ->
                             SettingsChoiceOption(renderStyleNames[index], label)
                         },
-                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, "REPLACE") ?: "REPLACE" }.value,
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, "COMPACT_OVERLAY") ?: "COMPACT_OVERLAY" }.value,
                         onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, it) } }
                     )
                 }
