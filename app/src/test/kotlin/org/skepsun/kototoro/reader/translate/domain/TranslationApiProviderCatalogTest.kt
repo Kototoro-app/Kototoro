@@ -50,10 +50,10 @@ class TranslationApiProviderCatalogTest {
 	fun `advanced OCR pack contains every automatic recognizer model`() {
 		val requiredIds = AdvancedOcrModelPackWorker.REQUIRED_MODEL_IDS
 
-		assertEquals(5, requiredIds.size)
+		assertEquals(6, requiredIds.size)
 		assertTrue("manga_default_det_20241225_onnx" in requiredIds)
 		listOf("ko", "th", "en", "ja").forEach { language ->
-			assertTrue(resolveAutomaticPaddleRecognizerModelId(language) in requiredIds)
+			assertTrue(resolveAutomaticReaderRecognizerModelId(language) in requiredIds)
 		}
 		requiredIds.forEach { modelId ->
 			assertNotNull(OnnxOfficialModelCatalog.findById(modelId), modelId)

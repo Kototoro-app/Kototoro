@@ -54,6 +54,24 @@ class ReaderAutomaticOcrLanguageTest {
 	}
 
 	@Test
+	fun `Japanese selects MangaOCR for automatic recognition`() {
+		assertEquals(
+			"mangaocr_2025_onnx",
+			resolveAutomaticReaderRecognizerModelId("ja-JP"),
+		)
+	}
+
+	@Test
+	fun `non-Japanese automatic recognition keeps using Paddle recognizers`() {
+		listOf("ko-KR", "th_TH", "en", "zh-CN", null).forEach { language ->
+			assertEquals(
+				resolveAutomaticPaddleRecognizerModelId(language),
+				resolveAutomaticReaderRecognizerModelId(language),
+			)
+		}
+	}
+
+	@Test
 	fun `latin script languages select the Latin PP OCRv5 recognizer`() {
 		listOf("en", "fr-FR", "de", "vi_VN").forEach { language ->
 			assertEquals(

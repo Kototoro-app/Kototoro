@@ -640,12 +640,23 @@ class ReaderPageTranslationProcessor @Inject constructor(
 
 	private fun resolvePageOcrRouteOrder(): List<PageOcrRoute> {
 		val detModelId = settings.readerTranslationPaddleDetModelId
-		val recModelId = settings.readerTranslationPaddleOfficialModelId
+		val configuredRecModelId = settings.readerTranslationPaddleOfficialModelId
+		val recModelId = if (configuredRecModelId == "AUTO") {
+			resolveAutomaticReaderRecognizerModelId(automaticRecognizerLanguage.get())
+		} else {
+			configuredRecModelId
+		}
 		val detBackend = resolveDetectorBackend(detModelId)
 		val recBackend = when (recModelId) {
 			"MLKIT" -> OcrRecognizerBackend.MLKIT
-			"mangaocr_2025_onnx" -> OcrRecognizerBackend.MANGA_OCR
+			MANGA_OCR_RECOGNIZER_MODEL_ID -> OcrRecognizerBackend.MANGA_OCR
 			else -> OcrRecognizerBackend.PADDLE
+		}
+		if (configuredRecModelId == "AUTO") {
+			log {
+				"metric.ocr.auto_recognizer.language=${automaticRecognizerLanguage.get() ?: "none"} " +
+					"model=$recModelId backend=${recBackend.name.lowercase()}"
+			}
 		}
 		val effectiveRoute = PageOcrRoute(
 			detector = detBackend,

@@ -131,6 +131,7 @@ class AdvancedOcrModelPackWorker @AssistedInject constructor(
 
 		val REQUIRED_MODEL_IDS = listOf(
 			"manga_default_det_20241225_onnx",
+			"mangaocr_2025_onnx",
 			"ppocrv6_medium_rec_onnx",
 			"latin_ppocrv5_mobile_rec_onnx",
 			"korean_ppocrv5_mobile_rec_onnx",

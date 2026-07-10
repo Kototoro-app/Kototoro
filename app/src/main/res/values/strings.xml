@@ -2802,7 +2802,7 @@
 	<string name="reader_translation_ocr_det_model_selection">Text detection model</string>
 	<string name="reader_translation_ocr_det_model_selection_summary">Select the model used to locate text regions on the page. Bubble/text detectors can also be used as the positioning stage.</string>
 	<string name="reader_translation_ocr_rec_model_auto">Auto (select by manga language)</string>
-	<string name="reader_translation_ocr_rec_model_auto_summary">Selects by the manga translation language first, then its source language: Korean uses PP-OCRv5 Korean, Thai uses PP-OCRv5 Thai, Latin-script languages use PP-OCRv5 Latin, and other languages use multilingual PP-OCRv6 Medium</string>
+	<string name="reader_translation_ocr_rec_model_auto_summary">Selects by the manga translation language first, then its source language: Japanese uses MangaOCR, Korean uses PP-OCRv5 Korean, Thai uses PP-OCRv5 Thai, Latin-script languages use PP-OCRv5 Latin, and other languages use multilingual PP-OCRv6 Medium</string>
 	<string name="reader_translation_ocr_det_mlkit">ML Kit (Google on-device, no download)</string>
     <!-- Weekdays -->
     <string name="day_monday">Monday</string>

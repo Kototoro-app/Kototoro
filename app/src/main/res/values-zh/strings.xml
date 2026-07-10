@@ -1734,7 +1734,7 @@
     <string name="reader_translation_ocr_pipeline_page_text_first">页级优先</string>
     <string name="reader_translation_ocr_pipeline_strategy">OCR 管线策略</string>
     <string name="reader_translation_ocr_rec_model_auto">自动（根据漫画语言选择）</string>
-    <string name="reader_translation_ocr_rec_model_auto_summary">优先根据漫画翻译语言选择，其次使用源语言：韩语使用 PP-OCRv5 Korean，泰语使用 PP-OCRv5 Thai，拉丁字母语言使用 PP-OCRv5 Latin，其他语言使用多语言 PP-OCRv6 Medium</string>
+    <string name="reader_translation_ocr_rec_model_auto_summary">优先根据漫画翻译语言选择，其次使用源语言：日语使用 MangaOCR，韩语使用 PP-OCRv5 Korean，泰语使用 PP-OCRv5 Thai，拉丁字母语言使用 PP-OCRv5 Latin，其他语言使用多语言 PP-OCRv6 Medium</string>
     <string name="reader_translation_ocr_recognizer_model_selection">文字识别模型</string>
     <string name="reader_translation_ocr_recognizer_models_title">文字识别模型</string>
     <string name="reader_translation_onnx_bubble_detector_models_title">气泡检测模型</string>

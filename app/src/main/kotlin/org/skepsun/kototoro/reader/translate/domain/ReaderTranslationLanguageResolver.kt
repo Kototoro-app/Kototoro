@@ -4,6 +4,7 @@ import java.util.Locale
 
 private const val AUTO_LANGUAGE = "auto"
 private const val DEFAULT_SOURCE_LANGUAGE = "ja"
+internal const val MANGA_OCR_RECOGNIZER_MODEL_ID = "mangaocr_2025_onnx"
 
 private val supportedTranslationLanguages = setOf(
 	"ar",
@@ -75,6 +76,14 @@ fun resolveAutomaticReaderOcrLanguage(
 	return sequenceOf(resolveReaderBranchLanguage(branch), translatedLanguage, sourceLanguage)
 		.mapNotNull { it.normalizeReaderTranslationLanguageTag() }
 		.firstOrNull { it !in unknownContentLanguages }
+}
+
+internal fun resolveAutomaticReaderRecognizerModelId(language: String?): String {
+	return if (language.normalizeReaderTranslationLanguageTag() == "ja") {
+		MANGA_OCR_RECOGNIZER_MODEL_ID
+	} else {
+		resolveAutomaticPaddleRecognizerModelId(language)
+	}
 }
 
 internal fun resolveReaderBranchLanguage(branch: String?): String? {

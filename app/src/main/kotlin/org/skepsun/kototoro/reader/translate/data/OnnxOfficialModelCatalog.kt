@@ -26,7 +26,7 @@ data class OnnxModelFile(
 )
 
 object OnnxOfficialModelCatalog {
-	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx, https://www.modelscope.cn/models/hgmzhn/manga-translator-ui, https://huggingface.co/Skepsun/detect-20241225-onnx, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
+	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx, https://www.modelscope.cn/models/hgmzhn/manga-translator-ui, https://huggingface.co/Skepsun/manga-translator-ui-onnx, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
 
 	val models = listOf(
 		OnnxOfficialModel(
@@ -157,7 +157,7 @@ object OnnxOfficialModelCatalog {
 			files = listOf(
 				OnnxModelFile(
 					fileName = "detect-20241225.onnx",
-					downloadUrl = "https://huggingface.co/Skepsun/detect-20241225-onnx/resolve/main/detect-20241225.onnx",
+					downloadUrl = "https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/detect-20241225.onnx",
 					sha256 = "0875cca4fda3d3c29dbc9b8d22b1230a9240f2ee187c83cc5068ee2006332f97",
 				),
 			),

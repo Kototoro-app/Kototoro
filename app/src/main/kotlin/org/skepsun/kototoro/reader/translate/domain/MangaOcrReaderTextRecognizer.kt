@@ -517,7 +517,7 @@ class MangaOcrReaderTextRecognizer @Inject constructor(
 	}
 
 	private companion object {
-		const val MANGA_OCR_MODEL_ID = "mangaocr_2025_onnx"
+		const val MANGA_OCR_MODEL_ID = MANGA_OCR_RECOGNIZER_MODEL_ID
 		const val TAG = "ReaderTranslate"
 		const val MAX_EMPTY_LOG_SAMPLES = 6
 		const val MAX_TRACE_SAMPLES = 6

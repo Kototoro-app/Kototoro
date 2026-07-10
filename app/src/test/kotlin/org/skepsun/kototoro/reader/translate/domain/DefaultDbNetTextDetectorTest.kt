@@ -17,7 +17,7 @@ class DefaultDbNetTextDetectorTest {
 		assertEquals(DefaultDbNetTextDetector.MODEL_FILE_NAME, model.files.single().fileName)
 		assertEquals(DefaultDbNetTextDetector.MODEL_SHA256, model.files.single().sha256)
 		assertEquals(
-			"https://huggingface.co/Skepsun/detect-20241225-onnx/resolve/main/detect-20241225.onnx",
+			"https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/detect-20241225.onnx",
 			model.files.single().downloadUrl,
 		)
 	}
