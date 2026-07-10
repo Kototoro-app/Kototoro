@@ -58,6 +58,7 @@ class ReaderActionsView @JvmOverloads constructor(
 	private var isSliderTracking = false
 	private var pageLabelFormatter: ((Int, Int) -> String)? = null
 	private var translateButtonRequestedVisible = false
+	private var translateButtonContextualVisible = false
 
 	var isSliderEnabled: Boolean
 		get() = binding.slider.isEnabled
@@ -218,7 +219,7 @@ class ReaderActionsView @JvmOverloads constructor(
 	}
 
 	/**
-	 * 显示/隐藏翻译按钮（仅在小说阅读器中显示）
+	 * 根据阅读器能力请求显示或隐藏翻译按钮。
 	 */
 	fun setTranslateButtonVisible(visible: Boolean) {
 		translateButtonRequestedVisible = visible
@@ -226,8 +227,14 @@ class ReaderActionsView @JvmOverloads constructor(
 		adjustLayoutParams()
 	}
 
+	fun setTranslateButtonContextualVisible(visible: Boolean) {
+		translateButtonContextualVisible = visible
+		applyTranslateButtonVisibility()
+		adjustLayoutParams()
+	}
+
 	/**
-	 * 更新翻译按钮的激活状态（翻译中时高亮显示）
+	 * 更新翻译按钮的激活状态。
 	 */
 	fun setTranslateActive(isActive: Boolean) {
 		binding.buttonTranslate.isSelected = isActive
@@ -266,7 +273,9 @@ class ReaderActionsView @JvmOverloads constructor(
 	}
 
 	private fun applyTranslateButtonVisibility() {
-		val visible = translateButtonRequestedVisible && ReaderControl.TRANSLATE in settings.readerControls
+		val visible = translateButtonRequestedVisible && (
+			translateButtonContextualVisible || ReaderControl.TRANSLATE in settings.readerControls
+		)
 		binding.buttonTranslate.isVisible = visible
 		(binding.buttonTranslate.parent as? View)?.isVisible = visible
 	}

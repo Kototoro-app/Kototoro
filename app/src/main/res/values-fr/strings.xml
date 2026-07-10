@@ -1789,8 +1789,8 @@
     <string name="reader_translation_ocr_pipeline_hybrid">Hybride</string>
     <string name="reader_translation_ocr_pipeline_page_text_first">Texte de la page en premier</string>
     <string name="reader_translation_ocr_pipeline_strategy">Stratégie du pipeline OCR</string>
-    <string name="reader_translation_ocr_rec_model_auto">Auto (sélection selon la langue source)</string>
-    <string name="reader_translation_ocr_rec_model_auto_summary">Choisit automatiquement le meilleur reconnaisseur : Japonais→MangaOCR ou PP-OCRv5 Server, Anglais→PP-OCRv5 EN, Coréen→PP-OCRv3 KO, Chinois/autre→PP-OCRv5 Server ou Mobile</string>
+    <string name="reader_translation_ocr_rec_model_auto">Auto (sélection selon la langue du manga)</string>
+    <string name="reader_translation_ocr_rec_model_auto_summary">Choisit d’abord selon la langue de traduction du manga, puis sa langue source : coréen avec PP-OCRv5 Korean, thaï avec PP-OCRv5 Thai, langues latines avec PP-OCRv5 Latin, autres langues avec PP-OCRv6 Medium multilingue</string>
     <string name="reader_translation_ocr_recognizer_model_selection">Modèle de reconnaissance de texte</string>
     <string name="reader_translation_ocr_recognizer_models_title">Modèles de reconnaissance de texte</string>
     <string name="reader_translation_onnx_bubble_detector_models_title">Modèles de détecteur de bulles</string>

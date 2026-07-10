@@ -431,6 +431,7 @@ configurations.all {
 	implementation libs.mlkit.translate
 	implementation libs.mlkit.language.id
 	implementation libs.onnxruntime.android
+	implementation libs.opencv.android
 	implementation libs.djl.tokenizers
 	implementation files('libs/tokenizer-native-0.33.0.aar')
 	implementation cloudstreamRuntimeJar

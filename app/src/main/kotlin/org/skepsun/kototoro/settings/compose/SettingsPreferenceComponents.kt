@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -298,6 +299,8 @@ fun <T> SettingsChoicePreference(
     options: List<SettingsChoiceOption<T>>,
     summary: String? = null,
     enabled: Boolean = true,
+	onSettingsClick: (() -> Unit)? = null,
+	settingsContentDescription: String? = null,
     onValueChange: (T) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
@@ -336,6 +339,15 @@ fun <T> SettingsChoicePreference(
             }
         }
         Spacer(modifier = Modifier.width(8.dp))
+		if (onSettingsClick != null) {
+			IconButton(onClick = onSettingsClick, enabled = enabled) {
+				Icon(
+					imageVector = Icons.Filled.Settings,
+					contentDescription = settingsContentDescription,
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
+		}
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,

@@ -15,9 +15,10 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.settings.compose.TranslationSettingsScreen
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
-import org.skepsun.kototoro.reader.translate.data.OnnxModelCategory
-import org.skepsun.kototoro.reader.translate.data.OnnxOfficialModelCatalog
-import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.reader.translate.data.AdvancedOcrModelPackWorker
+import org.skepsun.kototoro.core.prefs.ReaderOcrMode
+import android.widget.Toast
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -51,9 +52,6 @@ class TranslationSettingsFragment : Fragment() {
                     onOpenApiSettings = {
                         (activity as? SettingsActivity)?.openDestination(SettingsDestination.TranslationApiSettings, null, false)
                     },
-                    onOpenE2eApiSettings = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.TranslationE2EApiSettings, null, false)
-                    },
                 )
             }
         }
@@ -71,83 +69,35 @@ fun TranslationSettingsRoute(
     onnxModelManager: OnnxModelManager,
     onOpenOcrModels: () -> Unit,
     onOpenApiSettings: () -> Unit,
-    onOpenE2eApiSettings: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val onnxModels = buildList {
-        add(SettingsChoiceOption("", context.getString(R.string.reader_translation_local_model_mlkit)))
-        addAll(
-            OnnxOfficialModelCatalog.models
-                .filter { it.category == OnnxModelCategory.CLASSIC_TRANSLATION }
-                .map {
-                    val suffix = if (onnxModelManager.isModelDownloaded(it.id)) {
-                        ""
-                    } else {
-                        context.getString(R.string.reader_translation_ocr_model_selection_not_downloaded_suffix)
-                    }
-                    SettingsChoiceOption(it.id, it.title + suffix)
-                },
-        )
-    }
-    val paddleDetModels = buildList {
-        add(SettingsChoiceOption("MLKIT", context.getString(R.string.reader_translation_ocr_det_mlkit)))
-        addAll(
-            OnnxOfficialModelCatalog.models
-                .filter {
-                    it.category == OnnxModelCategory.OCR_DETECTOR ||
-                        it.category == OnnxModelCategory.BUBBLE_DETECTION
-                }
-                .map {
-                    val suffix = if (onnxModelManager.isModelDownloaded(it.id)) {
-                        ""
-                    } else {
-                        context.getString(R.string.reader_translation_ocr_model_selection_not_downloaded_suffix)
-                    }
-                    SettingsChoiceOption(it.id, it.title + suffix)
-                },
-        )
-    }
-    val paddleOfficialModels = buildList {
-        add(SettingsChoiceOption("AUTO", context.getString(R.string.reader_translation_ocr_rec_model_auto)))
-        add(SettingsChoiceOption("MLKIT", context.getString(R.string.reader_translation_ocr_det_mlkit)))
-        add(SettingsChoiceOption("mangaocr_2025_onnx", "MangaOCR 2025"))
-        addAll(
-            OnnxOfficialModelCatalog.models
-                .filter { it.category == OnnxModelCategory.OCR_RECOGNIZER && !it.id.startsWith("mangaocr") }
-                .map {
-                    val suffix = if (onnxModelManager.isModelDownloaded(it.id)) {
-                        ""
-                    } else {
-                        context.getString(R.string.reader_translation_ocr_model_selection_not_downloaded_suffix)
-                    }
-                    SettingsChoiceOption(it.id, it.title + suffix)
-                },
-        )
-    }
-    val onnxBubbleModels = buildList {
-        add(SettingsChoiceOption("AUTO", context.getString(R.string.reader_translation_ocr_model_onnx_automatic)))
-        addAll(
-            OnnxOfficialModelCatalog.models
-                .filter { it.category == OnnxModelCategory.BUBBLE_DETECTION }
-                .map {
-                    val suffix = if (onnxModelManager.isModelDownloaded(it.id)) {
-                        ""
-                    } else {
-                        context.getString(R.string.reader_translation_ocr_model_selection_not_downloaded_suffix)
-                    }
-                    SettingsChoiceOption(it.id, it.title + suffix)
-                },
-        )
-    }
+
+	fun selectOcrMode(mode: ReaderOcrMode) {
+		if (mode == ReaderOcrMode.BASIC) {
+			AdvancedOcrModelPackWorker.cancel(context)
+			settings.readerTranslationOcrMode = ReaderOcrMode.BASIC
+			return
+		}
+		if (AdvancedOcrModelPackWorker.areAllModelsReady(onnxModelManager)) {
+			settings.readerTranslationOcrMode = ReaderOcrMode.ADVANCED
+			Toast.makeText(context, R.string.reader_translation_ocr_pack_ready, Toast.LENGTH_SHORT).show()
+			return
+		}
+		MaterialAlertDialogBuilder(context)
+			.setTitle(R.string.reader_translation_ocr_pack_title)
+			.setMessage(R.string.reader_translation_ocr_pack_message)
+			.setNegativeButton(android.R.string.cancel, null)
+			.setPositiveButton(R.string.reader_translation_ocr_pack_download) { _, _ ->
+				AdvancedOcrModelPackWorker.enqueue(context)
+				Toast.makeText(context, R.string.reader_translation_ocr_pack_started, Toast.LENGTH_LONG).show()
+			}
+			.show()
+	}
 
     TranslationSettingsScreen(
         settings = settings,
-        onnxModels = onnxModels,
-        paddleDetModels = paddleDetModels,
-        paddleOfficialModels = paddleOfficialModels,
-        onnxBubbleModels = onnxBubbleModels,
+		onOcrModeChange = ::selectOcrMode,
         onOpenOcrModels = onOpenOcrModels,
         onOpenApiSettings = onOpenApiSettings,
-        onOpenE2eApiSettings = onOpenE2eApiSettings,
     )
 }

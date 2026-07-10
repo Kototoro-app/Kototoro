@@ -23,7 +23,7 @@ import javax.inject.Singleton
 class MlKitReaderOcrEngine @Inject constructor(
 	@LocalizedAppContext private val context: Context,
 	private val settings: AppSettings,
-) : ReaderOcrService {
+) : ReaderOcrService, ReaderTextRecognizer {
 
 	override suspend fun recognize(request: OcrRequest): List<OcrTextBlock> {
 		val sourceUri = request.sourceUri
@@ -85,6 +85,63 @@ class MlKitReaderOcrEngine @Inject constructor(
 			} finally {
 				cropBitmap?.recycle()
 				decodedBitmap?.takeIf { it !== cropBitmap }?.recycle()
+			}
+		} finally {
+			recognizer.close()
+		}
+	}
+
+	override suspend fun recognize(sourceUri: android.net.Uri, regions: List<TextRegion>): List<OcrTextBlock> {
+		if (regions.isEmpty()) return emptyList()
+		val bitmap = runInterruptible(Dispatchers.IO) {
+			BitmapDecoderCompat.decode(sourceUri.toFile())
+		}
+		return try {
+			recognize(bitmap, regions)
+		} finally {
+			bitmap.recycle()
+		}
+	}
+
+	override suspend fun recognize(bitmap: Bitmap, regions: List<TextRegion>): List<OcrTextBlock> {
+		if (regions.isEmpty()) return emptyList()
+		val recognizer = when (settings.readerTranslationSourceLanguage) {
+			"ja" -> TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+			"zh", "zh-cn", "zh-hans", "zh-tw", "zh-hant" -> {
+				TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+			}
+			else -> TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+		}
+		return try {
+			buildList {
+				for (region in regions) {
+					val crop = cropBitmap(bitmap, region.rect)
+					try {
+						val result = recognizer.process(InputImage.fromBitmap(crop, 0)).awaitCancellable()
+						result.textBlocks.mapTo(this) { block ->
+							val localBox = block.boundingBox
+							val boundingBox = localBox?.let { box ->
+								Rect(
+									box.left + region.rect.left,
+									box.top + region.rect.top,
+									box.right + region.rect.left,
+									box.bottom + region.rect.top,
+								)
+							} ?: Rect(region.rect)
+							OcrTextBlock(
+								text = block.text,
+								boundingBox = boundingBox,
+								directionHint = region.directionHint,
+								angleHintDegrees = region.angleHintDegrees,
+								isAxisAligned = region.isAxisAligned,
+								quadPoints = if (localBox == null) region.quadPoints else rectToTextQuad(boundingBox),
+								detectorId = region.detectorId,
+							)
+						}
+					} finally {
+						crop.recycle()
+					}
+				}
 			}
 		} finally {
 			recognizer.close()

@@ -45,13 +45,6 @@ class AISettingsFragment : Fragment() {
                             false,
                         )
                     },
-                    onOpenE2eApiSettings = {
-                        (activity as? SettingsActivity)?.openDestination(
-                            SettingsDestination.TranslationE2EApiSettings,
-                            null,
-                            false,
-                        )
-                    },
                     onOpenTranslationSettings = {
                         (activity as? SettingsActivity)?.openDestination(
                             SettingsDestination.TranslationSettings,
@@ -95,7 +88,6 @@ class AISettingsFragment : Fragment() {
 fun AISettingsRoute(
     onOpenOcrModels: () -> Unit,
     onOpenApiSettings: () -> Unit,
-    onOpenE2eApiSettings: () -> Unit,
     onOpenTranslationSettings: () -> Unit,
     onOpenImageEnhancementSettings: () -> Unit,
     onOpenTtsSettings: () -> Unit,
@@ -104,7 +96,6 @@ fun AISettingsRoute(
     AISettingsScreen(
         onOpenOcrModels = onOpenOcrModels,
         onOpenApiSettings = onOpenApiSettings,
-        onOpenE2eApiSettings = onOpenE2eApiSettings,
         onOpenTranslationSettings = onOpenTranslationSettings,
         onOpenImageEnhancementSettings = onOpenImageEnhancementSettings,
         onOpenTtsSettings = onOpenTtsSettings,

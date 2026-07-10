@@ -87,7 +87,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 	}
 
 	override suspend fun recognize(request: OcrRequest): List<OcrTextBlock> {
-		val modelPair = resolveActiveModelPair() ?: run {
+		val modelPair = resolveActiveModelPair(request.sourceLang) ?: run {
 			log { "paddle onnx model unavailable" }
 			return emptyList()
 		}
@@ -126,7 +126,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 	}
 
 	override suspend fun detect(bitmap: Bitmap): List<TextRegion> {
-		val modelPair = resolveActiveModelPair() ?: run {
+		val modelPair = resolveActiveModelPair(null) ?: run {
 			log { "paddle onnx detector unavailable" }
 			return emptyList()
 		}
@@ -138,22 +138,39 @@ class PaddleReaderOcrEngine @Inject constructor(
 	}
 
 	override suspend fun recognize(sourceUri: Uri, regions: List<TextRegion>): List<OcrTextBlock> {
+		return recognize(sourceUri, regions, null)
+	}
+
+	suspend fun recognize(
+		sourceUri: Uri,
+		regions: List<TextRegion>,
+		automaticLanguage: String?,
+	): List<OcrTextBlock> {
 		val decodedBitmap = runInterruptible(Dispatchers.IO) {
 			BitmapDecoderCompat.decode(sourceUri.toFile())
 		}
 		return try {
-			recognize(decodedBitmap, regions)
+			recognize(decodedBitmap, regions, automaticLanguage)
 		} finally {
 			decodedBitmap.recycle()
 		}
 	}
 
 	override suspend fun recognize(bitmap: Bitmap, regions: List<TextRegion>): List<OcrTextBlock> {
+		return recognize(bitmap, regions, null)
+	}
+
+	suspend fun recognize(
+		bitmap: Bitmap,
+		regions: List<TextRegion>,
+		automaticLanguage: String?,
+	): List<OcrTextBlock> {
 		if (regions.isEmpty()) return emptyList()
-		val modelPair = resolveActiveModelPair() ?: run {
+		val modelPair = resolveActiveModelPair(automaticLanguage) ?: run {
 			log { "paddle onnx recognizer unavailable" }
 			return emptyList()
 		}
+		log { "metric.ocr.paddle.recognizer_model=${modelPair.recognizer.id}" }
 		val runtime = ensureRuntime(
 			detectorModelId = modelPair.detector.id,
 			recognizerModelId = modelPair.recognizer.id,
@@ -166,9 +183,9 @@ class PaddleReaderOcrEngine @Inject constructor(
 		val recognizer: org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel,
 	)
 
-	private fun resolveActiveModelPair(): ModelPair? {
+	private fun resolveActiveModelPair(automaticLanguage: String?): ModelPair? {
 		val detector = resolveDetectorModel() ?: return null
-		val recognizer = resolveRecognizerModel() ?: return null
+		val recognizer = resolveRecognizerModel(automaticLanguage) ?: return null
 		return ModelPair(detector = detector, recognizer = recognizer)
 	}
 
@@ -188,13 +205,15 @@ class PaddleReaderOcrEngine @Inject constructor(
 
 	/**
 	 * Resolves the recognizer model. When set to "AUTO", selects the best model
-	 * based on the user's configured source language, aligning with manga-translator-android:
-	 * - Japanese (ja) → MangaOCR 2025 (encoder-decoder, best for manga) or PP-OCRv5 Server
-	 * - English (en) → PP-OCRv5 Mobile EN recognizer
-	 * - Korean (ko) → PP-OCRv3 Mobile KO recognizer
-	 * - Chinese (zh) / auto / other → PP-OCRv5 Server (larger, better for CJK) or Mobile
+	 * based on the current manga language context, aligning with manga-translator-ui:
+	 * - Korean (ko) → PP-OCRv5 Korean
+	 * - Thai (th) → PP-OCRv5 Thai
+	 * - Latin-script languages → PP-OCRv5 Latin
+	 * - Missing languages and other scripts → multilingual PP-OCRv6 Medium
 	 */
-	private fun resolveRecognizerModel(): org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel? {
+	private fun resolveRecognizerModel(
+		automaticLanguage: String?,
+	): org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel? {
 		val preferredId = normalizeRecognizerModelId(settings.readerTranslationPaddleOfficialModelId)
 		// Only include Paddle-compatible recognizers (those with dict files).
 		// MangaOCR is an encoder-decoder model with its own pipeline — not compatible here.
@@ -208,20 +227,10 @@ class PaddleReaderOcrEngine @Inject constructor(
 				?: allRecognizers.first()
 		}
 
-		// AUTO: select by source language
-		val sourceLang = settings.readerTranslationSourceLanguage
-		val autoResolved = when (sourceLang) {
-			"ja" -> resolvePreferredDownloadedRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
-				?: allRecognizers.firstOrNull { it.id == "ppocrv5_server_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-				?: allRecognizers.firstOrNull { it.id == "ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-			"en" -> resolvePreferredDownloadedRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
-				?: allRecognizers.firstOrNull { it.id == "en_ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-			"ko" -> allRecognizers.firstOrNull { it.id == "korean_ppocrv3_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-			"zh" -> resolvePreferredDownloadedRecognizer(allRecognizers, PPOCRV6_RECOGNIZER_PRIORITY)
-				?: allRecognizers.firstOrNull { it.id == "ppocrv5_server_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-				?: allRecognizers.firstOrNull { it.id == "ppocrv5_mobile_rec_onnx" && onnxModelManager.isModelDownloaded(it.id) }
-			else -> null // "auto" or unrecognized
-		}
+		val sourceLang = automaticLanguage.normalizeReaderTranslationLanguageTag()
+		val automaticModelId = resolveAutomaticPaddleRecognizerModelId(sourceLang)
+		val autoResolved = allRecognizers.firstOrNull { it.id == automaticModelId }
+		log { "metric.ocr.paddle.auto_language=${sourceLang ?: "none"} auto_model=$automaticModelId" }
 		if (autoResolved != null) return autoResolved
 
 		// Fallback: best available downloaded model
@@ -331,7 +340,14 @@ class PaddleReaderOcrEngine @Inject constructor(
 	}
 
 	private fun findDictTextFile(dir: File): File? {
-		val candidates = listOf("ppocrv5_dict.txt", "en_dict.txt", "korean_dict.txt")
+		val candidates = listOf(
+			"ppocrv5_dict.txt",
+			"ppocrv5_latin_dict.txt",
+			"ppocrv5_korean_dict.txt",
+			"ppocrv5_thai_dict.txt",
+			"en_dict.txt",
+			"korean_dict.txt",
+		)
 		for (name in candidates) {
 			val f = File(dir, name)
 			if (f.isFile) return f
@@ -399,6 +415,8 @@ class PaddleReaderOcrEngine @Inject constructor(
 		return when (modelId) {
 			"ppocrv5_mobile_onnx" -> "ppocrv5_mobile_rec_onnx"
 			"ppocrv5_server_onnx" -> "ppocrv5_server_rec_onnx"
+			"en_ppocrv5_mobile_rec_onnx" -> LATIN_RECOGNIZER_MODEL_ID
+			"korean_ppocrv3_mobile_rec_onnx" -> KOREAN_RECOGNIZER_MODEL_ID
 			else -> modelId
 		}
 	}
@@ -707,6 +725,10 @@ class PaddleReaderOcrEngine @Inject constructor(
 		const val DET_MIN_COMPONENT_PIXELS = 8
 		const val REC_INPUT_HEIGHT = 48
 		const val REC_MIN_WIDTH = 32
+		const val MULTILINGUAL_RECOGNIZER_MODEL_ID = "ppocrv6_medium_rec_onnx"
+		const val LATIN_RECOGNIZER_MODEL_ID = "latin_ppocrv5_mobile_rec_onnx"
+		const val KOREAN_RECOGNIZER_MODEL_ID = "korean_ppocrv5_mobile_rec_onnx"
+		const val THAI_RECOGNIZER_MODEL_ID = "thai_ppocrv5_mobile_rec_onnx"
 		const val IMAGENET_MEAN_R = 0.485f
 		const val IMAGENET_MEAN_G = 0.456f
 		const val IMAGENET_MEAN_B = 0.406f
@@ -989,5 +1011,18 @@ class PaddleReaderOcrEngine @Inject constructor(
 			}
 			return blocks
 		}
+	}
+}
+
+internal fun resolveAutomaticPaddleRecognizerModelId(language: String?): String {
+	val normalized = language.normalizeReaderTranslationLanguageTag()
+	return when {
+		normalized == "ko" -> "korean_ppocrv5_mobile_rec_onnx"
+		normalized == "th" -> "thai_ppocrv5_mobile_rec_onnx"
+		normalized in setOf(
+			"ca", "cs", "da", "de", "en", "es", "fi", "fr", "hr", "id", "it", "nl", "pl", "pt", "ro",
+			"sk", "sv", "tl", "tr", "vi",
+		) -> "latin_ppocrv5_mobile_rec_onnx"
+		else -> "ppocrv6_medium_rec_onnx"
 	}
 }

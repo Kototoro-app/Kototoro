@@ -99,7 +99,6 @@ class SettingsSearchHelper @Inject constructor(
 		val aiKeys = listOf(
 			"ai_models" to R.string.reader_translation_manage_ocr_models,
 			"ai_api" to R.string.ai_api_settings,
-			"ai_e2e_api" to R.string.reader_translation_e2e_api_settings_title,
 			"ai_translation" to R.string.translation_settings,
 			"ai_image" to R.string.ai_image_enhancement_settings,
 			"ai_tts" to R.string.tts_settings_title,
@@ -267,12 +266,10 @@ class SettingsSearchHelper @Inject constructor(
 		}
 		val translationBreadcrumbs = listOf(context.getString(R.string.ai_settings), context.getString(R.string.translation_settings))
 		val translationKeys = listOf(
-			"reader_translation_debug_logs" to R.string.reader_translation_debug_logs,
-			"reader_translation_quality_filter_enabled" to R.string.reader_translation_quality_filter_enabled,
-			"reader_translation_mode" to R.string.reader_translation_mode,
-			"reader_translation_pipeline_mode" to R.string.reader_translation_pipeline_mode,
 			"reader_translation_source_lang" to R.string.reader_translation_source_lang,
 			"reader_translation_target_lang" to R.string.reader_translation_target_lang,
+			"reader_translation_paddle_det_model_id" to R.string.reader_translation_ocr_det_model_selection,
+			"reader_translation_paddle_official_model_id" to R.string.reader_translation_ocr_recognizer_model_selection,
 		)
 		translationKeys.forEach { (key, titleRes) ->
 			result.add(
@@ -299,26 +296,6 @@ class SettingsSearchHelper @Inject constructor(
 					title = context.getString(titleRes),
 					breadcrumbs = translationApiBreadcrumbs,
 					destination = SettingsDestination.TranslationApiSettings,
-				),
-			)
-		}
-		val translationE2eBreadcrumbs = translationBreadcrumbs + context.getString(R.string.reader_translation_e2e_api_settings_title)
-		val translationE2eKeys = listOf(
-			"reader_e2e_api_provider_preset" to R.string.reader_translation_api_provider_preset,
-			"reader_e2e_api_endpoint" to R.string.reader_translation_api_endpoint,
-			"reader_e2e_api_key" to R.string.reader_translation_api_key,
-			"reader_e2e_api_model" to R.string.reader_translation_api_model,
-			"reader_e2e_api_custom_headers" to R.string.reader_translation_api_custom_headers,
-			"reader_e2e_api_concurrency" to R.string.reader_translation_e2e_api_concurrency,
-			"reader_e2e_api_fetch_models" to R.string.reader_translation_api_models_fetch,
-		)
-		translationE2eKeys.forEach { (key, titleRes) ->
-			result.add(
-				SettingsItem(
-					key = key,
-					title = context.getString(titleRes),
-					breadcrumbs = translationE2eBreadcrumbs,
-					destination = SettingsDestination.TranslationE2EApiSettings,
 				),
 			)
 		}

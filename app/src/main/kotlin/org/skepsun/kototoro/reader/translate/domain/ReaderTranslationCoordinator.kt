@@ -293,10 +293,11 @@ internal class ReaderTranslationCoordinator(
 					.url(endpoint)
 					.post(payload.toString().toRequestBody(jsonMediaType))
 					.header("Content-Type", "application/json")
-				if (apiKey.isNotBlank()) {
-					requestBuilder.header("Authorization", "Bearer $apiKey")
-					requestBuilder.header("X-API-Key", apiKey)
-				}
+				TranslationApiProviderCatalog.applyAuthentication(
+					requestBuilder,
+					settings.readerTranslationApiProviderPreset,
+					apiKey,
+				)
 				applyCustomHeaders(requestBuilder)
 				val response = okHttpClient.newCall(requestBuilder.build()).await()
 				response.use { resp ->
@@ -361,10 +362,11 @@ internal class ReaderTranslationCoordinator(
 					.url(endpoint)
 					.post(payload.toString().toRequestBody(jsonMediaType))
 					.header("Content-Type", "application/json")
-				if (apiKey.isNotBlank()) {
-					requestBuilder.header("Authorization", "Bearer $apiKey")
-					requestBuilder.header("X-API-Key", apiKey)
-				}
+				TranslationApiProviderCatalog.applyAuthentication(
+					requestBuilder,
+					settings.readerTranslationApiProviderPreset,
+					apiKey,
+				)
 				applyCustomHeaders(requestBuilder)
 				val response = okHttpClient.newCall(requestBuilder.build()).await()
 				response.use { resp ->
@@ -541,6 +543,7 @@ internal class ReaderTranslationCoordinator(
 			"it" -> TranslateLanguage.ITALIAN
 			"ja" -> TranslateLanguage.JAPANESE
 			"ko" -> TranslateLanguage.KOREAN
+			"th" -> TranslateLanguage.THAI
 			"nl" -> TranslateLanguage.DUTCH
 			"pl" -> TranslateLanguage.POLISH
 			"pt" -> TranslateLanguage.PORTUGUESE
@@ -572,10 +575,11 @@ internal class ReaderTranslationCoordinator(
 			.url(endpoint)
 			.post(payload.toString().toRequestBody(jsonMediaType))
 		val key = settings.readerTranslationApiKey.trim()
-		if (key.isNotBlank()) {
-			requestBuilder.header("Authorization", "Bearer $key")
-			requestBuilder.header("X-API-Key", key)
-		}
+		TranslationApiProviderCatalog.applyAuthentication(
+			requestBuilder,
+			settings.readerTranslationApiProviderPreset,
+			key,
+		)
 		applyCustomHeaders(requestBuilder)
 		val request = requestBuilder.build()
 		val response = okHttpClient.newCall(request).await()

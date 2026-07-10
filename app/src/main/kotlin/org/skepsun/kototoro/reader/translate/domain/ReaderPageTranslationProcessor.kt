@@ -81,6 +81,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	private val mlKitOcrEngine: MlKitReaderOcrEngine,
 	private val paddleOcrEngine: PaddleReaderOcrEngine,
 	private val comicTextDetectorOnnx: ComicTextDetectorOnnx,
+	private val defaultDbNetTextDetector: DefaultDbNetTextDetector,
 	private val bubbleReaderTextDetector: BubbleReaderTextDetector,
 	private val mangaOcrReaderTextRecognizer: MangaOcrReaderTextRecognizer,
 	private val onnxBubbleDetectorEngine: OnnxBubbleDetectorEngine,
@@ -107,6 +108,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	private val renderedSourceMap = LruCache<String, String>(512)
 	private val pageRenderEpochs = LongSparseArray<Int>()
 	private val loggingPageId = ThreadLocal<Long?>()
+	private val automaticRecognizerLanguage = ThreadLocal<String?>()
 	@Volatile
 	private var renderCacheEpoch: Int = 0
 	@Volatile
@@ -140,8 +142,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		color = Color.argb(240, 255, 80, 80)
 		textSize = dp(10f).toFloat()
 	}
-	private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-		color = Color.BLACK
+	private val textPaintTemplate = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+		color = Color.WHITE
 		textAlign = Paint.Align.LEFT
 	}
 	private val bubbleRenderCoordinator by lazy(LazyThreadSafetyMode.NONE) {
@@ -166,8 +168,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		get() = paddleOcrEngine
 	private val ctdTextDetector: ReaderTextDetector
 		get() = comicTextDetectorOnnx
-	private val paddleTextRecognizer: ReaderTextRecognizer
-		get() = paddleOcrEngine
+	private val dbNetTextDetector: ReaderTextDetector
+		get() = defaultDbNetTextDetector
 	private val mangaTextRecognizer: ReaderTextRecognizer
 		get() = mangaOcrReaderTextRecognizer
 	private val translationCoordinator by lazy(LazyThreadSafetyMode.NONE) {
@@ -222,11 +224,16 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		log { "translation page cache cleared page=$pageId" }
 	}
 
-	suspend fun peekRendered(page: ContentPage, sourceUri: Uri): Uri? {
+	suspend fun peekRendered(
+		page: ContentPage,
+		sourceUri: Uri,
+		autoRecognizerLanguage: String? = null,
+	): Uri? {
 		if (!settings.isReaderTranslationEnabled) {
 			return null
 		}
-		val sourceLang = resolveSourceLanguage(page)
+		val normalizedAutoRecognizerLanguage = autoRecognizerLanguage.normalizeReaderTranslationLanguageTag()
+		val sourceLang = resolveSourceLanguage(page, normalizedAutoRecognizerLanguage)
 		val targetLang = settings.readerTranslationTargetLanguage.normalizeReaderTranslationLanguageTag() ?: "zh"
 		if (sourceLang == targetLang) {
 			return null
@@ -237,6 +244,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			sourceLang = sourceLang,
 			targetLang = targetLang,
 			pageEpoch = getPageRenderEpoch(page.id),
+			autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
 		)
 		return cache[renderCacheKey]?.toUri()?.also {
 			appendPageLog(page.id, "metric.render_cache.hit=1")
@@ -248,14 +256,20 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return renderedSourceMap[renderedUri.toString()]?.toUri()
 	}
 
-	suspend fun process(page: ContentPage, sourceUri: Uri, forceEnabled: Boolean = false): Uri {
+	suspend fun process(
+		page: ContentPage,
+		sourceUri: Uri,
+		forceEnabled: Boolean = false,
+		autoRecognizerLanguage: String? = null,
+	): Uri {
 		val enabled = forceEnabled || settings.isReaderTranslationEnabled
 		val showTranslated = settings.isReaderTranslationShowTranslated
 		Log.d(LOG_TAG, "process debug: page=${page.id} enabled=$enabled showTranslated=$showTranslated")
 		if (!enabled) {
 			return sourceUri
 		}
-		val sourceLang = resolveSourceLanguage(page)
+		val normalizedAutoRecognizerLanguage = autoRecognizerLanguage.normalizeReaderTranslationLanguageTag()
+		val sourceLang = resolveSourceLanguage(page, normalizedAutoRecognizerLanguage)
 		val targetLang = settings.readerTranslationTargetLanguage.normalizeReaderTranslationLanguageTag() ?: "zh"
 		Log.d(LOG_TAG, "process debug: page=${page.id} sourceLang=$sourceLang targetLang=$targetLang")
 		if (sourceLang == targetLang) {
@@ -273,6 +287,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			sourceLang = sourceLang,
 			targetLang = targetLang,
 			pageEpoch = getPageRenderEpoch(page.id),
+			autoRecognizerLanguage = normalizedAutoRecognizerLanguage,
 		)
 		cache[renderCacheKey]?.let {
 			Log.d(LOG_TAG, "process debug: render cache hit before start page=${page.id}")
@@ -280,7 +295,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				rememberRenderedSource(rendered, localUri)
 			}
 		}
-		log { "process start page=${page.id} sourceLang=$sourceLang targetLang=$targetLang ocr=${settings.readerTranslationOcrEngine}" }
+		val processStartLog =
+			"process start page=${page.id} sourceLang=$sourceLang targetLang=$targetLang " +
+				"ocr=${settings.readerTranslationOcrEngine.name} " +
+				"det=${settings.readerTranslationPaddleDetModelId} " +
+				"rec=${settings.readerTranslationPaddleOfficialModelId} " +
+				"autoRecLang=${normalizedAutoRecognizerLanguage ?: "none"}"
+		log { processStartLog }
 		
 		val permitSemaphore = if (settings.readerTranslationPipelineMode == ReaderTranslationPipelineMode.END_TO_END_API) {
 			getE2eSemaphore()
@@ -289,10 +310,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		}
 		Log.d(LOG_TAG, "process debug: waiting permit page=${page.id}")
 		
-		return withContext(loggingPageId.asContextElement(page.id)) {
+		return withContext(
+			loggingPageId.asContextElement(page.id) +
+				automaticRecognizerLanguage.asContextElement(normalizedAutoRecognizerLanguage),
+		) {
 			permitSemaphore.withPermit {
 				Log.d(LOG_TAG, "process debug: permit acquired page=${page.id}")
-				appendPageLog(page.id, "process start page=${page.id}")
+				appendPageLog(page.id, processStartLog)
 				cache[renderCacheKey]?.let {
 					appendPageLog(page.id, "metric.render_cache.hit=1")
 					Log.d(LOG_TAG, "process debug: render cache hit after permit page=${page.id}")
@@ -526,6 +550,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				recognizeTextByRoute(route, sourceUri, sourceLang, pageId)
 			}.onFailure {
 				it.printStackTraceDebug()
+				log {
+					"metric.ocr.attempt.${route.metricKey}.error=" +
+						"${it.javaClass.simpleName}:${it.message.orEmpty().take(160)}"
+				}
 			}.getOrDefault(emptyList())
 			val attemptDurationMs = SystemClock.elapsedRealtime() - attemptStartMs
 			log { "metric.ocr.attempt.${route.metricKey}.ms=$attemptDurationMs" }
@@ -620,7 +648,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			else -> OcrRecognizerBackend.PADDLE
 		}
 		val effectiveRoute = PageOcrRoute(
-			detector = if (recBackend == OcrRecognizerBackend.MLKIT) OcrDetectorBackend.MLKIT else detBackend,
+			detector = detBackend,
 			recognizer = recBackend,
 		)
 		val routes = linkedSetOf<PageOcrRoute>()
@@ -642,10 +670,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return when (model?.category) {
 			OnnxModelCategory.BUBBLE_DETECTION -> OcrDetectorBackend.BUBBLE
 			OnnxModelCategory.OCR_DETECTOR -> {
-				if (model.id == ComicTextDetectorOnnx.MODEL_ID) {
-					OcrDetectorBackend.CTD
-				} else {
-					OcrDetectorBackend.PADDLE
+				when (model.id) {
+					ComicTextDetectorOnnx.MODEL_ID -> OcrDetectorBackend.CTD
+					DefaultDbNetTextDetector.MODEL_ID -> OcrDetectorBackend.DBNET
+					else -> OcrDetectorBackend.PADDLE
 				}
 			}
 			else -> OcrDetectorBackend.PADDLE
@@ -690,7 +718,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val regions = paddleTextDetector.detect(sourceUri)
 		log { "metric.ocr.paddle.detected_regions=${regions.size}" }
 		if (regions.isEmpty()) return emptyList()
-		val blocks = paddleTextRecognizer.recognize(sourceUri, regions)
+		val blocks = paddleOcrEngine.recognize(sourceUri, regions, automaticRecognizerLanguage.get())
 		log { "metric.ocr.paddle.recognized_blocks=${blocks.size}" }
 		return blocks
 	}
@@ -763,6 +791,25 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				log { "metric.ocr.ctd_mangaocr.recognized_blocks=${recognized.size}" }
 				recognized
 			}
+			route.detector == OcrDetectorBackend.DBNET &&
+				route.recognizer == OcrRecognizerBackend.MANGA_OCR -> {
+				val regions = dbNetTextDetector.detect(sourceUri)
+				log { "metric.ocr.dbnet.detected_regions=${regions.size}" }
+				if (regions.isEmpty()) return emptyList()
+				val recognized = mangaTextRecognizer.recognize(sourceUri, regions)
+				mangaOcrReaderTextRecognizer.consumeLastDiagnostics()
+				log { "metric.ocr.dbnet_mangaocr.recognized_blocks=${recognized.size}" }
+				recognized
+			}
+			route.detector == OcrDetectorBackend.DBNET &&
+				route.recognizer == OcrRecognizerBackend.MLKIT -> {
+				val regions = dbNetTextDetector.detect(sourceUri)
+				log { "metric.ocr.dbnet.detected_regions=${regions.size}" }
+				if (regions.isEmpty()) return emptyList()
+				val recognized = mlKitOcrEngine.recognize(sourceUri, regions)
+				log { "metric.ocr.dbnet_mlkit.recognized_blocks=${recognized.size}" }
+				recognized
+			}
 			route.detector == OcrDetectorBackend.MLKIT &&
 				route.recognizer == OcrRecognizerBackend.PADDLE -> {
 				// ML Kit detection → Paddle recognition
@@ -775,7 +822,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				val regions = detectedBlocksToRegions(detectedBlocks)
 				log { "metric.ocr.mlkit_det_paddle_rec.detected_regions=${regions.size}" }
 				if (regions.isEmpty()) return emptyList()
-				val recognized = paddleTextRecognizer.recognize(sourceUri, regions)
+				val recognized = paddleOcrEngine.recognize(sourceUri, regions, automaticRecognizerLanguage.get())
 				log { "metric.ocr.mlkit_det_paddle_rec.recognized_blocks=${recognized.size}" }
 				recognized
 			}
@@ -784,20 +831,29 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				val regions = ctdTextDetector.detect(sourceUri)
 				log { "metric.ocr.ctd.detected_regions=${regions.size}" }
 				if (regions.isEmpty()) return emptyList()
-				val recognized = paddleTextRecognizer.recognize(sourceUri, regions)
+				val recognized = paddleOcrEngine.recognize(sourceUri, regions, automaticRecognizerLanguage.get())
 				log { "metric.ocr.ctd_paddle.recognized_blocks=${recognized.size}" }
 				recognized
 			}
-			route.detector == OcrDetectorBackend.BUBBLE &&
-				route.recognizer == OcrRecognizerBackend.PADDLE -> {
-				val regions = bubbleReaderTextDetector.detect(sourceUri)
-				log { "metric.ocr.bubble.detected_regions=${regions.size}" }
-				if (regions.isEmpty()) return emptyList()
-				val recognized = paddleTextRecognizer.recognize(sourceUri, regions)
-				log { "metric.ocr.bubble_paddle.recognized_blocks=${recognized.size}" }
-				recognized
-			}
-			else -> emptyList()
+				route.detector == OcrDetectorBackend.BUBBLE &&
+					route.recognizer == OcrRecognizerBackend.PADDLE -> {
+					val regions = bubbleReaderTextDetector.detect(sourceUri)
+					log { "metric.ocr.bubble.detected_regions=${regions.size}" }
+					if (regions.isEmpty()) return emptyList()
+					val recognized = paddleOcrEngine.recognize(sourceUri, regions, automaticRecognizerLanguage.get())
+					log { "metric.ocr.bubble_paddle.recognized_blocks=${recognized.size}" }
+					recognized
+				}
+				route.detector == OcrDetectorBackend.DBNET &&
+					route.recognizer == OcrRecognizerBackend.PADDLE -> {
+					val regions = dbNetTextDetector.detect(sourceUri)
+					log { "metric.ocr.dbnet.detected_regions=${regions.size}" }
+					if (regions.isEmpty()) return emptyList()
+					val recognized = paddleOcrEngine.recognize(sourceUri, regions, automaticRecognizerLanguage.get())
+					log { "metric.ocr.dbnet_paddle.recognized_blocks=${recognized.size}" }
+					recognized
+				}
+				else -> emptyList()
 		}
 	}
 
@@ -1327,14 +1383,14 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	}
 
 	private fun resolveVerticalCellSize(glyphs: List<String>, textSize: Float): Int {
-		val previousTextSize = textPaint.textSize
-		textPaint.textSize = textSize
+		val measurePaint = TextPaint(textPaintTemplate).apply {
+			this.textSize = textSize
+		}
 		var maxGlyphWidth = textSize
 		for (glyph in glyphs) {
 			if (glyph.isBlank()) continue
-			maxGlyphWidth = max(maxGlyphWidth, textPaint.measureText(glyph))
+			maxGlyphWidth = max(maxGlyphWidth, measurePaint.measureText(glyph))
 		}
-		textPaint.textSize = previousTextSize
 		val sideBearingPadding = max(2f, textSize * 0.16f)
 		return ceil(max(textSize * 1.18f, maxGlyphWidth + sideBearingPadding).toDouble())
 			.toInt()
@@ -1571,13 +1627,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, compactOverlayPaint)
 	}
 
-	private fun configureTextPaintForRender() {
-		textPaint.color = Color.WHITE
-		textPaint.clearShadowLayer()
-	}
-
 	private fun drawBubbleText(canvas: Canvas, bubble: PreparedBubble) {
-		configureTextPaintForRender()
 		if (bubble.segments.isNotEmpty()) {
 			for (segment in bubble.segments) {
 				val vertical = segment.verticalPlan
@@ -1749,10 +1799,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		contentWidth: Int,
 		contentHeight: Int,
 	) {
-		val previousAlign = textPaint.textAlign
-		textPaint.textSize = plan.textSize
-		textPaint.textAlign = Paint.Align.CENTER
-		val fm = textPaint.fontMetrics
+		val drawPaint = TextPaint(textPaintTemplate).apply {
+			textSize = plan.textSize
+			textAlign = Paint.Align.CENTER
+		}
+		val fm = drawPaint.fontMetrics
 		val baselineOffset = -(fm.ascent + fm.descent) / 2f
 		val cell = plan.cellSize.toFloat()
 		val usedWidth = computeVerticalUsedWidth(plan).toFloat()
@@ -1771,10 +1822,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			val row = index % plan.rowCapacity
 			val cx = contentLeft + offsetX + usedWidth - cell * (col + 0.5f)
 			val cy = contentTop + offsetY + cell * (row + 0.5f)
-			canvas.drawText(glyph, cx, cy + baselineOffset, textPaint)
+			canvas.drawText(glyph, cx, cy + baselineOffset, drawPaint)
 		}
 		canvas.restore()
-		textPaint.textAlign = previousAlign
 	}
 
 	private fun buildVerticalPlan(text: String, width: Int, height: Int): VerticalLayoutPlan? {
@@ -1930,7 +1980,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		maxLines: Int = Int.MAX_VALUE,
 		ellipsize: TextUtils.TruncateAt? = null,
 	): StaticLayout {
-		val layoutPaint = TextPaint(textPaint).apply {
+		val layoutPaint = TextPaint(textPaintTemplate).apply {
+			color = Color.WHITE
 			this.textSize = textSize
 			textAlign = Paint.Align.LEFT
 		}
@@ -2014,7 +2065,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		bitmapHeight: Int,
 		allSourceRects: List<Rect>,
 	): PreparedBubble? {
-		return if (verticalPreferred) {
+		val preferred = if (verticalPreferred) {
 			buildVisibleFirstVerticalBubble(
 				input = input,
 				text = text,
@@ -2051,6 +2102,88 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				allSourceRects = allSourceRects,
 			)
 		}
+		return preferred ?: buildFullTextFallbackBubble(
+			input = input,
+			text = text,
+			anchorRect = anchorRect,
+			bitmapWidth = bitmapWidth,
+			bitmapHeight = bitmapHeight,
+		)
+	}
+
+	private fun buildFullTextFallbackBubble(
+		input: BubbleInput,
+		text: String,
+		anchorRect: Rect,
+		bitmapWidth: Int,
+		bitmapHeight: Int,
+	): PreparedBubble? {
+		val pageMargin = min(dp(FULL_TEXT_FALLBACK_PAGE_MARGIN_DP), min(bitmapWidth, bitmapHeight) / 20)
+		val padding = dp(FULL_TEXT_FALLBACK_PADDING_DP)
+		val availableWidth = bitmapWidth - pageMargin * 2
+		val availableHeight = bitmapHeight - pageMargin * 2
+		if (availableWidth <= padding * 2 || availableHeight <= padding * 2) return null
+		val contentHeight = availableHeight - padding * 2
+		var selectedWidth = 0
+		var selectedFit: HorizontalLayoutFit? = null
+		for (widthRatio in FULL_TEXT_FALLBACK_WIDTH_RATIOS) {
+			val candidateWidth = max(
+				anchorRect.width(),
+				(bitmapWidth * widthRatio).roundToInt(),
+			).coerceAtMost(availableWidth)
+			val candidateContentWidth = candidateWidth - padding * 2
+			if (candidateContentWidth <= 0) continue
+			val candidateFit = fitHorizontalLayout(
+				text = text,
+				width = candidateContentWidth,
+				height = contentHeight,
+				initialTextSize = dp(FULL_TEXT_FALLBACK_MAX_TEXT_SIZE_DP).toFloat(),
+				allowEllipsize = false,
+			)
+			if (candidateFit.overflow > 0 || candidateFit.truncated) continue
+			val currentFit = selectedFit
+			if (
+				currentFit == null ||
+				candidateFit.textSize > currentFit.textSize ||
+				(candidateFit.textSize == currentFit.textSize && candidateWidth < selectedWidth)
+			) {
+				selectedWidth = candidateWidth
+				selectedFit = candidateFit
+			}
+		}
+		val fit = selectedFit ?: run {
+			log {
+				"bubble render fallback_full_text_failed source=${anchorRect} " +
+					"available=${availableWidth}x$availableHeight chars=${text.length}"
+			}
+			return null
+		}
+		val contentWidth = selectedWidth - padding * 2
+		val rectHeight = (fit.usedHeight + padding * 2).coerceAtMost(availableHeight)
+		val maxLeft = bitmapWidth - pageMargin - selectedWidth
+		val maxTop = bitmapHeight - pageMargin - rectHeight
+		val left = (anchorRect.centerX() - selectedWidth / 2).coerceIn(pageMargin, maxLeft)
+		val top = (anchorRect.centerY() - rectHeight / 2).coerceIn(pageMargin, maxTop)
+		val rect = Rect(left, top, left + selectedWidth, top + rectHeight)
+		log {
+			"bubble render fallback_full_text source=${anchorRect} prepared=$rect " +
+				"textSize=${fit.textSize} chars=${text.length}"
+		}
+		return PreparedBubble(
+			rect = rect,
+			padding = padding,
+			contentWidth = contentWidth,
+			contentHeight = fit.usedHeight.coerceAtLeast(1),
+			layout = fit.layout,
+			verticalPlan = null,
+			debugOverlay = buildBubbleDebugOverlay(
+				input = input,
+				preparedRect = rect,
+				padding = padding,
+				contentWidth = contentWidth,
+				contentHeight = fit.usedHeight.coerceAtLeast(1),
+			),
+		)
 	}
 
 	private fun buildVisibleFirstHorizontalBubble(
@@ -3341,6 +3474,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		sourceLang: String,
 		targetLang: String,
 		pageEpoch: Int,
+		autoRecognizerLanguage: String?,
 	): String {
 		val raw = listOf(
 			TRANSLATION_PIPELINE_VERSION,
@@ -3359,6 +3493,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			OCR_STRATEGY_PAGE_DET_REC,
 			settings.isReaderTranslationQualityFilterEnabled.toString(),
 			settings.readerTranslationPaddleOfficialModelId,
+			autoRecognizerLanguage.orEmpty(),
 			settings.readerTranslationPaddleDetModelId,
 			settings.readerTranslationPaddleRecModelUrl,
 			settings.readerTranslationPaddleRecModelVersion,
@@ -3400,6 +3535,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			settings.readerTranslationPipelineMode.name,
 			OCR_STRATEGY_PAGE_DET_REC,
 			settings.readerTranslationPaddleOfficialModelId,
+			automaticRecognizerLanguage.get().orEmpty(),
 			settings.readerTranslationPaddleDetModelId,
 			settings.readerTranslationPaddleRecModelUrl,
 			settings.readerTranslationPaddleRecModelVersion,
@@ -3409,7 +3545,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return "${OCR_CACHE_PREFIX}${raw.sha256()}"
 	}
 
-	private fun resolveSourceLanguage(page: ContentPage): String {
+	private fun resolveSourceLanguage(page: ContentPage, contextualLanguage: String? = null): String {
+		if (isAutoReaderTranslationLanguage(settings.readerTranslationSourceLanguage)) {
+			contextualLanguage.normalizeReaderTranslationLanguageTag()?.let { return it }
+		}
 		return resolveReaderTranslationSourceLanguage(
 			preferredLanguage = settings.readerTranslationSourceLanguage,
 			contentLanguage = page.source.getLocale()?.language,
@@ -3499,7 +3638,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 		const val DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 		const val MAX_OPENAI_BATCH_SIZE = 3
-		const val TRANSLATION_PIPELINE_VERSION = "2026-07-09-layout-paint-snapshot"
+		const val TRANSLATION_PIPELINE_VERSION = "2026-07-10-adaptive-dbnet-v6"
 		const val OPENAI_TRANSLATION_SYSTEM_PROMPT = """
 		You translate manga OCR text.
 		Output only the translation.
@@ -3515,6 +3654,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		const val VERTICAL_TEXT_SIZE_WIDTH_RATIO = 0.78f
 		const val MAX_RENDER_TEXT_SIZE_DP = 24f
 		const val MAX_VERTICAL_RENDER_TEXT_SIZE_DP = 10f
+		const val FULL_TEXT_FALLBACK_MAX_TEXT_SIZE_DP = 10f
+		const val FULL_TEXT_FALLBACK_PAGE_MARGIN_DP = 6f
+		const val FULL_TEXT_FALLBACK_PADDING_DP = 4f
+		val FULL_TEXT_FALLBACK_WIDTH_RATIOS = floatArrayOf(0.45f, 0.65f, 0.90f, 1f)
 		const val MIN_INITIAL_TEXT_SIZE_DP = 6f
 		const val MIN_RENDER_TEXT_SIZE_DP = 2f
 		const val HORIZONTAL_LAYOUT_WIDTH_OVERFLOW_TOLERANCE_DP = 2f
@@ -3551,6 +3694,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			MLKIT,
 			PADDLE,
 			CTD,
+			DBNET,
 			BUBBLE,
 		}
 

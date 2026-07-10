@@ -48,6 +48,10 @@ internal fun openDetailsReader(
 
 	val intentBuilder = ReaderIntent.Builder(context)
 		.manga(manga)
+		.languages(
+			translatedLanguage = viewModel.resolvedReadingLanguage.value,
+			sourceLanguage = viewModel.resolvedMetadataLanguage.value,
+		)
 		.branch(viewModel.selectedBranchValue)
 
 	runCatching {

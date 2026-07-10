@@ -173,7 +173,6 @@
 	</string-array>
 	<string-array name="reader_translation_modes" translatable="false">
 		<item>@string/reader_translation_mode_local_only</item>
-		<item>@string/reader_translation_mode_local_first</item>
 		<item>@string/reader_translation_mode_api_only</item>
 	</string-array>
 	<string-array name="reader_translation_ocr_engines" translatable="false">
@@ -192,8 +191,6 @@
 		<item>@string/reader_translation_api_provider_zhipu</item>
 		<item>@string/reader_translation_api_provider_alibaba</item>
 		<item>@string/reader_translation_api_provider_moonshot</item>
-		<item>@string/reader_translation_api_provider_minimax</item>
-		<item>@string/reader_translation_api_provider_baidu</item>
 		<item>@string/reader_translation_api_provider_anthropic</item>
 		<item>@string/reader_translation_api_provider_gemini</item>
 		<item>@string/reader_translation_api_provider_openrouter</item>
@@ -209,7 +206,6 @@
 	</string-array>
 	<string-array name="values_reader_translation_modes" translatable="false">
 		<item>LOCAL_ONLY</item>
-		<item>LOCAL_FIRST</item>
 		<item>API_ONLY</item>
 	</string-array>
 	<string-array name="values_reader_translation_ocr_engines" translatable="false">
@@ -228,8 +224,6 @@
 		<item>ZHIPU</item>
 		<item>ALIBABA</item>
 		<item>MOONSHOT</item>
-		<item>MINIMAX</item>
-		<item>BAIDU</item>
 		<item>ANTHROPIC</item>
 		<item>GEMINI</item>
 		<item>OPENROUTER</item>
@@ -264,6 +258,7 @@
 		<item>Indonesian</item>
 		<item>Japanese</item>
 		<item>Korean</item>
+		<item>Thai</item>
 		<item>Dutch</item>
 		<item>Polish</item>
 		<item>Portuguese</item>
@@ -297,6 +292,7 @@
 		<item>id</item>
 		<item>ja</item>
 		<item>ko</item>
+		<item>th</item>
 		<item>nl</item>
 		<item>pl</item>
 		<item>pt</item>
@@ -329,6 +325,7 @@
 		<item>Indonesian</item>
 		<item>Japanese</item>
 		<item>Korean</item>
+		<item>Thai</item>
 		<item>Dutch</item>
 		<item>Polish</item>
 		<item>Portuguese</item>
@@ -361,6 +358,7 @@
 		<item>id</item>
 		<item>ja</item>
 		<item>ko</item>
+		<item>th</item>
 		<item>nl</item>
 		<item>pl</item>
 		<item>pt</item>

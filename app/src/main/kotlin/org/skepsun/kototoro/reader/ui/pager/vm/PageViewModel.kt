@@ -64,11 +64,7 @@ class PageViewModel(
 			.onEach { pageId ->
 				val page = boundPage ?: return@onEach
 				if (page.id != pageId) return@onEach
-				if (isLoading()) {
-					pendingLayerSwitchPageId = pageId
-					return@onEach
-				}
-				switchDisplayLayer(page)
+				switchDisplayLayerWhenIdle(page)
 			}.launchIn(scope)
 	}
 
@@ -164,6 +160,29 @@ class PageViewModel(
 			}
 			cachedBounds = resolveTrimmedBounds(targetUri)
 			state.value = PageState.Loaded(targetUri.toImageSource(cachedBounds), isConverted = false)
+		}
+	}
+
+	private fun switchDisplayLayerWhenIdle(page: ContentPage) {
+		val activeJob = job
+		if (activeJob?.isActive != true) {
+			switchDisplayLayer(page)
+			return
+		}
+		pendingLayerSwitchPageId = page.id
+		activeJob.invokeOnCompletion {
+			scope.launch {
+				val currentPage = boundPage
+				if (currentPage?.id != page.id || pendingLayerSwitchPageId != page.id) {
+					return@launch
+				}
+				if (job?.isActive == true && job !== activeJob) {
+					switchDisplayLayerWhenIdle(currentPage)
+				} else {
+					pendingLayerSwitchPageId = null
+					switchDisplayLayer(currentPage)
+				}
+			}
 		}
 	}
 
@@ -311,7 +330,7 @@ class PageViewModel(
 		}
 		val currentUri = (source as? ImageSource.Uri)?.uri ?: return null
 		val originalUri = enhancementController.resolveDisplayVariant(page, currentUri, showTranslated = false) ?: currentUri
-		val translatedUri = enhancementController.resolveDisplayVariant(page, currentUri, showTranslated = true)
+		val translatedUri = enhancementController.resolveDisplayVariant(page, originalUri, showTranslated = true)
 		val original = originalUri.toImageSource(resolveTrimmedBounds(originalUri))
 		val translated = translatedUri?.let { it.toImageSource(resolveTrimmedBounds(it)) }
 		return LayerSources(original = original, translated = translated)

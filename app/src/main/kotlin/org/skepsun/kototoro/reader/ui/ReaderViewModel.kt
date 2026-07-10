@@ -40,6 +40,8 @@ import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
+import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
+import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
@@ -432,6 +434,17 @@ class ReaderViewModel @Inject constructor(
         return !isTranslationBypassedForCurrentContent()
     }
 
+    fun hasTranslationEngineConfigured(): Boolean {
+        return when (settings.readerTranslationPipelineMode) {
+            ReaderTranslationPipelineMode.END_TO_END_API -> settings.readerE2eApiEndpoint.isNotBlank()
+            ReaderTranslationPipelineMode.TWO_STAGE -> when (settings.readerTranslationMode) {
+                ReaderTranslationMode.API_ONLY -> settings.readerTranslationApiEndpoint.isNotBlank()
+                ReaderTranslationMode.LOCAL_ONLY,
+                ReaderTranslationMode.LOCAL_FIRST -> true
+            }
+        }
+    }
+
     private fun resolveCurrentTranslationSourceLanguage(): String {
         return resolveReaderTranslationSourceLanguage(
             preferredLanguage = settings.readerTranslationSourceLanguage,
@@ -769,6 +782,14 @@ class ReaderViewModel @Inject constructor(
                 detailsLoadUseCase(intent, force = false)
                     .collect { details ->
                         loadedDetails = details
+                        val translatedLanguage = savedStateHandle[ReaderIntent.EXTRA_TRANSLATED_LANGUAGE]
+                            ?: details.toContent().source.locale
+                        val sourceLanguage: String? = savedStateHandle[ReaderIntent.EXTRA_SOURCE_LANGUAGE]
+                        pageLoader.setTranslationLanguageContext(
+                            translatedLanguage = translatedLanguage,
+                            sourceLanguage = sourceLanguage,
+                            branch = selectedBranch.value ?: savedStateHandle[ReaderIntent.EXTRA_BRANCH],
+                        )
                         if (mangaDetails.value == null) {
                             mangaDetails.value = details
                         }
@@ -786,6 +807,11 @@ class ReaderViewModel @Inject constructor(
                             }.getOrDefault(settings.defaultReaderMode)
                             val branch = chaptersLoader.peekChapter(newState.chapterId)?.branch
                             selectedBranch.value = branch
+                            pageLoader.setTranslationLanguageContext(
+                                translatedLanguage = translatedLanguage,
+                                sourceLanguage = sourceLanguage,
+                                branch = branch,
+                            )
                             readerMode.value = mode
                             try {
                                 chaptersLoader.loadSingleChapter(newState.chapterId)

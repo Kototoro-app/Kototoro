@@ -26,10 +26,26 @@ import org.skepsun.kototoro.reader.translate.data.OnnxModelDownloadWorker
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.OnnxOfficialModel
 import org.skepsun.kototoro.reader.translate.data.OnnxOfficialModelCatalog
+import org.skepsun.kototoro.reader.translate.domain.DefaultDbNetTextDetector
+import org.skepsun.kototoro.reader.translate.domain.ComicTextDetectorOnnx
 import org.skepsun.kototoro.settings.compose.OcrModelItemUiState
 import org.skepsun.kototoro.settings.compose.OcrModelSectionUiState
 import org.skepsun.kototoro.settings.compose.OcrModelsSettingsScreen
+import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.prefs.ReaderOcrMode
+import org.skepsun.kototoro.reader.translate.data.AdvancedOcrModelPackWorker
+import androidx.core.content.edit
 import javax.inject.Inject
+
+internal val READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS = linkedSetOf(
+    "mangaocr_2025_onnx",
+    "ppocrv6_medium_rec_onnx",
+    "latin_ppocrv5_mobile_rec_onnx",
+    "korean_ppocrv5_mobile_rec_onnx",
+    "thai_ppocrv5_mobile_rec_onnx",
+)
 
 @Keep
 @AndroidEntryPoint
@@ -37,6 +53,8 @@ class OcrModelsFragment : Fragment() {
 
     @Inject
     lateinit var onnxModelManager: OnnxModelManager
+
+	private val settings: AppSettings by lazy { AppSettings(requireContext()) }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -54,6 +72,7 @@ class OcrModelsFragment : Fragment() {
             KototoroTheme {
                 OcrModelsRoute(
                     onnxModelManager = onnxModelManager,
+					settings = settings,
                 )
             }
         }
@@ -68,6 +87,7 @@ class OcrModelsFragment : Fragment() {
 @Composable
 fun OcrModelsRoute(
     onnxModelManager: OnnxModelManager,
+	settings: AppSettings,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -105,31 +125,32 @@ fun OcrModelsRoute(
         fun buildSection(
             title: String,
             category: OnnxModelCategory,
+            visibleModelIds: Set<String>? = null,
         ): OcrModelSectionUiState {
             return OcrModelSectionUiState(
                 title = title,
                 items = OnnxOfficialModelCatalog.models
-                    .filter { it.category == category }
+                    .filter { model ->
+                        model.category == category &&
+                            (visibleModelIds == null || model.id in visibleModelIds)
+                    }
                     .map(::buildItemState),
             )
         }
 
         listOf(
             buildSection(
-                title = context.getString(R.string.reader_translation_onnx_models_title),
-                category = OnnxModelCategory.CLASSIC_TRANSLATION,
-            ),
-            buildSection(
                 title = context.getString(R.string.reader_translation_ocr_detector_models_title),
                 category = OnnxModelCategory.OCR_DETECTOR,
+				visibleModelIds = setOf(
+					ComicTextDetectorOnnx.MODEL_ID,
+					DefaultDbNetTextDetector.MODEL_ID,
+				),
             ),
             buildSection(
                 title = context.getString(R.string.reader_translation_ocr_recognizer_models_title),
                 category = OnnxModelCategory.OCR_RECOGNIZER,
-            ),
-            buildSection(
-                title = context.getString(R.string.reader_translation_onnx_bubble_detector_models_title),
-                category = OnnxModelCategory.BUBBLE_DETECTION,
+                visibleModelIds = READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS,
             ),
             buildSection(
                 title = context.getString(R.string.reader_translation_onnx_super_resolution_models_title),
@@ -137,6 +158,24 @@ fun OcrModelsRoute(
             ),
         )
     }
+	val detectorOptions = listOf(
+		ComicTextDetectorOnnx.MODEL_ID,
+		DefaultDbNetTextDetector.MODEL_ID,
+	).mapNotNull(OnnxOfficialModelCatalog::findById).map { model ->
+		SettingsChoiceOption(model.id, model.title)
+	}
+	val recognizerOptions = buildList {
+		add(SettingsChoiceOption("AUTO", context.getString(R.string.reader_translation_ocr_rec_model_auto)))
+		READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS
+			.mapNotNull(OnnxOfficialModelCatalog::findById)
+			.forEach { model -> add(SettingsChoiceOption(model.id, model.title)) }
+	}
+	val selectedDetector = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID) {
+		settings.readerTranslationAdvancedDetModelId
+	}.value
+	val selectedRecognizer = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID) {
+		settings.readerTranslationAdvancedRecModelId
+	}.value
 
     fun handleModelClick(modelId: String) {
         val model = OnnxOfficialModelCatalog.findById(modelId) ?: return
@@ -147,6 +186,9 @@ fun OcrModelsRoute(
                 .setPositiveButton(android.R.string.ok) { _, _ ->
                     OnnxModelDownloadWorker.cancel(context, model.id)
                     if (onnxModelManager.deleteModel(model.id)) {
+						if (model.id in AdvancedOcrModelPackWorker.REQUIRED_MODEL_IDS) {
+							settings.readerTranslationOcrMode = ReaderOcrMode.BASIC
+						}
                         updateTransientState(model.id, null)
                         Toast.makeText(
                             context,
@@ -165,6 +207,16 @@ fun OcrModelsRoute(
 
     OcrModelsSettingsScreen(
         sections = sections,
+		detectorOptions = detectorOptions,
+		recognizerOptions = recognizerOptions,
+		selectedDetector = selectedDetector,
+		selectedRecognizer = selectedRecognizer,
+		onDetectorChange = { modelId ->
+			settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, modelId) }
+		},
+		onRecognizerChange = { modelId ->
+			settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, modelId) }
+		},
         onModelClick = ::handleModelClick,
         modifier = modifier,
     )

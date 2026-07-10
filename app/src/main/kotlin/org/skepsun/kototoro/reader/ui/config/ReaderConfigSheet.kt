@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CompoundButton
+import android.widget.Toast
 import androidx.appcompat.view.ActionMode
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isGone
@@ -40,11 +41,12 @@ import org.skepsun.kototoro.core.util.ext.viewLifecycleScope
 import org.skepsun.kototoro.core.util.progress.IntPercentLabelFormatter
 import org.skepsun.kototoro.databinding.SheetReaderConfigBinding
 import org.skepsun.kototoro.reader.domain.PageLoader
-import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.ui.TranslationTaskPanelSheet
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.ScreenOrientationHelper
 import javax.inject.Inject
+
+private const val STATE_ENABLE_TRANSLATION_AFTER_SETUP = "enable_translation_after_setup"
 
 @AndroidEntryPoint
 class ReaderConfigSheet :
@@ -67,6 +69,7 @@ class ReaderConfigSheet :
 
     private lateinit var mode: ReaderMode
     private lateinit var imageServerDelegate: ImageServerDelegate
+    private var enableTranslationAfterSetup = false
 
     @Inject
     lateinit var settings: AppSettings
@@ -102,6 +105,9 @@ class ReaderConfigSheet :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableTranslationAfterSetup = savedInstanceState?.getBoolean(
+            STATE_ENABLE_TRANSLATION_AFTER_SETUP,
+        ) == true
         mode = arguments?.getInt(AppRouter.KEY_READER_MODE)
             ?.let { ReaderMode.valueOf(it) }
             ?: ReaderMode.STANDARD
@@ -133,13 +139,8 @@ class ReaderConfigSheet :
         binding.switchDoubleFoldable.isChecked = settings.isReaderDoubleOnFoldable
         binding.switchDoubleFoldable.isEnabled = binding.switchDoubleReader.isEnabled
         binding.switchSplitPages.isChecked = settings.isReaderSplitPagesEnabled
-        binding.switchTranslationEnabled.isChecked = settings.isReaderTranslationEnabled
-        binding.switchTranslationShowTranslated.isChecked = settings.isReaderTranslationShowTranslated
-        binding.switchTranslationShowTranslated.isEnabled = settings.isReaderTranslationEnabled
         binding.switchSuperResolution.isChecked = settings.isReaderSuperResolutionEnabled
-        binding.buttonRetranslate.isEnabled = settings.isReaderTranslationEnabled
-        binding.buttonTranslationLog.isEnabled = settings.isReaderTranslationEnabled
-        updateTranslationBypassHint(binding)
+        bindTranslationControls(binding)
         binding.sliderDoubleSensitivity.setValueRounded(settings.readerDoublePagesSensitivity * 100f)
         binding.sliderDoubleSensitivity.setLabelFormatter(IntPercentLabelFormatter(binding.root.context))
         binding.adjustSensitivitySlider(withAnimation = false)
@@ -152,11 +153,11 @@ class ReaderConfigSheet :
         binding.buttonColorFilter.setOnClickListener(this)
         binding.buttonScrollTimer.setOnClickListener(this)
         binding.buttonBookmark.setOnClickListener(this)
+        binding.buttonTranslation.setOnClickListener(this)
+        binding.buttonTranslationSettings.setOnClickListener(this)
         binding.switchDoubleReader.setOnCheckedChangeListener(this)
         binding.switchDoubleFoldable.setOnCheckedChangeListener(this)
         binding.switchSplitPages.setOnCheckedChangeListener(this)
-        binding.switchTranslationEnabled.setOnCheckedChangeListener(this)
-        binding.switchTranslationShowTranslated.setOnCheckedChangeListener(this)
         binding.switchSuperResolution.setOnCheckedChangeListener(this)
         binding.buttonRetranslate.setOnClickListener(this)
         binding.buttonTranslationLog.setOnClickListener(this)
@@ -185,6 +186,32 @@ class ReaderConfigSheet :
             bottom = insets.getInsets(typeMask).bottom,
         )
         return insets.consume(v, typeMask, bottom = true)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!enableTranslationAfterSetup) {
+            viewBinding?.let(::bindTranslationControls)
+            return
+        }
+        enableTranslationAfterSetup = false
+        if (!viewModel.hasTranslationEngineConfigured()) {
+            viewBinding?.let(::bindTranslationControls)
+            return
+        }
+        viewModel.getTranslationBypassHint(requireContext())?.let { hint ->
+            Toast.makeText(requireContext(), hint, Toast.LENGTH_SHORT).show()
+            viewBinding?.let(::bindTranslationControls)
+            return
+        }
+        settings.isReaderTranslationEnabled = true
+        settings.isReaderTranslationShowTranslated = true
+        dismissAllowingStateLoss()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_ENABLE_TRANSLATION_AFTER_SETUP, enableTranslationAfterSetup)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onClick(v: View) {
@@ -217,6 +244,10 @@ class ReaderConfigSheet :
                 val manga = viewModel.getContentOrNull() ?: return
                 router.openColorFilterConfig(manga, page)
             }
+
+            R.id.button_translation -> handleTranslationAction()
+
+            R.id.button_translation_settings -> router.openTranslationSettings()
 
             R.id.button_open_in_browser -> {
                 val manga = viewModel.getContentOrNull() ?: return
@@ -289,22 +320,6 @@ class ReaderConfigSheet :
                 findParentCallback(Callback::class.java)?.onSplitModeChanged(isChecked)
             }
 
-            R.id.switch_translation_enabled -> {
-                settings.isReaderTranslationEnabled = isChecked
-                if (isChecked) {
-                    settings.isReaderTranslationShowTranslated = true
-                    viewBinding?.switchTranslationShowTranslated?.isChecked = true
-                }
-                viewBinding?.switchTranslationShowTranslated?.isEnabled = isChecked
-                viewBinding?.buttonRetranslate?.isEnabled = isChecked
-                viewBinding?.buttonTranslationLog?.isEnabled = isChecked
-                viewBinding?.let { updateTranslationBypassHint(it) }
-            }
-
-            R.id.switch_translation_show_translated -> {
-                settings.isReaderTranslationShowTranslated = isChecked
-            }
-
             R.id.switch_super_resolution -> {
                 settings.isReaderSuperResolutionEnabled = isChecked
                 viewLifecycleScope.launch {
@@ -371,6 +386,41 @@ class ReaderConfigSheet :
         if (visible) {
             binding.textTranslationBypassHint.text = hint
         }
+    }
+
+    private fun handleTranslationAction() {
+        if (!viewModel.hasTranslationEngineConfigured()) {
+            enableTranslationAfterSetup = true
+            router.openTranslationSettings()
+            return
+        }
+        val enabled = !settings.isReaderTranslationEnabled
+        if (enabled) {
+            viewModel.getTranslationBypassHint(requireContext())?.let { hint ->
+                Toast.makeText(requireContext(), hint, Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+        settings.isReaderTranslationEnabled = enabled
+        settings.isReaderTranslationShowTranslated = enabled
+        dismissAllowingStateLoss()
+    }
+
+    private fun bindTranslationControls(binding: SheetReaderConfigBinding) {
+        val configured = viewModel.hasTranslationEngineConfigured()
+        val enabled = settings.isReaderTranslationEnabled
+        binding.buttonTranslation.setText(
+            when {
+                !configured -> R.string.reader_translation_action_setup
+                enabled -> R.string.reader_translation_action_disable
+                else -> R.string.reader_translation_action
+            },
+        )
+        binding.buttonTranslation.isSelected = enabled
+        binding.buttonTranslationSettings.isVisible = configured
+        binding.buttonRetranslate.isVisible = enabled
+        binding.buttonTranslationLog.isVisible = enabled
+        updateTranslationBypassHint(binding)
     }
 
     private fun showRetranslateActionDialog() {

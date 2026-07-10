@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.reader.translate.domain
 
+import java.util.Locale
+
 private const val AUTO_LANGUAGE = "auto"
 private const val DEFAULT_SOURCE_LANGUAGE = "ja"
 
@@ -28,6 +30,7 @@ private val supportedTranslationLanguages = setOf(
 	"ru",
 	"sk",
 	"sv",
+	"th",
 	"tl",
 	"tr",
 	"uk",
@@ -63,3 +66,52 @@ fun String?.normalizeReaderTranslationLanguageTag(): String? {
 		?.substringBefore('-')
 		?.ifBlank { null }
 }
+
+fun resolveAutomaticReaderOcrLanguage(
+	translatedLanguage: String?,
+	sourceLanguage: String?,
+	branch: String? = null,
+): String? {
+	return sequenceOf(resolveReaderBranchLanguage(branch), translatedLanguage, sourceLanguage)
+		.mapNotNull { it.normalizeReaderTranslationLanguageTag() }
+		.firstOrNull { it !in unknownContentLanguages }
+}
+
+internal fun resolveReaderBranchLanguage(branch: String?): String? {
+	val normalizedBranch = branch?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotEmpty() } ?: return null
+	val matches = branchLanguageMarkers.mapNotNull { (language, markers) ->
+		language.takeIf { markers.any { marker -> normalizedBranch.containsLanguageMarker(marker) } }
+	}.distinct()
+	return matches.singleOrNull()
+}
+
+private fun String.containsLanguageMarker(marker: String): Boolean {
+	if (marker.any { !it.isLetterOrDigit() && it != '-' }) {
+		return contains(marker)
+	}
+	return Regex("(?<![\\p{L}\\p{N}])${Regex.escape(marker)}(?![\\p{L}\\p{N}])")
+		.containsMatchIn(this)
+}
+
+private val branchLanguageMarkers: Map<String, Set<String>> by lazy {
+	supportedTranslationLanguages.associateWith { language ->
+		val locale = Locale.forLanguageTag(language)
+		buildSet {
+			add(language)
+			add(locale.getDisplayLanguage(Locale.ENGLISH))
+			add(locale.getDisplayLanguage(locale))
+			add(locale.getDisplayLanguage(Locale.SIMPLIFIED_CHINESE))
+			add(locale.getDisplayLanguage(Locale.TRADITIONAL_CHINESE))
+		}.mapTo(linkedSetOf()) { it.trim().lowercase(Locale.ROOT) }
+			.filterTo(linkedSetOf()) { it.isNotEmpty() }
+	}
+}
+
+private val unknownContentLanguages = setOf(
+	"all",
+	"auto",
+	"multi",
+	"multilingual",
+	"und",
+	"unknown",
+)

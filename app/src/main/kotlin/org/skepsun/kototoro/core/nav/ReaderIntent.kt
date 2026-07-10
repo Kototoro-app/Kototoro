@@ -21,7 +21,17 @@ value class ReaderIntent private constructor(
 
 		fun manga(manga: Content) = apply {
 			intent.putExtra(AppRouter.KEY_MANGA, ParcelableContent(manga))
+			intent.putExtra(EXTRA_TRANSLATED_LANGUAGE, manga.source.locale)
 			intent.setData(AppRouter.shortContentUrl(manga.id))
+		}
+
+		fun languages(translatedLanguage: String?, sourceLanguage: String?) = apply {
+			translatedLanguage?.takeIf { it.isNotBlank() }?.let {
+				intent.putExtra(EXTRA_TRANSLATED_LANGUAGE, it)
+			}
+			sourceLanguage?.takeIf { it.isNotBlank() }?.let {
+				intent.putExtra(EXTRA_SOURCE_LANGUAGE, it)
+			}
 		}
 
 		fun mangaId(mangaId: Long) = apply {
@@ -59,5 +69,7 @@ value class ReaderIntent private constructor(
 		const val EXTRA_STATE = "state"
 		const val EXTRA_BRANCH = "branch"
 		const val EXTRA_INCOGNITO = "incognito"
+		const val EXTRA_TRANSLATED_LANGUAGE = "translated_language"
+		const val EXTRA_SOURCE_LANGUAGE = "source_language"
 	}
 }

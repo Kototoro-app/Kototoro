@@ -1776,8 +1776,8 @@
     <string name="reader_translation_ocr_pipeline_hybrid">ハイブリッド</string>
     <string name="reader_translation_ocr_pipeline_page_text_first">ページテキストを優先</string>
     <string name="reader_translation_ocr_pipeline_strategy">OCRパイプライン戦略</string>
-    <string name="reader_translation_ocr_rec_model_auto">自動（ソース言語で選択）</string>
-    <string name="reader_translation_ocr_rec_model_auto_summary">最適な認識器を自動選択：日本語→MangaOCRまたはPP-OCRv5 Server、英語→PP-OCRv5 EN、韓国語→PP-OCRv3 KO、中国語/その他→PP-OCRv5 ServerまたはMobile</string>
+    <string name="reader_translation_ocr_rec_model_auto">自動（作品の言語で選択）</string>
+    <string name="reader_translation_ocr_rec_model_auto_summary">作品の翻訳言語を優先し、次に原文言語を使用：韓国語は PP-OCRv5 Korean、タイ語は PP-OCRv5 Thai、ラテン文字言語は PP-OCRv5 Latin、その他は多言語 PP-OCRv6 Medium</string>
     <string name="reader_translation_ocr_recognizer_model_selection">テキスト認識モデル</string>
     <string name="reader_translation_ocr_recognizer_models_title">テキスト認識モデル</string>
     <string name="reader_translation_onnx_bubble_detector_models_title">吹き出し検出モデル</string>

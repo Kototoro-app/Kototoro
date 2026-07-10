@@ -29,6 +29,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.settings.compose.TranslationApiSettingsScreen
 import org.skepsun.kototoro.settings.support.TranslationApiSettingsSupport
+import org.skepsun.kototoro.reader.translate.domain.TranslationApiProviderCatalog
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -77,14 +78,12 @@ class TranslationApiSettingsFragment : Fragment() {
                     Toast.makeText(requireContext(), R.string.reader_translation_api_endpoint_missing, Toast.LENGTH_SHORT).show()
                     return@launch
                 }
-                val modelsUrl = TranslationApiSettingsSupport.buildModelsUrl(endpoint)
+				val providerId = settings.readerTranslationApiProviderPreset
+				val modelsUrl = TranslationApiSettingsSupport.buildModelsUrl(endpoint, providerId)
                 val key = settings.readerTranslationApiKey.trim()
                 val models = withContext(Dispatchers.IO) {
                     val requestBuilder = Request.Builder().get().url(modelsUrl)
-                    if (key.isNotBlank()) {
-                        requestBuilder.header("Authorization", "Bearer $key")
-                        requestBuilder.header("X-API-Key", key)
-                    }
+					TranslationApiProviderCatalog.applyAuthentication(requestBuilder, providerId, key)
                     okHttpClient.newCall(requestBuilder.build()).execute().use { response ->
                         if (!response.isSuccessful) return@withContext emptyList<String>()
                         val body = response.body?.string().orEmpty()

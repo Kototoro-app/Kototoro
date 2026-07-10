@@ -26,7 +26,7 @@ data class OnnxModelFile(
 )
 
 object OnnxOfficialModelCatalog {
-	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/monkt/paddleocr-onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
+	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx, https://www.modelscope.cn/models/hgmzhn/manga-translator-ui, https://huggingface.co/Skepsun/detect-20241225-onnx, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
 
 	val models = listOf(
 		OnnxOfficialModel(
@@ -135,6 +135,33 @@ object OnnxOfficialModelCatalog {
 				),
 			),
 			description = "RT-DETR-v2 model fine-tuned on 11k manga/comics. Differentiates between text bubbles and free text.",
+		),
+		OnnxOfficialModel(
+			id = "comic_text_detector_onnx",
+			title = "Comic Text Detector ONNX",
+			version = "hf-main",
+			category = OnnxModelCategory.OCR_DETECTOR,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "comic-text-detector.onnx",
+					downloadUrl = "https://huggingface.co/mayocream/comic-text-detector-onnx/resolve/main/comic-text-detector.onnx",
+				),
+			),
+			description = "Comic text detector trained on Manga109-s for text-region detection.",
+		),
+		OnnxOfficialModel(
+			id = "manga_default_det_20241225_onnx",
+			title = "Manga Text Detector 2024-12-25",
+			version = "2024-12-25",
+			category = OnnxModelCategory.OCR_DETECTOR,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "detect-20241225.onnx",
+					downloadUrl = "https://huggingface.co/Skepsun/detect-20241225-onnx/resolve/main/detect-20241225.onnx",
+					sha256 = "0875cca4fda3d3c29dbc9b8d22b1230a9240f2ee187c83cc5068ee2006332f97",
+				),
+			),
+			description = "DBNet ResNet34 detector used by manga-image-translator's default OCR pipeline.",
 		),
 		OnnxOfficialModel(
 			id = "ppocrv5_mobile_det_onnx",
@@ -270,54 +297,79 @@ object OnnxOfficialModelCatalog {
 		),
 		OnnxOfficialModel(
 			id = "ppocrv6_medium_rec_onnx",
-			title = "PP-OCRv6 Medium Recognizer",
-			version = "hf-main",
+			title = "PP-OCRv6 Medium Recognizer (Multilingual)",
+			version = "modelscope-master",
 			category = OnnxModelCategory.OCR_RECOGNIZER,
 			files = listOf(
 				OnnxModelFile(
 					fileName = "inference.onnx",
-					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.onnx",
+					downloadUrl = "https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/master/inference.onnx",
+					sha256 = "9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba",
 				),
 				OnnxModelFile(
 					fileName = "inference.yml",
-					downloadUrl = "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.yml",
+					downloadUrl = "https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/master/inference.yml",
+					sha256 = "991b700facf5b50a7de193468207d5f4255b538dde0d312ae3b7c7a9b6873129",
 				),
 			),
-			description = "Official PP-OCRv6 medium ONNX recognizer. The character dictionary is loaded from inference.yml.",
+			description = "Official PP-OCRv6 medium multilingual ONNX recognizer. Used by automatic selection for languages without a specialized PP-OCRv5 model.",
 		),
 		OnnxOfficialModel(
-			id = "en_ppocrv5_mobile_rec_onnx",
-			title = "PP-OCRv5 Mobile Recognizer (English)",
-			version = "hf-main",
+			id = "latin_ppocrv5_mobile_rec_onnx",
+			title = "PP-OCRv5 Mobile Recognizer (Latin)",
+			version = "manga-translator-ui-v1.8.0",
 			category = OnnxModelCategory.OCR_RECOGNIZER,
 			files = listOf(
 				OnnxModelFile(
-					fileName = "ppocrv5_rec_en.onnx",
-					downloadUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/rec.onnx",
+					fileName = "latin_PP-OCRv5_rec_mobile_infer.onnx",
+					downloadUrl = "https://www.modelscope.cn/models/hgmzhn/manga-translator-ui/resolve/master/latin_PP-OCRv5_rec_mobile_infer.onnx",
+					sha256 = "614ffc2d6d3902d360fad7f1b0dd455ee45e877069d14c4e51a99dc4ef144409",
 				),
 				OnnxModelFile(
-					fileName = "en_dict.txt",
-					downloadUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/dict.txt",
+					fileName = "ppocrv5_latin_dict.txt",
+					downloadUrl = "https://www.modelscope.cn/models/hgmzhn/manga-translator-ui/resolve/master/ppocrv5_latin_dict.txt",
+					sha256 = "3c0a8a79b612653c25f765271714f71281e4e955962c153e272b7b8c1d2b13ff",
 				),
 			),
-			description = "PaddleOCR PP-OCRv5 mobile recognizer optimized for English text.",
+			description = "Manga Translator PP-OCRv5 mobile recognizer for English and other Latin-script languages.",
 		),
 		OnnxOfficialModel(
-			id = "korean_ppocrv3_mobile_rec_onnx",
+			id = "korean_ppocrv5_mobile_rec_onnx",
 			title = "PP-OCRv5 Mobile Recognizer (Korean)",
-			version = "hf-main",
+			version = "manga-translator-ui-v1.7.1",
 			category = OnnxModelCategory.OCR_RECOGNIZER,
 			files = listOf(
 				OnnxModelFile(
-					fileName = "ppocrv3_rec_ko.onnx",
-					downloadUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean/rec.onnx",
+					fileName = "korean_PP-OCRv5_rec_mobile_infer.onnx",
+					downloadUrl = "https://www.modelscope.cn/models/hgmzhn/manga-translator-ui/resolve/master/korean_PP-OCRv5_rec_mobile_infer.onnx",
+					sha256 = "cd6e2ea50f6943ca7271eb8c56a877a5a90720b7047fe9c41a2e541a25773c9b",
 				),
 				OnnxModelFile(
-					fileName = "korean_dict.txt",
-					downloadUrl = "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean/dict.txt",
+					fileName = "ppocrv5_korean_dict.txt",
+					downloadUrl = "https://www.modelscope.cn/models/hgmzhn/manga-translator-ui/resolve/master/ppocrv5_korean_dict.txt",
+					sha256 = "a88071c68c01707489baa79ebe0405b7beb5cca229f4fc94cc3ef992328802d7",
 				),
 			),
-			description = "PaddleOCR PP-OCRv5 mobile recognizer optimized for Korean text.",
+			description = "Manga Translator PP-OCRv5 mobile recognizer optimized for Korean text.",
+		),
+		OnnxOfficialModel(
+			id = "thai_ppocrv5_mobile_rec_onnx",
+			title = "PP-OCRv5 Mobile Recognizer (Thai)",
+			version = "manga-translator-ui-master",
+			category = OnnxModelCategory.OCR_RECOGNIZER,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "thai_PP-OCRv5_rec_mobile_infer.onnx",
+					downloadUrl = "https://www.modelscope.cn/models/hgmzhn/manga-translator-ui/resolve/master/thai_PP-OCRv5_rec_mobile_infer.onnx",
+					sha256 = "2b6e56b1872200349e227574c25aeb0e0f9af9b8356e9ff5f75ac543a535669a",
+				),
+				OnnxModelFile(
+					fileName = "ppocrv5_thai_dict.txt",
+					downloadUrl = "https://www.modelscope.cn/models/hgmzhn/manga-translator-ui/resolve/master/ppocrv5_thai_dict.txt",
+					sha256 = "57f5406f94bb6688fb7077f7be65f08bbd71cecf48c01ea26c522cb5c4836b7a",
+				),
+			),
+			description = "Manga Translator PP-OCRv5 mobile recognizer optimized for Thai text.",
 		),
 		OnnxOfficialModel(
 			id = "mangaocr_2025_onnx",

@@ -54,4 +54,4 @@ chroma
 reasonix.toml
 /.vscode
 .pi-weave
-
+/models/

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.reader.domain
 import android.net.Uri
 import android.util.Log
 import androidx.collection.LongSparseArray
+import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -13,8 +14,10 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.translate.domain.ReaderPageTranslationProcessor
+import org.skepsun.kototoro.reader.translate.domain.resolveAutomaticReaderOcrLanguage
 import javax.inject.Inject
 
+@ActivityRetainedScoped
 class ReaderPageEnhancementController @Inject constructor(
 	private val settings: AppSettings,
 	private val translationProcessor: ReaderPageTranslationProcessor,
@@ -24,6 +27,18 @@ class ReaderPageEnhancementController @Inject constructor(
 	private val translationStatusUpdates = MutableSharedFlow<TranslationLayerStateEvent>(extraBufferCapacity = 128)
 	private val translationLock = Any()
 	private val translationJobs = LongSparseArray<Job>()
+	@Volatile
+	private var translatedLanguage: String? = null
+	@Volatile
+	private var sourceLanguage: String? = null
+	@Volatile
+	private var branch: String? = null
+
+	fun setTranslationLanguageContext(translatedLanguage: String?, sourceLanguage: String?, branch: String?) {
+		this.translatedLanguage = translatedLanguage
+		this.sourceLanguage = sourceLanguage
+		this.branch = branch
+	}
 
 	data class PreparedPage(
 		val displayUri: Uri,
@@ -57,6 +72,12 @@ class ReaderPageEnhancementController @Inject constructor(
 			append(settings.readerTranslationPaddleOfficialModelId)
 			append('|')
 			append(settings.readerTranslationPaddleDetModelId)
+			append('|')
+			append(translatedLanguage.orEmpty())
+			append('|')
+			append(sourceLanguage.orEmpty())
+			append('|')
+			append(branch.orEmpty())
 			append('|')
 			append(settings.readerTranslationOcrDetectionMaxSide)
 			append('|')
@@ -92,7 +113,7 @@ class ReaderPageEnhancementController @Inject constructor(
 		showTranslated: Boolean,
 	): Uri? {
 		return if (showTranslated) {
-			translationProcessor.peekRendered(page, currentUri)
+			translationProcessor.peekRendered(page, currentUri, resolveAutoRecognizerLanguage())
 		} else {
 			translationProcessor.peekSourceOfRendered(currentUri) ?: currentUri
 		}
@@ -120,7 +141,11 @@ class ReaderPageEnhancementController @Inject constructor(
 			)
 		}
 
-		val cachedRecord = translationProcessor.peekRendered(page, readyUri)
+		val cachedRecord = translationProcessor.peekRendered(
+			page = page,
+			sourceUri = readyUri,
+			autoRecognizerLanguage = resolveAutoRecognizerLanguage(),
+		)
 		if (cachedRecord != null) {
 			Log.d("ReaderTranslate", "PageLoader debug: cached record found page=${page.id}")
 			emitState(page.id, TranslationLayerState.READY)
@@ -156,7 +181,11 @@ class ReaderPageEnhancementController @Inject constructor(
 			translationJobs.put(page.id, scope.launch {
 				Log.d("ReaderTranslate", "translation job start page=${page.id}")
 				val translated = runCatching {
-					translationProcessor.process(page, sourceUri)
+					translationProcessor.process(
+						page = page,
+						sourceUri = sourceUri,
+						autoRecognizerLanguage = resolveAutoRecognizerLanguage(),
+					)
 				}.onFailure {
 					Log.d("ReaderTranslate", "translation job exception page=${page.id} err=${it.javaClass.simpleName}: ${it.message.orEmpty()}")
 					it.printStackTraceDebug()
@@ -176,6 +205,14 @@ class ReaderPageEnhancementController @Inject constructor(
 				}
 			})
 		}
+	}
+
+	private fun resolveAutoRecognizerLanguage(): String? {
+		return resolveAutomaticReaderOcrLanguage(
+			translatedLanguage = translatedLanguage,
+			sourceLanguage = sourceLanguage,
+			branch = branch,
+		)
 	}
 
 	fun invalidateTranslationTask(pageId: Long) {

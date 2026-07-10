@@ -1111,14 +1111,33 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_READER_TRANSLATION_TARGET_LANG, "zh") ?: "zh"
 		set(value) = prefs.edit { putString(KEY_READER_TRANSLATION_TARGET_LANG, value) }
 
+	var readerTranslationOcrMode: ReaderOcrMode
+		get() = prefs.getEnumValue(
+			KEY_READER_TRANSLATION_OCR_MODE,
+			if (prefs.getString(KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, null).isNullOrBlank() ||
+				prefs.getString(KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, null) == "MLKIT"
+			) {
+				ReaderOcrMode.BASIC
+			} else {
+				ReaderOcrMode.ADVANCED
+			},
+		)
+		set(value) = prefs.edit { putEnumValue(KEY_READER_TRANSLATION_OCR_MODE, value) }
+
 	val readerTranslationOcrEngine: ReaderOcrEngine
-		get() = prefs.getEnumValue(KEY_READER_TRANSLATION_OCR_ENGINE, ReaderOcrEngine.MLKIT)
+		get() = when (readerTranslationOcrMode) {
+			ReaderOcrMode.BASIC -> ReaderOcrEngine.MLKIT
+			ReaderOcrMode.ADVANCED -> ReaderOcrEngine.PADDLE
+		}
 
 	val readerTranslationMode: ReaderTranslationMode
-		get() = prefs.getEnumValue(KEY_READER_TRANSLATION_MODE, ReaderTranslationMode.LOCAL_FIRST)
+		get() = when (prefs.getEnumValue(KEY_READER_TRANSLATION_MODE, ReaderTranslationMode.LOCAL_ONLY)) {
+			ReaderTranslationMode.LOCAL_FIRST -> ReaderTranslationMode.LOCAL_ONLY
+			else -> prefs.getEnumValue(KEY_READER_TRANSLATION_MODE, ReaderTranslationMode.LOCAL_ONLY)
+		}
 
 	val readerTranslationPipelineMode: org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
-		get() = prefs.getEnumValue(KEY_READER_TRANSLATION_PIPELINE_MODE, org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode.TWO_STAGE)
+		get() = org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode.TWO_STAGE
 
 	val readerTranslationApiEndpoint: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_API_ENDPOINT, "") ?: ""
@@ -1130,7 +1149,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_READER_TRANSLATION_API_MODEL, "gpt-4o-mini") ?: "gpt-4o-mini"
 
 	val readerTranslationApiProviderPreset: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_API_PROVIDER_PRESET, "CUSTOM") ?: "CUSTOM"
+		get() = prefs.getString(KEY_READER_TRANSLATION_API_PROVIDER_PRESET, "CUSTOM")
+			?.trim()
+			?.uppercase()
+			?.takeIf { it in READER_TRANSLATION_API_PROVIDER_PRESETS }
+			?: "CUSTOM"
 
 	val readerTranslationApiCustomHeaders: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, "") ?: ""
@@ -1176,12 +1199,39 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val readerTranslationPaddleModelPath: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_PATH, "") ?: ""
 
+	val readerTranslationAdvancedRecModelId: String
+		get() = when (val modelId = prefs.getString(KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, "AUTO")) {
+			"en_ppocrv5_mobile_rec_onnx" -> "latin_ppocrv5_mobile_rec_onnx"
+			"korean_ppocrv3_mobile_rec_onnx" -> "korean_ppocrv5_mobile_rec_onnx"
+			"AUTO",
+			"mangaocr_2025_onnx",
+			"ppocrv6_medium_rec_onnx",
+			"latin_ppocrv5_mobile_rec_onnx",
+			"korean_ppocrv5_mobile_rec_onnx",
+			"thai_ppocrv5_mobile_rec_onnx",
+			-> modelId
+			else -> "AUTO"
+		}
+
 	val readerTranslationPaddleOfficialModelId: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, "") ?: ""
+		get() = when (readerTranslationOcrMode) {
+			ReaderOcrMode.BASIC -> "MLKIT"
+			ReaderOcrMode.ADVANCED -> readerTranslationAdvancedRecModelId
+		}
+
+	val readerTranslationAdvancedDetModelId: String
+		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID)
+			?.takeIf {
+				it == "comic_text_detector_onnx" ||
+					it == "manga_default_det_20241225_onnx"
+			}
+			?: DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID
 
 	val readerTranslationPaddleDetModelId: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID)
-			?: DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID
+		get() = when (readerTranslationOcrMode) {
+			ReaderOcrMode.BASIC -> "MLKIT"
+			ReaderOcrMode.ADVANCED -> readerTranslationAdvancedDetModelId
+		}
 
 	val readerTranslationOcrDetectionMaxSide: Int
 		get() = DEFAULT_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE
@@ -1245,7 +1295,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_READER_TRANSLATION_BUBBLE_YOLO_URL, value) }
 
 	var readerTranslationOnnxModelId: String
-		get() = prefs.getString(KEY_READER_TRANSLATION_ONNX_MODEL_ID, "") ?: ""
+		get() = ""
 		set(value) = prefs.edit { putString(KEY_READER_TRANSLATION_ONNX_MODEL_ID, value) }
 
 	var readerTranslationBubbleDetectorModelId: String
@@ -2005,6 +2055,17 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	}
 
 	companion object {
+		private val READER_TRANSLATION_API_PROVIDER_PRESETS = setOf(
+			"CUSTOM",
+			"OPENAI",
+			"DEEPSEEK",
+			"ZHIPU",
+			"ALIBABA",
+			"MOONSHOT",
+			"ANTHROPIC",
+			"GEMINI",
+			"OPENROUTER",
+		)
 
 		private val CORNER_RADIUS_ALLOWED_VALUES = setOf(-1, 12, 16, 20, 24)
 
@@ -2148,9 +2209,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_TRANSLATION_RENDER_STYLE = "reader_translation_render_style"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_PATH = "reader_translation_paddle_model_path"
 		const val KEY_READER_TRANSLATION_PADDLE_OCR_ONLY = "reader_translation_paddle_ocr_only"
+		const val KEY_READER_TRANSLATION_OCR_MODE = "reader_translation_ocr_mode"
 		const val KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID = "reader_translation_paddle_official_model_id"
 		const val KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "reader_translation_paddle_det_model_id"
-		const val DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "ppocrv6_small_det_onnx"
+		const val DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "manga_default_det_20241225_onnx"
 		const val DEFAULT_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE = 1536
 		const val DEFAULT_READER_TRANSLATION_OCR_DETECTION_THRESHOLD = 0.4f
 		const val DEFAULT_READER_TRANSLATION_OCR_MIN_BOX_SIZE = 6
