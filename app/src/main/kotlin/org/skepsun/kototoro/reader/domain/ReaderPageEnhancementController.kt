@@ -27,6 +27,7 @@ class ReaderPageEnhancementController @Inject constructor(
 
 	data class PreparedPage(
 		val displayUri: Uri,
+		val translationSourceUri: Uri,
 		val state: TranslationLayerState,
 		val shouldScheduleTranslation: Boolean,
 	)
@@ -113,6 +114,7 @@ class ReaderPageEnhancementController @Inject constructor(
 			emitState(page.id, TranslationLayerState.IDLE)
 			return PreparedPage(
 				displayUri = readyUri,
+				translationSourceUri = readyUri,
 				state = TranslationLayerState.IDLE,
 				shouldScheduleTranslation = false,
 			)
@@ -124,6 +126,7 @@ class ReaderPageEnhancementController @Inject constructor(
 			emitState(page.id, TranslationLayerState.READY)
 			return PreparedPage(
 				displayUri = if (settings.isReaderTranslationShowTranslated) cachedRecord else readyUri,
+				translationSourceUri = readyUri,
 				state = TranslationLayerState.READY,
 				shouldScheduleTranslation = false,
 			)
@@ -131,6 +134,7 @@ class ReaderPageEnhancementController @Inject constructor(
 
 		return PreparedPage(
 			displayUri = readyUri,
+			translationSourceUri = readyUri,
 			state = TranslationLayerState.GENERATING,
 			shouldScheduleTranslation = true,
 		)
@@ -150,20 +154,25 @@ class ReaderPageEnhancementController @Inject constructor(
 			}
 			emitState(page.id, TranslationLayerState.GENERATING)
 			translationJobs.put(page.id, scope.launch {
+				Log.d("ReaderTranslate", "translation job start page=${page.id}")
 				val translated = runCatching {
 					translationProcessor.process(page, sourceUri)
 				}.onFailure {
+					Log.d("ReaderTranslate", "translation job exception page=${page.id} err=${it.javaClass.simpleName}: ${it.message.orEmpty()}")
 					it.printStackTraceDebug()
 				}.getOrDefault(sourceUri)
 				if (translated != sourceUri) {
+					Log.d("ReaderTranslate", "translation job ready page=${page.id}")
 					emitState(page.id, TranslationLayerState.READY)
 					onRendered()
 					translationUpdates.tryEmit(page.id)
 				} else {
+					Log.d("ReaderTranslate", "translation job failed page=${page.id}")
 					emitState(page.id, TranslationLayerState.FAILED)
 				}
 				synchronized(translationLock) {
 					translationJobs.remove(page.id)
+					Log.d("ReaderTranslate", "translation job removed page=${page.id}")
 				}
 			})
 		}

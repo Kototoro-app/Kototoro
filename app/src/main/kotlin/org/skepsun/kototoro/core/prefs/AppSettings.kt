@@ -1184,22 +1184,22 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			?: DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID
 
 	val readerTranslationOcrDetectionMaxSide: Int
-		get() = prefs.getInt(KEY_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE, 1536)
+		get() = DEFAULT_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE
 
 	val readerTranslationOcrDetectionThreshold: Float
-		get() = prefs.getInt(KEY_READER_TRANSLATION_OCR_DETECTION_THRESHOLD, 40).coerceIn(1, 99) / 100f
+		get() = DEFAULT_READER_TRANSLATION_OCR_DETECTION_THRESHOLD
 
 	val readerTranslationOcrMinBoxSize: Int
-		get() = prefs.getInt(KEY_READER_TRANSLATION_OCR_MIN_BOX_SIZE, 6).coerceAtLeast(1)
+		get() = DEFAULT_READER_TRANSLATION_OCR_MIN_BOX_SIZE
 
 	val readerTranslationOcrRecognitionThreshold: Float
-		get() = prefs.getInt(KEY_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD, 10).coerceIn(0, 99) / 100f
+		get() = DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD
 
 	val readerTranslationOcrRecognitionMaxWidth: Int
-		get() = prefs.getInt(KEY_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH, 320).coerceAtLeast(32)
+		get() = DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH
 
 	val readerTranslationOcrRecognitionBatchSize: Int
-		get() = prefs.getInt(KEY_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE, 16).coerceIn(1, 16)
+		get() = DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE
 
 	val readerTranslationPaddleModelUrl: String
 		get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_URL, null) 
@@ -2151,12 +2151,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID = "reader_translation_paddle_official_model_id"
 		const val KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "reader_translation_paddle_det_model_id"
 		const val DEFAULT_READER_TRANSLATION_PADDLE_DET_MODEL_ID = "ppocrv6_small_det_onnx"
-		const val KEY_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE = "reader_translation_ocr_detection_max_side"
-		const val KEY_READER_TRANSLATION_OCR_DETECTION_THRESHOLD = "reader_translation_ocr_detection_threshold"
-		const val KEY_READER_TRANSLATION_OCR_MIN_BOX_SIZE = "reader_translation_ocr_min_box_size"
-		const val KEY_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD = "reader_translation_ocr_recognition_threshold"
-		const val KEY_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH = "reader_translation_ocr_recognition_max_width"
-		const val KEY_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE = "reader_translation_ocr_recognition_batch_size"
+		const val DEFAULT_READER_TRANSLATION_OCR_DETECTION_MAX_SIDE = 1536
+		const val DEFAULT_READER_TRANSLATION_OCR_DETECTION_THRESHOLD = 0.4f
+		const val DEFAULT_READER_TRANSLATION_OCR_MIN_BOX_SIZE = 6
+		const val DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_THRESHOLD = 0.1f
+		const val DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_MAX_WIDTH = 320
+		const val DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE = 16
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_URL = "reader_translation_paddle_model_url"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_VERSION = "reader_translation_paddle_model_version"
 		const val KEY_READER_TRANSLATION_PADDLE_MODEL_SHA256 = "reader_translation_paddle_model_sha256"

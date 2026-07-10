@@ -94,6 +94,7 @@ internal data class TextFragment(
 	val angleHintDegrees: Float = inferTextAngleHintDegrees(rect, text),
 	val isAxisAligned: Boolean = inferAxisAlignedHint(rect),
 	val quadPoints: TextQuad = rectToTextQuad(rect),
+	val detectorId: String = "",
 )
 
 internal data class PreparedBubble(

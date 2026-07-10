@@ -469,7 +469,7 @@ class PageLoader @Inject constructor(
 			Log.d("ReaderTranslate", "PageLoader debug: scheduling translation for page=${page.id} (show=${settings.isReaderTranslationShowTranslated})")
 			enhancementController.scheduleTranslation(
 				page = page,
-				sourceUri = displayUri,
+				sourceUri = preparedPage.translationSourceUri,
 				scope = loaderScope,
 			) {
 				synchronized(tasks) {

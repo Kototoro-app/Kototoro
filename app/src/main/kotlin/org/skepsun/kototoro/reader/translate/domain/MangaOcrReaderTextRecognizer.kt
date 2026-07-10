@@ -265,6 +265,7 @@ class MangaOcrReaderTextRecognizer @Inject constructor(
 					angleHintDegrees = region.angleHintDegrees,
 					isAxisAligned = region.isAxisAligned,
 					quadPoints = region.quadPoints,
+					detectorId = region.detectorId,
 				)
 			}
 		} finally {

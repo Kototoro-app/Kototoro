@@ -142,10 +142,43 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 	}
 
 	suspend fun detectAttempt(bitmap: Bitmap): DetectionAttempt {
-		val model = resolveActiveModel() ?: return DetectionAttempt(
+		return detectAttempt(
+			bitmap = bitmap,
+			preferredModelId = settings.readerTranslationBubbleDetectorModelId,
+			allowDownloadedFallback = true,
+		)
+	}
+
+	suspend fun detectAttempt(bitmap: Bitmap, preferredModelId: String): DetectionAttempt {
+		return detectAttempt(
+			bitmap = bitmap,
+			preferredModelId = preferredModelId,
+			allowDownloadedFallback = false,
+		)
+	}
+
+	private suspend fun detectAttempt(
+		bitmap: Bitmap,
+		preferredModelId: String,
+		allowDownloadedFallback: Boolean,
+	): DetectionAttempt {
+		val model = resolveActiveModel(preferredModelId, allowDownloadedFallback) ?: return DetectionAttempt(
 			status = AttemptStatus.NO_MODEL_DOWNLOADED,
+			modelId = preferredModelId,
 			stage = "resolve_model",
 		)
+		if (!allowDownloadedFallback) {
+			runCatching {
+				onnxModelManager.ensureModelReady(model)
+			}.onFailure {
+				return DetectionAttempt(
+					status = AttemptStatus.RUNTIME_UNAVAILABLE,
+					modelId = model.id,
+					stage = "model_prepare_failed",
+					error = it.message.orEmpty(),
+				)
+			}
+		}
 		val runtimeAttempt = ensureRuntime(model.id)
 		val runtime = runtimeAttempt.runtime ?: return DetectionAttempt(
 			status = AttemptStatus.RUNTIME_UNAVAILABLE,
@@ -216,13 +249,20 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 		}
 	}
 
-	private fun resolveActiveModel(): OnnxOfficialModel? {
-		val preferredId = settings.readerTranslationBubbleDetectorModelId
+	private fun resolveActiveModel(
+		preferredId: String,
+		allowDownloadedFallback: Boolean,
+	): OnnxOfficialModel? {
+		if (!allowDownloadedFallback) {
+			return OnnxOfficialModelCatalog.findById(preferredId)
+				?.takeIf { it.category == OnnxModelCategory.BUBBLE_DETECTION }
+		}
 		val downloaded = OnnxOfficialModelCatalog.models.filter {
 			it.category == OnnxModelCategory.BUBBLE_DETECTION && onnxModelManager.isModelDownloaded(it.id)
 		}
 		if (downloaded.isEmpty()) return null
-		return downloaded.firstOrNull { it.id == preferredId } ?: downloaded.first()
+		return downloaded.firstOrNull { it.id == preferredId }
+			?: downloaded.first().takeIf { allowDownloadedFallback }
 	}
 
 	private suspend fun ensureRuntime(modelId: String): RuntimeAttempt {
@@ -398,17 +438,18 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 	}
 
 	private fun detectInternal(source: Bitmap, runtime: Runtime): DecodedDetections {
+		val readableSource = ensureReadableBitmap(source)
 		val isDetr = runtime.parser == ParserKind.RT_DETR || runtime.parser == ParserKind.AUTO_RT_DETR
 		val isResizeOnly = isDetr || runtime.parser == ParserKind.GENERIC_YOLO
 		val letterboxed = if (isResizeOnly) null else createLetterboxBitmap(
-			source = source,
-			targetWidth = runtime.inputWidth,
-			targetHeight = runtime.inputHeight,
+			source = readableSource,
+			targetWidth = resolveDynamicInputWidth(readableSource, runtime),
+			targetHeight = resolveDynamicInputHeight(readableSource, runtime),
 		)
 		val resized = if (isResizeOnly) createResizedBitmap(
-			source = source,
-			targetWidth = runtime.inputWidth,
-			targetHeight = runtime.inputHeight,
+			source = readableSource,
+			targetWidth = resolveDynamicInputWidth(readableSource, runtime),
+			targetHeight = resolveDynamicInputHeight(readableSource, runtime),
 		) else null
 		val preparedBitmap = resized?.bitmap ?: letterboxed!!.bitmap
 		val preparedWidth = resized?.inputWidth ?: letterboxed!!.inputWidth
@@ -422,7 +463,7 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 			if ("orig_target_sizes" in runtime.session.inputNames) {
 				val env = OrtEnvironment.getEnvironment()
 				val targetSizes = if (isDetr) {
-					longArrayOf(source.height.toLong(), source.width.toLong())
+					longArrayOf(readableSource.height.toLong(), readableSource.width.toLong())
 				} else {
 					longArrayOf(preparedHeight.toLong(), preparedWidth.toLong())
 				}
@@ -441,8 +482,8 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 				return decodeRtDetrOutput(
 					sessionResult = sessionResult,
 					parser = runtime.parser,
-					sourceWidth = source.width,
-					sourceHeight = source.height,
+					sourceWidth = readableSource.width,
+					sourceHeight = readableSource.height,
 					inputWidth = preparedWidth,
 					inputHeight = preparedHeight,
 					nmsThreshold = nmsThreshold,
@@ -459,12 +500,12 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 			return decodeOutputTensor(
 				parser = runtime.parser,
 				tensor = outputTensor,
-				sourceWidth = source.width,
-				sourceHeight = source.height,
+				sourceWidth = readableSource.width,
+				sourceHeight = readableSource.height,
 				inputWidth = preparedWidth,
 				inputHeight = preparedHeight,
-				scaleX = if (isResizeOnly) preparedWidth.toFloat() / source.width else letterboxed!!.scale,
-				scaleY = if (isResizeOnly) preparedHeight.toFloat() / source.height else letterboxed!!.scale,
+				scaleX = if (isResizeOnly) preparedWidth.toFloat() / readableSource.width else letterboxed!!.scale,
+				scaleY = if (isResizeOnly) preparedHeight.toFloat() / readableSource.height else letterboxed!!.scale,
 				padX = if (isResizeOnly) 0f else letterboxed!!.padX,
 				padY = if (isResizeOnly) 0f else letterboxed!!.padY,
 				nmsThreshold = nmsThreshold,
@@ -473,10 +514,40 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 			runCatching { sizesTensor?.close() }
 			runCatching { inputTensor.close() }
 			runCatching { sessionResult?.close() }
-			if (preparedBitmap !== source) {
+			if (preparedBitmap !== readableSource) {
 				preparedBitmap.recycle()
 			}
+			if (readableSource !== source) {
+				readableSource.recycle()
+			}
 		}
+	}
+
+	private fun resolveDynamicInputWidth(source: Bitmap, runtime: Runtime): Int {
+		runtime.inputWidth?.let { return it }
+		if (runtime.modelId == COMIC_TEXT_AND_BUBBLE_DETECTOR_ID &&
+			(runtime.parser == ParserKind.RT_DETR || runtime.parser == ParserKind.AUTO_RT_DETR)
+		) {
+			return COMIC_TEXT_AND_BUBBLE_DETECTOR_INPUT_SIZE
+		}
+		return chooseDynamicInputSize(source.width, source.height)
+	}
+
+	private fun resolveDynamicInputHeight(source: Bitmap, runtime: Runtime): Int {
+		runtime.inputHeight?.let { return it }
+		if (runtime.modelId == COMIC_TEXT_AND_BUBBLE_DETECTOR_ID &&
+			(runtime.parser == ParserKind.RT_DETR || runtime.parser == ParserKind.AUTO_RT_DETR)
+		) {
+			return COMIC_TEXT_AND_BUBBLE_DETECTOR_INPUT_SIZE
+		}
+		return chooseDynamicInputSize(source.height, source.width)
+	}
+
+	private fun ensureReadableBitmap(bitmap: Bitmap): Bitmap {
+		if (bitmap.config != Bitmap.Config.HARDWARE) {
+			return bitmap
+		}
+		return bitmap.copy(Bitmap.Config.ARGB_8888, false)
 	}
 
 	private fun createLetterboxBitmap(source: Bitmap, targetWidth: Int?, targetHeight: Int?): LetterboxBitmap {
@@ -1054,6 +1125,8 @@ class OnnxBubbleDetectorEngine @Inject constructor(
 		const val MODEL_STRIDE = 32
 		const val MIN_DYNAMIC_INPUT_SIZE = 640
 		const val MAX_DYNAMIC_INPUT_SIZE = 1280
+		const val COMIC_TEXT_AND_BUBBLE_DETECTOR_ID = "comic_text_and_bubble_detector_detr"
+		const val COMIC_TEXT_AND_BUBBLE_DETECTOR_INPUT_SIZE = 640
 		const val MIN_BOX_SIDE = 24
 		const val MIN_BOX_SIDE_OBB = 12
 		const val MAX_OUTPUT_BOXES = 24

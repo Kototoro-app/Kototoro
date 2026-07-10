@@ -11,4 +11,5 @@ data class OcrTextBlock(
 	val angleHintDegrees: Float = inferTextAngleHintDegrees(boundingBox, text),
 	val isAxisAligned: Boolean = inferAxisAlignedHint(boundingBox),
 	val quadPoints: TextQuad? = boundingBox?.let(::rectToTextQuad),
+	val detectorId: String = "",
 )

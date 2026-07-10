@@ -1689,7 +1689,7 @@
     <string name="reader_translation_model_downloading_percent">正在下载资源包… %1$d%%</string>
     <string name="reader_translation_ocr_det_mlkit">ML Kit（Google 设备端，无需下载）</string>
     <string name="reader_translation_ocr_det_model_selection">文字检测模型</string>
-    <string name="reader_translation_ocr_det_model_selection_summary">选择用于定位页面上文字区域的模型。"自动"默认使用 PP-OCRv5 检测器。</string>
+    <string name="reader_translation_ocr_det_model_selection_summary">选择用于定位页面上文字区域的模型。气泡/文本检测模型也可以作为定位阶段使用。</string>
     <string name="reader_translation_ocr_detector_models_title">文字检测模型</string>
     <string name="reader_translation_ocr_engine">文字提取方式</string>
     <string name="reader_translation_ocr_engine_mlkit">ML Kit（设备端，无需下载）</string>

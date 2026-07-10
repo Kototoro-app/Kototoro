@@ -1730,7 +1730,7 @@
     <string name="reader_translation_ocr_model_det_autodetect">自动检测</string>
     <string name="reader_translation_ocr_model_onnx_automatic">ONNX 自动选择</string>
     <string name="reader_translation_ocr_det_model_selection">文字检测模型</string>
-    <string name="reader_translation_ocr_det_model_selection_summary">选择用于定位页面上文字区域的模型。"自动"默认使用 PP-OCRv5 检测器。</string>
+    <string name="reader_translation_ocr_det_model_selection_summary">选择用于定位页面上文字区域的模型。气泡/文本检测模型也可以作为定位阶段使用。</string>
     <string name="reader_translation_ocr_rec_model_auto">自动（根据源语言选择）</string>
     <string name="reader_translation_ocr_rec_model_auto_summary">自动挑选最佳识别模型：日语→MangaOCR 或 PP-OCRv5 Server，英语→PP-OCRv5 EN，韩语→PP-OCRv3 KO，中文/其他→PP-OCRv5 Server 或 Mobile</string>
     <string name="reader_translation_ocr_det_mlkit">ML Kit（Google 设备端，无需下载）</string>
@@ -2116,18 +2116,6 @@
     <string name="reader_translation_bubble_grouping_enabled_summary_no_detector">在文本检测、识别与合并之后，直接以已合并文本单元作为翻译输入。启用气泡检测后，才会允许 OCR 后的气泡辅助分组。</string>
     <string name="reader_translation_bubble_detector_enabled">将气泡检测作为 OCR 后辅助</string>
     <string name="reader_translation_bubble_detector_enabled_summary">在整页 OCR 完成后运行可选检测模型，用于辅助把文本块归入气泡并服务渲染，而不是作为 OCR 主入口。</string>
-    <string name="reader_translation_ocr_detection_max_side">检测图像尺寸</string>
-    <string name="reader_translation_ocr_detection_max_side_summary">数值越大越容易发现小字，但会增加 OCR 延迟和内存占用。</string>
-    <string name="reader_translation_ocr_detection_threshold">检测阈值</string>
-    <string name="reader_translation_ocr_detection_threshold_summary">降低会保留更多候选文本区域；提高会抑制弱检测。</string>
-    <string name="reader_translation_ocr_min_box_size">最小文本框尺寸</string>
-    <string name="reader_translation_ocr_min_box_size_summary">识别前过滤过小的 OCR 文本框。</string>
-    <string name="reader_translation_ocr_recognition_threshold">识别置信度阈值</string>
-    <string name="reader_translation_ocr_recognition_threshold_summary">低于该置信度的文本会被忽略。降低可保留不确定文本继续翻译。</string>
-    <string name="reader_translation_ocr_recognition_max_width">识别输入最大宽度</string>
-    <string name="reader_translation_ocr_recognition_max_width_summary">让较长文本裁剪保留更多细节。数值越高识别可能越慢。</string>
-    <string name="reader_translation_ocr_recognition_batch_size">识别批量大小</string>
-    <string name="reader_translation_ocr_recognition_batch_size_summary">一次 ONNX 调用处理多个文本框。较高数值在部分设备上更快，但更占内存。</string>
     <string name="novel_reading_mode">阅读模式</string>
     <string name="novel_mode_paged">翻页</string>
     <string name="novel_mode_scroll">滚动</string>

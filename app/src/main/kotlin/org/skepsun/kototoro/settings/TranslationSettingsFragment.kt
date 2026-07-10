@@ -93,7 +93,10 @@ fun TranslationSettingsRoute(
         add(SettingsChoiceOption("MLKIT", context.getString(R.string.reader_translation_ocr_det_mlkit)))
         addAll(
             OnnxOfficialModelCatalog.models
-                .filter { it.category == OnnxModelCategory.OCR_DETECTOR }
+                .filter {
+                    it.category == OnnxModelCategory.OCR_DETECTOR ||
+                        it.category == OnnxModelCategory.BUBBLE_DETECTION
+                }
                 .map {
                     val suffix = if (onnxModelManager.isModelDownloaded(it.id)) {
                         ""

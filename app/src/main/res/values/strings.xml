@@ -2780,22 +2780,10 @@
 	<string name="reader_translation_bubble_detector_nms_summary">Controls the strictness of suppressing overlapping bubbles. A lower value removes duplicate boxes aggressively, while a higher value preserves naturally touching dialogue bubbles. The optimal preset is loaded automatically per model.</string>
 	<string name="reader_translation_ocr_model_onnx_automatic">ONNX Automatic</string>
 	<string name="reader_translation_ocr_det_model_selection">Text detection model</string>
-	<string name="reader_translation_ocr_det_model_selection_summary">Select the model used to locate text regions on the page. \"Auto\" uses the default PP-OCRv5 detector.</string>
+	<string name="reader_translation_ocr_det_model_selection_summary">Select the model used to locate text regions on the page. Bubble/text detectors can also be used as the positioning stage.</string>
 	<string name="reader_translation_ocr_rec_model_auto">Auto (select by source language)</string>
 	<string name="reader_translation_ocr_rec_model_auto_summary">Automatically picks the best recognizer: Japanese→MangaOCR or PP-OCRv5 Server, English→PP-OCRv5 EN, Korean→PP-OCRv3 KO, Chinese/other→PP-OCRv5 Server or Mobile</string>
 	<string name="reader_translation_ocr_det_mlkit">ML Kit (Google on-device, no download)</string>
-	<string name="reader_translation_ocr_detection_max_side">Detection image size</string>
-	<string name="reader_translation_ocr_detection_max_side_summary">Larger values can find smaller text but increase OCR latency and memory use.</string>
-	<string name="reader_translation_ocr_detection_threshold">Detection threshold</string>
-	<string name="reader_translation_ocr_detection_threshold_summary">Lower values keep more candidate text regions; higher values suppress weak detections.</string>
-	<string name="reader_translation_ocr_min_box_size">Minimum text box size</string>
-	<string name="reader_translation_ocr_min_box_size_summary">Filters very small OCR boxes before recognition.</string>
-	<string name="reader_translation_ocr_recognition_threshold">Recognition confidence threshold</string>
-	<string name="reader_translation_ocr_recognition_threshold_summary">Text below this confidence is ignored. Lower values preserve uncertain text for translation.</string>
-	<string name="reader_translation_ocr_recognition_max_width">Recognition input max width</string>
-	<string name="reader_translation_ocr_recognition_max_width_summary">Allows longer text crops to retain more detail. Higher values can slow recognition.</string>
-	<string name="reader_translation_ocr_recognition_batch_size">Recognition batch size</string>
-	<string name="reader_translation_ocr_recognition_batch_size_summary">Runs multiple text boxes per ONNX call. Higher values are faster on some devices but use more memory.</string>
     <!-- Weekdays -->
     <string name="day_monday">Monday</string>
     <string name="day_tuesday">Tuesday</string>

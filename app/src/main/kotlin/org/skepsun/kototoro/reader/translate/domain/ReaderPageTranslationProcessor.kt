@@ -40,6 +40,8 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toMimeTypeOrNull
 import org.skepsun.kototoro.local.data.LocalStorageCache
 import org.skepsun.kototoro.local.data.PageCache
+import org.skepsun.kototoro.reader.translate.data.OnnxModelCategory
+import org.skepsun.kototoro.reader.translate.data.OnnxOfficialModelCatalog
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.translate.data.ReaderTranslationTextCache
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -79,6 +81,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	private val mlKitOcrEngine: MlKitReaderOcrEngine,
 	private val paddleOcrEngine: PaddleReaderOcrEngine,
 	private val comicTextDetectorOnnx: ComicTextDetectorOnnx,
+	private val bubbleReaderTextDetector: BubbleReaderTextDetector,
 	private val mangaOcrReaderTextRecognizer: MangaOcrReaderTextRecognizer,
 	private val onnxBubbleDetectorEngine: OnnxBubbleDetectorEngine,
 	private val onnxTranslationEngine: OnnxReaderTranslationEngine,
@@ -259,9 +262,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			return sourceUri
 		}
 		val localUri = ensureLocalFileUri(sourceUri) ?: run {
+			Log.d(LOG_TAG, "process debug: localize failed page=${page.id} uri=$sourceUri")
 			log { "process skip: cannot localize uri=$sourceUri" }
 			return sourceUri
 		}
+		Log.d(LOG_TAG, "process debug: local uri ready page=${page.id} uri=$localUri")
 		val renderCacheKey = buildRenderedCacheKey(
 			pageUrl = page.url,
 			sourceUri = sourceUri.toString(),
@@ -270,6 +275,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			pageEpoch = getPageRenderEpoch(page.id),
 		)
 		cache[renderCacheKey]?.let {
+			Log.d(LOG_TAG, "process debug: render cache hit before start page=${page.id}")
 			return it.toUri().also { rendered ->
 				rememberRenderedSource(rendered, localUri)
 			}
@@ -281,12 +287,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		} else {
 			processingSemaphore
 		}
+		Log.d(LOG_TAG, "process debug: waiting permit page=${page.id}")
 		
 		return withContext(loggingPageId.asContextElement(page.id)) {
 			permitSemaphore.withPermit {
+				Log.d(LOG_TAG, "process debug: permit acquired page=${page.id}")
 				appendPageLog(page.id, "process start page=${page.id}")
 				cache[renderCacheKey]?.let {
 					appendPageLog(page.id, "metric.render_cache.hit=1")
+					Log.d(LOG_TAG, "process debug: render cache hit after permit page=${page.id}")
 					return@withPermit it.toUri().also { rendered ->
 						rememberRenderedSource(rendered, localUri)
 					}
@@ -294,10 +303,13 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				runCatching {
 					processImpl(page.id, localUri, renderCacheKey, sourceLang, targetLang)
 				}.onFailure {
+					Log.d(LOG_TAG, "process debug: pipeline failed page=${page.id} err=${it.javaClass.simpleName}: ${it.message.orEmpty()}")
 					it.printStackTraceDebug()
 					appendPageLog(page.id, "process failed: ${it.javaClass.simpleName}: ${it.message.orEmpty()}")
 					appendPageLog(page.id, "fail_code=$FAIL_CODE_PROCESS_EXCEPTION")
-				}.getOrDefault(sourceUri)
+				}.getOrDefault(sourceUri).also { result ->
+					Log.d(LOG_TAG, "process debug: pipeline returned page=${page.id} translated=${result != sourceUri}")
+				}
 			}
 		}
 	}
@@ -601,11 +613,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	private fun resolvePageOcrRouteOrder(): List<PageOcrRoute> {
 		val detModelId = settings.readerTranslationPaddleDetModelId
 		val recModelId = settings.readerTranslationPaddleOfficialModelId
-		val detBackend = when (detModelId) {
-			"MLKIT" -> OcrDetectorBackend.MLKIT
-			ComicTextDetectorOnnx.MODEL_ID -> OcrDetectorBackend.CTD
-			else -> OcrDetectorBackend.PADDLE
-		}
+		val detBackend = resolveDetectorBackend(detModelId)
 		val recBackend = when (recModelId) {
 			"MLKIT" -> OcrRecognizerBackend.MLKIT
 			"mangaocr_2025_onnx" -> OcrRecognizerBackend.MANGA_OCR
@@ -626,6 +634,22 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		)
 		
 		return routes.toList()
+	}
+
+	private fun resolveDetectorBackend(modelId: String): OcrDetectorBackend {
+		if (modelId == "MLKIT") return OcrDetectorBackend.MLKIT
+		val model = OnnxOfficialModelCatalog.findById(modelId)
+		return when (model?.category) {
+			OnnxModelCategory.BUBBLE_DETECTION -> OcrDetectorBackend.BUBBLE
+			OnnxModelCategory.OCR_DETECTOR -> {
+				if (model.id == ComicTextDetectorOnnx.MODEL_ID) {
+					OcrDetectorBackend.CTD
+				} else {
+					OcrDetectorBackend.PADDLE
+				}
+			}
+			else -> OcrDetectorBackend.PADDLE
+		}
 	}
 
 	private suspend fun recognizeTextByEngine(
@@ -719,6 +743,16 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				log { "metric.ocr.mangaocr.recognized_blocks=${recognized.size}" }
 				recognized
 			}
+			route.detector == OcrDetectorBackend.BUBBLE &&
+				route.recognizer == OcrRecognizerBackend.MANGA_OCR -> {
+				val regions = bubbleReaderTextDetector.detect(sourceUri)
+				log { "metric.ocr.bubble.detected_regions=${regions.size}" }
+				if (regions.isEmpty()) return emptyList()
+				val recognized = mangaTextRecognizer.recognize(sourceUri, regions)
+				mangaOcrReaderTextRecognizer.consumeLastDiagnostics()
+				log { "metric.ocr.bubble_mangaocr.recognized_blocks=${recognized.size}" }
+				recognized
+			}
 			route.detector == OcrDetectorBackend.CTD &&
 				route.recognizer == OcrRecognizerBackend.MANGA_OCR -> {
 				val regions = ctdTextDetector.detect(sourceUri)
@@ -752,6 +786,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				if (regions.isEmpty()) return emptyList()
 				val recognized = paddleTextRecognizer.recognize(sourceUri, regions)
 				log { "metric.ocr.ctd_paddle.recognized_blocks=${recognized.size}" }
+				recognized
+			}
+			route.detector == OcrDetectorBackend.BUBBLE &&
+				route.recognizer == OcrRecognizerBackend.PADDLE -> {
+				val regions = bubbleReaderTextDetector.detect(sourceUri)
+				log { "metric.ocr.bubble.detected_regions=${regions.size}" }
+				if (regions.isEmpty()) return emptyList()
+				val recognized = paddleTextRecognizer.recognize(sourceUri, regions)
+				log { "metric.ocr.bubble_paddle.recognized_blocks=${recognized.size}" }
 				recognized
 			}
 			else -> emptyList()
@@ -852,10 +895,14 @@ class ReaderPageTranslationProcessor @Inject constructor(
 						angleHintDegrees = block.angleHintDegrees,
 						isAxisAligned = block.isAxisAligned,
 						quadPoints = block.quadPoints ?: rectToTextQuad(rect),
+						detectorId = block.detectorId,
 					)
 				}
 			}
 			.toList()
+		if (fragments.isNotEmpty() && fragments.all { it.detectorId.startsWith(BUBBLE_DETECTOR_ID_PREFIX) }) {
+			return fragments
+		}
 		return textMergeCoordinator.merge(
 			fragments = fragments,
 			sourceLang = sourceLang,
@@ -3375,6 +3422,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			val obj = JSONObject()
 			obj.put("text", block.text)
 			obj.put("confidence", block.confidence)
+			if (block.detectorId.isNotBlank()) {
+				obj.put("detector_id", block.detectorId)
+			}
 			if (block.directionHint != TextDirectionHint.UNKNOWN) {
 				obj.put("direction", block.directionHint.name)
 			}
@@ -3423,6 +3473,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 					angleHintDegrees = obj.optDouble("angle", inferTextAngleHintDegrees(box, obj.optString("text")).toDouble()).toFloat(),
 					isAxisAligned = if (obj.has("axis_aligned")) obj.optBoolean("axis_aligned", true) else inferAxisAlignedHint(box),
 					quadPoints = quad,
+					detectorId = obj.optString("detector_id"),
 				)
 			)
 		}
@@ -3459,6 +3510,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		const val MIN_RENDER_COLUMN_WIDTH_RATIO = 0.22f
 		const val DETECTOR_ANCHORED_MIN_WIDTH_RATIO = 0.42f
 		const val DETECTOR_CONTENT_MERGE_PADDING_DP = 8f
+		const val BUBBLE_DETECTOR_ID_PREFIX = "bubble_detector:"
 		const val HORIZONTAL_TEXT_SIZE_WIDTH_RATIO = 0.58f
 		const val VERTICAL_TEXT_SIZE_WIDTH_RATIO = 0.78f
 		const val MAX_RENDER_TEXT_SIZE_DP = 24f
@@ -3499,6 +3551,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			MLKIT,
 			PADDLE,
 			CTD,
+			BUBBLE,
 		}
 
 		private enum class OcrRecognizerBackend {
