@@ -40,6 +40,7 @@ import org.skepsun.kototoro.tracker.ui.debug.TrackDebugItem
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentity
+import org.skepsun.kototoro.work.domain.WorkMigrationState
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -191,6 +192,12 @@ class TrackingRepository @Inject constructor(
 			?: db.getMangaDao().find(anchorMangaId)?.toContent()
 	}
 
+	suspend fun hasValidTrackingIdentity(track: ContentTracking): Boolean {
+		val entityId = track.entityId ?: return false
+		val identity = resolveTrackIdentity(track.anchorMangaId)
+		return identity.migrationState == WorkMigrationState.VALID && identity.entityId == entityId
+	}
+
 	@VisibleForTesting
 	suspend fun deleteTrack(mangaId: Long) {
 		val anchorMangaId = resolvePersistableTrackAnchorMangaId(mangaId) ?: return
@@ -240,19 +247,26 @@ class TrackingRepository @Inject constructor(
 
 	suspend fun saveUpdates(updates: MangaUpdates) {
 		db.withTransaction {
-			val anchorMangaId = resolvePersistableTrackAnchorMangaId(updates.manga.id) ?: return@withTransaction
-			val entityId = resolveTrackIdentity(anchorMangaId).entityId
+			val entityId = updates.entityId ?: return@withTransaction
+			val anchorMangaId = updates.anchorMangaId
+			val identity = resolveTrackIdentity(anchorMangaId)
+			if (
+				identity.migrationState != WorkMigrationState.VALID ||
+				identity.entityId != entityId ||
+				!db.getMangaDao().contains(anchorMangaId)
+			) {
+				return@withTransaction
+			}
 			val track = getOrCreateTrack(anchorMangaId).mergeWith(updates, anchorMangaId)
 			db.getTracksDao().upsert(track)
 			
-			val updatedManga = updates.manga
-			val resolvedManga = contentDataRepository.resolveStoredProjection(updatedManga)
-			if (db.getMangaDao().contains(resolvedManga.id)) {
-				contentDataRepository.updateProjectionSnapshot(resolvedManga)
-			}
+			val resolvedManga = contentDataRepository.updateProjectionSnapshotAtAnchor(
+				manga = updates.manga,
+				anchorMangaId = anchorMangaId,
+			)
 
 			if (updates is MangaUpdates.Success && updates.isValid && updates.newChapters.isNotEmpty()) {
-				progressUpdateUseCase(updates.manga)
+				progressUpdateUseCase(resolvedManga)
 				val logEntity = TrackLogEntity(
 					ownerId = resolveTrackOwnerId(entityId, anchorMangaId),
 					mangaId = anchorMangaId,

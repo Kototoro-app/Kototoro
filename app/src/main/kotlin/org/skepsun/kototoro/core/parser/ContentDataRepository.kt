@@ -491,17 +491,27 @@ class ContentDataRepository @Inject constructor(
 
 	suspend fun updateProjectionSnapshot(manga: Content): Content {
 		return db.withTransaction {
-			val stored = resolveStoredProjection(manga)
-			val tags = stored.tags.toEntities()
-			db.getTagsDao().upsert(tags)
-			db.getMangaDao().upsert(stored.toEntity(), tags)
-			if (!stored.isLocal) {
-				stored.chapters?.let { chapters ->
-					db.getChaptersDao().replaceAll(stored.id, chapters.withIndex().toEntities(stored.id))
-				}
-			}
-			stored
+			upsertProjectionSnapshot(resolveStoredProjection(manga))
 		}
+	}
+
+	suspend fun updateProjectionSnapshotAtAnchor(manga: Content, anchorMangaId: Long): Content {
+		return db.withTransaction {
+			check(db.getMangaDao().contains(anchorMangaId)) { "Unknown projection anchor: $anchorMangaId" }
+			upsertProjectionSnapshot(manga.copy(id = anchorMangaId))
+		}
+	}
+
+	private suspend fun upsertProjectionSnapshot(stored: Content): Content {
+		val tags = stored.tags.toEntities()
+		db.getTagsDao().upsert(tags)
+		db.getMangaDao().upsert(stored.toEntity(), tags)
+		if (!stored.isLocal) {
+			stored.chapters?.let { chapters ->
+				db.getChaptersDao().replaceAll(stored.id, chapters.withIndex().toEntities(stored.id))
+			}
+		}
+		return stored
 	}
 
 	suspend fun gcChaptersCache() {

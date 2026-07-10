@@ -1,11 +1,9 @@
 package org.skepsun.kototoro.tracker.domain
 
 import android.util.Log
-import coil3.request.CachePolicy
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.getPreferredBranch
 import org.skepsun.kototoro.core.model.isLocal
-import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.MultiMutex
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -36,6 +34,8 @@ class CheckNewChaptersUseCase @Inject constructor(
 		repository.updateTracks()
 		val tracking = repository.getTrackOrNull(manga) ?: return@withLock MangaUpdates.Failure(
 			manga = manga,
+			entityId = null,
+			anchorMangaId = manga.id,
 			error = null,
 		)
 		invokeImpl(tracking)
@@ -109,12 +109,21 @@ class CheckNewChaptersUseCase @Inject constructor(
 	}
 
 	private suspend fun invokeImpl(track: ContentTracking): MangaUpdates = runCatchingCancellable {
+		val entityId = checkNotNull(track.entityId) { "Tracking requires a valid Work identity" }
+		check(repository.hasValidTrackingIdentity(track)) { "Tracking identity requires migration review" }
 		val executionSeed = repository.getExecutionTrackingContent(track)
-		val details = getFullContent(executionSeed, forceFetch = true)
-		compare(track, details, getBranch(details, track.lastChapterId))
+		val details = getFullContent(executionSeed, forceFetch = true).copy(id = track.anchorMangaId)
+		compare(
+			track = track,
+			entityId = entityId,
+			manga = details,
+			branch = getBranch(details, track.lastChapterId),
+		)
 	}.getOrElse { error ->
 		MangaUpdates.Failure(
 			manga = repository.getExecutionTrackingContentOrNull(track.anchorMangaId) ?: track.manga,
+			entityId = track.entityId,
+			anchorMangaId = track.anchorMangaId,
 			error = error,
 		)
 	}.also { updates ->
@@ -146,20 +155,28 @@ class CheckNewChaptersUseCase @Inject constructor(
 
 	private suspend fun fetchDetails(manga: Content): Content {
 		val repo = mangaRepositoryFactory.create(manga.source)
-		return if (repo is CachingContentRepository) {
-			repo.getDetails(manga, CachePolicy.WRITE_ONLY)
-		} else {
-			repo.getDetails(manga)
-		}
+		return repo.getDetails(manga, ContentRepository.DetailsFetchMode.FORCE_REFRESH)
 	}
 
 	/**
 	 * The main functionality of tracker: check new chapters in [manga] comparing to the [track]
 	 */
-	private fun compare(track: ContentTracking, manga: Content, branch: String?): MangaUpdates.Success {
+	private fun compare(
+		track: ContentTracking,
+		entityId: Long,
+		manga: Content,
+		branch: String?,
+	): MangaUpdates.Success {
 		if (track.isEmpty()) {
 			// first check or manga was empty on last check
-			return MangaUpdates.Success(manga, branch, emptyList(), isValid = false)
+			return MangaUpdates.Success(
+				manga = manga,
+				entityId = entityId,
+				anchorMangaId = track.anchorMangaId,
+				branch = branch,
+				newChapters = emptyList(),
+				isValid = false,
+			)
 		}
 		val chapters = requireNotNull(manga.getChapters(branch))
 		if (BuildConfig.DEBUG && chapters.findById(track.lastChapterId) == null) {
@@ -170,6 +187,8 @@ class CheckNewChaptersUseCase @Inject constructor(
 			newChapters.isEmpty() -> {
 				MangaUpdates.Success(
 					manga = manga,
+					entityId = entityId,
+					anchorMangaId = track.anchorMangaId,
 					branch = branch,
 					newChapters = emptyList(),
 					isValid = chapters.lastOrNull()?.id == track.lastChapterId,
@@ -177,11 +196,25 @@ class CheckNewChaptersUseCase @Inject constructor(
 			}
 
 			newChapters.size == chapters.size -> {
-				MangaUpdates.Success(manga, branch, emptyList(), isValid = false)
+				MangaUpdates.Success(
+					manga = manga,
+					entityId = entityId,
+					anchorMangaId = track.anchorMangaId,
+					branch = branch,
+					newChapters = emptyList(),
+					isValid = false,
+				)
 			}
 
 			else -> {
-				MangaUpdates.Success(manga, branch, newChapters, isValid = true)
+				MangaUpdates.Success(
+					manga = manga,
+					entityId = entityId,
+					anchorMangaId = track.anchorMangaId,
+					branch = branch,
+					newChapters = newChapters,
+					isValid = true,
+				)
 			}
 		}
 	}

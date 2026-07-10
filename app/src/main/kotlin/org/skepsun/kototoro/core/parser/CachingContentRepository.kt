@@ -28,6 +28,17 @@ abstract class CachingContentRepository(
 
 	final override suspend fun getDetails(manga: Content): Content = getDetails(manga, CachePolicy.ENABLED)
 
+	final override suspend fun getDetails(
+		manga: Content,
+		fetchMode: ContentRepository.DetailsFetchMode,
+	): Content = getDetails(
+		manga = manga,
+		cachePolicy = when (fetchMode) {
+			ContentRepository.DetailsFetchMode.ALLOW_CACHE -> CachePolicy.ENABLED
+			ContentRepository.DetailsFetchMode.FORCE_REFRESH -> CachePolicy.WRITE_ONLY
+		},
+	)
+
 	final override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = pagesMutex.withLock(chapter.cacheLockKey()) {
 		cache.getPages(source, chapter.url)?.let {
 			if (it.isNotEmpty()) {

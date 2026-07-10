@@ -148,6 +148,8 @@ class TrackWorker @AssistedInject constructor(
 							}.getOrElse { error ->
 								MangaUpdates.Failure(
 									manga = track.manga,
+									entityId = track.entityId,
+									anchorMangaId = track.anchorMangaId,
 									error = error,
 								)
 							},

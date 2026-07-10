@@ -135,11 +135,91 @@ class ChaptersDeduplicationTest : StringSpec({
             branch = "BranchA",
             bookmarks = emptyList(),
             isGrid = false,
-            isDownloadedOnly = false
+            isDownloadedOnly = false,
+            shareProgressAcrossBranches = true,
         )
 
         mappedA.size shouldBe 1
         mappedA.first().chapter.id shouldBe 1L
         mappedA.first().isUnread shouldBe false
+    }
+
+    "should keep branch progress isolated when repeated chapter merging is disabled" {
+        val branchA = createChapter(id = 1, number = 1.0f, title = "Chapter 1", branch = "BranchA")
+        val branchB = createChapter(id = 2, number = 2.0f, title = "Chapter 2", branch = "BranchB")
+        val contentDetails = ContentDetails(
+            Content(
+                id = 100L,
+                title = "Manga",
+                altTitles = emptySet(),
+                url = "http://example.com/manga",
+                publicUrl = "http://example.com/manga",
+                rating = 0f,
+                contentRating = null,
+                coverUrl = null,
+                tags = emptySet(),
+                state = null,
+                authors = emptySet(),
+                chapters = listOf(branchA, branchB),
+                source = TestContentSource,
+            ),
+        )
+
+        val mappedA = contentDetails.mapChapters(
+            currentChapterId = branchB.id,
+            newCount = 0,
+            branch = "BranchA",
+            bookmarks = emptyList(),
+            isGrid = false,
+            isDownloadedOnly = false,
+        )
+
+        mappedA.single().isUnread shouldBe true
+    }
+
+    "should compare volumes when sharing progress across branches" {
+        val earlierVolume = createChapter(
+            id = 1,
+            number = 10.0f,
+            title = "Volume 1 Chapter 10",
+            volume = 1,
+            branch = "BranchA",
+        )
+        val currentVolume = createChapter(
+            id = 2,
+            number = 1.0f,
+            title = "Volume 2 Chapter 1",
+            volume = 2,
+            branch = "BranchB",
+        )
+        val contentDetails = ContentDetails(
+            Content(
+                id = 100L,
+                title = "Manga",
+                altTitles = emptySet(),
+                url = "http://example.com/manga",
+                publicUrl = "http://example.com/manga",
+                rating = 0f,
+                contentRating = null,
+                coverUrl = null,
+                tags = emptySet(),
+                state = null,
+                authors = emptySet(),
+                chapters = listOf(earlierVolume, currentVolume),
+                source = TestContentSource,
+            ),
+        )
+
+        val mapped = contentDetails.mapChapters(
+            currentChapterId = currentVolume.id,
+            newCount = 0,
+            branch = "BranchA",
+            bookmarks = emptyList(),
+            isGrid = false,
+            isDownloadedOnly = false,
+            shareProgressAcrossBranches = true,
+        )
+
+        mapped.single().isUnread shouldBe false
     }
 })

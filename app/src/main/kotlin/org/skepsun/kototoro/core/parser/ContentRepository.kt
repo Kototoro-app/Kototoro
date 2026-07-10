@@ -18,6 +18,11 @@ import javax.inject.Inject
 
 interface ContentRepository {
 
+	enum class DetailsFetchMode {
+		ALLOW_CACHE,
+		FORCE_REFRESH,
+	}
+
 	enum class ListPagingMode {
 		OFFSET,
 		PAGE_INDEX,
@@ -44,6 +49,8 @@ interface ContentRepository {
 	suspend fun getList(offset: Int, order: SortOrder?, filter: ContentListFilter?): List<Content>
 
 	suspend fun getDetails(manga: Content): Content
+
+	suspend fun getDetails(manga: Content, fetchMode: DetailsFetchMode): Content = getDetails(manga)
 
 	suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String? = null): List<ContentPage>
 

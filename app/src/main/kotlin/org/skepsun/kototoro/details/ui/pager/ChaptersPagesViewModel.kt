@@ -177,6 +177,7 @@ abstract class ChaptersPagesViewModel(
 						bookmarks = bookmarks,
 						isGrid = grid,
 						isDownloadedOnly = downloadedOnly,
+						shareProgressAcrossBranches = true,
 					)
 				}
 			} else {

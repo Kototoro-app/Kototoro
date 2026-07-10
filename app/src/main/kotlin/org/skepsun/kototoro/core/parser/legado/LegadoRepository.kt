@@ -610,17 +610,27 @@ class LegadoRepository(
         return true
     }
 
-    override suspend fun getDetails(manga: Content): Content {
+    override suspend fun getDetails(manga: Content): Content = getDetails(
+        manga = manga,
+        fetchMode = ContentRepository.DetailsFetchMode.ALLOW_CACHE,
+    )
+
+    override suspend fun getDetails(
+        manga: Content,
+        fetchMode: ContentRepository.DetailsFetchMode,
+    ): Content {
         val normalizedContentUrl = AnalyzeUrl.normalizeUrl(manga.url)
-        memoryCache?.getDetails(source, normalizedContentUrl)?.let {
-            val hasTocRule = !config.ruleToc?.chapterList.isNullOrBlank()
-            val cachedChapters = it.chapters.orEmpty()
-            if (!hasTocRule || cachedChapters.isNotEmpty()) {
-                android.util.Log.d(TAG, "Memory cache HIT (getDetails) for book: ${manga.title}")
-                return it
+        if (fetchMode == ContentRepository.DetailsFetchMode.ALLOW_CACHE) {
+            memoryCache?.getDetails(source, normalizedContentUrl)?.let {
+                val hasTocRule = !config.ruleToc?.chapterList.isNullOrBlank()
+                val cachedChapters = it.chapters.orEmpty()
+                if (!hasTocRule || cachedChapters.isNotEmpty()) {
+                    android.util.Log.d(TAG, "Memory cache HIT (getDetails) for book: ${manga.title}")
+                    return it
+                }
+                // 章节为空且存在目录规则：视为“脏缓存”，触发重新拉取（常见于网络错误/规则调整后）。
+                android.util.Log.w(TAG, "Memory cache BYPASS (getDetails) for book: ${manga.title} (cached chapters empty)")
             }
-            // 章节为空且存在目录规则：视为“脏缓存”，触发重新拉取（常见于网络错误/规则调整后）。
-            android.util.Log.w(TAG, "Memory cache BYPASS (getDetails) for book: ${manga.title} (cached chapters empty)")
         }
 
         if (shouldUseStandaloneListRuntimeForDebug()) {

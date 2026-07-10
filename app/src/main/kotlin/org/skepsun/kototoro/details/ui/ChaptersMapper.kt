@@ -42,6 +42,7 @@ fun ContentDetails.mapChapters(
 	bookmarks: List<Bookmark>,
 	isGrid: Boolean,
 	isDownloadedOnly: Boolean,
+	shareProgressAcrossBranches: Boolean = false,
 ): List<ChapterListItem> {
 	val resolvedBranch = when {
 		branch == null -> null
@@ -83,7 +84,9 @@ fun ContentDetails.mapChapters(
 		null
 	}
 	
-	val currentChapterNumber = allChapters.find { it.id == currentChapterId }?.number
+	val currentChapter = remoteChapters.find { it.id == currentChapterId }
+		?: localChapters.find { it.id == currentChapterId }
+		?: if (shareProgressAcrossBranches) allChapters.find { it.id == currentChapterId } else null
 	
 	if (!isDownloadedOnly || local?.manga?.chapters == null) {
 		for ((index, chapter) in remoteChapters.withIndex()) {
@@ -97,8 +100,8 @@ fun ContentDetails.mapChapters(
 			}
 			val local = localById ?: localByUrl
 			val finalChapter = local ?: chapter
-			val isUnread = if (currentChapterNumber != null) {
-				chapter.number > currentChapterNumber
+			val isUnread = if (currentChapter != null) {
+				chapter.isAfter(currentChapter)
 			} else {
 				true
 			}
@@ -131,6 +134,14 @@ fun ContentDetails.mapChapters(
 	)
 	
 	return result
+}
+
+private fun ContentChapter.isAfter(current: ContentChapter): Boolean {
+	return if (volume > 0 && current.volume > 0 && volume != current.volume) {
+		volume > current.volume
+	} else {
+		number > current.number
+	}
 }
 
 fun List<ChapterListItem>.withVolumeHeaders(context: Context): MutableList<ListModel> {
