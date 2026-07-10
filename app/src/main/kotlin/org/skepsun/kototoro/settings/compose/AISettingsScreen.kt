@@ -43,6 +43,7 @@ fun AISettingsScreen(
                     summary = stringResource(R.string.reader_translation_manage_ocr_models_summary),
                     onClick = onOpenOcrModels
                 )
+                SettingsSectionDivider()
                 SettingsActionPreference(
                     title = stringResource(R.string.ai_api_settings),
                     summary = stringResource(R.string.ai_api_settings_summary),

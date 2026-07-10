@@ -309,7 +309,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		}
 
 	var panoramaCoverExtraHeight: Int
-		get() = prefs.getSafeInt(KEY_PANORAMA_EXTRA_HEIGHT, 50).coerceIn(0, 100)
+		get() = prefs.getSafeInt(KEY_PANORAMA_EXTRA_HEIGHT, 0).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_PANORAMA_EXTRA_HEIGHT, value.coerceIn(0, 100)) }
 
 	var panoramaBottomGradientAlpha: Int
@@ -317,12 +317,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putInt(KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA, value.coerceIn(0, 100)) }
 
 	var browsePanoramaBottomGradientAlpha: Int
-		get() = prefs.getSafeInt(KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA, panoramaBottomGradientAlpha)
+		get() = prefs.getSafeInt(KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA, 100)
 			.coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA, value.coerceIn(0, 100)) }
 
 	var browsePanoramaBlendHeight: Int
-		get() = prefs.getSafeInt(KEY_BROWSE_PANORAMA_BLEND_HEIGHT, 156).coerceIn(48, 220)
+		get() = prefs.getSafeInt(KEY_BROWSE_PANORAMA_BLEND_HEIGHT, 220).coerceIn(48, 220)
 		set(value) = prefs.edit { putInt(KEY_BROWSE_PANORAMA_BLEND_HEIGHT, value.coerceIn(48, 220)) }
 
 	var isPanoramaDownsampleEnabled: Boolean
@@ -871,7 +871,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putInt(KEY_HAZE_OPACITY, value.coerceIn(0, 100)) }
 
 	var glassMaterialPreset: GlassMaterialPreset
-		get() = prefs.getString(KEY_GLASS_MATERIAL_PRESET, GlassMaterialPreset.HAZE_THICK.name)
+		get() = prefs.getString(KEY_GLASS_MATERIAL_PRESET, GlassMaterialPreset.KOTOTORO.name)
 			?.let { raw ->
 				GlassMaterialPreset.entries.firstOrNull { preset -> preset.name == raw }
 			}
@@ -987,6 +987,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var isDetailsTranslateButtonVisible: Boolean
 		get() = prefs.getBoolean(KEY_DETAILS_TRANSLATE_BUTTON, true)
 		set(value) = prefs.edit { putBoolean(KEY_DETAILS_TRANSLATE_BUTTON, value) }
+
+	var isModernDetailsDockEnabled: Boolean
+		get() = prefs.getBoolean(KEY_MODERN_DETAILS_DOCK, false)
+		set(value) = prefs.edit { putBoolean(KEY_MODERN_DETAILS_DOCK, value) }
 
 	var defaultDetailsTab: Int
 		get() = if (isPagesTabEnabled) {
@@ -2420,6 +2424,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_CF_BOOK = "cf_book"
 		const val KEY_PAGES_TAB = "pages_tab"
 		const val KEY_DETAILS_TRANSLATE_BUTTON = "details_translate_button"
+		const val KEY_MODERN_DETAILS_DOCK = "modern_details_dock"
 		const val KEY_DETAILS_TAB = "details_tab"
 		const val KEY_DETAILS_LAST_TAB = "details_last_tab"
 		const val KEY_READING_TIME = "reading_time"
@@ -2588,7 +2593,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_FILTER_PILL_RIGHT, value.name) }
 
 	object GlassMaterialDefaults {
-		const val DEFAULT_OPACITY_PERCENT = 80
+		const val DEFAULT_OPACITY_PERCENT = 30
+		const val STYLE_BASELINE_OPACITY_PERCENT = 80
 		const val DEFAULT_IMMERSIVE_STRENGTH_PERCENT = 100
 	}
 

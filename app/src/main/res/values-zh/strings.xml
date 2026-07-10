@@ -737,6 +737,8 @@
     <string name="details_tracking_suggestion_view">查看候选</string>
     <string name="details_translate_button_visible">在详情页显示翻译按钮</string>
     <string name="details_translate_button_visible_summary">当翻译可用时，在作品详情页显示翻译操作按钮</string>
+    <string name="modern_details_dock">现代详情页 Dock</string>
+    <string name="modern_details_dock_summary">使用分层玻璃底栏、清晰的选中状态和突出的主要操作</string>
     <string name="details_translate_title_and_description_hint">翻译标题和描述</string>
     <string name="detect_reader_mode">自动检测阅读模式</string>
     <string name="detect_reader_mode_summary">阅读条漫时自动应用条漫阅读模式</string>

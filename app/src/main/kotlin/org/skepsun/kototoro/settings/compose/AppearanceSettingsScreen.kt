@@ -77,6 +77,7 @@ data class AppearanceSettingsUiState(
     val isDetailsPanoramaLimitedToInfoCardMidpoint: Boolean,
     val isPagesTabEnabled: Boolean,
     val isDetailsTranslateButtonVisible: Boolean,
+    val isModernDetailsDockEnabled: Boolean,
     val defaultDetailsTab: Int,
     val searchSuggestionTypes: Set<SearchSuggestionType>,
     val isSharedElementTransitionsEnabled: Boolean,
@@ -170,6 +171,7 @@ fun AppearanceSettingsScreen(
     onDetailsPanoramaLimitedToInfoCardMidpointChange: (Boolean) -> Unit,
     onPagesTabEnabledChange: (Boolean) -> Unit,
     onDetailsTranslateButtonVisibleChange: (Boolean) -> Unit,
+    onModernDetailsDockEnabledChange: (Boolean) -> Unit,
     onDefaultDetailsTabChange: (Int) -> Unit,
     onSearchSuggestionTypesChange: (Set<SearchSuggestionType>) -> Unit,
     onNavConfigClick: () -> Unit,
@@ -545,6 +547,13 @@ fun AppearanceSettingsScreen(
                     checked = state.isDetailsTranslateButtonVisible,
                     summary = stringResource(R.string.details_translate_button_visible_summary),
                     onCheckedChange = onDetailsTranslateButtonVisibleChange,
+                )
+                SettingsSectionDivider()
+                SettingsSwitchPreference(
+                    title = stringResource(R.string.modern_details_dock),
+                    checked = state.isModernDetailsDockEnabled,
+                    summary = stringResource(R.string.modern_details_dock_summary),
+                    onCheckedChange = onModernDetailsDockEnabledChange,
                 )
                 if (state.isPagesTabEnabled) {
                     SettingsSectionDivider()

@@ -229,6 +229,8 @@ private class AppearanceSettingsCoordinator(
         val isPagesTabEnabled = settings.observeAsState(AppSettings.KEY_PAGES_TAB) { isPagesTabEnabled }.value
         val isDetailsTranslateButtonVisible =
             settings.observeAsState(AppSettings.KEY_DETAILS_TRANSLATE_BUTTON) { isDetailsTranslateButtonVisible }.value
+        val isModernDetailsDockEnabled =
+            settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) { isModernDetailsDockEnabled }.value
         val defaultDetailsTab =
             settings.observeAsState(AppSettings.KEY_PAGES_TAB, AppSettings.KEY_DETAILS_TAB) { defaultDetailsTab }.value
         val searchSuggestionTypes =
@@ -347,6 +349,7 @@ private class AppearanceSettingsCoordinator(
             isDetailsPanoramaLimitedToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint,
             isPagesTabEnabled = isPagesTabEnabled,
             isDetailsTranslateButtonVisible = isDetailsTranslateButtonVisible,
+            isModernDetailsDockEnabled = isModernDetailsDockEnabled,
             defaultDetailsTab = defaultDetailsTab,
             searchSuggestionTypes = searchSuggestionTypes,
             isSharedElementTransitionsEnabled = effectiveSharedElementTransitionsEnabled,
@@ -427,6 +430,7 @@ private class AppearanceSettingsCoordinator(
             },
             onPagesTabEnabledChange = { settings.isPagesTabEnabled = it },
             onDetailsTranslateButtonVisibleChange = { settings.isDetailsTranslateButtonVisible = it },
+            onModernDetailsDockEnabledChange = { settings.isModernDetailsDockEnabled = it },
             onDefaultDetailsTabChange = { settings.defaultDetailsTab = it },
             onSearchSuggestionTypesChange = { settings.searchSuggestionTypes = it },
             onNavConfigClick = onOpenNavConfig,

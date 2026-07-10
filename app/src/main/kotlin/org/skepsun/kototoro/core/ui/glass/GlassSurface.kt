@@ -508,7 +508,7 @@ private fun resolveContainerAlpha(
 ): Float {
     val normalizedPreferenceAlpha = preferenceAlpha.coerceIn(0f, 1f)
     val normalizedStyleAlpha = styleContainerAlpha.coerceIn(0f, 1f)
-    val defaultPreferenceAlpha = AppSettings.GlassMaterialDefaults.DEFAULT_OPACITY_PERCENT / 100f
+    val defaultPreferenceAlpha = AppSettings.GlassMaterialDefaults.STYLE_BASELINE_OPACITY_PERCENT / 100f
     return if (normalizedPreferenceAlpha <= defaultPreferenceAlpha) {
         (normalizedPreferenceAlpha / defaultPreferenceAlpha) * normalizedStyleAlpha
     } else {

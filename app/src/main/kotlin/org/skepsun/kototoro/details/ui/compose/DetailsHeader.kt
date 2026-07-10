@@ -715,12 +715,10 @@ fun DetailsHeader(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val expressive = LocalMaterialExpressiveComponentsEnabled.current
-            val expressiveContainerColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = stringResource(R.string.description),
@@ -728,69 +726,29 @@ fun DetailsHeader(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (canExpandDescription) {
-                    if (expressive) {
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = expressiveContainerColors.containerColor.detailsButtonContainerColor(),
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            tonalElevation = 0.dp,
-                            shadowElevation = 0.dp,
-                            border = expressiveContainerColors.border,
-                        ) {
-                            Text(
-                                text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier
-                                    .clickable { isDescriptionExpanded = !isDescriptionExpanded }
-                                    .padding(horizontal = 12.dp, vertical = 7.dp),
-                            )
-                        }
-                    } else {
-                        Text(
-                            text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded },
-                        )
-                    }
-                }
-            }
-            val descriptionContent: @Composable () -> Unit = {
-                SelectionContainer {
                     Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
+                        text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded },
                     )
                 }
             }
-            if (expressive) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    color = expressiveContainerColors.containerColor.detailsPanelContainerColor(),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    border = expressiveContainerColors.border,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                ) {
-                    Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                        descriptionContent()
-                    }
-                }
-            } else {
-                descriptionContent()
+            SelectionContainer {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
+                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
 
         if (!content?.tags.isNullOrEmpty()) {
-            val expressive = LocalMaterialExpressiveComponentsEnabled.current
-            val expressiveChipColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 24.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     FlowRow(
@@ -803,7 +761,7 @@ fun DetailsHeader(
                             SuggestionChip(
                                 onClick = { onTagClick(tag) },
                                 modifier = Modifier.heightIn(min = 24.dp),
-                                shape = RoundedCornerShape(if (expressive) 999.dp else 8.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 label = {
                                     Text(
                                         text = tag.title,
@@ -815,8 +773,6 @@ fun DetailsHeader(
                                 colors = SuggestionChipDefaults.suggestionChipColors(
                                     containerColor = if (isSensitiveTag) {
                                         Color(0xFFE3B341).copy(alpha = 0.22f)
-                                    } else if (expressive) {
-                                        expressiveChipColors.containerColor.detailsButtonContainerColor()
                                     } else {
                                         MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
                                     },
@@ -830,10 +786,6 @@ fun DetailsHeader(
                                     enabled = true,
                                     borderColor = if (isSensitiveTag) {
                                         Color(0xFFE3B341).copy(alpha = 0.68f)
-                                    } else if (expressive) {
-                                        MaterialTheme.colorScheme.outlineVariant.copy(
-                                            alpha = expressiveChipColors.containerColor.alpha.coerceAtMost(0.42f),
-                                        )
                                     } else {
                                         MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
                                     },
@@ -1203,8 +1155,6 @@ private fun DetailsSourceSelectorButton(
     isMenuEnabled: Boolean,
     onMenuClick: () -> Unit,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val sourceSelectorColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     val isPrimaryEnabled = currentDisplayModel != null
 
     Column(
@@ -1217,21 +1167,11 @@ private fun DetailsSourceSelectorButton(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Surface(
-            shape = RoundedCornerShape(if (expressive) 22.dp else 16.dp),
-            color = if (expressive) {
-                sourceSelectorColors.containerColor.detailsButtonContainerColor()
-            } else {
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.18f)
-            },
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.18f),
             border = BorderStroke(
                 1.dp,
-                if (expressive) {
-                    MaterialTheme.colorScheme.outlineVariant.copy(
-                        alpha = sourceSelectorColors.containerColor.alpha.coerceAtMost(0.34f),
-                    )
-                } else {
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)
-                },
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.34f),
             ),
         ) {
             Row(

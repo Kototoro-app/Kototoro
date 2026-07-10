@@ -16,6 +16,7 @@ import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 fun DetailsPaneHost(
     state: DetailsPaneState,
     modifier: Modifier = Modifier,
+    dragEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
@@ -23,11 +24,17 @@ fun DetailsPaneHost(
             .graphicsLayer {
                 translationY = state.translationY
             }
-            .anchoredDraggable(
-                state = state.anchoredState,
-                orientation = Orientation.Vertical,
-                enabled = state.anchor != CompactDetailsPaneAnchor.Full &&
-                    !state.isGridSizeControlsVisible,
+            .then(
+                if (dragEnabled) {
+                    Modifier.anchoredDraggable(
+                        state = state.anchoredState,
+                        orientation = Orientation.Vertical,
+                        enabled = state.anchor != CompactDetailsPaneAnchor.Full &&
+                            !state.isGridSizeControlsVisible,
+                    )
+                } else {
+                    Modifier
+                },
             ),
         content = content,
     )

@@ -133,17 +133,11 @@ private fun SettingsSectionCard(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
         )
         if (LocalMaterialExpressiveComponentsEnabled.current) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-            ) {
-                Column {
-                    section.items.forEachIndexed { index, item ->
-                        SettingsRootRow(item = item)
-                        if (index != section.items.lastIndex) {
-                            SettingsRootDivider(startPadding = 62.dp)
-                        }
+            SettingsGroupSurface {
+                section.items.forEachIndexed { index, item ->
+                    SettingsRootRow(item = item)
+                    if (index != section.items.lastIndex) {
+                        SettingsRootDivider(startPadding = 62.dp)
                     }
                 }
             }
@@ -175,20 +169,14 @@ private fun SettingsSearchResultsCard(
             )
         } else {
             if (LocalMaterialExpressiveComponentsEnabled.current) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                ) {
-                    Column {
-                        results.forEachIndexed { index, item ->
-                            SettingsSearchResultRow(
-                                item = item,
-                                onClick = { onItemClick(item) },
-                            )
-                            if (index != results.lastIndex) {
-                                SettingsRootDivider(startPadding = 14.dp)
-                            }
+                SettingsGroupSurface {
+                    results.forEachIndexed { index, item ->
+                        SettingsSearchResultRow(
+                            item = item,
+                            onClick = { onItemClick(item) },
+                        )
+                        if (index != results.lastIndex) {
+                            SettingsRootDivider(startPadding = 14.dp)
                         }
                     }
                 }
@@ -329,21 +317,5 @@ private fun SettingsRootRow(
 private fun SettingsRootDivider(
     startPadding: Dp,
 ) {
-    if (LocalMaterialExpressiveComponentsEnabled.current) {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = startPadding, end = 20.dp)
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
-        )
-    } else {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = startPadding, end = 20.dp)
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)),
-        )
-    }
+    SettingsGroupDivider(startPadding = startPadding)
 }
