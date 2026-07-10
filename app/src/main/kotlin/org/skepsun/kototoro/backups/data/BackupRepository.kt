@@ -27,6 +27,7 @@ import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.serializer
 import org.json.JSONArray
 import org.json.JSONObject
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.backups.data.model.BookmarkBackup
 import org.skepsun.kototoro.backups.data.model.CategoryBackup
@@ -71,7 +72,9 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.filter.data.PersistableFilter
 import org.skepsun.kototoro.filter.data.SavedFiltersRepository
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
+import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.stats.data.WorkStatsEntity
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
@@ -283,6 +286,7 @@ class BackupRepository @Inject constructor(
                 "Refusing backup creation: Work identity normalization is not complete.",
             )
         }
+        repairActiveDanglingWorkFavouriteCategories()
         val dao = database.getEntityGraphDao()
         val missingSyncId = dao.findWorkEntityIdsMissingSyncId().firstOrNull()
         if (missingSyncId != null) {
@@ -314,6 +318,41 @@ class BackupRepository @Inject constructor(
                 )
             }
         }
+    }
+
+    private suspend fun repairActiveDanglingWorkFavouriteCategories() {
+        val workFavouritesDao = database.getWorkFavouritesDao()
+        if (workFavouritesDao.countActiveDanglingCategoryRefs() == 0) {
+            return
+        }
+        database.withTransaction {
+            val targetCategoryId = database.ensureBackupFallbackCategoryId()
+            val repaired = database.getWorkFavouritesDao().repairActiveDanglingCategoryRefs(targetCategoryId)
+            if (repaired > 0) {
+                Log.w(
+                    TAG,
+                    "backup creation repaired $repaired active work favourite category refs " +
+                        "to categoryId=$targetCategoryId",
+                )
+            }
+        }
+    }
+
+    private suspend fun MangaDatabase.ensureBackupFallbackCategoryId(): Long {
+        getFavouriteCategoriesDao().findAll().firstOrNull()?.let { return it.categoryId.toLong() }
+        val now = System.currentTimeMillis()
+        return getFavouriteCategoriesDao().insert(
+            FavouriteCategoryEntity(
+                categoryId = 0,
+                createdAt = now,
+                sortKey = 0,
+                title = appContext.getString(R.string.favourites),
+                order = ListSortOrder.NEWEST.name,
+                track = false,
+                isVisibleInLibrary = true,
+                deletedAt = 0L,
+            ),
+        )
     }
 
     suspend fun createBackup(
@@ -434,7 +473,7 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.WORK_FAVOURITES -> output.writeJsonArray(
                     section = BackupSection.WORK_FAVOURITES,
-                    data = database.getWorkFavouritesDao().dump().map { WorkFavouriteBackup(it) },
+                    data = database.getWorkFavouritesDao().dumpWithActiveCategories().map { WorkFavouriteBackup(it) },
                     serializer = serializer(),
                 )
 

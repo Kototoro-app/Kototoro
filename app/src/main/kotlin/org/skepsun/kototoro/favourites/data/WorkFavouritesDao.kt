@@ -45,6 +45,20 @@ abstract class WorkFavouritesDao {
 	)
 	abstract suspend fun countDanglingEntityRefs(): Int
 
+	@Query(
+		"""
+		SELECT COUNT(*)
+		FROM work_favourites wf
+		LEFT JOIN favourite_categories fc
+			ON fc.category_id = wf.category_id
+			AND fc.deleted_at = 0
+		WHERE wf.anchor_manga_id IS NOT NULL
+			AND wf.deleted_at = 0
+			AND fc.category_id IS NULL
+		""",
+	)
+	abstract suspend fun countActiveDanglingCategoryRefs(): Int
+
 	@Query("SELECT COUNT(DISTINCT entity_id) FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
 	abstract suspend fun countActiveWorks(): Int
 
@@ -305,6 +319,40 @@ abstract class WorkFavouritesDao {
 	)
 	protected abstract suspend fun recoverAt(entityId: Long, categoryId: Long, updatedAt: Long)
 
+	@Query(
+		"""
+		SELECT wf.*
+		FROM work_favourites wf
+		LEFT JOIN favourite_categories fc
+			ON fc.category_id = wf.category_id
+			AND fc.deleted_at = 0
+		WHERE wf.anchor_manga_id IS NOT NULL
+			AND wf.deleted_at = 0
+			AND fc.category_id IS NULL
+		ORDER BY wf.updated_at DESC
+		""",
+	)
+	protected abstract suspend fun findActiveWithDanglingCategory(): List<WorkFavouriteEntity>
+
+	@Query("SELECT * FROM work_favourites WHERE entity_id = :entityId AND category_id = :categoryId LIMIT 1")
+	protected abstract suspend fun findIncludingDeleted(entityId: Long, categoryId: Long): WorkFavouriteEntity?
+
+	@Transaction
+	open suspend fun repairActiveDanglingCategoryRefs(targetCategoryId: Long): Int {
+		val sources = findActiveWithDanglingCategory()
+		for (source in sources) {
+			val moved = source.copy(categoryId = targetCategoryId)
+			val target = findIncludingDeleted(source.entityId, targetCategoryId)
+			deleteRow(source.entityId, source.categoryId)
+			if (target == null) {
+				upsert(moved)
+			} else {
+				upsert(mergeRestoredWorkFavourites(target, moved))
+			}
+		}
+		return sources.size
+	}
+
 	@Query("SELECT * FROM work_favourites ORDER BY updated_at DESC LIMIT :limit OFFSET :offset")
 	protected abstract suspend fun findAll(offset: Int, limit: Int): List<WorkFavouriteEntity>
 
@@ -313,6 +361,31 @@ abstract class WorkFavouritesDao {
 		var offset = 0
 		while (currentCoroutineContext().isActive) {
 			val list = findAll(offset, window)
+			if (list.isEmpty()) {
+				break
+			}
+			offset += window
+			list.forEach { emit(it) }
+		}
+	}
+
+	@Query(
+		"""
+		SELECT wf.*
+		FROM work_favourites wf
+		INNER JOIN favourite_categories fc ON fc.category_id = wf.category_id
+		WHERE fc.deleted_at = 0
+		ORDER BY wf.updated_at DESC
+		LIMIT :limit OFFSET :offset
+		""",
+	)
+	protected abstract suspend fun findAllWithActiveCategory(offset: Int, limit: Int): List<WorkFavouriteEntity>
+
+	fun dumpWithActiveCategories(): Flow<WorkFavouriteEntity> = flow {
+		val window = 10
+		var offset = 0
+		while (currentCoroutineContext().isActive) {
+			val list = findAllWithActiveCategory(offset, window)
 			if (list.isEmpty()) {
 				break
 			}
