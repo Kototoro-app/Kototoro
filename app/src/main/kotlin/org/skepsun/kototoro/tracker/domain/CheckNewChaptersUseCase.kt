@@ -110,7 +110,7 @@ class CheckNewChaptersUseCase @Inject constructor(
 
 	private suspend fun invokeImpl(track: ContentTracking): MangaUpdates = runCatchingCancellable {
 		val executionSeed = repository.getExecutionTrackingContent(track)
-		val details = getFullContent(executionSeed)
+		val details = getFullContent(executionSeed, forceFetch = true)
 		compare(track, details, getBranch(details, track.lastChapterId))
 	}.getOrElse { error ->
 		MangaUpdates.Failure(
@@ -134,13 +134,13 @@ class CheckNewChaptersUseCase @Inject constructor(
 		return manga.getPreferredBranch(null)
 	}
 
-	private suspend fun getFullContent(manga: Content): Content = when {
+	private suspend fun getFullContent(manga: Content, forceFetch: Boolean = false): Content = when {
 		manga.isLocal -> {
 			val remote = localContentRepository.getRemoteContent(manga)
 			if (remote != null) fetchDetails(remote) else manga
 		}
 
-		manga.chapters.isNullOrEmpty() -> fetchDetails(manga)
+		forceFetch || manga.chapters.isNullOrEmpty() -> fetchDetails(manga)
 		else -> manga
 	}
 
