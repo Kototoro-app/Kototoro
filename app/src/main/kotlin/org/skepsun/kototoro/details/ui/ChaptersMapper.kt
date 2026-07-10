@@ -83,8 +83,7 @@ fun ContentDetails.mapChapters(
 		null
 	}
 	
-	val currentChapterNumber = remoteChapters.find { it.id == currentChapterId }?.number
-		?: localChapters.find { it.id == currentChapterId }?.number
+	val currentChapterNumber = allChapters.find { it.id == currentChapterId }?.number
 	
 	if (!isDownloadedOnly || local?.manga?.chapters == null) {
 		for ((index, chapter) in remoteChapters.withIndex()) {
