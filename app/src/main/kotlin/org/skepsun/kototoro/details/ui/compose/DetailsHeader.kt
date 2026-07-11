@@ -200,6 +200,7 @@ fun DetailsHeader(
     onOpenTrackingDiscover: (ScrobblerService) -> Unit,
     onOpenMetadataSourceSheet: () -> Unit,
     onOpenReadingSourceSheet: () -> Unit,
+    onOpenChapters: () -> Unit,
     onOpenSupplementalAction: (DetailsSupplementAction) -> Unit,
     onAuthorClick: (String) -> Unit,
     onTagClick: (ContentTag) -> Unit,
@@ -416,6 +417,8 @@ fun DetailsHeader(
                 label = stringResource(R.string.chapters),
                 value = chapterProgressLabel,
                 iconRes = R.drawable.ic_book_page,
+                onClick = onOpenChapters,
+                showNavigationIndicator = true,
             ),
         )
         if (localContent != null) {
@@ -601,6 +604,7 @@ fun DetailsHeader(
                                             modifier = Modifier.weight(1f),
                                             valueMuted = item.valueMuted,
                                             onClick = item.onClick,
+                                            showNavigationIndicator = item.showNavigationIndicator,
                                         )
                                     }
                                     if (rowItems.size == 1) {

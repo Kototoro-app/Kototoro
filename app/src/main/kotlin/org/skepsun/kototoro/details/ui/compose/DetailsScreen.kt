@@ -2538,6 +2538,9 @@ private fun DetailsScrollableContent(
             onOpenReadingSourceSheet = {
                 if (isWorkActionEnabled) onOpenReadingSourceSheet()
             },
+            onOpenChapters = {
+                if (isWorkActionEnabled) onActionClick(DetailsAction.ToggleList)
+            },
             onOpenSupplementalAction = { action ->
                 onActionClick(DetailsAction.OpenWebUrl(action.url))
             },
@@ -3200,8 +3203,7 @@ private fun DetailsPaneActionsRow(
                         }
                     }
                 }
-                DetailsDockContainer(
-                    modernStyle = isModernDockEnabled,
+                Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .then(modernDockDragModifier)
@@ -3209,8 +3211,7 @@ private fun DetailsPaneActionsRow(
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = if (isModernDockEnabled) 4.dp else 0.dp),
+                            .fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         when (topBarMode) {
@@ -3246,6 +3247,7 @@ private fun DetailsPaneActionsRow(
                                             historyInfo = historyInfo,
                                             isLoading = isLoading,
                                         ),
+                                        contentType = contentType,
                                         branches = branches,
                                         historyInfo = historyInfo,
                                         isDownloadAvailable = historyInfo.canDownload,
@@ -3319,6 +3321,7 @@ private fun DetailsPaneActionsRow(
                                         historyInfo = historyInfo,
                                         isLoading = isLoading,
                                     ),
+                                    contentType = contentType,
                                     branches = branches,
                                     historyInfo = historyInfo,
                                     isDownloadAvailable = historyInfo.canDownload,
@@ -3822,6 +3825,7 @@ private fun ReadDock(
     modernStyle: Boolean = false,
     compact: Boolean = false,
     readLabel: String,
+    contentType: ContentType?,
     branches: List<ContentBranch>,
     historyInfo: HistoryInfo,
     isDownloadAvailable: Boolean,
@@ -3843,7 +3847,22 @@ private fun ReadDock(
     val hasMenuActions = hasQuickActions || hasBranchOptions
 
     val shapeRadiusPercent by androidx.compose.animation.core.animateIntAsState(targetValue = if (expanded) 50 else 0)
-    val optionGap by androidx.compose.animation.core.animateDpAsState(targetValue = if (expanded) 8.dp else 2.dp)
+    val optionGap by androidx.compose.animation.core.animateDpAsState(
+        targetValue = when {
+            expanded -> 8.dp
+            modernStyle -> 0.dp
+            else -> 2.dp
+        },
+    )
+    val dividerAlpha by animateFloatAsState(
+        targetValue = if (modernStyle && !expanded) 0.22f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "readDockDividerAlpha",
+    )
+    val actionIconRes = when (contentType) {
+        ContentType.VIDEO, ContentType.HENTAI_VIDEO -> R.drawable.ic_play
+        else -> R.drawable.ic_read
+    }
     val readButtonShape = androidx.compose.foundation.shape.RoundedCornerShape(
         topStartPercent = 50,
         bottomStartPercent = 50,
@@ -3861,8 +3880,7 @@ private fun ReadDock(
         modifier = modifier
             .height(if (modernStyle) 52.dp else 50.dp)
             .padding(
-                horizontal = if (modernStyle) 2.dp else 4.dp,
-                vertical = if (modernStyle) 3.dp else 4.dp,
+                all = if (modernStyle) 0.dp else 4.dp,
             ),
         horizontalArrangement = Arrangement.spacedBy(optionGap),
         verticalAlignment = Alignment.CenterVertically,
@@ -3883,7 +3901,7 @@ private fun ReadDock(
                 MaterialTheme.colorScheme.onPrimaryContainer
             },
             tonalElevation = 0.dp,
-            shadowElevation = if (modernStyle) 2.dp else 0.dp,
+            shadowElevation = if (modernStyle) 4.dp else 0.dp,
         ) {
             Box(
                 modifier = Modifier
@@ -3898,7 +3916,7 @@ private fun ReadDock(
                     horizontalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        painter = rememberSafePainter(R.drawable.ic_read),
+                        painter = rememberSafePainter(actionIconRes),
                         contentDescription = if (compact) readLabel else null,
                         modifier = Modifier.size(22.dp),
                     )
@@ -3947,7 +3965,7 @@ private fun ReadDock(
                     MaterialTheme.colorScheme.onPrimaryContainer
                 },
                 tonalElevation = 0.dp,
-                shadowElevation = if (modernStyle) 2.dp else 0.dp,
+                shadowElevation = if (modernStyle) 4.dp else 0.dp,
             ) {
                 Box(
                     modifier = Modifier
@@ -3956,6 +3974,15 @@ private fun ReadDock(
                         .clickable(enabled = hasMenuActions, onClick = { expanded = true }),
                     contentAlignment = Alignment.Center,
                 ) {
+                    if (modernStyle) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = dividerAlpha)),
+                        )
+                    }
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = if (hasBranchOptions) {

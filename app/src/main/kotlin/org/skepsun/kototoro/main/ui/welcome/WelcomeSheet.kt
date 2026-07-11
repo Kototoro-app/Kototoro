@@ -7,9 +7,8 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,41 +19,45 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,6 +77,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
+import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -82,12 +87,14 @@ import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.databinding.SheetWelcomeBinding
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.parsers.model.ContentType
+import kotlinx.coroutines.launch
+import dev.chrisbanes.haze.HazePositionStrategy
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 
 private const val REPO_KOTOTORO =
 	"https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json"
-private const val REPO_YAKATEAM =
-	"https://raw.githubusercontent.com/skepsun/k-parsers-y/repo/index.min.json"
 private const val REPO_REDO =
 	"https://raw.githubusercontent.com/skepsun/k-parsers-r/repo/index.min.json"
 
@@ -107,6 +114,8 @@ class WelcomeSheet : BaseAdaptiveSheet<SheetWelcomeBinding>(), ActivityResultCal
 
 	override fun onViewBindingCreated(binding: SheetWelcomeBinding, savedInstanceState: Bundle?) {
 		super.onViewBindingCreated(binding, savedInstanceState)
+		disableFitToContents()
+		binding.root.post { setExpanded(isExpanded = true, isLocked = true) }
 		binding.composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 		binding.composeView.setContent {
 			KototoroTheme {
@@ -114,8 +123,6 @@ class WelcomeSheet : BaseAdaptiveSheet<SheetWelcomeBinding>(), ActivityResultCal
 					viewModel = viewModel,
 					mirrorEntries = resources.getStringArray(R.array.pref_github_mirror_entries).toList(),
 					onRestoreBackup = ::openBackupDocument,
-					onSync = { router.openSyncSettings() },
-					onDirectories = { router.openDirectoriesSettings() },
 					onDone = { dismiss() },
 				)
 			}
@@ -146,210 +153,158 @@ private fun WelcomeRoute(
 	viewModel: WelcomeViewModel,
 	mirrorEntries: List<String>,
 	onRestoreBackup: () -> Unit,
-	onSync: () -> Unit,
-	onDirectories: () -> Unit,
 	onDone: () -> Unit,
 ) {
 	val locales by viewModel.locales.collectAsStateWithLifecycle()
 	val types by viewModel.types.collectAsStateWithLifecycle()
 	val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
-	var step by rememberSaveable { mutableIntStateOf(0) }
-	val selectedRepos = remember { mutableStateListOf(REPO_KOTOTORO) }
+	val pagerState = rememberPagerState(pageCount = { 2 })
+	val scope = rememberCoroutineScope()
+	val selectedRepos = remember { mutableStateListOf(REPO_KOTOTORO, REPO_REDO) }
 	var selectedMirrorIndex by rememberSaveable { mutableIntStateOf(0) }
-	var disclaimerAccepted by rememberSaveable { mutableStateOf(false) }
+	var showAdvanced by rememberSaveable { mutableStateOf(false) }
+	var showDisclaimer by rememberSaveable { mutableStateOf(false) }
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
-	val steps = listOf(
-		stringResource(R.string.welcome_step_start),
-		stringResource(R.string.welcome_step_sources),
-		stringResource(R.string.welcome_step_preferences),
-		stringResource(R.string.welcome_step_ready),
-	)
+	val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
 
-	Column(
-		modifier = Modifier
-			.fillMaxWidth()
-			.background(MaterialTheme.colorScheme.surface)
-			.windowInsetsPadding(WindowInsets.navigationBars)
-			.verticalScroll(rememberScrollState())
-			.padding(horizontal = 20.dp, vertical = 16.dp),
-		verticalArrangement = Arrangement.spacedBy(18.dp),
+	BackHandler(enabled = pagerState.currentPage > 0 && !isInitializing) {
+		scope.launch { pagerState.animateScrollToPage(0) }
+	}
+
+	CompositionLocalProvider(LocalHazeState provides hazeState) {
+	Box(
+		modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
 	) {
-		WelcomeHero(expressive = expressive)
-		StepIndicator(steps = steps, currentStep = step, expressive = expressive)
-
-		when (step) {
-			0 -> WelcomeStartStep(
-				onRestoreBackup = onRestoreBackup,
-				onSync = onSync,
-				onDirectories = onDirectories,
-				expressive = expressive,
-			)
-			1 -> WelcomeSourcesStep(
-				mirrorEntries = mirrorEntries,
-				selectedMirrorIndex = selectedMirrorIndex,
-				onMirrorSelected = { selectedMirrorIndex = it },
-				selectedRepos = selectedRepos,
-				disclaimerAccepted = disclaimerAccepted,
-				onDisclaimerAccepted = { disclaimerAccepted = it },
-				isInitializing = isInitializing,
-				onInitialize = {
-					viewModel.initializePlugins(selectedMirrorIndex, selectedRepos.toList())
-				},
-				expressive = expressive,
-			)
-			2 -> WelcomePreferencesStep(
-				locales = locales,
-				types = types,
-				onLocaleToggle = viewModel::setLocaleChecked,
-				onTypeToggle = viewModel::setTypeChecked,
-				expressive = expressive,
-			)
-			else -> WelcomeReadyStep(types = types, locales = locales, expressive = expressive)
+		HorizontalPager(
+			state = pagerState,
+			userScrollEnabled = !isInitializing,
+			modifier = Modifier.fillMaxSize().hazeSource(hazeState),
+		) { page ->
+			Column(
+				modifier = Modifier
+					.fillMaxSize()
+					.verticalScroll(rememberScrollState())
+					.padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 112.dp),
+				verticalArrangement = Arrangement.spacedBy(18.dp),
+			) {
+				if (page == 0) {
+					WelcomeHero(expressive = expressive)
+					WelcomeSourcesStep(
+						mirrorEntries = mirrorEntries,
+						selectedMirrorIndex = selectedMirrorIndex,
+						onMirrorSelected = { selectedMirrorIndex = it },
+						selectedRepos = selectedRepos,
+						showAdvanced = showAdvanced,
+						onAdvancedToggle = { showAdvanced = !showAdvanced },
+						isInitializing = isInitializing,
+						onInitialize = { showDisclaimer = true },
+						onRestoreBackup = onRestoreBackup,
+					)
+				} else {
+					WelcomePreferencesStep(
+						locales = locales,
+						types = types,
+						onLocaleToggle = viewModel::setLocaleChecked,
+						onTypeToggle = viewModel::setTypeChecked,
+					)
+				}
+			}
 		}
 
-		HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-		Row(
-			modifier = Modifier.fillMaxWidth(),
-			horizontalArrangement = Arrangement.SpaceBetween,
-			verticalAlignment = Alignment.CenterVertically,
+		Box(
+			modifier = Modifier
+				.align(Alignment.BottomCenter)
+				.fillMaxWidth()
+				.windowInsetsPadding(WindowInsets.navigationBars)
+				.padding(horizontal = 16.dp, vertical = 12.dp),
+			contentAlignment = Alignment.Center,
 		) {
-			OutlinedButton(
-				onClick = { step = (step - 1).coerceAtLeast(0) },
-				enabled = step > 0 && !isInitializing,
+			GlassBottomBarContainer(
+				modifier = Modifier.wrapContentWidth(),
 			) {
-				Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-				Spacer(Modifier.width(8.dp))
-				Text(stringResource(R.string.back))
-			}
-			Button(
-				onClick = {
-					if (step == steps.lastIndex) {
-						onDone()
-					} else {
-						step = (step + 1).coerceAtMost(steps.lastIndex)
+				Row(
+					modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+					horizontalArrangement = Arrangement.spacedBy(24.dp),
+					verticalAlignment = Alignment.CenterVertically,
+				) {
+					Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+						repeat(2) { index ->
+							Box(modifier = Modifier.size(width = 24.dp, height = 8.dp), contentAlignment = Alignment.Center) {
+								Surface(
+									shape = RoundedCornerShape(999.dp),
+									color = if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+									modifier = Modifier.size(width = if (index == pagerState.currentPage) 24.dp else 8.dp, height = 8.dp),
+								) {}
+							}
+						}
 					}
-				},
-				enabled = !isInitializing,
-			) {
-				Text(stringResource(if (step == steps.lastIndex) R.string.done else R.string.next))
-				Spacer(Modifier.width(8.dp))
-				Icon(
-					if (step == steps.lastIndex) Icons.Default.Done else Icons.Default.ArrowForward,
-					contentDescription = null,
-					modifier = Modifier.size(18.dp),
-				)
+					Button(
+						onClick = {
+							if (pagerState.currentPage == 1) {
+								onDone()
+							} else {
+								scope.launch { pagerState.animateScrollToPage(1) }
+							}
+						},
+						enabled = !isInitializing,
+						modifier = Modifier.height(48.dp),
+					) {
+						Text(stringResource(if (pagerState.currentPage == 1) R.string.done else R.string.next))
+						Spacer(Modifier.width(8.dp))
+						Icon(
+							if (pagerState.currentPage == 1) Icons.Default.Done else Icons.AutoMirrored.Filled.ArrowForward,
+							contentDescription = null,
+							modifier = Modifier.size(18.dp),
+						)
+					}
+				}
+			}
 			}
 		}
+	}
+
+	if (showDisclaimer) {
+		AlertDialog(
+			onDismissRequest = { showDisclaimer = false },
+			title = { Text(stringResource(R.string.welcome_plugins_title)) },
+			text = { Text(stringResource(R.string.welcome_plugins_disclaimer)) },
+			confirmButton = {
+				TextButton(onClick = {
+					showDisclaimer = false
+					viewModel.initializePlugins(selectedMirrorIndex, selectedRepos.toList())
+				}) { Text(stringResource(R.string.confirm)) }
+			},
+			dismissButton = {
+				TextButton(onClick = { showDisclaimer = false }) { Text(stringResource(android.R.string.cancel)) }
+			},
+		)
 	}
 }
 
 @Composable
 private fun WelcomeHero(expressive: Boolean) {
-	val shape = RoundedCornerShape(if (expressive) 28.dp else 18.dp)
-	Surface(
-		shape = shape,
-		color = MaterialTheme.colorScheme.primaryContainer,
-		contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-		modifier = Modifier.fillMaxWidth(),
-	) {
-		Row(
-			modifier = Modifier.padding(20.dp),
-			verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = Arrangement.spacedBy(16.dp),
-		) {
-			Surface(
-				shape = RoundedCornerShape(if (expressive) 22.dp else 14.dp),
-				color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-			) {
-				Icon(
-					painter = rememberSafePainter(R.drawable.ic_welcome),
-					contentDescription = null,
-					modifier = Modifier
-						.padding(14.dp)
-						.size(if (expressive) 34.dp else 28.dp),
-				)
-			}
-			Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-				Text(
-					text = stringResource(R.string.welcome_intro_title),
-					style = MaterialTheme.typography.headlineSmall,
-					fontWeight = FontWeight.SemiBold,
-				)
-				Text(
-					text = stringResource(R.string.welcome_intro_summary),
-					style = MaterialTheme.typography.bodyMedium,
-				)
-			}
-		}
-	}
-}
-
-@Composable
-private fun StepIndicator(steps: List<String>, currentStep: Int, expressive: Boolean) {
 	Row(
 		modifier = Modifier.fillMaxWidth(),
-		horizontalArrangement = Arrangement.spacedBy(8.dp),
+		verticalAlignment = Alignment.CenterVertically,
+		horizontalArrangement = Arrangement.spacedBy(16.dp),
 	) {
-		steps.forEachIndexed { index, label ->
-			val selected = index == currentStep
-			Surface(
-				modifier = Modifier.weight(1f),
-				shape = RoundedCornerShape(if (expressive) 18.dp else 12.dp),
-				color = if (selected) {
-					MaterialTheme.colorScheme.secondaryContainer
-				} else {
-					MaterialTheme.colorScheme.surfaceContainerLow
-				},
-				contentColor = if (selected) {
-					MaterialTheme.colorScheme.onSecondaryContainer
-				} else {
-					MaterialTheme.colorScheme.onSurfaceVariant
-				},
-			) {
-				Text(
-					text = label,
-					modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-					style = MaterialTheme.typography.labelMedium,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-				)
-			}
-		}
-	}
-}
-
-@Composable
-private fun WelcomeStartStep(
-	onRestoreBackup: () -> Unit,
-	onSync: () -> Unit,
-	onDirectories: () -> Unit,
-	expressive: Boolean,
-) {
-	SectionHeader(
-		title = stringResource(R.string.welcome),
-		summary = stringResource(R.string.welcome_restore_summary),
-	)
-	FlowRow(
-		horizontalArrangement = Arrangement.spacedBy(10.dp),
-		verticalArrangement = Arrangement.spacedBy(10.dp),
-	) {
-		AssistActionChip(R.drawable.ic_backup_restore, R.string.restore_backup, onRestoreBackup)
-		AssistActionChip(R.drawable.ic_sync, R.string.sync_auth, onSync)
-		AssistActionChip(R.drawable.ic_storage, R.string.local_manga_directories, onDirectories)
-	}
-	Surface(
-		shape = RoundedCornerShape(if (expressive) 24.dp else 16.dp),
-		color = MaterialTheme.colorScheme.surfaceContainerLow,
-		border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-	) {
-		Column(
-			modifier = Modifier.padding(16.dp),
-			verticalArrangement = Arrangement.spacedBy(12.dp),
+		Surface(
+			shape = RoundedCornerShape(if (expressive) 22.dp else 14.dp),
+			color = MaterialTheme.colorScheme.primaryContainer,
+			contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
 		) {
-			CapabilityRow(R.drawable.ic_manga_source, stringResource(R.string.welcome_ecosystem_manga))
-			CapabilityRow(R.drawable.ic_book_page, stringResource(R.string.welcome_ecosystem_novel))
-			CapabilityRow(R.drawable.ic_play, stringResource(R.string.welcome_ecosystem_video))
+			Icon(
+				painter = rememberSafePainter(R.drawable.ic_welcome),
+				contentDescription = null,
+				modifier = Modifier.padding(12.dp).size(if (expressive) 30.dp else 26.dp),
+			)
 		}
+		Text(
+			text = stringResource(R.string.welcome_intro_title),
+			style = MaterialTheme.typography.headlineSmall,
+			fontWeight = FontWeight.SemiBold,
+			color = MaterialTheme.colorScheme.onSurface,
+		)
 	}
 }
 
@@ -359,53 +314,19 @@ private fun WelcomeSourcesStep(
 	selectedMirrorIndex: Int,
 	onMirrorSelected: (Int) -> Unit,
 	selectedRepos: MutableList<String>,
-	disclaimerAccepted: Boolean,
-	onDisclaimerAccepted: (Boolean) -> Unit,
+	showAdvanced: Boolean,
+	onAdvancedToggle: () -> Unit,
 	isInitializing: Boolean,
 	onInitialize: () -> Unit,
-	expressive: Boolean,
+	onRestoreBackup: () -> Unit,
 ) {
 	SectionHeader(
-		title = stringResource(R.string.welcome_ecosystems_title),
-		summary = stringResource(R.string.welcome_ecosystems_summary),
-	)
-	SourceFamilyGrid(expressive = expressive)
-	SectionHeader(
-		title = stringResource(R.string.welcome_plugin_repositories),
+		title = stringResource(R.string.welcome_plugins_title),
 		summary = stringResource(R.string.welcome_plugins_summary),
 	)
-	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-		RepoChip(R.string.welcome_plugins_repo_kototoro, REPO_KOTOTORO, selectedRepos, enabled = !isInitializing)
-		RepoChip(R.string.welcome_plugins_repo_yakateam, REPO_YAKATEAM, selectedRepos, enabled = !isInitializing)
-		RepoChip(R.string.welcome_plugins_repo_redo, REPO_REDO, selectedRepos, enabled = !isInitializing)
-	}
-	MirrorDropdown(
-		entries = mirrorEntries,
-		selectedIndex = selectedMirrorIndex,
-		onSelected = onMirrorSelected,
-		enabled = !isInitializing,
-	)
-	Row(
-		modifier = Modifier
-			.fillMaxWidth()
-			.clickable(enabled = !isInitializing) { onDisclaimerAccepted(!disclaimerAccepted) }
-			.padding(vertical = 4.dp),
-		verticalAlignment = Alignment.CenterVertically,
-	) {
-		Checkbox(
-			checked = disclaimerAccepted,
-			onCheckedChange = onDisclaimerAccepted,
-			enabled = !isInitializing,
-		)
-		Text(
-			text = stringResource(R.string.welcome_plugin_acknowledge),
-			style = MaterialTheme.typography.bodySmall,
-			color = MaterialTheme.colorScheme.onSurfaceVariant,
-		)
-	}
 	Button(
 		onClick = onInitialize,
-		enabled = disclaimerAccepted && selectedRepos.isNotEmpty() && !isInitializing,
+		enabled = selectedRepos.isNotEmpty() && !isInitializing,
 		modifier = Modifier.fillMaxWidth(),
 		contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
 	) {
@@ -416,6 +337,34 @@ private fun WelcomeSourcesStep(
 	if (isInitializing) {
 		LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
 	}
+	TextButton(
+		onClick = onAdvancedToggle,
+		enabled = !isInitializing,
+		modifier = Modifier.fillMaxWidth(),
+	) {
+		Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+		Spacer(Modifier.width(8.dp))
+		Text(stringResource(R.string.advanced))
+		Spacer(Modifier.weight(1f))
+		Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+	}
+	if (showAdvanced) {
+		FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+			RepoChip(R.string.welcome_plugins_repo_kototoro, REPO_KOTOTORO, selectedRepos, enabled = !isInitializing)
+			RepoChip(R.string.welcome_plugins_repo_redo, REPO_REDO, selectedRepos, enabled = !isInitializing)
+		}
+		MirrorDropdown(
+			entries = mirrorEntries,
+			selectedIndex = selectedMirrorIndex,
+			onSelected = onMirrorSelected,
+			enabled = !isInitializing,
+		)
+	}
+	TextButton(onClick = onRestoreBackup, enabled = !isInitializing) {
+		Icon(rememberSafePainter(R.drawable.ic_backup_restore), contentDescription = null)
+		Spacer(Modifier.width(8.dp))
+		Text(stringResource(R.string.restore_backup))
+	}
 }
 
 @Composable
@@ -424,7 +373,6 @@ private fun WelcomePreferencesStep(
 	types: FilterProperty<ContentType>,
 	onLocaleToggle: (Locale, Boolean) -> Unit,
 	onTypeToggle: (ContentType, Boolean) -> Unit,
-	expressive: Boolean,
 ) {
 	SectionHeader(
 		title = stringResource(R.string.welcome_source_formats_title),
@@ -438,7 +386,7 @@ private fun WelcomePreferencesStep(
 	FilterChipGroup(
 		items = locales.availableItems,
 		selectedItems = locales.selectedItems,
-		label = { it.getDisplayName(androidx.compose.ui.platform.LocalContext.current) },
+		label = { it.getDisplayName(LocalContext.current) },
 		onToggle = onLocaleToggle,
 	)
 	if (locales.isLoading || types.isLoading) {
@@ -447,94 +395,15 @@ private fun WelcomePreferencesStep(
 }
 
 @Composable
-private fun WelcomeReadyStep(
-	types: FilterProperty<ContentType>,
-	locales: FilterProperty<Locale>,
-	expressive: Boolean,
-) {
-	Surface(
-		shape = RoundedCornerShape(if (expressive) 28.dp else 18.dp),
-		color = MaterialTheme.colorScheme.tertiaryContainer,
-		contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-		modifier = Modifier.fillMaxWidth(),
-	) {
-		Column(
-			modifier = Modifier.padding(20.dp),
-			verticalArrangement = Arrangement.spacedBy(12.dp),
-		) {
-			Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(36.dp))
-			Text(
-				text = stringResource(R.string.welcome_step_ready),
-				style = MaterialTheme.typography.headlineSmall,
-				fontWeight = FontWeight.SemiBold,
-			)
-			Text(text = stringResource(R.string.welcome_ready_summary), style = MaterialTheme.typography.bodyMedium)
-		}
-	}
-	SelectionSummary(types = types, locales = locales)
-}
-
-@Composable
 private fun SectionHeader(title: String, summary: String) {
 	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-		Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-		Text(text = summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-	}
-}
-
-@Composable
-private fun AssistActionChip(iconRes: Int, textRes: Int, onClick: () -> Unit) {
-	AssistChip(
-		onClick = onClick,
-		label = { Text(stringResource(textRes)) },
-		leadingIcon = {
-			Icon(rememberSafePainter(iconRes), contentDescription = null, modifier = Modifier.size(18.dp))
-		},
-	)
-}
-
-@Composable
-private fun CapabilityRow(iconRes: Int, text: String) {
-	Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-		Icon(
-			painter = rememberSafePainter(iconRes),
-			contentDescription = null,
-			modifier = Modifier.size(22.dp),
-			tint = MaterialTheme.colorScheme.primary,
+		Text(
+			text = title,
+			style = MaterialTheme.typography.titleMedium,
+			fontWeight = FontWeight.SemiBold,
+			color = MaterialTheme.colorScheme.onSurface,
 		)
-		Text(text = text, style = MaterialTheme.typography.bodyMedium)
-	}
-}
-
-@Composable
-private fun SourceFamilyGrid(expressive: Boolean) {
-	val items = listOf(
-		R.drawable.ic_extension to "JAR",
-		R.drawable.ic_source_mihon to "Mihon",
-		R.drawable.ic_source_aniyomi to "Aniyomi",
-		R.drawable.ic_source_ireader to "IReader",
-		R.drawable.ic_source_legado to "Legado",
-		R.drawable.ic_source_tvbox to "TVBox",
-		R.drawable.ic_source_lnreader to "LNReader",
-		R.drawable.ic_source_cloudstream to "Cloudstream",
-	)
-	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-		items.forEach { (icon, label) ->
-			Surface(
-				shape = RoundedCornerShape(if (expressive) 18.dp else 12.dp),
-				color = MaterialTheme.colorScheme.surfaceContainerLow,
-				border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-			) {
-				Row(
-					modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-					verticalAlignment = Alignment.CenterVertically,
-					horizontalArrangement = Arrangement.spacedBy(8.dp),
-				) {
-					Icon(rememberSafePainter(icon), contentDescription = null, modifier = Modifier.size(20.dp))
-					Text(label, style = MaterialTheme.typography.labelLarge)
-				}
-			}
-		}
+		Text(text = summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 	}
 }
 
@@ -646,42 +515,6 @@ private fun <T> FilterChipGroup(
 					else -> null
 				},
 			)
-		}
-	}
-}
-
-@Composable
-private fun SelectionSummary(types: FilterProperty<ContentType>, locales: FilterProperty<Locale>) {
-	val context = LocalContext.current
-	val typeNames = types.selectedItems.map { stringResource(it.titleResId) }
-	val localeNames = locales.selectedItems.map { it.getDisplayName(context) }
-	Surface(
-		shape = MaterialTheme.shapes.large,
-		color = MaterialTheme.colorScheme.surfaceContainerLow,
-		modifier = Modifier.fillMaxWidth(),
-	) {
-		Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-			SummaryLine(
-				iconRes = R.drawable.ic_manga_source,
-				title = stringResource(R.string.type),
-				value = typeNames.joinToString(),
-			)
-			SummaryLine(
-				iconRes = R.drawable.ic_language,
-				title = stringResource(R.string.languages),
-				value = localeNames.joinToString(),
-			)
-		}
-	}
-}
-
-@Composable
-private fun SummaryLine(iconRes: Int, title: String, value: String) {
-	Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-		Icon(rememberSafePainter(iconRes), contentDescription = null, modifier = Modifier.size(20.dp))
-		Column {
-			Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-			Text(value.ifBlank { "-" }, style = MaterialTheme.typography.bodyMedium)
 		}
 	}
 }

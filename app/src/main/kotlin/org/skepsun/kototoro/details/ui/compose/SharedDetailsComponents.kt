@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -499,6 +501,7 @@ fun MetadataItem(
     modifier: Modifier = Modifier,
     valueMuted: Boolean = false,
     onClick: (() -> Unit)? = null,
+    showNavigationIndicator: Boolean = false,
 ) {
     val contentAlpha = if (valueMuted) 0.62f else 1f
     Row(
@@ -530,6 +533,14 @@ fun MetadataItem(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        if (showNavigationIndicator) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 
@@ -587,6 +598,7 @@ data class DetailsInfoItem(
     @DrawableRes val iconRes: Int? = null,
     val valueMuted: Boolean = false,
     val onClick: (() -> Unit)? = null,
+    val showNavigationIndicator: Boolean = false,
 )
 
 data class DetailsHeroBadgeSpec(
