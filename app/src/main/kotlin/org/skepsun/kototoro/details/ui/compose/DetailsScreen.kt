@@ -273,6 +273,8 @@ private val ModernDetailsDockCompactPrimaryWidth = 112.dp
 private val ModernDetailsDockToolsWidth = 112.dp
 private val ModernDetailsDockTabSlotWidth = 50.dp
 private val ModernDetailsDockMoreButtonWidth = 40.dp
+private val ModernDetailsDockChromeHeight = 52.dp
+private val ModernDetailsDockExpandedPanelGap = 12.dp
 private const val ModernDetailsDockAnimationDurationMillis = 380
 private const val PageThumbnailAspectRatioMin = 0.35f
 private const val PageThumbnailAspectRatioMax = 1f
@@ -2759,12 +2761,15 @@ private fun DetailsPaneContent(
         label = "detailsPaneActionsExpansion",
     )
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    val useCompactPaneSurfaceTint = showCollapsedHandle
-    val paneShape = if (showCollapsedHandle && isSheetFullyExpanded && paneOpacityProgress >= 0.96f) {
-        RoundedCornerShape(0.dp)
+    val modernPanelTopPadding = if (showCollapsedHandle && isSheetFullyExpanded) {
+        statusBarTopPadding + ModernDetailsDockChromeHeight + ModernDetailsDockExpandedPanelGap
+    } else if (showCollapsedHandle) {
+        82.dp
     } else {
-        RoundedCornerShape(28.dp)
+        76.dp
     }
+    val useCompactPaneSurfaceTint = showCollapsedHandle
+    val paneShape = RoundedCornerShape(28.dp)
     val paneGlassStyle = if (useCompactPaneSurfaceTint || !showCollapsedHandle) {
         GlassDefaults.prominentStyle()
     } else {
@@ -2822,7 +2827,7 @@ private fun DetailsPaneContent(
                     .then(
                         if (isModernDetailsDockEnabled) {
                             Modifier
-                                .padding(top = if (showCollapsedHandle) 82.dp else 76.dp)
+                                .padding(top = modernPanelTopPadding)
                                 .graphicsLayer {
                                     alpha = modernPanelRevealProgress
                                     translationY = with(density) {
@@ -2975,6 +2980,8 @@ private fun DetailsPaneActionsRow(
         contentType != ContentType.HENTAI_VIDEO
     val compactModernDock = isModernDockEnabled && isModernDockCompact
     val showAllDockTabs = !compactModernDock
+    val isModernDockFullyExpanded = isModernDockEnabled && isSheetFullyExpanded
+    val shouldShowPaneDragHandle = showCollapsedHandle && !isModernDockFullyExpanded
     val dragHandleAlpha by animateFloatAsState(
         targetValue = if (
             isModernDockEnabled && detailsPaneState.anchor == CompactDetailsPaneAnchor.Collapsed
@@ -3037,7 +3044,11 @@ private fun DetailsPaneActionsRow(
                 start = DetailsDockContentHorizontalPadding,
                 end = DetailsDockContentHorizontalPadding,
                 top = if (showCollapsedHandle) {
-                    2.dp + (handleTopInset * paneOpacityProgress)
+                    if (isModernDockFullyExpanded) {
+                        handleTopInset
+                    } else {
+                        2.dp + (handleTopInset * paneOpacityProgress)
+                    }
                 } else {
                     7.dp
                 },
@@ -3046,7 +3057,7 @@ private fun DetailsPaneActionsRow(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
     ) {
-        if (showCollapsedHandle) {
+        if (shouldShowPaneDragHandle) {
             val collapsedHandleHeight = 18.dp
             Box(
                 modifier = Modifier
@@ -3164,9 +3175,10 @@ private fun DetailsPaneActionsRow(
                 ) {
                     Row(
                         modifier = Modifier.padding(
-                            horizontal = if (isModernDockEnabled) 6.dp else 2.dp,
+                            horizontal = if (isModernDockEnabled) 5.dp else 2.dp,
                             vertical = if (isModernDockEnabled) 5.dp else 0.dp,
                         ),
+                        horizontalArrangement = Arrangement.spacedBy(if (isModernDockEnabled) 2.dp else 0.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AnimatedVisibility(
@@ -3705,7 +3717,7 @@ internal fun DetailsDockActionButton(
         label = "detailsDockSelectionContentColor",
     )
     Surface(
-        modifier = Modifier.padding(end = if (modernStyle) 2.dp else 4.dp),
+        modifier = Modifier.padding(end = if (modernStyle) 0.dp else 4.dp),
         shape = RoundedCornerShape(if (modernStyle) 18.dp else 16.dp),
         color = containerColor,
         tonalElevation = 0.dp,
