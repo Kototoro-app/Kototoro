@@ -123,6 +123,23 @@ class TachiyomiXSourceCompatibilityTest {
 		assertEquals(listOf("Legacy Custom Chapter"), chapters.map { it.name })
 	}
 
+	@Test
+	fun `HttpSource legacy chapter fetch can delegate to super without recursion`() = runTest {
+		val server = MockWebServer()
+		server.enqueue(MockResponse().setBody("Chapter From Super"))
+		server.start()
+		try {
+			val source = SuperDelegatingFetchChapterHttpSource(server.url("/").toString().removeSuffix("/"))
+
+			val chapters = source.getChapterList(manga("/manga", "Manga"))
+
+			assertEquals(listOf("Chapter From Super!"), chapters.map { it.name })
+			assertEquals("/manga", server.takeRequest().path)
+		} finally {
+			server.shutdown()
+		}
+	}
+
 	private class LegacyCatalogueSource : CatalogueSource {
 		override val id: Long = 1L
 		override val name: String = "Legacy"
@@ -249,6 +266,41 @@ class TachiyomiXSourceCompatibilityTest {
 
 		override fun chapterListParse(response: Response): List<SChapter> {
 			return listOf(chapter("/parsed", "Parsed Chapter"))
+		}
+
+		override fun popularMangaRequest(page: Int): Request = unused()
+		override fun popularMangaParse(response: Response): MangasPage = unused()
+		override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = unused()
+		override fun searchMangaParse(response: Response): MangasPage = unused()
+		override fun latestUpdatesRequest(page: Int): Request = unused()
+		override fun latestUpdatesParse(response: Response): MangasPage = unused()
+		override fun mangaDetailsParse(response: Response): SManga = unused()
+		override fun pageListParse(response: Response): List<Page> = unused()
+		override fun imageUrlParse(response: Response): String = unused()
+	}
+
+	private class SuperDelegatingFetchChapterHttpSource(
+		override val baseUrl: String,
+	) : HttpSource() {
+		override val client: OkHttpClient = OkHttpClient()
+		override val lang: String = "en"
+		override val name: String = "Super Delegating Fetch"
+		override val supportsLatest: Boolean = false
+
+		override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+			return super.fetchChapterList(manga).map { chapters ->
+				chapters.map { chapter ->
+					chapter.apply { name += "!" }
+				}
+			}
+		}
+
+		override fun chapterListRequest(manga: SManga): Request {
+			return Request.Builder().url(baseUrl + manga.url).build()
+		}
+
+		override fun chapterListParse(response: Response): List<SChapter> {
+			return listOf(chapter("/chapter-from-super", response.body.string()))
 		}
 
 		override fun popularMangaRequest(page: Int): Request = unused()

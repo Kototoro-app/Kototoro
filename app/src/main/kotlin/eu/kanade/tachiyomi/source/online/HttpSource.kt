@@ -18,6 +18,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
+import org.skepsun.kototoro.mihon.compat.MihonRequestContext
 import org.skepsun.kototoro.parsers.model.ContentSource
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -297,8 +298,11 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getChapterList"))
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.fromCallable {
-            runBlocking { getChapterList(manga) }
+        return sourceObservable {
+            val request = tagRequest(chapterListRequest(manga))
+            client.newCall(request).execute().use { response ->
+                chapterListParse(response)
+            }
         }
     }
 
@@ -379,9 +383,19 @@ abstract class HttpSource : CatalogueSource {
         return request.newBuilder()
             .tag(
                 ContentSource::class.java,
-                org.skepsun.kototoro.core.model.ContentSource("MIHON_$id"),
+                mihonContentSource(),
             )
             .build()
+    }
+
+    private fun <T> sourceObservable(block: () -> T): Observable<T> {
+        return Observable.fromCallable {
+            MihonRequestContext.withSourceBlocking(mihonContentSource(), block)
+        }
+    }
+
+    private fun mihonContentSource(): ContentSource {
+        return org.skepsun.kototoro.core.model.ContentSource("MIHON_$id")
     }
 
     @Suppress("DEPRECATION")

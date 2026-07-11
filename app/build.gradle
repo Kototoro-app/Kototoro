@@ -1,4 +1,5 @@
 import java.time.LocalDateTime
+import java.util.Locale
 import java.util.zip.ZipFile
 
 plugins {
@@ -17,6 +18,13 @@ plugins {
 room {
 	schemaDirectory("$projectDir/schemas")
 }
+
+def allAbiFilters = ['arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86']
+def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCase(Locale.ROOT) }
+def debugOnlyAbiBuild = !requestedTaskNames.isEmpty() &&
+	requestedTaskNames.any { it.contains('debug') } &&
+	requestedTaskNames.every { !it.contains('release') && !it.contains('nightly') }
+def activeAbiFilters = debugOnlyAbiBuild ? ['arm64-v8a'] : allAbiFilters
 
 android {
 	compileSdk = 36
@@ -70,7 +78,7 @@ android {
 		externalNativeBuild {
 			cmake {
 				cppFlags ""
-				abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
+				abiFilters(*activeAbiFilters)
 			}
 		}
 	}
@@ -103,8 +111,8 @@ android {
 		abi {
 			enable true
 			reset()
-			include 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
-			universalApk true
+			include(*activeAbiFilters)
+			universalApk !debugOnlyAbiBuild
 		}
 	}
 	buildFeatures {
