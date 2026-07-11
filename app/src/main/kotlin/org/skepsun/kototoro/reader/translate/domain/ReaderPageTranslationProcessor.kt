@@ -3649,7 +3649,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 		const val DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 		const val MAX_OPENAI_BATCH_SIZE = 3
-		const val TRANSLATION_PIPELINE_VERSION = "2026-07-10-adaptive-dbnet-v6"
+		const val TRANSLATION_PIPELINE_VERSION = "2026-07-11-ocr-rec-v7"
 		const val OPENAI_TRANSLATION_SYSTEM_PROMPT = """
 		You translate manga OCR text.
 		Output only the translation.

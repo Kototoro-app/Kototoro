@@ -73,9 +73,19 @@ class ReaderAutomaticOcrLanguageTest {
 
 	@Test
 	fun `latin script languages select the Latin PP OCRv5 recognizer`() {
-		listOf("en", "fr-FR", "de", "vi_VN").forEach { language ->
+		listOf("en", "fr-FR", "de", "vi_VN", "hu", "no", "et", "lv", "lt", "sl", "sq").forEach { language ->
 			assertEquals(
 				"latin_ppocrv5_mobile_rec_onnx",
+				resolveAutomaticPaddleRecognizerModelId(language),
+			)
+		}
+	}
+
+	@Test
+	fun `non Latin scripts continue using the multilingual recognizer`() {
+		listOf("bg", "el", "hi", "ru", "uk").forEach { language ->
+			assertEquals(
+				"ppocrv6_medium_rec_onnx",
 				resolveAutomaticPaddleRecognizerModelId(language),
 			)
 		}

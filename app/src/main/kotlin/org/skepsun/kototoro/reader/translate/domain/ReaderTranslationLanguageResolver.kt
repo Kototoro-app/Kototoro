@@ -5,6 +5,7 @@ import java.util.Locale
 private const val AUTO_LANGUAGE = "auto"
 private const val DEFAULT_SOURCE_LANGUAGE = "ja"
 internal const val MANGA_OCR_RECOGNIZER_MODEL_ID = "mangaocr_2025_onnx"
+internal const val MANGA_48PX_CTC_RECOGNIZER_MODEL_ID = "manga_48px_ctc_onnx"
 
 private val supportedTranslationLanguages = setOf(
 	"ar",

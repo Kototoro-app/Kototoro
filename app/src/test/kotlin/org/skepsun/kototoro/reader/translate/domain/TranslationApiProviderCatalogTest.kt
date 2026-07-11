@@ -59,4 +59,20 @@ class TranslationApiProviderCatalogTest {
 			assertNotNull(OnnxOfficialModelCatalog.findById(modelId), modelId)
 		}
 	}
+
+	@Test
+	fun `catalog exposes manga 48px CTC recognizer from verified Hugging Face files`() {
+		val model = requireNotNull(OnnxOfficialModelCatalog.findById(MANGA_48PX_CTC_RECOGNIZER_MODEL_ID))
+
+		assertEquals("OCR_RECOGNIZER", model.category.name)
+		assertEquals(
+			listOf("ocr-48px-ctc.onnx", "alphabet-all-v5.txt"),
+			model.files.map { it.fileName },
+		)
+		assertEquals(
+			"da8d4b2c3ea236ad0c741677da29b77360230aee3380675bc95d4c15dc452497",
+			model.files.first().sha256,
+		)
+		assertTrue(model.files.all { it.downloadUrl.startsWith("https://huggingface.co/Skepsun/") })
+	}
 }

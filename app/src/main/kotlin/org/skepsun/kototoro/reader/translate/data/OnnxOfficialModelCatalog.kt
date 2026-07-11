@@ -372,6 +372,25 @@ object OnnxOfficialModelCatalog {
 			description = "Manga Translator PP-OCRv5 mobile recognizer optimized for Thai text.",
 		),
 		OnnxOfficialModel(
+			id = "manga_48px_ctc_onnx",
+			title = "Manga Translator 48px CTC",
+			version = "hf-e241e93",
+			category = OnnxModelCategory.OCR_RECOGNIZER,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "ocr-48px-ctc.onnx",
+					downloadUrl = "https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/ocr-48px-ctc.onnx",
+					sha256 = "da8d4b2c3ea236ad0c741677da29b77360230aee3380675bc95d4c15dc452497",
+				),
+				OnnxModelFile(
+					fileName = "alphabet-all-v5.txt",
+					downloadUrl = "https://huggingface.co/Skepsun/manga-translator-ui-onnx/resolve/main/alphabet-all-v5.txt",
+					sha256 = "c1295ae1962e69e35b5b225a0405d1f3432e368c9941d23bfd3acda12654da33",
+				),
+			),
+			description = "Manga Translator 48px CTC recognizer for multilingual manga text.",
+		),
+		OnnxOfficialModel(
 			id = "mangaocr_2025_onnx",
 			title = "MangaOCR 2025 ONNX",
 			version = "hf-main",

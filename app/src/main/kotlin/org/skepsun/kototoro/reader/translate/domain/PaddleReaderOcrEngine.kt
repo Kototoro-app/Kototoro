@@ -24,15 +24,123 @@ import java.io.File
 import java.nio.FloatBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.ceil
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+
+internal data class PaddleCtcResult(
+	val text: String,
+	val confidence: Float,
+)
+
+internal fun computePaddleRecognitionWidth(sourceWidth: Int, sourceHeight: Int, maxWidth: Int): Int {
+	return ceil(48f * sourceWidth / sourceHeight.coerceAtLeast(1)).toInt().coerceIn(1, maxWidth)
+}
+
+internal fun shouldRotatePaddleRecognitionCrop(width: Int, height: Int): Boolean {
+	return height.toFloat() / width.coerceAtLeast(1) >= 1.5f
+}
+
+internal fun shouldRotateManga48pxRecognitionCrop(width: Int, height: Int): Boolean {
+	return height > width
+}
+
+internal fun decodePaddleCtc(
+	values: FloatArray,
+	offset: Int,
+	timeSteps: Int,
+	classes: Int,
+	dictionary: List<String>,
+): PaddleCtcResult {
+	val text = StringBuilder()
+	var previousIndex = -1
+	var confidenceSum = 0f
+	var reachedEndToken = false
+	for (timeStep in 0 until timeSteps) {
+		val timeStepOffset = offset + timeStep * classes
+		var bestIndex = 0
+		var bestValue = Float.NEGATIVE_INFINITY
+		for (classIndex in 0 until classes) {
+			val value = values[timeStepOffset + classIndex]
+			if (value > bestValue) {
+				bestIndex = classIndex
+				bestValue = value
+			}
+		}
+		confidenceSum += bestValue
+		if (!reachedEndToken && bestIndex != 0 && bestIndex != previousIndex) {
+			val character = dictionary.getOrNull(bestIndex - 1)
+			when (character) {
+				"<S>" -> continue
+				"</S>" -> reachedEndToken = true
+				"<SP>" -> text.append(' ')
+				null -> Unit
+				else -> text.append(character)
+			}
+		}
+		previousIndex = bestIndex
+	}
+	return PaddleCtcResult(
+		text = text.toString(),
+		confidence = if (timeSteps == 0) 0f else confidenceSum / timeSteps,
+	)
+}
+
+internal fun decodeManga48pxCtc(
+	values: FloatArray,
+	offset: Int,
+	timeSteps: Int,
+	classes: Int,
+	dictionary: List<String>,
+): PaddleCtcResult {
+	val text = StringBuilder()
+	var previousIndex = 0
+	var emittedLogProbabilitySum = 0f
+	var emittedCount = 0
+	for (timeStep in 0 until timeSteps) {
+		val timeStepOffset = offset + timeStep * classes
+		var bestIndex = 0
+		var bestLogit = Float.NEGATIVE_INFINITY
+		for (classIndex in 0 until classes) {
+			val logit = values[timeStepOffset + classIndex]
+			if (logit > bestLogit) {
+				bestIndex = classIndex
+				bestLogit = logit
+			}
+		}
+		if (bestIndex != 0 && bestIndex != previousIndex) {
+			var expSum = 0.0
+			for (classIndex in 0 until classes) {
+				expSum += exp((values[timeStepOffset + classIndex] - bestLogit).toDouble())
+			}
+			emittedLogProbabilitySum += -ln(expSum).toFloat()
+			emittedCount++
+			when (val character = dictionary.getOrNull(bestIndex)) {
+				"<SP>" -> text.append(' ')
+				null -> Unit
+				else -> text.append(character)
+			}
+		}
+		previousIndex = bestIndex
+	}
+	return PaddleCtcResult(
+		text = text.toString(),
+		confidence = if (emittedCount == 0) 0f else exp(emittedLogProbabilitySum / emittedCount),
+	)
+}
 
 @Singleton
 class PaddleReaderOcrEngine @Inject constructor(
 	private val settings: AppSettings,
 	private val onnxModelManager: OnnxModelManager,
 ) : ReaderOcrService, ReaderTextDetector, ReaderTextRecognizer {
+	private enum class RecognizerKind {
+		PADDLE,
+		MANGA_48PX_CTC,
+	}
 
 	private data class Runtime(
 		val detectorModelId: String,
@@ -41,6 +149,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 		val detSession: OrtSession,
 		val recSession: OrtSession,
 		val recDict: List<String>,
+		val recognizerKind: RecognizerKind,
 	) {
 		fun close() {
 			runCatching { detSession.close() }
@@ -296,9 +405,18 @@ class PaddleReaderOcrEngine @Inject constructor(
 				?: error("Missing OCR det model in: ${detectorModelDir.absolutePath}")
 			val recFile = findOnnxFile(recognizerModelDir, recognizerModel)
 				?: error("Missing OCR rec model in: ${recognizerModelDir.absolutePath}")
-			val recDict = buildRecDictionary(recognizerModelDir)
+			val recognizerKind = if (recognizerModelId == MANGA_48PX_CTC_RECOGNIZER_MODEL_ID) {
+				RecognizerKind.MANGA_48PX_CTC
+			} else {
+				RecognizerKind.PADDLE
+			}
+			val recDict = buildRecDictionary(recognizerModelDir, recognizerKind)
 			val env = OrtEnvironment.getEnvironment()
-			val options = OrtSession.SessionOptions().apply {
+			val detectorOptions = OrtSession.SessionOptions().apply {
+				setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
+				setIntraOpNumThreads(2)
+			}
+			val recognizerOptions = OrtSession.SessionOptions().apply {
 				setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
 				setIntraOpNumThreads(2)
 			}
@@ -306,9 +424,10 @@ class PaddleReaderOcrEngine @Inject constructor(
 				detectorModelId = detectorModelId,
 				recognizerModelId = recognizerModelId,
 				detectorNormalizeMode = resolveDetectorNormalizeMode(detectorModel),
-				detSession = env.createSession(detFile.absolutePath, options),
-				recSession = env.createSession(recFile.absolutePath, options),
+				detSession = env.createSession(detFile.absolutePath, detectorOptions),
+				recSession = env.createSession(recFile.absolutePath, recognizerOptions),
 				recDict = recDict,
+				recognizerKind = recognizerKind,
 			)
 			runtime = created
 			created
@@ -341,6 +460,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 
 	private fun findDictTextFile(dir: File): File? {
 		val candidates = listOf(
+			"alphabet-all-v5.txt",
 			"ppocrv5_dict.txt",
 			"ppocrv5_latin_dict.txt",
 			"ppocrv5_korean_dict.txt",
@@ -355,10 +475,10 @@ class PaddleReaderOcrEngine @Inject constructor(
 		return dir.listFiles()?.firstOrNull { it.isFile && it.extension.equals("txt", ignoreCase = true) }
 	}
 
-	private fun buildRecDictionary(dir: File): List<String> {
+	private fun buildRecDictionary(dir: File, recognizerKind: RecognizerKind): List<String> {
 		val dictFile = findDictTextFile(dir)
 		if (dictFile != null) {
-			return buildRecDictionaryFromTextFile(dictFile)
+			return buildRecDictionaryFromTextFile(dictFile, recognizerKind)
 		}
 		val yamlFile = File(dir, "inference.yml").takeIf { it.isFile }
 			?: File(dir, "inference.yaml").takeIf { it.isFile }
@@ -366,11 +486,14 @@ class PaddleReaderOcrEngine @Inject constructor(
 		return buildRecDictionaryFromYamlFile(yamlFile)
 	}
 
-	private fun buildRecDictionaryFromTextFile(dictFile: File): List<String> {
+	private fun buildRecDictionaryFromTextFile(
+		dictFile: File,
+		recognizerKind: RecognizerKind,
+	): List<String> {
 		val entries = dictFile.readLines()
 			.map { it.trimEnd('\r') }
 			.filter { it.isNotEmpty() }
-		return entries + " "
+		return if (recognizerKind == RecognizerKind.MANGA_48PX_CTC) entries else entries + " "
 	}
 
 	private fun buildRecDictionaryFromYamlFile(yamlFile: File): List<String> {
@@ -460,7 +583,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 
 	private fun recognizeSingleRegion(bitmap: Bitmap, region: TextRegion, runtime: Runtime): OcrTextBlock? {
 		val crop = cropRegionBitmap(bitmap, region)
-		val normalized = textRecognizer.normalizeRecognitionOrientation(crop)
+		val normalized = textRecognizer.normalizeRecognitionOrientation(crop, runtime.recognizerKind)
 		return try {
 			val tuning = currentOcrTuning()
 			val (text, confidence) = textRecognizer.recognizeCrop(normalized, runtime, tuning)
@@ -537,6 +660,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 		widths: List<Int>,
 		targetHeight: Int,
 		canvasWidth: Int,
+		recognizerKind: RecognizerKind,
 	): OnnxTensor {
 		val data = FloatArray(bitmaps.size * 3 * targetHeight * canvasWidth)
 		val imageStride = 3 * targetHeight * canvasWidth
@@ -555,9 +679,10 @@ class PaddleReaderOcrEngine @Inject constructor(
 						val g = ((pixel shr 8) and 0xFF) / 255f
 						val b = (pixel and 0xFF) / 255f
 						val base = imageOffset + y * canvasWidth + x
-						data[base] = (r - 0.5f) / 0.5f
+						data[base] = ((if (recognizerKind == RecognizerKind.PADDLE) b else r) - 0.5f) / 0.5f
 						data[imageOffset + channelStride + y * canvasWidth + x] = (g - 0.5f) / 0.5f
-						data[imageOffset + channelStride * 2 + y * canvasWidth + x] = (b - 0.5f) / 0.5f
+						data[imageOffset + channelStride * 2 + y * canvasWidth + x] =
+							((if (recognizerKind == RecognizerKind.PADDLE) r else b) - 0.5f) / 0.5f
 					}
 				}
 			} finally {
@@ -576,6 +701,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 	private fun decodeRecognitionTensor(
 		tensor: OnnxTensor,
 		dictionary: List<String>,
+		recognizerKind: RecognizerKind,
 	): Pair<String, Float> {
 		val shape = tensor.info.shape
 		if (shape.size != 3) return "" to 0f
@@ -589,6 +715,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 			timeSteps = timeSteps,
 			classes = classes,
 			dictionary = dictionary,
+			recognizerKind = recognizerKind,
 		)
 	}
 
@@ -598,35 +725,13 @@ class PaddleReaderOcrEngine @Inject constructor(
 		timeSteps: Int,
 		classes: Int,
 		dictionary: List<String>,
+		recognizerKind: RecognizerKind,
 	): Pair<String, Float> {
-		val text = StringBuilder()
-		var previousIndex = -1
-		var confidenceSum = 0f
-		var confidenceCount = 0
-		for (t in 0 until timeSteps) {
-			var bestIndex = 0
-			var bestValue = Float.NEGATIVE_INFINITY
-			val timeStepOffset = offset + t * classes
-			for (i in 0 until classes) {
-				val v = values[timeStepOffset + i]
-				if (v > bestValue) {
-					bestValue = v
-					bestIndex = i
-				}
-			}
-			if (bestIndex == 0 || bestIndex == previousIndex) {
-				previousIndex = bestIndex
-				continue
-			}
-			val charIndex = bestIndex - 1
-			if (charIndex in dictionary.indices) {
-				text.append(dictionary[charIndex])
-				confidenceSum += bestValue
-				confidenceCount++
-			}
-			previousIndex = bestIndex
+		val result = when (recognizerKind) {
+			RecognizerKind.PADDLE -> decodePaddleCtc(values, offset, timeSteps, classes, dictionary)
+			RecognizerKind.MANGA_48PX_CTC -> decodeManga48pxCtc(values, offset, timeSteps, classes, dictionary)
 		}
-		return text.toString().trim() to if (confidenceCount > 0) confidenceSum / confidenceCount else 0f
+		return result.text to result.confidence
 	}
 
 	private fun cropBitmap(source: Bitmap, box: Rect): Bitmap {
@@ -724,7 +829,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 		const val PADDLE_DETECTOR_ID = "paddle_onnx_ppocrv5_det"
 		const val DET_MIN_COMPONENT_PIXELS = 8
 		const val REC_INPUT_HEIGHT = 48
-		const val REC_MIN_WIDTH = 32
+		const val MANGA_48PX_CTC_EXTRA_PADDING = 128
 		const val MULTILINGUAL_RECOGNIZER_MODEL_ID = "ppocrv6_medium_rec_onnx"
 		const val LATIN_RECOGNIZER_MODEL_ID = "latin_ppocrv5_mobile_rec_onnx"
 		const val KOREAN_RECOGNIZER_MODEL_ID = "korean_ppocrv5_mobile_rec_onnx"
@@ -862,11 +967,15 @@ class PaddleReaderOcrEngine @Inject constructor(
 
 	private inner class PaddleTextRecognizer {
 
-		fun normalizeRecognitionOrientation(bitmap: Bitmap): Bitmap {
-			if (bitmap.height <= bitmap.width * 13 / 10) {
+		fun normalizeRecognitionOrientation(bitmap: Bitmap, recognizerKind: RecognizerKind): Bitmap {
+			val shouldRotate = when (recognizerKind) {
+				RecognizerKind.PADDLE -> shouldRotatePaddleRecognitionCrop(bitmap.width, bitmap.height)
+				RecognizerKind.MANGA_48PX_CTC -> shouldRotateManga48pxRecognitionCrop(bitmap.width, bitmap.height)
+			}
+			if (!shouldRotate) {
 				return bitmap
 			}
-			val matrix = Matrix().apply { postRotate(90f) }
+			val matrix = Matrix().apply { postRotate(-90f) }
 			return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 		}
 
@@ -912,24 +1021,24 @@ class PaddleReaderOcrEngine @Inject constructor(
 				for (region in regions) {
 					val crop = cropRegionBitmap(bitmap, region)
 					crops += crop
-					val normalizedCrop = normalizeRecognitionOrientation(crop)
+					val normalizedCrop = normalizeRecognitionOrientation(crop, runtime.recognizerKind)
 					normalized += normalizedCrop
 					val targetWidth = computeRecognitionWidth(normalizedCrop, tuning)
 					widths += targetWidth
 					scaled += Bitmap.createScaledBitmap(normalizedCrop, targetWidth, targetHeight, true)
 				}
-				val canvasWidth = widths.maxOrNull() ?: return emptyList()
 				inputTensor = createRecognitionBatchTensor(
 					bitmaps = scaled,
 					widths = widths,
 					targetHeight = targetHeight,
-					canvasWidth = canvasWidth,
+					canvasWidth = computeRecognitionCanvasWidth(widths, tuning, runtime.recognizerKind),
+					recognizerKind = runtime.recognizerKind,
 				)
 				val inputName = runtime.recSession.inputNames.first()
 				result = runtime.recSession.run(mapOf(inputName to inputTensor))
 				val outputName = runtime.recSession.outputNames.first()
 				val tensor = result.get(outputName).orElse(null) as? OnnxTensor ?: return emptyList()
-				decodeRecognitionBatchTensor(tensor, runtime.recDict, regions, tuning)
+				decodeRecognitionBatchTensor(tensor, runtime.recDict, regions, tuning, runtime.recognizerKind)
 			} finally {
 				runCatching { result?.close() }
 				runCatching { inputTensor?.close() }
@@ -950,17 +1059,18 @@ class PaddleReaderOcrEngine @Inject constructor(
 			var inputTensor: OnnxTensor? = null
 			var result: OrtSession.Result? = null
 			return try {
-				inputTensor = createImageTensor(
-					bitmap = scaled,
-					height = targetHeight,
-					width = targetWidth,
-					normalizeToSigned = true,
+				inputTensor = createRecognitionBatchTensor(
+					bitmaps = listOf(scaled),
+					widths = listOf(targetWidth),
+					targetHeight = targetHeight,
+					canvasWidth = computeRecognitionCanvasWidth(listOf(targetWidth), tuning, runtime.recognizerKind),
+					recognizerKind = runtime.recognizerKind,
 				)
 				val inputName = runtime.recSession.inputNames.first()
 				result = runtime.recSession.run(mapOf(inputName to inputTensor))
 				val outputName = runtime.recSession.outputNames.first()
 				val tensor = result.get(outputName).orElse(null) as? OnnxTensor ?: return "" to 0f
-				val (text, confidence) = decodeRecognitionTensor(tensor, runtime.recDict)
+				val (text, confidence) = decodeRecognitionTensor(tensor, runtime.recDict, runtime.recognizerKind)
 				if (confidence < tuning.recognitionThreshold) "" to confidence else text to confidence
 			} finally {
 				runCatching { result?.close() }
@@ -970,9 +1080,17 @@ class PaddleReaderOcrEngine @Inject constructor(
 		}
 
 		private fun computeRecognitionWidth(bitmap: Bitmap, tuning: OcrTuning): Int {
-			return (bitmap.width * (REC_INPUT_HEIGHT.toFloat() / bitmap.height.toFloat().coerceAtLeast(1f)))
-				.roundToInt()
-				.coerceIn(REC_MIN_WIDTH, tuning.recognitionMaxWidth)
+			return computePaddleRecognitionWidth(bitmap.width, bitmap.height, tuning.recognitionMaxWidth)
+		}
+
+		private fun computeRecognitionCanvasWidth(
+			widths: List<Int>,
+			tuning: OcrTuning,
+			recognizerKind: RecognizerKind,
+		): Int {
+			if (recognizerKind == RecognizerKind.PADDLE) return tuning.recognitionMaxWidth
+			val paddedWidth = (widths.maxOrNull() ?: 1) + MANGA_48PX_CTC_EXTRA_PADDING
+			return (paddedWidth + 3) / 4 * 4
 		}
 
 		private fun decodeRecognitionBatchTensor(
@@ -980,6 +1098,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 			dictionary: List<String>,
 			regions: List<TextRegion>,
 			tuning: OcrTuning,
+			recognizerKind: RecognizerKind,
 		): List<OcrTextBlock> {
 			val shape = tensor.info.shape
 			if (shape.size != 3) return emptyList()
@@ -996,6 +1115,7 @@ class PaddleReaderOcrEngine @Inject constructor(
 					timeSteps = timeSteps,
 					classes = classes,
 					dictionary = dictionary,
+					recognizerKind = recognizerKind,
 				)
 				if (text.isBlank() || confidence < tuning.recognitionThreshold) continue
 				val region = regions[batchIndex]
@@ -1020,8 +1140,9 @@ internal fun resolveAutomaticPaddleRecognizerModelId(language: String?): String 
 		normalized == "ko" -> "korean_ppocrv5_mobile_rec_onnx"
 		normalized == "th" -> "thai_ppocrv5_mobile_rec_onnx"
 		normalized in setOf(
-			"ca", "cs", "da", "de", "en", "es", "fi", "fr", "hr", "id", "it", "nl", "pl", "pt", "ro",
-			"sk", "sv", "tl", "tr", "vi",
+			"af", "az", "bs", "ca", "cs", "cy", "da", "de", "en", "es", "et", "eu", "fi", "fr", "gl",
+			"hr", "hu", "id", "is", "it", "la", "lt", "lv", "ms", "nl", "no", "pl", "pt", "ro", "sk",
+			"sl", "sq", "sv", "sw", "tl", "tr", "vi",
 		) -> "latin_ppocrv5_mobile_rec_onnx"
 		else -> "ppocrv6_medium_rec_onnx"
 	}

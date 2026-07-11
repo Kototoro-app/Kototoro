@@ -1209,6 +1209,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			"korean_ppocrv3_mobile_rec_onnx" -> "korean_ppocrv5_mobile_rec_onnx"
 			"AUTO",
 			"mangaocr_2025_onnx",
+			"manga_48px_ctc_onnx",
 			"ppocrv6_medium_rec_onnx",
 			"latin_ppocrv5_mobile_rec_onnx",
 			"korean_ppocrv5_mobile_rec_onnx",
