@@ -106,11 +106,11 @@ Read more: [Source Integrations](./source-integrations.md)
 
 ### Automatic Translation
 
-1. Open `Settings -> Reader -> Translation`.
-2. Enable translation.
-3. Pick the OCR engine you want to try first.
-4. Open `Manage models` and download the models you need.
-5. Set source language, target language, and translation mode.
+1. Open `Settings -> AI -> Translation`.
+2. Set the source and target languages, then choose `Local` or `API only`.
+3. Start with `Basic` OCR; select `Advanced` only when you need the downloadable offline OCR pack.
+4. Open a manga chapter and enable **Manga translation** from the reader controls.
+5. For `API only`, configure the endpoint, key, and model from **Online Translation Service** first.
 
 Read more: [Automatic Translation](./automatic-translation.md)
 

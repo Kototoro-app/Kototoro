@@ -53,7 +53,7 @@ Read more: [Source Integrations](./source-integrations.md)
 
 ## Is OCR + Translation Really Local?
 
-It can be. Kototoro supports local-first workflows and model downloads through the app. Remote API translation is also supported when you want it, but it is not the only path.
+It can be. Kototoro supports on-device OCR and local translation, with downloadable advanced OCR models when needed. `API only` translation is also available for a configured remote provider, but it is a separate mode rather than an automatic fallback.
 
 Read more: [Automatic Translation](./automatic-translation.md)
 

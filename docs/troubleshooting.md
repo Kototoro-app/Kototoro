@@ -47,9 +47,11 @@ This page collects the most common setup and integration problems.
 
 ### The translation feature is enabled but nothing happens
 
-1. Recheck source and target languages.
-2. Open `Manage models` and confirm the required models were downloaded.
-3. Test on a page with clearly visible text.
+1. Check that the work language and target language differ; matching languages are intentionally skipped.
+2. Recheck source and target languages, using an explicit source language if automatic detection is wrong.
+3. In `API only` mode, confirm the endpoint, key, and model are configured.
+4. In advanced OCR mode, wait for the full OCR pack to download and verify.
+5. Test on a page with clearly visible text.
 
 ### Model downloads fail
 
@@ -60,8 +62,8 @@ This page collects the most common setup and integration problems.
 ### Remote API translation fails
 
 1. Recheck endpoint, API key, and model name.
-2. Try manual model entry if model discovery fails.
-3. Use `LOCAL_FIRST` while validating a new provider.
+2. Use **Test connection and choose model**; enter the model name manually if discovery fails.
+3. Switch to `Local` only if you want on-device translation. The current app does not automatically fall back from local translation to an API.
 
 ## WebDAV Sync Problems
 

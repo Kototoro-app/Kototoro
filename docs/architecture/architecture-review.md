@@ -371,9 +371,9 @@ A future generalized external-extension runtime abstraction would likely be valu
 
 ## OCR and Translation Pipeline
 
-Main design reference:
+Historical design reference:
 
-- [`docs/architecture/ocr-pipeline-v2.md`](./ocr-pipeline-v2.md)
+- [Archived OCR Pipeline V2](../archive/ocr-pipeline-v2.md)
 
 Current OCR interface:
 

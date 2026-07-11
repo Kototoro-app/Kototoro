@@ -74,7 +74,6 @@ Deployment model:
 - [External Extension Integration Guide](./architecture/external-extension-integration-guide.md)
 - [Architecture Review](./architecture/architecture-review.md)
 - [Architecture Roadmap](./architecture/architecture-roadmap.md)
-- [OCR Pipeline Notes](./architecture/ocr-pipeline-v2.md)
 - [UI Improvement](./architecture/ui_improvement.md)
 
 ## Development Expectations
@@ -99,5 +98,4 @@ For contribution expectations, see [Contributing](./contributing.md).
 - [External Extension Integration Guide](./architecture/external-extension-integration-guide.md)
 - [Architecture Review](./architecture/architecture-review.md)
 - [Architecture Roadmap](./architecture/architecture-roadmap.md)
-- [OCR Pipeline Notes](./architecture/ocr-pipeline-v2.md)
 - [UI Improvement](./architecture/ui_improvement.md)

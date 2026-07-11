@@ -1,5 +1,7 @@
 # OCR Architecture Review
 
+> Archived: this branch-specific implementation review predates the completed OCR and translation refactor. It is retained for historical context and is not the current implementation reference.
+
 ## Scope
 
 This document describes the OCR pipeline that is currently implemented in Kototoro on this branch.

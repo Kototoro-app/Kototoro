@@ -22,8 +22,9 @@ Typical workflow:
 
 - Detect text from the page
 - Recognize it with the configured OCR pipeline
-- Translate locally or through an API
-- Render the translated result back into the reading view
+- Translate on-device in `Local` mode, or through a configured provider in `API only` mode
+- Render a translated layer over the original page, with a reader control to return to the original image
+- Retranslate the current page, failed pages, or the current chapter and inspect their state in the translation task panel
 
 Read more: [Automatic Translation](./automatic-translation.md)
 

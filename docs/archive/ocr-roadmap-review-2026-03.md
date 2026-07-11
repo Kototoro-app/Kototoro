@@ -1,5 +1,7 @@
 # Kototoro OCR Roadmap Review Pack (Current Branch Status)
 
+> Archived: this March 2026 roadmap review describes a pre-refactor branch state. The OCR and translation architecture has since been substantially reworked; do not use its implementation status or priorities as the current plan.
+
 ## 1. 当前已落地
 
 - **Hybrid fallback 已实现**（NCNN 主 + TFLite 低置信 fallback）

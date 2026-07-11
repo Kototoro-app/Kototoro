@@ -43,7 +43,6 @@ This directory is organized by task, not by internal implementation. Start with 
 - [Novel Reader Immersive Refinement (2026-05)](./architecture/novel-reader-immersive-refinement-2026-05.md)
 - [Tracking Site Support Plan (2026-04)](./architecture/tracking-site-support-plan-2026-04.md)
 - [UI Improvement](./architecture/ui_improvement.md)
-- [OCR Pipeline Notes](./architecture/ocr-pipeline-v2.md)
 - [Mihon Integration Reference](./reference/mihon-integration.md)
 - [TVBox Runtime Compatibility](./reference/tvbox-runtime.md)
 - [Kotatsu-Redo Integration Reference](./KotatsuRedoIntegration.md)
@@ -60,6 +59,8 @@ This directory is organized by task, not by internal implementation. Start with 
 ### Archived materials
 
 - [OCR Roadmap Review, March 2026](./archive/ocr-roadmap-review-2026-03.md)
+- [OCR Pipeline V2](./archive/ocr-pipeline-v2.md)
+- [OCR Architecture Review](./archive/ocr-architecture-review.md)
 - [Archived Chinese Mihon Compatibility Notes](./archive/zh/mihon-compatibility.md)
 
 ## Documentation Rules

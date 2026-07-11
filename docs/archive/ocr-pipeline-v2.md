@@ -1,5 +1,7 @@
 # OCR Pipeline
 
+> Archived: this target-design document predates the completed OCR and translation refactor. It is retained for historical context and is not the current implementation reference.
+
 ## Goal
 
 This document defines the target OCR architecture Kototoro should preserve and continue refining on this branch.
