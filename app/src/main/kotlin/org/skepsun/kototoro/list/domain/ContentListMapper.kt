@@ -57,6 +57,7 @@ class ContentListMapper @Inject constructor(
 
 	fun observeDisplayChanges(): Flow<Unit> = merge(
 		dataRepository.observeDisplayPreferencesChanges().map { Unit },
+		favouritesRepository.observeFavouriteBadgeChanges(),
 		trackingSiteCacheRepository.observeDetailsUpdates().map { Unit },
 	)
 

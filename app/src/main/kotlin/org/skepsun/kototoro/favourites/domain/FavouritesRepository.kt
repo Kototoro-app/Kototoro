@@ -190,6 +190,15 @@ class FavouritesRepository @Inject constructor(
 			.distinctUntilChanged()
 	}
 
+	fun observeFavouriteBadgeChanges(): Flow<Unit> {
+		return db.invalidationTracker.createFlow(
+			TABLE_WORK_FAVOURITES,
+			TABLE_ENTITY_GRAPH_BINDING,
+			TABLE_ENTITY_PREFERENCES,
+			emitInitialState = false,
+		).map { Unit }
+	}
+
 	fun observeCategories(): Flow<List<FavouriteCategory>> {
 		return db.getFavouriteCategoriesDao().observeAll().mapItems {
 			it.toFavouriteCategory()

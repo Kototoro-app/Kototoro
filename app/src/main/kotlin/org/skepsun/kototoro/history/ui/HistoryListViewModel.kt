@@ -203,7 +203,6 @@ class HistoryListViewModel @Inject constructor(
 		settings.observeAsFlow(AppSettings.KEY_INCOGNITO_MODE) { isIncognitoModeEnabled },
 		this.currentGroupTab,
 		this.currentSourceTags,
-		mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
 		refreshTrigger,
 		settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
 			.flatMapLatest { id ->
@@ -219,8 +218,8 @@ class HistoryListViewModel @Inject constructor(
 		val incognito = values[4] as Boolean
 		val groupTab = values[5] as BrowseGroupTab
 		val sourceTags = values[6] as Set<SourceTag>
-		val preset = values[9] as? org.skepsun.kototoro.explore.data.SourcePreset
-		val skipNsfw = values[10] as Boolean
+		val preset = values[8] as? org.skepsun.kototoro.explore.data.SourcePreset
+		val skipNsfw = values[9] as Boolean
 		HistoryUiParams(
 			order = order,
 			filters = filters,
@@ -239,9 +238,12 @@ class HistoryListViewModel @Inject constructor(
 			isPaginationReady.set(false)
 			buildPreviewStateOrNull(params)?.let { emit(it) } ?: emit(listOf(LoadingState))
 			emitAll(
-				observeHistory(params.order, params.effectiveFilters).onEach {
-					isPaginationReady.set(true)
-				}.mapLatest { list ->
+				combine(
+					observeHistory(params.order, params.effectiveFilters).onEach {
+						isPaginationReady.set(true)
+					},
+					mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
+				) { list, _ ->
 					mapList(
 						list = list,
 						grouped = params.grouped,

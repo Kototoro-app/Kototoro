@@ -1597,6 +1597,7 @@ internal fun HistoryTopLevelRouteContent(
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
     var selectedItemsIds by remember { mutableStateOf(emptySet<Long>()) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var pendingMarkAsReadItems by remember { mutableStateOf<List<Content>?>(null) }
     val selectedModels = remember(items, selectedItemsIds) {
         items
             .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
@@ -1642,6 +1643,9 @@ internal fun HistoryTopLevelRouteContent(
                             supportedActions = setOf(
                                 org.skepsun.kototoro.list.ui.compose.SelectionAction.SELECT_ALL,
                                 org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE,
+                                org.skepsun.kototoro.list.ui.compose.SelectionAction.SAVE,
+                                org.skepsun.kototoro.list.ui.compose.SelectionAction.FAVOURITE,
+                                org.skepsun.kototoro.list.ui.compose.SelectionAction.MARK_AS_COMPLETED,
                             ),
                             onClearSelection = { selectedItemsIds = emptySet() },
                             onActionClick = { action ->
@@ -1653,6 +1657,22 @@ internal fun HistoryTopLevelRouteContent(
                                     }
                                     org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE -> {
                                         viewModel.removeFromHistory(selectedItemsIds)
+                                        selectedItemsIds = emptySet()
+                                    }
+                                    org.skepsun.kototoro.list.ui.compose.SelectionAction.SAVE -> {
+                                        appRouter.showDownloadDialog(selectedModels.map { it.manga }, rootView)
+                                        selectedItemsIds = emptySet()
+                                    }
+                                    org.skepsun.kototoro.list.ui.compose.SelectionAction.FAVOURITE -> {
+                                        appRouter.showFavoriteDialog(selectedModels.map { it.manga })
+                                        selectedItemsIds = emptySet()
+                                    }
+                                    org.skepsun.kototoro.list.ui.compose.SelectionAction.EDIT_OVERRIDE -> {
+                                        selectedModels.singleOrNull()?.manga?.let(appRouter::openContentOverrideConfig)
+                                        selectedItemsIds = emptySet()
+                                    }
+                                    org.skepsun.kototoro.list.ui.compose.SelectionAction.MARK_AS_COMPLETED -> {
+                                        pendingMarkAsReadItems = selectedModels.map { it.manga }
                                         selectedItemsIds = emptySet()
                                     }
                                     else -> Unit
@@ -1771,9 +1791,28 @@ internal fun HistoryTopLevelRouteContent(
             },
             onClearSelection = { selectedItemsIds = emptySet() },
             onSelectionAction = { action ->
-                if (action == org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE) {
-                    viewModel.removeFromHistory(selectedItemsIds)
-                    selectedItemsIds = emptySet()
+                when (action) {
+                    org.skepsun.kototoro.list.ui.compose.SelectionAction.REMOVE -> {
+                        viewModel.removeFromHistory(selectedItemsIds)
+                        selectedItemsIds = emptySet()
+                    }
+                    org.skepsun.kototoro.list.ui.compose.SelectionAction.SAVE -> {
+                        appRouter.showDownloadDialog(selectedModels.map { it.manga }, rootView)
+                        selectedItemsIds = emptySet()
+                    }
+                    org.skepsun.kototoro.list.ui.compose.SelectionAction.FAVOURITE -> {
+                        appRouter.showFavoriteDialog(selectedModels.map { it.manga })
+                        selectedItemsIds = emptySet()
+                    }
+                    org.skepsun.kototoro.list.ui.compose.SelectionAction.EDIT_OVERRIDE -> {
+                        selectedModels.singleOrNull()?.manga?.let(appRouter::openContentOverrideConfig)
+                        selectedItemsIds = emptySet()
+                    }
+                    org.skepsun.kototoro.list.ui.compose.SelectionAction.MARK_AS_COMPLETED -> {
+                        pendingMarkAsReadItems = selectedModels.map { it.manga }
+                        selectedItemsIds = emptySet()
+                    }
+                    else -> Unit
                 }
             },
             onStatsClick = { appRouter.openStatistic() },
@@ -1807,6 +1846,37 @@ internal fun HistoryTopLevelRouteContent(
                         org.skepsun.kototoro.history.ui.compose.ClearHistoryOption.CLEAR_ALL -> {
                             viewModel.clearHistory(null)
                         }
+                    }
+                },
+            )
+        }
+
+        pendingMarkAsReadItems?.let { itemsToMark ->
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { pendingMarkAsReadItems = null },
+                title = {
+                    androidx.compose.material3.Text(
+                        text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed),
+                    )
+                },
+                text = {
+                    androidx.compose.material3.Text(
+                        text = stringResource(org.skepsun.kototoro.R.string.mark_as_completed_prompt),
+                    )
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            viewModel.markAsRead(itemsToMark.toSet())
+                            pendingMarkAsReadItems = null
+                        },
+                    ) {
+                        androidx.compose.material3.Text(text = stringResource(android.R.string.ok))
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { pendingMarkAsReadItems = null }) {
+                        androidx.compose.material3.Text(text = stringResource(android.R.string.cancel))
                     }
                 },
             )
