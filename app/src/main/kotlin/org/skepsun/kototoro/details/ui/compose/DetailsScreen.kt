@@ -1131,6 +1131,7 @@ fun DetailsScreen(
                                             else -> R.string.open_reading_page_in_browser
                                         },
                                         hasOnlineVariant = isWorkActionEnabled && remoteContent != null,
+                                        isReadingRecordAvailable = isWorkActionEnabled,
                                         isDeleteLocalAvailable = isWorkActionEnabled && content?.source == LocalMangaSource,
                                         isEditOverrideAvailable = isWorkActionEnabled && content != null,
                                         isShortcutSupported = isWorkActionEnabled && isShortcutSupported && content != null,
@@ -1232,17 +1233,12 @@ fun DetailsScreen(
                                     translatedTitle = translatedTitle,
                                     translatedDescription = translatedDescription,
                                     isShowingTranslation = isShowingTranslation,
-                                    hasTranslationCache = hasTranslationCache,
-                                    isTranslating = isTranslating,
-                                    showTranslateAction = showTranslateAction,
                                     settings = settings,
                                     collapseProgressProvider = remember { { 0f } },
                                     coverVisualAlpha = 1f,
                                     coverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
                                         ?: content?.coverUrl?.takeIfUsableImageUri(),
                                     fallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri(),
-                                    showCommentsAction = supplementalCommentThreads.isNotEmpty(),
-                                    showReviewsAction = supplementalReviews.isNotEmpty(),
                                     content = content,
                                     isTemporaryReadOnly = isTemporaryReadOnly,
                                     isWorkDetails = isWorkDetails,
@@ -1253,8 +1249,6 @@ fun DetailsScreen(
                                     },
                                     onInfoCardBoundsSync = syncInfoCardBounds,
                                     onFavoriteClick = { showFavoriteDialog = true },
-                                    onCommentsClick = { showCommentsDialog = true },
-                                    onReviewsClick = { showReviewsDialog = true },
                                     onSupplementalRelationClick = { item ->
                                         when {
                                             shouldOpenTrackingRelationSheet(item) -> {
@@ -1265,8 +1259,6 @@ fun DetailsScreen(
                                             }
                                         }
                                     },
-                                    onSelectActiveLocalSource = viewModel::selectActiveLocalSource,
-                                    onSelectMetadataSource = viewModel::selectMetadataSource,
                                     onOpenMetadataSourceSheet = {
                                         if (!isTemporaryReadOnly) showMetadataSourceDialog = true
                                     },
@@ -1411,17 +1403,12 @@ fun DetailsScreen(
                                 translatedTitle = translatedTitle,
                                 translatedDescription = translatedDescription,
                                 isShowingTranslation = isShowingTranslation,
-                                hasTranslationCache = hasTranslationCache,
-                                isTranslating = isTranslating,
-                                showTranslateAction = showTranslateAction,
                                 settings = settings,
                                 collapseProgressProvider = compactCollapseProgressProvider,
                                 coverVisualAlpha = headerCoverVisualAlpha,
                                 coverUrl = mangaDetails?.coverUrl?.takeIfUsableImageUri()
                                     ?: content?.coverUrl?.takeIfUsableImageUri(),
                                 fallbackCoverUrl = content?.coverUrl?.takeIfUsableImageUri(),
-                                showCommentsAction = supplementalCommentThreads.isNotEmpty(),
-                                showReviewsAction = supplementalReviews.isNotEmpty(),
                                 content = content,
                                 isTemporaryReadOnly = isTemporaryReadOnly,
                                 isWorkDetails = isWorkDetails,
@@ -1432,8 +1419,6 @@ fun DetailsScreen(
                                 },
                                 onInfoCardBoundsSync = syncInfoCardBounds,
                                 onFavoriteClick = { showFavoriteDialog = true },
-                                onCommentsClick = { showCommentsDialog = true },
-                                onReviewsClick = { showReviewsDialog = true },
                                 onSupplementalRelationClick = { item ->
                                     when {
                                         shouldOpenTrackingRelationSheet(item) -> {
@@ -1444,8 +1429,6 @@ fun DetailsScreen(
                                         }
                                     }
                                 },
-                                onSelectActiveLocalSource = viewModel::selectActiveLocalSource,
-                                onSelectMetadataSource = viewModel::selectMetadataSource,
                                 onOpenMetadataSourceSheet = {
                                     if (!isTemporaryReadOnly) showMetadataSourceDialog = true
                                 },
@@ -2454,16 +2437,11 @@ private fun DetailsScrollableContent(
     translatedTitle: String?,
     translatedDescription: String?,
     isShowingTranslation: Boolean,
-    hasTranslationCache: Boolean,
-    isTranslating: Boolean,
-    showTranslateAction: Boolean,
     settings: org.skepsun.kototoro.core.prefs.AppSettings,
     collapseProgressProvider: () -> Float,
     coverVisualAlpha: Float,
     coverUrl: String?,
     fallbackCoverUrl: String?,
-    showCommentsAction: Boolean,
-    showReviewsAction: Boolean,
     content: org.skepsun.kototoro.parsers.model.Content?,
     isTemporaryReadOnly: Boolean,
     isWorkDetails: Boolean,
@@ -2477,11 +2455,7 @@ private fun DetailsScrollableContent(
     pendingAuthorSearch: (String, ContentSource) -> Unit,
     onInfoCardBoundsSync: (Float, Float) -> Unit,
     onFavoriteClick: () -> Unit,
-    onCommentsClick: () -> Unit,
-    onReviewsClick: () -> Unit,
     onSupplementalRelationClick: (EntityRelationItem) -> Unit,
-    onSelectActiveLocalSource: (Long) -> Unit,
-    onSelectMetadataSource: (DetailsSourceOption) -> Unit,
     onOpenMetadataSourceSheet: () -> Unit,
     onOpenReadingSourceSheet: () -> Unit,
     onUpdateLinkedTrackingStatus: (org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel, ScrobblingStatus) -> Unit,
@@ -2538,9 +2512,6 @@ private fun DetailsScrollableContent(
             translatedTitle = translatedTitle,
             translatedDescription = translatedDescription,
             isShowingTranslation = isShowingTranslation,
-            hasTranslationCache = hasTranslationCache,
-            isTranslating = isTranslating,
-            showTranslateAction = showTranslateAction,
             settings = settings,
             collapseProgressProvider = collapseProgressProvider,
             coverVisualAlpha = coverVisualAlpha,
@@ -2548,17 +2519,10 @@ private fun DetailsScrollableContent(
             fallbackCoverUrl = fallbackCoverUrl,
             sharedElementKey = sharedElementKey,
             showWorkActions = isWorkActionEnabled,
-            showCommentsAction = showCommentsAction,
-            showReviewsAction = showReviewsAction,
 
             onInfoCardBoundsSync = onInfoCardBoundsSync,
             onCoverClick = { onActionClick(DetailsAction.OpenCover) },
             onFavoriteClick = onFavoriteClick,
-            onReadingRecordClick = { onActionClick(DetailsAction.OpenReadingRecord) },
-            onCommentsClick = onCommentsClick,
-            onReviewsClick = onReviewsClick,
-            onSelectActiveLocalSource = onSelectActiveLocalSource,
-            onSelectMetadataSource = onSelectMetadataSource,
             onSourceClick = { onActionClick(DetailsAction.OpenSource(it)) },
             onTrackingSourceClick = { option ->
                 option.trackingService?.let { service ->
@@ -2583,15 +2547,6 @@ private fun DetailsScrollableContent(
                 }
             },
             onTagClick = pendingTagSearch,
-            onTranslateClick = { onActionClick(DetailsAction.Translate) },
-            onTranslateLongClick = {
-                Toast.makeText(
-                    context,
-                    R.string.details_translate_title_and_description_hint,
-                    Toast.LENGTH_SHORT,
-                ).show()
-            },
-            onToggleTranslationClick = { onActionClick(DetailsAction.ToggleTranslation) },
             onOpenLinkedTracking = { linked ->
                 onActionClick(DetailsAction.OpenTrackingDetails(linked.service, linked.remoteId, linked.url))
             },
@@ -2755,16 +2710,21 @@ private fun DetailsPaneContent(
         ((paneOpacityProgress - 0.04f) / 0.28f).coerceIn(0f, 1f)
     }
     val density = LocalDensity.current
-    val actionsExpansionProgress by animateFloatAsState(
-        targetValue = if (isSheetFullyExpanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-        label = "detailsPaneActionsExpansion",
-    )
+    val actionsExpansionProgress = sheetExpansionProgress
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-    val modernPanelTopPadding = if (showCollapsedHandle && isSheetFullyExpanded) {
-        statusBarTopPadding + ModernDetailsDockChromeHeight + ModernDetailsDockExpandedPanelGap
-    } else if (showCollapsedHandle) {
-        82.dp
+    val modernDragHandleRevealProgress = modernDockDragHandleRevealProgress(
+        isModernDockEnabled = isModernDetailsDockEnabled,
+        paneOpacityProgress = paneOpacityProgress,
+    )
+    val modernPanelTopPadding = if (showCollapsedHandle) {
+        modernDockActionsTopPadding(
+            handleTopInset = statusBarTopPadding,
+            paneOpacityProgress = paneOpacityProgress,
+            handleRevealProgress = modernDragHandleRevealProgress,
+        ) + modernDockDragHandleHeight(modernDragHandleRevealProgress) +
+            modernDockDragHandleGap(modernDragHandleRevealProgress) +
+            ModernDetailsDockChromeHeight +
+            ModernDetailsDockExpandedPanelGap
     } else {
         76.dp
     }
@@ -2980,15 +2940,18 @@ private fun DetailsPaneActionsRow(
         contentType != ContentType.HENTAI_VIDEO
     val compactModernDock = isModernDockEnabled && isModernDockCompact
     val showAllDockTabs = !compactModernDock
-    val isModernDockFullyExpanded = isModernDockEnabled && isSheetFullyExpanded
-    val shouldShowPaneDragHandle = showCollapsedHandle && !isModernDockFullyExpanded
+    val modernDragHandleRevealProgress = modernDockDragHandleRevealProgress(
+        isModernDockEnabled = isModernDockEnabled,
+        paneOpacityProgress = paneOpacityProgress,
+    )
+    val shouldShowPaneDragHandle = showCollapsedHandle && modernDragHandleRevealProgress > 0.01f
     val dragHandleAlpha by animateFloatAsState(
         targetValue = if (
             isModernDockEnabled && detailsPaneState.anchor == CompactDetailsPaneAnchor.Collapsed
         ) {
             0f
         } else {
-            lerpFloat(0.68f, 1f, paneOpacityProgress)
+            lerpFloat(0.68f, 1f, paneOpacityProgress) * modernDragHandleRevealProgress
         },
         animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "detailsPaneDragHandleAlpha",
@@ -3044,24 +3007,29 @@ private fun DetailsPaneActionsRow(
                 start = DetailsDockContentHorizontalPadding,
                 end = DetailsDockContentHorizontalPadding,
                 top = if (showCollapsedHandle) {
-                    if (isModernDockFullyExpanded) {
-                        handleTopInset
-                    } else {
-                        2.dp + (handleTopInset * paneOpacityProgress)
-                    }
+                    modernDockActionsTopPadding(
+                        handleTopInset = handleTopInset,
+                        paneOpacityProgress = paneOpacityProgress,
+                        handleRevealProgress = modernDragHandleRevealProgress,
+                    )
                 } else {
                     7.dp
                 },
                 bottom = 2.dp,
             ),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(
+            if (showCollapsedHandle) {
+                modernDockDragHandleGap(modernDragHandleRevealProgress)
+            } else {
+                4.dp
+            },
+        ),
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
     ) {
         if (shouldShowPaneDragHandle) {
-            val collapsedHandleHeight = 18.dp
             Box(
                 modifier = Modifier
-                    .height(collapsedHandleHeight)
+                    .height(modernDockDragHandleHeight(modernDragHandleRevealProgress))
                     .then(
                         if (isModernDockEnabled) {
                             Modifier
@@ -3178,7 +3146,6 @@ private fun DetailsPaneActionsRow(
                             horizontal = if (isModernDockEnabled) 5.dp else 2.dp,
                             vertical = if (isModernDockEnabled) 5.dp else 0.dp,
                         ),
-                        horizontalArrangement = Arrangement.spacedBy(if (isModernDockEnabled) 2.dp else 0.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AnimatedVisibility(
@@ -3191,6 +3158,11 @@ private fun DetailsPaneActionsRow(
                                 contentDescription = stringResource(R.string.chapters),
                                 isSelected = selectedTabId == DETAILS_TAB_CHAPTERS,
                                 modernStyle = isModernDockEnabled,
+                                spacingAfter = if (isModernDockEnabled && showAllDockTabs && (showPagesTab || showBookmarksTab)) {
+                                    2.dp
+                                } else {
+                                    0.dp
+                                },
                                 onClick = { onActionClick(DetailsAction.ToggleList) },
                             )
                         }
@@ -3204,6 +3176,11 @@ private fun DetailsPaneActionsRow(
                                 contentDescription = stringResource(R.string.pages),
                                 isSelected = selectedTabId == DETAILS_TAB_PAGES,
                                 modernStyle = isModernDockEnabled,
+                                spacingAfter = if (isModernDockEnabled && showAllDockTabs && showBookmarksTab) {
+                                    2.dp
+                                } else {
+                                    0.dp
+                                },
                                 onClick = { onActionClick(DetailsAction.ToggleGrid) },
                             )
                         }
@@ -3217,6 +3194,7 @@ private fun DetailsPaneActionsRow(
                                 contentDescription = stringResource(R.string.bookmarks),
                                 isSelected = selectedTabId == DETAILS_TAB_BOOKMARKS,
                                 modernStyle = isModernDockEnabled,
+                                spacingAfter = 0.dp,
                                 onClick = { onActionClick(DetailsAction.ToggleBookmarkView) },
                             )
                         }
@@ -3695,6 +3673,7 @@ internal fun DetailsDockActionButton(
     contentDescription: String,
     isSelected: Boolean,
     modernStyle: Boolean = false,
+    spacingAfter: androidx.compose.ui.unit.Dp = if (modernStyle) 0.dp else 4.dp,
     onClick: () -> Unit,
 ) {
     val containerColor by animateColorAsState(
@@ -3717,7 +3696,7 @@ internal fun DetailsDockActionButton(
         label = "detailsDockSelectionContentColor",
     )
     Surface(
-        modifier = Modifier.padding(end = if (modernStyle) 0.dp else 4.dp),
+        modifier = Modifier.padding(end = spacingAfter),
         shape = RoundedCornerShape(if (modernStyle) 18.dp else 16.dp),
         color = containerColor,
         tonalElevation = 0.dp,
@@ -4071,6 +4050,45 @@ private fun ReadDock(
 
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
     return start + (stop - start) * fraction.coerceIn(0f, 1f)
+}
+
+private fun lerpDp(
+    start: androidx.compose.ui.unit.Dp,
+    stop: androidx.compose.ui.unit.Dp,
+    fraction: Float,
+): androidx.compose.ui.unit.Dp {
+    return start + ((stop - start) * fraction.coerceIn(0f, 1f))
+}
+
+private fun modernDockDragHandleRevealProgress(
+    isModernDockEnabled: Boolean,
+    paneOpacityProgress: Float,
+): Float {
+    return if (isModernDockEnabled) {
+        ((1f - paneOpacityProgress) / 0.32f).coerceIn(0f, 1f)
+    } else {
+        1f
+    }
+}
+
+private fun modernDockActionsTopPadding(
+    handleTopInset: androidx.compose.ui.unit.Dp,
+    paneOpacityProgress: Float,
+    handleRevealProgress: Float,
+): androidx.compose.ui.unit.Dp {
+    return lerpDp(
+        start = handleTopInset,
+        stop = 2.dp + (handleTopInset * paneOpacityProgress),
+        fraction = handleRevealProgress,
+    )
+}
+
+private fun modernDockDragHandleHeight(revealProgress: Float): androidx.compose.ui.unit.Dp {
+    return 18.dp * revealProgress.coerceIn(0f, 1f)
+}
+
+private fun modernDockDragHandleGap(revealProgress: Float): androidx.compose.ui.unit.Dp {
+    return 4.dp * revealProgress.coerceIn(0f, 1f)
 }
 
 @Composable
@@ -4615,6 +4633,7 @@ private fun DetailsOverflowMenu(
     hasLocalBrowserTarget: Boolean,
     localBrowserTitleRes: Int,
     hasOnlineVariant: Boolean,
+    isReadingRecordAvailable: Boolean,
     isDeleteLocalAvailable: Boolean,
     isEditOverrideAvailable: Boolean,
     isShortcutSupported: Boolean,
@@ -4650,7 +4669,7 @@ private fun DetailsOverflowMenu(
                                 } else if (hasTranslationCache) {
                                     R.string.details_show_translation
                                 } else {
-                                    R.string.translate_title
+                                    R.string.details_translate_title_and_description_hint
                                 },
                             ),
                         )
@@ -4665,6 +4684,15 @@ private fun DetailsOverflowMenu(
                                 DetailsAction.Translate
                             },
                         )
+                    },
+                )
+            }
+            if (isReadingRecordAvailable) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.reading_record)) },
+                    onClick = {
+                        expanded = false
+                        onActionClick(DetailsAction.OpenReadingRecord)
                     },
                 )
             }
