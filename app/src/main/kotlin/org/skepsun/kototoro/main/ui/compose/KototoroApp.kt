@@ -4,6 +4,8 @@ import android.app.Activity
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material3.Slider
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -715,6 +717,9 @@ fun KototoroApp(
     val showAllUpdates by appSettings.observeAsState(keys = arrayOf(org.skepsun.kototoro.core.prefs.AppSettings.KEY_SHOW_ALL_UPDATES)) {
         showAllUpdates
     }
+    val feedLimit by appSettings.observeAsState(keys = arrayOf(org.skepsun.kototoro.core.prefs.AppSettings.KEY_FEED_LIMIT)) {
+        feedLimit
+    }
     val sortOrders = layeredTopBarOverrideState?.sortOrders?.takeIf { it.isNotEmpty() } ?: fallbackFavoritesSortOrders
     val selectedSortOrder = layeredTopBarOverrideState?.selectedSortOrder ?: if (isFavoritesRoute) {
         globalFavoritesSortOrder
@@ -731,6 +736,8 @@ fun KototoroApp(
             FeedDisplayOptionsContent(
                 showAllUpdates = showAllUpdates,
                 onShowAllUpdatesChanged = { appSettings.showAllUpdates = it },
+                feedLimit = feedLimit,
+                onFeedLimitChanged = { appSettings.feedLimit = it },
                 onFeedRefresh = {
                     onFeedRefresh()
                     dismiss()
@@ -1329,8 +1336,12 @@ private fun BoxScope.MainTopChrome(
 private fun FeedDisplayOptionsContent(
     showAllUpdates: Boolean,
     onShowAllUpdatesChanged: (Boolean) -> Unit,
+    feedLimit: Int,
+    onFeedLimitChanged: (Int) -> Unit,
     onFeedRefresh: () -> Unit,
 ) {
+    val jumps = remember { listOf(50, 100, 200, 500, 1000, 2000) }
+    val limitIndex = remember(feedLimit) { jumps.indexOf(feedLimit).coerceAtLeast(0) }
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1350,6 +1361,37 @@ private fun FeedDisplayOptionsContent(
             Switch(
                 checked = showAllUpdates,
                 onCheckedChange = onShowAllUpdatesChanged,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.feed_visible_entries),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = feedLimit.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(
+                value = limitIndex.toFloat(),
+                onValueChange = { index ->
+                    onFeedLimitChanged(jumps[index.roundToInt()])
+                },
+                valueRange = 0f..(jumps.size - 1).toFloat(),
+                steps = jumps.size - 2,
+                modifier = Modifier.fillMaxWidth()
             )
         }
         AnimatedVisibility(visible = showAllUpdates) {

@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
@@ -103,11 +104,14 @@ class TrackingRepository @Inject constructor(
 	}
 
 	fun observeUnreadUpdatesCount(): Flow<Int> {
-		return combine(
-			db.getTrackLogsDao().observeUnreadCount(),
-			db.getTracksDao().observeUpdateContentCount(),
-		) { unreadLogs, updatedContent ->
-			maxOf(unreadLogs, updatedContent)
+		val lastOpenTimeFlow = settings.observeAsFlow(AppSettings.KEY_FEED_LAST_OPEN_TIME) { feedLastOpenTime }
+		return lastOpenTimeFlow.flatMapLatest { lastOpenTime ->
+			combine(
+				db.getTrackLogsDao().observeUnreadCount(lastOpenTime),
+				db.getTracksDao().observeUpdateContentCount(lastOpenTime),
+			) { unreadLogs, updatedContent ->
+				maxOf(unreadLogs, updatedContent)
+			}
 		}
 	}
 

@@ -66,6 +66,7 @@ fun FeedScreen(
 	isRefreshing: Boolean,
 	onRefresh: () -> Unit,
 	onLoadMore: () -> Unit,
+	onFeedOpened: () -> Unit = {},
 	onFeedItemClick: (FeedItem, Rect?) -> Unit,
 	onUpdatedContentItemClick: (UpdatedContentHeaderItem, Rect?) -> Unit,
 	onUpdatedContentMoreClick: (UpdatedContentHeader) -> Unit,
@@ -80,6 +81,10 @@ fun FeedScreen(
 		LazyListState()
 	}
 	val context = LocalContext.current
+
+	LaunchedEffect(Unit) {
+		onFeedOpened()
+	}
 	val density = LocalDensity.current
 	val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
 	val carouselPrefs by settings.observeAsState(

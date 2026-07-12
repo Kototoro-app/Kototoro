@@ -8,6 +8,10 @@
 		<item quantity="one">%1$d new chapter</item>
 		<item quantity="other">%1$d new chapters</item>
 	</plurals>
+	<plurals name="old_chapters_in_total">
+		<item quantity="one">%1$d old chapter in total</item>
+		<item quantity="other">%1$d old chapters in total</item>
+	</plurals>
 	<plurals name="home_updates_new_chapters">
 		<item quantity="one">%1$d new chapter</item>
 		<item quantity="other">%1$d new chapters</item>

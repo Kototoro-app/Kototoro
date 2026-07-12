@@ -171,6 +171,7 @@
     <string name="clear_updates_feed">Clear updates feed</string>
     <string name="updates_feed_cleared">Cleared</string>
     <string name="show_all_updates">Show all updates</string>
+    <string name="feed_visible_entries">Visible entries limit</string>
     <string name="feed_behavior_description">Default shows new unread chapters only.\n\nWhen enabled, the feed shows cached tracked entries with up to 10 chapters per item. Use Trigger Update to refresh tracked favorites.</string>
     <string name="trigger_update_now">Trigger Update</string>
     <string name="rotate_screen">Rotate screen</string>

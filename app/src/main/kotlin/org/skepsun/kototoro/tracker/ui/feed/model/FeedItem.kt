@@ -15,6 +15,7 @@ data class FeedItem(
 	val manga: Content,
 	val count: Int,
 	val isNew: Boolean,
+	val totalChapters: Int = 0,
 ) : ListModel {
 
 	val imageUrl: String?
