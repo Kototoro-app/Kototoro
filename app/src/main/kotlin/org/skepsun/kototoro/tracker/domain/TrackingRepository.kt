@@ -106,12 +106,7 @@ class TrackingRepository @Inject constructor(
 	fun observeUnreadUpdatesCount(): Flow<Int> {
 		val lastOpenTimeFlow = settings.observeAsFlow(AppSettings.KEY_FEED_LAST_OPEN_TIME) { feedLastOpenTime }
 		return lastOpenTimeFlow.flatMapLatest { lastOpenTime ->
-			combine(
-				db.getTrackLogsDao().observeUnreadCount(lastOpenTime),
-				db.getTracksDao().observeUpdateContentCount(lastOpenTime),
-			) { unreadLogs, updatedContent ->
-				maxOf(unreadLogs, updatedContent)
-			}
+			db.getTracksDao().observeUnreadWorkCount(lastOpenTime)
 		}
 	}
 

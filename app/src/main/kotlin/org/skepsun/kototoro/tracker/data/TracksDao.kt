@@ -45,8 +45,25 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT COUNT(*) FROM tracks WHERE chapters_new > 0")
 	abstract fun observeUpdateContentCount(): Flow<Int>
 
-	@Query("SELECT COUNT(*) FROM tracks WHERE chapters_new > 0 AND last_check_time > :lastOpenTime")
-	abstract fun observeUpdateContentCount(lastOpenTime: Long): Flow<Int>
+	@Query(
+		"""
+		SELECT COUNT(*)
+		FROM (
+			SELECT entity_id
+			FROM track_logs
+			WHERE entity_id IS NOT NULL
+				AND unread = 1
+				AND created_at > :lastOpenTime
+			UNION
+			SELECT entity_id
+			FROM tracks
+			WHERE entity_id IS NOT NULL
+				AND chapters_new > 0
+				AND last_check_time > :lastOpenTime
+		)
+		""",
+	)
+	abstract fun observeUnreadWorkCount(lastOpenTime: Long): Flow<Int>
 
 	@Query("SELECT IFNULL(chapters_new, 0) FROM tracks WHERE manga_id = :mangaId LIMIT 1")
 	abstract fun observeNewChapters(mangaId: Long): Flow<Int>
