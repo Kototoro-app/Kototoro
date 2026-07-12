@@ -305,6 +305,9 @@ class SuggestionsWorker @AssistedInject constructor(
 				).asArrayList()
 			}
 		}
+		list.removeAll { content ->
+			content.title.isBlank() || (content.url.isBlank() && content.publicUrl.isBlank())
+		}
 		if (appSettings.isSuggestionsExcludeNsfw) {
 			list.removeAll { it.isNsfw() }
 		}
