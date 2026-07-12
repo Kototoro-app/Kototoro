@@ -98,10 +98,8 @@ class WebViewExecutor @Inject constructor(
 
 	val defaultUserAgent: String? by lazy {
 		try {
-			WebSettings.getDefaultUserAgent(context)
-		} catch (e: AndroidRuntimeException) {
-			e.printStackTraceDebug()
-			// Probably WebView is not available
+			org.skepsun.kototoro.core.network.UserAgentProvider.get(context)
+		} catch (e: Exception) {
 			null
 		}
 	}
