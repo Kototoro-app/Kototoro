@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -38,6 +39,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
@@ -69,6 +71,7 @@ fun AppBookmarksRoute(
     }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
+    val hapticFeedback = LocalHapticFeedback.current
     val mainActivity = activity as? MainActivity
     val rootView = LocalView.current
 
@@ -188,6 +191,7 @@ fun AppBookmarksRoute(
                                             isSelected = isSelected,
                                             onClick = {
                                                 if (composeSelectionIds.isNotEmpty()) {
+                                                    hapticFeedback.performSelectionHapticFeedback()
                                                     composeSelectionIds = if (isSelected) composeSelectionIds - listModel.pageId else composeSelectionIds + listModel.pageId
                                                 } else {
                                                     val intent = ReaderIntent.Builder(activity as Context)
@@ -210,6 +214,7 @@ fun AppBookmarksRoute(
                                             isSelected = isSelected,
                                             onClick = {
                                                 if (composeSelectionIds.isNotEmpty()) {
+                                                    hapticFeedback.performSelectionHapticFeedback()
                                                     composeSelectionIds = if (isSelected) composeSelectionIds - listModel.pageId else composeSelectionIds + listModel.pageId
                                                 } else {
                                                     val intent = ReaderIntent.Builder(activity as Context)

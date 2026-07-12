@@ -22,7 +22,6 @@ import org.skepsun.kototoro.R
 data class NotificationSettingsUiState(
     val isTrackerNotificationsEnabled: Boolean,
     val ringtoneSummary: String,
-    val isNotificationVibrateEnabled: Boolean,
     val isNotificationLightEnabled: Boolean,
     val isNotificationsInfoVisible: Boolean,
 )
@@ -34,7 +33,7 @@ fun NotificationSettingsScreen(
     snackbarHostState: SnackbarHostState,
     onTrackerNotificationsEnabledChange: (Boolean) -> Unit,
     onNotificationSoundClick: () -> Unit,
-    onNotificationVibrateChange: (Boolean) -> Unit,
+    onNotificationVibrateClick: () -> Unit,
     onNotificationLightChange: (Boolean) -> Unit,
 ) {
     Scaffold(
@@ -71,11 +70,10 @@ fun NotificationSettingsScreen(
                         onClick = onNotificationSoundClick,
                     )
                     SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    SettingsActionPreference(
                         title = stringResource(R.string.vibration),
-                        checked = state.isNotificationVibrateEnabled,
                         enabled = state.isTrackerNotificationsEnabled,
-                        onCheckedChange = onNotificationVibrateChange,
+                        onClick = onNotificationVibrateClick,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(

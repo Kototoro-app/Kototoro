@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -32,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
@@ -60,6 +62,7 @@ fun AppDownloadsRoute(
 
     var selectionIds by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
     val inSelectionMode = selectionIds.isNotEmpty()
+    val hapticFeedback = LocalHapticFeedback.current
     val rootView = LocalView.current
     val mainActivity = LocalContext.current as? MainActivity
 
@@ -92,6 +95,7 @@ fun AppDownloadsRoute(
                     },
                     actions = {
                         IconButton(onClick = {
+                            hapticFeedback.performSelectionHapticFeedback()
                             selectionIds = viewModel.allIds()
                         }) {
                             Icon(Icons.Default.CheckCircle, contentDescription = "Select All")
@@ -248,6 +252,7 @@ fun AppDownloadsRoute(
                             isSelected = isSelected,
                             onItemClick = {
                                 if (inSelectionMode) {
+                                    hapticFeedback.performSelectionHapticFeedback()
                                     selectionIds = if (isSelected) selectionIds - item.id.mostSignificantBits else selectionIds + item.id.mostSignificantBits
                                 } else {
                                     if (item.displayManga != null) {

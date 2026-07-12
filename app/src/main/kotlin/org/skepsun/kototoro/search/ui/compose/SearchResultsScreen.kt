@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -76,6 +77,7 @@ import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
@@ -216,6 +218,7 @@ fun SearchResultsRoute(
     var pinnedOnly by remember { mutableStateOf(viewModel.isPinnedOnlySelected) }
     var hideEmpty by remember { mutableStateOf(viewModel.isHideEmptySelected) }
     var selectedItemsIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    val hapticFeedback = LocalHapticFeedback.current
 
     val preparedItems = remember(listModels) { prepareSearchItems(listModels) }
     val sections = preparedItems.sections
@@ -336,6 +339,7 @@ fun SearchResultsRoute(
                     onSectionClick = { onOpenSourceResults(section) },
                     onItemClick = { item ->
                         if (selectedItemsIds.isNotEmpty() && !isPickMode) {
+                            hapticFeedback.performSelectionHapticFeedback()
                             selectedItemsIds = selectedItemsIds.toggle(item.id)
                         } else if (isPickMode) {
                             onPickContent(item.toContentWithOverride())

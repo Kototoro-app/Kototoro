@@ -64,7 +64,6 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -100,6 +99,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.getOriginLabel
 import org.skepsun.kototoro.core.model.getStableIdentityKey
 import org.skepsun.kototoro.core.model.getTitle
@@ -1403,7 +1403,7 @@ private fun StageConfigCard(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Slider(
+                            KototoroSlider(
                                 value = uiState.fuzzyMergeThresholdPercent.toFloat(),
                                 onValueChange = {
                                     onFuzzyMergeThresholdPercentChange(it.toInt())
@@ -3721,7 +3721,7 @@ private fun TrackingBindingSection(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Slider(
+                    KototoroSlider(
                         value = uiState.fuzzyTrackingThresholdPercent.toFloat(),
                         onValueChange = {
                             onFuzzyTrackingThresholdPercentChange(it.toInt())

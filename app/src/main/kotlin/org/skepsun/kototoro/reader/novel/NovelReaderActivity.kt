@@ -47,6 +47,8 @@ import org.skepsun.kototoro.core.ui.BaseFullscreenActivity
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.core.util.ext.isNightMode
+import org.skepsun.kototoro.core.util.ext.performConfirmHapticFeedback
+import org.skepsun.kototoro.core.util.ext.performRejectHapticFeedback
 import org.skepsun.kototoro.databinding.ActivityNovelReaderV2Binding
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -662,6 +664,7 @@ class NovelReaderActivity :
             loadChapter(currentChapterIndex)
         } else {
             // 已经是第一章或最后一章
+            viewBinding.readerView.performRejectHapticFeedback()
             val message = if (delta > 0) {
                 getString(R.string.novel_last_chapter)
             } else {
@@ -905,6 +908,7 @@ class NovelReaderActivity :
                 if (existingBookmark != null) {
                     // 删除书签
                     bookmarksRepository.removeBookmark(manga.id, chapter.id, currentPage)
+                    viewBinding.readerView.performConfirmHapticFeedback()
                     viewBinding.toastView.showTemporary(getString(R.string.novel_bookmark_removed), 1500L)
                 } else {
                     // 添加书签 - 保存当前页面的文本预览
@@ -922,6 +926,7 @@ class NovelReaderActivity :
                         percent = percent,
                     )
                     bookmarksRepository.addBookmark(bookmark)
+                    viewBinding.readerView.performConfirmHapticFeedback()
                     viewBinding.toastView.showTemporary(getString(R.string.novel_bookmark_added), 1500L)
                 }
             } catch (e: Exception) {

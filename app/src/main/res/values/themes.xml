@@ -63,6 +63,7 @@
 		<item name="switchPreferenceCompatStyle">@style/Preference.SwitchPreferenceCompat.M3</item>
 		<item name="circularProgressIndicatorStyle">@style/Widget.Kototoro.CircularProgressIndicator.ThickStraight</item>
 		<item name="linearProgressIndicatorStyle">@style/Widget.Kototoro.LinearProgressIndicator.ThickStraight</item>
+		<item name="sliderStyle">@style/Widget.Kototoro.Slider</item>
 		<item name="bottomSheetDragHandleStyle">@style/Widget.Kototoro.BottomSheet.DragHandle</item>
 		<item name="preferenceTheme">@style/PreferenceThemeOverlay.Kototoro</item>
 		<!-- Fix crash in A15 + compact spacing for SearchBar filter icons -->
@@ -110,7 +111,7 @@
 		<item name="navigationRailStyle">@style/Widget.Material3Expressive.NavigationRailView</item>
 		<item name="toolbarStyle">@style/Widget.Material3Expressive.Toolbar</item>
 		<item name="toolbarSurfaceStyle">@style/Widget.Material3Expressive.Toolbar.Surface</item>
-		<item name="sliderStyle">@style/Widget.Material3Expressive.Slider.Xsmall</item>
+		<item name="sliderStyle">@style/Widget.Kototoro.Slider</item>
 	</style>
 
 	<!-- Expressive Monet theme -->
@@ -165,7 +166,7 @@
 		<item name="linearProgressIndicatorStyle">@style/Widget.Material3Expressive.LinearProgressIndicator</item>
 		<item name="circularProgressIndicatorStyle">@style/Widget.Material3Expressive.CircularProgressIndicator</item>
 
-		<item name="sliderStyle">@style/Widget.Material3Expressive.Slider.Xsmall</item>
+		<item name="sliderStyle">@style/Widget.Kototoro.Slider</item>
 
 		<item name="collapsingToolbarLayoutMediumSize">@dimen/m3_comp_app_bar_medium_flexible_container_height</item>
 		<item name="collapsingToolbarLayoutLargeSize">@dimen/m3_comp_app_bar_large_flexible_container_height</item>

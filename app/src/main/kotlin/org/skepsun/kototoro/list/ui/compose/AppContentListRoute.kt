@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import android.widget.Toast
 import androidx.compose.foundation.lazy.LazyListState
@@ -28,6 +29,7 @@ import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ErrorState
 import org.skepsun.kototoro.list.ui.model.ListModel
@@ -112,6 +114,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val hasMoreItems by viewModel.hasMoreItems.collectAsStateWithLifecycle()
 
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    val hapticFeedback = LocalHapticFeedback.current
     var pendingFixIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingMarkAsCompletedItems by remember { mutableStateOf<List<ContentListModel>?>(null) }
 
@@ -213,6 +216,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                     onActionClick = { action ->
                         when (action) {
                             SelectionAction.SELECT_ALL -> {
+                                hapticFeedback.performSelectionHapticFeedback()
                                 composeSelectionIds = selectionModels.allContentIds
                             }
 
@@ -464,6 +468,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         },
         onItemClick = { item ->
             if (composeSelectionIds.isNotEmpty()) {
+                hapticFeedback.performSelectionHapticFeedback()
                 composeSelectionIds = if (item.id in composeSelectionIds) composeSelectionIds - item.id else composeSelectionIds + item.id
             } else {
                 val content = item.toContentWithOverride()
@@ -514,6 +519,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         onSelectionAction = { action ->
             when (action) {
                 SelectionAction.SELECT_ALL -> {
+                    hapticFeedback.performSelectionHapticFeedback()
                     val allIds = viewModel.content.value.mapNotNull { (it as? org.skepsun.kototoro.list.ui.model.ContentListModel)?.id }.toSet()
                     composeSelectionIds = allIds
                 }

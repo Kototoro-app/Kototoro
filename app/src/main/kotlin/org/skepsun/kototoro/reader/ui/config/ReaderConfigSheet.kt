@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
 import org.skepsun.kototoro.core.util.ext.consume
 import org.skepsun.kototoro.core.util.ext.findParentCallback
 import org.skepsun.kototoro.core.util.ext.observe
+import org.skepsun.kototoro.core.util.ext.performSegmentHapticFeedback
 import org.skepsun.kototoro.core.util.ext.setValueRounded
 import org.skepsun.kototoro.core.util.ext.viewLifecycleScope
 import org.skepsun.kototoro.core.util.progress.IntPercentLabelFormatter
@@ -358,6 +359,7 @@ class ReaderConfigSheet :
             return
         }
         findParentCallback(Callback::class.java)?.onReaderModeChanged(newMode) ?: return
+        group?.performSegmentHapticFeedback()
         mode = newMode
     }
 

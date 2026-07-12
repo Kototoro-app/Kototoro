@@ -20,6 +20,7 @@ import androidx.appcompat.widget.Toolbar
 import androidx.annotation.DrawableRes
 import androidx.core.animation.doOnEnd
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.util.ext.performSegmentHapticFeedback
 import org.skepsun.kototoro.parsers.model.ContentType
 import kotlin.math.abs
 
@@ -201,7 +202,7 @@ class SwipeFilterPillView @JvmOverloads constructor(
                     }
                     if (newIndex != selectedIndex) {
                         selectedIndex = newIndex
-                        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        performSegmentHapticFeedback()
                         updateIconOpacities()
                         invalidateWithParents()
                     }

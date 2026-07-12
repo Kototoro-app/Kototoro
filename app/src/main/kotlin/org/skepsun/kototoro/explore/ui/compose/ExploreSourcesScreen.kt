@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.collection.LongSet
@@ -34,6 +35,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.iconResForUi
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.explore.ui.ExploreViewModel
@@ -50,6 +52,7 @@ fun KototoroExploreSourcesScreen(
 ) {
     val items by viewModel.content.collectAsStateWithLifecycle()
     var composeSelectionIds: LongSet by remember { mutableStateOf(longSetOf()) }
+    val hapticFeedback = LocalHapticFeedback.current
     val isGrid by viewModel.isGrid.collectAsStateWithLifecycle()
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
@@ -147,6 +150,7 @@ fun KototoroExploreSourcesScreen(
                                 .combinedClickable(
                                     onClick = {
                                         if (composeSelectionIds.isNotEmpty()) {
+                                            hapticFeedback.performSelectionHapticFeedback()
                                             val newSet = androidx.collection.MutableLongSet(composeSelectionIds.size + 1)
                                             newSet.addAll(composeSelectionIds)
                                             if (isSelected) newSet.remove(listModel.id) else newSet.add(listModel.id)

@@ -27,7 +27,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -54,6 +53,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getSaveTitleResId
 import org.skepsun.kototoro.core.model.getWholeWorkOptionResId
@@ -637,7 +637,7 @@ private fun DownloadIntSlider(
             },
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Slider(
+            KototoroSlider(
                 value = value.toFloat(),
                 onValueChange = { rawValue ->
                     val snappedValue = (rawValue / stepSize).roundToInt() * stepSize

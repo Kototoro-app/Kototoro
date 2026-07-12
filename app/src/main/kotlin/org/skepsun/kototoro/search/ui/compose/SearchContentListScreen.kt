@@ -68,7 +68,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -101,6 +100,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -119,6 +119,7 @@ import coil3.request.SuccessResult
 import coil3.request.ImageRequest
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.isLocal
@@ -410,6 +411,7 @@ fun AppSearchContentListRoute(
     var previewContent by remember { mutableStateOf<Content?>(null) }
     var showTagsCatalog by remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
     var selectedItemsIds by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
+    val hapticFeedback = LocalHapticFeedback.current
     val focusRequester = remember { FocusRequester() }
     val selectedItems: Set<Content> = remember(selectedItemsIds, contentListItems) {
         contentListItems
@@ -667,6 +669,7 @@ fun AppSearchContentListRoute(
                                 onPrepareItemTransition = { _, _ -> },
                                 onItemClick = { item ->
                                     if (selectedItemsIds.isNotEmpty()) {
+                                        hapticFeedback.performSelectionHapticFeedback()
                                         selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
                                     } else {
                                         previewContent = item.toContentWithOverride()
@@ -830,6 +833,7 @@ fun AppSearchContentListRoute(
                             onPrepareItemTransition = { _, _ -> },
                             onItemClick = { item ->
                                 if (selectedItemsIds.isNotEmpty()) {
+                                    hapticFeedback.performSelectionHapticFeedback()
                                     selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
                                 } else {
                                     val content = item.toContentWithOverride()

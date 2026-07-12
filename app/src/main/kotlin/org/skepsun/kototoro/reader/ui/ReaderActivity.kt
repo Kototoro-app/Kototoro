@@ -66,6 +66,7 @@ import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.postDelayed
+import org.skepsun.kototoro.core.util.ext.performConfirmHapticFeedback
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.zipWithPrevious
 import org.skepsun.kototoro.databinding.ActivityReaderBinding
@@ -243,6 +244,9 @@ class ReaderActivity :
         viewModel.isBookmarkAdded.observe(this, MenuInvalidator(this))
         viewModel.onAskNsfwIncognito.observeEvent(this) { askForIncognitoMode() }
         viewModel.onShowToast.observeEvent(this) { msgId ->
+            if (msgId == R.string.bookmark_added || msgId == R.string.bookmark_removed) {
+                viewBinding.container.performConfirmHapticFeedback()
+            }
             Snackbar.make(viewBinding.container, msgId, Snackbar.LENGTH_SHORT)
                 .setAnchorView(viewBinding.toolbarDocked)
                 .show()

@@ -4,7 +4,6 @@ import android.app.Activity
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.material3.Slider
 import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -52,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import androidx.compose.ui.unit.LayoutDirection
 
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -1384,7 +1384,7 @@ private fun FeedDisplayOptionsContent(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            Slider(
+            KototoroSlider(
                 value = limitIndex.toFloat(),
                 onValueChange = { index ->
                     onFeedLimitChanged(jumps[index.roundToInt()])

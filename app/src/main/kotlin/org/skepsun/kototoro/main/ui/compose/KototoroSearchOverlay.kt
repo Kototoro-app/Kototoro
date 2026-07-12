@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -87,6 +88,7 @@ import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.entitygraph.domain.EntityType
@@ -624,6 +626,8 @@ private fun SuggestionList(
     onSourceSuggestionClick: (ContentSource) -> Unit,
     onDeleteQuery: (String) -> Unit,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
+
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
@@ -679,7 +683,10 @@ private fun SuggestionList(
                         },
                         enableDismissFromStartToEnd = true,
                         enableDismissFromEndToStart = true,
-                        onDismiss = { onDeleteQuery(item.query) },
+                        onDismiss = {
+                            hapticFeedback.performSelectionHapticFeedback()
+                            onDeleteQuery(item.query)
+                        },
                     ) {
                         SearchSuggestionRow(
                             text = item.query,

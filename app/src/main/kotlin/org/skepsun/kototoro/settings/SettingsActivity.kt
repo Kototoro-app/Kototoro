@@ -1349,6 +1349,17 @@ class SettingsActivity :
 					onNotificationSoundClick = {
 						ringtonePickContract.launch(kototoroAppSettings.notificationSound)
 					},
+					onNotificationVibrateClick = {
+						trackerNotificationHelper.updateChannels()
+						startSettingsActivitySafe(
+							Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+								.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+								.putExtra(
+									android.provider.Settings.EXTRA_CHANNEL_ID,
+									TrackerNotificationHelper.CHANNEL_ID,
+								),
+						)
+					},
 				)
 			}
 			SettingsDestination.ServicesSettings -> RenderComposeSection(title = getString(R.string.services)) {

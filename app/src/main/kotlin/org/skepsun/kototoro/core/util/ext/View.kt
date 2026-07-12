@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Point
 import android.graphics.Rect
 import android.os.Build
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.View.MeasureSpec
 import android.view.ViewGroup
@@ -29,6 +30,30 @@ import com.google.android.material.slider.RangeSlider
 import com.google.android.material.slider.Slider
 import com.google.android.material.tabs.TabLayout
 import kotlin.math.roundToInt
+
+fun View.performConfirmHapticFeedback() {
+	performHapticFeedback(
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			HapticFeedbackConstants.CONFIRM
+		} else {
+			HapticFeedbackConstants.VIRTUAL_KEY
+		},
+	)
+}
+
+fun View.performRejectHapticFeedback() {
+	performHapticFeedback(
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+			HapticFeedbackConstants.REJECT
+		} else {
+			HapticFeedbackConstants.LONG_PRESS
+		},
+	)
+}
+
+fun View.performSegmentHapticFeedback() {
+	performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+}
 
 fun View.hasGlobalPoint(x: Int, y: Int): Boolean {
 	if (visibility != View.VISIBLE) {

@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.settings
 
+import android.content.Intent
 import android.media.RingtoneManager
 import android.os.Bundle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +21,7 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.settings.compose.NotificationSettingsScreen
 import org.skepsun.kototoro.settings.compose.NotificationSettingsUiState
 import org.skepsun.kototoro.settings.utils.RingtonePickContract
+import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -27,6 +30,9 @@ class NotificationSettingsLegacyFragment : Fragment() {
 
     @Inject
     lateinit var settings: AppSettings
+
+    @Inject
+    lateinit var notificationHelper: TrackerNotificationHelper
 
     private val ringtonePickContract = registerForActivityResult(
         RingtonePickContract(R.string.notification_sound),
@@ -53,6 +59,14 @@ class NotificationSettingsLegacyFragment : Fragment() {
                     onNotificationSoundClick = {
                         ringtonePickContract.launch(settings.notificationSound)
                     },
+                    onNotificationVibrateClick = {
+                        notificationHelper.updateChannels()
+                        startActivity(
+                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
+                                .putExtra(Settings.EXTRA_CHANNEL_ID, TrackerNotificationHelper.CHANNEL_ID),
+                        )
+                    },
                 )
             }
         }
@@ -68,6 +82,7 @@ class NotificationSettingsLegacyFragment : Fragment() {
 fun NotificationSettingsRoute(
     settings: AppSettings,
     onNotificationSoundClick: () -> Unit,
+    onNotificationVibrateClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val isTrackerNotificationsEnabled = settings.observeAsState(
@@ -76,9 +91,6 @@ fun NotificationSettingsRoute(
     val notificationSound = settings.observeAsState(
         AppSettings.KEY_NOTIFICATIONS_SOUND,
     ) { notificationSound }.value
-    val notificationVibrate = settings.observeAsState(
-        AppSettings.KEY_NOTIFICATIONS_VIBRATE,
-    ) { notificationVibrate }.value
     val notificationLight = settings.observeAsState(
         AppSettings.KEY_NOTIFICATIONS_LIGHT,
     ) { notificationLight }.value
@@ -90,7 +102,6 @@ fun NotificationSettingsRoute(
     val state = NotificationSettingsUiState(
         isTrackerNotificationsEnabled = isTrackerNotificationsEnabled,
         ringtoneSummary = ringtoneSummary,
-        isNotificationVibrateEnabled = notificationVibrate,
         isNotificationLightEnabled = notificationLight,
         isNotificationsInfoVisible = !isTrackerNotificationsEnabled,
     )
@@ -101,7 +112,7 @@ fun NotificationSettingsRoute(
         snackbarHostState = snackbarHostState,
         onTrackerNotificationsEnabledChange = { settings.isTrackerNotificationsEnabled = it },
         onNotificationSoundClick = onNotificationSoundClick,
-        onNotificationVibrateChange = { settings.notificationVibrate = it },
+        onNotificationVibrateClick = onNotificationVibrateClick,
         onNotificationLightChange = { settings.notificationLight = it },
     )
 }

@@ -13,6 +13,7 @@ import androidx.core.view.updateLayoutParams
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.slider.Slider
 import org.skepsun.kototoro.databinding.SheetNovelReaderConfigBinding
+import org.skepsun.kototoro.core.util.ext.performSegmentHapticFeedback
 
 /**
  * 小说阅读器设置面板
@@ -107,8 +108,9 @@ class NovelReaderConfigSheet : BottomSheetDialogFragment(),
         binding.buttonClose.setOnClickListener(this)
         binding.buttonClearTranslationCache.setOnClickListener(this)
         
-        binding.toggleGroupReadingMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        binding.toggleGroupReadingMode.addOnButtonCheckedListener { group, checkedId, isChecked ->
             if (isChecked) {
+                group.performSegmentHapticFeedback()
                 settings = settings.copy(
                     readingMode = if (checkedId == org.skepsun.kototoro.R.id.btnModeScroll) ReadingMode.SCROLL else ReadingMode.PAGED
                 )
@@ -118,8 +120,9 @@ class NovelReaderConfigSheet : BottomSheetDialogFragment(),
             }
         }
 
-        binding.toggleGroupPageTurnAnimation.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        binding.toggleGroupPageTurnAnimation.addOnButtonCheckedListener { group, checkedId, isChecked ->
             if (isChecked) {
+                group.performSegmentHapticFeedback()
                 settings = settings.copy(
                     pageTurnAnimation = if (checkedId == org.skepsun.kototoro.R.id.btnAnimationSimulation) {
                         NovelPageTurnAnimation.SIMULATION
@@ -131,8 +134,9 @@ class NovelReaderConfigSheet : BottomSheetDialogFragment(),
             }
         }
 
-        binding.toggleGroupThemePreset.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        binding.toggleGroupThemePreset.addOnButtonCheckedListener { group, checkedId, isChecked ->
             if (isChecked) {
+                group.performSegmentHapticFeedback()
                 settings = settings.copy(
                     themePreset = when (checkedId) {
                         org.skepsun.kototoro.R.id.btnThemeSepia -> NovelReaderThemePreset.SEPIA
@@ -147,8 +151,9 @@ class NovelReaderConfigSheet : BottomSheetDialogFragment(),
         }
 
         // 翻译展示模式切换监听
-        binding.toggleGroupTranslationMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        binding.toggleGroupTranslationMode.addOnButtonCheckedListener { group, checkedId, isChecked ->
             if (isChecked) {
+                group.performSegmentHapticFeedback()
                 settings = settings.copy(
                     translationDisplayMode = if (checkedId == org.skepsun.kototoro.R.id.btnTranslationBilingual) {
                         NovelTranslationDisplayMode.BILINGUAL
@@ -181,6 +186,8 @@ class NovelReaderConfigSheet : BottomSheetDialogFragment(),
             org.skepsun.kototoro.R.id.sliderMarginVertical -> settings.copy(marginVertical = value.toInt())
             else -> return
         }.normalized()
+
+        slider.performSegmentHapticFeedback()
 
         updateValueDisplays()
         updatePreviewCard()

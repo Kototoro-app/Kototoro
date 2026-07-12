@@ -152,10 +152,16 @@
 	</style>
 
 
-	<style name="Widget.Kototoro.Slider.Wide" parent="Widget.Material3.Slider">
-		<item name="thumbHeight">48dp</item>
-		<item name="trackCornerSize">12dp</item>
-		<item name="trackHeight">40dp</item>
+	<style name="Widget.Kototoro.Slider" parent="Widget.Material3.Slider">
+		<item name="android:minHeight">48dp</item>
+		<item name="thumbWidth">6dp</item>
+		<item name="thumbHeight">24dp</item>
+		<item name="thumbStrokeWidth">0dp</item>
+		<item name="trackCornerSize">4dp</item>
+		<item name="trackHeight">8dp</item>
+		<item name="haloRadius">18dp</item>
+		<item name="tickRadiusActive">2dp</item>
+		<item name="tickRadiusInactive">2dp</item>
 	</style>
 
 	<style name="Widget.Kototoro.RecyclerView" parent="">

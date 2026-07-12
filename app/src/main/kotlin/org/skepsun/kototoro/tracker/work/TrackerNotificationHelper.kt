@@ -181,6 +181,7 @@ class TrackerNotificationHelper @Inject constructor(
 			.setDescription(applicationContext.getString(R.string.show_notification_new_chapters_on))
 			.setShowBadge(true)
 			.setLightColor(ContextCompat.getColor(applicationContext, R.color.blue_primary))
+			.setVibrationEnabled(settings.notificationVibrate)
 			.build()
 		manager.createNotificationChannel(channel)
 	}

@@ -23,11 +23,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -71,6 +73,7 @@ fun HistoryScreen(
     showInlineSelectionTopBar: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
     val quickFilter = remember(items, headerQuickFilter) {
         headerQuickFilter ?: (items.firstOrNull { it is QuickFilter } as? QuickFilter)
     }
@@ -159,7 +162,12 @@ fun HistoryScreen(
             gridScale = gridScale,
             selectedItemsIds = selectedItemsIds,
             onPrepareItemTransition = onPrepareItemTransition,
-            onItemClick = onItemClick,
+            onItemClick = { item ->
+                if (selectedItemsIds.isNotEmpty()) {
+                    hapticFeedback.performSelectionHapticFeedback()
+                }
+                onItemClick(item)
+            },
             onItemLongClick = onItemLongClick,
             onClearSelection = onClearSelection,
             onSelectionAction = onSelectionAction,

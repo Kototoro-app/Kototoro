@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -42,6 +43,7 @@ import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.model.ListHeader
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -131,6 +133,8 @@ fun BookmarksScreen(
 	onSelectionActionClick: (Int) -> Unit,
 	onClearSelection: () -> Unit,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
+
     val gridState = rememberLazyGridState()
     val activeDetailsPaneState by remember(detailsPaneState) {
         derivedStateOf {
@@ -193,7 +197,12 @@ fun BookmarksScreen(
 								BookmarkCard(
 									bookmark = item,
 									isSelected = selectedItemIds.contains(item.pageId),
-									onClick = { onItemClick(item) },
+									onClick = {
+                                        if (selectedItemIds.isNotEmpty()) {
+                                            hapticFeedback.performSelectionHapticFeedback()
+                                        }
+                                        onItemClick(item)
+                                    },
 									onLongClick = { onItemLongClick(item) },
 								)
 							}

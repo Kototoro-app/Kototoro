@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -33,6 +34,7 @@ import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -182,6 +184,7 @@ fun PagesScreen(
 	onClearSelection: () -> Unit,
 ) {
     val context = LocalContext.current
+    val hapticFeedback = LocalHapticFeedback.current
     val listState = rememberLazyGridState()
     val activeDetailsPaneState by remember(detailsPaneState) {
         derivedStateOf {
@@ -297,7 +300,12 @@ fun PagesScreen(
                                 isSelected = selectedItemIds.contains(item.page.id),
                                 fitPreview = fitPreview,
                                 aspectRatio = cardAspectRatio,
-                                onClick = { onItemClick(item) },
+                                onClick = {
+                                    if (selectedItemIds.isNotEmpty()) {
+                                        hapticFeedback.performSelectionHapticFeedback()
+                                    }
+                                    onItemClick(item)
+                                },
                                 onLongClick = { onItemLongClick(item) },
                             )
                         }

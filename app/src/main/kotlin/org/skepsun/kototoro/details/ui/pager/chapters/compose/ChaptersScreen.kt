@@ -35,10 +35,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
+import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -68,6 +70,7 @@ fun ChaptersScreen(
     onSelectionActionClick: (Int) -> Unit,
     onClearSelection: () -> Unit,
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val itemPositionKeys = remember(items) {
@@ -232,7 +235,12 @@ fun ChaptersScreen(
                                     ChapterGridCard(
                                         item = item,
                                         isSelected = selectedItemIds.contains(item.chapter.id),
-                                        onClick = { onItemClick(item) },
+                                        onClick = {
+                                            if (selectedItemIds.isNotEmpty()) {
+                                                hapticFeedback.performSelectionHapticFeedback()
+                                            }
+                                            onItemClick(item)
+                                        },
                                         onLongClick = { onItemLongClick(item) },
                                     )
                                 }
@@ -273,7 +281,12 @@ fun ChaptersScreen(
                                     ChapterListCard(
                                         item = item,
                                         isSelected = selectedItemIds.contains(item.chapter.id),
-                                        onClick = { onItemClick(item) },
+                                        onClick = {
+                                            if (selectedItemIds.isNotEmpty()) {
+                                                hapticFeedback.performSelectionHapticFeedback()
+                                            }
+                                            onItemClick(item)
+                                        },
                                         onLongClick = { onItemLongClick(item) },
                                     )
                                 }

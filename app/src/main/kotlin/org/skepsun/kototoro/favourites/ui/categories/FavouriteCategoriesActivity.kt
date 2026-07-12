@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.favourites.ui.categories
 
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup.MarginLayoutParams
 import androidx.activity.viewModels
@@ -22,6 +23,7 @@ import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
 import org.skepsun.kototoro.core.util.ext.end
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
+import org.skepsun.kototoro.core.util.ext.performSegmentHapticFeedback
 import org.skepsun.kototoro.core.util.ext.systemBarsInsets
 import org.skepsun.kototoro.databinding.ActivityCategoriesBinding
 import org.skepsun.kototoro.favourites.ui.categories.adapter.CategoriesAdapter
@@ -144,6 +146,7 @@ class FavouriteCategoriesActivity :
 	}
 
 	override fun onDragHandleTouch(holder: RecyclerView.ViewHolder): Boolean {
+		holder.itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
 		reorderHelper.startDrag(holder)
 		return true
 	}
@@ -186,6 +189,7 @@ class FavouriteCategoriesActivity :
 				return false
 			}
 			adapter.reorderItems(fromPos, toPos)
+			viewHolder.itemView.performSegmentHapticFeedback()
 			return true
 		}
 

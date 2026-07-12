@@ -38,8 +38,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RangeSlider
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +60,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroRangeSlider
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.nav.router
@@ -1003,7 +1003,7 @@ private fun YearSection(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Slider(
+        KototoroSlider(
             value = sliderValue,
             onValueChange = { sliderValue = it },
             valueRange = minYear.toFloat()..maxYear.toFloat(),
@@ -1054,7 +1054,7 @@ private fun YearRangeSection(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        RangeSlider(
+        KototoroRangeSlider(
             value = sliderValues.first..sliderValues.second,
             onValueChange = { range ->
                 sliderValues = range.start to range.endInclusive
