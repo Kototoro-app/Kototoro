@@ -119,6 +119,7 @@ limitations under the License.
 - [Light Novel Yuedu Source](https://github.com/ZWolken/Light-Novel-Yuedu-Source)
 - [legado-with-MD3](https://github.com/HapeLee/legado-with-MD3)
 - [RealCUGAN-ncnn-Android](https://github.com/omeshi1/RealCUGAN-ncnn-Android)
+- [manga-translator-ui](https://github.com/hgmzhn/manga-translator-ui)
 
 ## Contact / 联系方式
 
