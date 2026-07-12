@@ -248,7 +248,7 @@ class KotoNetworkHelper(
                                             !title.contains("Cloudflare", ignoreCase = true) &&
                                             title.isNotBlank()
                                         },
-                                        timeoutMs = 15000,
+                                        timeoutMs = 45000,
                                         userAgent = request.header("User-Agent") ?: defaultUserAgentProvider(),
                                         headers = buildWebViewHeaders(request),
                                     )
@@ -360,20 +360,11 @@ class KotoNetworkHelper(
     }
 
     private fun Request.toBrowserChallengeUrlForSource(): String {
-        return if (isMihonRequest()) {
-            url.toString()
-        } else {
-            toBrowserChallengeUrl()
-        }
+        return CloudFlareHelper.getChallengeUrl(url.toString())
     }
 
     private fun okhttp3.Request.toSuccessCookieUrl(): String {
-        return url.newBuilder()
-            .encodedPath("/")
-            .query(null)
-            .fragment(null)
-            .build()
-            .toString()
+        return CloudFlareHelper.getChallengeUrl(url.toString())
     }
 
     private fun Request.withCurrentSourceTagIfCompatible(): Request {
@@ -890,7 +881,7 @@ class KotoNetworkHelper(
         private const val INTERACTIVE_RETRY_WINDOW_MS = 10 * 60 * 1000L
         private const val WEBVIEW_SOLVE_REUSE_WINDOW_MS = 10_000L
         private const val WEBVIEW_SOLVE_FAILURE_COOLDOWN_MS = 10 * 60 * 1000L
-        private const val CLOUDFLARE_WEBVIEW_SOLVE_TIMEOUT_MS = 30_000L
+        private const val CLOUDFLARE_WEBVIEW_SOLVE_TIMEOUT_MS = 45_000L
         private val WEBVIEW_UNSAFE_HEADER_NAMES = setOf(
             "content-length",
             "host",

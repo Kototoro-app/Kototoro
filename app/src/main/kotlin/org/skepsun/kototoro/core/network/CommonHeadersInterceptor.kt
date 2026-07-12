@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.core.network
 
+import android.content.Context
 import android.util.Log
 import dagger.Lazy
+import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Interceptor.Chain
@@ -24,6 +26,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CommonHeadersInterceptor @Inject constructor(
+	@ApplicationContext private val context: Context,
 	private val mangaRepositoryFactoryLazy: Lazy<ContentRepository.Factory>,
 	private val mangaLoaderContextLazy: Lazy<ContentLoaderContextImpl>,
 ) : Interceptor {
@@ -51,8 +54,21 @@ class CommonHeadersInterceptor @Inject constructor(
 				headersBuilder[name] = value
 			}
 		}
-		if (headersBuilder[CommonHeaders.USER_AGENT] == null) {
-			headersBuilder[CommonHeaders.USER_AGENT] = mangaLoaderContextLazy.get().getDefaultUserAgent()
+		val userAgent = headersBuilder[CommonHeaders.USER_AGENT] ?: UserAgentProvider.get(context)
+		headersBuilder[CommonHeaders.USER_AGENT] = userAgent
+
+		if (userAgent.contains("Chrome", ignoreCase = true)) {
+			val chromeVersionRegex = Regex("Chrome/(\\d+)\\.", RegexOption.IGNORE_CASE)
+			val majorVersion = chromeVersionRegex.find(userAgent)?.groupValues?.get(1) ?: "124"
+			if (headersBuilder["sec-ch-ua"] == null) {
+				headersBuilder["sec-ch-ua"] = "\"Chromium\";v=\"$majorVersion\", \"Google Chrome\";v=\"$majorVersion\", \"Not-A.Brand\";v=\"99\""
+			}
+			if (headersBuilder["sec-ch-ua-mobile"] == null) {
+				headersBuilder["sec-ch-ua-mobile"] = "?1"
+			}
+			if (headersBuilder["sec-ch-ua-platform"] == null) {
+				headersBuilder["sec-ch-ua-platform"] = "\"Android\""
+			}
 		}
 		
 		// Add Referer header upfront if not already set (like Kotatsu does)

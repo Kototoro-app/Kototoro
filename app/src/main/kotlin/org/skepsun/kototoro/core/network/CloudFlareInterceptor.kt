@@ -37,7 +37,7 @@ class CloudFlareInterceptor : Interceptor {
 
 			CloudFlareHelper.PROTECTION_CAPTCHA -> response.closeThrowing(
 				CloudFlareProtectedException(
-					url = request.url.toString(),
+					url = CloudFlareHelper.getChallengeUrl(request.url.toString()),
 					source = source,
 					headers = request.headers,
 				),
