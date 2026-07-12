@@ -4,13 +4,15 @@ This page records the current engineering position for TVBox support in Kototoro
 
 ## Current Position
 
-Kototoro is not at the "TVBox runtime does not exist" stage anymore. The project already has:
+Kototoro has TVBox support across multiple layers:
 
 - TVBox JSON import for single-repository and multi-repository configurations
 - per-site normalized storage instead of storing only the original whole JSON document
-- TVBox source management in the JSON source directory and unified source screens
-- `type = 4` routing through a QuickJS-based runtime
-- `type = 3` / `csp_*` routing through a local JAR spider runtime
+- TVBox source management in the unified source management screen
+- `type = 4` routing through a QuickJS-based runtime (`TVBoxQuickJsSpiderRuntime.kt`)
+- `type = 3` / `csp_*` routing through a local JAR spider runtime (`TVBoxJarSpiderRuntime.kt`)
+- Support status classification via `TVBoxSupportStatusClassifier` (DIRECT, PARTIAL_RUNTIME, QUICKJS_PARTIAL, BRIDGEABLE, SPIDER_BRIDGE, ORDINARY_JAR, GUARD_NATIVE)
+- Structured failure diagnostics via `TVBoxRuntimeDiagnostics` with 10 failure categories
 - fallback handling for direct media, playlists, text live lists, and simple CMS-style APIs
 
 The unresolved work is compatibility depth. In particular, ordinary JAR spiders and Guard-native JAR spiders must be treated as different classes of runtime behavior.
@@ -22,9 +24,9 @@ The unresolved work is compatibility depth. In particular, ordinary JAR spiders 
 | Direct media URLs | Supported when the imported config exposes usable playback URLs | Keep stable and avoid unnecessary spider execution |
 | M3U / text live lists / simple playlists | Supported for simpler configurations | Improve parsing coverage and diagnostics |
 | Simple CMS-style APIs | Partially supported through fallback candidates | Improve candidate detection and per-request logs |
-| `type = 4` JavaScript sources | Basic QuickJS bridge exists | Fill gaps around `cat.js`, dependency loading, `js2Proxy`, modules, and unsupported bytecode formats |
-| Ordinary `type = 3` / `csp_*` JAR spiders | Local runtime exists and follows the usual TVBoxOS-style Java lifecycle closely enough for continued work | Keep improving host ABI shims, missing classes, proxy handling, and diagnostics |
-| Guard-native JAR spiders | Not reliably supported locally | Do not treat as ordinary JAR failures; isolate, classify, and degrade instead of repeatedly crashing local runtime |
+| `type = 4` JavaScript sources | QuickJS bridge (`TVBoxQuickJsSpiderRuntime.kt`) with basic bridge support | Fill gaps around `cat.js`, dependency loading, `js2Proxy`, modules, and unsupported bytecode formats |
+| Ordinary `type = 3` / `csp_*` JAR spiders | Local runtime (`TVBoxJarSpiderRuntime.kt`) follows TVBoxOS-style Java lifecycle | Keep improving host ABI shims, missing classes, proxy handling, and diagnostics |
+| Guard-native JAR spiders | Not reliably supported locally; classified by `TVBoxSupportStatusClassifier` and `TVBoxRuntimeDiagnostics` | Do not treat as ordinary JAR failures; isolate, classify, and degrade instead of repeatedly crashing local runtime |
 
 ## Ordinary JAR vs Guard-Native JAR
 
@@ -45,10 +47,12 @@ The project has already explored more than one approach:
 
 - importing TVBox JSON sources as normalized per-site sources
 - supporting multi-repository TVBox JSON files
-- adding a QuickJS bridge for `type = 4`
-- adding a local `DexClassLoader` runtime for `type = 3` / `csp_*`
+- adding a QuickJS bridge for `type = 4` (`TVBoxQuickJsSpiderRuntime.kt`)
+- adding a local `DexClassLoader` runtime for `type = 3` / `csp_*` (`TVBoxJarSpiderRuntime.kt`)
 - aligning the Java-level loading sequence with TVBoxOS-style shells
 - adding TVBox / CatVod host compatibility stubs
+- implementing structured support status classification (`TVBoxSupportStatusClassifier`)
+- implementing structured failure diagnostics (`TVBoxRuntimeDiagnostics`)
 - experimenting with an isolated companion / worker process path
 - comparing Guard behavior against TVBoxOS-style loading
 
@@ -56,7 +60,7 @@ The important conclusion from that work is narrow: local Java-layer alignment re
 
 ## Diagnostic Policy
 
-When a TVBox source fails, classify the failure before changing runtime code:
+When a TVBox source fails, classify the failure before changing runtime code. `TVBoxRuntimeDiagnostics` provides structured classification:
 
 - `json_import`: the source JSON could not be fetched, parsed, or normalized
 - `multi_repo`: a child repository failed to resolve or produced no valid sites
@@ -66,24 +70,17 @@ When a TVBox source fails, classify the failure before changing runtime code:
 - `ordinary_jar_missing_class`: a local JAR spider references a missing host class
 - `ordinary_jar_missing_method`: a local JAR spider references an incompatible host method
 - `ordinary_jar_proxy`: `proxy` / `proxyLocal` handling is incomplete
+- `ordinary_jar_runtime`: general JAR runtime failure (timeout, etc.)
 - `guard_native`: a Guard-native spider hits native/JNI failure or is known to require native guard behavior
 
-Runtime failures should be logged with stable fields:
-
-```text
-TVBox runtime failure: category=<category> source=<source> runtime=<runtime> action=<action> detail=<detail>
-```
-
-Import failures use the same category vocabulary where possible:
-
-```text
-TVBox import failure: category=<category> action=<action> locator=<url-or-inline> detail=<detail>
-```
-
-The `action` field should name the narrow operation that failed, such as `parse_root`, `child_http_error`,
-`buildCatalog`, `getList`, `loadScript`, `instantiate`, `init`, `proxy`, or `getPages`. Use this before widening
-runtime shims. For example, `ordinary_jar_missing_class` should lead to a host ABI check, while `guard_native`
-should not be treated as another missing Java stub by default.
+Support status is pre-classified by `TVBoxSupportStatusClassifier`:
+- `DIRECT`: direct media URL, no spider required
+- `PARTIAL_RUNTIME`: CMS fallback candidate
+- `QUICKJS_PARTIAL`: type=4 JavaScript source
+- `BRIDGEABLE`: playable/CMS candidate with spider artifacts
+- `SPIDER_BRIDGE`: spider artifacts only, no playable candidate
+- `ORDINARY_JAR`: ordinary JAR spider (type=3 or csp_*)
+- `GUARD_NATIVE`: Guard-native JAR (detected by guard/dexnative/basespiderguard/wex keywords)
 
 This keeps fixes small and prevents unrelated runtime paths from being destabilized.
 
@@ -97,9 +94,10 @@ TVBox support should be described as a compatibility spectrum:
 
 Avoid promising full compatibility with every TVBox repository. Many public TVBox lists mix direct sources, CMS sources, ordinary spiders, JavaScript spiders, and Guard-native spiders in one file, so a repository can be partially usable even when some entries are not.
 
-## Next Engineering Steps
+## Key Files
 
-1. Continue ordinary JAR compatibility work only when logs show Java-layer missing class, missing method, initialization, proxy, or response parsing failures.
-2. Treat Guard-native failures as isolated limitations unless a dedicated safe execution environment is selected later.
-3. Improve multi-repository import diagnostics so each child repository reports fetch, parse, normalization, and emitted-site counts.
-4. Add focused regression fixtures for direct media, CMS fallback, QuickJS, ordinary JAR, and Guard-native classification.
+- Runtime: `TVBoxSpiderRuntime.kt`, `TVBoxJarSpiderRuntime.kt`, `TVBoxQuickJsSpiderRuntime.kt`, `TVBoxSpiderRuntimeFactory.kt`
+- Repository: `TVBoxRepository.kt`
+- Playback: `TVBoxPlayback.kt`
+- Diagnostics: `TVBoxRuntimeDiagnostics.kt`, `TVBoxSupportStatusClassifier.kt`
+- All under `core/parser/tvbox/`

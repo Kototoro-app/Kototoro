@@ -177,13 +177,28 @@ Kototoro 定位是漫画 + 小说阅读器，不是音频播放器。不做。
 | Content parser | `core/parser/legado/book/BookContent.kt` |
 | TOC parser | `core/parser/legado/book/BookChapterList.kt` |
 | Info parser | `core/parser/legado/book/BookInfo.kt` |
+| List parser | `core/parser/legado/book/BookList.kt` |
+| Crypto | `core/parser/legado/auth/LegadoCrypto.kt` |
+| Runtime bridge | `core/parser/legado/bridge/KototoroLegadoRuntimeBridge.kt` |
+| HTTP executor | `core/parser/legado/bridge/KototoroLegadoHttpExecutor.kt` |
+| Variable store | `core/parser/legado/bridge/KototoroLegadoVariableStore.kt` |
+| Cookie store | `core/parser/legado/bridge/KototoroLegadoCookieStore.kt` |
+| Sandbox JS evaluator | `core/parser/legado/bridge/LegadoSandboxJsEvaluator.kt` |
+| Sandbox rule context | `core/parser/legado/bridge/LegadoSandboxRuleRuntimeContext.kt` |
+| Standalone rule context | `core/parser/legado/bridge/StandaloneLegadoRuleRuntimeContext.kt` |
+| Standalone runtime state | `core/parser/legado/runtime/StandaloneLegadoRuntimeState.kt` |
+| Standalone list runtime | `core/parser/legado/runtime/StandaloneLegadoListRuntime.kt` |
+| Request plan builder | `core/parser/legado/LegadoRequestPlanBuilder.kt` |
+| URL template evaluator | `core/parser/legado/LegadoUrlTemplateEvaluator.kt` |
+| Source rule classifier | `core/parser/legado/LegadoSourceRuleClassifier.kt` |
+| Rule template resolver | `core/parser/legado/LegadoRuleTemplateResolver.kt` |
 | Replace rules model | `core/replace/ReplaceRule.kt` |
 | Replace rules repo | `core/replace/ReplaceRuleRepository.kt` |
 | Replace rules UI | `settings/sources/replace/ReplaceRulesFragment.kt` |
 | Login UI | `settings/sources/SourceComposeSettingsFragment.kt` |
 | Auth activity | `settings/sources/auth/SourceAuthActivity.kt` |
 | Factory | `core/parser/JsonContentRepositoryProvider.kt` |
-| Legado native ref | `../legado-with-MD3/app/src/main/java/io/legado/app/` |
+| Legado native ref | [legado-with-MD3](https://github.com/HapeLee/legado-with-MD3) |
 
 ---
 
