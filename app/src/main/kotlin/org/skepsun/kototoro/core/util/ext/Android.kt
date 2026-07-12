@@ -226,9 +226,9 @@ fun WebView.configureForParser(userAgentOverride: String?, blockImages: Boolean 
 	// Match Legado's settings for content loading
 	mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 	blockNetworkImage = blockImages // 阻止图片加载以加速
-	if (userAgentOverride != null) {
-		userAgentString = userAgentOverride
-	}
+	val finalUa = userAgentOverride?.let { org.skepsun.kototoro.core.network.UserAgentProvider.sanitize(it) }
+		?: org.skepsun.kototoro.core.network.UserAgentProvider.get(this@configureForParser.context)
+	userAgentString = finalUa
 	val cookieManager = CookieManager.getInstance()
 	cookieManager.setAcceptCookie(true)
 	cookieManager.setAcceptThirdPartyCookies(this@configureForParser, true)
