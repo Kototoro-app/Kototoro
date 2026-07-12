@@ -1340,6 +1340,7 @@ fun DetailsScreen(
                                     onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                                     onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                                     showCollapsedHandle = false,
+                                    isModernDetailsDockEnabled = false,
                                     isModernDockCompact = false,
                                     onSelectedTabIdChange = persistSelectedPaneTab,
                                     onActionClick = handleActionClick,
@@ -1508,6 +1509,7 @@ fun DetailsScreen(
                             onPageThumbnailAspectRatioChange = updatePageThumbnailAspectRatio,
                             onTogglePageThumbnailsFitPreview = togglePageThumbnailsFitPreview,
                             showCollapsedHandle = true,
+                            isModernDetailsDockEnabled = isModernDetailsDockEnabled,
                             isModernDockCompact = isModernDockCompact,
                             onSelectedTabIdChange = persistSelectedPaneTab,
                             onActionClick = handleActionClick,
@@ -2696,6 +2698,7 @@ private fun DetailsPaneContent(
     onPageThumbnailAspectRatioChange: (Float) -> Unit,
     onTogglePageThumbnailsFitPreview: () -> Unit,
     showCollapsedHandle: Boolean,
+    isModernDetailsDockEnabled: Boolean,
     isModernDockCompact: Boolean,
     onSelectedTabIdChange: (Int) -> Unit,
     onActionClick: (DetailsAction) -> Unit,
@@ -2703,9 +2706,6 @@ private fun DetailsPaneContent(
 ) {
     val chapterQuery = detailsPaneState.chapterQuery
     val isChapterSearchVisible = detailsPaneState.isChapterSearchVisible
-    val isModernDetailsDockEnabled by settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) {
-        isModernDetailsDockEnabled
-    }
     val paneOpacityProgress = easedOpacityProgress(sheetExpansionProgress)
     val modernPanelRevealProgress = if (!showCollapsedHandle) {
         1f
@@ -3911,37 +3911,46 @@ private fun ReadDock(
                     .padding(horizontal = if (modernStyle) 6.dp else 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        painter = rememberSafePainter(actionIconRes),
-                        contentDescription = if (compact) readLabel else null,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    AnimatedVisibility(
-                        visible = !compact,
-                        enter = fadeIn(tween(260)) + expandHorizontally(
-                            animationSpec = tween(
-                                ModernDetailsDockAnimationDurationMillis,
-                                easing = FastOutSlowInEasing,
-                            ),
-                            expandFrom = Alignment.Start,
-                        ),
-                        exit = fadeOut(tween(200)) + shrinkHorizontally(
-                            animationSpec = tween(320, easing = FastOutSlowInEasing),
-                            shrinkTowards = Alignment.Start,
-                        ),
+                if (modernStyle) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
                     ) {
-                        Text(
-                            text = readLabel,
-                            modifier = Modifier.padding(start = 8.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                        Icon(
+                            painter = rememberSafePainter(actionIconRes),
+                            contentDescription = if (compact) readLabel else null,
+                            modifier = Modifier.size(22.dp),
                         )
+                        AnimatedVisibility(
+                            visible = !compact,
+                            enter = fadeIn(tween(260)) + expandHorizontally(
+                                animationSpec = tween(
+                                    ModernDetailsDockAnimationDurationMillis,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                                expandFrom = Alignment.Start,
+                            ),
+                            exit = fadeOut(tween(200)) + shrinkHorizontally(
+                                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                                shrinkTowards = Alignment.Start,
+                            ),
+                        ) {
+                            Text(
+                                text = readLabel,
+                                modifier = Modifier.padding(start = 8.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
+                } else {
+                    Text(
+                        text = readLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
