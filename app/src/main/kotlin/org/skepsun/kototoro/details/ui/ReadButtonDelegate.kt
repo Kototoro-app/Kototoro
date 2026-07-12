@@ -115,7 +115,11 @@ internal fun openDetailsReader(
 							scroll = 0,
 						)
 					} else {
-						ReaderState(history.copy(chapterId = matchedChapter.id))
+						ReaderState(
+							chapterId = matchedChapter.id,
+							page = 0,
+							scroll = 0,
+						)
 					}
 				} else {
 					ReaderState(history.copy(chapterId = matchedChapter.id))
