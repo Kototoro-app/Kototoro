@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.compose
 
 import android.text.format.Formatter
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -40,6 +41,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -74,11 +76,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
@@ -340,11 +346,11 @@ fun DetailsHeader(
     }
 
     var isDescriptionExpanded by remember(settings.isDescriptionExpanded) { mutableStateOf(settings.isDescriptionExpanded) }
+    var isTitleExpanded by rememberSaveable(displayTitle) { mutableStateOf(false) }
+    var canExpandTitle by remember(displayTitle) { mutableStateOf(false) }
     val description = displayDescription.ifBlank { fallbackDescription }
     val collapsedDescriptionMaxLines = 3
-    var canExpandDescription by remember(description) {
-        mutableStateOf(description.length > 200)
-    }
+    var canExpandDescription by remember(description) { mutableStateOf(false) }
 
     val coverModel = remember(content?.source?.name, content?.url, currentCoverUrl) {
         when {
@@ -436,7 +442,7 @@ fun DetailsHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -475,7 +481,7 @@ fun DetailsHeader(
                     },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SelectionContainer {
+                SelectionContainer(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = displayTitle,
                         style = MaterialTheme.typography.headlineSmall.copy(
@@ -483,8 +489,37 @@ fun DetailsHeader(
                             lineHeight = 27.sp,
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 3,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                if (canExpandTitle && !isTitleExpanded) {
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startY = size.height * 0.62f,
+                                            endY = size.height,
+                                        ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                }
+                            }
+                            .clickable(enabled = canExpandTitle) {
+                                isTitleExpanded = !isTitleExpanded
+                            },
+                        maxLines = if (isTitleExpanded) Int.MAX_VALUE else 3,
                         overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { textLayoutResult ->
+                            val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
+                                textLayoutResult.lineCount > 3
+                            if (canExpandTitle != hasCollapsedOverflow) {
+                                canExpandTitle = hasCollapsedOverflow
+                            }
+                        },
                     )
                 }
                 if (alternateTitlesText.isNotEmpty()) {
@@ -665,12 +700,28 @@ fun DetailsHeader(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (canExpandDescription) {
-                    Text(
-                        text = if (isDescriptionExpanded) stringResource(R.string.show_less) else stringResource(R.string.show_more),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { isDescriptionExpanded = !isDescriptionExpanded },
-                    )
+                    TextButton(
+                        onClick = { isDescriptionExpanded = !isDescriptionExpanded },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    ) {
+                        Text(
+                            text = if (isDescriptionExpanded) {
+                                stringResource(R.string.show_less)
+                            } else {
+                                stringResource(R.string.show_more)
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Icon(
+                            imageVector = if (isDescriptionExpanded) {
+                                Icons.Filled.KeyboardArrowUp
+                            } else {
+                                Icons.Filled.KeyboardArrowDown
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             SelectionContainer {
@@ -680,6 +731,7 @@ fun DetailsHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .animateContentSize()
                         .clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
                     maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
                     overflow = TextOverflow.Ellipsis,
