@@ -1217,6 +1217,7 @@ internal fun FeedTopLevelRouteContent(
             isRefreshing = isRefreshing,
             onRefresh = { viewModel.update() },
             onLoadMore = { viewModel.requestMoreItems() },
+            onFeedOpened = { viewModel.markFeedAsOpened() },
             onFeedItemClick = { item, _ ->
                 viewModel.onItemClick(item)
                 val content = item.toContentWithOverride()

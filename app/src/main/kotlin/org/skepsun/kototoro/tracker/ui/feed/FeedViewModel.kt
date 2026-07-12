@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 private const val PAGE_SIZE = 20
-private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 200
+private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 2000
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
@@ -89,9 +89,23 @@ class FeedViewModel @Inject constructor(
 		val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
 	)
 
-	private val limit = MutableStateFlow(PAGE_SIZE)
+	private val feedLimitFlow = settings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.Default,
+		key = AppSettings.KEY_FEED_LIMIT,
+		valueProducer = { feedLimit },
+	)
+
+	private val limit = MutableStateFlow(settings.feedLimit)
 	private val isReady = AtomicBoolean(false)
 	private val selectedCategoryId = MutableStateFlow(NO_ID)
+
+	init {
+		launchJob(Dispatchers.Default) {
+			feedLimitFlow.collect { newLimit ->
+				limit.value = newLimit
+			}
+		}
+	}
 
 	val categories = favouritesRepository.observeCategoriesForLibrary()
 		.map { listOf(FavouriteCategory(id = NO_ID, title = "", sortKey = Int.MIN_VALUE, order = org.skepsun.kototoro.list.domain.ListSortOrder.NEWEST, createdAt = java.time.Instant.EPOCH, isTrackingEnabled = false, isVisibleInLibrary = true)) + it }
@@ -299,8 +313,12 @@ class FeedViewModel @Inject constructor(
 
 	fun requestMoreItems() {
 		if (isReady.compareAndSet(true, false)) {
-			limit.value += PAGE_SIZE
+			limit.value += 50
 		}
+	}
+
+	fun markFeedAsOpened() {
+		settings.feedLastOpenTime = System.currentTimeMillis()
 	}
 
 	fun update() {

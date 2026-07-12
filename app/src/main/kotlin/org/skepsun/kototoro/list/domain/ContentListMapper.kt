@@ -33,6 +33,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
 import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
+import org.skepsun.kototoro.core.db.MangaDatabase
 import javax.inject.Inject
 
 @Reusable
@@ -45,6 +46,7 @@ class ContentListMapper @Inject constructor(
 	private val localContentIndex: LocalContentIndex,
 	private val dataRepository: ContentDataRepository,
 	private val trackingSiteCacheRepository: TrackingSiteCacheRepository,
+	private val db: MangaDatabase,
 ) {
 
 	data class ListModelRequest(
@@ -221,6 +223,9 @@ class ContentListMapper @Inject constructor(
 		val manualOverrides = dataRepository.getOverrides()
 		val metadataSelections = dataRepository.getMetadataSourceSelections(mangaIds)
 		val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
+		val chapterCounts = db.getChaptersDao().findAllByMangaIds(mangaIds)
+			.groupBy { it.mangaId }
+			.mapValues { it.value.size }
 		return logItems.map { logItem ->
 			FeedItem(
 				id = logItem.id,
@@ -235,6 +240,7 @@ class ContentListMapper @Inject constructor(
 				count = logItem.count ?: logItem.chapters.size,
 				manga = logItem.manga,
 				isNew = logItem.isNew,
+				totalChapters = chapterCounts[logItem.manga.id] ?: 0,
 			)
 		}
 	}

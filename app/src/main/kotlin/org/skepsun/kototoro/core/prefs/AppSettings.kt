@@ -809,6 +809,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_SHOW_ALL_UPDATES, false)
 		set(value) = prefs.edit { putBoolean(KEY_SHOW_ALL_UPDATES, value) }
 
+	var feedLimit: Int
+		get() = prefs.getInt(KEY_FEED_LIMIT, 200)
+		set(value) = prefs.edit { putInt(KEY_FEED_LIMIT, value) }
+
+	var feedLastOpenTime: Long
+		get() = prefs.getLong(KEY_FEED_LAST_OPEN_TIME, 0L)
+		set(value) = prefs.edit { putLong(KEY_FEED_LAST_OPEN_TIME, value) }
+
 	var progressIndicatorMode: ProgressIndicatorMode
 		get() = prefs.getEnumValue(KEY_PROGRESS_INDICATORS, ProgressIndicatorMode.PERCENT_READ)
 		set(value) = prefs.edit { putEnumValue(KEY_PROGRESS_INDICATORS, value) }
@@ -2434,6 +2442,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_STATS_ENABLED = "stats_on"
 		const val KEY_FEED_HEADER = "feed_header"
 		const val KEY_SHOW_ALL_UPDATES = "show_all_updates"
+		const val KEY_FEED_LIMIT = "feed_limit"
+		const val KEY_FEED_LAST_OPEN_TIME = "feed_last_open_time"
 		const val KEY_SEARCH_SUGGESTION_TYPES = "search_suggest_types"
 		const val KEY_SOURCES_VERSION = "sources_version"
 		const val KEY_SOURCES_ENABLED_ALL = "sources_enabled_all"

@@ -52,6 +52,7 @@ import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.toListItem
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.bookmarks.domain.BookmarksRepository
+import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getContentType
@@ -498,6 +499,7 @@ class DetailsViewModel @Inject constructor(
 	private val entityGraphRepository: org.skepsun.kototoro.entitygraph.data.EntityGraphRepository,
 	private val trackingSiteDiscoveryService: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService,
 	private val sourceTypeIdentifier: SourceTypeIdentifier,
+	private val trackingRepository: TrackingRepository,
 	private val workResolver: org.skepsun.kototoro.work.domain.WorkResolver,
 ) : ChaptersPagesViewModel(
 	settings = settings,
@@ -5284,6 +5286,7 @@ class DetailsViewModel @Inject constructor(
 				)
 				baseLoadedDetails = finalDetails
 				syncDisplayedState()
+				trackingRepository.clearReadUpdates(finalDetails.id)
 				val localEntityId = entityGraphRepository.findEntityByBinding("0", finalDetails.id.toString())?.id
 					?: entityGraphRepository.findEntityByBinding("local_manga", finalDetails.id.toString())?.id
 				if (localEntityId != null && !isTrackingOriginSelectionPinned()) {

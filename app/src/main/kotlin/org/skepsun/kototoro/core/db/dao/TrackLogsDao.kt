@@ -28,6 +28,9 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
 	@Query("SELECT COUNT(*) FROM track_logs WHERE unread = 1")
 	abstract fun observeUnreadCount(): Flow<Int>
 
+	@Query("SELECT COUNT(*) FROM track_logs WHERE unread = 1 AND created_at > :lastOpenTime")
+	abstract fun observeUnreadCount(lastOpenTime: Long): Flow<Int>
+
 	@Query("SELECT * FROM track_logs ORDER BY created_at DESC")
 	abstract suspend fun dump(): List<TrackLogEntity>
 

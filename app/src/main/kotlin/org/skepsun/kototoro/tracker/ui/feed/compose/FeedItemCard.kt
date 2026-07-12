@@ -142,12 +142,21 @@ fun FeedItemCard(
 					overflow = TextOverflow.Ellipsis,
 				)
 			}
-			Text(
-				text = pluralStringResource(
+			val chapterText = if (item.count > 0) {
+				pluralStringResource(
 					id = R.plurals.new_chapters,
 					count = item.count,
 					item.count,
-				),
+				)
+			} else {
+				pluralStringResource(
+					id = R.plurals.old_chapters_in_total,
+					count = item.totalChapters,
+					item.totalChapters,
+				)
+			}
+			Text(
+				text = chapterText,
 				style = MaterialTheme.typography.bodySmall,
 				color = MaterialTheme.colorScheme.onSurfaceVariant,
 				maxLines = 1,
