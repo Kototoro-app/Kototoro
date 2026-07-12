@@ -796,6 +796,7 @@ private fun EmptyStateCard(
         Text(
             text = titleText ?: stringResource(item.textPrimary),
             style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         val subtitleText = item.textSecondaryText?.toString()
         if (item.textSecondary != 0 || !subtitleText.isNullOrBlank()) {

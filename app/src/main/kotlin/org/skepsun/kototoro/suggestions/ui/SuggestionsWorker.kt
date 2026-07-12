@@ -86,6 +86,7 @@ import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.suggestions.domain.ContentSuggestion
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
+import org.skepsun.kototoro.suggestions.domain.selectBalancedBySource
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.math.pow
@@ -208,8 +209,8 @@ class SuggestionsWorker @AssistedInject constructor(
 			}
 		}
 		val suggestions = producer
+			.toList()
 			.flatten()
-			.take(MAX_RAW_RESULTS)
 			.map { manga ->
 				ContentSuggestion(
 					manga = manga,
@@ -218,9 +219,14 @@ class SuggestionsWorker @AssistedInject constructor(
 			}.toList()
 			.sortedByDescending { it.relevance }
 			.distinctBy { it.manga.id }
-			.limitPerSource(MAX_RESULTS_PER_SOURCE)
-			.spreadLeadingSources(LEADING_SOURCE_BALANCE_WINDOW, MAX_LEADING_RESULTS_PER_SOURCE)
-			.take(MAX_RESULTS)
+			.selectBalancedBySource(
+				limit = MAX_RESULTS,
+				perSourceLimit = MAX_RESULTS_PER_SOURCE,
+			) { it.manga.source.name }
+			.mapIndexed { index, suggestion ->
+				// Room 按 relevance 排序，因此将打散后的名次编码进持久化分数。
+				suggestion.copy(relevance = (MAX_RESULTS - index).toFloat() / MAX_RESULTS)
+			}
 		suggestionRepository.replace(suggestions)
 		if (appSettings.isSuggestionsNotificationAvailable
 			&& applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
@@ -256,8 +262,7 @@ class SuggestionsWorker @AssistedInject constructor(
 
 	private suspend fun getSources(): List<ContentSource> {
 		if (appSettings.isSuggestionsIncludeDisabledSources) {
-			val result: MutableList<ContentSource> = ArrayList(sourcesRepository.allContentSources)
-			result.addAll(sourcesRepository.getExternalSources())
+			val result = sourcesRepository.getAllAvailableSourcesUnfiltered().toMutableList()
 			result.shuffle()
 			result.sortWith(compareBy(nullsLast(LocaleComparator())) { it.getLocale() })
 			return result
@@ -491,10 +496,7 @@ class SuggestionsWorker @AssistedInject constructor(
 		const val MAX_RESULTS = 160
 		const val MAX_PARALLELISM = 3
 		const val MAX_SOURCE_RESULTS = 20
-		const val MAX_RAW_RESULTS = 280
 		const val MAX_RESULTS_PER_SOURCE = 12
-		const val LEADING_SOURCE_BALANCE_WINDOW = 32
-		const val MAX_LEADING_RESULTS_PER_SOURCE = 8
 		const val TAG_EQ_THRESHOLD = 0.4f
 		const val RATING_MIN = 0.5f
 		const val SETTINGS_ACTION_CODE = 4
@@ -509,56 +511,4 @@ class SuggestionsWorker @AssistedInject constructor(
 
 	@AssistedFactory
 	interface Factory : WorkerAssistedFactory<SuggestionsWorker>
-}
-
-private fun List<ContentSuggestion>.limitPerSource(limit: Int): List<ContentSuggestion> {
-	val perSourceCounts = HashMap<String, Int>()
-	val result = ArrayList<ContentSuggestion>(size)
-	for (item in this) {
-		val sourceName = item.manga.source.name
-		val count = perSourceCounts[sourceName] ?: 0
-		if (count >= limit) {
-			continue
-		}
-		perSourceCounts[sourceName] = count + 1
-		result += item
-	}
-	return result
-}
-
-private fun List<ContentSuggestion>.spreadLeadingSources(
-	windowSize: Int,
-	sourceLimit: Int,
-): List<ContentSuggestion> {
-	if (windowSize <= 0 || sourceLimit <= 0 || size <= sourceLimit) {
-		return this
-	}
-
-	val leadingSize = minOf(windowSize, size)
-	val result = ArrayList<ContentSuggestion>(size)
-	val deferred = ArrayDeque<ContentSuggestion>()
-	val leadingSourceCounts = HashMap<String, Int>()
-	var index = 0
-
-	while (index < size && result.size < leadingSize) {
-		val item = this[index++]
-		val sourceName = item.manga.source.name
-		val count = leadingSourceCounts[sourceName] ?: 0
-		if (count < sourceLimit) {
-			leadingSourceCounts[sourceName] = count + 1
-			result += item
-		} else {
-			deferred += item
-		}
-	}
-
-	while (result.size < leadingSize && deferred.isNotEmpty()) {
-		result += deferred.removeFirst()
-	}
-
-	result += deferred
-	while (index < size) {
-		result += this[index++]
-	}
-	return result
 }

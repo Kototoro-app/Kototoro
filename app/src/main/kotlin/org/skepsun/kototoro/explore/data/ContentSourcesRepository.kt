@@ -131,7 +131,7 @@ class ContentSourcesRepository @Inject constructor(
 		return canonicalizeSourcesByName(buildList {
 			addAll(allContentSources)
 			addAll(getExternalSources())
-			addAll(getEnabledJsonSources())
+			addAll(jsonSourceManager.observeAllJsonSources().first().map(::JsonContentSource))
 			addAll(getEnabledMihonSources())
 			addAll(getEnabledAniyomiSources())
 			addAll(getEnabledIReaderSources())
