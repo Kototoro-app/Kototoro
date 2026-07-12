@@ -71,7 +71,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			supportActionBar?.hide()
 			viewBinding.appbar.isVisible = false
 			viewBinding.progressBar.isVisible = false
-			viewBinding.root.alpha = 0f
+			viewBinding.root.alpha = 0.01f
 			window.addFlags(
 				WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
 					WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
@@ -276,6 +276,6 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 		const val TAG = "CloudFlareActivity"
 		const val EXTRA_HIDDEN = "hidden"
 		const val EXTRA_AUTO_RESOLVE = "auto_resolve"
-		private const val HIDDEN_TIMEOUT_MS = 15_000L
+		private const val HIDDEN_TIMEOUT_MS = 45_000L
 	}
 }

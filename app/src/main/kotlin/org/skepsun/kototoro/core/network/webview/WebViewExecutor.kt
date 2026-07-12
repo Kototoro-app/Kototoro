@@ -948,11 +948,12 @@ class WebViewExecutor @Inject constructor(
             (webView.parent as? ViewGroup)?.removeView(webView)
             // Turnstile needs a real viewport, but using the full physical display can crash the
             // WebView renderer on high-resolution devices due to tile memory pressure.
-            webView.alpha = 0f
+            webView.alpha = 0.01f
             webView.visibility = View.VISIBLE
-            webView.translationY = 10_000f
+            webView.translationY = 0f
             content.addView(
                 webView,
+                0, // Add at index 0 (behind other child views) to avoid showing on screen
                 ViewGroup.LayoutParams(width, height),
             )
         }.onFailure {
