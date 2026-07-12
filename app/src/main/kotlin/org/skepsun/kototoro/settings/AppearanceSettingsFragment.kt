@@ -546,6 +546,7 @@ private class AppearanceSettingsCoordinator(
 
     private fun buildTabletUiModeOptions(): List<SettingsChoiceOption<TabletUiMode>> {
         return listOf(
+            SettingsChoiceOption(TabletUiMode.DISABLED, context.getString(R.string.tablet_ui_mode_disabled)),
             SettingsChoiceOption(TabletUiMode.RELAXED, context.getString(R.string.tablet_ui_mode_relaxed)),
             SettingsChoiceOption(TabletUiMode.STRICT, context.getString(R.string.tablet_ui_mode_strict)),
         )

@@ -77,6 +77,7 @@ object FoldableUtils {
         minWidthDp: Int = 600,
     ): Boolean {
         return when (settings.tabletUiMode) {
+            TabletUiMode.DISABLED -> false
             TabletUiMode.STRICT -> context.resources.getBoolean(R.bool.is_tablet)
             TabletUiMode.RELAXED -> context.resources.getBoolean(R.bool.is_tablet) ||
                 configuration.screenWidthDp >= minWidthDp

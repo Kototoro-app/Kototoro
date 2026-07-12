@@ -40,6 +40,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseFullscreenActivity
@@ -2603,7 +2604,7 @@ class NovelReaderActivity :
 
     private fun updateDualPageMode() {
         val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val isTablet = resources.getBoolean(R.bool.is_tablet)
+        val isTablet = FoldableUtils.shouldUseTabletLayout(this, settings)
         val shouldEnableDualPage = readerSettings.enableDualPage && (isLandscape || isTablet)
         viewBinding.readerView.setDualPageMode(shouldEnableDualPage)
     }

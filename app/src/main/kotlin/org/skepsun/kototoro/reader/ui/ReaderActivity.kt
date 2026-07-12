@@ -49,6 +49,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.prefs.ReaderMode
@@ -172,7 +173,7 @@ class ReaderActivity :
         }
         viewBinding.timerControl.onVisibilityChangeListener = this
         viewBinding.timerControl.attach(scrollTimer, this)
-        if (resources.getBoolean(R.bool.is_tablet)) {
+        if (FoldableUtils.shouldUseTabletLayout(this, settings)) {
             viewBinding.timerControl.updateLayoutParams<CoordinatorLayout.LayoutParams> {
                 topMargin = marginEnd + getThemeDimensionPixelOffset(appcompatR.attr.actionBarSize)
             }

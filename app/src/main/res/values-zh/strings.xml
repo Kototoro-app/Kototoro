@@ -2249,6 +2249,7 @@
     <string name="sync_freq_weekly">每周</string>
     <string name="system_default">默认</string>
     <string name="tablet_ui_mode">平板布局检测</string>
+    <string name="tablet_ui_mode_disabled">关闭（始终使用竖屏布局）</string>
     <string name="tablet_ui_mode_relaxed">宽松（宽竖屏也算）</string>
     <string name="tablet_ui_mode_strict">严格（原 Kotatsu 规则）</string>
     <string name="tags">标签</string>

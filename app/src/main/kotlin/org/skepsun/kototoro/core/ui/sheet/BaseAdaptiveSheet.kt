@@ -26,9 +26,11 @@ import com.google.android.material.sidesheet.SideSheetDialog
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.util.ActionModeDelegate
+import org.skepsun.kototoro.core.util.FoldableUtils
 import com.google.android.material.R as materialR
 
 abstract class BaseAdaptiveSheet<B : ViewBinding> : AppCompatDialogFragment(),
@@ -39,6 +41,7 @@ abstract class BaseAdaptiveSheet<B : ViewBinding> : AppCompatDialogFragment(),
 
 	protected lateinit var exceptionResolver: ExceptionResolver
 		private set
+	private lateinit var appSettings: AppSettings
 
 	var viewBinding: B? = null
 		private set
@@ -63,6 +66,7 @@ abstract class BaseAdaptiveSheet<B : ViewBinding> : AppCompatDialogFragment(),
 		super.onAttach(context)
 		val entryPoint = EntryPointAccessors.fromApplication<BaseActivityEntryPoint>(context)
 		exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
+		appSettings = entryPoint.settings
 	}
 
 	final override fun onCreateView(
@@ -93,7 +97,7 @@ abstract class BaseAdaptiveSheet<B : ViewBinding> : AppCompatDialogFragment(),
 
 	override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
 		val context = requireContext()
-		val dialog = if (context.resources.getBoolean(R.bool.is_tablet)) {
+		val dialog = if (FoldableUtils.shouldUseTabletLayout(context, appSettings)) {
 			SideSheetDialogImpl(context, theme)
 		} else {
 			BottomSheetDialogImpl(context, theme)

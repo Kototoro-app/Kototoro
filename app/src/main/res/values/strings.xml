@@ -585,6 +585,7 @@
     <string name="percent_string_pattern" translatable="false">%1$s%%</string>
     <string name="appearance">Appearance</string>
     <string name="tablet_ui_mode">Tablet layout detection</string>
+    <string name="tablet_ui_mode_disabled">Off (always use phone layout)</string>
     <string name="tablet_ui_mode_relaxed">Relaxed (wide portrait counts)</string>
     <string name="tablet_ui_mode_strict">Strict (original Kotatsu)</string>
     <string name="suggestions_updating">Suggestions updating</string>
