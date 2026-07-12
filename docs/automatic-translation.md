@@ -2,24 +2,26 @@
 
 Kototoro can translate manga and novel content inside the reader. Translation is an optional reader enhancement; normal reading continues when it is disabled or a page cannot be translated.
 
-## Translation Pipelines
+## How Translation Works
 
-Kototoro supports two translation pipelines:
+Kototoro uses a two-stage pipeline: text is detected and recognized on the page, then the recognized text is sent to the configured translator. The translated result is rendered as a layer over the original image.
 
-| Pipeline | How it works |
+The pipeline supports two translation modes:
+
+| Mode | Actual behavior |
 | --- | --- |
-| **Two-stage** (OCR → translate) | Text is detected and recognized on the page, then recognized text is sent to the configured translator. The translated result is rendered as a layer over the original image. |
-| **End-to-End API** (image → translation) | The entire page image (or cropped regions) is sent directly to a vision-capable API. The API returns combined detection + translation results. No local OCR engine is used. |
+| `Local` | Tries the configured local ONNX translation model when available, then falls back to the on-device ML Kit translator. It does not call a remote translation API. |
+| `API only` | Sends recognized text to the configured online translation service. The API endpoint must be configured before translation can be enabled. |
 
-The two-stage pipeline supports both `Local` and `API only` translation modes. The end-to-end API pipeline uses `API only` exclusively.
+Older settings values may contain `LOCAL_FIRST`, but the current app normalizes that value to `Local`. It is not an automatic local-to-API fallback mode in the current build.
 
 ## Where To Configure It
 
 Open `Settings -> AI`. The AI settings hub organizes translation features into these sections:
 
 - **Local Model Management** — download, manage, and configure OCR detection, recognition, and super-resolution models
-- **Online Translation Service** — configure the two-stage pipeline's API provider, key, and model
-- **Translation** — choose pipeline mode, translation mode, OCR mode, source/target languages, and debug logs
+- **Online Translation Service** — configure the API provider, key, and model
+- **Translation** — choose translation mode, OCR mode, source/target languages, and debug logs
 - **Image Enhancement** — Anime4K, RealCUGAN, and Real-ESRGAN super-resolution model settings
 - **TTS (Text-to-Speech)** — voice reading settings for novels
 - **Video Enhancement** — Anime4K video super-resolution filter presets
@@ -28,20 +30,19 @@ Open `Settings -> AI`. The AI settings hub organizes translation features into t
 
 Open `Settings -> AI -> Translation`. The page contains:
 
-- **Pipeline mode**: `Two-stage` (OCR → translate) or `End-to-End API` (image → translation)
-- **Translation mode**: `Local` or `API only` (two-stage pipeline only)
-- **OCR mode**: `Basic` or `Advanced` (two-stage pipeline only)
+- **Translation mode**: `Local` or `API only`
+- **OCR mode**: `Basic` or `Advanced`
 - **Source and target languages**
 - **Translation debug logs**
 
-When pipeline mode is `End-to-End API`, the settings button opens the **End-to-End API Service** screen. When it is `Two-stage` and translation mode is `API only`, the settings button opens **Online Translation Service**.
+When translation mode is `API only`, the settings button opens **Online Translation Service**.
 
 ## First-Time Setup
 
 ### Local Translation
 
 1. Open `Settings -> AI -> Translation`.
-2. Choose `Two-stage` pipeline mode and `Local` translation mode.
+2. Choose `Local` translation mode.
 3. Choose the target language. Leave source language on `Automatic` unless recognition is consistently using the wrong language.
 4. Keep OCR mode on `Basic` for the quickest setup.
 5. Open a manga chapter, open the reader configuration panel, and select **Set up manga translation** or **Manga translation**.
@@ -63,7 +64,7 @@ Model downloads run in the background and report progress through Android notifi
 
 ### API-Only Translation
 
-1. Select `Two-stage` pipeline mode and `API only` in `Settings -> AI -> Translation`.
+1. Select `API only` in `Settings -> AI -> Translation`.
 2. Open **Online Translation Service** from the settings button on that row.
 3. Select a provider preset, or select `Custom` and enter a compatible endpoint.
 4. Enter the API key and translation model.
@@ -84,35 +85,6 @@ The built-in presets are:
 | OpenRouter | `openrouter.ai/api/v1/chat/completions` | openai/gpt-5.4-mini |
 
 Provider presets supply the endpoint and default model. `Custom` exposes the endpoint and JSON custom-header fields.
-
-### End-to-End API Translation
-
-When `Pipeline mode` is set to `End-to-End API`, Kototoro sends the entire page image (or cropped bubble regions) to a vision-capable API. The API performs combined text detection and translation in a single call, then returns the translated text regions.
-
-1. Open `Settings -> AI -> Translation`.
-2. Set `Pipeline mode` to `End-to-End API`.
-3. Use the settings button to open **End-to-End API Service**.
-4. Select a provider preset: `Gemini`, `Ollama`, or `Custom`.
-5. Enter the API endpoint, key, and model.
-6. Configure concurrency (number of parallel API calls).
-7. Use **Test connection and choose model** to verify the setup.
-
-| Provider | Typical use case |
-| --- | --- |
-| Gemini | Google's Gemini vision models with native image understanding |
-| Ollama | Self-hosted vision models via Ollama (e.g., local llama-vision) |
-| Custom | Any OpenAI-compatible vision endpoint |
-
-In this pipeline, no local OCR engine is used — all detection is done by the API. Bubble detection (`OnnxBubbleDetectorEngine`) may still be used to crop regions before sending to the API. Translation mode is always `API only` in this pipeline.
-
-## Translation Modes
-
-| Mode | Actual behavior |
-| --- | --- |
-| `Local` | Tries the configured local ONNX translation model when available, then falls back to the on-device ML Kit translator. It does not call a remote translation API. |
-| `API only` | Sends recognized text to the configured online translation service. The API endpoint must be configured before translation can be enabled. |
-
-Older settings values may contain `LOCAL_FIRST`, but the current app normalizes that value to `Local`. It is not an automatic local-to-API fallback mode in the current build.
 
 ## Using Translation In The Reader
 
@@ -136,7 +108,7 @@ Novel translation is available when reading novel content. The processor reuses 
 - Chapters are split into paragraphs
 - Paragraphs are batched and sent to the translation coordinator
 - Results are emitted progressively via Flow for streaming rendering
-- A text cache (`ReaderTranslationTextCache`) avoids re-translating duplicate text
+- A text cache avoids re-translating duplicate text
 
 **Display modes:**
 
@@ -171,8 +143,6 @@ Enable **Translation debug logs** only while investigating a problem. It writes 
 
 ## Architecture Overview
 
-### Two-Stage Pipeline
-
 ```
 Page image
   → Bubble detection (OnnxBubbleDetectorEngine / BubbleReaderTextDetector)
@@ -180,16 +150,6 @@ Page image
   → Text grouping and merging (ReaderBubbleGroupingCoordinator / ReaderTextMergeCoordinator)
   → Translation (ONNX local / ML Kit local / API provider)
   → Render overlay (ReaderBubbleRenderCoordinator / ReaderPageTranslationProcessor)
-```
-
-### End-to-End Pipeline
-
-```
-Page image
-  → Bubble detection (optional, OnnxBubbleDetectorEngine)
-  → API call with image (Gemini / Ollama / Custom vision API)
-  → Parse API response into text regions
-  → Render overlay
 ```
 
 ### Key Components
@@ -204,7 +164,6 @@ Page image
 | ML Kit OCR engine | `reader/translate/domain/MlKitReaderOcrEngine.kt` |
 | PaddleOCR engine | `reader/translate/domain/PaddleReaderOcrEngine.kt` |
 | MangaOCR recognizer | `reader/translate/domain/MangaOcrReaderTextRecognizer.kt` |
-| Gemini end-to-end translator | `reader/translate/domain/GeminiEndToEndTranslator.kt` |
 | ONNX model manager | `reader/translate/data/OnnxModelManager.kt` |
 | Paddle model manager | `reader/translate/data/PaddleModelManager.kt` |
 | API provider catalog | `reader/translate/domain/TranslationApiProviderCatalog.kt` |
@@ -212,7 +171,6 @@ Page image
 | Translation task panel UI | `reader/ui/TranslationTaskPanelSheet.kt` |
 | Translation settings screen | `settings/TranslationSettingsFragment.kt` |
 | API settings screen | `settings/TranslationApiSettingsFragment.kt` |
-| E2E API settings screen | `settings/TranslationEndToEndApiSettingsFragment.kt` |
 | OCR models screen | `settings/OcrModelsFragment.kt` |
 | AI settings hub | `settings/compose/AISettingsScreen.kt` |
 
@@ -222,7 +180,6 @@ Page image
 
 - Check that the work language and target language are different.
 - In `API only` mode, configure the endpoint, key, and model before enabling translation.
-- For end-to-end API, verify the vision API endpoint is reachable and the model supports image input.
 - For advanced OCR, wait for the complete model pack to download and verify.
 - Try a page with clear, readable text first.
 
@@ -240,13 +197,6 @@ Page image
 - Recheck the API key and model name.
 - Use **Test connection and choose model** when available.
 - If model discovery is unavailable, enter the provider's model identifier manually.
-
-### End-to-End API translation fails
-
-- Verify the API endpoint supports vision/image input (not all models support this).
-- Check that the concurrency setting is not too high for the API's rate limits.
-- For Gemini, ensure the API key has access to the Gemini Vision API.
-- For Ollama, verify the local server is running and the model supports vision.
 
 ### The translated layer is clipped or uneven
 

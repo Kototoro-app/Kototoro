@@ -16,18 +16,13 @@ This keeps history, favorites, source access, and sync in one app instead of spl
 
 ### Local OCR + Translation
 
-Kototoro includes local OCR + translation directly inside the reader. This is one of the most distinctive parts of the project because it keeps the workflow close to the page instead of sending users to external desktop tools.
-
-**Two translation pipelines:**
-
-- **Two-stage** (OCR → translate): Detect text, recognize it with the configured OCR engine, translate on-device (`Local`) or via API (`API only`), then render a translated overlay.
-- **End-to-End API** (image → translation): Send the page image directly to a vision-capable API (Gemini, Ollama, or custom). No local OCR engine is used.
+Kototoro includes OCR + translation directly inside the reader. This is one of the most distinctive parts of the project because it keeps the workflow close to the page instead of sending users to external desktop tools.
 
 **Manga translation workflow:**
 
-- Detect text from the page
-- Recognize it with the configured OCR pipeline (ML Kit, PaddleOCR, or MangaOCR)
-- Translate on-device in `Local` mode, or through a configured provider in `API only` mode
+- Detect text from the page using the configured detector (ONNX bubble detector, DB-Net, or catch-all OCR)
+- Recognize text with the configured OCR engine (ML Kit, PaddleOCR, or MangaOCR)
+- Translate on-device in `Local` mode, or through a configured API provider in `API only` mode
 - Render a translated layer over the original page, with a reader control to return to the original image
 - Retranslate the current page, failed pages, or the current chapter and inspect their state in the translation task panel
 
