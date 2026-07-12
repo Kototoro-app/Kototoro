@@ -73,4 +73,47 @@ public object CloudFlareHelper {
             || name.startsWith("__cf")
             || name == "csrftoken"
     }
+
+    @JvmStatic
+    public fun getChallengeUrl(url: String): String {
+        val httpUrl = try {
+            url.toHttpUrl()
+        } catch (_: Exception) {
+            return url
+        }
+        val host = httpUrl.host.lowercase()
+        
+        // If it's a known asset host or ends with static extensions, resolve to the parent root domain
+        val isAsset = httpUrl.encodedPath.substringAfterLast('.').lowercase() in setOf("jpg", "jpeg", "png", "webp", "gif", "svg") ||
+                host.startsWith("imagenes.") || host.startsWith("images.") || host.startsWith("cdn.") || host.startsWith("img.") || host.startsWith("static.")
+        
+        if (isAsset) {
+            val rootDomain = getRootDomain(host)
+            if (rootDomain.isNotBlank()) {
+                return "https://$rootDomain/"
+            }
+        }
+        
+        // Otherwise, strip path/query parameters to hit the root of the host
+        return httpUrl.newBuilder()
+            .encodedPath("/")
+            .query(null)
+            .fragment(null)
+            .build()
+            .toString()
+    }
+
+    @JvmStatic
+    public fun getRootDomain(host: String): String {
+        val parts = host.split('.')
+        if (parts.size <= 2) return host
+        val last = parts.last()
+        val secondLast = parts[parts.size - 2]
+        val isDoubleTld = secondLast in setOf("com", "co", "org", "net", "edu", "gov") && last.length == 2
+        return if (isDoubleTld && parts.size >= 3) {
+            parts.takeLast(3).joinToString(".")
+        } else {
+            parts.takeLast(2).joinToString(".")
+        }
+    }
 }

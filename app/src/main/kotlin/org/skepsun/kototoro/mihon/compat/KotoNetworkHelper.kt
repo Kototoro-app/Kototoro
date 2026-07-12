@@ -360,20 +360,11 @@ class KotoNetworkHelper(
     }
 
     private fun Request.toBrowserChallengeUrlForSource(): String {
-        return if (isMihonRequest()) {
-            url.toString()
-        } else {
-            toBrowserChallengeUrl()
-        }
+        return CloudFlareHelper.getChallengeUrl(url.toString())
     }
 
     private fun okhttp3.Request.toSuccessCookieUrl(): String {
-        return url.newBuilder()
-            .encodedPath("/")
-            .query(null)
-            .fragment(null)
-            .build()
-            .toString()
+        return CloudFlareHelper.getChallengeUrl(url.toString())
     }
 
     private fun Request.withCurrentSourceTagIfCompatible(): Request {
