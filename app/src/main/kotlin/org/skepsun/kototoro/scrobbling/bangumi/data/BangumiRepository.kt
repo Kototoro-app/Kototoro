@@ -59,8 +59,6 @@ import java.util.concurrent.ConcurrentHashMap
 private const val REDIRECT_URI = "kototoro://bangumi-auth"
 private const val OFFICIAL_WEB_URL = "https://bangumi.tv/"
 private const val OFFICIAL_API_URL = "https://api.bgm.tv/"
-private const val BANGUMI_RDD_MOE_WEB_URL = "https://bangumi.rdd.moe/"
-private const val BANGUMI_RDD_MOE_API_URL = "https://api.bgm.rdd.moe/"
 private const val BANGUMI_LOL_WEB_URL = "https://bangumi.lol/"
 
 @Singleton
@@ -79,10 +77,6 @@ class BangumiRepository @Inject constructor(
 
 	private val publicEndpoints: BangumiEndpointUrls
 		get() = when (settings.bangumiMirror) {
-			AppSettings.BangumiMirror.BGMMI_ANIBT -> BangumiEndpointUrls(
-				webBaseUrl = BANGUMI_RDD_MOE_WEB_URL,
-				apiBaseUrl = BANGUMI_RDD_MOE_API_URL,
-			)
 			AppSettings.BangumiMirror.BANGUMI_LOL -> BangumiEndpointUrls(
 				webBaseUrl = BANGUMI_LOL_WEB_URL,
 				apiBaseUrl = BANGUMI_LOL_WEB_URL,
@@ -92,7 +86,7 @@ class BangumiRepository @Inject constructor(
 				apiBaseUrl = OFFICIAL_API_URL,
 			)
 			AppSettings.BangumiMirror.CUSTOM -> {
-				val webBaseUrl = normalizeBangumiBaseUrl(settings.bangumiMirrorCustomBase, BANGUMI_RDD_MOE_WEB_URL)
+				val webBaseUrl = normalizeBangumiBaseUrl(settings.bangumiMirrorCustomBase, BANGUMI_LOL_WEB_URL)
 				BangumiEndpointUrls(
 					webBaseUrl = webBaseUrl,
 					apiBaseUrl = inferBangumiApiBaseUrl(webBaseUrl),
@@ -1347,7 +1341,6 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		val host = uri.host?.takeIf { it.isNotBlank() } ?: return OFFICIAL_API_URL
 		when (host) {
 			"bgmmi.anibt.net" -> return OFFICIAL_API_URL
-			"bangumi.rdd.moe" -> return BANGUMI_RDD_MOE_API_URL
 			"bangumi.lol" -> return "$scheme://$host/"
 		}
 		val apiHost = if (host.startsWith("api.")) host else "api.$host"

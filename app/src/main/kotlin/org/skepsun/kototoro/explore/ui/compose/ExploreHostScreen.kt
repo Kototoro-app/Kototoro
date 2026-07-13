@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.explore.ui.compose
 
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -301,6 +302,11 @@ fun KototoroExploreHostRoute(
     var heroPx by rememberSaveable { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val context = LocalContext.current
+    LaunchedEffect(discoverViewModel, context) {
+        discoverViewModel.bangumiRecommendationLoadFailures.collect {
+            Toast.makeText(context, R.string.bangumi_recommendations_load_failed_hint, Toast.LENGTH_LONG).show()
+        }
+    }
     val configuration = LocalConfiguration.current
     val layoutDirection = LocalLayoutDirection.current
     val lifecycleOwner = LocalLifecycleOwner.current

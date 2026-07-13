@@ -54,6 +54,7 @@
     <string name="browse_tracking_recommendations_summary">在浏览页显示来自追踪网站的推荐内容。关闭后，浏览页只显示内容源。</string>
     <string name="browse_more_tracking_recommendations">显示更多追踪网站推荐</string>
     <string name="browse_more_tracking_recommendations_summary">在浏览页内容源下方显示额外追踪推荐。关闭后保留顶部 Hero，并展开内容源。</string>
+    <string name="bangumi_recommendations_load_failed_hint">Bangumi 推荐加载失败，请尝试使用 VPN，或前往“设置 - 存储与网络”更换镜像网址。</string>
     <string name="never">从不</string>
     <string name="show_notification_new_chapters_on">接收在读作品的更新通知</string>
     <string name="nsfw">18+</string>

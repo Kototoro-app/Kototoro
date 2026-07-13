@@ -373,6 +373,7 @@
     <string name="browse_tracking_recommendations_summary">Show recommendation rows from tracking websites on the Browse page. When disabled, Browse only shows content sources.</string>
     <string name="browse_more_tracking_recommendations">Show more tracking web recommendations</string>
     <string name="browse_more_tracking_recommendations_summary">Show additional tracking rows below content sources on the Browse page. When disabled, the hero stays visible and content sources stay expanded.</string>
+    <string name="bangumi_recommendations_load_failed_hint">Failed to load Bangumi recommendations. Try a VPN or select another mirror in Settings - Storage &amp; network.</string>
     <string name="browse_display_options_summary">This option has moved to Browse page search bar > More > Display options.</string>
     <string name="show_extra_info_on_cards">Show extra info on cards</string>
     <string name="show_extra_info_on_cards_summary">Display rating, status, chapter count and tags on content cards</string>

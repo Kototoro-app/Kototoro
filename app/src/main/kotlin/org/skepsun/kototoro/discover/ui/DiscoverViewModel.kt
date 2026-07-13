@@ -6,9 +6,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
@@ -153,10 +155,12 @@ class DiscoverViewModel @Inject constructor(
 	private val _items = MutableStateFlow<List<TrackingSiteItem>>(emptyList())
 	private val _page = MutableStateFlow(0)
 	private val _contentState = MutableStateFlow<List<ListModel>>(listOf(LoadingState))
+	private val _bangumiRecommendationLoadFailures = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 	private var isPageLoading = false
 	private var lastHandledRefreshVersion = 0
 
 	val content: StateFlow<List<ListModel>> = _contentState.asStateFlow()
+	val bangumiRecommendationLoadFailures = _bangumiRecommendationLoadFailures.asSharedFlow()
 
 	private var loadJob: kotlinx.coroutines.Job? = null
 
@@ -387,6 +391,9 @@ class DiscoverViewModel @Inject constructor(
 				}
 
 				val result = runCatching { discoveryService.getTrending(TrackingSiteCatalog(service = service, page = 0)) }
+				if (result.isFailure && service == ScrobblerService.BANGUMI) {
+					_bangumiRecommendationLoadFailures.tryEmit(Unit)
+				}
 				val items = result.getOrNull() ?: emptyList()
 				if (items.isNotEmpty()) {
 					cacheRepository.saveCategoryCache(service, "root_trending", items)
@@ -404,29 +411,38 @@ class DiscoverViewModel @Inject constructor(
 			).let { categories ->
 				if (isMoreEnabled) categories else categories.take(1)
 			}
-			val rows = visibleCategories.mapNotNull { cat ->
+			val categoryResults = visibleCategories.map { cat ->
 
 				viewModelScope.async(Dispatchers.IO) {
 					val cached = cacheRepository.readCategoryCache(service, cat.id)
 					if (cached != null && cached.isNotEmpty()) {
-						return@async DiscoverCarouselRow(category = cat, items = cached.toDiscoverModels())
+						return@async DiscoverCarouselRow(category = cat, items = cached.toDiscoverModels()) to false
 					}
 
 					var items = emptyList<TrackingSiteItem>()
+					var requestFailed = false
 					for (attempt in 1..3) {
 						items = runCatching {
 							discoveryService.getTrending(TrackingSiteCatalog(service = service, category = cat.id, page = 0))
-						}.getOrElse { emptyList() }
+						}.getOrElse {
+							requestFailed = true
+							emptyList()
+						}
 						if (items.isNotEmpty()) break
 						if (attempt < 3) kotlinx.coroutines.delay(800L * attempt)
 					}
 					
-					if (items.isNotEmpty()) {
+					val row = if (items.isNotEmpty()) {
 						cacheRepository.saveCategoryCache(service, cat.id, items)
 						DiscoverCarouselRow(category = cat, items = items.toDiscoverModels())
 					} else null
+					row to requestFailed
 				}
-			}.awaitAll().filterNotNull()
+			}.awaitAll()
+			if (service == ScrobblerService.BANGUMI && categoryResults.any { it.second }) {
+				_bangumiRecommendationLoadFailures.tryEmit(Unit)
+			}
+			val rows = categoryResults.mapNotNull { it.first }
 			
 			_contentState.value = rows.ifEmpty { listOf(EmptyState(icon = R.drawable.ic_bangumi_outline, textPrimary = R.string.discover_empty_title, textSecondary = R.string.discover_empty_text, actionStringRes = 0)) }
 		} else {

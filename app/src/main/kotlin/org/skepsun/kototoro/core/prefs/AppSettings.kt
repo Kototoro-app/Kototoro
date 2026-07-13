@@ -424,21 +424,20 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_HUGGINGFACE_MIRROR, value.value) }
 
 	enum class BangumiMirror(val value: String) {
-		BGMMI_ANIBT("bgmmi_anibt"),
 		BANGUMI_LOL("bangumi_lol"),
 		NATIVE("native"),
 		CUSTOM("custom");
 
 		companion object {
 			fun fromValue(value: String?): BangumiMirror = when (value) {
-				"bangumi_one" -> BGMMI_ANIBT
-				else -> entries.find { it.value == value } ?: BGMMI_ANIBT
+				"bangumi_one", "bgmmi_anibt" -> BANGUMI_LOL
+				else -> entries.find { it.value == value } ?: BANGUMI_LOL
 			}
 		}
 	}
 
 	var bangumiMirror: BangumiMirror
-		get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.BGMMI_ANIBT.value))
+		get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.BANGUMI_LOL.value))
 		set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR, value.value) }
 
 	var bangumiMirrorCustomBase: String?
@@ -1445,7 +1444,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putBoolean(KEY_BROWSE_TRACKING_RECOMMENDATIONS, value) }
 
 	var isBrowseMoreTrackingRecommendationsEnabled: Boolean
-		get() = prefs.getBoolean(KEY_BROWSE_MORE_TRACKING_RECOMMENDATIONS, true)
+		get() = prefs.getBoolean(KEY_BROWSE_MORE_TRACKING_RECOMMENDATIONS, false)
 		set(value) = prefs.edit { putBoolean(KEY_BROWSE_MORE_TRACKING_RECOMMENDATIONS, value) }
 
 	val isSuggestionsWiFiOnly: Boolean
