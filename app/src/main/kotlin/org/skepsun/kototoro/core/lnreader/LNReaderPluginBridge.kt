@@ -178,7 +178,7 @@ class LNReaderPluginBridge(
 					console.error("PLUGIN EVAL ERROR: " + String(error) + "\nSTACK: " + (error ? error.stack : "null"));
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message) ? error.message : String(error)
+						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
 					};
 				}
 			})();
@@ -205,7 +205,7 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message) ? error.message : String(error)
+						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
 					};
 				}
 			})();
@@ -233,7 +233,7 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message) ? error.message : String(error)
+						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
 					};
 				}
 			})();
@@ -264,7 +264,7 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message) ? error.message : String(error)
+						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
 					};
 				}
 			})();
@@ -323,7 +323,7 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message) ? error.message : String(error)
+						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
 					};
 				}
 			})();
@@ -475,6 +475,11 @@ class LNReaderPluginBridge(
 		val genres = try {
 			when (val g = obj["genres"]) {
 				is JsonArray -> g.mapNotNull { it.jsonPrimitive.contentOrNull }
+				is JsonPrimitive -> g.contentOrNull
+					?.split(',')
+					?.map { it.trim() }
+					?.filter { it.isNotEmpty() }
+					?: emptyList()
 				else -> emptyList()
 			}
 		} catch (e: Exception) { emptyList() }

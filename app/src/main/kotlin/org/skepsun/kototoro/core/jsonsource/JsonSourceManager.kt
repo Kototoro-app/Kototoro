@@ -489,7 +489,7 @@ class JsonSourceManager @Inject constructor(
 				updatedAt = timestamp,
 				lastUsedAt = 0,
 				isPinned = false,
-				iconUrl = meta.icon.takeIf { it.isNotBlank() },
+				iconUrl = normalizeLnReaderIconUrl(meta.icon),
 			)
 			
 			jsonSourceDao.insert(entity)
@@ -511,6 +511,15 @@ class JsonSourceManager @Inject constructor(
 			lang = lang.ifBlank { fallback.lang },
 			icon = icon.ifBlank { fallback.icon },
 		)
+	}
+
+	private fun normalizeLnReaderIconUrl(icon: String?): String? {
+		val value = icon?.trim()?.takeIf { it.isNotBlank() } ?: return null
+		if (value.startsWith("http://") || value.startsWith("https://")) return value
+		return value
+			.removePrefix("/")
+			.takeIf { it.startsWith("src/") || it.startsWith("multisrc/") }
+			?.let { "https://raw.githubusercontent.com/lnreader/lnreader-plugins/plugins/v3.0.0/public/static/$it" }
 	}
 	
 	/**

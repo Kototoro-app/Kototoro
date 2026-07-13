@@ -9,12 +9,12 @@ const val URI_SCHEME_FAVICON = "favicon"
 
 fun ContentSource.directFaviconUriOrNull(): Uri? {
 	if (this is JsonSourceListSource) {
-		iconUrl?.takeIf { it.isNotBlank() }?.let { iconUrl ->
+		iconUrl?.normalizeLnReaderIconUrl()?.let { iconUrl ->
 			return directFaviconUri(name, iconUrl)
 		}
 	}
 	if (this is JsonContentSource) {
-		entity.iconUrl?.takeIf { it.isNotBlank() }?.let { iconUrl ->
+		entity.iconUrl?.normalizeLnReaderIconUrl()?.let { iconUrl ->
 			return directFaviconUri(name, iconUrl)
 		}
 	}
@@ -36,4 +36,13 @@ private fun directFaviconUri(sourceName: String, iconUrl: String): Uri {
 		.encodedAuthority(sourceName)
 		.appendQueryParameter("url", iconUrl)
 		.build()
+}
+
+private fun String.normalizeLnReaderIconUrl(): String? {
+	val value = trim().takeIf { it.isNotBlank() } ?: return null
+	if (value.startsWith("http://") || value.startsWith("https://")) return value
+	return value
+		.removePrefix("/")
+		.takeIf { it.startsWith("src/") || it.startsWith("multisrc/") }
+		?.let { "https://raw.githubusercontent.com/lnreader/lnreader-plugins/plugins/v3.0.0/public/static/$it" }
 }

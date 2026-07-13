@@ -10,6 +10,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.util.Base64
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * QuickJS-based JavaScript engine for executing LNReader plugins.
@@ -56,8 +60,11 @@ class LNReaderEngine(
 			
 			// 4. Register synchronous cheerio bridge
 			registerCheerioBridge(qjs)
+
+			// 5. Register native crypto helpers
+			registerCryptoBridge(qjs)
 			
-			// 5. Setup module system for plugins
+			// 6. Setup module system for plugins
 			setupModuleSystem(qjs)
 			
 			// 5. Load the plugin code
@@ -106,6 +113,12 @@ class LNReaderEngine(
 			val init = args.getOrNull(1) as? String
 			fetchBridge.fetch(url, init)
 		})
+		qjs.defineBinding("__nativeFetchProto", FunctionBinding<String?> { args ->
+			val url = args.getOrNull(0) as? String ?: return@FunctionBinding null
+			val init = args.getOrNull(1) as? String
+			val bodyBase64 = args.getOrNull(2) as? String ?: return@FunctionBinding null
+			fetchBridge.fetchBinary(url, init, bodyBase64)
+		})
 		
 		qjs.evaluate<Any?>(
 			"""
@@ -152,6 +165,34 @@ class LNReaderEngine(
 					    return s.replace(/[.*+?^${'$'}()|[\]\\]/g, '\\$&');
 					};
 					return this.replace(new RegExp(escapeRegex(str), 'g'), newStr);
+				};
+			}
+			if (!Array.prototype.flat) {
+				Array.prototype.flat = function(depth) {
+					var result = [];
+					var maxDepth = depth === undefined ? 1 : Number(depth);
+					function flatten(items, currentDepth) {
+						for (var i = 0; i < items.length; i++) {
+							var item = items[i];
+							if (Array.isArray(item) && currentDepth < maxDepth) {
+								flatten(item, currentDepth + 1);
+							} else {
+								result.push(item);
+							}
+						}
+					}
+					flatten(this, 0);
+					return result;
+				};
+			}
+			if (!Array.prototype.flatMap) {
+				Array.prototype.flatMap = function(callback, thisArg) {
+					if (typeof callback !== 'function') throw new TypeError('flatMap callback is not a function');
+					var mapped = [];
+					for (var i = 0; i < this.length; i++) {
+						if (i in this) mapped.push(callback.call(thisArg, this[i], i, this));
+					}
+					return mapped.flat(1);
 				};
 			}
 			""".trimIndent(),
@@ -504,6 +545,8 @@ class LNReaderEngine(
 			
 			globalThis.__libs_novelStatus = ${getNovelStatusLibrary()};
 			globalThis.__libs_filterInputs = ${getFilterInputsLibrary()};
+			globalThis.__libs_dayjs = ${getDayjsLibrary()};
+			globalThis.__libs_aes = ${getAesLibrary()};
 			
 			// Module stubs for LNReader plugin imports
 			if (typeof globalThis.require === 'undefined') {
@@ -512,10 +555,12 @@ class LNReaderEngine(
 					if (name === '@libs/fetch') return {
 						fetchApi: function(url, options) { return globalThis.fetch(url, options); },
 						fetchText: function(url, options) { return globalThis.fetch(url, options).then(function(res) { return res.text(); }); },
+						fetchProto: function(protoInit, url, options) { return globalThis.fetchProto(protoInit, url, options); },
 						fetchFile: function(url) { return globalThis.fetch(url).then(function(res) { return res.text(); }); }
 					};
 					if (name === '@libs/novelStatus') return globalThis.__libs_novelStatus;
 					if (name === '@libs/filterInputs') return globalThis.__libs_filterInputs;
+					if (name === '@libs/aes') return globalThis.__libs_aes;
 					
 					if (name === '@libs/storage') return {
 						storage: { get: function(key) { return null; }, set: function(key, value) {}, delete: function(key) {} },
@@ -539,6 +584,7 @@ class LNReaderEngine(
 					
 					if (name === 'htmlparser2') return globalThis.htmlparser2;
 					if (name === 'cheerio') return globalThis.cheerio;
+					if (name === 'dayjs') return globalThis.__libs_dayjs;
 					
 					// Return a dummy proxy that absorbs any property access without throwing
 					return new Proxy(function() {}, {
@@ -612,6 +658,12 @@ class LNReaderEngine(
 						val sel = selector.substringAfter("__is__:")
 						return@FunctionBinding if (parent.`is`(sel)) "true" else "false"
 					}
+					if (selector == "__root_text__") {
+						return@FunctionBinding parent.text()
+					}
+					if (selector == "__root_html__") {
+						return@FunctionBinding parent.html()
+					}
 					if (selector == "__remove__") {
 						parent.remove()
 						return@FunctionBinding "true"
@@ -619,6 +671,15 @@ class LNReaderEngine(
 					
 					val selection = when {
 						selector == "__parent__" -> org.jsoup.select.Elements(parent.parent() ?: parent)
+						selector == "__next__" -> parent.nextElementSibling()
+							?.let { org.jsoup.select.Elements(it) }
+							?: org.jsoup.select.Elements()
+						selector == "__prev__" -> parent.previousElementSibling()
+							?.let { org.jsoup.select.Elements(it) }
+							?: org.jsoup.select.Elements()
+						selector.startsWith("__closest__:") -> parent.closest(selector.substringAfter("__closest__:"))
+							?.let { org.jsoup.select.Elements(it) }
+							?: org.jsoup.select.Elements()
 						selector == "__children__" -> parent.children()
 						selector.isNotEmpty() -> parent.select(selector)
 						else -> org.jsoup.select.Elements()
@@ -627,17 +688,18 @@ class LNReaderEngine(
 					for (element in selection) {
 						val elId = cheerioIdCounter++
 						parsedElements[elId] = element
+						val attrs = buildMap {
+							element.attributes().forEach { attr ->
+								put(attr.key, attr.value)
+							}
+						}
 						
 						val itemData = mapOf(
 							"id" to elId.toString(),
 							"text" to element.text(),
 							"html" to element.html(),
-							"attrs" to mapOf(
-								"href" to element.attr("href"),
-								"src" to element.attr("src"),
-								"class" to element.className(),
-								"id" to element.id()
-							)
+							"tagName" to element.tagName(),
+							"attrs" to attrs
 						)
 						// Convert map to Json string manually
 						resultItems.add(json.encodeToString(
@@ -671,6 +733,25 @@ class LNReaderEngine(
 			"{}"
 		})
 	}
+
+	private fun registerCryptoBridge(qjs: QuickJs) {
+		qjs.defineBinding("__nativeAesGcmDecrypt", FunctionBinding<String?> { args ->
+			val keyBase64 = args.getOrNull(0) as? String ?: return@FunctionBinding null
+			val ivBase64 = args.getOrNull(1) as? String ?: return@FunctionBinding null
+			val dataBase64 = args.getOrNull(2) as? String ?: return@FunctionBinding null
+			runCatching {
+				val key = Base64.getDecoder().decode(keyBase64)
+				val iv = Base64.getDecoder().decode(ivBase64)
+				val data = Base64.getDecoder().decode(dataBase64)
+				val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+				cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
+				Base64.getEncoder().encodeToString(cipher.doFinal(data))
+			}.getOrElse { error ->
+				Log.e(TAG, "AES-GCM decrypt failed: ${error.message}")
+				null
+			}
+		})
+	}
 	
 	private fun getNativeCheerioBridge(): String {
 		return """
@@ -680,16 +761,37 @@ class LNReaderEngine(
 					const docId = parseInt(docIdStr);
 					
 					function createSelection(parentId, result) {
+						function parseQuery(targetId, selector) {
+							const resultStr = globalThis.__nativeCheerio('query', targetId, selector || '');
+							let r = {items:[]};
+							try { r = JSON.parse(resultStr); } catch (e) {}
+							return r;
+						}
+						function selectionFromItems(items) {
+							items = items || [];
+							return createSelection(parentId, {
+								items: items,
+								text: items.map(function(item) { return item.text || ''; }).join(' '),
+								html: items.map(function(item) { return item.html || ''; }).join(''),
+								attrs: items[0] ? (items[0].attrs || {}) : {}
+							});
+						}
 						return {
 							_parentId: parentId,
+							_result: result,
 							text: function() { return result.text || ''; },
 							attr: function(name) { return (result.attrs && result.attrs[name]) || ''; },
 							html: function() { return result.html || ''; },
 							find: function(subSelector) {
-								const resultStr = globalThis.__nativeCheerio('query', parentId, subSelector || '');
-								let r = {items:[]};
-								try { r = JSON.parse(resultStr); } catch (e) {}
-								return createSelection(parentId, r);
+								if (result.items && result.items.length > 0) {
+									let items = [];
+									result.items.forEach(function(item) {
+										const r = parseQuery(parseInt(item.id), subSelector || '');
+										if (r.items) items = items.concat(r.items);
+									});
+									return selectionFromItems(items);
+								}
+								return createSelection(parentId, parseQuery(parentId, subSelector || ''));
 							},
 							is: function(sel) {
 								if (!result.items || result.items.length === 0) return false;
@@ -699,12 +801,39 @@ class LNReaderEngine(
 								}
 								return false;
 							},
+							hasClass: function(name) {
+								const classes = (this.attr('class') || '').split(/\s+/);
+								return classes.indexOf(name) >= 0;
+							},
+							prop: function(name) {
+								if (name === 'tagName' || name === 'nodeName') {
+									const item = result.items && result.items[0];
+									return item && item.tagName ? String(item.tagName).toUpperCase() : undefined;
+								}
+								return this.attr(name);
+							},
+							data: function(name) {
+								if (!name) return {};
+								return this.attr('data-' + name);
+							},
 							parent: function() {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
 								const resultStr = globalThis.__nativeCheerio('query', result.items[0].id, '__parent__');
 								let r = {items:[]};
 								try { r = JSON.parse(resultStr); } catch (e) {}
 								return createSelection(docId, r); 
+							},
+							next: function() {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								return createSelection(docId, parseQuery(result.items[0].id, '__next__'));
+							},
+							prev: function() {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								return createSelection(docId, parseQuery(result.items[0].id, '__prev__'));
+							},
+							closest: function(sel) {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								return createSelection(docId, parseQuery(result.items[0].id, '__closest__:' + (sel || '')));
 							},
 							children: function() {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
@@ -724,39 +853,31 @@ class LNReaderEngine(
 								}
 								return this;
 							},
+							slice: function(start, end) {
+								if (!result.items) return createSelection(parentId, {items:[]});
+								return selectionFromItems(result.items.slice(start, end));
+							},
+							not: function(selector) {
+								if (!result.items) return createSelection(parentId, {items:[]});
+								if (typeof selector !== 'string') return this;
+								const items = result.items.filter(function(item) {
+									const flag = globalThis.__nativeCheerio('query', item.id, '__is__:' + selector);
+									return flag !== 'true';
+								});
+								return selectionFromItems(items);
+							},
 							first: function() {
 								if (!result.items || result.items.length === 0) return this;
-								const cloned = Object.assign({}, this);
-								cloned.text = function() { return result.items[0].text || ''; };
-								cloned.html = function() { return result.items[0].html || ''; };
-								cloned.attr = function(name) { return (result.items[0].attrs && result.items[0].attrs[name]) || ''; };
-								cloned.get = function(i) { return i === undefined ? [result.items[0]] : result.items[0]; };
-								cloned.toArray = function() { return [result.items[0]]; };
-								cloned.length = 1;
-								return cloned;
+								return selectionFromItems([result.items[0]]);
 							},
 							last: function() {
 								if (!result.items || result.items.length === 0) return this;
 								const lastIdx = result.items.length - 1;
-								const cloned = Object.assign({}, this);
-								cloned.text = function() { return result.items[lastIdx].text || ''; };
-								cloned.html = function() { return result.items[lastIdx].html || ''; };
-								cloned.attr = function(name) { return (result.items[lastIdx].attrs && result.items[lastIdx].attrs[name]) || ''; };
-								cloned.get = function(i) { return i === undefined ? [result.items[lastIdx]] : result.items[lastIdx]; };
-								cloned.toArray = function() { return [result.items[lastIdx]]; };
-								cloned.length = 1;
-								return cloned;
+								return selectionFromItems([result.items[lastIdx]]);
 							},
 							eq: function(index) {
 								if (!result.items || !result.items[index]) return this;
-								const cloned = Object.assign({}, this);
-								cloned.text = function() { return result.items[index].text || ''; };
-								cloned.html = function() { return result.items[index].html || ''; };
-								cloned.attr = function(name) { return (result.items[index].attrs && result.items[index].attrs[name]) || ''; };
-								cloned.get = function(i) { return i === undefined ? [result.items[index]] : result.items[index]; };
-								cloned.toArray = function() { return [result.items[index]]; };
-								cloned.length = 1;
-								return cloned;
+								return selectionFromItems([result.items[index]]);
 							},
 							each: function(callback) {
 								if (result.items) {
@@ -813,6 +934,14 @@ class LNReaderEngine(
 						if (typeof selector === 'object' && selector._parentId !== undefined) {
 							return selector;
 						}
+						if (typeof selector === 'object' && selector.id !== undefined) {
+							return createSelection(docId, {
+								items: [selector],
+								text: selector.text || '',
+								html: selector.html || '',
+								attrs: selector.attrs || {}
+							});
+						}
 						const resultStr = globalThis.__nativeCheerio('query', docId, selector || '');
 						let result = {items:[]};
 						try {
@@ -821,6 +950,15 @@ class LNReaderEngine(
 						
 						return createSelection(docId, result);
 					};
+					const rootSelection = createSelection(docId, {
+						items: [],
+						text: globalThis.__nativeCheerio('query', docId, '__root_text__') || '',
+						html: globalThis.__nativeCheerio('query', docId, '__root_html__') || '',
+						attrs: {}
+					});
+					${'$'}.text = function() { return rootSelection.text(); };
+					${'$'}.html = function() { return rootSelection.html(); };
+					${'$'}.root = function() { return rootSelection; };
 					return ${'$'};
 				}
 			}
@@ -918,6 +1056,78 @@ class LNReaderEngine(
 						Title: 'Title'
 					}
 				};
+			})()
+		""".trimIndent()
+	}
+
+	private fun getAesLibrary(): String {
+		return """
+			(function() {
+				function bytesToBase64(bytes) {
+					var binary = '';
+					for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+					return btoa(binary);
+				}
+				function base64ToBytes(base64) {
+					var binary = atob(base64 || '');
+					var bytes = new Uint8Array(binary.length);
+					for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i) & 255;
+					return bytes;
+				}
+				return {
+					gcm: function(key, iv) {
+						return {
+							decrypt: function(data) {
+								var result = __nativeAesGcmDecrypt(
+									bytesToBase64(key || new Uint8Array(0)),
+									bytesToBase64(iv || new Uint8Array(0)),
+									bytesToBase64(data || new Uint8Array(0))
+								);
+								if (!result) throw new Error('AES-GCM decrypt failed');
+								return base64ToBytes(result);
+							}
+						};
+					}
+				};
+			})()
+		""".trimIndent()
+	}
+
+	private fun getDayjsLibrary(): String {
+		return """
+			(function() {
+				function createDay(value) {
+					var date = value === undefined || value === null || value === '' ? new Date() : new Date(value);
+					var valid = !isNaN(date.getTime());
+					function api() {}
+					api.subtract = function(amount, unit) {
+						if (!valid) return api;
+						amount = Number(amount || 0);
+						unit = String(unit || '').toLowerCase();
+						if (unit.indexOf('second') === 0) date = new Date(date.getTime() - amount * 1000);
+						else if (unit.indexOf('minute') === 0) date = new Date(date.getTime() - amount * 60 * 1000);
+						else if (unit.indexOf('hour') === 0) date = new Date(date.getTime() - amount * 60 * 60 * 1000);
+						else if (unit.indexOf('day') === 0) date = new Date(date.getTime() - amount * 24 * 60 * 60 * 1000);
+						else if (unit.indexOf('week') === 0) date = new Date(date.getTime() - amount * 7 * 24 * 60 * 60 * 1000);
+						else if (unit.indexOf('month') === 0) date.setMonth(date.getMonth() - amount);
+						else if (unit.indexOf('year') === 0) date.setFullYear(date.getFullYear() - amount);
+						return api;
+					};
+					api.format = function(pattern) {
+						if (!valid) return 'Invalid Date';
+						var yyyy = String(date.getFullYear());
+						var mm = String(date.getMonth() + 1).padStart(2, '0');
+						var dd = String(date.getDate()).padStart(2, '0');
+						if (pattern === 'LL') return yyyy + '-' + mm + '-' + dd;
+						return yyyy + '-' + mm + '-' + dd;
+					};
+					api.toDate = function() { return date; };
+					api.valueOf = function() { return valid ? date.getTime() : NaN; };
+					return api;
+				}
+				createDay.default = createDay;
+				createDay.__esModule = true;
+				return createDay;
 			})()
 		""".trimIndent()
 	}

@@ -162,13 +162,20 @@ class FaviconFetcher(
 			// LNReader sources: extract icon from JS code config
 			is org.skepsun.kototoro.core.lnreader.LNReaderContentRepository -> {
 				val configStr = (repo.source as? JsonContentSource)?.entity?.config
-				val iconUrl = try {
-					configStr?.let { 
-						org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata.extractFromCode(it, "")?.icon?.takeIf { s -> s.isNotBlank() } 
+				val iconUrl = (repo.source as? JsonContentSource)
+					?.entity
+					?.iconUrl
+					?.normalizeLnReaderIconUrl()
+					?: try {
+						configStr?.let {
+							org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata
+								.extractFromCode(it, "")
+								?.icon
+								?.normalizeLnReaderIconUrl()
+						}
+					} catch (e: Exception) {
+						null
 					}
-				} catch (e: Exception) {
-					null
-				}
 				iconUrl?.let { url ->
 					runCatchingCancellable { imageLoader.fetch(url, options) }.getOrNull()
 				} ?: fetchDefaultIcon(mangaSource)
@@ -649,6 +656,15 @@ class FaviconFetcher(
 			)
 			if (blacklist.any { lowered.contains(it) }) return false
 			return Uri.parse(url).host?.isNotBlank() == true
+		}
+
+		private fun String.normalizeLnReaderIconUrl(): String? {
+			val value = trim().takeIf { it.isNotBlank() } ?: return null
+			if (value.startsWith("http://") || value.startsWith("https://")) return value
+			return value
+				.removePrefix("/")
+				.takeIf { it.startsWith("src/") || it.startsWith("multisrc/") }
+				?.let { "https://raw.githubusercontent.com/lnreader/lnreader-plugins/plugins/v3.0.0/public/static/$it" }
 		}
 
 		private fun throwNSEE(lastError: Exception?): Nothing {
