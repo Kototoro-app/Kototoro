@@ -15,6 +15,7 @@ import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.core.parser.legado.bridge.KototoroLegadoHttpExecutor
 import org.skepsun.kototoro.core.parser.legado.bridge.KototoroLegadoRuntimeBridge
 import org.skepsun.kototoro.core.parser.legado.book.BookChapterList
@@ -1400,7 +1401,13 @@ class LegadoRepository(
     }
 
     override suspend fun getRelated(seed: Content): List<Content> {
-        return emptyList()
+        return RelatedContentSearchFallback.find(seed) { query ->
+            getList(
+                offset = 0,
+                order = defaultSortOrder,
+                filter = ContentListFilter(query = query),
+            )
+        }
     }
 
     private suspend fun getChaptersHelper(

@@ -13,6 +13,7 @@ import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentListFilter
@@ -250,7 +251,15 @@ class TVBoxRepository(
 			?: buildHeadersForUrl(config.site.api.takeIf(::looksLikeUrl), emptyMap())
 	}
 
-	override suspend fun getRelated(seed: Content): List<Content> = emptyList()
+	override suspend fun getRelated(seed: Content): List<Content> {
+		return RelatedContentSearchFallback.find(seed) { query ->
+			getList(
+				offset = 0,
+				order = SortOrder.RELEVANCE,
+				filter = ContentListFilter(query = query),
+			)
+		}
+	}
 
 	fun getRuntimeCapabilitySummary(): String? = spiderRuntime?.describeCapability(config)
 

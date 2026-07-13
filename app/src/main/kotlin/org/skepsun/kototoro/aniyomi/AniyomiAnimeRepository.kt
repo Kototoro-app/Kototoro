@@ -15,6 +15,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.parser.CachingContentRepository
+import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.aniyomi.model.getPublicAnimeUrl
 import org.skepsun.kototoro.aniyomi.model.toAniyomiAnime
@@ -198,7 +199,15 @@ class AniyomiAnimeRepository(
         fetchVideoList(sEpisode)
     }
     
-    override suspend fun getRelatedContentImpl(seed: Content): List<Content> = emptyList()
+    override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
+        return RelatedContentSearchFallback.find(seed) { query ->
+            getList(
+                offset = 0,
+                order = defaultSortOrder,
+                filter = ContentListFilter(query = query),
+            )
+        }
+    }
     
     override suspend fun getPageUrl(page: ContentPage): String = withContext(Dispatchers.IO) {
         // For video, the URL is already the stream URL

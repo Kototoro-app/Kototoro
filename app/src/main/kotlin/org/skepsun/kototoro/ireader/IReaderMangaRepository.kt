@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.parser.CachingContentRepository
+import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.ireader.model.IReaderMangaSource
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -156,7 +157,15 @@ class IReaderMangaRepository(
         return ContentListFilterOptions(emptySet(), emptyList())
     }
 
-    override suspend fun getRelatedContentImpl(seed: Content): List<Content> = emptyList()
+    override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
+        return RelatedContentSearchFallback.find(seed) { query ->
+            getList(
+                offset = 0,
+                order = defaultSortOrder,
+                filter = ContentListFilter(query = query),
+            )
+        }
+    }
 
     private suspend fun fetchChapters(mangaInfo: MangaInfo): List<ChapterInfo> {
         val reportedPageCount = runCatching { ireaderSource.getChapterPageCount(mangaInfo) }

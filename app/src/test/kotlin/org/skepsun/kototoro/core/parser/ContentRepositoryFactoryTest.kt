@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.parser
 
+import eu.kanade.tachiyomi.source.CatalogueSource
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -158,6 +159,30 @@ class ContentRepositoryFactoryTest {
 		val resolved = MihonContentSourceResolver(manager).resolve(namedSource("MIHON_42"))
 
 		assertSame(resolvedSource, resolved)
+	}
+
+	@Test
+	fun `mihon source resolver resolves persisted display name`() {
+		val manager = mockk<MihonExtensionManager>()
+		val resolvedSource = mihonSource(id = 42L, name = "Entity Graph")
+		every { manager.getMihonMangaSources() } returns listOf(resolvedSource)
+
+		val resolved = MihonContentSourceResolver(manager).resolve(namedSource("Entity Graph"))
+
+		assertSame(resolvedSource, resolved)
+	}
+
+	@Test
+	fun `mihon source resolver ignores ambiguous display name`() {
+		val manager = mockk<MihonExtensionManager>()
+		every { manager.getMihonMangaSources() } returns listOf(
+			mihonSource(id = 42L, name = "Duplicated"),
+			mihonSource(id = 43L, name = "Duplicated"),
+		)
+
+		val resolved = MihonContentSourceResolver(manager).resolve(namedSource("Duplicated"))
+
+		assertSame(null, resolved)
 	}
 
 	@Test
@@ -320,6 +345,18 @@ class ContentRepositoryFactoryTest {
 		override val name: String = name
 		override val locale: String = "en"
 		override val contentType: ContentType = ContentType.MANGA
+	}
+
+	private fun mihonSource(id: Long, name: String): MihonMangaSource {
+		val catalogueSource = mockk<CatalogueSource>()
+		every { catalogueSource.id } returns id
+		every { catalogueSource.name } returns name
+		every { catalogueSource.lang } returns "en"
+		every { catalogueSource.supportsLatest } returns false
+		return MihonMangaSource(
+			catalogueSource = catalogueSource,
+			pkgName = "tachiyomi.extension.test.$id",
+		)
 	}
 
 	private fun jsonEntity(id: String, type: JsonSourceType) = JsonSourceEntity(

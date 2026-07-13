@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.CachingContentRepository
+import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -198,7 +199,15 @@ class CloudstreamContentRepository(
 		)
 	}
 
-	override suspend fun getRelatedContentImpl(seed: Content): List<Content> = emptyList()
+	override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
+		return RelatedContentSearchFallback.find(seed) { query ->
+			getList(
+				offset = 0,
+				order = defaultSortOrder,
+				filter = ContentListFilter(query = query),
+			)
+		}
+	}
 
 	private fun SearchResponse.toKotoContent(
 		source: CloudstreamSource,

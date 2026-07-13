@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.core.util.MultiMutex
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -285,7 +286,15 @@ class LNReaderContentRepository(
 		}
 	}
 	
-	override suspend fun getRelated(seed: Content): List<Content> = emptyList()
+	override suspend fun getRelated(seed: Content): List<Content> {
+		return RelatedContentSearchFallback.find(seed) { query ->
+			getList(
+				offset = 0,
+				order = defaultSortOrder,
+				filter = ContentListFilter(query = query),
+			)
+		}
+	}
 	
 	// ==================== Internal ====================
 	
