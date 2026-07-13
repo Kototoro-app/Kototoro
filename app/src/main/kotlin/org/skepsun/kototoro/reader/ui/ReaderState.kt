@@ -5,6 +5,8 @@ import kotlinx.parcelize.Parcelize
 import org.skepsun.kototoro.core.model.ContentHistory
 import org.skepsun.kototoro.parsers.model.Content
 
+const val FULLY_READ_CHAPTER_ID = Long.MAX_VALUE
+
 @Parcelize
 data class ReaderState(
 	val chapterId: Long,

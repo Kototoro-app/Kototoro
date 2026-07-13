@@ -115,6 +115,7 @@ import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordSnapshot
+import org.skepsun.kototoro.reader.ui.FULLY_READ_CHAPTER_ID
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
@@ -2902,12 +2903,12 @@ class DetailsViewModel @Inject constructor(
 		selectedBranch,
 	) { details, h, branch ->
 		val chapter = details?.allChapters?.findChapterByHistory(h)
-		if (h != null && chapter != null) {
-			val isCompleted = h.percent >= 0.99999f
-			if (isCompleted && details != null) {
-				val branchChapters = details.allChapters
-					.filter { it.branch == branch }
-					.sortedBy { it.number }
+			if (h != null && chapter != null) {
+				val isCompleted = h.percent >= 0.99999f
+				if (isCompleted) {
+					val branchChapters = details.allChapters
+						.filter { it.branch == branch }
+						.sortedBy { it.number }
 				val index = branchChapters.indexOfFirst { it.id == chapter.id }
 				if (index != -1 && index + 1 < branchChapters.size) {
 					val nextChapter = branchChapters[index + 1]
@@ -2916,11 +2917,11 @@ class DetailsViewModel @Inject constructor(
 						page = 0,
 						scroll = 0,
 					)
-				} else {
-					ReaderState(
-						chapterId = Long.MAX_VALUE,
-						page = 0,
-						scroll = 0,
+					} else {
+						ReaderState(
+							chapterId = FULLY_READ_CHAPTER_ID,
+							page = 0,
+							scroll = 0,
 					)
 				}
 			} else {

@@ -540,8 +540,9 @@ class TrackingRepository @Inject constructor(
 		}
 		val chapters = db.getChaptersDao()
 			.findAllByMangaIds(tracks.map { it.manga.id })
-		val unreadMangaIds = db.getTrackLogsDao().findUnreadMangaIds(tracks.map { it.manga.id }).toSet()
-		return TrackingLogItemMapper.fromAllTrackedContent(tracks, chapters, unreadMangaIds)
+		val trackOwnerIds = tracks.map { track -> resolveTrackOwnerId(track.entityId, track.manga.id) }
+		val unreadOwnerIds = db.getTrackLogsDao().findUnreadOwnerIds(trackOwnerIds).toSet()
+		return TrackingLogItemMapper.fromAllTrackedContent(tracks, chapters, unreadOwnerIds)
 	}
 
 	private suspend fun buildFallbackContentByAnchorId(anchorIds: Collection<Long>): Map<Long, Content> {

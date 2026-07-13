@@ -13,6 +13,7 @@ import org.skepsun.kototoro.local.epub.ChapterType
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.reader.ui.FULLY_READ_CHAPTER_ID
 
 /**
  * Checks if a chapter URL points to a local file (i.e. actually downloaded),
@@ -101,7 +102,7 @@ fun ContentDetails.mapChapters(
 			val local = localById ?: localByUrl
 			val finalChapter = local ?: chapter
 			val isUnread = when {
-				currentChapterId == Long.MAX_VALUE -> false
+				currentChapterId == FULLY_READ_CHAPTER_ID -> false
 				currentChapter != null -> chapter.isAfter(currentChapter)
 				else -> true
 			}
