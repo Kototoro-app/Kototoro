@@ -84,7 +84,7 @@ class WelcomeViewModel @Inject constructor(
 	fun refreshState() {
 		updateJob?.cancel()
 		updateJob = launchJob(Dispatchers.Default) {
-			val allSourcesSnapshot = repository.queryAllSources()
+			val allSourcesSnapshot = repository.queryAllSources(includeDisabledSources = true)
 			val localesGroupsSnapshot = allSourcesSnapshot.groupBy { it.getLocale() ?: Locale.ROOT }
 
 			types.value = types.value.copy(
@@ -237,7 +237,7 @@ class WelcomeViewModel @Inject constructor(
 				else -> listOf(type)
 			}
 		}
-		val enabledSources = repository.queryAllSources()
+		val enabledSources = repository.queryAllSources(includeDisabledSources = true)
 			.filterTo(HashSet()) { x ->
 				val localeLang = x.getLocale()?.language ?: ""
 				val mappedLang = if (x is org.skepsun.kototoro.ireader.model.IReaderMangaSource) {

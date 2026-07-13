@@ -364,6 +364,7 @@ class ContentSourcesRepository @Inject constructor(
 		locale: String? = null,
 		sortOrder: SourcesSortOrder? = null,
 		sourceTypes: Set<org.skepsun.kototoro.core.jsonsource.SourceType>? = null,
+		includeDisabledSources: Boolean = false,
 	): List<ContentSource> {
 		normalizeAllEnabledFlagIfNeeded()
 		val result = mutableListOf<ContentSource>()
@@ -395,6 +396,7 @@ class ContentSourcesRepository @Inject constructor(
 				isDisabledOnly = isDisabledOnly,
 				query = query,
 				sourceTypes = sourceTypes,
+				includeDisabledSources = includeDisabledSources,
 			)
 			result.addAll(jsonSources)
 		}
@@ -409,7 +411,7 @@ class ContentSourcesRepository @Inject constructor(
 			val existingNames = result.mapToSet { it.name }
 			val filteredMihon = allMihon.filter { source ->
 				source.name !in existingNames &&
-				(if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) && 
+				(includeDisabledSources || if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) &&
 				(query.isNullOrEmpty() || source.displayName.contains(query, ignoreCase = true))
 			}
 			result.addAll(filteredMihon)
@@ -433,7 +435,7 @@ class ContentSourcesRepository @Inject constructor(
 			val existingNames = result.mapToSet { it.name }
 			val filteredAniyomi = allAniyomi.filter { source ->
 				source.name !in existingNames &&
-				(if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) && 
+				(includeDisabledSources || if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) &&
 				(query.isNullOrEmpty() || source.displayName.contains(query, ignoreCase = true))
 			}
 			result.addAll(filteredAniyomi)
@@ -449,7 +451,7 @@ class ContentSourcesRepository @Inject constructor(
 			val existingNames = result.mapToSet { it.name }
 			val filteredIReader = allIReader.filter { source ->
 				source.name !in existingNames &&
-				(if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) && 
+				(includeDisabledSources || if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) &&
 				(query.isNullOrEmpty() || source.displayName.contains(query, ignoreCase = true))
 			}
 			result.addAll(filteredIReader)
@@ -464,7 +466,7 @@ class ContentSourcesRepository @Inject constructor(
 			val existingNames = result.mapToSet { it.name }
 			val filteredCloudstream = allCloudstream.filter { source ->
 				source.name !in existingNames &&
-					(if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) &&
+					(includeDisabledSources || if (isDisabledOnly) source.name in disabledNames else source.name !in disabledNames) &&
 					(query.isNullOrEmpty() || source.displayName.contains(query, ignoreCase = true))
 			}
 			result.addAll(filteredCloudstream)
@@ -501,15 +503,16 @@ class ContentSourcesRepository @Inject constructor(
 		isDisabledOnly: Boolean,
 		query: String?,
 		sourceTypes: Set<org.skepsun.kototoro.core.jsonsource.SourceType>?,
+		includeDisabledSources: Boolean,
 	): List<JsonSourceListSource> {
 		// Get all JSON sources
 		val allJsonSources = jsonDao.observeAllSummaries().first()
 		
 		// Filter by enabled/disabled
-		var filtered = if (isDisabledOnly) {
-			allJsonSources.filter { !it.enabled }
-		} else {
-			allJsonSources.filter { it.enabled }
+		var filtered = when {
+			includeDisabledSources -> allJsonSources
+			isDisabledOnly -> allJsonSources.filter { !it.enabled }
+			else -> allJsonSources.filter { it.enabled }
 		}
 		
 		// Filter by source type
@@ -799,7 +802,7 @@ class ContentSourcesRepository @Inject constructor(
 	}
 
 	suspend fun setSourcesEnabledExclusive(sources: Set<ContentSource>) {
-		val allSources = queryAllSources()
+		val allSources = queryAllSources(includeDisabledSources = true)
 		val enabledNames = sources.map { it.name }.toSet()
 		
 		val jsonSourcesToEnable = mutableListOf<String>()
@@ -934,7 +937,7 @@ class ContentSourcesRepository @Inject constructor(
 	}
 
 	private suspend fun materializeAllEnabledState() {
-		val allSources = queryAllSources()
+		val allSources = queryAllSources(includeDisabledSources = true)
 		val nativeSources = mutableListOf<String>()
 		val jsonSources = mutableListOf<String>()
 		for (source in allSources) {
