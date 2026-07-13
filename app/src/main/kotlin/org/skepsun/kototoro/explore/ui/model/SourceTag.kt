@@ -53,7 +53,7 @@ enum class SourceTag(
         ANIYOMI -> tab == BrowseGroupTab.Video || tab == BrowseGroupTab.All
         LEGADO -> tab == BrowseGroupTab.Content || tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
         TVBOX -> tab == BrowseGroupTab.Video || tab == BrowseGroupTab.All
-        IREADER -> tab == BrowseGroupTab.Content || tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
+        IREADER -> tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
         CLOUDSTREAM -> tab == BrowseGroupTab.Video || tab == BrowseGroupTab.All
         LNREADER -> tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
         PINNED -> true

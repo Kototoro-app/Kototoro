@@ -95,10 +95,13 @@ class SourceGroupManager @Inject constructor(
 		// Priority 3: Prefix-based fallback for anonymous sources
 		val name = source.name
 		return when {
+			name.startsWith("CLOUDSTREAM_") -> if (isNsfw) ContentGroup.HENTAI_VIDEO else ContentGroup.VIDEO
+			name.startsWith("IREADER_") -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
 			name.startsWith("ANIYOMI_") -> if (isNsfw) ContentGroup.HENTAI_VIDEO else ContentGroup.VIDEO
 			name.startsWith("JSON_TVBOX_") -> if (isNsfw) ContentGroup.HENTAI_VIDEO else ContentGroup.VIDEO
 			name.startsWith("JSON_LEGADO_M_") -> if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
 			name.startsWith("JSON_LEGADO_") -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
+			name.startsWith("JSON_LNREADER_") -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
 			else -> if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
 		}
 	}
