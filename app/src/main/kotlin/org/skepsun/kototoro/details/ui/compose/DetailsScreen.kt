@@ -75,7 +75,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
@@ -3077,6 +3076,7 @@ private fun DetailsPaneActionsRow(
             DetailsPaneTopBarMode.ChapterSelection -> {
                 ChapterSelectionTopBar(
                     state = chapterSelectionState ?: return@Column,
+                    modernStyle = isModernDockEnabled,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 return@Column
@@ -3219,6 +3219,7 @@ private fun DetailsPaneActionsRow(
                                 if (showCollapsedHandle) {
                                     ExpandedPaneUtilityDock(
                                         modifier = Modifier.weight(1f),
+                                        modernStyle = isModernDockEnabled,
                                         sheetExpansionProgress = paneOpacityProgress,
                                         isSearchEnabled = isChapterSearchAvailable,
                                         isSearchActive = isChapterSearchVisible,
@@ -3264,6 +3265,7 @@ private fun DetailsPaneActionsRow(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     ExpandedPaneUtilityDock(
                                         modifier = Modifier.weight(0.36f),
+                                        modernStyle = isModernDockEnabled,
                                         sheetExpansionProgress = paneOpacityProgress,
                                         isSearchEnabled = isChapterSearchAvailable,
                                         isSearchActive = isChapterSearchVisible,
@@ -3359,74 +3361,106 @@ private fun DetailsPaneDragHandle(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChapterSelectionTopBar(
     state: ChapterSelectionUiState,
+    modernStyle: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    TopAppBar(
-        title = {
-            Text(text = state.selectedCount.toString())
-        },
-        navigationIcon = {
-            IconButton(onClick = state.onClearSelection) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.close),
-                )
-            }
-        },
-        actions = {
-            if (state.canSelectAll) {
-                IconButton(onClick = state.onSelectAll) {
+    Row(
+        modifier = modifier.height(ModernDetailsDockChromeHeight),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DetailsDockContainer(modernStyle = modernStyle) {
+                IconButton(
+                    onClick = state.onClearSelection,
+                    modifier = Modifier.size(ModernDetailsDockChromeHeight),
+                ) {
                     Icon(
-                        painter = rememberSafePainter(R.drawable.ic_select_all),
-                        contentDescription = stringResource(android.R.string.selectAll),
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.close),
                     )
                 }
             }
-            if (state.canDownload) {
-                IconButton(onClick = state.onDownload) {
-                    Icon(
-                        painter = rememberSafePainter(R.drawable.ic_download),
-                        contentDescription = stringResource(R.string.download),
-                    )
+            Text(
+                text = state.selectedCount.toString(),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        DetailsDockContainer(
+            modernStyle = modernStyle,
+            modifier = Modifier.weight(1f, fill = false),
+        ) {
+            Row(
+                modifier = Modifier
+                    .height(ModernDetailsDockChromeHeight)
+                    .padding(horizontal = 5.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (state.canSelectAll) {
+                    ChapterSelectionActionButton(onClick = state.onSelectAll) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_select_all),
+                            contentDescription = stringResource(android.R.string.selectAll),
+                        )
+                    }
+                }
+                if (state.canDownload) {
+                    ChapterSelectionActionButton(onClick = state.onDownload) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_download),
+                            contentDescription = stringResource(R.string.download),
+                        )
+                    }
+                }
+                if (state.canDelete) {
+                    ChapterSelectionActionButton(onClick = state.onDelete) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_delete),
+                            contentDescription = stringResource(R.string.delete),
+                        )
+                    }
+                }
+                if (state.canBookmark) {
+                    ChapterSelectionActionButton(onClick = state.onBookmark) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_bookmark),
+                            contentDescription = stringResource(R.string.bookmarks),
+                        )
+                    }
+                }
+                if (state.canMarkCurrent) {
+                    ChapterSelectionActionButton(onClick = state.onMarkCurrent) {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_current_chapter),
+                            contentDescription = stringResource(R.string.mark_as_current),
+                        )
+                    }
                 }
             }
-            if (state.canDelete) {
-                IconButton(onClick = state.onDelete) {
-                    Icon(
-                        painter = rememberSafePainter(R.drawable.ic_delete),
-                        contentDescription = stringResource(R.string.delete),
-                    )
-                }
-            }
-            if (state.canBookmark) {
-                IconButton(onClick = state.onBookmark) {
-                    Icon(
-                        painter = rememberSafePainter(R.drawable.ic_bookmark),
-                        contentDescription = stringResource(R.string.bookmarks),
-                    )
-                }
-            }
-            if (state.canMarkCurrent) {
-                IconButton(onClick = state.onMarkCurrent) {
-                    Icon(
-                        painter = rememberSafePainter(R.drawable.ic_current_chapter),
-                        contentDescription = stringResource(R.string.mark_as_current),
-                    )
-                }
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-            actionIconContentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-        modifier = modifier,
-    )
+        }
+    }
+}
+
+@Composable
+private fun ChapterSelectionActionButton(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(42.dp),
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -3511,6 +3545,7 @@ private fun LabeledGridSlider(
 @Composable
 private fun ExpandedPaneUtilityDock(
     modifier: Modifier = Modifier,
+    modernStyle: Boolean,
     sheetExpansionProgress: Float,
     isSearchEnabled: Boolean,
     isSearchActive: Boolean,
@@ -3531,13 +3566,15 @@ private fun ExpandedPaneUtilityDock(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Row(
+    DetailsDockContainer(
+        modernStyle = modernStyle,
         modifier = modifier,
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
         Row(
-            modifier = Modifier.height(52.dp).padding(horizontal = 4.dp),
+            modifier = Modifier
+                .height(ModernDetailsDockChromeHeight)
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
             IconButton(
