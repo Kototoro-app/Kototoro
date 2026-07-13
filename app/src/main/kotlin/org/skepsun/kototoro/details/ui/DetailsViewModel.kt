@@ -2917,7 +2917,11 @@ class DetailsViewModel @Inject constructor(
 						scroll = 0,
 					)
 				} else {
-					ReaderState(h.copy(chapterId = chapter.id))
+					ReaderState(
+						chapterId = Long.MAX_VALUE,
+						page = 0,
+						scroll = 0,
+					)
 				}
 			} else {
 				ReaderState(h.copy(chapterId = chapter.id))
@@ -5463,6 +5467,12 @@ class DetailsViewModel @Inject constructor(
 				item
 			}
 		}
+	}
+
+	override suspend fun onDownloadComplete(downloadedContent: LocalContent?) {
+		super.onDownloadComplete(downloadedContent)
+		downloadedContent ?: return
+		baseLoadedDetails = interactor.updateLocal(baseLoadedDetails, downloadedContent)
 	}
 
 	fun translateTitleAndDescription(forceRefresh: Boolean = false) {
