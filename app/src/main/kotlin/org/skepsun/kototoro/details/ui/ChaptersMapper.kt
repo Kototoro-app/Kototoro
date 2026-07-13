@@ -100,10 +100,10 @@ fun ContentDetails.mapChapters(
 			}
 			val local = localById ?: localByUrl
 			val finalChapter = local ?: chapter
-			val isUnread = if (currentChapter != null) {
-				chapter.isAfter(currentChapter)
-			} else {
-				true
+			val isUnread = when {
+				currentChapterId == Long.MAX_VALUE -> false
+				currentChapter != null -> chapter.isAfter(currentChapter)
+				else -> true
 			}
 			
 			result += finalChapter.toListItem(

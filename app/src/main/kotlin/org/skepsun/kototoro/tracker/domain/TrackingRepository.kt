@@ -298,7 +298,14 @@ class TrackingRepository @Inject constructor(
 
 	suspend fun clearReadUpdates(mangaId: Long) = db.withTransaction {
 		for (anchorMangaId in resolveTrackAnchorMangaIdsForRead(mangaId)) {
-			clearTrackUpdates(anchorMangaId)
+			markTrackLogsAsRead(anchorMangaId)
+		}
+	}
+
+	private suspend fun markTrackLogsAsRead(anchorMangaId: Long) {
+		val track = db.getTracksDao().find(anchorMangaId)
+		track?.let {
+			db.getTrackLogsDao().markUnreadAsReadByOwner(it.ownerId)
 		}
 	}
 
@@ -371,7 +378,15 @@ class TrackingRepository @Inject constructor(
 				mangaId = anchorMangaId,
 				entityId = entityId,
 				lastChapterId = updates.manga.getChapters(updates.branch).lastOrNull()?.id ?: NO_ID,
-				newChapters = if (updates.isValid) newChapters + updates.newChapters.size else 0,
+				newChapters = if (updates.isValid) {
+					if (updates.newChapters.isNotEmpty()) {
+						updates.newChapters.size
+					} else {
+						newChapters
+					}
+				} else {
+					0
+				},
 				lastCheckTime = System.currentTimeMillis(),
 				lastChapterDate = updates.lastChapterDate().ifZero { lastChapterDate },
 				lastResult = if (updates.isNotEmpty()) TrackEntity.RESULT_HAS_UPDATE else TrackEntity.RESULT_NO_UPDATE,
@@ -525,7 +540,8 @@ class TrackingRepository @Inject constructor(
 		}
 		val chapters = db.getChaptersDao()
 			.findAllByMangaIds(tracks.map { it.manga.id })
-		return TrackingLogItemMapper.fromAllTrackedContent(tracks, chapters)
+		val unreadMangaIds = db.getTrackLogsDao().findUnreadMangaIds(tracks.map { it.manga.id }).toSet()
+		return TrackingLogItemMapper.fromAllTrackedContent(tracks, chapters, unreadMangaIds)
 	}
 
 	private suspend fun buildFallbackContentByAnchorId(anchorIds: Collection<Long>): Map<Long, Content> {
