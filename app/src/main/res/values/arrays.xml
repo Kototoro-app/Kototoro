@@ -70,6 +70,14 @@
 		<item>@string/color_dark</item>
 		<item>@string/color_white</item>
 		<item>@string/color_black</item>
+		<item>@string/automatic</item>
+	</string-array>
+	<string-array name="video_backgrounds" translatable="false">
+		<item>@string/system_default</item>
+		<item>@string/color_light</item>
+		<item>@string/color_dark</item>
+		<item>@string/color_white</item>
+		<item>@string/color_black</item>
 	</string-array>
 	<string-array name="video_decoder_modes" translatable="false">
 		<item>@string/video_decoder_hardware</item>

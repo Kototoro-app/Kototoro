@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.TabletUiMode
 import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
@@ -141,6 +142,7 @@ class ReaderConfigSheet :
         binding.switchDoubleFoldable.isEnabled = binding.switchDoubleReader.isEnabled
         binding.switchSplitPages.isChecked = settings.isReaderSplitPagesEnabled
         binding.switchSuperResolution.isChecked = settings.isReaderSuperResolutionEnabled
+        bindReaderBackgroundTitle(binding)
         bindTranslationControls(binding)
         binding.sliderDoubleSensitivity.setValueRounded(settings.readerDoublePagesSensitivity * 100f)
         binding.sliderDoubleSensitivity.setLabelFormatter(IntPercentLabelFormatter(binding.root.context))
@@ -152,6 +154,7 @@ class ReaderConfigSheet :
         binding.buttonSettings.setOnClickListener(this)
         binding.buttonImageServer.setOnClickListener(this)
         binding.buttonColorFilter.setOnClickListener(this)
+        binding.buttonReaderBackground.setOnClickListener(this)
         binding.buttonScrollTimer.setOnClickListener(this)
         binding.buttonBookmark.setOnClickListener(this)
         binding.buttonTranslation.setOnClickListener(this)
@@ -191,6 +194,7 @@ class ReaderConfigSheet :
 
     override fun onResume() {
         super.onResume()
+        viewBinding?.let(::bindReaderBackgroundTitle)
         if (!enableTranslationAfterSetup) {
             viewBinding?.let(::bindTranslationControls)
             return
@@ -245,6 +249,8 @@ class ReaderConfigSheet :
                 val manga = viewModel.getContentOrNull() ?: return
                 router.openColorFilterConfig(manga, page)
             }
+
+            R.id.button_reader_background -> showReaderBackgroundDialog()
 
             R.id.button_translation -> handleTranslationAction()
 
@@ -447,6 +453,31 @@ class ReaderConfigSheet :
 
     private fun showTranslationTaskPanel() {
         TranslationTaskPanelSheet.show(parentFragmentManager)
+    }
+
+    private fun showReaderBackgroundDialog() {
+        val options = ReaderBackground.entries
+        val labels = resources.getStringArray(R.array.reader_backgrounds)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.background)
+            .setSingleChoiceItems(labels, options.indexOf(settings.readerBackground)) { dialog, which ->
+                settings.readerBackground = options.getOrNull(which) ?: return@setSingleChoiceItems
+                viewBinding?.let(::bindReaderBackgroundTitle)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun bindReaderBackgroundTitle(binding: SheetReaderConfigBinding) {
+        val labels = resources.getStringArray(R.array.reader_backgrounds)
+        val selectedLabel = labels.getOrNull(ReaderBackground.entries.indexOf(settings.readerBackground))
+            ?: getString(R.string.system_default)
+        binding.buttonReaderBackground.text = getString(
+            R.string.inline_preference_pattern,
+            getString(R.string.background),
+            selectedLabel,
+        )
     }
 
     private suspend fun bindImageServerTitle() {

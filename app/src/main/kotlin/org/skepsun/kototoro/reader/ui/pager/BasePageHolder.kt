@@ -4,6 +4,9 @@ import android.content.ComponentCallbacks2
 import android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.Animatable
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.view.View
 import android.widget.ImageView
@@ -13,21 +16,25 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.viewbinding.ViewBinding
-import android.graphics.drawable.Animatable
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.request.target
 import coil3.size.Size
+import coil3.toBitmap
 import coil3.util.CoilUtils
 import com.davemorrissey.labs.subscaleview.DefaultOnImageEventListener
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.os.NetworkState
+import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.ui.list.lifecycle.LifecycleAwareViewHolder
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.isLowRamDevice
@@ -75,6 +82,9 @@ abstract class BasePageHolder<B : ViewBinding>(
 	private var lastTranslationDisplaySignature: String? = null
 	private var lastTranslationContentSignature: String? = null
 	private var pendingAnimatedUri: Uri? = null
+	private var autoBackgroundJob: Job? = null
+	private var autoBackgroundSource: Uri? = null
+	private var autoBackgroundColor: Int? = null
 
 	init {
 		lifecycleScope.launch(Dispatchers.Main) {
@@ -108,6 +118,7 @@ abstract class BasePageHolder<B : ViewBinding>(
 		lastTranslationDisplaySignature = translationDisplaySignature
 		lastTranslationContentSignature = translationContentSignature
 		settings.applyBackground(itemView)
+		applyAutoBackground(currentImageSource())
 		if (translationDisplayChanged || translationContentChanged) {
 			val page = boundData?.toContentPage()
 			if (page != null) {
@@ -137,6 +148,9 @@ abstract class BasePageHolder<B : ViewBinding>(
 	}
 
 	fun bind(data: ReaderPage) {
+		autoBackgroundJob?.cancel()
+		autoBackgroundSource = null
+		autoBackgroundColor = null
 		boundData = data
 		viewModel.onBind(data.toContentPage(), data.split)
 		onBind(data)
@@ -188,6 +202,7 @@ abstract class BasePageHolder<B : ViewBinding>(
 
 	@CallSuper
 	open fun onRecycled() {
+		autoBackgroundJob?.cancel()
 		viewModel.onRecycle()
 		ssiv.isVisible = true
 		ssiv.recycle()
@@ -254,6 +269,7 @@ abstract class BasePageHolder<B : ViewBinding>(
 				ssiv.isVisible = true
 				bindingInfo.textViewStatus.setText(R.string.preparing_)
 				ssiv.setImage(state.source)
+				applyAutoBackground(state.source)
 			}
 
 			is PageState.Loading -> {
@@ -263,10 +279,65 @@ abstract class BasePageHolder<B : ViewBinding>(
 			}
 
 			is PageState.Shown -> {
+				applyAutoBackground(state.source)
 				if (state.isAnimated) {
 					prepareAnimated((state.source as? ImageSource.Uri)?.uri ?: return)
 				}
 			}
+		}
+	}
+
+	private fun currentImageSource(): ImageSource? = when (val state = viewModel.state.value) {
+		is PageState.Loaded -> state.source
+		is PageState.AwaitingTranslation -> state.source
+		is PageState.Shown -> state.source
+		else -> null
+	}
+
+	private fun applyAutoBackground(source: ImageSource?) {
+		if (settings.background != ReaderBackground.AUTO || this is WebtoonHolder) {
+			autoBackgroundJob?.cancel()
+			autoBackgroundSource = null
+			autoBackgroundColor = null
+			return
+		}
+		val uri = (source as? ImageSource.Uri)?.uri ?: return
+		val pageKey = boundData?.readerKey ?: return
+		if (autoBackgroundSource == uri) {
+			autoBackgroundColor?.let(::onAutoBackgroundResolved)
+			return
+		}
+		autoBackgroundJob?.cancel()
+		autoBackgroundSource = uri
+		autoBackgroundJob = lifecycleScope.launch {
+			val result = viewModel.imageLoader.execute(
+				ImageRequest.Builder(context)
+					.data(uri)
+					.size(AUTO_BACKGROUND_SAMPLE_SIZE, AUTO_BACKGROUND_SAMPLE_SIZE)
+					.allowHardware(false)
+					.build(),
+			) as? SuccessResult ?: return@launch
+			val color = withContext(Dispatchers.Default) {
+				ReaderAutoBackground.resolve(result.image.toBitmap())
+			}
+			if (boundData?.readerKey != pageKey || settings.background != ReaderBackground.AUTO) {
+				return@launch
+			}
+			autoBackgroundColor = color
+			onAutoBackgroundResolved(color)
+		}
+	}
+
+	protected open fun onAutoBackgroundResolved(color: Int) {
+		applyResolvedBackground(color)
+	}
+
+	protected fun applyResolvedBackground(color: Int) {
+		itemView.background = ColorDrawable(color)
+		itemView.backgroundTintList = if (color == Color.WHITE) {
+			settings.colorFilter?.getBackgroundTint()
+		} else {
+			null
 		}
 	}
 
@@ -325,5 +396,9 @@ abstract class BasePageHolder<B : ViewBinding>(
 			context.isLowRamDevice() -> 8
 			else -> 4
 		}
+	}
+
+	private companion object {
+		const val AUTO_BACKGROUND_SAMPLE_SIZE = 96
 	}
 }

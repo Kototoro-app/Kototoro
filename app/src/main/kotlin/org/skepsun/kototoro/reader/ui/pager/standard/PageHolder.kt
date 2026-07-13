@@ -63,6 +63,7 @@ open class PageHolder(
 	private var dualLayerLoadJob: Job? = null
 	private var translatedLayerReady = false
 	private var suppressLayerSync = false
+	private var layerSyncScheduled = false
 
 	init {
 		ViewCompat.setOnApplyWindowInsetsListener(binding.root, this)
@@ -77,19 +78,19 @@ open class PageHolder(
 			}
 			ssiv.onStateChangedListener = object : OnStateChangedListener {
 				override fun onScaleChanged(newScale: Float, origin: Int) {
-					syncOriginalLayerState()
+					scheduleOriginalLayerSync()
 				}
 
 				override fun onScaleChanged(view: SubsamplingScaleImageView, newScale: Float, origin: Int) {
-					syncOriginalLayerState()
+					scheduleOriginalLayerSync()
 				}
 
 				override fun onCenterChanged(newCenter: PointF, origin: Int) {
-					syncOriginalLayerState()
+					scheduleOriginalLayerSync()
 				}
 
 				override fun onCenterChanged(view: SubsamplingScaleImageView, newCenter: PointF, origin: Int) {
-					syncOriginalLayerState()
+					scheduleOriginalLayerSync()
 				}
 			}
 		}
@@ -261,5 +262,14 @@ open class PageHolder(
 		suppressLayerSync = true
 		ssivOriginal.setScaleAndCenter(ssiv.scale, PointF(center.x, center.y))
 		suppressLayerSync = false
+	}
+
+	private fun scheduleOriginalLayerSync() {
+		if (layerSyncScheduled) return
+		layerSyncScheduled = true
+		ssiv.postOnAnimation {
+			layerSyncScheduled = false
+			syncOriginalLayerState()
+		}
 	}
 }

@@ -7,6 +7,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.os.NetworkState
+import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.databinding.ItemPageBinding
 import org.skepsun.kototoro.reader.domain.PageLoader
 import org.skepsun.kototoro.reader.domain.ReaderPageEnhancementController
@@ -14,7 +15,7 @@ import org.skepsun.kototoro.reader.ui.config.ReaderSettings
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.standard.PageHolder
 
-class DoublePageHolder(
+class DoublePageHolder internal constructor(
 	owner: LifecycleOwner,
 	binding: ItemPageBinding,
 	loader: PageLoader,
@@ -22,6 +23,7 @@ class DoublePageHolder(
 	readerSettingsProducer: ReaderSettings.Producer,
 	networkState: NetworkState,
 	exceptionResolver: ExceptionResolver,
+	private val backgroundCoordinator: DoublePageBackgroundCoordinator,
 ) : PageHolder(
 	owner = owner,
 	binding = binding,
@@ -37,6 +39,11 @@ class DoublePageHolder(
 
 	init {
 		binding.ssiv.panLimit = SubsamplingScaleImageView.PAN_LIMIT_INSIDE
+	}
+
+	internal fun bind(data: ReaderPage, backgroundKey: DoublePageBackgroundKey) {
+		backgroundCoordinator.register(this, backgroundKey, data.readerKey)
+		super.bind(data)
 	}
 
 	override fun onBind(data: ReaderPage) {
@@ -58,5 +65,20 @@ class DoublePageHolder(
 				PointF(if (isEven) 0f else sWidth.toFloat(), sHeight / 2f),
 			)
 		}
+	}
+
+	override fun onAutoBackgroundResolved(color: Int) {
+		backgroundCoordinator.onColorResolved(this, color)
+	}
+
+	fun applyCoordinatedBackground(color: Int) {
+		if (settings.background == ReaderBackground.AUTO) {
+			applyResolvedBackground(color)
+		}
+	}
+
+	override fun onRecycled() {
+		backgroundCoordinator.unregister(this)
+		super.onRecycled()
 	}
 }

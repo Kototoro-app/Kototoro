@@ -41,7 +41,7 @@ fun PlaybackSettingsScreen(
     val rendererModeOptions = stringArrayResource(R.array.video_renderer_modes).mapIndexed { index, label ->
         SettingsChoiceOption(rendererModeNames[index], label)
     }
-    val backgroundOptions = stringArrayResource(R.array.reader_backgrounds).mapIndexed { index, label ->
+    val backgroundOptions = stringArrayResource(R.array.video_backgrounds).mapIndexed { index, label ->
         SettingsChoiceOption(readerBackgroundNames[index], label)
     }
 

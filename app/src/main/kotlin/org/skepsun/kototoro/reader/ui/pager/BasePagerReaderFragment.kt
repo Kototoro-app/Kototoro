@@ -187,7 +187,12 @@ abstract class BasePagerReaderFragment : BaseReaderFragment<FragmentReaderPagerB
 	protected open fun onCreateAdvancedTransformer(): PageTransformer = PageAnimTransformer()
 
 	protected open fun onInitPager(pager: ViewPager2) {
-		pager.offscreenPageLimit = 2
+		pager.offscreenPageLimit = 1
+		pager.recyclerView?.apply {
+			itemAnimator = null
+			setHasFixedSize(true)
+			setItemViewCacheSize(2)
+		}
 	}
 
 	protected open fun notifyPageChanged(page: Int) {

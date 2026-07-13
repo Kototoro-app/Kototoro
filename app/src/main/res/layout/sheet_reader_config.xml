@@ -220,6 +220,14 @@
                 app:drawableStartCompat="@drawable/ic_appearance" />
 
             <org.skepsun.kototoro.core.ui.widgets.ListItemTextView
+                android:id="@+id/button_reader_background"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:drawableEnd="@drawable/ic_expand_more_22px"
+                android:text="@string/background"
+                app:drawableStartCompat="@drawable/ic_appearance" />
+
+            <org.skepsun.kototoro.core.ui.widgets.ListItemTextView
                 android:id="@+id/button_translation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

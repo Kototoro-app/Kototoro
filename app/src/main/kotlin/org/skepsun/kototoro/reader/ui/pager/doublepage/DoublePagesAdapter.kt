@@ -18,7 +18,24 @@ class DoublePagesAdapter(
 	readerSettingsProducer: ReaderSettings.Producer,
 	networkState: NetworkState,
 	exceptionResolver: ExceptionResolver,
-) : BaseReaderAdapter<DoublePageHolder>(loader, enhancementController, readerSettingsProducer, networkState, exceptionResolver) {
+) : BaseReaderAdapter<DoublePageHolder>(
+	loader,
+	enhancementController,
+	readerSettingsProducer,
+	networkState,
+	exceptionResolver,
+) {
+	private val backgroundCoordinator = DoublePageBackgroundCoordinator()
+
+	override fun onBindViewHolder(holder: DoublePageHolder, position: Int) {
+		val firstPosition = position and 1.inv()
+		val firstPage = getItem(firstPosition)
+		val secondPage = getItemOrNull(firstPosition + 1)
+		holder.bind(
+			data = getItem(position),
+			backgroundKey = DoublePageBackgroundKey(firstPage.readerKey, secondPage?.readerKey),
+		)
+	}
 
 	override fun onCreateViewHolder(
 		parent: ViewGroup,
@@ -35,5 +52,6 @@ class DoublePagesAdapter(
 		readerSettingsProducer = readerSettingsProducer,
 		networkState = networkState,
 		exceptionResolver = exceptionResolver,
+		backgroundCoordinator = backgroundCoordinator,
 	)
 }

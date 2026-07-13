@@ -565,8 +565,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val readerAnimation: ReaderAnimation
 		get() = prefs.getEnumValue(KEY_READER_ANIMATION, ReaderAnimation.DEFAULT)
 
-	val readerBackground: ReaderBackground
+	var readerBackground: ReaderBackground
 		get() = prefs.getEnumValue(KEY_READER_BACKGROUND, ReaderBackground.DEFAULT)
+		set(value) = prefs.edit { putEnumValue(KEY_READER_BACKGROUND, value) }
 
 	var videoDecoderMode: VideoDecoderMode
 		get() = prefs.getEnumValue(KEY_VIDEO_DECODER_MODE, VideoDecoderMode.HARDWARE)
