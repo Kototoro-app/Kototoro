@@ -12,6 +12,7 @@ object TrackingLogItemMapper {
 	fun fromAllTrackedContent(
 		tracks: List<ContentTracking>,
 		chapters: List<ChapterEntity>,
+		unreadMangaIds: Set<Long>? = null,
 	): List<TrackingLogItem> {
 		if (tracks.isEmpty()) {
 			return emptyList()
@@ -30,7 +31,11 @@ object TrackingLogItemMapper {
 				manga = track.manga,
 				chapters = chapterTitles,
 				createdAt = track.lastChapterDate ?: track.lastCheck ?: Instant.EPOCH,
-				isNew = track.newChapters > 0,
+				isNew = if (unreadMangaIds != null) {
+					track.newChapters > 0 && track.manga.id in unreadMangaIds
+				} else {
+					track.newChapters > 0
+				},
 				count = track.newChapters,
 			)
 		}
