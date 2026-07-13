@@ -308,6 +308,26 @@ class LNReaderFetchBridge(
 				function parseProtoSchema(proto) {
 					var messages = {};
 					var cleaned = String(proto || '').replace(/\/\/.*$/gm, '');
+					function stripNestedTypeBlocks(body) {
+						var result = '';
+						var pos = 0;
+						var blockRegex = /\b(message|enum)\s+\w+\s*\{/g;
+						var match;
+						while ((match = blockRegex.exec(body)) !== null) {
+							result += body.substring(pos, match.index);
+							var depth = 1;
+							var end = blockRegex.lastIndex;
+							while (end < body.length && depth > 0) {
+								var ch = body.charAt(end++);
+								if (ch === '{') depth++;
+								else if (ch === '}') depth--;
+							}
+							pos = end;
+							blockRegex.lastIndex = end;
+						}
+						result += body.substring(pos);
+						return result;
+					}
 					function collectMessages(source) {
 						var messageRegex = /message\s+(\w+)\s*\{/g;
 						var match;
@@ -329,9 +349,10 @@ class LNReaderFetchBridge(
 					}
 					function parseMessage(name, body) {
 						var fields = {};
+						var ownBody = stripNestedTypeBlocks(body);
 						var fieldRegex = /^\s*(optional|repeated)?\s*([.\w]+)\s+(\w+)\s*=\s*(\d+)/gm;
 						var field;
-						while ((field = fieldRegex.exec(body)) !== null) {
+						while ((field = fieldRegex.exec(ownBody)) !== null) {
 							fields[Number(field[4])] = {
 								rule: field[1] || '',
 								type: field[2].split('.').pop(),
@@ -445,7 +466,10 @@ class LNReaderFetchBridge(
 				function skipField(bytes, state, wireType) {
 					if (wireType === 0) readVarint(bytes, state);
 					else if (wireType === 1) state.pos += 8;
-					else if (wireType === 2) state.pos += readVarint(bytes, state);
+					else if (wireType === 2) {
+						var len = readVarint(bytes, state);
+						state.pos += len;
+					}
 					else if (wireType === 5) state.pos += 4;
 					else state.pos = bytes.length;
 				}

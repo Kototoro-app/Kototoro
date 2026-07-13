@@ -99,7 +99,7 @@ fun rememberResolvedSourceTitle(source: ContentSource): String {
     return remember(source.name, resolvedSource.javaClass.name) {
         resolveSourceTitleForUi(
             context = context,
-            source = source,
+            source = resolvedSource,
             entryPoint = entryPoint,
         )
     }
