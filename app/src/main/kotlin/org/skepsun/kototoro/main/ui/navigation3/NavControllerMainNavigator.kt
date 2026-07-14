@@ -56,11 +56,12 @@ class NavControllerMainNavigator(
         sharedElementKey: String?,
     ) {
         onDetailsTransitionRequested()
-        mainNavState?.push(DetailsNavKey)
         mainActivity?.resolveDetailsOriginForContent(content) { origin ->
+            mainNavState?.push(origin.toDetailsNavKey())
             PendingDetailsNavigation.set(origin, sharedElementKey)
             navController.navigate(DetailsRoute)
         } ?: run {
+            mainNavState?.push(DetailsNavKey(requestedProjectionId = content.id))
             PendingDetailsNavigation.set(content, sharedElementKey)
             navController.navigate(DetailsRoute)
         }
@@ -71,7 +72,7 @@ class NavControllerMainNavigator(
         sharedElementKey: String?,
     ) {
         onDetailsTransitionRequested()
-        mainNavState?.push(DetailsNavKey)
+        mainNavState?.push(origin.toDetailsNavKey())
         PendingDetailsNavigation.set(origin, sharedElementKey)
         navController.navigate(DetailsRoute)
     }
@@ -83,4 +84,16 @@ class NavControllerMainNavigator(
         }
         return popped
     }
+}
+
+private fun DetailsOrigin.toDetailsNavKey(): DetailsNavKey = when (this) {
+    is DetailsOrigin.EntityGraph -> DetailsNavKey(
+        entityId = entityId,
+        requestedProjectionId = initialProjectionLocalMangaId ?: preferredLocalMangaId,
+    )
+    is DetailsOrigin.LocalMangaId -> DetailsNavKey(requestedProjectionId = mangaId)
+    is DetailsOrigin.LocalMangaContent -> DetailsNavKey(requestedProjectionId = manga.id)
+    is DetailsOrigin.TrackingEntity,
+    is DetailsOrigin.TrackingItem,
+    -> DetailsNavKey()
 }

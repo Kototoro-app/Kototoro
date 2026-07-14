@@ -26,9 +26,19 @@ class MainNavState internal constructor(
     }
 
     fun replaceCurrentStack(keys: List<MainNavKey>) {
-        val stack = currentStack()
+        replaceStack(selectedTopLevel, keys)
+    }
+
+    fun replaceStack(key: TopLevelNavKey, keys: List<MainNavKey>) {
+        val stack = stackFor(key)
         stack.clear()
         stack.addAll(keys)
+    }
+
+    fun stacksSnapshot(): Map<TopLevelNavKey, List<MainNavKey>> = stacks.mapValues { (_, stack) -> stack.toList() }
+
+    fun isInitialState(initialTopLevel: TopLevelNavKey): Boolean {
+        return selectedTopLevel == initialTopLevel && stacks.all { (key, stack) -> stack.toList() == listOf(key) }
     }
 
     fun push(key: MainNavKey) {
@@ -52,7 +62,7 @@ class MainNavState internal constructor(
     fun currentStack(): NavBackStack<MainNavKey> = stacks.getValue(selectedTopLevel)
 }
 
-private fun encodeTopLevelNavKey(key: TopLevelNavKey): String = when (key) {
+internal fun encodeTopLevelNavKey(key: TopLevelNavKey): String = when (key) {
     HomeNavKey -> "home"
     HistoryNavKey -> "history"
     FavoritesNavKey -> "favorites"
@@ -65,7 +75,7 @@ private fun encodeTopLevelNavKey(key: TopLevelNavKey): String = when (key) {
     UpdatedNavKey -> "updated"
 }
 
-private fun decodeTopLevelNavKey(value: String): TopLevelNavKey = when (value) {
+internal fun decodeTopLevelNavKey(value: String): TopLevelNavKey? = when (value) {
     "home" -> HomeNavKey
     "history" -> HistoryNavKey
     "favorites" -> FavoritesNavKey
@@ -76,12 +86,12 @@ private fun decodeTopLevelNavKey(value: String): TopLevelNavKey = when (value) {
     "suggestions" -> SuggestionsNavKey
     "bookmarks" -> BookmarksNavKey
     "updated" -> UpdatedNavKey
-    else -> HomeNavKey
+    else -> null
 }
 
 private val topLevelNavKeyStateSaver = Saver<MutableState<TopLevelNavKey>, String>(
     save = { state -> encodeTopLevelNavKey(state.value) },
-    restore = { value -> mutableStateOf(decodeTopLevelNavKey(value)) },
+    restore = { value -> mutableStateOf(decodeTopLevelNavKey(value) ?: HomeNavKey) },
 )
 
 @Composable

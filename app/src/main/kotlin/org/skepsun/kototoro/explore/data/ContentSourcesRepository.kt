@@ -1185,7 +1185,7 @@ class ContentSourcesRepository @Inject constructor(
 		normalizeAllEnabledFlagIfNeeded()
 	}
 
-	private fun String.toContentSourceOrNull(): ContentSource? {
+	private fun String.toContentSourceOrNull(allowFallback: Boolean = true): ContentSource? {
 		// Try Global Registry for PluginContentSources first
 		org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.value.find { it.name == this }?.let { return it }
 		org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.find { it.name == this }?.let { 
@@ -1227,10 +1227,13 @@ class ContentSourcesRepository @Inject constructor(
 			jsonSources.find { it.name == this }?.let { return it }
 		}
 
+		if (!allowFallback) return null
 		// Fallback to anonymous/static wrapper
 		val fallback = org.skepsun.kototoro.core.model.ContentSource(this)
 		return if (fallback == org.skepsun.kototoro.core.model.UnknownContentSource) null else fallback
 	}
+
+	fun isSourceAvailable(sourceName: String): Boolean = sourceName.toContentSourceOrNull(allowFallback = false) != null
 
 	private fun canonicalizeSourcesByName(sources: List<ContentSource>): List<ContentSource> {
 		if (sources.size <= 1) {

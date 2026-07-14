@@ -640,7 +640,7 @@ fun AppNavGraph(
                             onOpenSourceList = { source, filter, sortOrder ->
                                 mainNavigator.openContentList(source, filter, sortOrder)
                             },
-                            onFinish = { navController.popBackStack() },
+                            onFinish = { mainNavigator.pop() },
                         )
                     },
                 )

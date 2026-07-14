@@ -8,12 +8,18 @@ import org.skepsun.kototoro.space.domain.DefaultSpaceContentPolicy
 import org.skepsun.kototoro.space.data.AppSettingsSpaceLocalDataSource
 import org.skepsun.kototoro.space.data.DefaultSpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.data.DefaultSpaceRepository
+import org.skepsun.kototoro.space.data.DefaultSpaceSessionRepository
+import org.skepsun.kototoro.space.data.DefaultSpaceSessionValidator
+import org.skepsun.kototoro.space.data.DefaultSpaceSourceAvailability
 import org.skepsun.kototoro.space.data.LogcatSpaceDiagnostics
 import org.skepsun.kototoro.space.data.SpaceDiagnostics
 import org.skepsun.kototoro.space.data.SpaceLocalDataSource
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceRepository
+import org.skepsun.kototoro.space.domain.SpaceSessionRepository
+import org.skepsun.kototoro.space.domain.SpaceSessionValidator
+import org.skepsun.kototoro.space.domain.SpaceSourceAvailability
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -33,4 +39,13 @@ interface SpaceModule {
 
 	@Binds
 	fun bindSpaceFeatureFlagsRepository(impl: DefaultSpaceFeatureFlagsRepository): SpaceFeatureFlagsRepository
+
+	@Binds
+	fun bindSpaceSessionRepository(impl: DefaultSpaceSessionRepository): SpaceSessionRepository
+
+	@Binds
+	fun bindSpaceSessionValidator(impl: DefaultSpaceSessionValidator): SpaceSessionValidator
+
+	@Binds
+	fun bindSpaceSourceAvailability(impl: DefaultSpaceSourceAvailability): SpaceSourceAvailability
 }

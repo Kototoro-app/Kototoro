@@ -15,7 +15,10 @@ data class ContentListNavKey(
 ) : MainNavKey
 
 @Serializable
-data object DetailsNavKey : MainNavKey
+data class DetailsNavKey(
+    val entityId: Long? = null,
+    val requestedProjectionId: Long? = null,
+) : MainNavKey
 
 @Serializable
 data object HomeNavKey : TopLevelNavKey

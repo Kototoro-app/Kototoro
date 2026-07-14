@@ -61,6 +61,7 @@ import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
 import org.skepsun.kototoro.space.ui.SpaceViewModel
+import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
@@ -92,6 +93,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     lateinit var workResolver: WorkResolver
 
     private val spaceViewModel by viewModels<SpaceViewModel>()
+    private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -245,6 +247,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
+            val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
 
             KototoroApp(
                 appSettings = settings,
@@ -266,6 +269,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onFeedRefresh = trackWorkerScheduler::startNow,
                 spaceUiState = spaceUiState,
                 onSpaceAction = spaceViewModel::onAction,
+                spaceNavigationSessionUiState = spaceNavigationSessionUiState,
+                onSpaceSessionChanged = spaceNavigationSessionViewModel::save,
                 onContentSuggestionClick = { content ->
                     resolveDetailsOriginForContent(content) { origin ->
                         when (origin) {

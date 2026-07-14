@@ -159,6 +159,42 @@ class MangaDatabaseTest {
 		}
 	}
 
+	@Test
+	fun migrate71To72CreatesSpaceSessionTables() {
+		helper.createDatabase(TEST_DB, 71).close()
+
+		helper.runMigrationsAndValidate(
+			TEST_DB,
+			72,
+			true,
+			migrations.single { it.startVersion == 71 && it.endVersion == 72 },
+		).use { db ->
+			db.execSQL(
+				"""
+				INSERT INTO space_session (
+					space_id, selected_top_level, resume_kind, resume_entity_id,
+					resume_projection_id, resume_route, route_schema_version,
+					last_accessed, updated_at
+				) VALUES ('builtin:manga', 'home', 'NONE', NULL, NULL, NULL, 1, 100, 100)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO space_navigation_entry (
+					space_id, stack_key, position, route_kind, route_payload,
+					route_schema_version, updated_at
+				) VALUES ('builtin:manga', 'home', 0, 'TOP_LEVEL', '{}', 1, 100)
+				""".trimIndent(),
+			)
+			db.query(
+				"SELECT COUNT(*) FROM space_navigation_entry WHERE space_id = 'builtin:manga'",
+			).use { cursor ->
+				cursor.moveToFirst()
+				assertEquals(1, cursor.getInt(0))
+			}
+		}
+	}
+
 	private companion object {
 
 		const val TEST_DB = "test-db"

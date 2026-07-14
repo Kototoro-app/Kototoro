@@ -75,6 +75,7 @@ import org.skepsun.kototoro.core.db.migrations.Migration67To68
 import org.skepsun.kototoro.core.db.migrations.Migration68To69
 import org.skepsun.kototoro.core.db.migrations.Migration69To70
 import org.skepsun.kototoro.core.db.migrations.Migration70To71
+import org.skepsun.kototoro.core.db.migrations.Migration71To72
 import org.skepsun.kototoro.core.db.migrations.Migration1To2
 import org.skepsun.kototoro.core.db.migrations.Migration20To21
 import org.skepsun.kototoro.core.db.migrations.Migration21To22
@@ -133,11 +134,14 @@ import org.skepsun.kototoro.tracker.data.TrackLogEntity
 import org.skepsun.kototoro.tracker.data.TracksDao
 import org.skepsun.kototoro.work.data.WorkMigrationLedgerDao
 import org.skepsun.kototoro.work.data.WorkMigrationLedgerEntity
+import org.skepsun.kototoro.space.data.SpaceNavigationEntryEntity
+import org.skepsun.kototoro.space.data.SpaceSessionDao
+import org.skepsun.kototoro.space.data.SpaceSessionEntity
 
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 71
+const val DATABASE_VERSION = 72
 
 @Database(
 	entities = [
@@ -150,6 +154,7 @@ const val DATABASE_VERSION = 71
 		EntityRecord::class, EntityBindingRecord::class, RelationRecord::class, EntityPrefsRecord::class,
 		WorkMigrationLedgerEntity::class,
 		ReadingRecordEntity::class, ReadingJumpPointEntity::class,
+		SpaceSessionEntity::class, SpaceNavigationEntryEntity::class,
 		// EpubChapterEntity::class,
 	],
 	version = DATABASE_VERSION,
@@ -207,6 +212,8 @@ abstract class MangaDatabase : RoomDatabase() {
 	abstract fun getWorkMigrationLedgerDao(): WorkMigrationLedgerDao
 
 	abstract fun getReadingRecordDao(): ReadingRecordDao
+
+	abstract fun getSpaceSessionDao(): SpaceSessionDao
 
 	// abstract fun getEpubChapterDao(): EpubChapterDao
 }
@@ -283,6 +290,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
 	Migration68To69(),
 	Migration69To70(),
 	Migration70To71(),
+	Migration71To72(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

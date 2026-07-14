@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -41,6 +42,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -124,6 +127,8 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.heroTransitionTimestampMs
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarFilterRail
@@ -143,6 +148,13 @@ import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
 import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 import org.skepsun.kototoro.main.ui.navigation3.rememberSpaceNavigationStates
 import org.skepsun.kototoro.main.ui.navigation3.resolveNavigationSpaceId
+import org.skepsun.kototoro.main.ui.navigation3.restoreFromSpaceSession
+import org.skepsun.kototoro.main.ui.navigation3.toSpaceSessionSnapshot
+import org.skepsun.kototoro.space.domain.BuiltInSpaces
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
+import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
+import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 
@@ -341,6 +353,8 @@ fun KototoroApp(
     onFeedRefresh: () -> Unit = {},
     spaceUiState: SpaceUiState = SpaceUiState(),
     onSpaceAction: (SpaceAction) -> Unit = {},
+    spaceNavigationSessionUiState: SpaceNavigationSessionUiState = SpaceNavigationSessionUiState(),
+    onSpaceSessionChanged: (SpaceSessionSnapshot) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -516,6 +530,66 @@ fun KototoroApp(
     val mainNavState = activeNavigationState.mainNavState
     val navController = activeNavigationState.navController
     val spaceSaveableStateHolder = rememberSaveableStateHolder()
+    val restoredSpaceIds = remember { mutableStateMapOf<SpaceId, Boolean>() }
+    val databaseRestoredSpaceIds = remember { mutableStateMapOf<SpaceId, Boolean>() }
+    val rootRestoredSpaceIds = remember { mutableStateMapOf<SpaceId, Boolean>() }
+    val currentOnSpaceSessionChanged by rememberUpdatedState(onSpaceSessionChanged)
+    LaunchedEffect(
+        spaceNavigationSessionUiState.enabled,
+        spaceNavigationSessionUiState.restorationReady,
+        spaceNavigationSessionUiState.sessions,
+    ) {
+        if (!spaceNavigationSessionUiState.enabled) {
+            restoredSpaceIds.clear()
+            databaseRestoredSpaceIds.clear()
+            rootRestoredSpaceIds.clear()
+            return@LaunchedEffect
+        }
+        if (!spaceNavigationSessionUiState.restorationReady) return@LaunchedEffect
+        BuiltInSpaces.contexts.forEach { context ->
+            if (restoredSpaceIds[context.id] == true) return@forEach
+            val state = spaceNavigationStates[context.id].mainNavState
+            val session = spaceNavigationSessionUiState.sessions[context.id]
+            if (session != null && state.isInitialState(initialTopLevel)) {
+                state.restoreFromSpaceSession(session)
+                databaseRestoredSpaceIds[context.id] = true
+            }
+            restoredSpaceIds[context.id] = true
+        }
+    }
+    val isActiveSpaceRestored = restoredSpaceIds[navigationSpaceId] == true
+    val isActiveDatabaseSessionApplied = databaseRestoredSpaceIds[navigationSpaceId] == true
+    LaunchedEffect(
+        navigationSpaceId,
+        mainNavState,
+        spaceNavigationSessionUiState.enabled,
+        isActiveSpaceRestored,
+    ) {
+        if (!spaceNavigationSessionUiState.enabled || !isActiveSpaceRestored) return@LaunchedEffect
+        snapshotFlow {
+            mainNavState.toSpaceSessionSnapshot(
+                spaceId = navigationSpaceId,
+                timestamp = System.currentTimeMillis(),
+            )
+        }.debounce(500L).collect(currentOnSpaceSessionChanged)
+    }
+    DisposableEffect(
+        navigationSpaceId,
+        mainNavState,
+        spaceNavigationSessionUiState.enabled,
+        isActiveSpaceRestored,
+    ) {
+        onDispose {
+            if (spaceNavigationSessionUiState.enabled && isActiveSpaceRestored) {
+                currentOnSpaceSessionChanged(
+                    mainNavState.toSpaceSessionSnapshot(
+                        spaceId = navigationSpaceId,
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            }
+        }
+    }
     val topLevelNavigator = remember(navController, mainNavState) {
         NavControllerMainNavigator(
             navController = navController,
@@ -550,6 +624,51 @@ fun KototoroApp(
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    LaunchedEffect(
+        navController,
+        navigationSpaceId,
+        isActiveSpaceRestored,
+        isActiveDatabaseSessionApplied,
+        spaceNavigationSessionUiState.sessions[navigationSpaceId],
+    ) {
+        if (!isActiveSpaceRestored || rootRestoredSpaceIds[navigationSpaceId] == true) return@LaunchedEffect
+        if (!isActiveDatabaseSessionApplied) {
+            rootRestoredSpaceIds[navigationSpaceId] = true
+            return@LaunchedEffect
+        }
+        val session = spaceNavigationSessionUiState.sessions[navigationSpaceId]
+        if (session == null) {
+            rootRestoredSpaceIds[navigationSpaceId] = true
+            return@LaunchedEffect
+        }
+        navController.currentBackStackEntryFlow.first()
+        if (navController.previousBackStackEntry == null) {
+            val selectedTopLevel = topLevelKeyForRouteOwnerKey(session.selectedTopLevel) ?: HomeNavKey
+            if (topLevelKeyForDestination(navController.currentDestination) != selectedTopLevel) {
+                navController.navigate(routeForTopLevelKey(selectedTopLevel)) {
+                    launchSingleTop = true
+                }
+            }
+            session.stacks[session.selectedTopLevel].orEmpty().drop(1).forEach { route ->
+                when (route) {
+                    is SpaceRouteSnapshot.TopLevel -> Unit
+                    is SpaceRouteSnapshot.ContentList -> navController.navigate(ContentListRoute(route.sourceName))
+                    is SpaceRouteSnapshot.WorkDetails -> {
+                        org.skepsun.kototoro.core.nav.PendingDetailsNavigation.set(
+                            org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                                entityId = route.entityId,
+                                preferredLocalMangaId = route.requestedProjectionId,
+                                initialProjectionLocalMangaId = route.requestedProjectionId,
+                            ),
+                        )
+                        navController.navigate(DetailsRoute)
+                    }
+                }
+            }
+        }
+        rootRestoredSpaceIds[navigationSpaceId] = true
+    }
     val currentDestinationRoute = currentDestination?.route
     val isSearchRoute = currentDestination?.hasRoute<SearchRoute>() == true
     val isDetailsRoute = currentDestination?.hasRoute<DetailsRoute>() == true
