@@ -73,6 +73,24 @@ class SpaceViewModelTest {
 		collection.cancel()
 	}
 
+	@Test
+	fun `persistent navigation requires its own gate and effective switcher`() = runTest {
+		val repository = FakeSpaceRepository()
+		val flags = FakeFeatureFlagsRepository(
+			enabledFlags().copy(spacePersistentNavigationEnabled = true),
+		)
+		val viewModel = SpaceViewModel(repository, flags)
+		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+		assertTrue(viewModel.uiState.value.persistentNavigationEnabled)
+
+		flags.flags.value = flags.flags.value.copy(spaceSwitcherEnabled = false)
+		advanceUntilIdle()
+
+		assertFalse(viewModel.uiState.value.persistentNavigationEnabled)
+		collection.cancel()
+	}
+
 	private fun enabledFlags() = SpaceFeatureFlags(
 		entitySpaceEnabled = true,
 		spaceSwitcherEnabled = true,

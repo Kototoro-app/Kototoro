@@ -20,6 +20,7 @@ data class SpaceUiState(
 	val switcherVisible: Boolean = false,
 	val switchInProgress: Boolean = false,
 	val switcherEnabled: Boolean = false,
+	val persistentNavigationEnabled: Boolean = false,
 )
 
 sealed interface SpaceAction {
@@ -44,12 +45,17 @@ class SpaceViewModel @Inject constructor(
 		transient.copy(
 			activeSpaceId = activeSpace,
 			switcherEnabled = flags.effectiveSwitcherEnabled,
+			persistentNavigationEnabled = flags.effectivePersistentNavigationEnabled,
 			switcherVisible = transient.switcherVisible && flags.effectiveSwitcherEnabled,
 		)
 	}.stateIn(
 		scope = viewModelScope,
 		started = SharingStarted.WhileSubscribed(5_000),
-		initialValue = SpaceUiState(activeSpaceId = repository.activeSpace.value),
+		initialValue = SpaceUiState(
+			activeSpaceId = repository.activeSpace.value,
+			switcherEnabled = featureFlagsRepository.flags.value.effectiveSwitcherEnabled,
+			persistentNavigationEnabled = featureFlagsRepository.flags.value.effectivePersistentNavigationEnabled,
+		),
 	)
 
 	fun onAction(action: SpaceAction) {
