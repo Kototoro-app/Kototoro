@@ -90,6 +90,8 @@ import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
 import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
 import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
 import org.skepsun.kototoro.space.ui.SpaceUiState
+import org.skepsun.kototoro.space.ui.MediaUniverseSheet
+import org.skepsun.kototoro.space.ui.MediaUniverseUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -359,6 +361,10 @@ fun KototoroApp(
     onSpaceSessionChanged: (SpaceSessionSnapshot) -> Unit = {},
     spaceResumeUiState: SpaceResumeUiState = SpaceResumeUiState(),
     onSpaceResume: (SpaceId) -> Unit = {},
+    mediaUniverseUiState: MediaUniverseUiState = MediaUniverseUiState(),
+    onOpenMediaUniverse: () -> Unit = {},
+    onDismissMediaUniverse: () -> Unit = {},
+    onMediaUniverseContentClick: (Content) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -1156,6 +1162,15 @@ fun KototoroApp(
                         onAction = onSpaceAction,
                         resumeItems = spaceResumeUiState.items,
                         onResume = onSpaceResume,
+                        onOpenMediaUniverse = {
+                            onSpaceAction(SpaceAction.DismissSwitcher)
+                            onOpenMediaUniverse()
+                        },
+                    )
+                    MediaUniverseSheet(
+                        state = mediaUniverseUiState,
+                        onDismiss = onDismissMediaUniverse,
+                        onContentClick = onMediaUniverseContentClick,
                     )
                 }
             }

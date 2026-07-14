@@ -3150,4 +3150,8 @@
     <string name="space_manga">Manga space</string>
     <string name="space_novel">Novel space</string>
     <string name="space_anime">Anime space</string>
+    <string name="media_universe_title">Media universe</string>
+    <string name="media_universe_empty">No history or favorites yet</string>
+    <string name="media_universe_history_and_favorites">History and favorites</string>
+    <string name="media_universe_item_summary">%1$s · %2$s</string>
 </resources>

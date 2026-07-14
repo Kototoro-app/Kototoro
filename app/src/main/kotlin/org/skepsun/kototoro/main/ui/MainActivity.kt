@@ -64,12 +64,17 @@ import org.skepsun.kototoro.space.ui.SpaceViewModel
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
+import org.skepsun.kototoro.space.ui.MediaUniverseViewModel
+import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : BaseActivity<ActivityMainBinding>() {
+
+    @Inject
+    lateinit var spaceRoutePreferencesController: SpaceRoutePreferencesController
     override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
         val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
             androidx.core.view.WindowInsetsCompat.Type.displayCutout()
@@ -97,6 +102,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
     private val spaceResumeViewModel by viewModels<SpaceResumeViewModel>()
+    private val mediaUniverseViewModel by viewModels<MediaUniverseViewModel>()
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -204,6 +210,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        spaceRoutePreferencesController.start()
         pageSaveHelper = pageSaveHelperFactory.create(this)
         searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
         applyConfiguredLanguagePreset()
@@ -247,6 +254,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
             val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
+            val mediaUniverseUiState by mediaUniverseViewModel.uiState.collectAsStateWithLifecycle()
 
             KototoroApp(
                 appSettings = settings,
@@ -272,6 +280,23 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onSpaceResume = { spaceId ->
                     spaceViewModel.onAction(SpaceAction.DismissSwitcher)
                     spaceResumeViewModel.resume(spaceId)
+                },
+                mediaUniverseUiState = mediaUniverseUiState,
+                onOpenMediaUniverse = mediaUniverseViewModel::open,
+                onDismissMediaUniverse = mediaUniverseViewModel::dismiss,
+                onMediaUniverseContentClick = { content ->
+                    mediaUniverseViewModel.dismiss()
+                    resolveDetailsOriginForContent(content) { origin ->
+                        when (origin) {
+                            is DetailsOrigin.EntityGraph -> {
+                                router.openEntityDetails(
+                                    entityId = origin.entityId,
+                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                )
+                            }
+                            else -> router.openResolvedDetails(content)
+                        }
+                    }
                 },
                 onContentSuggestionClick = { content ->
                     resolveDetailsOriginForContent(content) { origin ->

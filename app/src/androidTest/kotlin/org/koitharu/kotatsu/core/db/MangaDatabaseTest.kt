@@ -195,6 +195,33 @@ class MangaDatabaseTest {
 		}
 	}
 
+	@Test
+	fun migrate72To73CreatesSpaceRoutePreferences() {
+		helper.createDatabase(TEST_DB, 72).close()
+
+		helper.runMigrationsAndValidate(
+			TEST_DB,
+			73,
+			true,
+			migrations.single { it.startVersion == 72 && it.endVersion == 73 },
+		).use { db ->
+			db.execSQL(
+				"""
+				INSERT INTO space_route_preferences (
+					space_id, route_key, payload, schema_version, updated_at
+				) VALUES ('builtin:manga', 'main:list', '{}', 1, 100)
+				""".trimIndent(),
+			)
+			db.query(
+				"SELECT payload FROM space_route_preferences " +
+					"WHERE space_id = 'builtin:manga' AND route_key = 'main:list'",
+			).use { cursor ->
+				cursor.moveToFirst()
+				assertEquals("{}", cursor.getString(0))
+			}
+		}
+	}
+
 	private companion object {
 
 		const val TEST_DB = "test-db"

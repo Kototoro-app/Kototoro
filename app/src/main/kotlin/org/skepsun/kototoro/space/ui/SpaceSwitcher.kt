@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,6 +20,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -125,13 +127,13 @@ fun SpaceSwitcherSheet(
 	onAction: (SpaceAction) -> Unit,
 	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
 	onResume: (SpaceId) -> Unit = {},
+	onOpenMediaUniverse: () -> Unit = {},
 ) {
 	if (!state.switcherVisible) return
 	ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
 		Column(
 			modifier = Modifier
 				.fillMaxWidth()
-				.selectableGroup()
 				.padding(bottom = 24.dp),
 		) {
 			Text(
@@ -139,14 +141,35 @@ fun SpaceSwitcherSheet(
 				style = MaterialTheme.typography.titleLarge,
 				modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
 			)
-			BuiltInSpaces.contexts.forEach { context ->
-				SpaceRow(
-					context = context,
-					selected = context.id == state.activeSpaceId,
-					enabled = !state.switchInProgress,
-					resumeItem = resumeItems[context.id],
-					onResume = { onResume(context.id) },
-					onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+			Column(modifier = Modifier.selectableGroup()) {
+				BuiltInSpaces.contexts.forEach { context ->
+					SpaceRow(
+						context = context,
+						selected = context.id == state.activeSpaceId,
+						enabled = !state.switchInProgress,
+						resumeItem = resumeItems[context.id],
+						onResume = { onResume(context.id) },
+						onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+					)
+				}
+			}
+			HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+			Row(
+				modifier = Modifier
+					.fillMaxWidth()
+					.clickable(enabled = !state.switchInProgress, onClick = onOpenMediaUniverse)
+					.padding(horizontal = 24.dp, vertical = 12.dp),
+				verticalAlignment = Alignment.CenterVertically,
+				horizontalArrangement = Arrangement.spacedBy(16.dp),
+			) {
+				Icon(
+					painter = painterResource(R.drawable.ic_explore_normal),
+					contentDescription = null,
+					modifier = Modifier.size(24.dp),
+				)
+				Text(
+					text = stringResource(R.string.media_universe_title),
+					style = MaterialTheme.typography.titleMedium,
 				)
 			}
 			if (state.switchInProgress) {
