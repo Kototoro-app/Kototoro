@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
@@ -2552,6 +2553,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_FILTER_PILL_DEFAULT = "filter_pill_default"
 		const val KEY_FILTER_PILL_LEFT = "filter_pill_left"
 		const val KEY_FILTER_PILL_RIGHT = "filter_pill_right"
+		const val KEY_ACTIVE_SPACE = "entity_space_active"
+		const val KEY_ENTITY_SPACE_ENABLED = "entity_space_enabled"
+		const val KEY_SPACE_SWITCHER_ENABLED = "entity_space_switcher_enabled"
+		const val KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED = "entity_space_persistent_navigation_enabled"
+		const val KEY_SPACE_IMMERSIVE_SWITCH_ENABLED = "entity_space_immersive_switch_enabled"
+		const val KEY_SPACE_ROUTE_PREFERENCES_ENABLED = "entity_space_route_preferences_enabled"
 	}
 
 	// ==================== Video Intro/Outro Skip ====================
@@ -2602,6 +2609,30 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			return try { enumValueOf(name) } catch (e: Exception) { org.skepsun.kototoro.parsers.model.ContentType.NOVEL }
 		}
 		set(value) = prefs.edit { putString(KEY_FILTER_PILL_RIGHT, value.name) }
+
+	var activeSpaceId: String
+		get() = prefs.getString(KEY_ACTIVE_SPACE, "builtin:manga") ?: "builtin:manga"
+		set(value) = prefs.edit { putString(KEY_ACTIVE_SPACE, value) }
+
+	var isEntitySpaceEnabled: Boolean
+		get() = prefs.getBoolean(KEY_ENTITY_SPACE_ENABLED, BuildConfig.DEBUG)
+		set(value) = prefs.edit { putBoolean(KEY_ENTITY_SPACE_ENABLED, value) }
+
+	var isSpaceSwitcherEnabled: Boolean
+		get() = prefs.getBoolean(KEY_SPACE_SWITCHER_ENABLED, false)
+		set(value) = prefs.edit { putBoolean(KEY_SPACE_SWITCHER_ENABLED, value) }
+
+	var isSpacePersistentNavigationEnabled: Boolean
+		get() = prefs.getBoolean(KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED, false)
+		set(value) = prefs.edit { putBoolean(KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED, value) }
+
+	var isSpaceImmersiveSwitchEnabled: Boolean
+		get() = prefs.getBoolean(KEY_SPACE_IMMERSIVE_SWITCH_ENABLED, false)
+		set(value) = prefs.edit { putBoolean(KEY_SPACE_IMMERSIVE_SWITCH_ENABLED, value) }
+
+	var isSpaceRoutePreferencesEnabled: Boolean
+		get() = prefs.getBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, false)
+		set(value) = prefs.edit { putBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, value) }
 
 	object GlassMaterialDefaults {
 		const val DEFAULT_OPACITY_PERCENT = 30
