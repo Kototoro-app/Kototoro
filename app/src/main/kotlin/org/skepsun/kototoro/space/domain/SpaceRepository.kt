@@ -1,6 +1,9 @@
 package org.skepsun.kototoro.space.domain
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 interface SpaceRepository {
 
@@ -32,3 +35,12 @@ data class SpaceFeatureFlags(
 interface SpaceFeatureFlagsRepository {
 	val flags: StateFlow<SpaceFeatureFlags>
 }
+
+fun SpaceRepository.observeActiveSpaceScope(
+	featureFlagsRepository: SpaceFeatureFlagsRepository,
+): Flow<SpaceId?> = combine(
+	activeSpace,
+	featureFlagsRepository.flags,
+) { activeSpace, flags ->
+	activeSpace.takeIf { flags.effectiveSwitcherEnabled }
+}.distinctUntilChanged()

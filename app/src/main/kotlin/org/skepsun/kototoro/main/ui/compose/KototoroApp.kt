@@ -414,7 +414,9 @@ fun KototoroApp(
     val isSourceTagFilterVisibleSetting = filterVisibilityPrefs.isSourceTagFilterVisible
     
     val effectiveLanguagePresetFilterVisible = isLanguagePresetFilterVisible && isLanguagePresetFilterVisibleSetting
-    val effectiveContentTypeFilterVisible = isContentTypeFilterVisible && isContentTypeFilterVisibleSetting
+    val effectiveContentTypeFilterVisible = isContentTypeFilterVisible &&
+        isContentTypeFilterVisibleSetting &&
+        !spaceUiState.switcherEnabled
     val effectiveSourceTagFilterVisible = isSourceTagFilterVisible && isSourceTagFilterVisibleSetting
 
     var topBarHeightPx by remember { mutableIntStateOf(0) }

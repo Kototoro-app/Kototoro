@@ -73,6 +73,10 @@ import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceRepository
+import org.skepsun.kototoro.space.domain.observeActiveSpaceScope
 
 private const val PAGE_SIZE = 32
 
@@ -86,6 +90,7 @@ private data class HistoryUiParams(
 	val groupTab: BrowseGroupTab,
 	val sourceTags: Set<SourceTag>,
 	val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+	val spaceId: SpaceId?,
 )
 
 @HiltViewModel
@@ -106,6 +111,8 @@ class HistoryListViewModel @Inject constructor(
 	private val entityGraphRepository: EntityGraphRepository,
 	private val historyPreviewCache: HistoryPreviewCache,
 	private val workResolver: WorkResolver,
+	spaceRepository: SpaceRepository,
+	spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
 
 	@Volatile
@@ -119,7 +126,15 @@ class HistoryListViewModel @Inject constructor(
 	val onOpenReader = MutableEventFlow<Content>()
 
 	override val isFilterBarVisible = MutableStateFlow(true)
-		private val refreshTrigger = MutableStateFlow(Any())
+	private val refreshTrigger = MutableStateFlow(Any())
+	private val activeSpaceScope = spaceRepository.observeActiveSpaceScope(spaceFeatureFlagsRepository)
+		.stateIn(
+			viewModelScope + Dispatchers.Default,
+			SharingStarted.Eagerly,
+			spaceRepository.activeSpace.value.takeIf {
+				spaceFeatureFlagsRepository.flags.value.effectiveSwitcherEnabled
+			},
+		)
 
 
 	override val currentGroupTab = globalFavoritesState.selectedGroupTab
@@ -210,6 +225,7 @@ class HistoryListViewModel @Inject constructor(
 				else sourcePresetsRepository.observe(id)
 			},
 		settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
+		activeSpaceScope,
 	) { values: Array<Any?> ->
 		val order = values[0] as ListSortOrder
 		val filters = values[1] as Set<ListFilterOption>
@@ -220,6 +236,7 @@ class HistoryListViewModel @Inject constructor(
 		val sourceTags = values[6] as Set<SourceTag>
 		val preset = values[8] as? org.skepsun.kototoro.explore.data.SourcePreset
 		val skipNsfw = values[9] as Boolean
+		val spaceId = values[10] as? SpaceId
 		HistoryUiParams(
 			order = order,
 			filters = filters,
@@ -230,6 +247,7 @@ class HistoryListViewModel @Inject constructor(
 			groupTab = groupTab,
 			sourceTags = sourceTags,
 			preset = preset,
+			spaceId = spaceId,
 		)
 	}.distinctUntilChanged()
 
@@ -239,7 +257,7 @@ class HistoryListViewModel @Inject constructor(
 			buildPreviewStateOrNull(params)?.let { emit(it) } ?: emit(listOf(LoadingState))
 			emitAll(
 				combine(
-					observeHistory(params.order, params.effectiveFilters).onEach {
+					observeHistory(params.order, params.effectiveFilters, params.spaceId).onEach {
 						isPaginationReady.set(true)
 					},
 					mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
@@ -274,6 +292,7 @@ class HistoryListViewModel @Inject constructor(
 				groupTab = currentGroupTab.value,
 				sourceTags = currentSourceTags.value,
 				preset = historyPreviewCache.observe().value?.preset,
+				spaceId = activeSpaceScope.value,
 			),
 		) ?: listOf(LoadingState),
 	)
@@ -366,13 +385,17 @@ class HistoryListViewModel @Inject constructor(
 	private fun observeHistory(
 		order: ListSortOrder,
 		effectiveFilters: Set<ListFilterOption>,
+		spaceId: SpaceId?,
 	) = limit.flatMapLatest { currentLimit ->
-		repository.observeAllWithHistory(order, effectiveFilters, currentLimit)
+		repository.observeAllWithHistory(order, effectiveFilters, currentLimit, spaceId)
 	}
 
 	private suspend fun buildPreviewStateOrNull(
 		params: HistoryUiParams,
 	): List<ListModel>? {
+		if (params.spaceId != null) {
+			return null
+		}
 		val snapshot = historyPreviewCache.observe().value ?: return null
 		val currentPresetId = settings.activeSourcePresetId.takeIf { it != -1L }
 		if (
@@ -409,7 +432,7 @@ class HistoryListViewModel @Inject constructor(
 	private fun buildInitialPreviewStateOrNull(
 		params: HistoryUiParams,
 	): List<ListModel>? {
-		if (params.filters.isNotEmpty()) {
+		if (params.spaceId != null || params.filters.isNotEmpty()) {
 			return null
 		}
 		val snapshot = historyPreviewCache.observe().value ?: return null

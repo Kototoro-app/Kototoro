@@ -46,6 +46,7 @@ import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.space.domain.SpaceId
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -149,7 +150,8 @@ class HistoryRepository @Inject constructor(
 	fun observeAllWithHistory(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
-		limit: Int
+		limit: Int,
+		spaceId: SpaceId? = null,
 	): Flow<List<ContentWithHistory>> {
 		val requiresLocalMapping = ListFilterOption.Downloaded in filterOptions
 		val effectiveFilters = if (requiresLocalMapping) {
@@ -170,7 +172,7 @@ class HistoryRepository @Inject constructor(
 			),
 			emitInitialState = true,
 		).mapLatest {
-				buildObservedHistoryList(order, effectiveFilters, limit)
+				buildObservedHistoryList(order, effectiveFilters, limit, spaceId)
 			}
 			.distinctUntilChanged()
 		return if (requiresLocalMapping) {
@@ -450,10 +452,14 @@ class HistoryRepository @Inject constructor(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
+		spaceId: SpaceId? = null,
 	): List<ContentWithHistory> {
 		val oversampleLimit = if (limit > 0) limit * 15 else 500
 		val trackCache = HashMap<Long, TrackAggregate>()
-		val baseList = workAggregateRepository.findHistoryAggregates(oversampleLimit).mapNotNull { aggregate ->
+		val baseList = workAggregateRepository.findHistoryAggregates(
+			limit = oversampleLimit,
+			spaceId = spaceId,
+		).mapNotNull { aggregate ->
 			val content = aggregate.displayProjection ?: return@mapNotNull null
 			val history = aggregate.history ?: return@mapNotNull null
 			HistoryAggregateItem(

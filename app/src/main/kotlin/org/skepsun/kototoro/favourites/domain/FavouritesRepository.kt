@@ -44,6 +44,7 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.space.domain.SpaceId
 import javax.inject.Inject
 
 @Reusable
@@ -125,8 +126,9 @@ class FavouritesRepository @Inject constructor(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
+		spaceId: SpaceId? = null,
 	): Flow<List<Content>> {
-		return observeWorkFavouriteProjectionContents(FavouriteCategory.NO_ID, order, filterOptions, limit)
+		return observeWorkFavouriteProjectionContents(FavouriteCategory.NO_ID, order, filterOptions, limit, spaceId)
 	}
 
 	fun observeFeedCategoryIds(): Flow<Map<String, Set<Long>>> {
@@ -170,8 +172,9 @@ class FavouritesRepository @Inject constructor(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
+		spaceId: SpaceId? = null,
 	): Flow<List<Content>> {
-		return observeWorkFavouriteProjectionContents(categoryId, order, filterOptions, limit)
+		return observeWorkFavouriteProjectionContents(categoryId, order, filterOptions, limit, spaceId)
 	}
 
 	fun observeAll(categoryId: Long, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
@@ -179,9 +182,14 @@ class FavouritesRepository @Inject constructor(
 			.flatMapLatest { order -> observeAll(categoryId, order, filterOptions, limit) }
 	}
 
-	fun observeAllProjectionContents(categoryId: Long, filterOptions: Set<ListFilterOption>, limit: Int): Flow<List<Content>> {
+	fun observeAllProjectionContents(
+		categoryId: Long,
+		filterOptions: Set<ListFilterOption>,
+		limit: Int,
+		spaceId: SpaceId? = null,
+	): Flow<List<Content>> {
 		return observeOrder(categoryId)
-			.flatMapLatest { order -> observeAllProjectionContents(categoryId, order, filterOptions, limit) }
+			.flatMapLatest { order -> observeAllProjectionContents(categoryId, order, filterOptions, limit, spaceId) }
 	}
 
 	fun observeContentCount(): Flow<Int> {
@@ -554,6 +562,7 @@ class FavouritesRepository @Inject constructor(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
+		spaceId: SpaceId?,
 	): Flow<List<Content>> {
 		return db.invalidationTracker.createFlow(
 			TABLE_WORK_FAVOURITES,
@@ -568,7 +577,7 @@ class FavouritesRepository @Inject constructor(
 			"local_index",
 			emitInitialState = true,
 		).mapLatest {
-			buildWorkFavouriteProjectionContents(categoryId, order, filterOptions, limit)
+			buildWorkFavouriteProjectionContents(categoryId, order, filterOptions, limit, spaceId)
 		}.distinctUntilChanged()
 	}
 
@@ -591,12 +600,14 @@ class FavouritesRepository @Inject constructor(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption> = emptySet(),
 		limit: Int = Int.MAX_VALUE,
+		spaceId: SpaceId? = null,
 	): List<Content> {
 		return workAggregateRepository.findFavouriteAggregates(
 			categoryId = categoryId,
 			order = order,
 			filterOptions = filterOptions,
 			limit = limit,
+			spaceId = spaceId,
 		).flatMap { aggregate ->
 			aggregate.projections
 				.ifEmpty { listOfNotNull(aggregate.displayProjection) }
