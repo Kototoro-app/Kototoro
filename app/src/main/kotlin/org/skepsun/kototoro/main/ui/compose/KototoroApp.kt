@@ -1209,6 +1209,10 @@ fun KototoroApp(
                                                 lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
                                             }
                                         },
+                                        activeSpaceId = renderedSpaceId.takeIf { spaceUiState.switcherEnabled },
+                                        onSpaceSwitcherClick = {
+                                            onSpaceAction(SpaceAction.OpenSwitcher)
+                                        },
                                         onExploreSourceSelectionTopBarChanged = { overrideState ->
                                             when (overrideState) {
                                                 is RouteScopedTopBarOverrideState -> {

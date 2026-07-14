@@ -169,6 +169,8 @@ import org.skepsun.kototoro.list.ui.model.ErrorState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -330,6 +332,8 @@ fun AppSearchContentListRoute(
     appRouter: AppRouter,
     onBackClick: () -> Unit,
     onOpenDetails: ((Content, String?) -> Unit)? = null,
+    activeSpaceId: SpaceId? = null,
+    onSpaceSwitcherClick: () -> Unit = {},
     sharedTransitionEnabled: Boolean = true,
     viewModel: RemoteListViewModel = hiltViewModel(),
 ) {
@@ -606,7 +610,9 @@ fun AppSearchContentListRoute(
                 topActionsHeight = SearchTopActionsHeight,
                 collapseOffsetPx = collapseOffsetPx,
                 isRandomLoading = isRandomLoading,
+                activeSpaceId = activeSpaceId,
                 onBackClick = onBackClick,
+                onSpaceSwitcherClick = onSpaceSwitcherClick,
                 onRandomClick = viewModel::openRandom,
                 onFilterClick = {
                     if (isWideAdaptiveLayout) {
@@ -1136,7 +1142,9 @@ private fun SearchContentTopBar(
     topActionsHeight: Dp,
     collapseOffsetPx: Float,
     isRandomLoading: Boolean,
+    activeSpaceId: SpaceId?,
     onBackClick: () -> Unit,
+    onSpaceSwitcherClick: () -> Unit,
     onRandomClick: () -> Unit,
     onFilterClick: () -> Unit,
     onResetFilterClick: () -> Unit,
@@ -1226,7 +1234,9 @@ private fun SearchContentTopBar(
                         gridSize = gridSize,
                         isFilterApplied = isFilterApplied,
                         isRandomLoading = isRandomLoading,
+                        activeSpaceId = activeSpaceId,
                         onBackClick = onBackClick,
+                        onSpaceSwitcherClick = onSpaceSwitcherClick,
                         onSearchClick = onSearchOpen,
                         onRandomClick = onRandomClick,
                         onFilterClick = onFilterClick,
@@ -1393,7 +1403,9 @@ private fun SourceListTopActionsRow(
     gridSize: Int,
     isFilterApplied: Boolean,
     isRandomLoading: Boolean,
+    activeSpaceId: SpaceId?,
     onBackClick: () -> Unit,
+    onSpaceSwitcherClick: () -> Unit,
     onSearchClick: () -> Unit,
     onRandomClick: () -> Unit,
     onFilterClick: () -> Unit,
@@ -1464,6 +1476,17 @@ private fun SourceListTopActionsRow(
                             .alpha(topBarAlpha),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        activeSpaceId?.let { spaceId ->
+                            IconButton(
+                                onClick = onSpaceSwitcherClick,
+                                modifier = Modifier.size(SearchTopCompactActionButtonSize),
+                            ) {
+                                SpaceSwitcherIcon(
+                                    activeSpaceId = spaceId,
+                                    modifier = Modifier.size(SearchTopActionIconSize),
+                                )
+                            }
+                        }
                         BadgedBox(
                             badge = {
                                 if (isFilterApplied) {

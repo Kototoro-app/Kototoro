@@ -212,6 +212,8 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.readingrecord.data.ReadingChapterAggregateEntity
 import org.skepsun.kototoro.readingrecord.data.ReadingJumpPointEntity
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordEntity
@@ -290,6 +292,8 @@ fun DetailsScreen(
     appRouter: AppRouter,
     pageSaveHelper: PageSaveHelper,
     onBackClick: () -> Unit,
+    activeSpaceId: SpaceId? = null,
+    onSpaceSwitcherClick: () -> Unit = {},
     sharedElementKey: String? = null,
     onActionClick: (DetailsAction) -> Unit = {},
     isTemporaryReadOnly: Boolean = false,
@@ -1089,6 +1093,17 @@ fun DetailsScreen(
                                         .padding(horizontal = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
+                                    activeSpaceId?.let { spaceId ->
+                                        DetailsChromeButton(
+                                            onClick = onSpaceSwitcherClick,
+                                            modifier = Modifier.size(DetailsTopCompactActionButtonSize),
+                                        ) {
+                                            SpaceSwitcherIcon(
+                                                activeSpaceId = spaceId,
+                                                modifier = Modifier.size(DetailsTopActionIconSize),
+                                            )
+                                        }
+                                    }
                                     DetailsChromeButton(
                                         onClick = {
                                             showShareOptions = true

@@ -98,6 +98,7 @@ import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
+import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import dev.chrisbanes.haze.hazeSource
 
@@ -222,6 +223,8 @@ fun AppNavGraph(
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
     onDetailsTransitionRequested: () -> Unit = {},
     onDetailsReturnTransitionRequested: () -> Unit = {},
+    activeSpaceId: SpaceId? = null,
+    onSpaceSwitcherClick: () -> Unit = {},
     isLandscapeNavigation: Boolean = false,
     mainNavState: MainNavState? = null,
 ) {
@@ -543,6 +546,8 @@ fun AppNavGraph(
                 AppSearchContentListRoute(
                     appRouter = appRouter,
                     onBackClick = { mainNavigator.pop() },
+                    activeSpaceId = activeSpaceId,
+                    onSpaceSwitcherClick = onSpaceSwitcherClick,
                     onOpenDetails = { content, sharedElementKey ->
                         navigateToDetailsWithContent(content, sharedElementKey)
                     },
@@ -624,6 +629,8 @@ fun AppNavGraph(
                     onBackClick = {
                         mainNavigator.pop()
                     },
+                    activeSpaceId = activeSpaceId,
+                    onSpaceSwitcherClick = onSpaceSwitcherClick,
                     sharedElementKey = sharedKey,
                     onActionClick = { action ->
                         handleDetailsAction(

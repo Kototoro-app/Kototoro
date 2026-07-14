@@ -88,28 +88,34 @@ fun SpaceSwitcherRailButton(
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
-	val presentation = activeSpaceId.presentation()
-	val description = stringResource(
-		R.string.space_switcher_content_description,
-		stringResource(presentation.labelRes),
-	)
 	IconButton(
 		onClick = onClick,
-		modifier = modifier
-			.size(48.dp)
-			.semantics { contentDescription = description },
+		modifier = modifier.size(48.dp),
 	) {
 		Crossfade(
-			targetState = presentation,
+			targetState = activeSpaceId,
 			animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
 			label = "space_rail_icon",
 		) { target ->
-			Icon(
-				painter = painterResource(target.iconRes),
-				contentDescription = null,
-			)
+			SpaceSwitcherIcon(activeSpaceId = target)
 		}
 	}
+}
+
+@Composable
+fun SpaceSwitcherIcon(
+	activeSpaceId: SpaceId,
+	modifier: Modifier = Modifier,
+) {
+	val presentation = activeSpaceId.presentation()
+	Icon(
+		painter = painterResource(presentation.iconRes),
+		contentDescription = stringResource(
+			R.string.space_switcher_content_description,
+			stringResource(presentation.labelRes),
+		),
+		modifier = modifier,
+	)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
