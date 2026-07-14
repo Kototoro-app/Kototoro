@@ -997,7 +997,13 @@ fun KototoroApp(
             }
             Box(modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(
+                    if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+                        Color(0xFF08080C)
+                    } else {
+                        MaterialTheme.colorScheme.background
+                    }
+                )
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .nestedScroll(nestedScrollConnection)
                 .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
@@ -1031,7 +1037,7 @@ fun KototoroApp(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.80f))
+                                    .background(Color.Black.copy(alpha = 0.74f))
                             )
                         }
                     }
