@@ -53,6 +53,7 @@ import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.domain.DetailsInteractor
 import org.skepsun.kototoro.details.domain.DetailsLoadUseCase
 import org.skepsun.kototoro.details.ui.pager.ChaptersPagesViewModel
+import org.skepsun.kototoro.space.domain.awaitCompletion
 import org.skepsun.kototoro.details.ui.pager.EmptyContentReason
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.history.data.HistoryRepository
@@ -500,6 +501,23 @@ class ReaderViewModel @Inject constructor(
             readerState = readerState,
             percent = computePercent(readerState.chapterId, readerState.page),
         )
+    }
+
+    suspend fun flushForSpaceSwitch(state: ReaderState?) {
+        if (state != null) {
+            readingState.value = state
+            savedStateHandle[ReaderIntent.EXTRA_STATE] = state
+        }
+        if (isIncognitoMode.value != false) return
+        val readerState = state ?: readingState.value ?: return
+        val content = getContentOrNull() ?: return
+        ensureReadingSession(readerState)
+        historyUpdateUseCase(
+            manga = content,
+            readerState = readerState,
+            percent = computePercent(readerState.chapterId, readerState.page),
+        )
+        finishReadingSession(allowShort = true, continueFromEnd = false)?.awaitCompletion()
     }
 
     fun getCurrentState() = readingState.value
@@ -1026,10 +1044,10 @@ class ReaderViewModel @Inject constructor(
     private fun finishReadingSession(
         allowShort: Boolean = false,
         continueFromEnd: Boolean = true,
-    ) {
-        if (isIncognitoMode.value != false) return
-        val manga = getContentOrNull() ?: return
-        val startState = sessionStartState ?: readingState.value ?: return
+    ): kotlinx.coroutines.Job? {
+        if (isIncognitoMode.value != false) return null
+        val manga = getContentOrNull() ?: return null
+        val startState = sessionStartState ?: readingState.value ?: return null
         val endState = readingState.value ?: startState
         val startAt = sessionStartAt.takeIf { it > 0L } ?: System.currentTimeMillis()
         val endAt = System.currentTimeMillis()
@@ -1044,7 +1062,7 @@ class ReaderViewModel @Inject constructor(
             sessionStartState = null
             sessionStartPercent = PROGRESS_NONE
         }
-        launchJob(Dispatchers.Default) {
+        return launchJob(Dispatchers.Default) {
             readingRecordRepository.recordSession(
                 manga = manga,
                 startAt = startAt,

@@ -81,6 +81,10 @@ import org.skepsun.kototoro.reader.translate.domain.isAutoReaderTranslationLangu
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderUiState
 import org.skepsun.kototoro.reader.ui.tapgrid.TapGridDispatcher
+import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
+import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
+import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
+import org.skepsun.kototoro.space.ui.SpaceSwitcherDelegate
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
@@ -111,6 +115,9 @@ class ReaderActivity :
 
     @Inject
     lateinit var screenOrientationHelper: ScreenOrientationHelper
+
+    @Inject
+    lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
     private val idlingDetector = IdlingDetector(TimeUnit.SECONDS.toMillis(10), this)
 
@@ -160,6 +167,17 @@ class ReaderActivity :
         scrollTimer = scrollTimerFactory.create(resources, this, this)
         pageSaveHelper = pageSaveHelperFactory.create(this)
         controlDelegate = ReaderControlDelegate(resources, settings, tapGridSettings, this)
+        spaceSwitcherDelegate.bind(
+            activity = this,
+            snackbarAnchor = viewBinding.container,
+            origin = SpaceSwitchOrigin.READER,
+            availabilityProvider = { SpaceSwitchAvailability.SAVE_AND_SWITCH },
+            progressFlusher = SpaceProgressFlusher {
+                viewModel.flushForSpaceSwitch(readerManager.currentReader?.getCurrentState())
+            },
+        )
+        spaceSwitcherDelegate.install(viewBinding.toolbar)
+        viewBinding.toolbar.setOnMenuItemClickListener(spaceSwitcherDelegate::onMenuItemSelected)
         viewBinding.zoomControl.listener = this
         viewBinding.actionsView.listener = this
         viewBinding.actionsView.setTranslateButtonVisible(viewModel.shouldShowTranslationToggle())

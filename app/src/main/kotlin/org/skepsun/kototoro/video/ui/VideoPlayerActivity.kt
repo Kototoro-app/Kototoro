@@ -39,6 +39,7 @@ import org.skepsun.kototoro.core.util.ext.consumeAll
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import okhttp3.Request
 import okhttp3.Response
@@ -110,6 +111,11 @@ import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.danmaku.VideoDanmakuController
 import org.skepsun.kototoro.video.danmaku.DanmakuSettings
 import org.skepsun.kototoro.video.danmaku.DanmakuSourceManager
+import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
+import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
+import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
+import org.skepsun.kototoro.space.ui.SpaceSwitcherDelegate
+import org.skepsun.kototoro.space.domain.awaitCompletion
 import com.bytedance.danmaku.render.engine.DanmakuView
 import eu.kanade.tachiyomi.animesource.model.Video
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -510,6 +516,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     @Inject
     lateinit var mangaRepositoryFactory: ContentRepository.Factory
 
+    @Inject
+    lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
+
     private fun isLandscapeOrientation(): Boolean =
         resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -593,8 +602,21 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         // Apply default orientation: portrait when foldable unfolded in portrait; else landscape
         observeFoldableStateForOrientation()
 
+        spaceSwitcherDelegate.bind(
+            activity = this,
+            snackbarAnchor = viewBinding.root,
+            origin = SpaceSwitchOrigin.VIDEO_PLAYER,
+            availabilityProvider = {
+                if (isScreenLocked) SpaceSwitchAvailability.UNAVAILABLE else SpaceSwitchAvailability.SAVE_AND_SWITCH
+            },
+            progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
+        )
+
         // 设置菜单点击监听并复用给两个 Toolbar
         val onMenuItemClick = androidx.appcompat.widget.Toolbar.OnMenuItemClickListener { item ->
+            if (spaceSwitcherDelegate.onMenuItemSelected(item)) {
+                return@OnMenuItemClickListener true
+            }
             when (item.itemId) {
                 org.skepsun.kototoro.R.id.action_subtitle_track -> {
                     showSubtitleTrackDialog()
@@ -1988,12 +2010,14 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun enterScreenLock() {
         isScreenLocked = true
+        spaceSwitcherDelegate.invalidateAvailability()
         updateScreenLockButtonState()
         applyPlayerUiState(PlayerUiState.Locked)
     }
 
     private fun exitScreenLock() {
         isScreenLocked = false
+        spaceSwitcherDelegate.invalidateAvailability()
         updateScreenLockButtonState()
         viewBinding.root.removeCallbacks(hideLockUiRunnable)
         findViewById<View>(org.skepsun.kototoro.R.id.lock_overlay)?.isVisible = false
@@ -2687,6 +2711,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
         if (targetToolbar != null) {
             targetToolbar.inflateMenu(org.skepsun.kototoro.R.menu.menu_video_player)
+            spaceSwitcherDelegate.install(targetToolbar)
             // Force subtitle button to always show as icon (not in overflow)
             targetToolbar.menu.findItem(org.skepsun.kototoro.R.id.action_subtitle_track)?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
         }
@@ -3874,21 +3899,31 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         danmakuController.addLiveDanmaku(message, timeMs)
     }
 
-    private fun savePlaybackProgress(completed: Boolean = false) {
-        val currentUrl = currentMediaUrl ?: return
-        val player = mpvPlayer ?: return
-        val dur = mpvPlayer?.durationMs ?: return
+    private fun savePlaybackProgress(
+        completed: Boolean = false,
+        propagateFailure: Boolean = false,
+    ) {
+        val currentUrl = currentMediaUrl
+        val player = mpvPlayer
+        val dur = mpvPlayer?.durationMs
+        if (currentUrl == null || player == null || dur == null) {
+            if (propagateFailure) error("Playback state is not ready")
+            return
+        }
         val pos = if (completed && dur > 0L) dur else player.positionMs
-        runCatching {
-            getSharedPreferences("video_progress", MODE_PRIVATE)
+        val result = runCatching {
+            check(
+                getSharedPreferences("video_progress", MODE_PRIVATE)
                 .edit()
                 .putLong(currentUrl, pos)
                 .putLong("${currentUrl}_duration", dur)
                 .putLong("${currentUrl}_timestamp", System.currentTimeMillis())
-                .commit() // 使用commit()同步保存，确保数据不丢失
+                .commit(),
+            )
         }.onFailure { e ->
             android.util.Log.e("VideoPlayer", "Failed to save progress", e)
         }
+        if (propagateFailure) result.getOrThrow()
     }
 
     private fun restorePlaybackProgress() {
@@ -3989,9 +4024,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
     }
 
-    private fun saveHistoryProgressAsync(completed: Boolean = false) {
-        val exo = mpvPlayer ?: return
-        val mangaSeed = currentMangaContent() ?: return
+    private fun saveHistoryProgressAsync(
+        completed: Boolean = false,
+        requireHistory: Boolean = false,
+    ): Job? {
+        val exo = mpvPlayer ?: return null
+        val mangaSeed = currentMangaContent() ?: return null
         val dur = exo.durationMs
         val pos = exo.positionMs
         // 当时长未知（直播或刚开始播放）时，也保存一个有效百分比以建立历史记?
@@ -4034,7 +4072,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
 
         // 其余部分需要加载详情以确保 chapters 非空
-        lifecycleScope.launch {
+        return lifecycleScope.launch(CoroutineExceptionHandler { _, error ->
+            android.util.Log.e("VideoPlayer", "History save job failed", error)
+        }) {
             // 先确保漫画详情含章节
             // 防御性拦截：如果 mangaSeed ?URL 是本地文件协议，绝对不能交给在线解析器，否则必定抛错
 	            val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
@@ -4054,6 +4094,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             // 若仍无章节信息（网络/源不可用），避免保存触发断言失败
             if (manga.chapters.isNullOrEmpty()) {
                 android.util.Log.w("VideoPlayer", "Cannot save history: manga has no chapters")
+                if (requireHistory) error("Cannot save history without chapters")
                 return@launch
             }
 
@@ -4072,7 +4113,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                     scroll = episodePercentToScroll(episodePercent),
                 )
                 ensureReadingSession(timedState, overall)
-                historyUpdateUseCase.invokeAsync(manga, timedState, overall)
+                if (requireHistory) {
+                    historyUpdateUseCase(manga, timedState, overall)
+                } else {
+                    historyUpdateUseCase.invokeAsync(manga, timedState, overall)
+                }
             } else {
                 // ?ReaderState：优先使用已有历史，否则用首章构?
                 val history = runCatching { historyRepository.getOne(manga) }.getOrNull()
@@ -4088,12 +4133,27 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                         scroll = episodePercentToScroll(episodePercent),
                     )
                     ensureReadingSession(timedState, overall)
-                    historyUpdateUseCase.invokeAsync(manga, timedState, overall)
+                    if (requireHistory) {
+                        historyUpdateUseCase(manga, timedState, overall)
+                    } else {
+                        historyUpdateUseCase.invokeAsync(manga, timedState, overall)
+                    }
                 } else {
                     android.util.Log.w("VideoPlayer", "Cannot create fallback ReaderState")
+                    if (requireHistory) error("Cannot create history state")
                 }
             }
         }
+    }
+
+    private suspend fun flushForSpaceSwitch() {
+        savePlaybackProgress(propagateFailure = true)
+        val historyJob = saveHistoryProgressAsync(requireHistory = true)
+            ?: error("Playback history is not ready")
+        historyJob.awaitCompletion()
+        finishReadingSession(allowShort = true, continueFromEnd = false)?.awaitCompletion()
+        mpvPlayer?.pause()
+        danmakuController.pause()
     }
 
     private fun episodePercentToScroll(percent: Float): Int {
@@ -4125,10 +4185,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private fun finishReadingSession(
         allowShort: Boolean = false,
         continueFromEnd: Boolean = true,
-    ) {
-        val manga = currentMangaContent() ?: return
-        if (readingRecordRepository.shouldSkip(manga)) return
-        val startState = sessionStartState ?: currentVideoRecordState() ?: return
+    ): Job? {
+        val manga = currentMangaContent() ?: return null
+        if (readingRecordRepository.shouldSkip(manga)) return null
+        val startState = sessionStartState ?: currentVideoRecordState() ?: return null
         val endState = currentVideoRecordState() ?: startState
         val startAt = sessionStartAt.takeIf { it > 0L } ?: System.currentTimeMillis()
         val endAt = System.currentTimeMillis()
@@ -4143,7 +4203,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             sessionStartState = null
             sessionStartPercent = 0f
         }
-        lifecycleScope.launch(Dispatchers.Default) {
+        return lifecycleScope.launch(
+            Dispatchers.Default + CoroutineExceptionHandler { _, error ->
+                android.util.Log.e("VideoPlayer", "Reading record save failed", error)
+            },
+        ) {
             readingRecordRepository.recordSession(
                 manga = manga,
                 startAt = startAt,

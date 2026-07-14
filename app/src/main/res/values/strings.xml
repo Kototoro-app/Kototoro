@@ -3145,6 +3145,8 @@
     <string name="space_switcher_content_description">Current: %1$s. Switch space</string>
     <string name="space_recent_context">Recent: %1$s</string>
     <string name="space_continue_content_description">Continue %1$s</string>
+    <string name="space_switch_failed">Could not save progress. Space was not changed.</string>
+    <string name="space_switch_unavailable">Space switching is not available right now.</string>
     <string name="space_manga">Manga space</string>
     <string name="space_novel">Novel space</string>
     <string name="space_anime">Anime space</string>

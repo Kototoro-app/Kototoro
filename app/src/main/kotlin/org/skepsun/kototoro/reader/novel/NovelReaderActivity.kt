@@ -28,6 +28,7 @@ import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import android.util.SparseArray
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
@@ -56,6 +57,11 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
 import org.skepsun.kototoro.reader.ui.ReaderControlDelegate
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
+import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
+import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
+import org.skepsun.kototoro.space.ui.SpaceSwitcherDelegate
+import org.skepsun.kototoro.space.domain.awaitCompletion
 import javax.inject.Inject
 
 /**
@@ -110,6 +116,9 @@ class NovelReaderActivity :
 
     @Inject
     lateinit var translationProcessor: NovelTranslationProcessor
+
+    @Inject
+    lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
     private lateinit var manga: Content
     private lateinit var repository: ContentRepository
@@ -360,6 +369,15 @@ class NovelReaderActivity :
         android.util.Log.d("NovelReaderActivity", "Repository type: ${repository.javaClass.simpleName}")
 
         setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
+        spaceSwitcherDelegate.bind(
+            activity = this,
+            snackbarAnchor = viewBinding.root,
+            origin = SpaceSwitchOrigin.NOVEL_READER,
+            availabilityProvider = { SpaceSwitchAvailability.SAVE_AND_SWITCH },
+            progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
+        )
+        spaceSwitcherDelegate.install(viewBinding.toolbar)
+        viewBinding.toolbar.setOnMenuItemClickListener(spaceSwitcherDelegate::onMenuItemSelected)
         
         // 设置标题为小说名称
         title = manga.title
@@ -2920,10 +2938,16 @@ class NovelReaderActivity :
     /**
      * 更新历史记录和阅读进度
      */
-    private fun updateHistory(page: Int, total: Int) {
-        val chapter = chapters.getOrNull(currentChapterIndex) ?: return
+    private fun updateHistory(
+        page: Int,
+        total: Int,
+        propagateFailure: Boolean = false,
+    ): Job? {
+        val chapter = chapters.getOrNull(currentChapterIndex) ?: return null
         
-        lifecycleScope.launch {
+        return lifecycleScope.launch(CoroutineExceptionHandler { _, error ->
+            android.util.Log.e("NovelReaderActivity", "History save job failed", error)
+        }) {
             try {
                 // 确保保存历史时包含完整目录：优先使用当前内存中的章节（已合并本地/远端），并修正来源
                 val fixedSource = originalContent?.source ?: manga.source
@@ -2990,13 +3014,22 @@ class NovelReaderActivity :
                 ensureReadingSession(readerState, totalProgress)
                 
                 // 异步更新历史记录
-                historyUpdateUseCase.invokeAsync(mangaWithChapters, readerState, totalProgress)
+                historyUpdateUseCase(mangaWithChapters, readerState, totalProgress)
                 
                 android.util.Log.d("NovelReaderActivity", "History update invoked successfully")
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Failed to update history", e)
+                if (propagateFailure) throw e
             }
         }
+    }
+
+    private suspend fun flushForSpaceSwitch() {
+        ttsService?.stopTts()
+        val page = viewBinding.readerView.getCurrentPage()
+        val total = viewBinding.readerView.getTotalPages()
+        updateHistory(page, total, propagateFailure = true)?.awaitCompletion()
+        finishReadingSession(allowShort = true, continueFromEnd = false)?.awaitCompletion()
     }
 
     private fun currentReaderState(): ReaderState? {
@@ -3019,10 +3052,10 @@ class NovelReaderActivity :
     private fun finishReadingSession(
         allowShort: Boolean = false,
         continueFromEnd: Boolean = true,
-    ) {
+    ): Job? {
         val mangaWithChapters = manga.copy(chapters = chapters)
-        if (readingRecordRepository.shouldSkip(mangaWithChapters)) return
-        val startState = sessionStartState ?: currentReaderState() ?: return
+        if (readingRecordRepository.shouldSkip(mangaWithChapters)) return null
+        val startState = sessionStartState ?: currentReaderState() ?: return null
         val endState = currentReaderState() ?: startState
         val startAt = sessionStartAt.takeIf { it > 0L } ?: System.currentTimeMillis()
         val endAt = System.currentTimeMillis()
@@ -3037,7 +3070,11 @@ class NovelReaderActivity :
             sessionStartState = null
             sessionStartPercent = 0f
         }
-        lifecycleScope.launch(Dispatchers.Default) {
+        return lifecycleScope.launch(
+            Dispatchers.Default + CoroutineExceptionHandler { _, error ->
+                android.util.Log.e("NovelReaderActivity", "Reading record save failed", error)
+            },
+        ) {
             readingRecordRepository.recordSession(
                 manga = mangaWithChapters,
                 startAt = startAt,
