@@ -181,7 +181,7 @@ class HistoryListViewModel @Inject constructor(
 			AppSettings.KEY_MAIN_FAB,
 			AppSettings.KEY_INCOGNITO_MODE,
 		),
-		repository.observeLast(),
+		activeSpaceScope.flatMapLatest(repository::observeLast),
 		networkState,
 	) { _, last, isOnline ->
 		settings.isMainFabEnabled &&
@@ -359,23 +359,17 @@ class HistoryListViewModel @Inject constructor(
 
 	fun openLastReader() {
 		launchLoadingJob(Dispatchers.Default) {
-			val rawContent = repository.getLastOrNull() ?: throw EmptyHistoryException()
-			val entityId = workResolver.resolveByMangaId(rawContent.id).entityId
-			val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
-			val resolvedBase = preferredLocalMangaId
-				?.takeIf { it != rawContent.id }
-				?.let { dataRepository.findDisplayContentById(it, withChapters = false) }
-				?: rawContent
-			val manga = resolvedBase.let { content ->
-				if (content.looksLikeLocalVideoContent()) {
-					content.copy(
+			val content = repository.getLastOrNull(activeSpaceScope.value) ?: throw EmptyHistoryException()
+			val manga = content.let {
+				if (it.looksLikeLocalVideoContent()) {
+					it.copy(
 						source = LocalVideoSource,
-						chapters = content.chapters?.map { chapter ->
+						chapters = it.chapters?.map { chapter ->
 							if (chapter.url.looksLikeVideoUrl()) chapter.copy(source = LocalVideoSource) else chapter
 						},
 					)
 				} else {
-					content
+					it
 				}
 			}
 			onOpenReader.call(manga)

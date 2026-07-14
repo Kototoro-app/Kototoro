@@ -116,11 +116,11 @@ class HistoryRepository @Inject constructor(
 			.toList()
 	}
 
-	suspend fun getLastOrNull(): Content? {
-		return findRecentContentsByWorkAnchor(offset = 0, limit = 1).firstOrNull()
+	suspend fun getLastOrNull(spaceId: SpaceId? = null): Content? {
+		return findRecentContentsByWorkAnchor(offset = 0, limit = 1, spaceId = spaceId).firstOrNull()
 	}
 
-	fun observeLast(): Flow<Content?> {
+	fun observeLast(spaceId: SpaceId? = null): Flow<Content?> {
 		return db.invalidationTracker.createFlow(
 			tables = arrayOf(
 				TABLE_WORK_HISTORY,
@@ -130,7 +130,7 @@ class HistoryRepository @Inject constructor(
 			),
 			emitInitialState = true,
 		).mapLatest {
-			findRecentContentsByWorkAnchor(offset = 0, limit = 1).firstOrNull()
+			findRecentContentsByWorkAnchor(offset = 0, limit = 1, spaceId = spaceId).firstOrNull()
 		}.distinctUntilChanged()
 	}
 
@@ -431,12 +431,16 @@ class HistoryRepository @Inject constructor(
 		}.distinctUntilChanged()
 	}
 
-	private suspend fun findRecentContentsByWorkAnchor(offset: Int, limit: Int?): List<Content> {
+	private suspend fun findRecentContentsByWorkAnchor(
+		offset: Int,
+		limit: Int?,
+		spaceId: SpaceId? = null,
+	): List<Content> {
 		if (limit != null && limit <= 0) {
 			return emptyList()
 		}
 		val targetSize = if (limit == null) Int.MAX_VALUE else offset + limit
-		return workAggregateRepository.findRecentHistoryAggregates(targetSize)
+		return workAggregateRepository.findRecentHistoryAggregates(targetSize, spaceId)
 			.drop(offset)
 			.let { list ->
 				if (limit == null) list else list.take(limit)

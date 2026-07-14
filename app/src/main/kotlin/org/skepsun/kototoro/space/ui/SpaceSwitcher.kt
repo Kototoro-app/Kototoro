@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
@@ -116,6 +117,8 @@ fun SpaceSwitcherRailButton(
 fun SpaceSwitcherSheet(
 	state: SpaceUiState,
 	onAction: (SpaceAction) -> Unit,
+	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
+	onResume: (SpaceId) -> Unit = {},
 ) {
 	if (!state.switcherVisible) return
 	ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
@@ -135,6 +138,8 @@ fun SpaceSwitcherSheet(
 					context = context,
 					selected = context.id == state.activeSpaceId,
 					enabled = !state.switchInProgress,
+					resumeItem = resumeItems[context.id],
+					onResume = { onResume(context.id) },
 					onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
 				)
 			}
@@ -155,6 +160,8 @@ private fun SpaceRow(
 	context: SpaceContext,
 	selected: Boolean,
 	enabled: Boolean,
+	resumeItem: SpaceResumeItem?,
+	onResume: () -> Unit,
 	onClick: () -> Unit,
 ) {
 	val presentation = context.id.presentation()
@@ -182,11 +189,32 @@ private fun SpaceRow(
 			contentDescription = null,
 			modifier = Modifier.size(24.dp),
 		)
-		Text(
-			text = stringResource(presentation.labelRes),
-			style = MaterialTheme.typography.titleMedium,
-			modifier = Modifier.weight(1f),
-		)
+		Column(modifier = Modifier.weight(1f)) {
+			Text(
+				text = stringResource(presentation.labelRes),
+				style = MaterialTheme.typography.titleMedium,
+			)
+			resumeItem?.let { item ->
+				Text(
+					text = stringResource(R.string.space_recent_context, item.title),
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+			}
+		}
+		if (resumeItem?.canResume == true) {
+			IconButton(onClick = onResume, enabled = enabled) {
+				Icon(
+					painter = painterResource(presentation.resumeIconRes),
+					contentDescription = stringResource(
+						R.string.space_continue_content_description,
+						resumeItem.title,
+					),
+				)
+			}
+		}
 		RadioButton(selected = selected, onClick = null, enabled = enabled)
 	}
 }
@@ -194,10 +222,11 @@ private fun SpaceRow(
 private data class SpacePresentation(
 	@StringRes val labelRes: Int,
 	@DrawableRes val iconRes: Int,
+	@DrawableRes val resumeIconRes: Int,
 )
 
 private fun SpaceId.presentation(): SpacePresentation = when (this) {
-	BuiltInSpaces.Novel -> SpacePresentation(R.string.space_novel, R.drawable.ic_content_novel)
-	BuiltInSpaces.Anime -> SpacePresentation(R.string.space_anime, R.drawable.ic_content_video)
-	else -> SpacePresentation(R.string.space_manga, R.drawable.ic_content_manga)
+	BuiltInSpaces.Novel -> SpacePresentation(R.string.space_novel, R.drawable.ic_content_novel, R.drawable.ic_read)
+	BuiltInSpaces.Anime -> SpacePresentation(R.string.space_anime, R.drawable.ic_content_video, R.drawable.ic_play)
+	else -> SpacePresentation(R.string.space_manga, R.drawable.ic_content_manga, R.drawable.ic_read)
 }

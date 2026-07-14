@@ -156,6 +156,7 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
+import org.skepsun.kototoro.space.ui.SpaceResumeUiState
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
@@ -351,13 +352,13 @@ fun KototoroApp(
     onNavDestinationChanged: (Int) -> Unit = {},
     pendingSearchNavigation: SearchNavigationRequest? = null,
     onSearchNavigationHandled: () -> Unit = {},
-    isResumeEnabled: Boolean = false,
-    onResumeClick: () -> Unit = {},
     onFeedRefresh: () -> Unit = {},
     spaceUiState: SpaceUiState = SpaceUiState(),
     onSpaceAction: (SpaceAction) -> Unit = {},
     spaceNavigationSessionUiState: SpaceNavigationSessionUiState = SpaceNavigationSessionUiState(),
     onSpaceSessionChanged: (SpaceSessionSnapshot) -> Unit = {},
+    spaceResumeUiState: SpaceResumeUiState = SpaceResumeUiState(),
+    onSpaceResume: (SpaceId) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -1126,8 +1127,6 @@ fun KototoroApp(
                         navStateFlow = navStateFlow,
                         onItemSelected = ::navigateFromBottomNav,
                         onItemReselected = ::navigateFromBottomNav,
-                        isResumeEnabled = isResumeEnabled,
-                        onResumeClick = onResumeClick,
                         railHeaderContent = if (spaceUiState.switcherEnabled && canShowSpaceSwitcherEntry) {
                             {
                                 SpaceSwitcherRailButton(
@@ -1155,6 +1154,8 @@ fun KototoroApp(
                     SpaceSwitcherSheet(
                         state = spaceUiState,
                         onAction = onSpaceAction,
+                        resumeItems = spaceResumeUiState.items,
+                        onResume = onSpaceResume,
                     )
                 }
             }
@@ -1668,8 +1669,6 @@ private fun BoxScope.MainBottomChrome(
     navStateFlow: StateFlow<BottomNavState>,
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
-    isResumeEnabled: Boolean,
-    onResumeClick: () -> Unit,
     railHeaderContent: (@Composable () -> Unit)?,
 ) {
     Box(
@@ -1712,8 +1711,6 @@ private fun BoxScope.MainBottomChrome(
             state = navStateFlow,
             onItemSelected = onItemSelected,
             onItemReselected = onItemReselected,
-            showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
-            onContinueReadingClick = onResumeClick,
             railHeaderContent = railHeaderContent,
         )
     }

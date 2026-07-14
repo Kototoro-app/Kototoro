@@ -1814,10 +1814,8 @@ internal fun HistoryTopLevelRouteContent(
             onStatsClick = { appRouter.openStatistic() },
             onContinueReadingClick = { viewModel.openLastReader() },
             onQuickFilterOptionClick = viewModel::toggleFilterOption,
-            showContinueReadingButton = isResumeEnabled && !isLandscapeNavigation,
+            showContinueReadingButton = isResumeEnabled,
             showQuickFilterInline = true,
-            bottomBarOffsetPx = bottomBarOffsetPx,
-            bottomBarHeightPx = bottomBarHeightPx,
             showInlineSelectionTopBar = false,
         )
 

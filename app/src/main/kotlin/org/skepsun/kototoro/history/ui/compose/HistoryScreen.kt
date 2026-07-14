@@ -1,16 +1,14 @@
 package org.skepsun.kototoro.history.ui.compose
 
 import android.util.Log
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -21,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -47,7 +44,7 @@ private fun List<ListModel>.contentAtVisibleIndex(index: Int): String {
 
 @Composable
 fun HistoryScreen(
-    contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(0.dp),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
     items: List<ListModel>,
     headerQuickFilter: QuickFilter? = null,
     listMode: ListMode,
@@ -68,8 +65,6 @@ fun HistoryScreen(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     showContinueReadingButton: Boolean,
     showQuickFilterInline: Boolean = true,
-    bottomBarOffsetPx: Float = 0f,
-    bottomBarHeightPx: Int = 0,
     showInlineSelectionTopBar: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
@@ -89,25 +84,6 @@ fun HistoryScreen(
     val gridState = rememberSaveable(saver = LazyGridState.Saver) {
         LazyGridState()
     }
-    val fabCollapseProgress = remember(bottomBarOffsetPx, bottomBarHeightPx) {
-        if (bottomBarHeightPx <= 0) {
-            0f
-        } else {
-            (bottomBarOffsetPx / bottomBarHeightPx.toFloat()).coerceIn(0f, 1f)
-        }
-    }
-    val isFabExpanded = fabCollapseProgress < 0.5f
-    val listContentPadding = remember(contentPadding) {
-        PaddingValues(
-            start = contentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-            top = contentPadding.calculateTopPadding(),
-            end = contentPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
-            bottom = contentPadding.calculateBottomPadding() + 88.dp,
-        )
-    }
-    val fabBottomPadding = remember(contentPadding) {
-        contentPadding.calculateBottomPadding() + 28.dp
-    }
     LaunchedEffect(
         items.size,
         contentItems.size,
@@ -117,9 +93,6 @@ fun HistoryScreen(
         selectedItemsIds.size,
         showContinueReadingButton,
         contentPadding,
-        listContentPadding,
-        bottomBarOffsetPx,
-        bottomBarHeightPx,
     ) {
         Log.d(
             MainRouteFlickerLogTag,
@@ -127,9 +100,6 @@ fun HistoryScreen(
                 "quickItems=${quickFilter?.items?.size ?: -1} listMode=$listMode refreshing=$isRefreshing " +
                 "selected=${selectedItemsIds.size} continue=$showContinueReadingButton " +
                 "paddingTop=${contentPadding.calculateTopPadding()} paddingBottom=${contentPadding.calculateBottomPadding()} " +
-                "listPaddingTop=${listContentPadding.calculateTopPadding()} " +
-                "listPaddingBottom=${listContentPadding.calculateBottomPadding()} " +
-                "bottomOffset=$bottomBarOffsetPx bottomHeight=$bottomBarHeightPx " +
                 "visibleGrid=${contentItems.contentAtVisibleIndex(gridState.firstVisibleItemIndex)} " +
                 "visibleList=${contentItems.contentAtVisibleIndex(listState.firstVisibleItemIndex)} " +
                 "visibleDetail=${contentItems.contentAtVisibleIndex(detailedListState.firstVisibleItemIndex)}",
@@ -147,63 +117,43 @@ fun HistoryScreen(
                 Log.d(MainRouteFlickerLogTag, "history scroll $scrollState")
             }
     }
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
-        KototoroContentListScreen(
-            contentPadding = listContentPadding,
-            items = contentItems,
-            listMode = listMode,
-            isRefreshing = isRefreshing,
-            pullRefreshEnabled = pullRefreshEnabled,
-            showRemoveOption = true,
-            onRefresh = onRefresh,
-            onLoadMore = onLoadMore,
-            gridScale = gridScale,
-            selectedItemsIds = selectedItemsIds,
-            onPrepareItemTransition = onPrepareItemTransition,
-            onItemClick = { item ->
-                if (selectedItemsIds.isNotEmpty()) {
-                    hapticFeedback.performSelectionHapticFeedback()
-                }
-                onItemClick(item)
-            },
-            onItemLongClick = onItemLongClick,
-            onClearSelection = onClearSelection,
-            onSelectionAction = onSelectionAction,
-            showInlineSelectionTopBar = showInlineSelectionTopBar,
-            gridState = gridState,
-            listState = listState,
-            detailedListState = detailedListState,
-            listHeader = {
-                HistoryHeader(
-                    quickFilter = quickFilter.takeIf { showQuickFilterInline },
-                    isStatsEnabled = isStatsEnabled,
-                    onStatsClick = onStatsClick,
-                    onQuickFilterOptionClick = onQuickFilterOptionClick,
-                )
+    KototoroContentListScreen(
+        modifier = modifier,
+        contentPadding = contentPadding,
+        items = contentItems,
+        listMode = listMode,
+        isRefreshing = isRefreshing,
+        pullRefreshEnabled = pullRefreshEnabled,
+        showRemoveOption = true,
+        onRefresh = onRefresh,
+        onLoadMore = onLoadMore,
+        gridScale = gridScale,
+        selectedItemsIds = selectedItemsIds,
+        onPrepareItemTransition = onPrepareItemTransition,
+        onItemClick = { item ->
+            if (selectedItemsIds.isNotEmpty()) {
+                hapticFeedback.performSelectionHapticFeedback()
             }
-        )
-
-        if (showContinueReadingButton && selectedItemsIds.isEmpty()) {
-            ExtendedFloatingActionButton(
-                onClick = onContinueReadingClick,
-                icon = {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_read),
-                        contentDescription = null,
-                    )
-                },
-                text = {
-                    Text(stringResource(R.string._continue))
-                },
-                expanded = isFabExpanded,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = fabBottomPadding),
+            onItemClick(item)
+        },
+        onItemLongClick = onItemLongClick,
+        onClearSelection = onClearSelection,
+        onSelectionAction = onSelectionAction,
+        showInlineSelectionTopBar = showInlineSelectionTopBar,
+        gridState = gridState,
+        listState = listState,
+        detailedListState = detailedListState,
+        listHeader = {
+            HistoryHeader(
+                quickFilter = quickFilter.takeIf { showQuickFilterInline },
+                isStatsEnabled = isStatsEnabled,
+                onStatsClick = onStatsClick,
+                showContinueReadingButton = showContinueReadingButton && selectedItemsIds.isEmpty(),
+                onContinueReadingClick = onContinueReadingClick,
+                onQuickFilterOptionClick = onQuickFilterOptionClick,
             )
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -211,6 +161,8 @@ private fun HistoryHeader(
     quickFilter: QuickFilter?,
     isStatsEnabled: Boolean,
     onStatsClick: () -> Unit,
+    showContinueReadingButton: Boolean,
+    onContinueReadingClick: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 ) {
     Column(
@@ -221,7 +173,8 @@ private fun HistoryHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp)
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (isStatsEnabled) {
                 AssistChip(
@@ -234,6 +187,19 @@ private fun HistoryHeader(
                         )
                     },
                     label = { Text(stringResource(R.string.statistics)) }
+                )
+            }
+            if (showContinueReadingButton) {
+                AssistChip(
+                    onClick = onContinueReadingClick,
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_read),
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    },
+                    label = { Text(stringResource(R.string._continue)) },
                 )
             }
         }

@@ -62,6 +62,8 @@ import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
 import org.skepsun.kototoro.space.ui.SpaceViewModel
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
+import org.skepsun.kototoro.space.ui.SpaceAction
+import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
@@ -94,6 +96,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
+    private val spaceResumeViewModel by viewModels<SpaceResumeViewModel>()
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -122,8 +125,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private var searchNavigationRequest by mutableStateOf<SearchNavigationRequest?>(null)
     private var nextSearchRequestId = 0L
     private var searchQuery by mutableStateOf("")
-    private var isResumeEnabledState by androidx.compose.runtime.mutableStateOf(false)
-
     private val activeFilterCallbacks = LinkedHashSet<SearchBarFilterViewController.Callback>()
     private var currentFilterCallback: SearchBarFilterViewController.Callback? = null
     private var activeFilterContentType by mutableStateOf<ContentType?>(null)
@@ -226,9 +227,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 }
         }
 
-        viewModel.isResumeEnabled.observe(this) { isEnabled ->
-            isResumeEnabledState = isEnabled
-        }
         viewModel.feedCounter.observe(this) { count ->
             if (count > 0) {
                 composeNavBarDelegator.setBadgeNumber(R.id.nav_feed, count)
@@ -248,6 +246,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
+            val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
 
             KototoroApp(
                 appSettings = settings,
@@ -264,13 +263,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onSearchOverlayContentKindsChange = searchSuggestionViewModel::setContentKinds,
                 onSearchOverlayDismiss = ::syncSearchSuggestionFilters,
                 query = searchQuery,
-                isResumeEnabled = isResumeEnabledState,
-                onResumeClick = viewModel::openLastReader,
                 onFeedRefresh = trackWorkerScheduler::startNow,
                 spaceUiState = spaceUiState,
                 onSpaceAction = spaceViewModel::onAction,
                 spaceNavigationSessionUiState = spaceNavigationSessionUiState,
                 onSpaceSessionChanged = spaceNavigationSessionViewModel::save,
+                spaceResumeUiState = spaceResumeUiState,
+                onSpaceResume = { spaceId ->
+                    spaceViewModel.onAction(SpaceAction.DismissSwitcher)
+                    spaceResumeViewModel.resume(spaceId)
+                },
                 onContentSuggestionClick = { content ->
                     resolveDetailsOriginForContent(content) { origin ->
                         when (origin) {
@@ -424,6 +426,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                     }
                 },
             )
+        }
+
+        spaceResumeViewModel.onOpenReader.observeEvent(this) { content ->
+            router.openReader(content)
         }
         viewModel.onFirstStart.observeEvent(this) { this.router.showWelcomeSheet() }
         viewModel.isBottomNavPinned.observe(this, ::setNavbarPinned)
