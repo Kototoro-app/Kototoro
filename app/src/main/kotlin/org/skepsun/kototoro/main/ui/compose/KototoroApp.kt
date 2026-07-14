@@ -79,6 +79,11 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.space.ui.SpaceAction
+import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
+import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
+import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
+import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -332,6 +337,8 @@ fun KototoroApp(
     isResumeEnabled: Boolean = false,
     onResumeClick: () -> Unit = {},
     onFeedRefresh: () -> Unit = {},
+    spaceUiState: SpaceUiState = SpaceUiState(),
+    onSpaceAction: (SpaceAction) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -710,6 +717,7 @@ fun KototoroApp(
     val supportsDisplayModeMenu = chromeTopLevelKey.supportsDisplayModeMenu()
     val supportsGridSizeSlider = chromeTopLevelKey.supportsGridSizeSlider()
     val isFavoritesRoute = chromeTopLevelKey == FavoritesNavKey
+    val canShowSpaceSwitcherEntry = chromeTopLevelKey != HistoryNavKey
     val fallbackFavoritesSortOrders = if (isFavoritesRoute) ListSortOrder.FAVORITES.sortedByOrdinal() else emptyList()
     val globalFavoritesSortOrder by appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
         allFavoritesSortOrder
@@ -983,6 +991,33 @@ fun KototoroApp(
                         onItemReselected = ::navigateFromBottomNav,
                         isResumeEnabled = isResumeEnabled,
                         onResumeClick = onResumeClick,
+                        railHeaderContent = if (spaceUiState.switcherEnabled && canShowSpaceSwitcherEntry) {
+                            {
+                                SpaceSwitcherRailButton(
+                                    activeSpaceId = spaceUiState.activeSpaceId,
+                                    onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                    if (!isLandscapeNavigation && spaceUiState.switcherEnabled && canShowSpaceSwitcherEntry) {
+                        SpaceSwitcherFab(
+                            activeSpaceId = spaceUiState.activeSpaceId,
+                            expanded = totalContentScrollOffset >= 0f,
+                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(
+                                    end = 20.dp,
+                                    bottom = with(density) { bottomNavHeightPx.toDp() } + 20.dp,
+                                ),
+                        )
+                    }
+                    SpaceSwitcherSheet(
+                        state = spaceUiState,
+                        onAction = onSpaceAction,
                     )
                 }
             }
@@ -1479,6 +1514,7 @@ private fun BoxScope.MainBottomChrome(
     onItemReselected: (Int) -> Unit,
     isResumeEnabled: Boolean,
     onResumeClick: () -> Unit,
+    railHeaderContent: (@Composable () -> Unit)?,
 ) {
     Box(
         modifier = Modifier
@@ -1522,6 +1558,7 @@ private fun BoxScope.MainBottomChrome(
             onItemReselected = onItemReselected,
             showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
             onContinueReadingClick = onResumeClick,
+            railHeaderContent = railHeaderContent,
         )
     }
 }

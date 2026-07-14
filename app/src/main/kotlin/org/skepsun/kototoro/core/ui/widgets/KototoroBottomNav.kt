@@ -60,6 +60,7 @@ fun KototoroBottomNav(
     onItemReselected: (Int) -> Unit,
     showContinueReadingButton: Boolean = false,
     onContinueReadingClick: () -> Unit = {},
+    railHeaderContent: (@Composable () -> Unit)? = null,
 ) {
     val navState by state.collectAsState()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
@@ -192,6 +193,12 @@ fun KototoroBottomNav(
                 ) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    if (railHeaderContent != null) {
+                        item {
+                            railHeaderContent()
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                     if (showContinueReadingButton) {
                         item {

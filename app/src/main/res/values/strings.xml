@@ -3141,4 +3141,9 @@
     <string name="no_jump_points">No jump points yet</string>
     <string name="restore_jump_point">Tap to restore the position before this jump</string>
     <string name="reading_chapter_record_format">%1$d sessions · %2$s</string>
+    <string name="space_switcher_title">Switch space</string>
+    <string name="space_switcher_content_description">Current: %1$s. Switch space</string>
+    <string name="space_manga">Manga space</string>
+    <string name="space_novel">Novel space</string>
+    <string name="space_anime">Anime space</string>
 </resources>

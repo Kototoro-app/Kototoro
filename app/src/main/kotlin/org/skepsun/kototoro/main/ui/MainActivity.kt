@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -59,6 +60,7 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
+import org.skepsun.kototoro.space.ui.SpaceViewModel
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
@@ -88,6 +90,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var workResolver: WorkResolver
+
+    private val spaceViewModel by viewModels<SpaceViewModel>()
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -240,6 +244,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val appUpdate by viewModel.appUpdate.collectAsState(initial = null)
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
+            val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
 
             KototoroApp(
                 appSettings = settings,
@@ -259,6 +264,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 isResumeEnabled = isResumeEnabledState,
                 onResumeClick = viewModel::openLastReader,
                 onFeedRefresh = trackWorkerScheduler::startNow,
+                spaceUiState = spaceUiState,
+                onSpaceAction = spaceViewModel::onAction,
                 onContentSuggestionClick = { content ->
                     resolveDetailsOriginForContent(content) { origin ->
                         when (origin) {
