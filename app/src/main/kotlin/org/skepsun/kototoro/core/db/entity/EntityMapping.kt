@@ -4,6 +4,7 @@ import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.resolvedContentTypeForSnapshot
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -100,6 +101,7 @@ fun Content.toEntity() = MangaEntity(
 	title = title,
 	authors = authors.joinToString(VALUES_DIVIDER.toString()),
 	description = description,
+	contentType = source.resolvedContentTypeForSnapshot()?.name,
 )
 
 fun ContentTag.toEntity() = TagEntity(

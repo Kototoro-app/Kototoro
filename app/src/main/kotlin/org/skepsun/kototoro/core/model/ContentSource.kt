@@ -157,6 +157,11 @@ fun ContentSource.getLocale(): Locale? = unwrap().locale.takeIf { it.isNotEmpty(
 
 fun ContentSource.getContentType(): ContentType = unwrap().contentType
 
+fun ContentSource.resolvedContentTypeForSnapshot(): ContentType? {
+	val resolved = unwrap()
+	return resolved.contentType.takeUnless { resolved is AnonymousContentSource || resolved === UnknownContentSource }
+}
+
 fun ContentSource.getSummary(context: Context, contentType: ContentType? = null): String? = when (val source = unwrap()) {
 	is KotatsuParserSource,
 	is org.skepsun.kototoro.mihon.model.MihonMangaSource,

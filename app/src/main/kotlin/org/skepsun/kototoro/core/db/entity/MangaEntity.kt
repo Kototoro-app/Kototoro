@@ -2,10 +2,14 @@ package org.skepsun.kototoro.core.db.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 
-@Entity(tableName = TABLE_MANGA)
+@Entity(
+	tableName = TABLE_MANGA,
+	indices = [Index(name = "index_manga_content_type", value = ["content_type"])],
+)
 data class MangaEntity(
 	@PrimaryKey(autoGenerate = false)
 	@ColumnInfo(name = "manga_id") val id: Long,
@@ -22,4 +26,5 @@ data class MangaEntity(
 	@ColumnInfo(name = "author") val authors: String?,
 	@ColumnInfo(name = "source") val source: String,
 	@ColumnInfo(name = "description") val description: String? = null,
+	@ColumnInfo(name = "content_type") val contentType: String? = null,
 )

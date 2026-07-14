@@ -116,6 +116,7 @@ class AppBackupAgent : BackupAgent() {
 						contentHttpClient = okhttp3.OkHttpClient(),
 					),
 					sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
+					projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),
 				),
 				savedFiltersRepository = SavedFiltersRepository(
 					context = applicationContext,
@@ -214,6 +215,7 @@ class AppBackupAgent : BackupAgent() {
 							contentHttpClient = okhttp3.OkHttpClient(),
 						),
 						sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
+						projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),
 					),
 					savedFiltersRepository = SavedFiltersRepository(
 						context = applicationContext,

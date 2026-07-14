@@ -56,6 +56,7 @@ class SyncContent(
 	@SerialName("state") val state: String? = null,
 	@SerialName("author") val authors: String? = null,
 	@SerialName("source") val source: String,
+	@SerialName("content_type") val contentType: String? = null,
 ) {
 
 	constructor(entity: MangaEntity) : this(
@@ -72,6 +73,7 @@ class SyncContent(
 		state = entity.state,
 		authors = entity.authors,
 		source = entity.source,
+		contentType = entity.contentType,
 	)
 
 	fun toEntity(localId: Long = id): MangaEntity {
@@ -89,6 +91,7 @@ class SyncContent(
 			state = state,
 			authors = authors,
 			source = source,
+			contentType = contentType,
 		)
 	}
 }

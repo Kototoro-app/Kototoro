@@ -126,6 +126,39 @@ class MangaDatabaseTest {
 		}
 	}
 
+	@Test
+	fun migrate70To71AddsNullableContentTypeColumn() {
+		helper.createDatabase(TEST_DB, 70).use { db ->
+			db.execSQL(
+				"""
+				INSERT INTO manga (
+					manga_id,
+					title,
+					url,
+					public_url,
+					rating,
+					nsfw,
+					cover_url,
+					source
+				) VALUES (1, 'Test Title', 'http://example.com', '', 0.0, 0, '', 'Source')
+				""".trimIndent(),
+			)
+		}
+
+		helper.runMigrationsAndValidate(
+			TEST_DB,
+			71,
+			true,
+			migrations.single { it.startVersion == 70 && it.endVersion == 71 },
+		).use { db ->
+			db.query("SELECT manga_id, content_type FROM manga WHERE manga_id = 1").use { cursor ->
+				cursor.moveToFirst()
+				assertEquals(1L, cursor.getLong(0))
+				assertEquals(null, cursor.getString(1))
+			}
+		}
+	}
+
 	private companion object {
 
 		const val TEST_DB = "test-db"

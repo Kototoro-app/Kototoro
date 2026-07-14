@@ -53,6 +53,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
+import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.LocalNovelSource
+import org.skepsun.kototoro.core.model.LocalVideoSource
+import org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill
 
 private data class EnabledSourcesSnapshot(
 	val sources: List<ContentSourceInfo>,
@@ -74,6 +78,7 @@ class ContentSourcesRepository @Inject constructor(
 	private val ireaderExtensionManager: org.skepsun.kototoro.ireader.IReaderExtensionManager,
 	private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
 	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
+	private val projectionContentTypeBackfill: ProjectionContentTypeBackfill,
 ) {
 
 	private val dao get() = db.getSourcesDao()
@@ -128,7 +133,7 @@ class ContentSourcesRepository @Inject constructor(
 
 	suspend fun getAllAvailableSourcesUnfiltered(): List<ContentSource> {
 		assimilateNewSources()
-		return canonicalizeSourcesByName(buildList {
+		val sources = canonicalizeSourcesByName(buildList {
 			addAll(allContentSources)
 			addAll(getExternalSources())
 			addAll(jsonSourceManager.observeAllJsonSources().first().map(::JsonContentSource))
@@ -136,6 +141,10 @@ class ContentSourcesRepository @Inject constructor(
 			addAll(getEnabledAniyomiSources())
 			addAll(getEnabledIReaderSources())
 		})
+		projectionContentTypeBackfill.backfill(
+			resolvedSources = sources + listOf(LocalMangaSource, LocalNovelSource, LocalVideoSource),
+		)
+		return sources
 	}
 
 	suspend fun getAllAvailableSourcesForListing(): List<ContentSource> {

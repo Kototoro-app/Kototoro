@@ -22,6 +22,7 @@ class ContentBackup(
 	@SerialName("state") val state: String? = null,
 	@SerialName("author") val authors: String? = null,
 	@SerialName("source") val source: String,
+	@SerialName("content_type") val contentType: String? = null,
 	@SerialName("tags") val tags: Set<TagBackup> = emptySet(),
 	@SerialName("title_override") val titleOverride: String? = null,
 	@SerialName("cover_override") val coverUrlOverride: String? = null,
@@ -46,6 +47,7 @@ class ContentBackup(
 		state = entity.manga.state,
 		authors = entity.manga.authors,
 		source = entity.manga.source,
+		contentType = entity.manga.contentType,
 		tags = entity.tags.mapToSet { TagBackup(it) },
 	)
 
@@ -63,6 +65,7 @@ class ContentBackup(
 		state = state,
 		authors = authors,
 		source = source,
+		contentType = contentType,
 	)
 
 	// Legacy compatibility only. Authoritative work/entity prefs are restored from

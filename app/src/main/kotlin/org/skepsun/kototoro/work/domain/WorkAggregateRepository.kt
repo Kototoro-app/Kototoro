@@ -14,7 +14,11 @@ import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.stats.data.WorkStatsSummaryRow
+import org.skepsun.kototoro.space.domain.BuiltInSpaces
+import org.skepsun.kototoro.space.domain.SpaceContentPolicy
+import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import javax.inject.Inject
 
@@ -22,18 +26,21 @@ import javax.inject.Inject
 class WorkAggregateRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val workResolver: WorkResolver,
+	private val spaceContentPolicy: SpaceContentPolicy,
 ) {
 
 	suspend fun findFavouriteAggregates(
 		categoryId: Long = FavouriteCategory.NO_ID,
 		order: ListSortOrder = ListSortOrder.UPDATED,
 		limit: Int = Int.MAX_VALUE,
+		spaceId: SpaceId? = null,
 	): List<WorkAggregate> {
 		return findFavouriteAggregates(
 			categoryId = categoryId,
 			order = order,
 			filterOptions = emptySet(),
 			limit = limit,
+			spaceId = spaceId,
 		)
 	}
 
@@ -42,12 +49,14 @@ class WorkAggregateRepository @Inject constructor(
 		order: ListSortOrder = ListSortOrder.UPDATED,
 		filterOptions: Set<ListFilterOption> = emptySet(),
 		limit: Int = Int.MAX_VALUE,
+		spaceId: SpaceId? = null,
 	): List<Content> {
 		return findFavouriteAggregates(
 			categoryId = categoryId,
 			order = order,
 			filterOptions = filterOptions,
 			limit = limit,
+			spaceId = spaceId,
 		).mapNotNull { it.displayProjection }
 	}
 
@@ -148,23 +157,32 @@ class WorkAggregateRepository @Inject constructor(
 		)
 	}
 
-	suspend fun findRecentHistoryAggregates(limit: Int = Int.MAX_VALUE): List<WorkAggregate> {
+	suspend fun findRecentHistoryAggregates(
+		limit: Int = Int.MAX_VALUE,
+		spaceId: SpaceId? = null,
+	): List<WorkAggregate> {
 		if (limit <= 0) {
 			return emptyList()
 		}
-		val histories = findRecentHistoryEntries(limit)
-		return buildHistoryAggregates(histories)
+		val histories = findRecentHistoryEntries(limit, spaceId)
+		return buildHistoryAggregates(histories, spaceId)
 	}
 
-	suspend fun findHistoryAggregates(limit: Int = Int.MAX_VALUE): List<WorkAggregate> {
+	suspend fun findHistoryAggregates(
+		limit: Int = Int.MAX_VALUE,
+		spaceId: SpaceId? = null,
+	): List<WorkAggregate> {
 		if (limit <= 0) {
 			return emptyList()
 		}
-		val histories = findRecentHistoryEntries(limit)
-		return buildHistoryAggregates(histories)
+		val histories = findRecentHistoryEntries(limit, spaceId)
+		return buildHistoryAggregates(histories, spaceId)
 	}
 
-	private suspend fun buildHistoryAggregates(histories: List<WorkHistoryEntity>): List<WorkAggregate> {
+	private suspend fun buildHistoryAggregates(
+		histories: List<WorkHistoryEntity>,
+		spaceId: SpaceId?,
+	): List<WorkAggregate> {
 		if (histories.isEmpty()) {
 			return emptyList()
 		}
@@ -176,12 +194,15 @@ class WorkAggregateRepository @Inject constructor(
 		val categoriesByEntityId = findCategoriesByEntityId(entityIds)
 		val statsByEntityId = findStatsByEntityId(entityIds)
 		val trackingByEntityId = findTrackingByEntityId(entityIds)
+		val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
 		return histories.mapNotNull { history ->
 			val identity = projectionSet.identitiesByEntityId[history.entityId] ?: return@mapNotNull null
 			val displayProjection = resolveDisplayProjection(
 				identity = identity,
 				anchorId = history.anchorMangaId,
 				cachedProjectionsById = projectionSet.projectionsById,
+				persistedContentTypesById = projectionSet.contentTypesById,
+				allowedContentTypes = allowedTypes,
 			)
 				?: return@mapNotNull null
 			WorkAggregate(
@@ -196,7 +217,14 @@ class WorkAggregateRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun findRecentHistoryEntries(limit: Int): List<WorkHistoryEntity> {
+	private suspend fun findRecentHistoryEntries(limit: Int, spaceId: SpaceId?): List<WorkHistoryEntity> {
+		if (spaceId != null) {
+			return db.getWorkHistoryDao().findRecentForSpace(
+				allowedTypes = allowedTypeNames(spaceId),
+				classifiedTypes = classifiedTypeNames,
+				limit = limit,
+			)
+		}
 		return if (limit == Int.MAX_VALUE) {
 			db.getWorkHistoryDao().findAll(offset = 0, limit = Int.MAX_VALUE)
 				.filter { it.deletedAt == 0L }
@@ -210,15 +238,16 @@ class WorkAggregateRepository @Inject constructor(
 		order: ListSortOrder = ListSortOrder.UPDATED,
 		filterOptions: Set<ListFilterOption> = emptySet(),
 		limit: Int = Int.MAX_VALUE,
+		spaceId: SpaceId? = null,
 	): List<WorkAggregate> {
 		if (limit <= 0) {
 			return emptyList()
 		}
-		val entries = findFavouriteEntries(categoryId, order, filterOptions, limit)
+		val entries = findFavouriteEntries(categoryId, order, filterOptions, limit, spaceId)
 		if (entries.isEmpty()) {
 			return emptyList()
 		}
-		val aggregates = buildFavouriteAggregates(entries)
+		val aggregates = buildFavouriteAggregates(entries, spaceId)
 		val downloadedIds = if (ListFilterOption.Downloaded in filterOptions) {
 			db.getLocalContentIndexDao().findExistingIds(
 				aggregates.mapNotNull { it.displayProjection?.id }.distinct(),
@@ -236,7 +265,10 @@ class WorkAggregateRepository @Inject constructor(
 			.take(limit)
 	}
 
-	private suspend fun buildFavouriteAggregates(entries: List<WorkFavouriteEntity>): List<WorkAggregate> {
+	private suspend fun buildFavouriteAggregates(
+		entries: List<WorkFavouriteEntity>,
+		spaceId: SpaceId?,
+	): List<WorkAggregate> {
 		val projectionSet = resolveProjectionSet(
 			entityIds = entries.map(WorkFavouriteEntity::entityId),
 			anchorIds = entries.mapNotNull(WorkFavouriteEntity::anchorMangaId),
@@ -246,6 +278,7 @@ class WorkAggregateRepository @Inject constructor(
 		val historyByEntityId = findHistoryByEntityId(entityIds)
 		val statsByEntityId = findStatsByEntityId(entityIds)
 		val trackingByEntityId = findTrackingByEntityId(entityIds)
+		val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
 
 		return entries.mapNotNull { entry: WorkFavouriteEntity ->
 			val identity = projectionSet.identitiesByEntityId[entry.entityId] ?: return@mapNotNull null
@@ -253,13 +286,15 @@ class WorkAggregateRepository @Inject constructor(
 				identity = identity,
 				anchorId = entry.anchorMangaId,
 				cachedProjectionsById = projectionSet.projectionsById,
+				persistedContentTypesById = projectionSet.contentTypesById,
+				allowedContentTypes = allowedTypes,
 			)
 				?: return@mapNotNull null
 			val categories: Set<FavouriteCategory> = categoriesById[entry.categoryId]?.let { setOf(it) } ?: emptySet()
 			WorkAggregate(
 				identity = identity,
 				displayProjection = displayProjection,
-				projections = projectionSet.projectionsFor(identity, entry.anchorMangaId),
+				projections = projectionSet.projectionsFor(identity, entry.anchorMangaId, allowedTypes),
 				categories = categories,
 				favourite = entry,
 				history = historyByEntityId[entry.entityId],
@@ -356,7 +391,23 @@ class WorkAggregateRepository @Inject constructor(
 		order: ListSortOrder,
 		filterOptions: Set<ListFilterOption>,
 		limit: Int,
+		spaceId: SpaceId?,
 	): List<WorkFavouriteEntity> {
+		if (spaceId != null) {
+			val queryLimit = when {
+				filterOptions.isNotEmpty() -> Int.MAX_VALUE
+				categoryId == FavouriteCategory.NO_ID ->
+					(limit * UNCATEGORIZED_FAVOURITE_LIMIT_MULTIPLIER).coerceAtLeast(limit)
+				else -> limit
+			}
+			return db.getWorkFavouritesDao().findActiveForSpace(
+				categoryId = categoryId.takeUnless { it == FavouriteCategory.NO_ID },
+				allowedTypes = allowedTypeNames(spaceId),
+				classifiedTypes = classifiedTypeNames,
+				oldestFirst = order == ListSortOrder.OLDEST,
+				limit = queryLimit,
+			)
+		}
 		val canLimitByWorkState = filterOptions.isEmpty() && limit != Int.MAX_VALUE
 		if (canLimitByWorkState) {
 			val queryLimit = if (categoryId == FavouriteCategory.NO_ID) {
@@ -402,12 +453,14 @@ class WorkAggregateRepository @Inject constructor(
 			identity.preferredMangaId?.let(projectionIds::add)
 			projectionIds += identity.localMangaIds
 		}
-		val projectionsById = db.getMangaDao()
-			.findWithTagsByIds(projectionIds)
-			.associate { it.manga.id to it.toContent() }
+		val projectionRows = db.getMangaDao().findWithTagsByIds(projectionIds)
+		val projectionsById = projectionRows.associate { it.manga.id to it.toContent() }
 		return WorkProjectionSet(
 			identitiesByEntityId = identitiesByEntityId,
 			projectionsById = projectionsById,
+			contentTypesById = projectionRows.associate { row ->
+				row.manga.id to row.manga.contentType?.let(::parseContentType)
+			},
 		)
 	}
 
@@ -415,9 +468,13 @@ class WorkAggregateRepository @Inject constructor(
 		identity: WorkIdentity,
 		anchorId: Long?,
 		cachedProjectionsById: Map<Long, Content>,
+		persistedContentTypesById: Map<Long, ContentType?> = emptyMap(),
+		allowedContentTypes: Set<ContentType>? = null,
 	): Content? {
 		val anchorProjection = anchorId?.let { mangaId ->
 			cachedProjectionsById[mangaId] ?: db.getMangaDao().find(mangaId)?.toContent()
+		}?.takeIf {
+			allowedContentTypes == null || persistedContentTypesById[anchorId] in allowedContentTypes
 		}
 		val candidateIds = buildList {
 			identity.preferredMangaId?.let(::add)
@@ -426,7 +483,8 @@ class WorkAggregateRepository @Inject constructor(
 		}.distinct()
 		for (mangaId in candidateIds) {
 			val candidate = cachedProjectionsById[mangaId] ?: db.getMangaDao().find(mangaId)?.toContent()
-			if (candidate != null) {
+			val contentType = persistedContentTypesById[mangaId]
+			if (candidate != null && (allowedContentTypes == null || contentType in allowedContentTypes)) {
 				return candidate.takeUnless { it.isStaleLocalMangaProjectionFor(anchorProjection) } ?: anchorProjection
 			}
 		}
@@ -443,14 +501,20 @@ class WorkAggregateRepository @Inject constructor(
 	private data class WorkProjectionSet(
 		val identitiesByEntityId: Map<Long, WorkIdentity?>,
 		val projectionsById: Map<Long, Content>,
+		val contentTypesById: Map<Long, ContentType?>,
 	) {
-		fun projectionsFor(identity: WorkIdentity, anchorId: Long? = null): List<Content> {
+		fun projectionsFor(
+			identity: WorkIdentity,
+			anchorId: Long? = null,
+			allowedContentTypes: Set<ContentType>? = null,
+		): List<Content> {
 			val projectionIds = buildList {
 				identity.preferredMangaId?.let(::add)
 				anchorId?.let(::add)
 				addAll(identity.localMangaIds)
 			}.distinct()
 			return projectionIds
+				.filter { id -> allowedContentTypes == null || contentTypesById[id] in allowedContentTypes }
 				.mapNotNull(projectionsById::get)
 				.distinctBy { content ->
 					ProjectionIdentityKeys.contentCompactKey(
@@ -461,6 +525,10 @@ class WorkAggregateRepository @Inject constructor(
 					)
 				}
 		}
+	}
+
+	private fun parseContentType(name: String): ContentType? {
+		return runCatching { ContentType.valueOf(name) }.getOrNull()
 	}
 
 	private fun matchesFavouriteFilters(
@@ -505,6 +573,14 @@ class WorkAggregateRepository @Inject constructor(
 			},
 		)
 	}
+
+	private fun allowedTypeNames(spaceId: SpaceId): Set<String> {
+		return spaceContentPolicy.allowedTypes(spaceId).mapTo(LinkedHashSet()) { it.name }
+	}
+
+	private val classifiedTypeNames: Set<String>
+		get() = BuiltInSpaces.contexts
+			.flatMapTo(LinkedHashSet()) { context -> context.allowedContentTypes.map { it.name } }
 
 	private companion object {
 		private const val UNCATEGORIZED_FAVOURITE_LIMIT_MULTIPLIER = 4

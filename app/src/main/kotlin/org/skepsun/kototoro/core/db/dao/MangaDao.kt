@@ -16,6 +16,11 @@ import org.skepsun.kototoro.core.db.entity.TagEntity
 @Dao
 abstract class MangaDao {
 
+	data class MissingContentTypeProjection(
+		val id: Long,
+		val source: String,
+	)
+
 	@Transaction
 	@Query("SELECT * FROM manga WHERE manga_id = :id")
 	abstract suspend fun find(id: Long): MangaWithTags?
@@ -56,6 +61,23 @@ abstract class MangaDao {
 	suspend fun findWithTagsByIds(ids: Collection<Long>): List<MangaWithTags> {
 		return ids.flatMapSqliteQueryChunks(::findWithTagsByIdsImpl)
 	}
+
+	@Query(
+		"""
+		SELECT manga_id AS id, source
+		FROM manga
+		WHERE content_type IS NULL AND source IN (:sources)
+		ORDER BY manga_id
+		LIMIT :limit
+		""",
+	)
+	abstract suspend fun findMissingContentTypes(
+		sources: Collection<String>,
+		limit: Int,
+	): List<MissingContentTypeProjection>
+
+	@Query("UPDATE manga SET content_type = :contentType WHERE manga_id = :id AND content_type IS NULL")
+	abstract suspend fun setContentTypeIfMissing(id: Long, contentType: String): Int
 
 	@Query("SELECT * FROM manga_tags WHERE manga_id IN (:ids)")
 	protected abstract suspend fun findTagRelationsByMangaIdsImpl(ids: Collection<Long>): List<MangaTagsEntity>

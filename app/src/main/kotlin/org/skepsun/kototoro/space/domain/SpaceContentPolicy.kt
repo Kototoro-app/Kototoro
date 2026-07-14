@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.space.domain
 
+import dagger.Reusable
 import org.skepsun.kototoro.parsers.model.ContentType
+import javax.inject.Inject
 
 interface SpaceContentPolicy {
 
@@ -11,7 +13,8 @@ interface SpaceContentPolicy {
     fun accepts(spaceId: SpaceId, contentType: ContentType?): Boolean
 }
 
-class DefaultSpaceContentPolicy : SpaceContentPolicy {
+@Reusable
+class DefaultSpaceContentPolicy @Inject constructor() : SpaceContentPolicy {
 
     override fun allowedTypes(spaceId: SpaceId): Set<ContentType> {
         return BuiltInSpaces.contexts.firstOrNull { it.id == spaceId }?.allowedContentTypes.orEmpty()
