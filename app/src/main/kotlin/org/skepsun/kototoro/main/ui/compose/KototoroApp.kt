@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
@@ -59,12 +60,12 @@ import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import androidx.compose.ui.unit.LayoutDirection
-
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
@@ -87,10 +88,8 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
-import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
 import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
 import org.skepsun.kototoro.space.ui.SpaceUiState
-import org.skepsun.kototoro.space.ui.MediaUniverseSheet
 import org.skepsun.kototoro.space.ui.MediaUniverseUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
@@ -362,8 +361,6 @@ fun KototoroApp(
     spaceResumeUiState: SpaceResumeUiState = SpaceResumeUiState(),
     onSpaceResume: (SpaceId) -> Unit = {},
     mediaUniverseUiState: MediaUniverseUiState = MediaUniverseUiState(),
-    onOpenMediaUniverse: () -> Unit = {},
-    onDismissMediaUniverse: () -> Unit = {},
     onMediaUniverseContentClick: (Content) -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -459,6 +456,8 @@ fun KototoroApp(
     var searchOverlayInitialQuery by rememberSaveable { mutableStateOf("") }
     var isSearchOverlayQueryCommitted by rememberSaveable { mutableStateOf(false) }
     var isDetailsChromeTransitionPending by rememberSaveable { mutableStateOf(false) }
+    var detailsBottomPanelExpansion by remember { mutableFloatStateOf(0f) }
+    var detailsBottomObstruction by remember { mutableStateOf(0.dp) }
     var keepTabsExpandedByScrollDirection by rememberSaveable { mutableStateOf(false) }
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
     val routeContextualMenuActions = remember { mutableStateMapOf<String, List<KototoroTopBarMenuAction>>() }
@@ -466,6 +465,8 @@ fun KototoroApp(
     var offsetDestinationRoute by remember { mutableStateOf<String?>(null) }
 
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val spaceSwitcherFabMargin = dimensionResource(R.dimen.space_switcher_fab_margin)
+    val spaceSwitcherFabControlGap = dimensionResource(R.dimen.space_switcher_fab_control_gap)
     val statusBarHeightPx = with(density) {
         WindowInsets.statusBars.asPaddingValues().calculateTopPadding().roundToPx()
     }
@@ -632,7 +633,20 @@ fun KototoroApp(
             }
         }
     }
-    fun navigateFromBottomNav(itemId: Int) = navigateToBottomNavItem(itemId)
+    val currentBottomNavNavigationState = rememberUpdatedState(activeNavigationState)
+    val bottomNavDispatcher = remember {
+        { itemId: Int ->
+            val navigationState = currentBottomNavNavigationState.value
+            val topLevelKey = topLevelKeyForBottomNavItem(itemId)
+            if (navigationState.mainNavState.selectedTopLevel != topLevelKey) {
+                NavControllerMainNavigator(
+                    navController = navigationState.navController,
+                    mainActivity = null,
+                    mainNavState = navigationState.mainNavState,
+                ).openTopLevel(topLevelKey)
+            }
+        }
+    }
     val startDestination = remember(initialTopLevel) {
         routeForTopLevelKey(initialTopLevel)
     }
@@ -861,7 +875,6 @@ fun KototoroApp(
     val supportsDisplayModeMenu = chromeTopLevelKey.supportsDisplayModeMenu()
     val supportsGridSizeSlider = chromeTopLevelKey.supportsGridSizeSlider()
     val isFavoritesRoute = chromeTopLevelKey == FavoritesNavKey
-    val canShowSpaceSwitcherEntry = chromeTopLevelKey != HistoryNavKey
     val fallbackFavoritesSortOrders = if (isFavoritesRoute) ListSortOrder.FAVORITES.sortedByOrdinal() else emptyList()
     val globalFavoritesSortOrder by appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
         allFavoritesSortOrder
@@ -1131,12 +1144,14 @@ fun KototoroApp(
                             }
                         },
                         navStateFlow = navStateFlow,
-                        onItemSelected = ::navigateFromBottomNav,
-                        onItemReselected = ::navigateFromBottomNav,
-                        railHeaderContent = if (spaceUiState.switcherEnabled && canShowSpaceSwitcherEntry) {
+                        onItemSelected = bottomNavDispatcher,
+                        onItemReselected = bottomNavDispatcher,
+                        railHeaderContent = null,
+                        adjacentAction = if (spaceUiState.switcherEnabled && !isLandscapeNavigation) {
                             {
-                                SpaceSwitcherRailButton(
+                                SpaceSwitcherFab(
                                     activeSpaceId = spaceUiState.activeSpaceId,
+                                    expanded = false,
                                     onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
                                 )
                             }
@@ -1144,35 +1159,15 @@ fun KototoroApp(
                             null
                         },
                     )
-                    if (!isLandscapeNavigation && spaceUiState.switcherEnabled && canShowSpaceSwitcherEntry) {
-                        SpaceSwitcherFab(
-                            activeSpaceId = spaceUiState.activeSpaceId,
-                            expanded = totalContentScrollOffset >= 0f,
-                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(
-                                    end = 20.dp,
-                                    bottom = with(density) { bottomNavHeightPx.toDp() } + 20.dp,
-                                ),
-                        )
-                    }
-                    SpaceSwitcherSheet(
-                        state = spaceUiState,
-                        onAction = onSpaceAction,
-                        resumeItems = spaceResumeUiState.items,
-                        onResume = onSpaceResume,
-                        onOpenMediaUniverse = {
-                            onSpaceAction(SpaceAction.DismissSwitcher)
-                            onOpenMediaUniverse()
-                        },
-                    )
-                    MediaUniverseSheet(
-                        state = mediaUniverseUiState,
-                        onDismiss = onDismissMediaUniverse,
-                        onContentClick = onMediaUniverseContentClick,
-                    )
                 }
+                SpaceSwitcherSheet(
+                    state = spaceUiState,
+                    onAction = onSpaceAction,
+                    resumeItems = spaceResumeUiState.items,
+                    onResume = onSpaceResume,
+                    mediaUniverseState = mediaUniverseUiState,
+                    onMediaUniverseContentClick = onMediaUniverseContentClick,
+                )
             }
             Box(modifier = Modifier
                 .fillMaxSize()
@@ -1224,9 +1219,11 @@ fun KototoroApp(
                                                 lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
                                             }
                                         },
-                                        activeSpaceId = renderedSpaceId.takeIf { spaceUiState.switcherEnabled },
-                                        onSpaceSwitcherClick = {
-                                            onSpaceAction(SpaceAction.OpenSwitcher)
+                                        onDetailsBottomPanelStateChanged = { expansion, obstruction ->
+                                            if (renderedSpaceId == navigationSpaceId) {
+                                                detailsBottomPanelExpansion = expansion
+                                                detailsBottomObstruction = obstruction
+                                            }
                                         },
                                         onExploreSourceSelectionTopBarChanged = { overrideState ->
                                             when (overrideState) {
@@ -1288,6 +1285,28 @@ fun KototoroApp(
                     }
                 }
                 mainShellChrome()
+                if (
+                    spaceUiState.switcherEnabled &&
+                    (isImmersiveRoute || isSearchRoute || (isLandscapeNavigation && shouldShowChrome)) &&
+                    (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
+                ) {
+                    SpaceSwitcherFab(
+                        activeSpaceId = spaceUiState.activeSpaceId,
+                        expanded = true,
+                        onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(
+                                end = spaceSwitcherFabMargin,
+                                bottom = if (isDetailsRoute && !isLandscapeNavigation) {
+                                    detailsBottomObstruction + spaceSwitcherFabControlGap
+                                } else {
+                                    WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() +
+                                        spaceSwitcherFabMargin
+                                },
+                            ),
+                    )
+                }
 
                 if (isSearchOverlayMounted) {
                     KototoroSearchOverlay(
@@ -1689,6 +1708,7 @@ private fun BoxScope.MainBottomChrome(
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
     railHeaderContent: (@Composable () -> Unit)?,
+    adjacentAction: (@Composable () -> Unit)?,
 ) {
     Box(
         modifier = Modifier
@@ -1731,6 +1751,7 @@ private fun BoxScope.MainBottomChrome(
             onItemSelected = onItemSelected,
             onItemReselected = onItemReselected,
             railHeaderContent = railHeaderContent,
+            adjacentAction = adjacentAction,
         )
     }
 }

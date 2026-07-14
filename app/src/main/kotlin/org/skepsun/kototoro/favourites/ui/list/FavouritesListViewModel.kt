@@ -63,6 +63,8 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.domain.observeActiveSpaceScope
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
@@ -88,6 +90,7 @@ class FavouritesListViewModel @AssistedInject constructor(
     @ApplicationContext private val appContext: Context,
     spaceRepository: SpaceRepository,
     spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository,
+    spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(appSettings, dataRepository, localStorageChanges), QuickFilterListener {
 
     @AssistedFactory
@@ -118,7 +121,10 @@ class FavouritesListViewModel @AssistedInject constructor(
         globalFavoritesState.setSelectedSourceTags(tags)
     }
 
-    override val currentGroupTab = globalFavoritesState.selectedGroupTab
+    override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+        spaceBrowseScope = spaceBrowseScope,
+        coroutineScope = viewModelScope + Dispatchers.Default,
+    )
 
     override fun setSelectedGroupTab(tab: BrowseGroupTab) {
         globalFavoritesState.setSelectedGroupTab(tab)

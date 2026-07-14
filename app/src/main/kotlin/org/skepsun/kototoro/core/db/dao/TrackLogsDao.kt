@@ -54,6 +54,50 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
 	@Query("DELETE FROM track_logs")
 	abstract suspend fun clear()
 
+	@Query(
+		"""
+		UPDATE track_logs
+		SET entity_id = (
+			SELECT entity_id
+			FROM entity_binding
+			WHERE source IN ('local_manga', '0')
+				AND external_id = CAST(track_logs.manga_id AS TEXT)
+				AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+			ORDER BY CASE WHEN source = 'local_manga' THEN 0 ELSE 1 END
+			LIMIT 1
+		),
+		owner_id = (
+			SELECT entity_id
+			FROM entity_binding
+			WHERE source IN ('local_manga', '0')
+				AND external_id = CAST(track_logs.manga_id AS TEXT)
+				AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+			ORDER BY CASE WHEN source = 'local_manga' THEN 0 ELSE 1 END
+			LIMIT 1
+		)
+		WHERE EXISTS (
+			SELECT 1
+			FROM entity_binding
+			WHERE source IN ('local_manga', '0')
+				AND external_id = CAST(track_logs.manga_id AS TEXT)
+				AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		)
+		""",
+	)
+	abstract suspend fun repairWorkIdentities()
+
+	@Query(
+		"""
+		DELETE FROM track_logs
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM manga
+			WHERE manga.manga_id = track_logs.manga_id
+		)
+		""",
+	)
+	abstract suspend fun deleteOrphans()
+
 	@Query("UPDATE track_logs SET unread = 0 WHERE id = :id")
 	abstract suspend fun markAsRead(id: Long)
 

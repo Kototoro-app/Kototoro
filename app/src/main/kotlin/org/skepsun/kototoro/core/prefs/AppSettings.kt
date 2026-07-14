@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
@@ -156,17 +155,22 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 				return newDefaults
 			}
 			val raw = rawStr?.split(',')
-			return if (raw.isNullOrEmpty()) {
+			val items = if (raw.isNullOrEmpty()) {
 				listOf(NavItem.HOME, NavItem.FAVORITES, NavItem.EXPLORE)
 			} else {
 				raw.mapNotNull { x -> NavItem.entries.find(x) }
 				.filterNot { it == NavItem.DISCOVER }
 				.ifEmpty { listOf(NavItem.HOME, NavItem.FAVORITES, NavItem.EXPLORE) }
 			}
+			return items.limitMainNavigationItems().also { limitedItems ->
+				if (limitedItems.size != items.size) {
+					prefs.edit { putString(KEY_NAV_MAIN, limitedItems.joinToString(",") { it.name }) }
+				}
+			}
 		}
 		set(value) {
 			prefs.edit {
-				putString(KEY_NAV_MAIN, value.joinToString(",") { it.name })
+				putString(KEY_NAV_MAIN, value.limitMainNavigationItems().joinToString(",") { it.name })
 			}
 		}
 
@@ -2615,23 +2619,23 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_ACTIVE_SPACE, value) }
 
 	var isEntitySpaceEnabled: Boolean
-		get() = prefs.getBoolean(KEY_ENTITY_SPACE_ENABLED, BuildConfig.DEBUG)
+		get() = prefs.getBoolean(KEY_ENTITY_SPACE_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_ENTITY_SPACE_ENABLED, value) }
 
 	var isSpaceSwitcherEnabled: Boolean
-		get() = prefs.getBoolean(KEY_SPACE_SWITCHER_ENABLED, false)
+		get() = prefs.getBoolean(KEY_SPACE_SWITCHER_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_SPACE_SWITCHER_ENABLED, value) }
 
 	var isSpacePersistentNavigationEnabled: Boolean
-		get() = prefs.getBoolean(KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED, false)
+		get() = prefs.getBoolean(KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED, value) }
 
 	var isSpaceImmersiveSwitchEnabled: Boolean
-		get() = prefs.getBoolean(KEY_SPACE_IMMERSIVE_SWITCH_ENABLED, false)
+		get() = prefs.getBoolean(KEY_SPACE_IMMERSIVE_SWITCH_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_SPACE_IMMERSIVE_SWITCH_ENABLED, value) }
 
 	var isSpaceRoutePreferencesEnabled: Boolean
-		get() = prefs.getBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, false)
+		get() = prefs.getBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, value) }
 
 	object GlassMaterialDefaults {

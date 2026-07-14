@@ -76,7 +76,7 @@ fun MediaUniverseSheet(
 }
 
 @Composable
-private fun MediaUniverseRow(
+internal fun MediaUniverseRow(
 	item: MediaUniverseItem,
 	onClick: () -> Unit,
 ) {

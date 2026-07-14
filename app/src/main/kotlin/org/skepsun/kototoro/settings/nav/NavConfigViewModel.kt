@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.MAX_MAIN_NAV_ITEM_COUNT
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
@@ -23,8 +24,6 @@ import org.skepsun.kototoro.parsers.util.move
 import org.skepsun.kototoro.settings.nav.model.NavItemAddModel
 import org.skepsun.kototoro.settings.nav.model.NavItemConfigModel
 import javax.inject.Inject
-
-const val MAX_ITEM_COUNT = 5
 
 @HiltViewModel
 class NavConfigViewModel @Inject constructor(
@@ -61,7 +60,7 @@ class NavConfigViewModel @Inject constructor(
 	)
 
 	val canAddAction: StateFlow<Boolean> = items.map { snapshot ->
-		snapshot.size < MAX_ITEM_COUNT
+		snapshot.size < MAX_MAIN_NAV_ITEM_COUNT
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.WhileSubscribed(5000),
@@ -74,7 +73,7 @@ class NavConfigViewModel @Inject constructor(
 				NavItemConfigModel(it, getUnavailabilityHint(it))
 			}
 			if (size < NavItem.entries.size) {
-				add(NavItemAddModel(size < MAX_ITEM_COUNT))
+				add(NavItemAddModel(size < MAX_MAIN_NAV_ITEM_COUNT))
 			}
 		}
 	}.stateIn(
@@ -103,6 +102,7 @@ class NavConfigViewModel @Inject constructor(
 	}
 
 	fun addItem(item: NavItem) {
+		if (items.value.size >= MAX_MAIN_NAV_ITEM_COUNT || item in items.value) return
 		items.value = items.value.plus(item).also {
 			commit(it)
 		}

@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
@@ -98,7 +99,6 @@ import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
-import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import dev.chrisbanes.haze.hazeSource
 
@@ -223,8 +223,7 @@ fun AppNavGraph(
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
     onDetailsTransitionRequested: () -> Unit = {},
     onDetailsReturnTransitionRequested: () -> Unit = {},
-    activeSpaceId: SpaceId? = null,
-    onSpaceSwitcherClick: () -> Unit = {},
+    onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     isLandscapeNavigation: Boolean = false,
     mainNavState: MainNavState? = null,
 ) {
@@ -546,8 +545,8 @@ fun AppNavGraph(
                 AppSearchContentListRoute(
                     appRouter = appRouter,
                     onBackClick = { mainNavigator.pop() },
-                    activeSpaceId = activeSpaceId,
-                    onSpaceSwitcherClick = onSpaceSwitcherClick,
+                    activeSpaceId = null,
+                    onSpaceSwitcherClick = {},
                     onOpenDetails = { content, sharedElementKey ->
                         navigateToDetailsWithContent(content, sharedElementKey)
                     },
@@ -629,8 +628,9 @@ fun AppNavGraph(
                     onBackClick = {
                         mainNavigator.pop()
                     },
-                    activeSpaceId = activeSpaceId,
-                    onSpaceSwitcherClick = onSpaceSwitcherClick,
+                    activeSpaceId = null,
+                    onSpaceSwitcherClick = {},
+                    onBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
                     sharedElementKey = sharedKey,
                     onActionClick = { action ->
                         handleDetailsAction(
@@ -1898,7 +1898,7 @@ internal fun FavoritesTopLevelRouteContent(
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>()
-    val selectedGroupTab by viewModel.globalFavoritesState.selectedGroupTab.collectAsStateWithLifecycle()
+    val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
     var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
@@ -2038,9 +2038,7 @@ internal fun FavoritesTopLevelRouteContent(
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
             override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                viewModel.globalFavoritesState.setSelectedGroupTab(
-                    if (selectedGroupTab == tab) BrowseGroupTab.All else tab,
-                )
+                viewModel.setSelectedGroupTab(tab)
             }
 
             override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =

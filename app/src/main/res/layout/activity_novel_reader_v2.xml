@@ -173,6 +173,8 @@
         tools:text="@string/loading_"
         tools:visibility="visible" />
 
+    <include layout="@layout/view_immersive_space_switcher_fab" />
+
     <!-- 加载指示器 -->
     <LinearLayout
         android:id="@+id/layout_loading"

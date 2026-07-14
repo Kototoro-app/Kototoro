@@ -51,6 +51,99 @@ class TracksDaoTest {
 		db.getTracksDao().observeUnreadWorkCount(lastOpenTime = 100L).first() shouldBe 0
 	}
 
+	@Test
+	fun insertTracksFromUnreadLogsSkipsOrphanProjection() = runTest {
+		insertLog(mangaId = 100L, entityId = null, createdAt = 300L, unread = true)
+		enableForeignKeys()
+
+		db.getTracksDao().insertTracksFromUnreadLogs()
+
+		db.getTracksDao().getTracksCount() shouldBe 0
+	}
+
+	@Test
+	fun repairWorkIdentitiesUsesProjectionBinding() = runTest {
+		insertManga(100L)
+		insertEntity(20L)
+		insertBinding(mangaId = 100L, entityId = 20L)
+		insertLog(mangaId = 100L, entityId = 10L, createdAt = 300L, unread = true)
+
+		db.getTrackLogsDao().repairWorkIdentities()
+
+		val log = db.getTrackLogsDao().dump().single()
+		log.entityId shouldBe 20L
+		log.ownerId shouldBe 20L
+	}
+
+	@Test
+	fun deleteOrphansOnlyRemovesMissingProjections() = runTest {
+		insertManga(100L)
+		insertManga(200L)
+		insertEntity(10L)
+		insertLog(mangaId = 100L, entityId = 10L, createdAt = 300L, unread = true)
+		insertLog(mangaId = 200L, entityId = null, createdAt = 301L, unread = true)
+		insertLog(mangaId = 300L, entityId = null, createdAt = 302L, unread = true)
+		insertLog(mangaId = 100L, entityId = 20L, createdAt = 303L, unread = true)
+
+		db.getTrackLogsDao().deleteOrphans()
+
+		db.getTrackLogsDao().count() shouldBe 3
+	}
+
+	@Test
+	fun insertTracksFromUnreadLogsRestoresValidLog() = runTest {
+		insertManga(100L)
+		insertEntity(10L)
+		insertLog(mangaId = 100L, entityId = 10L, createdAt = 300L, unread = true)
+		enableForeignKeys()
+
+		db.getTracksDao().insertTracksFromUnreadLogs()
+
+		val track = db.getTracksDao().findByOwnerId(10L)
+		track?.mangaId shouldBe 100L
+		track?.entityId shouldBe 10L
+		track?.newChapters shouldBe 1
+	}
+
+	private fun enableForeignKeys() {
+		db.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+	}
+
+	private fun insertManga(mangaId: Long) {
+		db.openHelper.writableDatabase.execSQL(
+			"""
+			INSERT INTO manga(
+				manga_id, title, alt_title, url, public_url, rating, nsfw, content_rating,
+				cover_url, large_cover_url, state, author, source, description, content_type
+			) VALUES (?, 'Title', NULL, '', '', 0, 0, NULL, '', NULL, NULL, NULL, 'test', NULL, 'MANGA')
+			""".trimIndent(),
+			arrayOf(mangaId),
+		)
+	}
+
+	private fun insertEntity(entityId: Long) {
+		db.openHelper.writableDatabase.execSQL(
+			"""
+			INSERT INTO entity(
+				id, type, sync_id, primary_name, name_hash, aliases, created_at, last_accessed, access_count
+			) VALUES (?, 'WORK', ?, 'Title', ?, NULL, 0, 0, 0)
+			""".trimIndent(),
+			arrayOf(entityId, "test-$entityId", entityId),
+		)
+	}
+
+	private fun insertBinding(mangaId: Long, entityId: Long) {
+		db.openHelper.writableDatabase.execSQL(
+			"""
+			INSERT INTO entity_binding(
+				entity_id, source, external_id, confidence, is_primary, source_kind,
+				state, created_by, updated_at
+			) VALUES (?, 'local_manga', ?, 1, 1, 'LOCAL', 'CONFIRMED', 'MIGRATION', 0)
+			""".trimIndent(),
+			arrayOf(entityId, mangaId.toString()),
+		)
+	}
+
 	private fun insertTrack(
 		ownerId: Long,
 		mangaId: Long,

@@ -116,7 +116,6 @@ import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
-import org.skepsun.kototoro.core.ui.compose.rememberVerticalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -298,7 +297,6 @@ fun KototoroExploreHostRoute(
     var shouldRestoreBrowseScroll by rememberSaveable { mutableStateOf(false) }
     var hasLeftBrowse by rememberSaveable { mutableStateOf(false) }
     var canRestoreBrowseScroll by rememberSaveable { mutableStateOf(false) }
-    val verticalScrollIntensity = rememberVerticalRailScrollIntensity(listState)
     var heroPx by rememberSaveable { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -855,7 +853,6 @@ fun KototoroExploreHostRoute(
                             listState = listState,
                             enableScrollLinkedAnimation = false,
                             scaleFactor = 0f,
-                            scrollIntensity = verticalScrollIntensity,
                         ) { animatedModifier ->
                             val sharedElementKey = contentCoverSharedKey(
                                 item.manga.source.name,

@@ -21,6 +21,7 @@ import com.google.android.material.navigation.NavigationBarView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
@@ -62,8 +63,11 @@ import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
 import org.skepsun.kototoro.space.ui.SpaceViewModel
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
+import org.skepsun.kototoro.space.ui.ImmersiveSpaceSessionRegistry
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
+import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.ui.MediaUniverseViewModel
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.tracker.work.TrackWorker
@@ -73,8 +77,19 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : BaseActivity<ActivityMainBinding>() {
 
+    companion object {
+        const val EXTRA_RESUME_SPACE_ID = "main_activity.resume_space_id"
+    }
+
     @Inject
     lateinit var spaceRoutePreferencesController: SpaceRoutePreferencesController
+
+    @Inject
+    lateinit var spaceRepository: SpaceRepository
+
+    @Inject
+    lateinit var immersiveSpaceSessionRegistry: ImmersiveSpaceSessionRegistry
+
     override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
         val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
             androidx.core.view.WindowInsetsCompat.Type.displayCutout()
@@ -273,19 +288,34 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 query = searchQuery,
                 onFeedRefresh = trackWorkerScheduler::startNow,
                 spaceUiState = spaceUiState,
-                onSpaceAction = spaceViewModel::onAction,
+                onSpaceAction = { action ->
+                    when (action) {
+                        SpaceAction.OpenSwitcher -> mediaUniverseViewModel.open()
+                        SpaceAction.DismissSwitcher -> mediaUniverseViewModel.dismiss()
+                        is SpaceAction.SelectSpace -> mediaUniverseViewModel.dismiss()
+                    }
+                    spaceViewModel.onAction(action)
+                    if (action is SpaceAction.SelectSpace) {
+                        restoreActiveImmersiveSession(action.spaceId)
+                    }
+                },
                 spaceNavigationSessionUiState = spaceNavigationSessionUiState,
                 onSpaceSessionChanged = spaceNavigationSessionViewModel::save,
                 spaceResumeUiState = spaceResumeUiState,
                 onSpaceResume = { spaceId ->
                     spaceViewModel.onAction(SpaceAction.DismissSwitcher)
-                    spaceResumeViewModel.resume(spaceId)
+                    mediaUniverseViewModel.dismiss()
+                    if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
+                        spaceViewModel.onAction(SpaceAction.SelectSpace(spaceId))
+                        restoreActiveImmersiveSession(spaceId)
+                    } else {
+                        spaceResumeViewModel.resume(spaceId)
+                    }
                 },
                 mediaUniverseUiState = mediaUniverseUiState,
-                onOpenMediaUniverse = mediaUniverseViewModel::open,
-                onDismissMediaUniverse = mediaUniverseViewModel::dismiss,
                 onMediaUniverseContentClick = { content ->
                     mediaUniverseViewModel.dismiss()
+                    spaceViewModel.onAction(SpaceAction.DismissSwitcher)
                     resolveDetailsOriginForContent(content) { origin ->
                         when (origin) {
                             is DetailsOrigin.EntityGraph -> {
@@ -463,7 +493,28 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             onFirstStart()
         }
 
+        consumeResumeSpaceIntent(intent)
         observeFoldableState()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeResumeSpaceIntent(intent)
+    }
+
+    private fun consumeResumeSpaceIntent(intent: Intent) {
+        val rawSpaceId = intent.getStringExtra(EXTRA_RESUME_SPACE_ID) ?: return
+        intent.removeExtra(EXTRA_RESUME_SPACE_ID)
+        spaceResumeViewModel.resume(SpaceId(rawSpaceId))
+    }
+
+    private fun restoreActiveImmersiveSession(spaceId: SpaceId) {
+        if (!immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) return
+        lifecycleScope.launch {
+            spaceRepository.activeSpace.first { it == spaceId }
+            immersiveSpaceSessionRegistry.restore(spaceId, this@MainActivity)
+        }
     }
 
     private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {

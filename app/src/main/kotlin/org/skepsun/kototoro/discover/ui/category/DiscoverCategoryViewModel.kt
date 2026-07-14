@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.model.ContentSource
@@ -38,6 +39,8 @@ import org.skepsun.kototoro.tracking.discovery.domain.isTrackingDateDrivenCatego
 import org.skepsun.kototoro.tracking.discovery.domain.resolveTrackingSeason
 import org.skepsun.kototoro.tracking.discovery.domain.trackingCalendarDate
 import org.skepsun.kototoro.tracking.discovery.data.TrackingSiteCacheRepository
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.toPrimaryContentType
 import javax.inject.Inject
 import org.skepsun.kototoro.R
 import java.time.Instant
@@ -52,6 +55,7 @@ class DiscoverCategoryViewModel @Inject constructor(
 	private val contentListMapper: ContentListMapper,
 	private val appSettings: AppSettings,
 	private val cacheRepository: TrackingSiteCacheRepository,
+	private val spaceBrowseScope: SpaceBrowseScope,
 	val filterCoordinator: org.skepsun.kototoro.filter.ui.FilterCoordinator,
 ) : BaseViewModel() {
 
@@ -103,6 +107,16 @@ class DiscoverCategoryViewModel @Inject constructor(
 						isFilterObserverPrimed = true
 						return@collect
 					}
+					if (currentService != null) {
+						refresh()
+					}
+				}
+		}
+		viewModelScope.launch {
+			spaceBrowseScope.groupTab
+				.drop(1)
+				.distinctUntilChanged()
+				.collect {
 					if (currentService != null) {
 						refresh()
 					}
@@ -209,6 +223,7 @@ class DiscoverCategoryViewModel @Inject constructor(
 				discoveryService.getTrending(
 					TrackingSiteCatalog(
 						service = service,
+						contentType = spaceBrowseScope.groupTab.value?.toPrimaryContentType(),
 						category = category,
 						page = pageRequested,
 						sortOrder = filterSnapshot.sortOrder,
@@ -339,18 +354,25 @@ class DiscoverCategoryViewModel @Inject constructor(
 	}
 
 	private fun resolveCacheKey(category: String): String {
-		if (!isTrackingDateDrivenCategory(category)) {
-			return category
-		}
-		val date = trackingCalendarDate(_selectedCalendarDateMillis.value) ?: return category
-		return when {
+		val datedCategory = if (!isTrackingDateDrivenCategory(category)) {
+			category
+		} else {
+			val date = trackingCalendarDate(_selectedCalendarDateMillis.value) ?: return category.withSpaceCacheSuffix()
+			when {
 			category.startsWith("calendar") -> category
 			category == "seasonal" || category == "shiki_seasonal" -> {
 				val season = resolveTrackingSeason(date)
 				"${category}_${season.shikimoriSeason}"
 			}
 			else -> "${category}_${date}"
+			}
 		}
+		return datedCategory.withSpaceCacheSuffix()
+	}
+
+	private fun String.withSpaceCacheSuffix(): String {
+		val groupTab = spaceBrowseScope.groupTab.value ?: return this
+		return "${this}_space_${groupTab.id}"
 	}
 
 	private suspend fun List<TrackingSiteItem>.toDiscoverModels(): List<ListModel> {

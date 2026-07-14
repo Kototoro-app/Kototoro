@@ -29,6 +29,8 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 import javax.inject.Inject
 
 @HiltViewModel
@@ -37,6 +39,7 @@ class AllBookmarksViewModel @Inject constructor(
 	private val sourceGroupManager: SourceGroupManager,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	settings: AppSettings,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
 
 	val onActionDone = MutableEventFlow<ReversibleAction>()
@@ -46,7 +49,10 @@ class AllBookmarksViewModel @Inject constructor(
 		valueProducer = { gridSize / 100f },
 	)
 
-	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab
+	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 	val currentSourceTags: StateFlow<Set<SourceTag>> = globalFavoritesState.selectedSourceTags
 
 	val content: StateFlow<List<ListModel>> = combine(

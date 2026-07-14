@@ -56,6 +56,7 @@ import org.skepsun.kototoro.databinding.ActivityVideoPlayerBinding
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.nav.router
 import androidx.core.net.toUri
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.reader.ui.ReaderState
@@ -610,13 +611,16 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 if (isScreenLocked) SpaceSwitchAvailability.UNAVAILABLE else SpaceSwitchAvailability.SAVE_AND_SWITCH
             },
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
+            onMediaUniverseContentClick = { content -> router.openResolvedDetails(content) },
         )
+        allControllers().forEach { controller ->
+            controller.findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(
+                R.id.immersive_space_switcher_fab,
+            )?.let(spaceSwitcherDelegate::installFab)
+        }
 
         // 设置菜单点击监听并复用给两个 Toolbar
         val onMenuItemClick = androidx.appcompat.widget.Toolbar.OnMenuItemClickListener { item ->
-            if (spaceSwitcherDelegate.onMenuItemSelected(item)) {
-                return@OnMenuItemClickListener true
-            }
             when (item.itemId) {
                 org.skepsun.kototoro.R.id.action_subtitle_track -> {
                     showSubtitleTrackDialog()
@@ -1997,6 +2001,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         } else {
             viewBinding.toolbarProgress.isVisible = false
         }
+        spaceSwitcherDelegate.setControlsVisible(controlsVisible)
     }
 
     // ==================== Screen Lock ====================
@@ -2711,7 +2716,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
         if (targetToolbar != null) {
             targetToolbar.inflateMenu(org.skepsun.kototoro.R.menu.menu_video_player)
-            spaceSwitcherDelegate.install(targetToolbar)
             // Force subtitle button to always show as icon (not in overflow)
             targetToolbar.menu.findItem(org.skepsun.kototoro.R.id.action_subtitle_track)?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
         }

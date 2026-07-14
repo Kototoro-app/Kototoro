@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -126,6 +127,35 @@ class SpaceResumeViewModelTest {
 
 		opened.await() shouldBe content
 		repository.activations shouldContainExactly listOf(BuiltInSpaces.Anime)
+	}
+
+	@Test
+	fun `resume waits for history refresh after immersive switch`() = runTest {
+		val content = content(4L, "Novel", ContentType.NOVEL)
+		val states = MutableStateFlow(SpaceResumeUiState())
+		val source = mockk<SpaceResumeStateSource> {
+			every { observe() } returns states
+		}
+		val repository = RecordingSpaceRepository()
+		val viewModel = SpaceResumeViewModel(source, repository)
+		val opened = async(Dispatchers.Default) {
+			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().content() }
+		}
+
+		viewModel.resume(BuiltInSpaces.Novel)
+		states.value = SpaceResumeUiState(
+			items = mapOf(
+				BuiltInSpaces.Novel to SpaceResumeItem(
+					spaceId = BuiltInSpaces.Novel,
+					title = content.title,
+					content = content,
+					canResume = true,
+				),
+			),
+		)
+
+		opened.await() shouldBe content
+		repository.activations shouldContainExactly listOf(BuiltInSpaces.Novel)
 	}
 
 	private suspend fun Event<Content>.content(): Content {

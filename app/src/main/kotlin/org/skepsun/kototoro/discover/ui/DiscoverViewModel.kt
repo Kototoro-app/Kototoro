@@ -52,6 +52,9 @@ import org.skepsun.kototoro.tracking.discovery.domain.displaySupportingText
 import org.skepsun.kototoro.tracking.discovery.domain.displaySubtitle
 import org.skepsun.kototoro.tracking.discovery.domain.displayTitle
 import javax.inject.Inject
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
+import org.skepsun.kototoro.space.ui.toPrimaryContentType
 
 @HiltViewModel
 class DiscoverViewModel @Inject constructor(
@@ -61,6 +64,7 @@ class DiscoverViewModel @Inject constructor(
 	private val contentListMapper: ContentListMapper,
 	private val globalFavoritesState: GlobalFavoritesState,
 	val settings: AppSettings,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
 
 	private val refreshTrigger = MutableStateFlow(0)
@@ -68,6 +72,10 @@ class DiscoverViewModel @Inject constructor(
 	private val selectedServiceOverride = MutableStateFlow<ScrobblerService?>(null)
 	private val selectedCategoryOverride = MutableStateFlow<String?>(null)
 	private val forceLoadRecommendations = MutableStateFlow(false)
+	private val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 
 	private val preferredService = preferredTrackingSiteProvider.preferredSite
 		.stateIn(
@@ -172,14 +180,17 @@ class DiscoverViewModel @Inject constructor(
 				refreshTrigger,
 				searchQuery,
 				browseRecommendationPrefs,
-			) { service, category, refreshVersion, query, browsePrefs ->
+				currentGroupTab,
+			) { values: Array<Any?> ->
+				val browsePrefs = values[4] as BrowseRecommendationPrefs
 				DiscoverRequest(
-					service = service,
-					category = category,
-					query = query.trim(),
-					refreshVersion = refreshVersion,
+					service = values[0] as ScrobblerService,
+					category = values[1] as? String,
+					query = (values[3] as String).trim(),
+					refreshVersion = values[2] as Int,
 					isEnabled = browsePrefs.isEnabled,
 					isMoreEnabled = browsePrefs.isMoreEnabled,
+					groupTab = values[5] as BrowseGroupTab,
 				)
 			}
 				.debounce(200) // Wait for all StateFlows to settle
@@ -218,9 +229,15 @@ class DiscoverViewModel @Inject constructor(
 		}
 
 		viewModelScope.launch {
+			currentGroupTab.drop(1).collect {
+				selectedCategoryOverride.value = null
+			}
+		}
+
+		viewModelScope.launch {
 			combine(
 				settings.observe(AppSettings.KEY_LIST_MODE),
-				settings.observe(AppSettings.KEY_SELECTED_GROUP_TAB),
+				currentGroupTab,
 				settings.observe(AppSettings.KEY_BROWSE_MORE_TRACKING_RECOMMENDATIONS),
 			) { _, _, _ -> }.drop(1).collect {
 				remapContentState()
@@ -451,6 +468,7 @@ class DiscoverViewModel @Inject constructor(
 				val catalog = TrackingSiteCatalog(
 					service = service,
 					query = query.ifEmpty { null },
+					contentType = getCurrentBrowseGroupTab().toPrimaryContentType(),
 					category = category,
 					page = pageRequested,
 				)
@@ -480,7 +498,7 @@ class DiscoverViewModel @Inject constructor(
 	}
 
 	private fun getCurrentBrowseGroupTab(): BrowseGroupTab {
-		return globalFavoritesState.selectedGroupTab.value
+		return currentGroupTab.value
 	}
 
 	private fun resolveVisibleCategoriesForTab(
@@ -672,6 +690,7 @@ private data class DiscoverRequest(
 	val refreshVersion: Int,
 	val isEnabled: Boolean,
 	val isMoreEnabled: Boolean,
+	val groupTab: BrowseGroupTab,
 ) {
 	fun shouldLoad(): Boolean = isEnabled || query.isNotBlank()
 }

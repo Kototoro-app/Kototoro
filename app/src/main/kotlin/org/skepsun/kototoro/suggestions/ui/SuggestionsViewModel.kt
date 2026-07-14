@@ -46,6 +46,8 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 32
 
@@ -62,6 +64,7 @@ class SuggestionsViewModel @Inject constructor(
 	private val dataRepository: ContentDataRepository,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	override val isFilterBarVisible = MutableStateFlow(true)
@@ -85,7 +88,10 @@ class SuggestionsViewModel @Inject constructor(
 	override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 
-	override val currentGroupTab = globalFavoritesState.selectedGroupTab
+	override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 	override val currentSourceTags = globalFavoritesState.selectedSourceTags
 
 	override fun setSelectedGroupTab(tab: BrowseGroupTab) {

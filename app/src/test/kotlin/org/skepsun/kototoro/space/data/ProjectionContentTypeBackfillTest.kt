@@ -63,4 +63,21 @@ class ProjectionContentTypeBackfillTest {
 
 		assertEquals(0, backfill.backfill(listOf(LocalMangaSource), limit = 10))
 	}
+
+	@Test
+	fun `bulk backfill updates each content type without per projection writes`() = runTest {
+		coEvery { dao.setContentTypeIfMissingForSources(any(), any()) } returns 2
+
+		val updated = backfill.backfillAll(
+			listOf(LocalMangaSource, LocalNovelSource, LocalVideoSource),
+		)
+
+		assertEquals(6, updated)
+		coVerify {
+			dao.setContentTypeIfMissingForSources(listOf(LocalMangaSource.name), ContentType.MANGA.name)
+			dao.setContentTypeIfMissingForSources(listOf(LocalNovelSource.name), ContentType.NOVEL.name)
+			dao.setContentTypeIfMissingForSources(listOf(LocalVideoSource.name), ContentType.VIDEO.name)
+		}
+		coVerify(exactly = 0) { dao.setContentTypeIfMissing(any(), any()) }
+	}
 }

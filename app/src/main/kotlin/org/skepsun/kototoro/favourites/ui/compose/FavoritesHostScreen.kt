@@ -84,7 +84,7 @@ fun KototoroFavoritesHostRoute(
     val mainActivity = LocalContext.current as? MainActivity
     val context = LocalContext.current
     val globalState = viewModel.globalFavoritesState
-    val selectedGroupTab by globalState.selectedGroupTab.collectAsStateWithLifecycle()
+    val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
     val allFavoritesSortOrder by viewModel.allFavoritesSortOrder.collectAsStateWithLifecycle()
 
@@ -100,7 +100,7 @@ fun KototoroFavoritesHostRoute(
                 override fun getSelectedContentType() = selectedGroupTab
 
                 override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                    globalState.setSelectedGroupTab(if (selectedGroupTab == tab) BrowseGroupTab.All else tab)
+                    viewModel.setSelectedGroupTab(tab)
                 }
 
                 override fun getSelectedSourceTags() = selectedSourceTags

@@ -79,6 +79,12 @@ abstract class MangaDao {
 	@Query("UPDATE manga SET content_type = :contentType WHERE manga_id = :id AND content_type IS NULL")
 	abstract suspend fun setContentTypeIfMissing(id: Long, contentType: String): Int
 
+	@Query("UPDATE manga SET content_type = :contentType WHERE content_type IS NULL AND source IN (:sources)")
+	abstract suspend fun setContentTypeIfMissingForSources(
+		sources: Collection<String>,
+		contentType: String,
+	): Int
+
 	@Query("SELECT * FROM manga_tags WHERE manga_id IN (:ids)")
 	protected abstract suspend fun findTagRelationsByMangaIdsImpl(ids: Collection<Long>): List<MangaTagsEntity>
 

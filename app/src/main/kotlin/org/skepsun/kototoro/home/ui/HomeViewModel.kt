@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
@@ -48,6 +49,7 @@ import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
@@ -67,6 +69,8 @@ import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
@@ -192,6 +196,7 @@ class HomeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val historyPreviewCache: HistoryPreviewCache,
     private val historyQuickFilter: HistoryListQuickFilter,
+    spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
 
     private companion object {
@@ -208,24 +213,11 @@ class HomeViewModel @Inject constructor(
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
 
-    private val selectedTabFlow = globalFavoritesState.selectedGroupTab.map { tabId ->
-        when (tabId) {
-            org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
-            org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel -> HomeContentTab.NOVEL
-            org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video -> HomeContentTab.VIDEO
-            else -> null
-        }
-    }
-        .onStart {
-            emit(
-                when (globalFavoritesState.selectedGroupTab.value) {
-                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
-                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel -> HomeContentTab.NOVEL
-                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video -> HomeContentTab.VIDEO
-                    else -> null
-                },
-            )
-        }
+    private val selectedBrowseGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+        spaceBrowseScope = spaceBrowseScope,
+        coroutineScope = viewModelScope + Dispatchers.Default,
+    )
+    private val selectedTabFlow = selectedBrowseGroupTab.map(BrowseGroupTab::toHomeContentTab)
         .distinctUntilChanged()
         .onEach { tab ->
             logHomeDiag("selectedTabFlow", "tab=$tab")
@@ -657,12 +649,7 @@ class HomeViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = HomeSummaryState(
-                selectedTab = when (globalFavoritesState.selectedGroupTab.value) {
-                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Content -> HomeContentTab.MANGA
-                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel -> HomeContentTab.NOVEL
-                    org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video -> HomeContentTab.VIDEO
-                    else -> null
-                },
+                selectedTab = selectedBrowseGroupTab.value.toHomeContentTab(),
                 selectedSourceTags = globalFavoritesState.selectedSourceTags.value,
             ),
         )
@@ -906,6 +893,13 @@ private fun HomeContentTab?.toBrowseGroupTab(): org.skepsun.kototoro.explore.ui.
     HomeContentTab.NOVEL -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Novel
     HomeContentTab.VIDEO -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.Video
     null -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.All
+}
+
+private fun BrowseGroupTab.toHomeContentTab(): HomeContentTab? = when (this) {
+    BrowseGroupTab.Content -> HomeContentTab.MANGA
+    BrowseGroupTab.Novel -> HomeContentTab.NOVEL
+    BrowseGroupTab.Video -> HomeContentTab.VIDEO
+    BrowseGroupTab.All -> null
 }
 
 private fun List<HomeRecentItem>.selectHomeHistoryByTab(

@@ -50,6 +50,8 @@ import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 32
 
@@ -66,6 +68,7 @@ class UpdatesViewModel @Inject constructor(
 	private val workResolver: WorkResolver,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
 
 	@Volatile
@@ -85,7 +88,10 @@ class UpdatesViewModel @Inject constructor(
 		globalFavoritesState.setSelectedSourceTags(tags)
 	}
 
-	override val currentGroupTab = globalFavoritesState.selectedGroupTab
+	override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 
 	override fun setSelectedGroupTab(tab: org.skepsun.kototoro.explore.ui.model.BrowseGroupTab) {
 		globalFavoritesState.setSelectedGroupTab(tab)

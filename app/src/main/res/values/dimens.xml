@@ -84,4 +84,6 @@
 	<dimen name="chip_icon_corner">3dp</dimen>
     <dimen name="read_button_min_width">74dp</dimen>
     <dimen name="chip_min_height_small">28dp</dimen>
+	<dimen name="space_switcher_fab_margin">20dp</dimen>
+	<dimen name="space_switcher_fab_control_gap">8dp</dimen>
 </resources>

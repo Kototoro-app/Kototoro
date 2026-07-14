@@ -41,6 +41,8 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 import javax.inject.Inject
 
 @HiltViewModel
@@ -53,6 +55,7 @@ class ExploreViewModel @Inject constructor(
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
 
 	val isGrid = settings.observeAsStateFlow(
@@ -85,7 +88,10 @@ class ExploreViewModel @Inject constructor(
 	/**
 	 * Observable selected group tab for UI
 	 */
-	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab
+	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 
 	/**
 	 * Observable selected source tags for UI
@@ -131,7 +137,7 @@ class ExploreViewModel @Inject constructor(
 	/**
 	 * Get the currently selected group tab
 	 */
-	fun getSelectedGroupTab(): BrowseGroupTab = globalFavoritesState.selectedGroupTab.value
+	fun getSelectedGroupTab(): BrowseGroupTab = currentGroupTab.value
 
 	init {
 		launchJob(Dispatchers.Default) {

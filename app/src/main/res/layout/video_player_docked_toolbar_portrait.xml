@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.dockedtoolbar.DockedToolbarLayout 
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/toolbar_docked"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:background="@android:color/transparent"
     android:clipToPadding="false"
     android:theme="@style/ThemeOverlay.Kototoro.VideoControls">
+
+    <com.google.android.material.dockedtoolbar.DockedToolbarLayout
+        android:id="@+id/toolbar_docked"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@android:color/transparent"
+        android:clipToPadding="false"
+        app:layout_insetEdge="bottom">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -233,4 +241,8 @@
 
     </LinearLayout>
 
-</com.google.android.material.dockedtoolbar.DockedToolbarLayout>
+    </com.google.android.material.dockedtoolbar.DockedToolbarLayout>
+
+    <include layout="@layout/view_immersive_space_switcher_fab" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -43,6 +43,8 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 
 @HiltViewModel
 class FavouritesContainerViewModel @Inject constructor(
@@ -55,7 +57,14 @@ class FavouritesContainerViewModel @Inject constructor(
 	networkState: NetworkState,
 	internal val globalFavoritesState: GlobalFavoritesState,
 	private val sourceGroupManager: SourceGroupManager,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
+	init {
+		launchJob(Dispatchers.IO) {
+			sourcesRepository.getAllAvailableSourcesUnfiltered()
+		}
+	}
+
 	data class FavoritesHostUiState(
 		val isLoading: Boolean = true,
 		val categories: List<FavouriteTabModel> = emptyList(),
@@ -75,13 +84,16 @@ class FavouritesContainerViewModel @Inject constructor(
 		allFavoritesSortOrder
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.allFavoritesSortOrder)
 
-	val currentGroupTab = globalFavoritesState.selectedGroupTab
+	val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 	val selectedSourceTags = globalFavoritesState.selectedSourceTags
 	val availableSourceTags = flowOf(SourceTag.quickFilterEntries.toSet())
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, SourceTag.quickFilterEntries.toSet())
 
 	fun setSelectedGroupTab(tab: BrowseGroupTab) {
-		if (globalFavoritesState.selectedGroupTab.value == tab) {
+		if (currentGroupTab.value == tab) {
 			globalFavoritesState.clearSelectedGroupTab()
 		} else {
 			globalFavoritesState.setSelectedGroupTab(tab)

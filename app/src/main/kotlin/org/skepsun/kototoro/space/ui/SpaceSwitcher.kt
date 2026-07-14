@@ -5,14 +5,14 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.CircularProgressIndicator
@@ -127,58 +127,85 @@ fun SpaceSwitcherSheet(
 	onAction: (SpaceAction) -> Unit,
 	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
 	onResume: (SpaceId) -> Unit = {},
-	onOpenMediaUniverse: () -> Unit = {},
+	mediaUniverseState: MediaUniverseUiState = MediaUniverseUiState(),
+	onMediaUniverseContentClick: (org.skepsun.kototoro.parsers.model.Content) -> Unit = {},
 ) {
 	if (!state.switcherVisible) return
 	ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
-		Column(
+		LazyColumn(
 			modifier = Modifier
 				.fillMaxWidth()
 				.padding(bottom = 24.dp),
 		) {
-			Text(
-				text = stringResource(R.string.space_switcher_title),
-				style = MaterialTheme.typography.titleLarge,
-				modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-			)
-			Column(modifier = Modifier.selectableGroup()) {
-				BuiltInSpaces.contexts.forEach { context ->
-					SpaceRow(
-						context = context,
-						selected = context.id == state.activeSpaceId,
-						enabled = !state.switchInProgress,
-						resumeItem = resumeItems[context.id],
-						onResume = { onResume(context.id) },
-						onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
-					)
+			item {
+				Text(
+					text = stringResource(R.string.space_switcher_title),
+					style = MaterialTheme.typography.titleLarge,
+					modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+				)
+			}
+			item {
+				Column(modifier = Modifier.selectableGroup()) {
+					BuiltInSpaces.contexts.forEach { context ->
+						SpaceRow(
+							context = context,
+							selected = context.id == state.activeSpaceId,
+							enabled = !state.switchInProgress,
+							resumeItem = resumeItems[context.id],
+							onResume = { onResume(context.id) },
+							onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+						)
+					}
 				}
 			}
-			HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-			Row(
-				modifier = Modifier
-					.fillMaxWidth()
-					.clickable(enabled = !state.switchInProgress, onClick = onOpenMediaUniverse)
-					.padding(horizontal = 24.dp, vertical = 12.dp),
-				verticalAlignment = Alignment.CenterVertically,
-				horizontalArrangement = Arrangement.spacedBy(16.dp),
-			) {
-				Icon(
-					painter = painterResource(R.drawable.ic_explore_normal),
-					contentDescription = null,
-					modifier = Modifier.size(24.dp),
-				)
+			item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+			item {
 				Text(
 					text = stringResource(R.string.media_universe_title),
 					style = MaterialTheme.typography.titleMedium,
+					modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
 				)
 			}
+			when {
+				mediaUniverseState.loading -> item {
+					Box(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(16.dp),
+						contentAlignment = Alignment.Center,
+					) {
+						CircularProgressIndicator(modifier = Modifier.size(32.dp))
+					}
+				}
+				mediaUniverseState.items.isEmpty() -> item {
+					Text(
+						text = stringResource(R.string.media_universe_empty),
+						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+					)
+				}
+				else -> items(
+					items = mediaUniverseState.items,
+					key = { item -> "${item.content.source.name}:${item.content.id}" },
+				) { item ->
+					MediaUniverseRow(
+						item = item,
+						onClick = { onMediaUniverseContentClick(item.content) },
+					)
+				}
+			}
 			if (state.switchInProgress) {
-				Spacer(Modifier.height(8.dp))
-				CircularProgressIndicator(
-					modifier = Modifier
-						.size(32.dp)
-						.align(Alignment.CenterHorizontally),
-				)
+				item {
+					Box(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(8.dp),
+						contentAlignment = Alignment.Center,
+					) {
+						CircularProgressIndicator(modifier = Modifier.size(32.dp))
+					}
+				}
 			}
 		}
 	}

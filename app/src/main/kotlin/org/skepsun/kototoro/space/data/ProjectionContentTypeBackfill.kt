@@ -35,6 +35,23 @@ class ProjectionContentTypeBackfill @Inject constructor(
 		}
 	}
 
+	suspend fun backfillAll(resolvedSources: Collection<ContentSource>): Int {
+		val sourcesByContentType = resolvedSources
+			.mapNotNull { source ->
+				source.resolvedContentTypeForSnapshot()?.name?.let { source.name to it }
+			}
+			.distinct()
+			.groupBy(keySelector = Pair<String, String>::second, valueTransform = Pair<String, String>::first)
+		if (sourcesByContentType.isEmpty()) return 0
+
+		val dao = db.getMangaDao()
+		return sourcesByContentType.entries.sumOf { (contentType, sources) ->
+			sources.chunked(MAX_SOURCE_QUERY_PARAMS).sumOf { sourceChunk ->
+				dao.setContentTypeIfMissingForSources(sourceChunk, contentType)
+			}
+		}
+	}
+
 	private companion object {
 		const val DEFAULT_BATCH_SIZE = 500
 		const val MAX_SOURCE_QUERY_PARAMS = 400

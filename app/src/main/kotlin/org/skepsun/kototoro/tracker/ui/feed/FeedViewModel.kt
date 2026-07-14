@@ -61,6 +61,8 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 20
 private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 2000
@@ -78,6 +80,7 @@ class FeedViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val dataRepository: ContentDataRepository,
 	private val workResolver: WorkResolver,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), QuickFilterListener by quickFilter {
 
 	private data class HeaderParams(
@@ -114,7 +117,10 @@ class FeedViewModel @Inject constructor(
 	val currentCategoryId = selectedCategoryId
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, NO_ID)
 
-	val currentGroupTab = globalFavoritesState.selectedGroupTab
+	val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 	val currentSourceTags = globalFavoritesState.selectedSourceTags
 
 	private val workerRunning = scheduler.observeIsRunning()

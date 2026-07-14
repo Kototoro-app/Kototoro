@@ -730,6 +730,13 @@ class BackupRepository @Inject constructor(
         logMissingAuthoritativeWorkSections(effectiveSections, archiveSections, restoredSections)
         val legacyJarReposImported = restoreLegacyJarRepositoriesIfNeeded(effectiveSections, archiveSections, restoredSections)
         Log.d(TAG, "restoreBackup: restoreLegacyJarRepositoriesIfNeeded elapsedMs=${SystemClock.elapsedRealtime() - legacyRepoStartedAt}")
+        val contentTypeBackfillStartedAt = SystemClock.elapsedRealtime()
+        mangaSourcesRepository.getAllAvailableSourcesUnfiltered()
+        Log.d(
+            TAG,
+            "restoreBackup: projectionContentTypeBackfill elapsedMs=" +
+                (SystemClock.elapsedRealtime() - contentTypeBackfillStartedAt),
+        )
         val normalizeStartedAt = SystemClock.elapsedRealtime()
         normalizeRestoredWorkState(
             requestedSections = effectiveSections,

@@ -175,9 +175,10 @@ class ReaderActivity :
             progressFlusher = SpaceProgressFlusher {
                 viewModel.flushForSpaceSwitch(readerManager.currentReader?.getCurrentState())
             },
+            onMediaUniverseContentClick = { content -> router.openResolvedDetails(content) },
         )
-        spaceSwitcherDelegate.install(viewBinding.toolbar)
-        viewBinding.toolbar.setOnMenuItemClickListener(spaceSwitcherDelegate::onMenuItemSelected)
+        spaceSwitcherDelegate.installFab(findViewById(R.id.immersive_space_switcher_fab))
+        spaceSwitcherDelegate.setControlsVisible(viewBinding.appbarTop.isVisible)
         viewBinding.zoomControl.listener = this
         viewBinding.actionsView.listener = this
         viewBinding.actionsView.setTranslateButtonVisible(viewModel.shouldShowTranslationToggle())
@@ -623,6 +624,7 @@ class ReaderActivity :
             systemUiController.setSystemUiVisible(isUiVisible || !isFullscreen)
             viewBinding.root.requestApplyInsets()
         }
+        spaceSwitcherDelegate.setControlsVisible(isUiVisible)
     }
 
     override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {

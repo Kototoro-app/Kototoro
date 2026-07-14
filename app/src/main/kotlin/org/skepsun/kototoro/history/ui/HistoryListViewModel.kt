@@ -77,6 +77,8 @@ import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.domain.observeActiveSpaceScope
+import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 32
 
@@ -113,6 +115,7 @@ class HistoryListViewModel @Inject constructor(
 	private val workResolver: WorkResolver,
 	spaceRepository: SpaceRepository,
 	spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository,
+	spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
 
 	@Volatile
@@ -137,7 +140,10 @@ class HistoryListViewModel @Inject constructor(
 		)
 
 
-	override val currentGroupTab = globalFavoritesState.selectedGroupTab
+	override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
+		spaceBrowseScope = spaceBrowseScope,
+		coroutineScope = viewModelScope + Dispatchers.Default,
+	)
 	override val currentSourceTags = globalFavoritesState.selectedSourceTags
 
 	override fun setSelectedGroupTab(tab: BrowseGroupTab) {

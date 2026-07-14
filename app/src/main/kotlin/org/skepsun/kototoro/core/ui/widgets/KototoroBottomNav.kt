@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.NavItem
+import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
@@ -59,6 +60,7 @@ fun KototoroBottomNav(
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
     railHeaderContent: (@Composable () -> Unit)? = null,
+    adjacentAction: (@Composable () -> Unit)? = null,
 ) {
     val navState by state.collectAsState()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
@@ -88,7 +90,9 @@ fun KototoroBottomNav(
     val navFloatingHeight = prefs.navFloatingHeight
     val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
 
-    val activeItems = navState.items.filter { navState.itemVisibility[it.id] != false }
+    val activeItems = navState.items
+        .filter { navState.itemVisibility[it.id] != false }
+        .limitMainNavigationItems()
     val showSelectedLabels = navState.labelVisibilityMode != NavigationBarView.LABEL_VISIBILITY_UNLABELED
     val useNavigationRail = remember(configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
         FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
@@ -243,38 +247,51 @@ fun KototoroBottomNav(
             modifier = navBarModifier,
             contentAlignment = Alignment.Center,
         ) {
-            GlassBottomBarContainer(
-                modifier = Modifier
-                    .widthIn(min = floatingMinWidth, max = 520.dp)
-                    .wrapContentWidth(),
-                style = navContainerStyle,
+            Row(
+                modifier = Modifier.wrapContentWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                FloatingBottomNavRow(
-                    items = activeItems,
-                    selectedItemId = navState.selectedItemId,
-                    badges = navState.badges,
-                    clickPulses = clickPulses,
-                    showSelectedLabels = showSelectedLabels,
-                    useExpressivePill = isExpressivePillEnabled,
-                    itemSpacing = floatingNavItemSpacing,
-                    onItemSelected = onItemSelected,
-                    onItemReselected = onItemReselected,
+                GlassBottomBarContainer(
                     modifier = Modifier
-                        .wrapContentWidth()
-                        .height(currentExplicitHeight)
-                        .padding(horizontal = floatingNavHorizontalPadding),
-                )
+                        .widthIn(min = floatingMinWidth, max = 520.dp)
+                        .wrapContentWidth(),
+                    style = navContainerStyle,
+                ) {
+                    FloatingBottomNavRow(
+                        items = activeItems,
+                        selectedItemId = navState.selectedItemId,
+                        badges = navState.badges,
+                        clickPulses = clickPulses,
+                        showSelectedLabels = showSelectedLabels,
+                        useExpressivePill = isExpressivePillEnabled,
+                        itemSpacing = floatingNavItemSpacing,
+                        onItemSelected = onItemSelected,
+                        onItemReselected = onItemReselected,
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .height(currentExplicitHeight)
+                            .padding(horizontal = floatingNavHorizontalPadding),
+                    )
+                }
+                adjacentAction?.invoke()
             }
         }
     } else {
-        GlassSurface(
-            modifier = navBarModifier,
-            style = navContainerStyle,
-            shape = RoundedCornerShape(0.dp),
-            visualTreatment = GlassVisualTreatment.TopBarPrototype,
-            componentRole = GlassComponentRole.BottomBar,
+        Row(
+            modifier = navBarModifier
+                .navigationBarsPadding()
+                .then(if (adjacentAction != null) Modifier.padding(end = 12.dp) else Modifier),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            GlassSurface(
+                modifier = Modifier.weight(1f),
+                style = navContainerStyle,
+                shape = RoundedCornerShape(0.dp),
+                visualTreatment = GlassVisualTreatment.TopBarPrototype,
+                componentRole = GlassComponentRole.BottomBar,
+            ) {
                 NavigationBar(
                     containerColor = Color.Transparent,
                     tonalElevation = 0.dp,
@@ -323,8 +340,8 @@ fun KototoroBottomNav(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
             }
+            adjacentAction?.invoke()
         }
     }
 }

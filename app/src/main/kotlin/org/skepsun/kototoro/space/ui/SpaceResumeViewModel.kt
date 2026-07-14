@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isLocal
@@ -79,8 +81,14 @@ class SpaceResumeViewModel @Inject constructor(
 	)
 
 	fun resume(spaceId: SpaceId) {
-		val item = uiState.value.items[spaceId]?.takeIf(SpaceResumeItem::canResume) ?: return
 		launchLoadingJob(Dispatchers.Default) {
+			val item = uiState.value.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
+				?: withTimeoutOrNull(2_000L) {
+					uiState.map { state ->
+						state.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
+					}.first { it != null }
+				}
+				?: return@launchLoadingJob
 			spaceRepository.activate(spaceId)
 			onOpenReader.call(item.content.normalizeLocalVideoSource())
 		}

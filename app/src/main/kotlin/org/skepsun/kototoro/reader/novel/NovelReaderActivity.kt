@@ -39,6 +39,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
+import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -375,9 +376,10 @@ class NovelReaderActivity :
             origin = SpaceSwitchOrigin.NOVEL_READER,
             availabilityProvider = { SpaceSwitchAvailability.SAVE_AND_SWITCH },
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
+            onMediaUniverseContentClick = { content -> router.openResolvedDetails(content) },
         )
-        spaceSwitcherDelegate.install(viewBinding.toolbar)
-        viewBinding.toolbar.setOnMenuItemClickListener(spaceSwitcherDelegate::onMenuItemSelected)
+        spaceSwitcherDelegate.installFab(findViewById(R.id.immersive_space_switcher_fab))
+        spaceSwitcherDelegate.setControlsVisible(isUiVisible)
         
         // 设置标题为小说名称
         title = manga.title
@@ -2576,6 +2578,7 @@ class NovelReaderActivity :
                     "field=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
             )
         }
+        spaceSwitcherDelegate.setControlsVisible(visible)
     }
 
     private fun showLoading(loading: Boolean) {
@@ -2706,6 +2709,7 @@ class NovelReaderActivity :
 
     private fun applyInitialUiVisibility() {
         val visible = !readerSettings.enableFullscreen
+        spaceSwitcherDelegate.setControlsVisible(visible)
         isUiVisible = visible
         viewBinding.appbarTop.isVisible = visible
         viewBinding.toolbarDocked.isVisible = visible

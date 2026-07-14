@@ -61,7 +61,6 @@ import org.skepsun.kototoro.core.ui.compose.VerticalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
-import org.skepsun.kototoro.core.ui.compose.rememberVerticalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -364,11 +363,6 @@ fun KototoroContentListScreen(
                             visibleThreshold = loadMoreVisibleThreshold,
                             onLoadMore = onLoadMore,
                         )
-                        val scrollIntensity = if (isVerticalCardListAnimationEnabled) {
-                            rememberVerticalRailScrollIntensity(actualListState)
-                        } else {
-                            0f
-                        }
                         LazyColumn(
                             state = actualListState,
                             contentPadding = innerPadding,
@@ -392,7 +386,6 @@ fun KototoroContentListScreen(
                                     index = index,
                                     listState = actualListState,
                                     isAnimationEnabled = isVerticalCardListAnimationEnabled,
-                                    scrollIntensity = scrollIntensity,
                                 ) { animatedModifier ->
                                     if (listModel is ContentCompactListModel) {
                                         KototoroContentCardList(
@@ -433,11 +426,6 @@ fun KototoroContentListScreen(
                             visibleThreshold = loadMoreVisibleThreshold,
                             onLoadMore = onLoadMore,
                         )
-                        val scrollIntensity = if (isVerticalCardListAnimationEnabled) {
-                            rememberVerticalRailScrollIntensity(actualListState)
-                        } else {
-                            0f
-                        }
                         LazyColumn(
                             state = actualListState,
                             contentPadding = innerPadding,
@@ -461,7 +449,6 @@ fun KototoroContentListScreen(
                                     index = index,
                                     listState = actualListState,
                                     isAnimationEnabled = isVerticalCardListAnimationEnabled,
-                                    scrollIntensity = scrollIntensity,
                                 ) { animatedModifier ->
                                     if (listModel is ContentDetailedListModel) {
                                         KototoroContentCardDetailedList(

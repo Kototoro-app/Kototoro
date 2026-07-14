@@ -130,6 +130,11 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 			NULL
 		FROM track_logs
 		WHERE unread = 1
+			AND EXISTS (
+				SELECT 1
+				FROM manga
+				WHERE manga.manga_id = track_logs.manga_id
+			)
 			AND NOT EXISTS (
 				SELECT 1
 				FROM tracks

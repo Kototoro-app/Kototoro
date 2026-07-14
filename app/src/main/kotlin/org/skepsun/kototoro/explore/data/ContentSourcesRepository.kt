@@ -11,15 +11,19 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.db.MangaDatabase
@@ -42,6 +46,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.flattenLatest
+import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -85,6 +90,15 @@ class ContentSourcesRepository @Inject constructor(
 	private val jsonDao get() = db.getJsonSourceDao()
 	private val isNewSourcesAssimilated = AtomicBoolean(false)
 	private val cachedKotatsuSources = java.util.concurrent.ConcurrentHashMap<String, org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource>()
+	private val enabledBrowseSources: StateFlow<List<ContentSourceInfo>> =
+		createEnabledBrowseSourcesFlow()
+			.distinctUntilChanged()
+			.flowOn(Dispatchers.Default)
+			.stateIn(
+				scope = processLifecycleScope,
+				started = SharingStarted.Eagerly,
+				initialValue = emptyList(),
+			)
 
 	init {
 		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -141,7 +155,7 @@ class ContentSourcesRepository @Inject constructor(
 			addAll(getEnabledAniyomiSources())
 			addAll(getEnabledIReaderSources())
 		})
-		projectionContentTypeBackfill.backfill(
+		projectionContentTypeBackfill.backfillAll(
 			resolvedSources = sources + listOf(LocalMangaSource, LocalNovelSource, LocalVideoSource),
 		)
 		return sources
@@ -737,7 +751,9 @@ class ContentSourcesRepository @Inject constructor(
 	 * - 仅针对 JSON_LEGADO 源做该过滤（避免误伤 JS/TVBox 等其它 JSON 类型）。
 	 * - 搜索仍使用 `getEnabledSources()`，不受影响。
 	 */
-	fun observeEnabledBrowseSources(): Flow<List<ContentSourceInfo>> {
+	fun observeEnabledBrowseSources(): StateFlow<List<ContentSourceInfo>> = enabledBrowseSources
+
+	private fun createEnabledBrowseSourcesFlow(): Flow<List<ContentSourceInfo>> {
 		return combine(
 			observeEnabledSources(),
 			settings.observeAsFlow(AppSettings.KEY_EXPLORE_HIDE_EMPTY_SOURCES) { isEmptySourcesHiddenInExplore },

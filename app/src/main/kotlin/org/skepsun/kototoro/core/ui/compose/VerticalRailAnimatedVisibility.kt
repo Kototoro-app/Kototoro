@@ -2,17 +2,13 @@ package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -22,47 +18,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-import kotlin.math.abs
-
-@Composable
-fun rememberVerticalRailScrollIntensity(
-    listState: LazyListState,
-): Float {
-    var velocityTarget by remember(listState) { mutableFloatStateOf(0f) }
-    val scrollIntensity by animateFloatAsState(
-        targetValue = velocityTarget,
-        animationSpec = tween(
-            durationMillis = if (listState.isScrollInProgress) 90 else 220,
-            easing = FastOutSlowInEasing,
-        ),
-        label = "vertical_rail_scroll_intensity",
-    )
-
-    LaunchedEffect(listState) {
-        var lastIndex = listState.firstVisibleItemIndex
-        var lastOffset = listState.firstVisibleItemScrollOffset
-        snapshotFlow {
-            Triple(
-                listState.firstVisibleItemIndex,
-                listState.firstVisibleItemScrollOffset,
-                listState.isScrollInProgress,
-            )
-        }.collectLatest { (currentIndex, currentOffset, isScrolling) ->
-            val estimatedItemSize = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 1
-            val deltaPx = ((currentIndex - lastIndex) * estimatedItemSize) + (currentOffset - lastOffset)
-            val pixelsPerSecond = abs(deltaPx) * 60f
-            velocityTarget = if (isScrolling) {
-                (pixelsPerSecond / 3600f).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            lastIndex = currentIndex
-            lastOffset = currentOffset
-        }
-    }
-
-    return scrollIntensity
-}
 
 @Composable
 fun VerticalRailAnimatedVisibility(
@@ -73,7 +28,6 @@ fun VerticalRailAnimatedVisibility(
     enableScrollLinkedAnimation: Boolean = true,
     animationFactor: Float = 1f,
     scaleFactor: Float = 1f,
-    scrollIntensity: Float = 0f,
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {

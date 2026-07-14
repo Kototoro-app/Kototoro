@@ -95,6 +95,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -135,6 +136,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -294,6 +296,7 @@ fun DetailsScreen(
     onBackClick: () -> Unit,
     activeSpaceId: SpaceId? = null,
     onSpaceSwitcherClick: () -> Unit = {},
+    onBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     sharedElementKey: String? = null,
     onActionClick: (DetailsAction) -> Unit = {},
     isTemporaryReadOnly: Boolean = false,
@@ -621,6 +624,16 @@ fun DetailsScreen(
         }
     }
     val compactSheetExpansionProgress = detailsPaneState.expansionProgress
+    val currentBottomPanelStateChanged by rememberUpdatedState(onBottomPanelStateChanged)
+    LaunchedEffect(compactSheetExpansionProgress, compactPaneCollapsedHeight, isWideAdaptiveLayout) {
+        currentBottomPanelStateChanged(
+            if (isWideAdaptiveLayout) 0f else compactSheetExpansionProgress,
+            if (isWideAdaptiveLayout) 0.dp else compactPaneCollapsedHeight,
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose { currentBottomPanelStateChanged(0f, 0.dp) }
+    }
     val detailsGradientAlpha = if (scrollState.maxValue > 0) {
         (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
     } else {
