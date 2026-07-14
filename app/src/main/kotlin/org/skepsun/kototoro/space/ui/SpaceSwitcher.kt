@@ -2,6 +2,8 @@ package org.skepsun.kototoro.space.ui
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -52,12 +56,26 @@ fun SpaceSwitcherFab(
 		modifier = modifier.semantics { contentDescription = description },
 		expanded = expanded,
 		icon = {
-			Icon(
-				painter = painterResource(presentation.iconRes),
-				contentDescription = null,
-			)
+			Crossfade(
+				targetState = presentation,
+				animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
+				label = "space_fab_icon",
+			) { target ->
+				Icon(
+					painter = painterResource(target.iconRes),
+					contentDescription = null,
+				)
+			}
 		},
-		text = { Text(stringResource(presentation.labelRes)) },
+		text = {
+			Crossfade(
+				targetState = presentation,
+				animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
+				label = "space_fab_label",
+			) { target ->
+				Text(stringResource(target.labelRes))
+			}
+		},
 		containerColor = MaterialTheme.colorScheme.primaryContainer,
 		contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
 	)
@@ -70,14 +88,26 @@ fun SpaceSwitcherRailButton(
 	modifier: Modifier = Modifier,
 ) {
 	val presentation = activeSpaceId.presentation()
-	IconButton(onClick = onClick, modifier = modifier.size(48.dp)) {
-		Icon(
-			painter = painterResource(presentation.iconRes),
-			contentDescription = stringResource(
-				R.string.space_switcher_content_description,
-				stringResource(presentation.labelRes),
-			),
-		)
+	val description = stringResource(
+		R.string.space_switcher_content_description,
+		stringResource(presentation.labelRes),
+	)
+	IconButton(
+		onClick = onClick,
+		modifier = modifier
+			.size(48.dp)
+			.semantics { contentDescription = description },
+	) {
+		Crossfade(
+			targetState = presentation,
+			animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
+			label = "space_rail_icon",
+		) { target ->
+			Icon(
+				painter = painterResource(target.iconRes),
+				contentDescription = null,
+			)
+		}
 	}
 }
 
@@ -128,13 +158,19 @@ private fun SpaceRow(
 	onClick: () -> Unit,
 ) {
 	val presentation = context.id.presentation()
+	val hapticFeedback = LocalHapticFeedback.current
 	Row(
 		modifier = Modifier
 			.fillMaxWidth()
 			.selectable(
 				selected = selected,
 				enabled = enabled,
-				onClick = onClick,
+				onClick = {
+					if (!selected) {
+						hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+					}
+					onClick()
+				},
 				role = Role.RadioButton,
 			)
 			.padding(horizontal = 24.dp, vertical = 12.dp),

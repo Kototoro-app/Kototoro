@@ -4,6 +4,7 @@ import android.app.Activity
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -157,6 +158,8 @@ import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
+import org.skepsun.kototoro.core.util.ext.animatorDurationScale
+import org.skepsun.kototoro.space.ui.SpaceMotion
 
 @Immutable
 private data class KototoroNavigationPrefs(
@@ -407,6 +410,10 @@ fun KototoroApp(
     }
     val effectiveSharedElementTransitionsEnabled =
         isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
+    val spaceMotionMode = SpaceMotion.resolveMode(
+        reducedVisualEffects = isReducedVisualEffectsEnabled,
+        animatorDurationScale = context.animatorDurationScale,
+    )
     val isNavBarPinned by appSettings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }
     val isFloating = navigationPrefs.isFloating
     val activeSourcePresetId = displayPrefs.activeSourcePresetId
@@ -1175,76 +1182,92 @@ fun KototoroApp(
                             null
                         },
                     ) {
-                        spaceSaveableStateHolder.SaveableStateProvider(navigationSpaceId.value) {
-                            key(navigationSpaceId.value) {
-                                AppNavGraph(
-                                    navController = navController,
-                                    mainNavState = mainNavState,
-                                    isLandscapeNavigation = isLandscapeNavigation,
-                                    startDestination = startDestination,
-                                    contentPadding = contentPadding,
-                                    bottomBarOffsetPx = effectiveBottomNavOffset,
-                                    bottomBarHeightPx = bottomNavHeightPx,
-                                    pageSaveHelper = pageSaveHelper,
-                                    onDetailsTransitionRequested = {
-                                        isDetailsChromeTransitionPending = true
-                                        heroTransitionPhase = HeroTransitionPhase.EnteringDetails
-                                        lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                    },
-                                    onDetailsReturnTransitionRequested = {
-                                        if (effectiveSharedElementTransitionsEnabled) {
+                        val renderSpaceNavigation: @Composable (SpaceId) -> Unit = { renderedSpaceId ->
+                            val renderedNavigationState = spaceNavigationStates[renderedSpaceId]
+                            val renderedNavController = renderedNavigationState.navController
+                            spaceSaveableStateHolder.SaveableStateProvider(renderedSpaceId.value) {
+                                key(renderedSpaceId.value) {
+                                    AppNavGraph(
+                                        navController = renderedNavController,
+                                        mainNavState = renderedNavigationState.mainNavState,
+                                        isLandscapeNavigation = isLandscapeNavigation,
+                                        startDestination = startDestination,
+                                        contentPadding = contentPadding,
+                                        bottomBarOffsetPx = effectiveBottomNavOffset,
+                                        bottomBarHeightPx = bottomNavHeightPx,
+                                        pageSaveHelper = pageSaveHelper,
+                                        onDetailsTransitionRequested = {
                                             isDetailsChromeTransitionPending = true
-                                            heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
+                                            heroTransitionPhase = HeroTransitionPhase.EnteringDetails
                                             lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                        }
-                                    },
-                                    onExploreSourceSelectionTopBarChanged = { overrideState ->
-                                        when (overrideState) {
-                                            is RouteScopedTopBarOverrideState -> {
-                                                val ownerRoute = overrideState.ownerRoute
-                                                val state = overrideState.state
-                                                if (state == null) {
-                                                    if (ownerRoute in routeTopBarOverrideStates) {
-                                                        routeTopBarOverrideStates.remove(ownerRoute)
+                                        },
+                                        onDetailsReturnTransitionRequested = {
+                                            if (effectiveSharedElementTransitionsEnabled) {
+                                                isDetailsChromeTransitionPending = true
+                                                heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
+                                                lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
+                                            }
+                                        },
+                                        onExploreSourceSelectionTopBarChanged = { overrideState ->
+                                            when (overrideState) {
+                                                is RouteScopedTopBarOverrideState -> {
+                                                    val ownerRoute = overrideState.ownerRoute
+                                                    val state = overrideState.state
+                                                    if (state == null) {
+                                                        if (ownerRoute in routeTopBarOverrideStates) {
+                                                            routeTopBarOverrideStates.remove(ownerRoute)
+                                                        }
+                                                    } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
+                                                        routeTopBarOverrideStates[ownerRoute] = state
                                                     }
-                                                } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
-                                                    routeTopBarOverrideStates[ownerRoute] = state
+                                                }
+                                                else -> {
+                                                    if (globalTopBarOverrideState !== overrideState) {
+                                                        globalTopBarOverrideState = overrideState
+                                                    }
                                                 }
                                             }
-                                            else -> {
-                                                if (globalTopBarOverrideState !== overrideState) {
-                                                    globalTopBarOverrideState = overrideState
+                                        },
+                                        onContextualMenuActionsChanged = { state ->
+                                            if (state.actions.isEmpty()) {
+                                                routeContextualMenuActions.remove(state.ownerRoute)
+                                            } else {
+                                                routeContextualMenuActions[state.ownerRoute] = state.actions
+                                            }
+                                        },
+                                        onOpenSearch = { request ->
+                                            val route = SearchNavigation.createRoute(request)
+                                            if (renderedNavController.currentDestination?.hasRoute<SearchRoute>() == true) {
+                                                renderedNavController.navigate(route) {
+                                                    popUpTo<SearchRoute> { inclusive = true }
+                                                    launchSingleTop = true
+                                                }
+                                            } else {
+                                                renderedNavController.navigate(route) {
+                                                    launchSingleTop = true
                                                 }
                                             }
-                                        }
-                                    },
-                                    onContextualMenuActionsChanged = { state ->
-                                        if (state.actions.isEmpty()) {
-                                            routeContextualMenuActions.remove(state.ownerRoute)
-                                        } else {
-                                            routeContextualMenuActions[state.ownerRoute] = state.actions
-                                        }
-                                    },
-                                    onOpenSearch = { request ->
-                                        val route = SearchNavigation.createRoute(request)
-                                        if (isSearchRoute) {
-                                            navController.navigate(route) {
-                                                popUpTo<SearchRoute> { inclusive = true }
-                                                launchSingleTop = true
-                                            }
-                                        } else {
-                                            navController.navigate(route) {
-                                                launchSingleTop = true
-                                            }
-                                        }
-                                    },
-                                    mainShellChrome = mainShellChrome,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
                             }
+                        }
+                        if (spaceUiState.persistentNavigationEnabled) {
+                            AnimatedContent(
+                                targetState = navigationSpaceId,
+                                transitionSpec = { SpaceMotion.contentTransform(spaceMotionMode) },
+                                contentKey = SpaceId::value,
+                                label = "space_content",
+                            ) { renderedSpaceId ->
+                                renderSpaceNavigation(renderedSpaceId)
+                            }
+                        } else {
+                            renderSpaceNavigation(navigationSpaceId)
                         }
                     }
                 }
+                mainShellChrome()
 
                 if (isSearchOverlayMounted) {
                     KototoroSearchOverlay(

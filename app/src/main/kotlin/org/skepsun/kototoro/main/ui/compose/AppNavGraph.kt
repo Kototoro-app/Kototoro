@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.background
@@ -218,7 +217,6 @@ fun AppNavGraph(
     bottomBarHeightPx: Int = 0,
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper? = null,
     modifier: Modifier = Modifier,
-    mainShellChrome: @Composable BoxScope.() -> Unit = {},
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit = {},
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit = {},
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
@@ -293,7 +291,6 @@ fun AppNavGraph(
                 onOpenSearch = onOpenSearch,
                 navigateToDetailsWithContent = navigateToDetailsWithContent,
                 navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                mainShellChrome = mainShellChrome,
             )
         }
         composable<HomeRoute> {
@@ -672,7 +669,6 @@ internal fun MainShellRouteContent(
     onOpenSearch: (SearchNavigationRequest) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
-    mainShellChrome: @Composable BoxScope.() -> Unit,
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val hazeState = LocalHazeState.current
@@ -718,7 +714,6 @@ internal fun MainShellRouteContent(
                 }
             }
         }
-        mainShellChrome()
     }
 }
 
