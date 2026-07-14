@@ -31,7 +31,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
+
 val LocalMaterialExpressiveComponentsEnabled = staticCompositionLocalOf { false }
+val LocalBackgroundStyle = staticCompositionLocalOf { BackgroundStyle.DEFAULT }
 
 @Composable
 fun KototoroTheme(
@@ -52,8 +55,11 @@ fun KototoroTheme(
     val expressiveAppFontPreset by settings.observeAsState(AppSettings.KEY_EXPRESSIVE_APP_FONT_PRESET) {
         expressiveAppFontPreset
     }
-    val colorScheme = remember(context, darkTheme, dynamicColor) {
-        context.resolveComposeColorScheme(darkTheme)
+    val backgroundStyle by settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) {
+        backgroundStyle
+    }
+    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle) {
+        context.resolveComposeColorScheme(darkTheme, backgroundStyle)
     }
     
     val radius = when {
@@ -86,7 +92,10 @@ fun KototoroTheme(
         )
     }
 
-    CompositionLocalProvider(LocalMaterialExpressiveComponentsEnabled provides expressiveComponents) {
+    CompositionLocalProvider(
+        LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
+        LocalBackgroundStyle provides backgroundStyle,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             shapes = shapes,
@@ -154,6 +163,7 @@ private fun kototoroTypography(
 
 private fun android.content.Context.resolveComposeColorScheme(
     darkTheme: Boolean,
+    backgroundStyle: BackgroundStyle,
 ): ColorScheme {
     val background = themeColor(android.R.attr.colorBackground)
     val surface = themeColorByName("colorSurface", background)
@@ -200,11 +210,43 @@ private fun android.content.Context.resolveComposeColorScheme(
     )
 
     return if (darkTheme) {
-        val liftedSurfaceContainerLowest = common.surfaceContainerLowest.liftForDarkContrast(0.10f)
-        val liftedSurfaceContainerLow = common.surfaceContainerLow.liftForDarkContrast(0.14f)
-        val liftedSurfaceContainer = common.surfaceContainer.liftForDarkContrast(0.16f)
-        val liftedSurfaceContainerHigh = common.surfaceContainerHigh.liftForDarkContrast(0.18f)
-        val liftedSurfaceContainerHighest = common.surfaceContainerHighest.liftForDarkContrast(0.20f)
+        val baseBg = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(Color(0xFF0C0D0F), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color.Black
+            BackgroundStyle.DEFAULT -> Color.Black
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color.Black
+        }
+        val baseSurface = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(Color(0xFF111316), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF141414)
+            BackgroundStyle.DEFAULT -> Color.Black
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF0C0C0C)
+        }
+        val liftedSurfaceContainerLowest = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerLowest.liftForDarkContrast(0.10f), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF121212)
+            else -> common.surfaceContainerLowest.liftForDarkContrast(0.10f)
+        }
+        val liftedSurfaceContainerLow = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerLow.liftForDarkContrast(0.14f), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF161616)
+            else -> common.surfaceContainerLow.liftForDarkContrast(0.14f)
+        }
+        val liftedSurfaceContainer = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainer.liftForDarkContrast(0.16f), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF1E1E1E)
+            else -> common.surfaceContainer.liftForDarkContrast(0.16f)
+        }
+        val liftedSurfaceContainerHigh = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerHigh.liftForDarkContrast(0.18f), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF242424)
+            else -> common.surfaceContainerHigh.liftForDarkContrast(0.18f)
+        }
+        val liftedSurfaceContainerHighest = when (backgroundStyle) {
+            BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerHighest.liftForDarkContrast(0.20f), common.primary, 0.08f)
+            BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF2C2C2C)
+            else -> common.surfaceContainerHighest.liftForDarkContrast(0.20f)
+        }
 
         darkColorScheme(
             primary = common.primary,
@@ -220,9 +262,9 @@ private fun android.content.Context.resolveComposeColorScheme(
             onTertiary = common.onTertiary,
             tertiaryContainer = common.tertiaryContainer,
             onTertiaryContainer = common.onTertiaryContainer,
-            background = common.background,
+            background = baseBg,
             onBackground = common.onBackground,
-            surface = common.surface,
+            surface = baseSurface,
             onSurface = common.onSurface,
             surfaceVariant = common.surfaceVariant,
             onSurfaceVariant = common.onSurfaceVariant,

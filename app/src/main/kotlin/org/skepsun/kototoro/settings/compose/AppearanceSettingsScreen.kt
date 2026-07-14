@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialFamily
 import org.skepsun.kototoro.core.prefs.AppFontPreset
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialPreset
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -34,6 +35,7 @@ data class AppearanceSettingsUiState(
     val navSummary: String,
     val colorScheme: ColorScheme,
     val theme: Int,
+    val backgroundStyle: BackgroundStyle,
     val isAmoledTheme: Boolean,
     val isMaterialExpressiveComponentsEnabled: Boolean,
     val appFontPreset: AppFontPreset,
@@ -106,6 +108,7 @@ data class AppearanceSettingsUiState(
 data class AppearanceSettingsOptions(
     val colorSchemes: List<SettingsChoiceOption<ColorScheme>>,
     val themes: List<SettingsChoiceOption<Int>>,
+    val backgroundStyles: List<SettingsChoiceOption<BackgroundStyle>>,
     val fontPresets: List<SettingsChoiceOption<AppFontPreset>>,
     val glassMaterialFamilies: List<SettingsChoiceOption<GlassMaterialFamily>>,
     val tabletUiModes: List<SettingsChoiceOption<TabletUiMode>>,
@@ -132,6 +135,7 @@ fun AppearanceSettingsScreen(
     emptySelectionText: String,
     onColorSchemeChange: (ColorScheme) -> Unit,
     onThemeChange: (Int) -> Unit,
+    onBackgroundStyleChange: (BackgroundStyle) -> Unit,
     onAmoledThemeChange: (Boolean) -> Unit,
     onMaterialExpressiveComponentsChange: (Boolean) -> Unit,
     onAppFontPresetChange: (AppFontPreset) -> Unit,
@@ -224,6 +228,14 @@ fun AppearanceSettingsScreen(
                     value = state.theme,
                     options = options.themes,
                     onValueChange = onThemeChange,
+                )
+                SettingsSectionDivider()
+                SettingsChoicePreference(
+                    title = stringResource(R.string.background_style),
+                    value = state.backgroundStyle,
+                    options = options.backgroundStyles,
+                    summary = stringResource(R.string.background_style_summary),
+                    onValueChange = onBackgroundStyleChange,
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
