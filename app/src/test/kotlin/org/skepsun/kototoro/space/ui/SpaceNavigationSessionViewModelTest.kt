@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.space.ui
 
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,6 +69,37 @@ class SpaceNavigationSessionViewModelTest {
 		repository.saved shouldBe emptyList()
 	}
 
+	@Test
+	fun `latest snapshot wins when an older save is still running`() = runTest {
+		val firstSaveStarted = CompletableDeferred<Unit>()
+		val releaseFirstSave = CompletableDeferred<Unit>()
+		val repository = FakeSessionRepository(
+			onSave = { savedCount ->
+				if (savedCount == 1) {
+					firstSaveStarted.complete(Unit)
+					releaseFirstSave.await()
+				}
+			},
+		)
+		val viewModel = SpaceNavigationSessionViewModel(
+			repository,
+			PassThroughValidator,
+			FakeSessionFlagsRepository(enabled = true),
+		)
+		advanceUntilIdle()
+
+		val older = snapshot(BuiltInSpaces.Manga, "explore")
+		val latest = snapshot(BuiltInSpaces.Manga, "home")
+		viewModel.save(older)
+		firstSaveStarted.await()
+		viewModel.save(latest)
+		releaseFirstSave.complete(Unit)
+		advanceUntilIdle()
+
+		repository.saved shouldBe listOf(older, latest)
+		viewModel.uiState.value.sessions[BuiltInSpaces.Manga] shouldBe latest
+	}
+
 	private fun snapshot(spaceId: SpaceId, selected: String) = SpaceSessionSnapshot(
 		spaceId = spaceId,
 		selectedTopLevel = selected,
@@ -84,6 +116,7 @@ private object PassThroughValidator : SpaceSessionValidator {
 
 private class FakeSessionRepository(
 	private val stored: Map<SpaceId, SpaceSessionSnapshot> = emptyMap(),
+	private val onSave: suspend (savedCount: Int) -> Unit = {},
 ) : SpaceSessionRepository {
 	val loads = mutableListOf<SpaceId>()
 	val saved = mutableListOf<SpaceSessionSnapshot>()
@@ -95,6 +128,7 @@ private class FakeSessionRepository(
 
 	override suspend fun save(snapshot: SpaceSessionSnapshot) {
 		saved += snapshot
+		onSave(saved.size)
 	}
 
 	override suspend fun delete(spaceId: SpaceId) = Unit

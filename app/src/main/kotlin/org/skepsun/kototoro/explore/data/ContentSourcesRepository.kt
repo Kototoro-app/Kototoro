@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.room.withTransaction
 import kotlinx.coroutines.channels.awaitClose
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.LocalizedAppContext
@@ -63,6 +66,14 @@ import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill
 
+private const val BrowseSourcesTraceTag = "BrowseSourcesTrace"
+
+private inline fun traceBrowseSources(message: () -> String) {
+	if (BuildConfig.DEBUG) {
+		Log.d(BrowseSourcesTraceTag, message())
+	}
+}
+
 private data class EnabledSourcesSnapshot(
 	val sources: List<ContentSourceInfo>,
 	val disabledNames: Set<String>,
@@ -92,6 +103,12 @@ class ContentSourcesRepository @Inject constructor(
 	private val cachedKotatsuSources = java.util.concurrent.ConcurrentHashMap<String, org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource>()
 	private val enabledBrowseSources: StateFlow<List<ContentSourceInfo>> =
 		createEnabledBrowseSourcesFlow()
+			.onEach { sources ->
+				traceBrowseSources {
+					"browse_state emitted size=${sources.size} " +
+						"types=${sources.groupingBy { it.mangaSource.getContentType() }.eachCount()}"
+				}
+			}
 			.distinctUntilChanged()
 			.flowOn(Dispatchers.Default)
 			.stateIn(
@@ -101,34 +118,21 @@ class ContentSourcesRepository @Inject constructor(
 			)
 
 	init {
-		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-			org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.collect {
-				assimilateNewSources(force = true)
-			}
-		}
-		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-			org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.collect {
+		processLifecycleScope.launch(Dispatchers.IO) {
+			combine(
+				observeJarParserSourceChanges(),
+				observeExternalExtensionChanges(),
+				cloudstreamRuntimeManager.sources,
+			) { _, _, _ -> Unit }.collect {
+				traceBrowseSources {
+					"registry_change content=${org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.value.size} " +
+						"manga=${org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.size} " +
+						"mihon=${mihonExtensionManager.installedExtensions.value.size} " +
+						"aniyomi=${aniyomiExtensionManager.installedExtensions.value.size} " +
+						"ireader=${ireaderExtensionManager.installedExtensions.value.size} " +
+						"cloudstream=${cloudstreamRuntimeManager.sources.value.size}"
+				}
 				cachedKotatsuSources.clear()
-				assimilateNewSources(force = true)
-			}
-		}
-		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-			mihonExtensionManager.installedExtensions.collect {
-				assimilateNewSources(force = true)
-			}
-		}
-		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-			aniyomiExtensionManager.installedExtensions.collect {
-				assimilateNewSources(force = true)
-			}
-		}
-		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-			ireaderExtensionManager.installedExtensions.collect {
-				assimilateNewSources(force = true)
-			}
-		}
-		org.skepsun.kototoro.core.util.ext.processLifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-			cloudstreamRuntimeManager.sources.collect {
 				assimilateNewSources(force = true)
 			}
 		}
@@ -630,8 +634,6 @@ class ContentSourcesRepository @Inject constructor(
 			ireaderExtensionManager.installedExtensions,
 		) { _, _, _ ->
 			Unit
-		}.onStart {
-			emit(Unit)
 		}
 	}
 
@@ -672,9 +674,13 @@ class ContentSourcesRepository @Inject constructor(
 				enabledNames = enabledNames,
 				allEnabled = allEnabled,
 			)
+		}.onEach { snapshot ->
+			traceBrowseSources {
+				"core_snapshot sources=${snapshot.sources.size} enabledNames=${snapshot.enabledNames.size} " +
+					"disabledNames=${snapshot.disabledNames.size} allEnabled=${snapshot.allEnabled}"
+			}
 		}
 	}.flattenLatest()
-		.onStart { assimilateNewSources() }
 		.combine(observeExternalSources()) { snapshot, external ->
 			val list = ArrayList<ContentSourceInfo>()
 			external.forEach {
@@ -683,7 +689,9 @@ class ContentSourcesRepository @Inject constructor(
 				}
 			}
 			list.addAll(snapshot.sources)
-			snapshot.copy(sources = list)
+			snapshot.copy(sources = list).also {
+				traceBrowseSources { "external_stage external=${external.size} total=${it.sources.size}" }
+			}
 		}
 		.combine(observeJsonSources()) { snapshot, jsonSources ->
 			val list = ArrayList<ContentSourceInfo>()
@@ -695,7 +703,9 @@ class ContentSourcesRepository @Inject constructor(
 					list.add(ContentSourceInfo(jsonSource, isEnabled = jsonSource.isEnabled, isPinned = jsonSource.isPinned))
 				}
 			}
-			snapshot.copy(sources = list)
+			snapshot.copy(sources = list).also {
+				traceBrowseSources { "json_stage json=${jsonSources.size} total=${it.sources.size}" }
+			}
 		}
 		.combine(observeMihonSources()) { snapshot, mihonSources ->
 			val list = ArrayList<ContentSourceInfo>()
@@ -708,7 +718,9 @@ class ContentSourcesRepository @Inject constructor(
 					list.add(ContentSourceInfo(mihonSource, isEnabled = true, isPinned = false))
 				}
 			}
-			snapshot.copy(sources = list)
+			snapshot.copy(sources = list).also {
+				traceBrowseSources { "mihon_stage extensions=${mihonSources.size} total=${it.sources.size}" }
+			}
 		}
 		.combine(observeAniyomiSources()) { snapshot, aniyomiSources ->
 			val list = ArrayList<ContentSourceInfo>()
@@ -721,7 +733,9 @@ class ContentSourcesRepository @Inject constructor(
 					list.add(ContentSourceInfo(aniyomiSource, isEnabled = true, isPinned = false))
 				}
 			}
-			snapshot.copy(sources = list)
+			snapshot.copy(sources = list).also {
+				traceBrowseSources { "aniyomi_stage extensions=${aniyomiSources.size} total=${it.sources.size}" }
+			}
 		}
 		.combine(observeIReaderSources()) { snapshot, ireaderSources ->
 			val list = ArrayList<ContentSourceInfo>()
@@ -734,13 +748,17 @@ class ContentSourcesRepository @Inject constructor(
 					list.add(ContentSourceInfo(ireaderSource, isEnabled = true, isPinned = false))
 				}
 			}
-			canonicalizeSourceInfosByName(list)
+			canonicalizeSourceInfosByName(list).also {
+				traceBrowseSources { "ireader_stage extensions=${ireaderSources.size} total=${it.size}" }
+			}
 		}
 		.combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
 			sources.map { info ->
 				info.copy(
 					availability = availability[info.mangaSource.name] ?: ContentSourceAvailability.UNKNOWN,
 				)
+			}.also {
+				traceBrowseSources { "availability_stage entries=${availability.size} total=${it.size}" }
 			}
 		}
 
@@ -884,7 +902,10 @@ class ContentSourcesRepository @Inject constructor(
 		} else {
 			false
 		}
-	}.onStart { assimilateNewSources() }
+	}.onStart {
+		emit(false)
+		assimilateNewSources()
+	}.distinctUntilChanged()
 
 	fun clearNewSourcesBadge() {
 		settings.sourcesVersion = BuildConfig.VERSION_CODE
@@ -892,11 +913,17 @@ class ContentSourcesRepository @Inject constructor(
 
 	private suspend fun assimilateNewSources(force: Boolean = false): Boolean {
 		if (!force && isNewSourcesAssimilated.getAndSet(true)) {
+			traceBrowseSources { "assimilate skipped force=false alreadyCompleted=true" }
 			return false
 		}
+		val startedAt = SystemClock.elapsedRealtime()
+		traceBrowseSources { "assimilate started force=$force" }
 		isNewSourcesAssimilated.set(true)
 		val new = getNewSources()
 		if (new.isEmpty()) {
+			traceBrowseSources {
+				"assimilate completed force=$force new=0 durationMs=${SystemClock.elapsedRealtime() - startedAt}"
+			}
 			return false
 		}
 		var maxSortKey = dao.getMaxSortKey()
@@ -913,6 +940,9 @@ class ContentSourcesRepository @Inject constructor(
 			)
 		}
 		dao.insertIfAbsent(entities)
+		traceBrowseSources {
+			"assimilate completed force=$force new=${entities.size} durationMs=${SystemClock.elapsedRealtime() - startedAt}"
+		}
 		return true
 	}
 

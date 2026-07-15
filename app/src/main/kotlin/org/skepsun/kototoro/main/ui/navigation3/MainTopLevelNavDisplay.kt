@@ -6,6 +6,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,8 @@ fun MainTopLevelNavDisplay(
         "MainTopLevelNavDisplay requires a ViewModelStoreOwner"
     }
     val saveableStateHolder = rememberSaveableStateHolder()
+    val currentRenderEntry = rememberUpdatedState(renderEntry)
+    val currentAnimatedVisibilityScope = rememberUpdatedState(animatedVisibilityScopeOverride)
     // Decorate each top-level stack independently so switching tabs does not clear its state.
     val decoratedEntriesByTopLevel: Map<TopLevelNavKey, List<NavEntry<TopLevelNavKey>>> = allTopLevelNavKeys.associateWith { key ->
         val backStack: List<TopLevelNavKey> = navState.stackFor(key).mapNotNull { it as? TopLevelNavKey }
@@ -47,8 +50,8 @@ fun MainTopLevelNavDisplay(
             entryProvider = { entryKey ->
                 topLevelNavEntry(
                     key = entryKey,
-                    animatedVisibilityScopeOverride = animatedVisibilityScopeOverride,
-                    renderEntry = renderEntry,
+                    animatedVisibilityScopeOverride = { currentAnimatedVisibilityScope.value },
+                    renderEntry = { key -> currentRenderEntry.value(key) },
                 )
             },
         )
@@ -69,12 +72,13 @@ fun MainTopLevelNavDisplay(
 
 private fun topLevelNavEntry(
     key: TopLevelNavKey,
-    animatedVisibilityScopeOverride: AnimatedVisibilityScope? = null,
+    animatedVisibilityScopeOverride: () -> AnimatedVisibilityScope? = { null },
     renderEntry: @Composable (TopLevelNavKey) -> Unit = {},
 ): NavEntry<TopLevelNavKey> {
     return NavEntry(key = key) { entryKey ->
         CompositionLocalProvider(
-            LocalNavAnimatedVisibilityScope provides (animatedVisibilityScopeOverride ?: LocalNavAnimatedContentScope.current),
+            LocalNavAnimatedVisibilityScope provides
+                (animatedVisibilityScopeOverride() ?: LocalNavAnimatedContentScope.current),
         ) {
             renderEntry(entryKey)
         }

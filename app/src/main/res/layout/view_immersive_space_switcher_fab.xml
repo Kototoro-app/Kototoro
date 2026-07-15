@@ -9,7 +9,6 @@
     android:layout_marginEnd="@dimen/space_switcher_fab_margin"
     android:layout_marginBottom="@dimen/space_switcher_fab_control_gap"
     android:contentDescription="@string/space_switcher_title"
-    android:text="@string/space_manga"
     android:visibility="gone"
     app:icon="@drawable/ic_content_manga"
     app:layout_dodgeInsetEdges="bottom" />

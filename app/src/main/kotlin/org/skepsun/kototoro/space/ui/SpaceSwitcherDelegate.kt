@@ -84,6 +84,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 
 	fun installFab(fab: ExtendedFloatingActionButton) {
 		fabs += fab
+		fab.shrink()
 		fab.setOnClickListener { showSwitcher() }
 		refreshMenuItems(spaceRepository.activeSpace.value, coordinator.state.value.inProgress)
 	}
@@ -192,7 +193,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 		fabs.forEach { target ->
 			target.isEnabled = !inProgress
 			target.icon = ContextCompat.getDrawable(context, activeSpaceId.iconRes())
-			target.text = context.getString(activeSpaceId.labelRes())
+			target.shrink()
 			target.contentDescription = context.getString(
 				R.string.space_switcher_content_description,
 				context.getString(activeSpaceId.labelRes()),

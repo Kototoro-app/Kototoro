@@ -11,12 +11,16 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceSessionRepository
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionValidator
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 data class SpaceNavigationSessionUiState(
@@ -31,6 +35,9 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 	private val validator: SpaceSessionValidator,
 	featureFlagsRepository: SpaceFeatureFlagsRepository,
 ) : ViewModel() {
+	private val saveMutex = Mutex()
+	private val saveGeneration = AtomicLong(0L)
+	private val latestSaveGeneration = ConcurrentHashMap<SpaceId, Long>()
 
 	private val mutableUiState = MutableStateFlow(
 		SpaceNavigationSessionUiState(
@@ -51,10 +58,17 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 
 	fun save(snapshot: SpaceSessionSnapshot) {
 		if (!uiState.value.enabled || !uiState.value.restorationReady) return
+		val generation = saveGeneration.incrementAndGet()
+		latestSaveGeneration[snapshot.spaceId] = generation
 		viewModelScope.launch {
-			runCatching { repository.save(snapshot) }.onSuccess {
-				mutableUiState.update { state ->
-					state.copy(sessions = state.sessions + (snapshot.spaceId to snapshot))
+			saveMutex.withLock {
+				if (latestSaveGeneration[snapshot.spaceId] != generation) return@withLock
+				runCatching { repository.save(snapshot) }.onSuccess {
+					if (latestSaveGeneration[snapshot.spaceId] == generation) {
+						mutableUiState.update { state ->
+							state.copy(sessions = state.sessions + (snapshot.spaceId to snapshot))
+						}
+					}
 				}
 			}
 		}
@@ -62,6 +76,7 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 
 	private suspend fun onEnabledChanged(enabled: Boolean) {
 		if (!enabled) {
+			latestSaveGeneration.clear()
 			mutableUiState.value = SpaceNavigationSessionUiState()
 			return
 		}

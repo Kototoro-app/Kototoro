@@ -1,13 +1,15 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import android.app.Activity
+import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedContent
 import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -62,6 +64,7 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -69,6 +72,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -98,6 +102,8 @@ import org.skepsun.kototoro.core.util.FoldableUtils
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavHostController
+import androidx.lifecycle.Lifecycle
 import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -162,6 +168,22 @@ import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.space.ui.SpaceMotion
+import org.skepsun.kototoro.space.ui.SpaceMotionMode
+
+private const val SpaceFabTraceTag = "SpaceFabTrace"
+
+private inline fun traceSpaceFab(message: () -> String) {
+    if (BuildConfig.DEBUG) {
+        Log.d(SpaceFabTraceTag, message())
+    }
+}
+
+private suspend fun NavHostController.awaitCurrentEntryResumed() {
+    val entry = currentBackStackEntryFlow.first()
+    entry.lifecycle.currentStateFlow.first { state ->
+        state.isAtLeast(Lifecycle.State.RESUMED)
+    }
+}
 
 @Immutable
 private data class KototoroNavigationPrefs(
@@ -458,6 +480,9 @@ fun KototoroApp(
     var isDetailsChromeTransitionPending by rememberSaveable { mutableStateOf(false) }
     var detailsBottomPanelExpansion by remember { mutableFloatStateOf(0f) }
     var detailsBottomObstruction by remember { mutableStateOf(0.dp) }
+    var mainSpaceSwitcherFabBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var canMeasureMainSpaceSwitcherFab by remember { mutableStateOf(true) }
+    var rootContentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var keepTabsExpandedByScrollDirection by rememberSaveable { mutableStateOf(false) }
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
     val routeContextualMenuActions = remember { mutableStateMapOf<String, List<KototoroTopBarMenuAction>>() }
@@ -541,6 +566,10 @@ fun KototoroApp(
         activeSpaceId = spaceUiState.activeSpaceId,
         persistentNavigationEnabled = spaceUiState.persistentNavigationEnabled,
     )
+    var mainSpaceSwitcherFabMeasurementSpaceId by remember { mutableStateOf(navigationSpaceId) }
+    var mainSpaceSwitcherFabCandidate by remember {
+        mutableStateOf<Pair<SpaceId, androidx.compose.ui.geometry.Rect>?>(null)
+    }
     val activeNavigationState = spaceNavigationStates[navigationSpaceId]
     val mainNavState = activeNavigationState.mainNavState
     val navController = activeNavigationState.navController
@@ -670,19 +699,27 @@ fun KototoroApp(
             rootRestoredSpaceIds[navigationSpaceId] = true
             return@LaunchedEffect
         }
-        navController.currentBackStackEntryFlow.first()
+        navController.awaitCurrentEntryResumed()
         if (navController.previousBackStackEntry == null) {
             val selectedTopLevel = topLevelKeyForRouteOwnerKey(session.selectedTopLevel) ?: HomeNavKey
-            if (topLevelKeyForDestination(navController.currentDestination) != selectedTopLevel) {
+            if (
+                navController.currentDestination?.hasRoute<MainShellRoute>() != true &&
+                topLevelKeyForDestination(navController.currentDestination) != selectedTopLevel
+            ) {
                 navController.navigate(routeForTopLevelKey(selectedTopLevel)) {
                     launchSingleTop = true
                 }
+                navController.awaitCurrentEntryResumed()
             }
             session.stacks[session.selectedTopLevel].orEmpty().drop(1).forEach { route ->
                 when (route) {
                     is SpaceRouteSnapshot.TopLevel -> Unit
-                    is SpaceRouteSnapshot.ContentList -> navController.navigate(ContentListRoute(route.sourceName))
+                    is SpaceRouteSnapshot.ContentList -> {
+                        navController.awaitCurrentEntryResumed()
+                        navController.navigate(ContentListRoute(route.sourceName))
+                    }
                     is SpaceRouteSnapshot.WorkDetails -> {
+                        navController.awaitCurrentEntryResumed()
                         org.skepsun.kototoro.core.nav.PendingDetailsNavigation.set(
                             org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
                                 entityId = route.entityId,
@@ -703,6 +740,41 @@ fun KototoroApp(
     val isContentListRoute = currentDestination?.hasRoute<ContentListRoute>() == true
     val isImmersiveRoute = isDetailsRoute || isContentListRoute
     val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
+    LaunchedEffect(shouldShowChrome, navigationSpaceId, isLandscapeNavigation) {
+        traceSpaceFab {
+            "space changed space=${navigationSpaceId.value} chrome=$shouldShowChrome landscape=$isLandscapeNavigation " +
+                "bottomOffset=$bottomNavOffset anchor=$mainSpaceSwitcherFabBounds"
+        }
+        when {
+            isLandscapeNavigation -> {
+                canMeasureMainSpaceSwitcherFab = false
+                mainSpaceSwitcherFabBounds = null
+                mainSpaceSwitcherFabMeasurementSpaceId = navigationSpaceId
+            }
+            !shouldShowChrome -> canMeasureMainSpaceSwitcherFab = false
+            mainSpaceSwitcherFabBounds == null -> {
+                mainSpaceSwitcherFabMeasurementSpaceId = navigationSpaceId
+                canMeasureMainSpaceSwitcherFab = true
+            }
+            else -> {
+                canMeasureMainSpaceSwitcherFab = false
+                delay(MainNavigationMotion.DetailsRouteSlideMillis.toLong())
+                mainSpaceSwitcherFabMeasurementSpaceId = navigationSpaceId
+                canMeasureMainSpaceSwitcherFab = true
+            }
+        }
+    }
+    LaunchedEffect(mainSpaceSwitcherFabCandidate, navigationSpaceId) {
+        val candidate = mainSpaceSwitcherFabCandidate ?: return@LaunchedEffect
+        if (candidate.first != navigationSpaceId) return@LaunchedEffect
+        delay(64L)
+        if (mainSpaceSwitcherFabCandidate == candidate && candidate.first == navigationSpaceId) {
+            traceSpaceFab {
+                "anchor committed space=${navigationSpaceId.value} bounds=${candidate.second}"
+            }
+            mainSpaceSwitcherFabBounds = candidate.second
+        }
+    }
     val currentTopLevelKey = topLevelKeyForDestination(currentDestination)
         ?: if (shouldShowChrome) mainNavState.selectedTopLevel else null
     val currentTopBarOwnerKey = routeOwnerKeyForTopLevelKey(currentTopLevelKey)
@@ -744,20 +816,18 @@ fun KototoroApp(
             isDetailsChromeTransitionPending = false
         }
         when {
-            isImmersiveRoute -> {
-                pendingChromeRestoreFromDetails = true
-                if (!isDetailsChromeTransitionPending) {
-                    isChromeVisible = false
-                    return@LaunchedEffect
-                }
-                isChromeVisible = true
-                delay(MainNavigationMotion.ChromeEnterExitDelayMillis)
-                isChromeVisible = false
-                isDetailsChromeTransitionPending = false
-            }
             shouldHideChromeForEnteringDetails -> {
                 isChromeVisible = false
                 pendingChromeRestoreFromDetails = false
+            }
+            isImmersiveRoute -> {
+                pendingChromeRestoreFromDetails = true
+                isChromeVisible = false
+                if (!isDetailsChromeTransitionPending) {
+                    return@LaunchedEffect
+                }
+                delay(MainNavigationMotion.ChromeEnterExitDelayMillis)
+                isDetailsChromeTransitionPending = false
             }
             !shouldShowChrome -> {
                 isChromeVisible = false
@@ -1149,10 +1219,30 @@ fun KototoroApp(
                         railHeaderContent = null,
                         adjacentAction = if (spaceUiState.switcherEnabled && !isLandscapeNavigation) {
                             {
-                                SpaceSwitcherFab(
-                                    activeSpaceId = spaceUiState.activeSpaceId,
-                                    expanded = false,
-                                    onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                                Box(
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .onGloballyPositioned { coordinates ->
+                                            if (
+                                                canMeasureMainSpaceSwitcherFab &&
+                                                shouldShowChrome &&
+                                                mainSpaceSwitcherFabMeasurementSpaceId == navigationSpaceId
+                                            ) {
+                                                val bounds = coordinates.boundsInRoot()
+                                                val normalizedBounds = bounds.copy(
+                                                    top = bounds.top - effectiveBottomNavOffset,
+                                                    bottom = bounds.bottom - effectiveBottomNavOffset,
+                                                )
+                                                val candidate = navigationSpaceId to normalizedBounds
+                                                if (mainSpaceSwitcherFabCandidate != candidate) {
+                                                    traceSpaceFab {
+                                                        "anchor candidate space=${navigationSpaceId.value} raw=$bounds " +
+                                                            "bottomOffset=$effectiveBottomNavOffset normalized=$normalizedBounds"
+                                                    }
+                                                    mainSpaceSwitcherFabCandidate = candidate
+                                                }
+                                            }
+                                        },
                                 )
                             }
                         } else {
@@ -1160,20 +1250,15 @@ fun KototoroApp(
                         },
                     )
                 }
-                SpaceSwitcherSheet(
-                    state = spaceUiState,
-                    onAction = onSpaceAction,
-                    resumeItems = spaceResumeUiState.items,
-                    onResume = onSpaceResume,
-                    mediaUniverseState = mediaUniverseUiState,
-                    onMediaUniverseContentClick = onMediaUniverseContentClick,
-                )
             }
             Box(modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .nestedScroll(nestedScrollConnection)
+                .onGloballyPositioned { coordinates ->
+                    rootContentBounds = coordinates.boundsInRoot()
+                }
                 .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
                 SharedTransitionLayout {
                     SideEffect {
@@ -1265,48 +1350,98 @@ fun KototoroApp(
                                                 }
                                             }
                                         },
+                                        mainShellChrome = {
+                                            if (renderedSpaceId == navigationSpaceId) {
+                                                mainShellChrome()
+                                            }
+                                        },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
                             }
                         }
-                        if (spaceUiState.persistentNavigationEnabled) {
-                            AnimatedContent(
-                                targetState = navigationSpaceId,
-                                transitionSpec = { SpaceMotion.contentTransform(spaceMotionMode) },
-                                contentKey = SpaceId::value,
-                                label = "space_content",
-                            ) { renderedSpaceId ->
-                                renderSpaceNavigation(renderedSpaceId)
-                            }
-                        } else {
+                        if (!spaceNavigationSessionUiState.enabled || isActiveSpaceRestored) {
                             renderSpaceNavigation(navigationSpaceId)
                         }
                     }
                 }
-                mainShellChrome()
+                val spaceSwitcherFabSize = 56.dp
+                val spaceSwitcherFabBaseBottom = WindowInsets.safeDrawing
+                    .asPaddingValues()
+                    .calculateBottomPadding() + spaceSwitcherFabMargin
+                val rootBounds = rootContentBounds
+                val mainAnchorBounds = mainSpaceSwitcherFabBounds
+                val shouldAnchorSpaceSwitcherFabToMainChrome =
+                    shouldShowChrome && !isLandscapeNavigation
+                val spaceSwitcherFabTargetOffset = rootBounds?.let { bounds ->
+                    if (shouldAnchorSpaceSwitcherFabToMainChrome) {
+                        val anchorBounds = mainAnchorBounds ?: return@let null
+                        androidx.compose.ui.unit.IntOffset(
+                            x = (anchorBounds.left - bounds.left).roundToInt(),
+                            y = (anchorBounds.top - bounds.top).roundToInt(),
+                        )
+                    } else {
+                        val detailsLift = if (isDetailsRoute && !isLandscapeNavigation) {
+                            (detailsBottomObstruction + spaceSwitcherFabControlGap - spaceSwitcherFabBaseBottom)
+                                .coerceAtLeast(0.dp)
+                        } else {
+                            0.dp
+                        }
+                        androidx.compose.ui.unit.IntOffset(
+                            x = (bounds.width - with(density) {
+                                spaceSwitcherFabMargin.roundToPx() + spaceSwitcherFabSize.roundToPx()
+                            }).roundToInt(),
+                            y = (bounds.height - with(density) {
+                                spaceSwitcherFabBaseBottom.roundToPx() +
+                                    detailsLift.roundToPx() +
+                                    spaceSwitcherFabSize.roundToPx()
+                            }).roundToInt(),
+                        )
+                    }
+                }
+                LaunchedEffect(
+                    navigationSpaceId,
+                    currentDestinationRoute,
+                    spaceSwitcherFabTargetOffset,
+                ) {
+                    traceSpaceFab {
+                        "target changed space=${navigationSpaceId.value} route=$currentDestinationRoute " +
+                            "target=$spaceSwitcherFabTargetOffset anchor=$mainAnchorBounds root=$rootBounds"
+                    }
+                }
                 if (
                     spaceUiState.switcherEnabled &&
-                    (isImmersiveRoute || isSearchRoute || (isLandscapeNavigation && shouldShowChrome)) &&
+                    spaceSwitcherFabTargetOffset != null &&
+                    (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
                     (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
                 ) {
+                    val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
+                        targetValue = spaceSwitcherFabTargetOffset,
+                        animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
+                            tween(durationMillis = MainNavigationMotion.DetailsRouteSlideMillis)
+                        } else {
+                            snap()
+                        },
+                        label = "space_switcher_fab_position",
+                    )
                     SpaceSwitcherFab(
                         activeSpaceId = spaceUiState.activeSpaceId,
-                        expanded = true,
+                        expanded = false,
                         onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(
-                                end = spaceSwitcherFabMargin,
-                                bottom = if (isDetailsRoute && !isLandscapeNavigation) {
-                                    detailsBottomObstruction + spaceSwitcherFabControlGap
-                                } else {
-                                    WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding() +
-                                        spaceSwitcherFabMargin
-                                },
-                            ),
+                            .align(Alignment.TopStart)
+                            .offset { animatedSpaceSwitcherFabOffset }
+                            .size(spaceSwitcherFabSize),
                     )
                 }
+                SpaceSwitcherSheet(
+                    state = spaceUiState,
+                    onAction = onSpaceAction,
+                    resumeItems = spaceResumeUiState.items,
+                    onResume = onSpaceResume,
+                    mediaUniverseState = mediaUniverseUiState,
+                    onMediaUniverseContentClick = onMediaUniverseContentClick,
+                )
 
                 if (isSearchOverlayMounted) {
                     KototoroSearchOverlay(

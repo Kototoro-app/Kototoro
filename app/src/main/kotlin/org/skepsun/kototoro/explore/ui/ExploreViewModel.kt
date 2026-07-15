@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.explore.ui
 
+import android.util.Log
 import androidx.collection.LongSet
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,8 +12,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
@@ -44,6 +47,21 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import javax.inject.Inject
+
+private const val ExploreViewModelTraceTag = "ExploreViewModelTrace"
+
+private inline fun traceExploreViewModel(message: () -> String) {
+	if (BuildConfig.DEBUG) {
+		Log.d(ExploreViewModelTraceTag, message())
+	}
+}
+
+private fun <T> Flow<T>.traceExploreInput(
+	name: String,
+	summary: (T) -> String,
+): Flow<T> = onEach { value ->
+	traceExploreViewModel { "input $name ${summary(value)}" }
+}
 
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
@@ -112,11 +130,17 @@ class ExploreViewModel @Inject constructor(
 	 */
 	val isSourceFilterVisible: StateFlow<Boolean> = MutableStateFlow(true)
 
-	val content: StateFlow<List<ListModel>> = isLoading.flatMapLatest { loading: Boolean ->
+	val content: StateFlow<List<ListModel>> = isLoading
+		.traceExploreInput("isLoading") { "value=$it" }
+		.flatMapLatest { loading: Boolean ->
 		if (loading) {
 			flowOf<List<ListModel>>(getLoadingStateList())
 		} else {
 			createContentFlow()
+		}
+	}.onEach { models ->
+		traceExploreViewModel {
+			"content emitted models=${models.size} loadingOnly=${models.size == 1 && models.firstOrNull() is LoadingState}"
 		}
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, getLoadingStateList())
 	
@@ -140,6 +164,10 @@ class ExploreViewModel @Inject constructor(
 	fun getSelectedGroupTab(): BrowseGroupTab = currentGroupTab.value
 
 	init {
+		traceExploreViewModel {
+			"created groupTab=${currentGroupTab.value} grid=${isGrid.value} allEnabled=${isAllSourcesEnabled.value} " +
+				"activePreset=${settings.activeSourcePresetId}"
+		}
 		launchJob(Dispatchers.Default) {
 			if (!settings.isSuggestionsEnabled && settings.isTipEnabled(TIP_SUGGESTIONS)) {
 				onShowSuggestionsTip.call(Unit)
@@ -206,22 +234,26 @@ class ExploreViewModel @Inject constructor(
 	}
 
 	private fun createContentFlow() = kotlinx.coroutines.flow.combine(
-			sourcesRepository.observeEnabledBrowseSources(),
-			isGrid,
-			isAllSourcesEnabled,
-			sourcesRepository.observeHasNewSourcesForBadge(),
-			currentGroupTab,
-			currentSourceTags,
+			sourcesRepository.observeEnabledBrowseSources()
+				.traceExploreInput("sources") { "size=${it.size}" },
+			isGrid.traceExploreInput("grid") { "value=$it" },
+			isAllSourcesEnabled.traceExploreInput("allEnabled") { "value=$it" },
+			sourcesRepository.observeHasNewSourcesForBadge()
+				.traceExploreInput("badge") { "value=$it" },
+			currentGroupTab.traceExploreInput("groupTab") { "value=$it" },
+			currentSourceTags.traceExploreInput("sourceTags") { "size=${it.size} values=$it" },
 			settings.observeAsStateFlow(
 				key = AppSettings.KEY_SOURCES_GROUPED_BY_LANGUAGE,
 				scope = viewModelScope + Dispatchers.IO,
 				valueProducer = { isSourcesGroupedByLanguage },
-			),
+			).traceExploreInput("grouped") { "value=$it" },
 			settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
+				.traceExploreInput("presetId") { "value=$it" }
 				.flatMapLatest { id ->
 					if (id == -1L) flowOf(null)
 					else sourcePresetsRepository.observe(id)
 				}
+				.traceExploreInput("preset") { "value=${it?.id ?: "none"}" }
 		) { values: Array<Any?> ->
 			@Suppress("UNCHECKED_CAST")
 			buildList(
@@ -234,6 +266,8 @@ class ExploreViewModel @Inject constructor(
 				values[6] as Boolean,
 				values[7] as? org.skepsun.kototoro.explore.data.SourcePreset,
 			)
+		}.onEach { models ->
+			traceExploreViewModel { "combined models=${models.size}" }
 		}.withErrorHandling()
 
 	private fun buildList(

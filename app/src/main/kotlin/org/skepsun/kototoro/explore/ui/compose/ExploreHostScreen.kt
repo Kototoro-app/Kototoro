@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -90,6 +91,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
@@ -139,8 +141,14 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import java.util.Locale
 
 private const val BrowseLoadMoreBuffer = 4
-private const val ExploreHeroScrollLogTag = "ExploreHeroScroll"
+private const val ExploreRouteTraceTag = "ExploreRouteTrace"
 private val BrowseHeroContentOverlap = 56.dp
+
+private inline fun traceExploreRoute(message: () -> String) {
+    if (BuildConfig.DEBUG) {
+        Log.d(ExploreRouteTraceTag, message())
+    }
+}
 
 private data class SourceQuickAccessMetrics(
     val preferredColumns: Int,
@@ -372,6 +380,14 @@ fun KototoroExploreHostRoute(
         heroItems.isNotEmpty() ||
         showcaseRows.isNotEmpty() ||
         popularItems.isNotEmpty()
+    val currentSourceTrace by rememberUpdatedState(sourceItems.size to sources.size)
+    LaunchedEffect(sourceItems, discoverItems, isDiscoverLoading) {
+        traceExploreRoute {
+            "content emitted lifecycle=${lifecycleOwner.lifecycle.currentState} " +
+                "sourceModels=${sourceItems.size} sources=${sources.size} sourceLoading=$isSourcesLoadingOnly " +
+                "discoverModels=${discoverItems.size} discoverLoading=$isDiscoverLoading"
+        }
+    }
     val heroOverlapDp = if (shouldShowBrowseHero && (sources.isNotEmpty() || isSourcesLoadingOnly)) {
         BrowseHeroContentOverlap
     } else {
@@ -502,25 +518,19 @@ fun KototoroExploreHostRoute(
     }
 
     DisposableEffect(lifecycleOwner) {
+        traceExploreRoute { "route mounted lifecycle=${lifecycleOwner.lifecycle.currentState}" }
         val observer = LifecycleEventObserver { _, event ->
+            traceExploreRoute {
+                val (sourceModelCount, sourceCount) = currentSourceTrace
+                "lifecycle event=$event state=${lifecycleOwner.lifecycle.currentState} " +
+                    "sourceModels=$sourceModelCount sources=$sourceCount"
+            }
             when (event) {
                 Lifecycle.Event.ON_PAUSE,
                 Lifecycle.Event.ON_STOP -> {
-                    Log.d(
-                        ExploreHeroScrollLogTag,
-                        "lifecycle $event before index=${listState.firstVisibleItemIndex} " +
-                            "offset=${listState.firstVisibleItemScrollOffset} saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                            "shouldRestore=$shouldRestoreBrowseScroll hasLeft=$hasLeftBrowse canRestore=$canRestoreBrowseScroll " +
-                            "ready=$isBrowseContentReady hero=$shouldShowBrowseHero heroPx=$heroPx heroHeight=$heroHeightDp",
-                    )
                     if (shouldRestoreBrowseScroll) {
                         hasLeftBrowse = true
                         canRestoreBrowseScroll = false
-                        Log.d(
-                            ExploreHeroScrollLogTag,
-                            "lifecycle $event keep pending restore saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                                "hasLeft=$hasLeftBrowse canRestore=$canRestoreBrowseScroll",
-                        )
                         return@LifecycleEventObserver
                     }
                     val index = listState.firstVisibleItemIndex
@@ -536,26 +546,11 @@ fun KototoroExploreHostRoute(
                     }
                     hasLeftBrowse = true
                     canRestoreBrowseScroll = false
-                    Log.d(
-                        ExploreHeroScrollLogTag,
-                        "lifecycle $event saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                            "shouldRestore=$shouldRestoreBrowseScroll hasLeft=$hasLeftBrowse canRestore=$canRestoreBrowseScroll",
-                    )
                 }
                 Lifecycle.Event.ON_START,
                 Lifecycle.Event.ON_RESUME -> {
-                    Log.d(
-                        ExploreHeroScrollLogTag,
-                        "lifecycle $event before shouldRestore=$shouldRestoreBrowseScroll hasLeft=$hasLeftBrowse " +
-                            "canRestore=$canRestoreBrowseScroll saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                            "current=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset} ready=$isBrowseContentReady",
-                    )
                     if (shouldRestoreBrowseScroll && hasLeftBrowse) {
                         canRestoreBrowseScroll = true
-                        Log.d(
-                            ExploreHeroScrollLogTag,
-                            "lifecycle $event enable restore saved=$savedBrowseListIndex/$savedBrowseListOffset",
-                        )
                     }
                 }
                 else -> Unit
@@ -563,49 +558,12 @@ fun KototoroExploreHostRoute(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            traceExploreRoute { "route disposed lifecycle=${lifecycleOwner.lifecycle.currentState}" }
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
     val currentDiscoverLoading = androidx.compose.runtime.rememberUpdatedState(isDiscoverLoading)
-
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .distinctUntilChanged()
-            .collect { (index, offset) ->
-                val isAtTop = index == 0 && offset == 0
-                val hasSavedScroll = savedBrowseListIndex != 0 || savedBrowseListOffset != 0
-                Log.d(
-                    ExploreHeroScrollLogTag,
-                    "snapshot current=$index/$offset saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                        "isAtTop=$isAtTop hasSaved=$hasSavedScroll shouldRestore=$shouldRestoreBrowseScroll " +
-                        "hasLeft=$hasLeftBrowse canRestore=$canRestoreBrowseScroll ready=$isBrowseContentReady",
-                )
-                if (isAtTop && !canRestoreBrowseScroll && !shouldRestoreBrowseScroll) {
-                    savedBrowseListIndex = 0
-                    savedBrowseListOffset = 0
-                    shouldRestoreBrowseScroll = false
-                    hasLeftBrowse = false
-                    Log.d(
-                        ExploreHeroScrollLogTag,
-                        "snapshot cleared top state saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                            "shouldRestore=$shouldRestoreBrowseScroll hasLeft=$hasLeftBrowse",
-                    )
-                } else if (!(shouldRestoreBrowseScroll && hasSavedScroll && isAtTop)) {
-                    savedBrowseListIndex = index
-                    savedBrowseListOffset = offset
-                    Log.d(
-                        ExploreHeroScrollLogTag,
-                        "snapshot saved current position saved=$savedBrowseListIndex/$savedBrowseListOffset",
-                    )
-                } else {
-                    Log.d(
-                        ExploreHeroScrollLogTag,
-                        "snapshot kept pending restore saved=$savedBrowseListIndex/$savedBrowseListOffset",
-                    )
-                }
-            }
-    }
 
     LaunchedEffect(
         isBrowseContentReady,
@@ -616,12 +574,6 @@ fun KototoroExploreHostRoute(
         shouldShowBrowseHero,
     ) {
         if (!shouldRestoreBrowseScroll || !canRestoreBrowseScroll || !isBrowseContentReady) {
-            Log.d(
-                ExploreHeroScrollLogTag,
-                "restore skipped shouldRestore=$shouldRestoreBrowseScroll canRestore=$canRestoreBrowseScroll " +
-                    "ready=$isBrowseContentReady saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                    "current=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
-            )
             return@LaunchedEffect
         }
         if (savedBrowseListIndex == 0 &&
@@ -629,58 +581,29 @@ fun KototoroExploreHostRoute(
             isBrowseTrackingRecommendationsEnabled &&
             !shouldShowBrowseHero
         ) {
-            Log.d(
-                ExploreHeroScrollLogTag,
-                "restore waiting for hero before top restore saved=0/0 " +
-                    "ready=$isBrowseContentReady hero=$shouldShowBrowseHero heroPx=$heroPx current=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
-            )
             return@LaunchedEffect
         }
         val targetIndex = savedBrowseListIndex.coerceAtLeast(0)
-        Log.d(
-            ExploreHeroScrollLogTag,
-            "restore waiting target=$targetIndex offset=$savedBrowseListOffset " +
-                "totalNow=${listState.layoutInfo.totalItemsCount} hero=$shouldShowBrowseHero heroPx=$heroPx heroHeight=$heroHeightDp",
-        )
         val totalItems = snapshotFlow { listState.layoutInfo.totalItemsCount }
             .filter { it > targetIndex }
             .first()
-        Log.d(
-            ExploreHeroScrollLogTag,
-            "restore scrollToItem target=$targetIndex/${savedBrowseListOffset} total=$totalItems " +
-                "before=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
-        )
         val restoreIndex = targetIndex.coerceAtMost(totalItems - 1)
         val restoreOffset = savedBrowseListOffset
-        repeat(if (restoreIndex == 0 && restoreOffset == 0) 3 else 1) { attempt ->
+        repeat(if (restoreIndex == 0 && restoreOffset == 0) 3 else 1) {
             listState.scrollToItem(
                 index = restoreIndex,
                 scrollOffset = restoreOffset,
             )
             yield()
-            Log.d(
-                ExploreHeroScrollLogTag,
-                "restore attempt=$attempt requested=$restoreIndex/$restoreOffset " +
-                    "afterYield=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
-            )
             if (listState.firstVisibleItemIndex == restoreIndex &&
                 listState.firstVisibleItemScrollOffset == restoreOffset
             ) {
                 return@repeat
             }
         }
-        Log.d(
-            ExploreHeroScrollLogTag,
-            "restore applied after=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
-        )
         if (listState.firstVisibleItemIndex != restoreIndex ||
             listState.firstVisibleItemScrollOffset != restoreOffset
         ) {
-            Log.d(
-                ExploreHeroScrollLogTag,
-                "restore keep pending requested=$restoreIndex/$restoreOffset " +
-                    "actual=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset}",
-            )
             return@LaunchedEffect
         }
         shouldRestoreBrowseScroll = false
@@ -689,12 +612,6 @@ fun KototoroExploreHostRoute(
     }
 
     LaunchedEffect(listState, query, popularItems.size) {
-        Log.d(
-            ExploreHeroScrollLogTag,
-            "loadMoreEffect start queryBlank=${query.isBlank()} popular=${popularItems.size} " +
-                "showcase=${showcaseRows.size} sources=${sources.size} hero=$shouldShowBrowseHero " +
-                "total=${listState.layoutInfo.totalItemsCount} loading=$isDiscoverLoading",
-        )
         if (query.isNotBlank() || popularItems.isEmpty()) {
             return@LaunchedEffect
         }
@@ -711,12 +628,6 @@ fun KototoroExploreHostRoute(
         shouldRestoreBrowseScroll = true
         hasLeftBrowse = false
         canRestoreBrowseScroll = false
-        Log.d(
-            ExploreHeroScrollLogTag,
-            "markDetailsNavigation saved=$savedBrowseListIndex/$savedBrowseListOffset " +
-                "hero=$shouldShowBrowseHero heroPx=$heroPx heroHeight=$heroHeightDp ready=$isBrowseContentReady " +
-                "items=${listState.layoutInfo.totalItemsCount}",
-        )
     }
 
     KototoroPullToRefreshBox(
@@ -964,16 +875,7 @@ private suspend fun LazyListState.maybeTriggerBrowseLoadMore(
         .distinctUntilChanged()
         .collect { lastVisibleIndex: Int? ->
             val loading = isLoading()
-            Log.d(
-                ExploreHeroScrollLogTag,
-                "loadMoreCheck last=$lastVisibleIndex itemCount=$itemCount " +
-                    "threshold=${itemCount - BrowseLoadMoreBuffer} total=${layoutInfo.totalItemsCount} loading=$loading",
-            )
             if (lastVisibleIndex != null && !loading && lastVisibleIndex >= itemCount - BrowseLoadMoreBuffer) {
-                Log.d(
-                    ExploreHeroScrollLogTag,
-                    "loadMoreTrigger last=$lastVisibleIndex itemCount=$itemCount total=${layoutInfo.totalItemsCount}",
-                )
                 onLoadMore()
             }
         }
