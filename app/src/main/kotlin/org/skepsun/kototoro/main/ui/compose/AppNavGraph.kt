@@ -68,6 +68,7 @@ import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
+import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
@@ -99,6 +100,7 @@ import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
 import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
+import org.skepsun.kototoro.remotelist.ui.ContentListSourceGateViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
@@ -540,25 +542,36 @@ fun AppNavGraph(
             val route = backStackEntry.toRoute<ContentListRoute>()
             val pendingFilter = remember(route.sourceName) { PendingContentListNavigation.consumeFilter() }
             val pendingSortOrder = remember(route.sourceName) { PendingContentListNavigation.consumeSortOrder() }
-            val viewModel = hiltViewModel<RemoteListViewModel>()
-            LaunchedEffect(viewModel, pendingFilter, pendingSortOrder) {
-                pendingSortOrder?.let(viewModel.filterCoordinator::setSortOrder)
-                pendingFilter?.let(viewModel.filterCoordinator::setAdjusted)
-            }
+            val sourceGateViewModel = hiltViewModel<ContentListSourceGateViewModel>()
+            val isSourceResolutionReady by sourceGateViewModel.isResolutionReady.collectAsStateWithLifecycle()
             BackHandler {
                 mainNavigator.pop()
             }
-            CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                AppSearchContentListRoute(
-                    appRouter = appRouter,
-                    onBackClick = { mainNavigator.pop() },
-                    activeSpaceId = null,
-                    onSpaceSwitcherClick = {},
-                    onOpenDetails = { content, sharedElementKey ->
-                        navigateToDetailsWithContent(content, sharedElementKey)
-                    },
-                    viewModel = viewModel,
-                )
+            if (isSourceResolutionReady) {
+                val viewModel = hiltViewModel<RemoteListViewModel>()
+                LaunchedEffect(viewModel, pendingFilter, pendingSortOrder) {
+                    pendingSortOrder?.let(viewModel.filterCoordinator::setSortOrder)
+                    pendingFilter?.let(viewModel.filterCoordinator::setAdjusted)
+                }
+                CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                    AppSearchContentListRoute(
+                        appRouter = appRouter,
+                        onBackClick = { mainNavigator.pop() },
+                        activeSpaceId = null,
+                        onSpaceSwitcherClick = {},
+                        onOpenDetails = { content, sharedElementKey ->
+                            navigateToDetailsWithContent(content, sharedElementKey)
+                        },
+                        viewModel = viewModel,
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    KototoroLoadingIndicator()
+                }
             }
         }
 

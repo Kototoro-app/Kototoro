@@ -354,9 +354,13 @@ class AppRouter private constructor(
 		)
 	}
 
-	fun openReader(manga: Content, anchor: View? = null) {
+	fun openReader(
+		manga: Content,
+		anchor: View? = null,
+		contentTypeOverride: ContentType? = null,
+	) {
 		val source = manga.source.unwrap()
-        val contentType = if (manga.looksLikeLocalVideoContent()) {
+        val contentType = contentTypeOverride ?: if (manga.looksLikeLocalVideoContent()) {
             ContentType.VIDEO
         } else {
             getContentType(source)

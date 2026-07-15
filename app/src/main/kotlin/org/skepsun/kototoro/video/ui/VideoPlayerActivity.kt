@@ -12,6 +12,7 @@ import android.os.Build
 import android.view.Gravity
 import androidx.core.view.isVisible
 import androidx.core.view.doOnLayout
+import androidx.core.view.doOnNextLayout
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import androidx.core.view.WindowInsetsCompat
@@ -2020,16 +2021,23 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             onPositioned()
             return
         }
+        val controlBar = controller.findViewById<View>(R.id.toolbar_docked)
+        if (controlBar == null) {
+            onPositioned()
+            return
+        }
         val updatePosition = {
             fab.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
-                bottomMargin = controller.height + resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
+                bottomMargin = controlBar.height +
+                    resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
             }
+            fab.bringToFront()
             onPositioned()
         }
-        if (controller.isLaidOut && controller.height > 0) {
+        if (controlBar.isLaidOut && controlBar.height > 0) {
             updatePosition()
         } else {
-            controller.doOnLayout { updatePosition() }
+            controlBar.doOnLayout { updatePosition() }
         }
     }
 
@@ -4300,6 +4308,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             mandatoryGestureInsets.bottom,
             cutoutInsets.bottom,
         )
+        findViewById<View>(R.id.immersive_space_switcher_fab)
+            ?.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
+                marginEnd = bars.right +
+                    resources.getDimensionPixelSize(R.dimen.space_switcher_fab_margin)
+            }
         // 顶部工具栏容器：使用外边距对齐系统栏高度，避免整体内容（如次级工具栏）侵入状态栏
         viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_container)?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             leftMargin = bars.left
@@ -4326,6 +4339,13 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 bottomMargin = 0
             }
             dockedToolbar?.updatePadding(bottom = bottomSafeInset)
+        }
+        viewBinding.root.doOnNextLayout {
+            updateSpaceSwitcherFabPosition(
+                controller = currentController(),
+                controlsVisible = playerUiState == PlayerUiState.ControlsVisible,
+                onPositioned = {},
+            )
         }
         // PlayerView 内容保持与左右系统栏对齐，底部不再额外内边距，避免与 DockedToolbar 重叠留白
         findViewById<View>(org.skepsun.kototoro.R.id.player_view).updatePadding(

@@ -503,8 +503,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             )
         }
 
-        spaceResumeViewModel.onOpenReader.observeEvent(this) { content ->
-            router.openReader(content)
+        spaceResumeViewModel.onOpenReader.observeEvent(this) { request ->
+            router.openReader(request.content, contentTypeOverride = request.contentType)
         }
         viewModel.onOpenReader.observeEvent(this) { content ->
             router.openReader(content)

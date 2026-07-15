@@ -31,6 +31,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
+import org.skepsun.kototoro.space.domain.SpaceKind
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import javax.inject.Inject
 
@@ -43,6 +44,11 @@ data class SpaceResumeItem(
 
 data class SpaceResumeUiState(
 	val items: Map<SpaceId, SpaceResumeItem> = emptyMap(),
+)
+
+data class SpaceResumeRequest(
+	val content: Content,
+	val contentType: ContentType?,
 )
 
 @Reusable
@@ -86,9 +92,10 @@ class SpaceResumeStateSource @Inject constructor(
 class SpaceResumeViewModel @Inject constructor(
 	stateSource: SpaceResumeStateSource,
 	private val spaceRepository: SpaceRepository,
+	private val catalogRepository: SpaceCatalogRepository,
 ) : BaseViewModel() {
 
-	val onOpenReader = MutableEventFlow<Content>()
+	val onOpenReader = MutableEventFlow<SpaceResumeRequest>()
 
 	val uiState = stateSource.observe().stateIn(
 		scope = viewModelScope + Dispatchers.Default,
@@ -106,7 +113,12 @@ class SpaceResumeViewModel @Inject constructor(
 				}
 				?: return@launchLoadingJob
 			spaceRepository.activate(spaceId)
-			onOpenReader.call(item.content.normalizeLocalVideoSource())
+			onOpenReader.call(
+				SpaceResumeRequest(
+					content = item.content.normalizeLocalVideoSource(),
+					contentType = catalogRepository.find(spaceId)?.kind?.toContentType(),
+				),
+			)
 		}
 	}
 
@@ -123,6 +135,12 @@ class SpaceResumeViewModel @Inject constructor(
 			},
 		)
 	}
+}
+
+private fun SpaceKind.toContentType(): ContentType = when (this) {
+	SpaceKind.MANGA -> ContentType.MANGA
+	SpaceKind.NOVEL -> ContentType.NOVEL
+	SpaceKind.ANIME -> ContentType.VIDEO
 }
 
 internal fun buildSpaceResumeUiState(

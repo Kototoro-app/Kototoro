@@ -31,6 +31,7 @@ import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
+import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpaceResumeViewModelTest {
@@ -100,7 +101,7 @@ class SpaceResumeViewModelTest {
 
 	@Test
 	fun `resume activates target space before emitting content`() = runTest {
-		val content = content(3L, "Anime", ContentType.VIDEO)
+		val content = content(3L, "Anime", ContentType.MANGA)
 		val state = SpaceResumeUiState(
 			items = mapOf(
 				BuiltInSpaces.Anime to SpaceResumeItem(
@@ -115,17 +116,17 @@ class SpaceResumeViewModelTest {
 			every { observe() } returns flowOf(state)
 		}
 		val repository = RecordingSpaceRepository()
-		val viewModel = SpaceResumeViewModel(source, repository)
+		val viewModel = SpaceResumeViewModel(source, repository, TestSpaceCatalogRepository())
 
 		withContext(Dispatchers.Default) {
 			withTimeout(2_000) { viewModel.uiState.first { it == state } }
 		}
 		val opened = async(Dispatchers.Default) {
-			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().content() }
+			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().request() }
 		}
 		viewModel.resume(BuiltInSpaces.Anime)
 
-		opened.await() shouldBe content
+		opened.await() shouldBe SpaceResumeRequest(content, ContentType.VIDEO)
 		repository.activations shouldContainExactly listOf(BuiltInSpaces.Anime)
 	}
 
@@ -137,9 +138,9 @@ class SpaceResumeViewModelTest {
 			every { observe() } returns states
 		}
 		val repository = RecordingSpaceRepository()
-		val viewModel = SpaceResumeViewModel(source, repository)
+		val viewModel = SpaceResumeViewModel(source, repository, TestSpaceCatalogRepository())
 		val opened = async(Dispatchers.Default) {
-			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().content() }
+			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().request() }
 		}
 
 		viewModel.resume(BuiltInSpaces.Novel)
@@ -154,14 +155,14 @@ class SpaceResumeViewModelTest {
 			),
 		)
 
-		opened.await() shouldBe content
+		opened.await() shouldBe SpaceResumeRequest(content, ContentType.NOVEL)
 		repository.activations shouldContainExactly listOf(BuiltInSpaces.Novel)
 	}
 
-	private suspend fun Event<Content>.content(): Content {
-		var content: Content? = null
-		consume(FlowCollector { content = it })
-		return checkNotNull(content)
+	private suspend fun Event<SpaceResumeRequest>.request(): SpaceResumeRequest {
+		var request: SpaceResumeRequest? = null
+		consume(FlowCollector { request = it })
+		return checkNotNull(request)
 	}
 
 	private fun content(id: Long, title: String, type: ContentType): Content {
