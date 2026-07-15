@@ -9,6 +9,7 @@ import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -157,8 +160,9 @@ private fun WelcomeRoute(
 ) {
 	val locales by viewModel.locales.collectAsStateWithLifecycle()
 	val types by viewModel.types.collectAsStateWithLifecycle()
+	val spacesEnabled by viewModel.spacesEnabled.collectAsStateWithLifecycle()
 	val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
-	val pagerState = rememberPagerState(pageCount = { 2 })
+	val pagerState = rememberPagerState(pageCount = { 3 })
 	val scope = rememberCoroutineScope()
 	val selectedRepos = remember { mutableStateListOf(REPO_KOTOTORO, REPO_REDO) }
 	var selectedMirrorIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -168,7 +172,7 @@ private fun WelcomeRoute(
 	val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
 
 	BackHandler(enabled = pagerState.currentPage > 0 && !isInitializing) {
-		scope.launch { pagerState.animateScrollToPage(0) }
+		scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
 	}
 
 	CompositionLocalProvider(LocalHazeState provides hazeState) {
@@ -187,25 +191,32 @@ private fun WelcomeRoute(
 					.padding(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 112.dp),
 				verticalArrangement = Arrangement.spacedBy(18.dp),
 			) {
-				if (page == 0) {
-					WelcomeHero(expressive = expressive)
-					WelcomeSourcesStep(
-						mirrorEntries = mirrorEntries,
-						selectedMirrorIndex = selectedMirrorIndex,
-						onMirrorSelected = { selectedMirrorIndex = it },
-						selectedRepos = selectedRepos,
-						showAdvanced = showAdvanced,
-						onAdvancedToggle = { showAdvanced = !showAdvanced },
-						isInitializing = isInitializing,
-						onInitialize = { showDisclaimer = true },
-						onRestoreBackup = onRestoreBackup,
-					)
-				} else {
-					WelcomePreferencesStep(
+				when (page) {
+					0 -> {
+						WelcomeHero(expressive = expressive)
+						WelcomeSourcesStep(
+							mirrorEntries = mirrorEntries,
+							selectedMirrorIndex = selectedMirrorIndex,
+							onMirrorSelected = { selectedMirrorIndex = it },
+							selectedRepos = selectedRepos,
+							showAdvanced = showAdvanced,
+							onAdvancedToggle = { showAdvanced = !showAdvanced },
+							isInitializing = isInitializing,
+							onInitialize = { showDisclaimer = true },
+							onRestoreBackup = onRestoreBackup,
+						)
+					}
+
+					1 -> WelcomePreferencesStep(
 						locales = locales,
 						types = types,
 						onLocaleToggle = viewModel::setLocaleChecked,
 						onTypeToggle = viewModel::setTypeChecked,
+					)
+
+					else -> WelcomeSpacesStep(
+						spacesEnabled = spacesEnabled,
+						onSpacesEnabledChange = viewModel::setSpacesEnabled,
 					)
 				}
 			}
@@ -228,7 +239,7 @@ private fun WelcomeRoute(
 					verticalAlignment = Alignment.CenterVertically,
 				) {
 					Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-						repeat(2) { index ->
+						repeat(pagerState.pageCount) { index ->
 							Box(modifier = Modifier.size(width = 24.dp, height = 8.dp), contentAlignment = Alignment.Center) {
 								Surface(
 									shape = RoundedCornerShape(999.dp),
@@ -240,19 +251,27 @@ private fun WelcomeRoute(
 					}
 					Button(
 						onClick = {
-							if (pagerState.currentPage == 1) {
+							if (pagerState.currentPage == pagerState.pageCount - 1) {
 								onDone()
 							} else {
-								scope.launch { pagerState.animateScrollToPage(1) }
+								scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
 							}
 						},
 						enabled = !isInitializing,
 						modifier = Modifier.height(48.dp),
 					) {
-						Text(stringResource(if (pagerState.currentPage == 1) R.string.done else R.string.next))
+						Text(
+							stringResource(
+								if (pagerState.currentPage == pagerState.pageCount - 1) R.string.done else R.string.next,
+							),
+						)
 						Spacer(Modifier.width(8.dp))
 						Icon(
-							if (pagerState.currentPage == 1) Icons.Default.Done else Icons.AutoMirrored.Filled.ArrowForward,
+							if (pagerState.currentPage == pagerState.pageCount - 1) {
+								Icons.Default.Done
+							} else {
+								Icons.AutoMirrored.Filled.ArrowForward
+							},
 							contentDescription = null,
 							modifier = Modifier.size(18.dp),
 						)
@@ -391,6 +410,49 @@ private fun WelcomePreferencesStep(
 	)
 	if (locales.isLoading || types.isLoading) {
 		LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+	}
+}
+
+@Composable
+private fun WelcomeSpacesStep(
+	spacesEnabled: Boolean,
+	onSpacesEnabledChange: (Boolean) -> Unit,
+) {
+	SectionHeader(
+		title = stringResource(R.string.welcome_spaces_title),
+		summary = stringResource(R.string.welcome_spaces_summary),
+	)
+	Row(
+		modifier = Modifier
+			.fillMaxWidth()
+			.toggleable(
+				value = spacesEnabled,
+				role = Role.Switch,
+				onValueChange = onSpacesEnabledChange,
+			)
+			.padding(vertical = 8.dp),
+		verticalAlignment = Alignment.CenterVertically,
+		horizontalArrangement = Arrangement.spacedBy(16.dp),
+	) {
+		Column(
+			modifier = Modifier.weight(1f),
+			verticalArrangement = Arrangement.spacedBy(4.dp),
+		) {
+			Text(
+				text = stringResource(R.string.spaces_enabled),
+				style = MaterialTheme.typography.titleMedium,
+				color = MaterialTheme.colorScheme.onSurface,
+			)
+			Text(
+				text = stringResource(R.string.spaces_enabled_summary),
+				style = MaterialTheme.typography.bodyMedium,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+		Switch(
+			checked = spacesEnabled,
+			onCheckedChange = null,
+		)
 	}
 }
 

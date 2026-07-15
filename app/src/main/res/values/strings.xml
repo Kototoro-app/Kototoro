@@ -279,6 +279,8 @@
     <string name="welcome_plugin_repositories">Plugin repositories</string>
     <string name="welcome_plugin_acknowledge">I understand these third-party repositories are configured at my own risk.</string>
     <string name="welcome_preferences_summary">Choose languages and content types. You can change this later in source settings.</string>
+    <string name="welcome_spaces_title">Separate your spaces</string>
+    <string name="welcome_spaces_summary">Spaces give manga, novels, and anime independent navigation, browsing preferences, and reading or playback context. Advanced options and custom spaces are available later in Settings &gt; User &gt; Spaces.</string>
     <string name="welcome_ready_summary">Setup is complete. Kototoro will enable sources matching your selected languages and formats. You can run this wizard again from Settings > Content sources > Setup wizard.</string>
     <string name="welcome_jar_install_success">Kototoro: Successfully fetched and mounted %1$d latest parser engines from cloud network!</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: Cloud verification complete, local parsers are up to date! (Loaded %1$d sources in total)</string>

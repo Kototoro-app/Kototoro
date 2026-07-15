@@ -267,6 +267,8 @@
     <string name="welcome_plugin_repositories">插件仓库</string>
     <string name="welcome_plugin_acknowledge">我理解这些第三方仓库由我自行承担配置风险。</string>
     <string name="welcome_preferences_summary">选择语言和内容类型。之后仍可在来源设置里调整。</string>
+    <string name="welcome_spaces_title">划分独立 Space</string>
+    <string name="welcome_spaces_summary">Spaces 会为漫画、小说和动画分别保留导航、浏览偏好以及阅读或播放上下文。之后可在“设置 - 用户 - Spaces”中调整高级选项并创建自定义 Space。</string>
     <string name="welcome_ready_summary">设置已完成。Kototoro 会启用匹配所选语言和形态的来源。之后也可以在“设置 - 内容源 - 设置向导”重新进行引导配置。</string>
     <string name="welcome_jar_install_success">Kototoro: 成功从云端网络抓取并挂载了 %1$d 个最新解析器引擎！</string>
     <string name="welcome_jar_install_up_to_date">Kototoro: 云端校验完成，本地解析器已是最新版本！(总计载入: %1$d 个源)</string>

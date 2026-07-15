@@ -45,6 +45,8 @@ class WelcomeViewModel @Inject constructor(
 
 	private val _isInitializingPlugins = MutableStateFlow(false)
 	val isInitializingPlugins = _isInitializingPlugins.asStateFlow()
+	private val _spacesEnabled = MutableStateFlow(settings.isEntitySpaceEnabled)
+	val spacesEnabled = _spacesEnabled.asStateFlow()
 
 	val locales = MutableStateFlow(
 		FilterProperty<Locale>(
@@ -223,6 +225,11 @@ class WelcomeViewModel @Inject constructor(
 			prevJob?.join()
 			commit()
 		}
+	}
+
+	fun setSpacesEnabled(enabled: Boolean) {
+		_spacesEnabled.value = enabled
+		settings.isEntitySpaceEnabled = enabled
 	}
 
 	private suspend fun commit() {
