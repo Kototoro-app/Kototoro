@@ -3166,4 +3166,14 @@
     <string name="space_immersive_switch_enabled_summary">Allow space switching from details, readers, and the video player</string>
     <string name="space_route_preferences_enabled">Remember page preferences per space</string>
     <string name="space_route_preferences_enabled_summary">Keep supported page filters and layout choices separate for each space</string>
+    <string name="custom_spaces">Space definitions</string>
+    <string name="add_custom_space">Add custom space</string>
+    <string name="edit_custom_space">Edit custom space</string>
+    <string name="delete_custom_space">Delete custom space</string>
+    <string name="delete_custom_space_message">Delete “%1$s” and its saved navigation state?</string>
+    <string name="custom_space_limit">Up to %1$d custom spaces</string>
+    <string name="built_in_space">Built in</string>
+    <string name="content_types">Content types</string>
+    <string name="source_types">Source types</string>
+    <string name="custom_space_rule_summary">%1$d content types · %2$d languages · %3$d source types</string>
 </resources>

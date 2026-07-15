@@ -20,6 +20,7 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceSessionRepository
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionValidator
+import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpaceNavigationSessionViewModelTest {
@@ -37,7 +38,12 @@ class SpaceNavigationSessionViewModelTest {
 		val initial = snapshot(BuiltInSpaces.Novel, "history")
 		val repository = FakeSessionRepository(mapOf(BuiltInSpaces.Novel to initial))
 		val flags = FakeSessionFlagsRepository(enabled = true)
-		val viewModel = SpaceNavigationSessionViewModel(repository, PassThroughValidator, flags)
+		val viewModel = SpaceNavigationSessionViewModel(
+			repository,
+			PassThroughValidator,
+			TestSpaceCatalogRepository(),
+			flags,
+		)
 
 		advanceUntilIdle()
 
@@ -58,6 +64,7 @@ class SpaceNavigationSessionViewModelTest {
 		val viewModel = SpaceNavigationSessionViewModel(
 			repository,
 			PassThroughValidator,
+			TestSpaceCatalogRepository(),
 			FakeSessionFlagsRepository(enabled = false),
 		)
 
@@ -84,6 +91,7 @@ class SpaceNavigationSessionViewModelTest {
 		val viewModel = SpaceNavigationSessionViewModel(
 			repository,
 			PassThroughValidator,
+			TestSpaceCatalogRepository(),
 			FakeSessionFlagsRepository(enabled = true),
 		)
 		advanceUntilIdle()

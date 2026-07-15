@@ -219,11 +219,21 @@ class WorkAggregateRepository @Inject constructor(
 
 	private suspend fun findRecentHistoryEntries(limit: Int, spaceId: SpaceId?): List<WorkHistoryEntity> {
 		if (spaceId != null) {
-			return db.getWorkHistoryDao().findRecentForSpace(
-				allowedTypes = allowedTypeNames(spaceId),
-				classifiedTypes = classifiedTypeNames,
-				limit = limit,
-			)
+			val allowedSources = spaceContentPolicy.allowedSourceNames(spaceId)
+			return if (allowedSources == null) {
+				db.getWorkHistoryDao().findRecentForSpace(
+					allowedTypes = allowedTypeNames(spaceId),
+					classifiedTypes = classifiedTypeNames,
+					limit = limit,
+				)
+			} else {
+				db.getWorkHistoryDao().findRecentForSpaceAndSources(
+					allowedTypes = allowedTypeNames(spaceId),
+					classifiedTypes = classifiedTypeNames,
+					allowedSources = allowedSources,
+					limit = limit,
+				)
+			}
 		}
 		return if (limit == Int.MAX_VALUE) {
 			db.getWorkHistoryDao().findAll(offset = 0, limit = Int.MAX_VALUE)
@@ -400,13 +410,25 @@ class WorkAggregateRepository @Inject constructor(
 					(limit * UNCATEGORIZED_FAVOURITE_LIMIT_MULTIPLIER).coerceAtLeast(limit)
 				else -> limit
 			}
-			return db.getWorkFavouritesDao().findActiveForSpace(
-				categoryId = categoryId.takeUnless { it == FavouriteCategory.NO_ID },
-				allowedTypes = allowedTypeNames(spaceId),
-				classifiedTypes = classifiedTypeNames,
-				oldestFirst = order == ListSortOrder.OLDEST,
-				limit = queryLimit,
-			)
+			val allowedSources = spaceContentPolicy.allowedSourceNames(spaceId)
+			return if (allowedSources == null) {
+				db.getWorkFavouritesDao().findActiveForSpace(
+					categoryId = categoryId.takeUnless { it == FavouriteCategory.NO_ID },
+					allowedTypes = allowedTypeNames(spaceId),
+					classifiedTypes = classifiedTypeNames,
+					oldestFirst = order == ListSortOrder.OLDEST,
+					limit = queryLimit,
+				)
+			} else {
+				db.getWorkFavouritesDao().findActiveForSpaceAndSources(
+					categoryId = categoryId.takeUnless { it == FavouriteCategory.NO_ID },
+					allowedTypes = allowedTypeNames(spaceId),
+					classifiedTypes = classifiedTypeNames,
+					allowedSources = allowedSources,
+					oldestFirst = order == ListSortOrder.OLDEST,
+					limit = queryLimit,
+				)
+			}
 		}
 		val canLimitByWorkState = filterOptions.isEmpty() && limit != Int.MAX_VALUE
 		if (canLimitByWorkState) {

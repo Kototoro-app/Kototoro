@@ -1,10 +1,10 @@
 package org.skepsun.kototoro.space.data
 
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.MAX_SPACE_NAVIGATION_ENTRIES_PER_STACK
 import org.skepsun.kototoro.space.domain.SPACE_ROUTE_SCHEMA_VERSION
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionRepository
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
@@ -15,15 +15,15 @@ import javax.inject.Singleton
 class DefaultSpaceSessionRepository internal constructor(
 	private val dao: SpaceSessionDao,
 	private val codec: SpaceRouteCodec,
+	private val catalogRepository: SpaceCatalogRepository,
 ) : SpaceSessionRepository {
 
 	@Inject
-	constructor(database: MangaDatabase, codec: SpaceRouteCodec) : this(database.getSpaceSessionDao(), codec)
-
-	private val builtInSpaceIds = BuiltInSpaces.contexts.mapTo(HashSet()) { it.id }
+	constructor(database: MangaDatabase, codec: SpaceRouteCodec, catalogRepository: SpaceCatalogRepository) :
+		this(database.getSpaceSessionDao(), codec, catalogRepository)
 
 	override suspend fun load(spaceId: SpaceId): SpaceSessionSnapshot? {
-		requireBuiltInSpace(spaceId)
+		requireKnownSpace(spaceId)
 		val session = dao.findSession(spaceId.value) ?: return null
 		val stacks = dao.findNavigationEntries(spaceId.value)
 			.groupBy(SpaceNavigationEntryEntity::stackKey)
@@ -49,7 +49,7 @@ class DefaultSpaceSessionRepository internal constructor(
 	}
 
 	override suspend fun save(snapshot: SpaceSessionSnapshot) {
-		requireBuiltInSpace(snapshot.spaceId)
+		requireKnownSpace(snapshot.spaceId)
 		val encodedResume = snapshot.resumeRoute?.let(codec::encode)
 		val session = SpaceSessionEntity(
 			spaceId = snapshot.spaceId.value,
@@ -80,12 +80,12 @@ class DefaultSpaceSessionRepository internal constructor(
 	}
 
 	override suspend fun delete(spaceId: SpaceId) {
-		requireBuiltInSpace(spaceId)
+		requireKnownSpace(spaceId)
 		dao.deleteSnapshot(spaceId.value)
 	}
 
-	private fun requireBuiltInSpace(spaceId: SpaceId) {
-		require(spaceId in builtInSpaceIds) { "Unknown built-in SpaceId: ${spaceId.value}" }
+	private fun requireKnownSpace(spaceId: SpaceId) {
+		require(catalogRepository.find(spaceId) != null) { "Unknown SpaceId: ${spaceId.value}" }
 	}
 
 	private fun List<SpaceNavigationEntryEntity>.decodeValidPrefix(): List<SpaceRouteSnapshot> {

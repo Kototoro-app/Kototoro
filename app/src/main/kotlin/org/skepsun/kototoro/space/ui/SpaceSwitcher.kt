@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.text.BreakIterator
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
@@ -45,14 +46,17 @@ import org.skepsun.kototoro.space.domain.SpaceId
 @Composable
 fun SpaceSwitcherFab(
 	activeSpaceId: SpaceId,
+	activeSpace: SpaceContext? = null,
 	expanded: Boolean,
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
-	val presentation = activeSpaceId.presentation()
+	val presentation = activeSpace?.presentation() ?: activeSpaceId.presentation()
+	val label = activeSpace?.title ?: stringResource(presentation.labelRes)
+	val iconState = SpaceIconState(presentation, activeSpace?.customMonogram())
 	val description = stringResource(
 		R.string.space_switcher_content_description,
-		stringResource(presentation.labelRes),
+		label,
 	)
 	ExtendedFloatingActionButton(
 		onClick = onClick,
@@ -60,23 +64,20 @@ fun SpaceSwitcherFab(
 		expanded = expanded,
 		icon = {
 			Crossfade(
-				targetState = presentation,
+				targetState = iconState,
 				animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
 				label = "space_fab_icon",
 			) { target ->
-				Icon(
-					painter = painterResource(target.iconRes),
-					contentDescription = null,
-				)
+				SpaceGlyph(target.presentation, target.monogram)
 			}
 		},
 		text = {
 			Crossfade(
-				targetState = presentation,
+				targetState = label,
 				animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
 				label = "space_fab_label",
 			) { target ->
-				Text(stringResource(target.labelRes))
+				Text(target)
 			}
 		},
 		containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -87,6 +88,7 @@ fun SpaceSwitcherFab(
 @Composable
 fun SpaceSwitcherRailButton(
 	activeSpaceId: SpaceId,
+	activeSpace: SpaceContext? = null,
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -95,11 +97,11 @@ fun SpaceSwitcherRailButton(
 		modifier = modifier.size(48.dp),
 	) {
 		Crossfade(
-			targetState = activeSpaceId,
+			targetState = activeSpaceId to activeSpace,
 			animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
 			label = "space_rail_icon",
-		) { target ->
-			SpaceSwitcherIcon(activeSpaceId = target)
+		) { (targetId, targetSpace) ->
+			SpaceSwitcherIcon(activeSpaceId = targetId, activeSpace = targetSpace)
 		}
 	}
 }
@@ -107,17 +109,19 @@ fun SpaceSwitcherRailButton(
 @Composable
 fun SpaceSwitcherIcon(
 	activeSpaceId: SpaceId,
+	activeSpace: SpaceContext? = null,
 	modifier: Modifier = Modifier,
 ) {
-	val presentation = activeSpaceId.presentation()
-	Icon(
-		painter = painterResource(presentation.iconRes),
-		contentDescription = stringResource(
-			R.string.space_switcher_content_description,
-			stringResource(presentation.labelRes),
-		),
-		modifier = modifier,
-	)
+	val presentation = activeSpace?.presentation() ?: activeSpaceId.presentation()
+	val label = activeSpace?.title ?: stringResource(presentation.labelRes)
+	Box(
+		modifier = modifier.semantics {
+			contentDescription = label
+		},
+		contentAlignment = Alignment.Center,
+	) {
+		SpaceGlyph(presentation, activeSpace?.customMonogram())
+	}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,7 +150,7 @@ fun SpaceSwitcherSheet(
 			}
 			item {
 				Column(modifier = Modifier.selectableGroup()) {
-					BuiltInSpaces.contexts.forEach { context ->
+					state.spaces.forEach { context ->
 						SpaceRow(
 							context = context,
 							selected = context.id == state.activeSpaceId,
@@ -220,7 +224,7 @@ private fun SpaceRow(
 	onResume: () -> Unit,
 	onClick: () -> Unit,
 ) {
-	val presentation = context.id.presentation()
+	val presentation = context.presentation()
 	val hapticFeedback = LocalHapticFeedback.current
 	Row(
 		modifier = Modifier
@@ -240,14 +244,14 @@ private fun SpaceRow(
 		verticalAlignment = Alignment.CenterVertically,
 		horizontalArrangement = Arrangement.spacedBy(16.dp),
 	) {
-		Icon(
-			painter = painterResource(presentation.iconRes),
-			contentDescription = null,
+		SpaceGlyph(
+			presentation = presentation,
+			monogram = context.customMonogram(),
 			modifier = Modifier.size(24.dp),
 		)
 		Column(modifier = Modifier.weight(1f)) {
 			Text(
-				text = stringResource(presentation.labelRes),
+				text = context.title ?: stringResource(presentation.labelRes),
 				style = MaterialTheme.typography.titleMedium,
 			)
 			resumeItem?.let { item ->
@@ -281,8 +285,52 @@ private data class SpacePresentation(
 	@DrawableRes val resumeIconRes: Int,
 )
 
+private data class SpaceIconState(
+	val presentation: SpacePresentation,
+	val monogram: String?,
+)
+
+@Composable
+private fun SpaceGlyph(
+	presentation: SpacePresentation,
+	monogram: String?,
+	modifier: Modifier = Modifier,
+) {
+	if (monogram == null) {
+		Icon(
+			painter = painterResource(presentation.iconRes),
+			contentDescription = null,
+			modifier = modifier,
+		)
+	} else {
+		Box(modifier = modifier.size(24.dp), contentAlignment = Alignment.Center) {
+			Text(text = monogram, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+		}
+	}
+}
+
+internal fun SpaceContext.customMonogram(): String? {
+	if (isBuiltIn) return null
+	val value = title?.trim().orEmpty()
+	if (value.isEmpty()) return null
+	val iterator = BreakIterator.getCharacterInstance()
+	iterator.setText(value)
+	val start = iterator.first()
+	val end = iterator.next()
+	return value.substring(start, end.takeUnless { it == BreakIterator.DONE } ?: value.offsetByCodePoints(0, 1))
+}
+
 private fun SpaceId.presentation(): SpacePresentation = when (this) {
 	BuiltInSpaces.Novel -> SpacePresentation(R.string.space_novel, R.drawable.ic_content_novel, R.drawable.ic_read)
 	BuiltInSpaces.Anime -> SpacePresentation(R.string.space_anime, R.drawable.ic_content_video, R.drawable.ic_play)
 	else -> SpacePresentation(R.string.space_manga, R.drawable.ic_content_manga, R.drawable.ic_read)
+}
+
+private fun SpaceContext.presentation(): SpacePresentation = when (kind) {
+	org.skepsun.kototoro.space.domain.SpaceKind.NOVEL ->
+		SpacePresentation(R.string.space_novel, R.drawable.ic_content_novel, R.drawable.ic_read)
+	org.skepsun.kototoro.space.domain.SpaceKind.ANIME ->
+		SpacePresentation(R.string.space_anime, R.drawable.ic_content_video, R.drawable.ic_play)
+	org.skepsun.kototoro.space.domain.SpaceKind.MANGA ->
+		SpacePresentation(R.string.space_manga, R.drawable.ic_content_manga, R.drawable.ic_read)
 }

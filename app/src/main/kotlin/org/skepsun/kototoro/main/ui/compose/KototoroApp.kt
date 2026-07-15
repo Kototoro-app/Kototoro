@@ -4,7 +4,12 @@ import android.app.Activity
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -126,8 +131,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.mutableLongStateOf
 import org.skepsun.kototoro.core.ui.compose.LocalRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
@@ -173,12 +178,34 @@ import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.space.ui.SpaceMotion
 import org.skepsun.kototoro.space.ui.SpaceMotionMode
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
+import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
 
 private const val SpaceFabTraceTag = "SpaceFabTrace"
+private const val SpaceChromeTraceTag = "SpaceChromeTrace"
+
+@OptIn(ExperimentalMaterial3Api::class)
+private class SpaceChromeScrollState {
+    val topAppBarState = TopAppBarState(
+        initialHeightOffsetLimit = -Float.MAX_VALUE,
+        initialHeightOffset = 0f,
+        initialContentOffset = 0f,
+    )
+    val bottomNavOffset = mutableFloatStateOf(0f)
+    val totalContentScrollOffset = mutableFloatStateOf(0f)
+    val keepTabsExpandedByScrollDirection = mutableStateOf(false)
+    val offsetDestinationRoute = mutableStateOf<String?>(null)
+    val offsetDestinationOwnerKey = mutableStateOf<String?>(null)
+}
 
 private inline fun traceSpaceFab(message: () -> String) {
     if (BuildConfig.DEBUG) {
         Log.d(SpaceFabTraceTag, message())
+    }
+}
+
+private inline fun traceSpaceChrome(message: () -> String) {
+    if (BuildConfig.DEBUG) {
+        Log.d(SpaceChromeTraceTag, message())
     }
 }
 
@@ -386,6 +413,8 @@ fun KototoroApp(
     onSpaceAction: (SpaceAction) -> Unit = {},
     spaceNavigationSessionUiState: SpaceNavigationSessionUiState = SpaceNavigationSessionUiState(),
     onSpaceSessionChanged: (SpaceSessionSnapshot) -> Unit = {},
+    spaceTransitionSuppressionTarget: SpaceId? = null,
+    onSpaceTransitionSuppressionConsumed: (SpaceId) -> Unit = {},
     spaceResumeUiState: SpaceResumeUiState = SpaceResumeUiState(),
     onSpaceResume: (SpaceId) -> Unit = {},
     mediaUniverseUiState: MediaUniverseUiState = MediaUniverseUiState(),
@@ -474,10 +503,32 @@ fun KototoroApp(
         !spaceUiState.switcherEnabled
     val effectiveSourceTagFilterVisible = isSourceTagFilterVisible && isSourceTagFilterVisibleSetting
 
+    val mainNavItems by appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
+    val initialTopLevel = remember(mainNavItems) {
+        topLevelKeyForBottomNavItem(mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home)
+    }
+    val spaceNavigationStates = rememberSpaceNavigationStates(
+        initialTopLevel = initialTopLevel,
+        activeSpaceId = spaceUiState.activeSpaceId,
+    )
+    val navigationSpaceId = resolveNavigationSpaceId(
+        activeSpaceId = spaceUiState.activeSpaceId,
+        persistentNavigationEnabled = spaceUiState.persistentNavigationEnabled,
+    )
+    val activeNavigationState = spaceNavigationStates[navigationSpaceId]
+    val mainNavState = activeNavigationState.mainNavState
+    val navController = activeNavigationState.navController
+    val chromeScrollStates = remember { mutableMapOf<SpaceId, SpaceChromeScrollState>() }
+    val chromeScrollState = chromeScrollStates.getOrPut(navigationSpaceId, ::SpaceChromeScrollState)
+    LaunchedEffect(spaceUiState.spaces) {
+        val activeSpaceIds = spaceUiState.spaces.mapTo(mutableSetOf()) { it.id }
+        chromeScrollStates.keys.retainAll(activeSpaceIds)
+    }
+
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavHeightPx by remember { mutableIntStateOf(0) }
-    var bottomNavOffset by remember { mutableFloatStateOf(0f) }
-    var totalContentScrollOffset by remember { mutableFloatStateOf(0f) }
+    var bottomNavOffset by chromeScrollState.bottomNavOffset
+    var totalContentScrollOffset by chromeScrollState.totalContentScrollOffset
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
     var isSearchOverlayVisible by rememberSaveable { mutableStateOf(false) }
     var isSearchOverlayMounted by rememberSaveable { mutableStateOf(false) }
@@ -489,11 +540,12 @@ fun KototoroApp(
     var mainSpaceSwitcherFabBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var canMeasureMainSpaceSwitcherFab by remember { mutableStateOf(true) }
     var rootContentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var keepTabsExpandedByScrollDirection by rememberSaveable { mutableStateOf(false) }
+    var keepTabsExpandedByScrollDirection by chromeScrollState.keepTabsExpandedByScrollDirection
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
     val routeContextualMenuActions = remember { mutableStateMapOf<String, List<KototoroTopBarMenuAction>>() }
     var globalTopBarOverrideState by remember { mutableStateOf<TopBarOverrideState?>(null) }
-    var offsetDestinationRoute by remember { mutableStateOf<String?>(null) }
+    var offsetDestinationRoute by chromeScrollState.offsetDestinationRoute
+    var offsetDestinationOwnerKey by chromeScrollState.offsetDestinationOwnerKey
 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val spaceSwitcherFabMargin = dimensionResource(R.dimen.space_switcher_fab_margin)
@@ -505,7 +557,7 @@ fun KototoroApp(
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().roundToPx()
     }
     var materialTopBarScrollEnabled by remember { mutableStateOf(true) }
-    val topAppBarState = rememberTopAppBarState()
+    val topAppBarState = chromeScrollState.topAppBarState
     val topAppBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
         state = topAppBarState,
         canScroll = {
@@ -521,6 +573,7 @@ fun KototoroApp(
         isLandscapeRailInteracting,
         bottomNavHeightPx,
         isSearchOverlayMounted,
+        navigationSpaceId,
     ) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
@@ -559,26 +612,13 @@ fun KototoroApp(
         }
     }
 
-    LaunchedEffect(topBarHeightPx) {
+    LaunchedEffect(topBarHeightPx, topAppBarState) {
         topAppBarState.heightOffsetLimit = -topBarHeightPx.toFloat()
     }
-
-    val mainNavItems by appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
-    val initialTopLevel = remember(mainNavItems) {
-        topLevelKeyForBottomNavItem(mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home)
-    }
-    val spaceNavigationStates = rememberSpaceNavigationStates(initialTopLevel = initialTopLevel)
-    val navigationSpaceId = resolveNavigationSpaceId(
-        activeSpaceId = spaceUiState.activeSpaceId,
-        persistentNavigationEnabled = spaceUiState.persistentNavigationEnabled,
-    )
     var mainSpaceSwitcherFabMeasurementSpaceId by remember { mutableStateOf(navigationSpaceId) }
     var mainSpaceSwitcherFabCandidate by remember {
         mutableStateOf<Pair<SpaceId, androidx.compose.ui.geometry.Rect>?>(null)
     }
-    val activeNavigationState = spaceNavigationStates[navigationSpaceId]
-    val mainNavState = activeNavigationState.mainNavState
-    val navController = activeNavigationState.navController
     val spaceSaveableStateHolder = rememberSaveableStateHolder()
     val restoredSpaceIds = remember { mutableStateMapOf<SpaceId, Boolean>() }
     val databaseRestoredSpaceIds = remember { mutableStateMapOf<SpaceId, Boolean>() }
@@ -596,7 +636,8 @@ fun KototoroApp(
             return@LaunchedEffect
         }
         if (!spaceNavigationSessionUiState.restorationReady) return@LaunchedEffect
-        BuiltInSpaces.contexts.forEach { context ->
+        spaceUiState.spaces.forEach { context ->
+            if (context.id !in spaceNavigationStates) return@forEach
             if (restoredSpaceIds[context.id] == true) return@forEach
             val state = spaceNavigationStates[context.id].mainNavState
             val session = spaceNavigationSessionUiState.sessions[context.id]
@@ -609,6 +650,17 @@ fun KototoroApp(
     }
     val isActiveSpaceRestored = restoredSpaceIds[navigationSpaceId] == true
     val isActiveDatabaseSessionApplied = databaseRestoredSpaceIds[navigationSpaceId] == true
+    val isActiveNavigationReady = !spaceNavigationSessionUiState.enabled || isActiveSpaceRestored
+    LaunchedEffect(
+        navigationSpaceId,
+        isActiveNavigationReady,
+        spaceTransitionSuppressionTarget,
+    ) {
+        if (isActiveNavigationReady && spaceTransitionSuppressionTarget == navigationSpaceId) {
+            androidx.compose.runtime.withFrameNanos { }
+            onSpaceTransitionSuppressionConsumed(navigationSpaceId)
+        }
+    }
     LaunchedEffect(
         navigationSpaceId,
         mainNavState,
@@ -685,7 +737,10 @@ fun KototoroApp(
     val startDestination = remember(initialTopLevel) {
         routeForTopLevelKey(initialTopLevel)
     }
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val navBackStackEntry = key(navController) {
+        val entry by navController.currentBackStackEntryAsState()
+        entry
+    }
     val currentDestination = navBackStackEntry?.destination
 
     LaunchedEffect(
@@ -903,26 +958,30 @@ fun KototoroApp(
         effectiveTopBarOverrideState is ExploreSourceSelectionTopBarState ||
             effectiveTopBarOverrideState is ContentSelectionTopBarOverrideState
     val shouldUseMaterialTopBarScroll = shouldShowChrome && !hasSelectionTopChrome
-    val isChromeOffsetFromCurrentDestination = offsetDestinationRoute == currentDestinationRoute
+    val isChromeOffsetFromCurrentDestination =
+        offsetDestinationRoute == currentDestinationRoute && offsetDestinationOwnerKey == currentTopBarOwnerKey
     val effectiveTopBarOffset = if (isChromeOffsetFromCurrentDestination && shouldUseMaterialTopBarScroll) {
         topAppBarState.heightOffset
     } else {
         0f
     }
     val effectiveBottomNavOffset = if (isChromeOffsetFromCurrentDestination) bottomNavOffset else 0f
-    LaunchedEffect(shouldUseMaterialTopBarScroll) {
+    LaunchedEffect(shouldUseMaterialTopBarScroll, topAppBarState) {
         materialTopBarScrollEnabled = shouldUseMaterialTopBarScroll
         if (!shouldUseMaterialTopBarScroll) {
             topAppBarState.heightOffset = 0f
         }
     }
-    LaunchedEffect(currentDestinationRoute, currentTopBarOwnerKey) {
+    LaunchedEffect(navigationSpaceId, currentDestinationRoute, currentTopBarOwnerKey) {
         if (currentDestinationRoute != null && !isImmersiveRoute && !isSearchRoute) {
-            topAppBarState.heightOffset = 0f
-            bottomNavOffset = 0f
-            totalContentScrollOffset = 0f
-            keepTabsExpandedByScrollDirection = false
+            if (!isChromeOffsetFromCurrentDestination) {
+                topAppBarState.heightOffset = 0f
+                bottomNavOffset = 0f
+                totalContentScrollOffset = 0f
+                keepTabsExpandedByScrollDirection = false
+            }
             offsetDestinationRoute = currentDestinationRoute
+            offsetDestinationOwnerKey = currentTopBarOwnerKey
         }
     }
     val scrollAlpha = if (!isChromeVisible) 0f else {
@@ -1026,6 +1085,23 @@ fun KototoroApp(
         navigationBarHeightPx
     } else {
         maxOf(visibleBottomNavInsetPx, navigationBarHeightPx)
+    }
+    LaunchedEffect(
+        navigationSpaceId,
+        currentDestinationRoute,
+        currentTopBarOwnerKey,
+        offsetDestinationRoute,
+        offsetDestinationOwnerKey,
+        isActiveSpaceRestored,
+    ) {
+        traceSpaceChrome {
+            "state space=${navigationSpaceId.value} nav=${System.identityHashCode(navController)} " +
+                "route=$currentDestinationRoute owner=$currentTopBarOwnerKey restored=$isActiveSpaceRestored " +
+                "offsetRoute=$offsetDestinationRoute offsetOwner=$offsetDestinationOwnerKey " +
+                "topOffset=${topAppBarState.heightOffset} effectiveTop=$effectiveTopBarOffset " +
+                "bottomOffset=$bottomNavOffset effectiveBottom=$effectiveBottomNavOffset " +
+                "topInset=$contentTopInsetPx bottomInset=$contentBottomInsetPx chrome=$shouldShowChrome"
+        }
     }
     val visibleStartInsetDp = with(density) {
         if (isLandscapeNavigation) {
@@ -1293,87 +1369,137 @@ fun KototoroApp(
                         val renderSpaceNavigation: @Composable (SpaceId) -> Unit = { renderedSpaceId ->
                             val renderedNavigationState = spaceNavigationStates[renderedSpaceId]
                             val renderedNavController = renderedNavigationState.navController
+                            DisposableEffect(renderedSpaceId, renderedNavController) {
+                                traceSpaceChrome {
+                                    "navigation mounted space=${renderedSpaceId.value} " +
+                                        "nav=${System.identityHashCode(renderedNavController)} " +
+                                        "route=${renderedNavController.currentDestination?.route}"
+                                }
+                                onDispose {
+                                    traceSpaceChrome {
+                                        "navigation disposed space=${renderedSpaceId.value} " +
+                                            "nav=${System.identityHashCode(renderedNavController)} " +
+                                            "route=${renderedNavController.currentDestination?.route}"
+                                    }
+                                }
+                            }
                             spaceSaveableStateHolder.SaveableStateProvider(renderedSpaceId.value) {
                                 key(renderedSpaceId.value) {
-                                    AppNavGraph(
-                                        navController = renderedNavController,
-                                        mainNavState = renderedNavigationState.mainNavState,
-                                        isLandscapeNavigation = isLandscapeNavigation,
-                                        startDestination = startDestination,
-                                        contentPadding = contentPadding,
-                                        bottomBarOffsetPx = effectiveBottomNavOffset,
-                                        bottomBarHeightPx = bottomNavHeightPx,
-                                        pageSaveHelper = pageSaveHelper,
-                                        onDetailsTransitionRequested = {
-                                            isDetailsChromeTransitionPending = true
-                                            heroTransitionPhase = HeroTransitionPhase.EnteringDetails
-                                            lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
+                                    CompositionLocalProvider(
+                                        LocalBrowseSpaceId provides renderedSpaceId.takeIf {
+                                            spaceUiState.switcherEnabled
                                         },
-                                        onDetailsReturnTransitionRequested = {
-                                            if (effectiveSharedElementTransitionsEnabled) {
+                                    ) {
+                                        AppNavGraph(
+                                            navController = renderedNavController,
+                                            mainNavState = renderedNavigationState.mainNavState,
+                                            isLandscapeNavigation = isLandscapeNavigation,
+                                            startDestination = startDestination,
+                                            contentPadding = contentPadding,
+                                            bottomBarOffsetPx = effectiveBottomNavOffset,
+                                            bottomBarHeightPx = bottomNavHeightPx,
+                                            pageSaveHelper = pageSaveHelper,
+                                            onDetailsTransitionRequested = {
                                                 isDetailsChromeTransitionPending = true
-                                                heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
+                                                heroTransitionPhase = HeroTransitionPhase.EnteringDetails
                                                 lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                            }
-                                        },
-                                        onDetailsBottomPanelStateChanged = { expansion, obstruction ->
-                                            if (renderedSpaceId == navigationSpaceId) {
-                                                detailsBottomPanelExpansion = expansion
-                                                detailsBottomObstruction = obstruction
-                                            }
-                                        },
-                                        onExploreSourceSelectionTopBarChanged = { overrideState ->
-                                            when (overrideState) {
-                                                is RouteScopedTopBarOverrideState -> {
-                                                    val ownerRoute = overrideState.ownerRoute
-                                                    val state = overrideState.state
-                                                    if (state == null) {
-                                                        if (ownerRoute in routeTopBarOverrideStates) {
-                                                            routeTopBarOverrideStates.remove(ownerRoute)
+                                            },
+                                            onDetailsReturnTransitionRequested = {
+                                                if (effectiveSharedElementTransitionsEnabled) {
+                                                    isDetailsChromeTransitionPending = true
+                                                    heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
+                                                    lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
+                                                }
+                                            },
+                                            onDetailsBottomPanelStateChanged = { expansion, obstruction ->
+                                                if (renderedSpaceId == navigationSpaceId) {
+                                                    detailsBottomPanelExpansion = expansion
+                                                    detailsBottomObstruction = obstruction
+                                                }
+                                            },
+                                            onExploreSourceSelectionTopBarChanged = { overrideState ->
+                                                when (overrideState) {
+                                                    is RouteScopedTopBarOverrideState -> {
+                                                        val ownerRoute = overrideState.ownerRoute
+                                                        val state = overrideState.state
+                                                        if (state == null) {
+                                                            if (ownerRoute in routeTopBarOverrideStates) {
+                                                                routeTopBarOverrideStates.remove(ownerRoute)
+                                                            }
+                                                        } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
+                                                            routeTopBarOverrideStates[ownerRoute] = state
                                                         }
-                                                    } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
-                                                        routeTopBarOverrideStates[ownerRoute] = state
+                                                    }
+                                                    else -> {
+                                                        if (globalTopBarOverrideState !== overrideState) {
+                                                            globalTopBarOverrideState = overrideState
+                                                        }
                                                     }
                                                 }
-                                                else -> {
-                                                    if (globalTopBarOverrideState !== overrideState) {
-                                                        globalTopBarOverrideState = overrideState
+                                            },
+                                            onContextualMenuActionsChanged = { state ->
+                                                if (state.actions.isEmpty()) {
+                                                    routeContextualMenuActions.remove(state.ownerRoute)
+                                                } else {
+                                                    routeContextualMenuActions[state.ownerRoute] = state.actions
+                                                }
+                                            },
+                                            onOpenSearch = { request ->
+                                                val route = SearchNavigation.createRoute(request)
+                                                if (renderedNavController.currentDestination?.hasRoute<SearchRoute>() == true) {
+                                                    renderedNavController.navigate(route) {
+                                                        popUpTo<SearchRoute> { inclusive = true }
+                                                        launchSingleTop = true
+                                                    }
+                                                } else {
+                                                    renderedNavController.navigate(route) {
+                                                        launchSingleTop = true
                                                     }
                                                 }
-                                            }
-                                        },
-                                        onContextualMenuActionsChanged = { state ->
-                                            if (state.actions.isEmpty()) {
-                                                routeContextualMenuActions.remove(state.ownerRoute)
-                                            } else {
-                                                routeContextualMenuActions[state.ownerRoute] = state.actions
-                                            }
-                                        },
-                                        onOpenSearch = { request ->
-                                            val route = SearchNavigation.createRoute(request)
-                                            if (renderedNavController.currentDestination?.hasRoute<SearchRoute>() == true) {
-                                                renderedNavController.navigate(route) {
-                                                    popUpTo<SearchRoute> { inclusive = true }
-                                                    launchSingleTop = true
+                                            },
+                                            mainShellChrome = {
+                                                if (renderedSpaceId == navigationSpaceId) {
+                                                    mainShellChrome()
                                                 }
-                                            } else {
-                                                renderedNavController.navigate(route) {
-                                                    launchSingleTop = true
-                                                }
-                                            }
-                                        },
-                                        mainShellChrome = {
-                                            if (renderedSpaceId == navigationSpaceId) {
-                                                mainShellChrome()
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
+                                            },
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
                                 }
                             }
                         }
-                        if (!spaceNavigationSessionUiState.enabled || isActiveSpaceRestored) {
-                            renderSpaceNavigation(navigationSpaceId)
+                        if (isActiveNavigationReady) {
+                            AnimatedContent(
+                                targetState = navigationSpaceId,
+                                transitionSpec = {
+                                    if (
+                                        spaceMotionMode == SpaceMotionMode.DISABLED ||
+                                        targetState == spaceTransitionSuppressionTarget
+                                    ) {
+                                        EnterTransition.None togetherWith ExitTransition.None
+                                    } else {
+                                        val initialIndex = spaceUiState.spaces.indexOfFirst { it.id == initialState }
+                                        val targetIndex = spaceUiState.spaces.indexOfFirst { it.id == targetState }
+                                        val direction = if (targetIndex >= initialIndex) {
+                                            AnimatedContentTransitionScope.SlideDirection.Left
+                                        } else {
+                                            AnimatedContentTransitionScope.SlideDirection.Right
+                                        }
+                                        val duration = if (spaceMotionMode == SpaceMotionMode.FULL) {
+                                            SpaceMotion.NavigationSlideMillis
+                                        } else {
+                                            SpaceMotion.ReducedNavigationSlideMillis
+                                        }
+                                        slideIntoContainer(direction, tween(duration)) togetherWith
+                                            slideOutOfContainer(direction, tween(duration))
+                                    }
+                                },
+                                contentKey = { it.value },
+                                label = "space_navigation",
+                                modifier = Modifier.fillMaxSize(),
+                            ) { renderedSpaceId ->
+                                renderSpaceNavigation(renderedSpaceId)
+                            }
                         }
                     }
                 }
@@ -1468,6 +1594,7 @@ fun KototoroApp(
                     if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
                         SpaceSwitcherFab(
                             activeSpaceId = spaceUiState.activeSpaceId,
+                            activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
                             expanded = false,
                             onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
                             modifier = fabModifier,

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.space.domain
 
+import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.parsers.model.ContentType
 
 @JvmInline
@@ -15,6 +16,12 @@ data class SpaceContext(
     val id: SpaceId,
     val kind: SpaceKind,
     val allowedContentTypes: Set<ContentType>,
+    val title: String? = null,
+    val sourceLanguages: Set<String> = emptySet(),
+    val sourceKinds: Set<SourceType> = emptySet(),
+    val isBuiltIn: Boolean = true,
+    val sortKey: Int = 0,
+    val enabled: Boolean = true,
 )
 
 object BuiltInSpaces {
@@ -39,6 +46,7 @@ object BuiltInSpaces {
                 ContentType.ARTIST_CG,
                 ContentType.GAME_CG,
             ),
+            sortKey = 0,
         ),
         SpaceContext(
             id = Novel,
@@ -47,6 +55,7 @@ object BuiltInSpaces {
                 ContentType.NOVEL,
                 ContentType.HENTAI_NOVEL,
             ),
+            sortKey = 1,
         ),
         SpaceContext(
             id = Anime,
@@ -55,6 +64,13 @@ object BuiltInSpaces {
                 ContentType.VIDEO,
                 ContentType.HENTAI_VIDEO,
             ),
+            sortKey = 2,
         ),
     )
+}
+
+fun Set<ContentType>.primarySpaceKind(): SpaceKind = when {
+    isNotEmpty() && all { it == ContentType.NOVEL || it == ContentType.HENTAI_NOVEL } -> SpaceKind.NOVEL
+    isNotEmpty() && all { it == ContentType.VIDEO || it == ContentType.HENTAI_VIDEO } -> SpaceKind.ANIME
+    else -> SpaceKind.MANGA
 }

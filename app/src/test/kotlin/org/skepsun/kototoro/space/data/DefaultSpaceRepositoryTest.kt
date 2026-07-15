@@ -3,6 +3,13 @@ package org.skepsun.kototoro.space.data
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -12,14 +19,23 @@ import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlags
 import org.skepsun.kototoro.space.domain.SpaceId
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DefaultSpaceRepositoryTest {
+
+	private val dispatcher = UnconfinedTestDispatcher()
+
+	@BeforeEach
+	fun setUp() = Dispatchers.setMain(dispatcher)
+
+	@AfterEach
+	fun tearDown() = Dispatchers.resetMain()
 
 	@Test
 	fun `invalid persisted id falls back to manga and repairs preference`() {
 		val store = FakeSpaceLocalDataSource("invalid")
 		val diagnostics = mockk<SpaceDiagnostics>(relaxed = true)
 
-		val repository = DefaultSpaceRepository(store, diagnostics)
+		val repository = DefaultSpaceRepository(store, diagnostics, TestSpaceCatalogRepository())
 
 		assertEquals(BuiltInSpaces.Manga, repository.activeSpace.value)
 		assertEquals(listOf(BuiltInSpaces.Manga.value), store.writes)
@@ -35,7 +51,7 @@ class DefaultSpaceRepositoryTest {
 	fun `activate persists and publishes built in space once`() = runTest {
 		val store = FakeSpaceLocalDataSource(BuiltInSpaces.Manga.value)
 		val diagnostics = mockk<SpaceDiagnostics>(relaxed = true)
-		val repository = DefaultSpaceRepository(store, diagnostics)
+		val repository = DefaultSpaceRepository(store, diagnostics, TestSpaceCatalogRepository())
 
 		repository.activate(BuiltInSpaces.Novel)
 		repository.activate(BuiltInSpaces.Novel)
@@ -51,7 +67,7 @@ class DefaultSpaceRepositoryTest {
 	fun `activate rejects unknown space without changing preference`() {
 		val store = FakeSpaceLocalDataSource(BuiltInSpaces.Manga.value)
 		val diagnostics = mockk<SpaceDiagnostics>(relaxed = true)
-		val repository = DefaultSpaceRepository(store, diagnostics)
+		val repository = DefaultSpaceRepository(store, diagnostics, TestSpaceCatalogRepository())
 
 		assertThrows(IllegalArgumentException::class.java) {
 			runTest { repository.activate(SpaceId("custom:unknown")) }

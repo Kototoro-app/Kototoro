@@ -21,4 +21,7 @@ abstract class SpaceRoutePreferencesDao {
 
 	@Query("DELETE FROM space_route_preferences WHERE space_id = :spaceId AND route_key = :routeKey")
 	abstract suspend fun delete(spaceId: String, routeKey: String)
+
+	@Query("DELETE FROM space_route_preferences WHERE space_id = :spaceId")
+	abstract suspend fun deleteForSpace(spaceId: String)
 }

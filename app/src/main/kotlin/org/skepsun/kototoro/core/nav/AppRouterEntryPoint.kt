@@ -7,6 +7,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -17,4 +18,5 @@ interface AppRouterEntryPoint {
     val mangaRepositoryFactory: ContentRepository.Factory
     val workResolver: WorkResolver
     val jsonSourceManager: org.skepsun.kototoro.core.jsonsource.JsonSourceManager
+    val spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository
 }

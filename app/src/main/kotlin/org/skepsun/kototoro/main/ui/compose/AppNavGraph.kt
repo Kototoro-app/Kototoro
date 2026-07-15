@@ -101,6 +101,7 @@ import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
+import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
 import dev.chrisbanes.haze.hazeSource
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
@@ -1061,6 +1062,10 @@ internal fun BrowseTopLevelRouteContent(
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>()
+    val browseSpaceId = LocalBrowseSpaceId.current
+    LaunchedEffect(exploreViewModel, browseSpaceId) {
+        exploreViewModel.bindSpace(browseSpaceId)
+    }
     val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
     val isEmptySourcesHidden by exploreViewModel.isEmptySourcesHidden.collectAsStateWithLifecycle()

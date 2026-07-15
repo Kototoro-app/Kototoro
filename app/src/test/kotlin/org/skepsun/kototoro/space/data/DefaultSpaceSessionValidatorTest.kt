@@ -8,7 +8,6 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
-import org.skepsun.kototoro.space.domain.SpaceSourceAvailability
 import org.skepsun.kototoro.work.domain.WorkIdentity
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkMigrationState
@@ -18,7 +17,7 @@ class DefaultSpaceSessionValidatorTest {
 
 	@Test
 	fun `missing work truncates it and all dependent routes`() = runTest {
-		val validator = DefaultSpaceSessionValidator(FakeWorkResolver(), FakeSourceAvailability())
+		val validator = DefaultSpaceSessionValidator(FakeWorkResolver())
 		val snapshot = snapshot(
 			routes = listOf(
 				SpaceRouteSnapshot.TopLevel("home"),
@@ -38,7 +37,6 @@ class DefaultSpaceSessionValidatorTest {
 	fun `invalid projection falls back to entity details`() = runTest {
 		val validator = DefaultSpaceSessionValidator(
 			FakeWorkResolver(entityIds = setOf(42L), projections = setOf(7L)),
-			FakeSourceAvailability(),
 		)
 		val snapshot = snapshot(
 			routes = listOf(
@@ -53,10 +51,9 @@ class DefaultSpaceSessionValidatorTest {
 	}
 
 	@Test
-	fun `unavailable source truncates content list route`() = runTest {
+	fun `temporarily unavailable source keeps content list route for cold start restoration`() = runTest {
 		val validator = DefaultSpaceSessionValidator(
 			FakeWorkResolver(),
-			FakeSourceAvailability(available = emptySet()),
 		)
 		val snapshot = snapshot(
 			routes = listOf(
@@ -67,7 +64,10 @@ class DefaultSpaceSessionValidatorTest {
 
 		val validated = validator.validate(snapshot)
 
-		validated.stacks.getValue("home") shouldBe listOf(SpaceRouteSnapshot.TopLevel("home"))
+		validated.stacks.getValue("home") shouldBe listOf(
+			SpaceRouteSnapshot.TopLevel("home"),
+			SpaceRouteSnapshot.ContentList("REMOVED"),
+		)
 	}
 
 	private fun snapshot(routes: List<SpaceRouteSnapshot>) = SpaceSessionSnapshot(
@@ -78,12 +78,6 @@ class DefaultSpaceSessionValidatorTest {
 		lastAccessed = 1L,
 		updatedAt = 1L,
 	)
-}
-
-private class FakeSourceAvailability(
-	private val available: Set<String> = setOf("AVAILABLE"),
-) : SpaceSourceAvailability {
-	override suspend fun isAvailable(sourceName: String): Boolean = sourceName in available
 }
 
 private class FakeWorkResolver(

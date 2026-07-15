@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withResumed
 import com.google.android.material.navigation.NavigationBarView
@@ -70,6 +71,7 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.ui.MediaUniverseViewModel
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
+import org.skepsun.kototoro.space.data.SpaceSourcePresetController
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
@@ -79,10 +81,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     companion object {
         const val EXTRA_RESUME_SPACE_ID = "main_activity.resume_space_id"
+        const val EXTRA_RESTORE_IMMERSIVE_SPACE_ID = "main_activity.restore_immersive_space_id"
     }
 
     @Inject
     lateinit var spaceRoutePreferencesController: SpaceRoutePreferencesController
+
+    @Inject
+    lateinit var spaceSourcePresetController: SpaceSourcePresetController
 
     @Inject
     lateinit var spaceRepository: SpaceRepository
@@ -226,6 +232,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         spaceRoutePreferencesController.start()
+        spaceSourcePresetController.start()
         pageSaveHelper = pageSaveHelperFactory.create(this)
         searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
         applyConfiguredLanguagePreset()
@@ -271,6 +278,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
             val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
             val mediaUniverseUiState by mediaUniverseViewModel.uiState.collectAsStateWithLifecycle()
+            val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
+                .mainTransitionSuppressionTarget
+                .collectAsStateWithLifecycle()
 
             KototoroApp(
                 appSettings = settings,
@@ -293,24 +303,31 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 spaceUiState = spaceUiState,
                 onSpaceAction = { action ->
                     when (action) {
-                        SpaceAction.OpenSwitcher -> mediaUniverseViewModel.open()
-                        SpaceAction.DismissSwitcher -> mediaUniverseViewModel.dismiss()
-                        is SpaceAction.SelectSpace -> mediaUniverseViewModel.dismiss()
-                    }
-                    spaceViewModel.onAction(action)
-                    if (action is SpaceAction.SelectSpace) {
-                        restoreActiveImmersiveSession(action.spaceId)
+                        SpaceAction.OpenSwitcher -> {
+                            mediaUniverseViewModel.open()
+                            spaceViewModel.onAction(action)
+                        }
+                        SpaceAction.DismissSwitcher -> {
+                            mediaUniverseViewModel.dismiss()
+                            spaceViewModel.onAction(action)
+                        }
+                        is SpaceAction.SelectSpace -> {
+                            mediaUniverseViewModel.dismiss()
+                            selectSpaceAndRestoreImmersiveSession(action.spaceId)
+                        }
                     }
                 },
                 spaceNavigationSessionUiState = spaceNavigationSessionUiState,
                 onSpaceSessionChanged = spaceNavigationSessionViewModel::save,
+                spaceTransitionSuppressionTarget = mainTransitionSuppressionTarget,
+                onSpaceTransitionSuppressionConsumed =
+                    immersiveSpaceSessionRegistry::completeMainTransitionSuppression,
                 spaceResumeUiState = spaceResumeUiState,
                 onSpaceResume = { spaceId ->
                     spaceViewModel.onAction(SpaceAction.DismissSwitcher)
                     mediaUniverseViewModel.dismiss()
                     if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
-                        spaceViewModel.onAction(SpaceAction.SelectSpace(spaceId))
-                        restoreActiveImmersiveSession(spaceId)
+                        selectSpaceAndRestoreImmersiveSession(spaceId)
                     } else {
                         spaceResumeViewModel.resume(spaceId)
                     }
@@ -510,6 +527,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     }
 
     private fun consumeResumeSpaceIntent(intent: Intent) {
+        intent.getStringExtra(EXTRA_RESTORE_IMMERSIVE_SPACE_ID)?.let { rawSpaceId ->
+            intent.removeExtra(EXTRA_RESTORE_IMMERSIVE_SPACE_ID)
+            val spaceId = SpaceId(rawSpaceId)
+            if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
+                restoreActiveImmersiveSession(spaceId)
+                intent.removeExtra(EXTRA_RESUME_SPACE_ID)
+                return
+            }
+        }
         val rawSpaceId = intent.getStringExtra(EXTRA_RESUME_SPACE_ID) ?: return
         intent.removeExtra(EXTRA_RESUME_SPACE_ID)
         spaceResumeViewModel.resume(SpaceId(rawSpaceId))
@@ -520,6 +546,29 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         lifecycleScope.launch {
             spaceRepository.activeSpace.first { it == spaceId }
             immersiveSpaceSessionRegistry.restore(spaceId, this@MainActivity)
+        }
+    }
+
+    private fun selectSpaceAndRestoreImmersiveSession(spaceId: SpaceId) {
+        if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
+            immersiveSpaceSessionRegistry.suppressMainTransitionTo(spaceId)
+            if (immersiveSpaceSessionRegistry.restore(spaceId, this)) {
+                lifecycleScope.launch {
+                    lifecycle.currentStateFlow.first { state ->
+                        !state.isAtLeast(Lifecycle.State.RESUMED)
+                    }
+                    if (!spaceViewModel.selectSpaceAndAwait(spaceId)) {
+                        immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+                    }
+                }
+                return
+            }
+            immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+        }
+        lifecycleScope.launch {
+            if (spaceViewModel.selectSpaceAndAwait(spaceId)) {
+                immersiveSpaceSessionRegistry.restore(spaceId, this@MainActivity)
+            }
         }
     }
 

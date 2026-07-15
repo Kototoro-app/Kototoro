@@ -11,7 +11,7 @@ import org.skepsun.kototoro.space.domain.SpaceListPreferences
 class DefaultSpaceRoutePreferencesRepositoryTest {
 
 	private val dao = FakeSpaceRoutePreferencesDao()
-	private val repository = DefaultSpaceRoutePreferencesRepository(dao, Json)
+	private val repository = DefaultSpaceRoutePreferencesRepository(dao, Json, TestSpaceCatalogRepository())
 
 	@Test
 	fun `same route key is isolated by space id`() = runTest {
@@ -65,6 +65,10 @@ class DefaultSpaceRoutePreferencesRepositoryTest {
 
 		override suspend fun delete(spaceId: String, routeKey: String) {
 			rows.remove(spaceId to routeKey)
+		}
+
+		override suspend fun deleteForSpace(spaceId: String) {
+			rows.keys.removeAll { it.first == spaceId }
 		}
 	}
 }

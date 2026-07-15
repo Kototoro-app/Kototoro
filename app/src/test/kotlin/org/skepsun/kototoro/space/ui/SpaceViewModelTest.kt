@@ -21,6 +21,7 @@ import org.skepsun.kototoro.space.domain.SpaceFeatureFlags
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
+import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpaceViewModelTest {
@@ -41,7 +42,7 @@ class SpaceViewModelTest {
 	fun `switcher opens and selection activates target space`() = runTest {
 		val repository = FakeSpaceRepository()
 		val flags = FakeFeatureFlagsRepository(enabledFlags())
-		val viewModel = SpaceViewModel(repository, flags)
+		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		viewModel.onAction(SpaceAction.OpenSwitcher)
@@ -60,7 +61,7 @@ class SpaceViewModelTest {
 	fun `parent feature gate closes and blocks switcher`() = runTest {
 		val repository = FakeSpaceRepository()
 		val flags = FakeFeatureFlagsRepository(enabledFlags().copy(entitySpaceEnabled = false))
-		val viewModel = SpaceViewModel(repository, flags)
+		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		viewModel.onAction(SpaceAction.OpenSwitcher)
@@ -74,12 +75,30 @@ class SpaceViewModelTest {
 	}
 
 	@Test
+	fun `awaited selection returns only after target space is active`() = runTest {
+		val repository = FakeSpaceRepository()
+		val viewModel = SpaceViewModel(
+			repository,
+			TestSpaceCatalogRepository(),
+			FakeFeatureFlagsRepository(enabledFlags()),
+		)
+		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+		assertTrue(viewModel.selectSpaceAndAwait(BuiltInSpaces.Anime))
+
+		assertEquals(BuiltInSpaces.Anime, repository.activeSpace.value)
+		assertEquals(BuiltInSpaces.Anime, viewModel.uiState.value.activeSpaceId)
+		assertFalse(viewModel.uiState.value.switchInProgress)
+		collection.cancel()
+	}
+
+	@Test
 	fun `persistent navigation requires its own gate and effective switcher`() = runTest {
 		val repository = FakeSpaceRepository()
 		val flags = FakeFeatureFlagsRepository(
 			enabledFlags().copy(spacePersistentNavigationEnabled = true),
 		)
-		val viewModel = SpaceViewModel(repository, flags)
+		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		assertTrue(viewModel.uiState.value.persistentNavigationEnabled)

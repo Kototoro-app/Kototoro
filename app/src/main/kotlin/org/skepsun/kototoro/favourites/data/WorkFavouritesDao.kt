@@ -49,6 +49,45 @@ abstract class WorkFavouritesDao {
 		limit: Int,
 	): List<WorkFavouriteEntity>
 
+	@Query(
+		"""
+		SELECT wf.* FROM work_favourites wf
+		WHERE wf.anchor_manga_id IS NOT NULL AND wf.deleted_at = 0
+			AND (:categoryId IS NULL OR wf.category_id = :categoryId)
+			AND EXISTS (
+				SELECT 1 FROM entity_binding eb
+				INNER JOIN manga m ON m.manga_id = CAST(eb.external_id AS INTEGER)
+				WHERE eb.entity_id = wf.entity_id
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND m.content_type IN (:allowedTypes)
+					AND m.source IN (:allowedSources)
+			)
+			AND NOT EXISTS (
+				SELECT 1 FROM entity_binding eb
+				INNER JOIN manga m ON m.manga_id = CAST(eb.external_id AS INTEGER)
+				WHERE eb.entity_id = wf.entity_id
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND m.content_type IN (:classifiedTypes)
+					AND m.content_type NOT IN (:allowedTypes)
+			)
+		ORDER BY
+			CASE WHEN :oldestFirst = 1 THEN wf.created_at END ASC,
+			CASE WHEN :oldestFirst = 0 THEN wf.created_at END DESC,
+			wf.updated_at DESC
+		LIMIT :limit
+		""",
+	)
+	abstract suspend fun findActiveForSpaceAndSources(
+		categoryId: Long?,
+		allowedTypes: Collection<String>,
+		classifiedTypes: Collection<String>,
+		allowedSources: Collection<String>,
+		oldestFirst: Boolean,
+		limit: Int,
+	): List<WorkFavouriteEntity>
+
 	@Query("SELECT DISTINCT category_id FROM work_favourites WHERE entity_id = :entityId AND anchor_manga_id IS NOT NULL AND deleted_at = 0 ORDER BY created_at ASC")
 	abstract suspend fun findCategoriesIds(entityId: Long): List<Long>
 

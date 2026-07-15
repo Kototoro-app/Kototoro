@@ -7,13 +7,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.skepsun.kototoro.space.domain.BuiltInSpaces
+import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
+import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceSessionRepository
@@ -33,6 +35,7 @@ data class SpaceNavigationSessionUiState(
 class SpaceNavigationSessionViewModel @Inject constructor(
 	private val repository: SpaceSessionRepository,
 	private val validator: SpaceSessionValidator,
+	private val catalogRepository: SpaceCatalogRepository,
 	featureFlagsRepository: SpaceFeatureFlagsRepository,
 ) : ViewModel() {
 	private val saveMutex = Mutex()
@@ -49,10 +52,12 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 
 	init {
 		viewModelScope.launch {
-			featureFlagsRepository.flags
-				.map { it.effectivePersistentNavigationEnabled }
+			combine(
+				featureFlagsRepository.flags.map { it.effectivePersistentNavigationEnabled },
+				catalogRepository.spaces,
+			) { enabled, spaces -> enabled to spaces }
 				.distinctUntilChanged()
-				.collectLatest(::onEnabledChanged)
+				.collectLatest { (enabled, spaces) -> onCatalogChanged(enabled, spaces) }
 		}
 	}
 
@@ -74,14 +79,14 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 		}
 	}
 
-	private suspend fun onEnabledChanged(enabled: Boolean) {
+	private suspend fun onCatalogChanged(enabled: Boolean, spaces: List<SpaceContext>) {
 		if (!enabled) {
 			latestSaveGeneration.clear()
 			mutableUiState.value = SpaceNavigationSessionUiState()
 			return
 		}
 		mutableUiState.value = SpaceNavigationSessionUiState(enabled = true, restorationReady = false)
-		val sessions = BuiltInSpaces.contexts.mapNotNull { context ->
+		val sessions = spaces.mapNotNull { context ->
 			runCatching {
 				repository.load(context.id)?.let { validator.validate(it) }
 			}

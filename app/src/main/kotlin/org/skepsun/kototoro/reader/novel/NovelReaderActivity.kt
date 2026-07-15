@@ -2536,6 +2536,9 @@ class NovelReaderActivity :
                 } else {
                     transition.addTransition(Fade().addTarget(viewBinding.actionsView))
                 }
+                if (!visible) {
+                    spaceSwitcherDelegate.addControlsHideTransition(transition)
+                }
                 TransitionManager.beginDelayedTransition(viewBinding.root, transition)
             }
             
@@ -2578,7 +2581,10 @@ class NovelReaderActivity :
                     "field=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
             )
         }
-        spaceSwitcherDelegate.setControlsVisible(visible)
+        spaceSwitcherDelegate.setControlsVisible(
+            visible = visible,
+            hideWithControlsTransition = !visible && isAnimationsEnabled,
+        )
     }
 
     private fun showLoading(loading: Boolean) {

@@ -388,6 +388,14 @@ fun KototoroExploreHostRoute(
                 "discoverModels=${discoverItems.size} discoverLoading=$isDiscoverLoading"
         }
     }
+    LaunchedEffect(contentPadding.calculateTopPadding(), contentPadding.calculateBottomPadding()) {
+        traceExploreRoute {
+            "insets top=${contentPadding.calculateTopPadding()} bottom=${contentPadding.calculateBottomPadding()} " +
+                "list=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset} " +
+                "saved=$savedBrowseListIndex:$savedBrowseListOffset restore=$shouldRestoreBrowseScroll " +
+                "left=$hasLeftBrowse canRestore=$canRestoreBrowseScroll"
+        }
+    }
     val heroOverlapDp = if (shouldShowBrowseHero && (sources.isNotEmpty() || isSourcesLoadingOnly)) {
         BrowseHeroContentOverlap
     } else {
@@ -518,12 +526,20 @@ fun KototoroExploreHostRoute(
     }
 
     DisposableEffect(lifecycleOwner) {
-        traceExploreRoute { "route mounted lifecycle=${lifecycleOwner.lifecycle.currentState}" }
+        traceExploreRoute {
+            "route mounted lifecycle=${lifecycleOwner.lifecycle.currentState} " +
+                "list=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset} " +
+                "saved=$savedBrowseListIndex:$savedBrowseListOffset restore=$shouldRestoreBrowseScroll " +
+                "left=$hasLeftBrowse canRestore=$canRestoreBrowseScroll"
+        }
         val observer = LifecycleEventObserver { _, event ->
             traceExploreRoute {
                 val (sourceModelCount, sourceCount) = currentSourceTrace
                 "lifecycle event=$event state=${lifecycleOwner.lifecycle.currentState} " +
-                    "sourceModels=$sourceModelCount sources=$sourceCount"
+                    "sourceModels=$sourceModelCount sources=$sourceCount " +
+                    "list=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset} " +
+                    "saved=$savedBrowseListIndex:$savedBrowseListOffset restore=$shouldRestoreBrowseScroll " +
+                    "left=$hasLeftBrowse canRestore=$canRestoreBrowseScroll"
             }
             when (event) {
                 Lifecycle.Event.ON_PAUSE,
@@ -558,7 +574,12 @@ fun KototoroExploreHostRoute(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            traceExploreRoute { "route disposed lifecycle=${lifecycleOwner.lifecycle.currentState}" }
+            traceExploreRoute {
+                "route disposed lifecycle=${lifecycleOwner.lifecycle.currentState} " +
+                    "list=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset} " +
+                    "saved=$savedBrowseListIndex:$savedBrowseListOffset restore=$shouldRestoreBrowseScroll " +
+                    "left=$hasLeftBrowse canRestore=$canRestoreBrowseScroll"
+            }
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -573,6 +594,14 @@ fun KototoroExploreHostRoute(
         savedBrowseListOffset,
         shouldShowBrowseHero,
     ) {
+        if (shouldRestoreBrowseScroll || canRestoreBrowseScroll) {
+            traceExploreRoute {
+                "restore evaluate contentReady=$isBrowseContentReady hero=$shouldShowBrowseHero " +
+                    "list=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset} " +
+                    "saved=$savedBrowseListIndex:$savedBrowseListOffset restore=$shouldRestoreBrowseScroll " +
+                    "left=$hasLeftBrowse canRestore=$canRestoreBrowseScroll"
+            }
+        }
         if (!shouldRestoreBrowseScroll || !canRestoreBrowseScroll || !isBrowseContentReady) {
             return@LaunchedEffect
         }
@@ -589,6 +618,19 @@ fun KototoroExploreHostRoute(
             .first()
         val restoreIndex = targetIndex.coerceAtMost(totalItems - 1)
         val restoreOffset = savedBrowseListOffset
+        if (listState.firstVisibleItemIndex == restoreIndex &&
+            listState.firstVisibleItemScrollOffset == restoreOffset
+        ) {
+            traceExploreRoute { "restore skipped alreadyAt=$restoreIndex:$restoreOffset" }
+            shouldRestoreBrowseScroll = false
+            hasLeftBrowse = false
+            canRestoreBrowseScroll = false
+            return@LaunchedEffect
+        }
+        traceExploreRoute {
+            "restore started target=$restoreIndex:$restoreOffset totalItems=$totalItems " +
+                "current=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset}"
+        }
         repeat(if (restoreIndex == 0 && restoreOffset == 0) 3 else 1) {
             listState.scrollToItem(
                 index = restoreIndex,
@@ -604,7 +646,15 @@ fun KototoroExploreHostRoute(
         if (listState.firstVisibleItemIndex != restoreIndex ||
             listState.firstVisibleItemScrollOffset != restoreOffset
         ) {
+            traceExploreRoute {
+                "restore mismatch target=$restoreIndex:$restoreOffset " +
+                    "actual=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset}"
+            }
             return@LaunchedEffect
+        }
+        traceExploreRoute {
+            "restore completed target=$restoreIndex:$restoreOffset " +
+                "actual=${listState.firstVisibleItemIndex}:${listState.firstVisibleItemScrollOffset}"
         }
         shouldRestoreBrowseScroll = false
         hasLeftBrowse = false

@@ -1,15 +1,21 @@
 package org.skepsun.kototoro.space.domain
 
+import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.explore.data.SourceRuleResolver
+import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 class SpaceContentPolicyTest {
 
-    private val policy = DefaultSpaceContentPolicy()
+    private val policy = DefaultSpaceContentPolicy(
+        TestSpaceCatalogRepository(),
+        mockk<SourceRuleResolver>(relaxed = true),
+    )
 
     @Test
     fun `built in spaces use stable ids`() {

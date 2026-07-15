@@ -3,6 +3,7 @@ package org.skepsun.kototoro.space.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -11,6 +12,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
+import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
+import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import javax.inject.Inject
@@ -21,6 +24,7 @@ data class SpaceUiState(
 	val switchInProgress: Boolean = false,
 	val switcherEnabled: Boolean = false,
 	val persistentNavigationEnabled: Boolean = false,
+	val spaces: List<SpaceContext> = BuiltInSpaces.contexts,
 )
 
 sealed interface SpaceAction {
@@ -32,6 +36,7 @@ sealed interface SpaceAction {
 @HiltViewModel
 class SpaceViewModel @Inject constructor(
 	private val repository: SpaceRepository,
+	catalogRepository: SpaceCatalogRepository,
 	featureFlagsRepository: SpaceFeatureFlagsRepository,
 ) : ViewModel() {
 
@@ -40,12 +45,14 @@ class SpaceViewModel @Inject constructor(
 	val uiState = combine(
 		repository.activeSpace,
 		featureFlagsRepository.flags,
+		catalogRepository.spaces,
 		transientState,
-	) { activeSpace, flags, transient ->
+	) { activeSpace, flags, spaces, transient ->
 		transient.copy(
 			activeSpaceId = activeSpace,
 			switcherEnabled = flags.effectiveSwitcherEnabled,
 			persistentNavigationEnabled = flags.effectivePersistentNavigationEnabled,
+			spaces = spaces,
 			switcherVisible = transient.switcherVisible && flags.effectiveSwitcherEnabled,
 		)
 	}.stateIn(
@@ -55,6 +62,7 @@ class SpaceViewModel @Inject constructor(
 			activeSpaceId = repository.activeSpace.value,
 			switcherEnabled = featureFlagsRepository.flags.value.effectiveSwitcherEnabled,
 			persistentNavigationEnabled = featureFlagsRepository.flags.value.effectivePersistentNavigationEnabled,
+			spaces = catalogRepository.spaces.value,
 		),
 	)
 
@@ -64,15 +72,20 @@ class SpaceViewModel @Inject constructor(
 				state.copy(switcherVisible = uiState.value.switcherEnabled)
 			}
 			SpaceAction.DismissSwitcher -> transientState.update { it.copy(switcherVisible = false) }
-			is SpaceAction.SelectSpace -> selectSpace(action.spaceId)
+			is SpaceAction.SelectSpace -> viewModelScope.launch { selectSpaceAndAwait(action.spaceId) }
 		}
 	}
 
-	private fun selectSpace(spaceId: SpaceId) {
-		if (!uiState.value.switcherEnabled || uiState.value.switchInProgress) return
-		viewModelScope.launch {
-			transientState.update { it.copy(switchInProgress = true) }
-			runCatching { repository.activate(spaceId) }
+	suspend fun selectSpaceAndAwait(spaceId: SpaceId): Boolean {
+		if (!uiState.value.switcherEnabled || uiState.value.switchInProgress) return false
+		transientState.update { it.copy(switchInProgress = true) }
+		return try {
+			repository.activate(spaceId)
+			true
+		} catch (error: Throwable) {
+			if (error is CancellationException) throw error
+			false
+		} finally {
 			transientState.update {
 				it.copy(
 					switchInProgress = false,

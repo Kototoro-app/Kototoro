@@ -174,6 +174,21 @@ class AppRouter private constructor(
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).jsonSourceManager
     }
 
+    private val spaceFeatureFlagsRepository: org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(
+            checkNotNull(contextOrNull()),
+        ).spaceFeatureFlagsRepository
+    }
+
+    private fun prepareImmersiveIntent(intent: Intent): Intent {
+        ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(intent)
+        val flags = immersiveTaskFlags(spaceFeatureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled)
+        if (flags != 0) {
+            intent.addFlags(flags)
+        }
+        return intent
+    }
+
     /** Activities **/
 
     fun openList(source: ContentSource, filter: ContentListFilter?, sortOrder: SortOrder?) {
@@ -348,7 +363,7 @@ class AppRouter private constructor(
         }
         if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
             startActivity(
-                ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(
+                prepareImmersiveIntent(
                     Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
                         .putExtra(KEY_MANGA, ParcelableContent(manga))
                         .putExtra(KEY_ID, manga.id),
@@ -476,7 +491,7 @@ class AppRouter private constructor(
                         novelIntent.putExtra(ReaderIntent.EXTRA_STATE, state)
                     }
                     startActivity(
-                        ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(novelIntent),
+                        prepareImmersiveIntent(novelIntent),
                         anchor?.let { scaleUpActivityOptionsOf(it) },
                     )
                     return
@@ -543,7 +558,7 @@ class AppRouter private constructor(
             activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
         }
         startActivity(
-            ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(activityIntent),
+            prepareImmersiveIntent(activityIntent),
             anchor?.let { view -> scaleUpActivityOptionsOf(view) },
         )
     }
@@ -620,7 +635,7 @@ class AppRouter private constructor(
     ) {
         val ctx = contextOrNull() ?: return
         startActivity(
-            ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(
+            prepareImmersiveIntent(
                 Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
                     .setData(Uri.parse(url))
                     .putExtra(KEY_URL, url)
@@ -640,7 +655,7 @@ class AppRouter private constructor(
     ) {
         val ctx = contextOrNull() ?: return
         startActivity(
-            ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(
+            prepareImmersiveIntent(
                 Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
                     .setData(Uri.parse(url))
                     .putExtra(KEY_URL, url)
@@ -1626,4 +1641,12 @@ class AppRouter private constructor(
 
         private inline fun <reified F : Fragment> fragmentTag() = F::class.java.fragmentTag()
     }
+}
+
+internal fun immersiveTaskFlags(enabled: Boolean): Int = if (enabled) {
+    Intent.FLAG_ACTIVITY_NEW_DOCUMENT or
+        Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
+        Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+} else {
+    0
 }

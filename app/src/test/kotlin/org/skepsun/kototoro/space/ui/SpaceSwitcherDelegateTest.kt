@@ -16,4 +16,34 @@ class SpaceSwitcherDelegateTest {
 	fun `continue action requests resume for target space`() {
 		resumeSpaceExtraValue(BuiltInSpaces.Anime, resumeReading = true) shouldBe BuiltInSpaces.Anime.value
 	}
+
+	@Test
+	fun `resumed immersive session restores its own space`() {
+		shouldRestoreImmersiveSpaceOnResume(
+			sessionSpaceId = BuiltInSpaces.Novel,
+			activeSpaceId = BuiltInSpaces.Manga,
+			immersiveSwitchEnabled = true,
+			switchInProgress = false,
+			transitionSuppressionTarget = null,
+		) shouldBe true
+	}
+
+	@Test
+	fun `active switch and pending activity restoration do not race resume synchronization`() {
+		shouldRestoreImmersiveSpaceOnResume(
+			sessionSpaceId = BuiltInSpaces.Novel,
+			activeSpaceId = BuiltInSpaces.Manga,
+			immersiveSwitchEnabled = true,
+			switchInProgress = true,
+			transitionSuppressionTarget = null,
+		) shouldBe false
+
+		shouldRestoreImmersiveSpaceOnResume(
+			sessionSpaceId = BuiltInSpaces.Novel,
+			activeSpaceId = BuiltInSpaces.Manga,
+			immersiveSwitchEnabled = true,
+			switchInProgress = false,
+			transitionSuppressionTarget = BuiltInSpaces.Novel,
+		) shouldBe false
+	}
 }

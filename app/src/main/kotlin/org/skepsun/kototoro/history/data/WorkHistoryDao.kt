@@ -44,6 +44,39 @@ abstract class WorkHistoryDao {
 		limit: Int,
 	): List<WorkHistoryEntity>
 
+	@Query(
+		"""
+		SELECT wh.* FROM work_history wh
+		WHERE wh.deleted_at = 0
+			AND EXISTS (
+				SELECT 1 FROM entity_binding eb
+				INNER JOIN manga m ON m.manga_id = CAST(eb.external_id AS INTEGER)
+				WHERE eb.entity_id = wh.entity_id
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND m.content_type IN (:allowedTypes)
+					AND m.source IN (:allowedSources)
+			)
+			AND NOT EXISTS (
+				SELECT 1 FROM entity_binding eb
+				INNER JOIN manga m ON m.manga_id = CAST(eb.external_id AS INTEGER)
+				WHERE eb.entity_id = wh.entity_id
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND m.content_type IN (:classifiedTypes)
+					AND m.content_type NOT IN (:allowedTypes)
+			)
+		ORDER BY wh.updated_at DESC
+		LIMIT :limit
+		""",
+	)
+	abstract suspend fun findRecentForSpaceAndSources(
+		allowedTypes: Collection<String>,
+		classifiedTypes: Collection<String>,
+		allowedSources: Collection<String>,
+		limit: Int,
+	): List<WorkHistoryEntity>
+
 	@Query("SELECT * FROM work_history WHERE entity_id = :entityId LIMIT 1")
 	abstract suspend fun find(entityId: Long): WorkHistoryEntity?
 

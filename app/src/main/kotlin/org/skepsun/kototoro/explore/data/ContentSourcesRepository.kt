@@ -57,6 +57,7 @@ import org.skepsun.kototoro.parsers.util.mapNotNullToSet
 import org.skepsun.kototoro.parsers.util.mapToSet
 import java.util.Collections
 import java.util.LinkedHashSet
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -101,6 +102,15 @@ class ContentSourcesRepository @Inject constructor(
 	private val jsonDao get() = db.getJsonSourceDao()
 	private val isNewSourcesAssimilated = AtomicBoolean(false)
 	private val cachedKotatsuSources = java.util.concurrent.ConcurrentHashMap<String, org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource>()
+	private val enabledSources: StateFlow<List<ContentSourceInfo>> =
+		createEnabledSourcesFlow()
+			.distinctUntilChanged()
+			.flowOn(Dispatchers.Default)
+			.stateIn(
+				scope = processLifecycleScope,
+				started = SharingStarted.Eagerly,
+				initialValue = emptyList(),
+			)
 	private val enabledBrowseSources: StateFlow<List<ContentSourceInfo>> =
 		createEnabledBrowseSourcesFlow()
 			.onEach { sources ->
@@ -510,8 +520,12 @@ class ContentSourcesRepository @Inject constructor(
 		if (activePresetId != -1L) {
 			val preset = db.getSourcePresetsDao().find(activePresetId)
 			if (preset != null) {
-				val activeSources = if (preset.sources.isEmpty()) emptySet() else preset.sources.split(",").toSet()
-				result.retainAll { it.name in activeSources }
+				val languages = preset.languages.split(',').mapNotNullTo(LinkedHashSet()) {
+					it.trim().lowercase(Locale.ROOT).takeIf(String::isNotEmpty)
+				}
+				result.retainAll { source ->
+					source.getLocale()?.language?.lowercase(Locale.ROOT) in languages
+				}
 			}
 		}
 		
@@ -646,7 +660,9 @@ class ContentSourcesRepository @Inject constructor(
 		}
 	}
 
-	fun observeEnabledSources(): Flow<List<ContentSourceInfo>> = combine(
+	fun observeEnabledSources(): StateFlow<List<ContentSourceInfo>> = enabledSources
+
+	private fun createEnabledSourcesFlow(): Flow<List<ContentSourceInfo>> = combine(
 		observeIsNsfwDisabled(),
 		observeAllEnabled(),
 		observeSortOrder(),

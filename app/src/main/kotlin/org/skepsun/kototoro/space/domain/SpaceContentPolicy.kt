@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.space.domain
 
 import dagger.Reusable
+import org.skepsun.kototoro.explore.data.SourceRule
+import org.skepsun.kototoro.explore.data.SourceRuleResolver
 import org.skepsun.kototoro.parsers.model.ContentType
 import javax.inject.Inject
 
@@ -11,23 +13,40 @@ interface SpaceContentPolicy {
     fun spaceFor(contentType: ContentType?): SpaceId?
 
     fun accepts(spaceId: SpaceId, contentType: ContentType?): Boolean
+
+    fun allowedSourceNames(spaceId: SpaceId): Set<String>?
 }
 
 @Reusable
-class DefaultSpaceContentPolicy @Inject constructor() : SpaceContentPolicy {
+class DefaultSpaceContentPolicy @Inject constructor(
+    private val catalogRepository: SpaceCatalogRepository,
+    private val sourceRuleResolver: SourceRuleResolver,
+) : SpaceContentPolicy {
 
     override fun allowedTypes(spaceId: SpaceId): Set<ContentType> {
-        return BuiltInSpaces.contexts.firstOrNull { it.id == spaceId }?.allowedContentTypes.orEmpty()
+        return catalogRepository.find(spaceId)?.allowedContentTypes.orEmpty()
     }
 
     override fun spaceFor(contentType: ContentType?): SpaceId? {
         if (contentType == null || contentType == ContentType.OTHER) {
             return null
         }
-        return BuiltInSpaces.contexts.firstOrNull { contentType in it.allowedContentTypes }?.id
+        return catalogRepository.spaces.value.firstOrNull { contentType in it.allowedContentTypes }?.id
     }
 
     override fun accepts(spaceId: SpaceId, contentType: ContentType?): Boolean {
         return contentType != null && contentType in allowedTypes(spaceId)
+    }
+
+    override fun allowedSourceNames(spaceId: SpaceId): Set<String>? {
+        val context = catalogRepository.find(spaceId) ?: return emptySet()
+        if (context.sourceLanguages.isEmpty() && context.sourceKinds.isEmpty()) return null
+        return sourceRuleResolver.resolveCurrentSourceNames(
+            SourceRule(
+                languages = context.sourceLanguages,
+                contentTypes = context.allowedContentTypes,
+                sourceTypes = context.sourceKinds,
+            ),
+        )
     }
 }

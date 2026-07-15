@@ -612,6 +612,9 @@ class ReaderActivity :
                 viewBinding.toolbarDocked?.let {
                     transition.addTransition(Slide(Gravity.BOTTOM).addTarget(it))
                 }
+                if (!isUiVisible) {
+                    spaceSwitcherDelegate.addControlsHideTransition(transition)
+                }
                 TransitionManager.beginDelayedTransition(viewBinding.root, transition)
             }
             val isFullscreen = settings.isReaderFullscreenEnabled
@@ -624,7 +627,10 @@ class ReaderActivity :
             systemUiController.setSystemUiVisible(isUiVisible || !isFullscreen)
             viewBinding.root.requestApplyInsets()
         }
-        spaceSwitcherDelegate.setControlsVisible(isUiVisible)
+        spaceSwitcherDelegate.setControlsVisible(
+            visible = isUiVisible,
+            hideWithControlsTransition = !isUiVisible && isAnimationsEnabled,
+        )
     }
 
     override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {

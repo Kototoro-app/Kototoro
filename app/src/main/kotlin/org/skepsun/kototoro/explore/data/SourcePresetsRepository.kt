@@ -1,34 +1,39 @@
 package org.skepsun.kototoro.explore.data
 
-import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.util.ext.mapItems
 import javax.inject.Inject
+import javax.inject.Singleton
 
-@Reusable
+@Singleton
 class SourcePresetsRepository @Inject constructor(
 	private val db: MangaDatabase,
+	private val sourceRuleResolver: SourceRuleResolver,
 ) {
 
 	private val dao: SourcePresetsDao
 		get() = db.getSourcePresetsDao()
 
 	fun observeAll(): Flow<List<SourcePreset>> {
-		return dao.observeAll().mapItems { it.toSourcePreset() }
+		return dao.observeAll().combine(sourceRuleResolver.observeResolvedSourceNames(SourceRule())) { entities, _ ->
+			entities.map { it.toResolvedSourcePreset() }
+		}
 	}
 
 	fun observe(id: Long): Flow<SourcePreset?> {
-		return dao.observe(id).map { it?.toSourcePreset() }
+		return dao.observe(id).combine(sourceRuleResolver.observeResolvedSourceNames(SourceRule())) { entity, _ ->
+			entity?.toResolvedSourcePreset()
+		}
 	}
 
 	suspend fun getAll(): List<SourcePreset> {
-		return dao.findAll().map { it.toSourcePreset() }
+		return dao.findAll().map { it.toResolvedSourcePreset() }
 	}
 
 	suspend fun getById(id: Long): SourcePreset? {
-		return dao.find(id)?.toSourcePreset()
+		return dao.find(id)?.toResolvedSourcePreset()
 	}
 
 	suspend fun createPreset(title: String, languages: Set<String>, sources: Set<String>): SourcePreset {
@@ -55,5 +60,16 @@ class SourcePresetsRepository @Inject constructor(
 
 	suspend fun deletePreset(id: Long) {
 		dao.delete(id)
+	}
+
+	private fun SourcePresetEntity.toResolvedSourcePreset(): SourcePreset {
+		val stored = toSourcePreset()
+		return stored.copy(
+			sources = if (stored.languages.isEmpty()) {
+				emptySet()
+			} else {
+				sourceRuleResolver.resolveCurrentSourceNames(SourceRule(languages = stored.languages))
+			},
+		)
 	}
 }

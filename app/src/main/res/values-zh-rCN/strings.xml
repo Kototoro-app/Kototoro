@@ -3060,4 +3060,14 @@ SHA-256 指纹:
     <string name="space_immersive_switch_enabled_summary">允许从详情页、阅读器和视频播放器切换 Space</string>
     <string name="space_route_preferences_enabled">记住每个 Space 的页面偏好</string>
     <string name="space_route_preferences_enabled_summary">为每个 Space 分别保存受支持页面的筛选和布局选择</string>
+    <string name="custom_spaces">Space 定义</string>
+    <string name="add_custom_space">添加自定义 Space</string>
+    <string name="edit_custom_space">编辑自定义 Space</string>
+    <string name="delete_custom_space">删除自定义 Space</string>
+    <string name="delete_custom_space_message">删除“%1$s”及其保存的导航状态？</string>
+    <string name="custom_space_limit">最多可创建 %1$d 个自定义 Space</string>
+    <string name="built_in_space">内置</string>
+    <string name="content_types">内容类型</string>
+    <string name="source_types">内容源类型</string>
+    <string name="custom_space_rule_summary">%1$d 种内容类型 · %2$d 种语言 · %3$d 种内容源类型</string>
 </resources>

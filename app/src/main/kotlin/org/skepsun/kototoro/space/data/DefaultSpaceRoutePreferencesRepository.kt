@@ -2,9 +2,9 @@ package org.skepsun.kototoro.space.data
 
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SPACE_ROUTE_PREFERENCES_SCHEMA_VERSION
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 import org.skepsun.kototoro.space.domain.SpaceListPreferences
 import org.skepsun.kototoro.space.domain.SpaceRoutePreferencesRepository
 import javax.inject.Inject
@@ -14,12 +14,12 @@ import javax.inject.Singleton
 class DefaultSpaceRoutePreferencesRepository internal constructor(
 	private val dao: SpaceRoutePreferencesDao,
 	private val json: Json,
+	private val catalogRepository: SpaceCatalogRepository,
 ) : SpaceRoutePreferencesRepository {
 
 	@Inject
-	constructor(database: MangaDatabase, json: Json) : this(database.getSpaceRoutePreferencesDao(), json)
-
-	private val builtInSpaceIds = BuiltInSpaces.contexts.mapTo(HashSet()) { it.id }
+	constructor(database: MangaDatabase, json: Json, catalogRepository: SpaceCatalogRepository) :
+		this(database.getSpaceRoutePreferencesDao(), json, catalogRepository)
 
 	override suspend fun load(spaceId: SpaceId, routeKey: String): SpaceListPreferences? {
 		requireValidKey(spaceId, routeKey)
@@ -53,7 +53,7 @@ class DefaultSpaceRoutePreferencesRepository internal constructor(
 	}
 
 	private fun requireValidKey(spaceId: SpaceId, routeKey: String) {
-		require(spaceId in builtInSpaceIds) { "Unknown built-in SpaceId: ${spaceId.value}" }
+		require(catalogRepository.find(spaceId) != null) { "Unknown SpaceId: ${spaceId.value}" }
 		require(routeKey.isNotBlank()) { "routeKey must not be blank" }
 	}
 }

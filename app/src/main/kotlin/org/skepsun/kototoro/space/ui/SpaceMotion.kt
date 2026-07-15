@@ -8,6 +8,8 @@ enum class SpaceMotionMode {
 
 object SpaceMotion {
 	const val IconCrossfadeMillis = 120
+	const val NavigationSlideMillis = 220
+	const val ReducedNavigationSlideMillis = 100
 
 	fun resolveMode(
 		reducedVisualEffects: Boolean,

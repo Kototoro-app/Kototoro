@@ -14,6 +14,8 @@ import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.DefaultSpaceContentPolicy
+import org.skepsun.kototoro.explore.data.SourceRuleResolver
+import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 class WorkAggregateSpaceQueryTest {
 
@@ -26,7 +28,10 @@ class WorkAggregateSpaceQueryTest {
 	private val repository = WorkAggregateRepository(
 		db = db,
 		workResolver = mockk(),
-		spaceContentPolicy = DefaultSpaceContentPolicy(),
+		spaceContentPolicy = DefaultSpaceContentPolicy(
+			TestSpaceCatalogRepository(),
+			mockk<SourceRuleResolver>(relaxed = true),
+		),
 	)
 
 	@Test

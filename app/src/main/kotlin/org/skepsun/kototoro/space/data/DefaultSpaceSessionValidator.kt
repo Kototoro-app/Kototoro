@@ -11,14 +11,12 @@ import javax.inject.Singleton
 @Singleton
 class DefaultSpaceSessionValidator @Inject constructor(
 	private val workResolver: WorkResolver,
-	private val sourceRegistry: SpaceSourceAvailability,
 ) : SpaceSessionValidator {
 
 	override suspend fun validate(snapshot: SpaceSessionSnapshot): SpaceSessionSnapshot {
-		val sourceAvailabilityCache = HashMap<String, Boolean>()
 		val validatedStacks = snapshot.stacks.mapNotNull { (stackKey, routes) ->
 			if (stackKey !in VALID_TOP_LEVEL_KEYS) return@mapNotNull null
-			val validated = routes.validatePrefix(stackKey, sourceAvailabilityCache)
+			val validated = routes.validatePrefix(stackKey)
 			(stackKey to validated).takeIf { validated.isNotEmpty() }
 		}.toMap()
 		val selectedTopLevel = snapshot.selectedTopLevel.takeIf {
@@ -26,38 +24,32 @@ class DefaultSpaceSessionValidator @Inject constructor(
 		} ?: DEFAULT_TOP_LEVEL_KEY
 		return snapshot.copy(
 			selectedTopLevel = selectedTopLevel,
-			resumeRoute = snapshot.resumeRoute?.validate(sourceAvailabilityCache),
+			resumeRoute = snapshot.resumeRoute?.validate(),
 			stacks = validatedStacks,
 		)
 	}
 
 	private suspend fun List<SpaceRouteSnapshot>.validatePrefix(
 		stackKey: String,
-		sourceAvailability: MutableMap<String, Boolean>,
 	): List<SpaceRouteSnapshot> {
 		val result = ArrayList<SpaceRouteSnapshot>(size)
 		for ((index, route) in withIndex()) {
-			val validated = route.validate(sourceAvailability) ?: break
+			val validated = route.validate() ?: break
 			if (index == 0 && validated != SpaceRouteSnapshot.TopLevel(stackKey)) break
 			result += validated
 		}
 		return result
 	}
 
-	private suspend fun SpaceRouteSnapshot.validate(
-		sourceAvailability: MutableMap<String, Boolean>,
-	): SpaceRouteSnapshot? = when (this) {
+	private suspend fun SpaceRouteSnapshot.validate(): SpaceRouteSnapshot? = when (this) {
 		is SpaceRouteSnapshot.TopLevel -> takeIf { key in VALID_TOP_LEVEL_KEYS }
 		is SpaceRouteSnapshot.WorkDetails -> {
 			val identity = workResolver.resolveByEntityId(entityId) ?: return null
 			copy(requestedProjectionId = requestedProjectionId?.takeIf { it in identity.localMangaIds })
 		}
-		is SpaceRouteSnapshot.ContentList -> takeIf {
-			val available = sourceAvailability[sourceName] ?: sourceRegistry.isAvailable(sourceName).also {
-				sourceAvailability[sourceName] = it
-			}
-			available
-		}
+		// Runtime source registries are transiently empty during cold start. Route restoration must not
+		// destructively discard a valid saved destination before extension discovery finishes.
+		is SpaceRouteSnapshot.ContentList -> this
 	}
 
 	private companion object {

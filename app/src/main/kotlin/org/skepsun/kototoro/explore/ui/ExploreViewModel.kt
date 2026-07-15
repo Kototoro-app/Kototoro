@@ -73,8 +73,14 @@ class ExploreViewModel @Inject constructor(
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
-	spaceBrowseScope: SpaceBrowseScope,
+	private val spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel() {
+	private val boundSpaceId = MutableStateFlow(spaceBrowseScope.currentSpaceId)
+	private val boundSpaceGroupTab = spaceBrowseScope.observeGroupTab(boundSpaceId).stateIn(
+		scope = viewModelScope + Dispatchers.Default,
+		started = SharingStarted.Eagerly,
+		initialValue = spaceBrowseScope.groupTab.value,
+	)
 
 	val isGrid = settings.observeAsStateFlow(
 		key = AppSettings.KEY_SOURCES_GRID,
@@ -107,7 +113,7 @@ class ExploreViewModel @Inject constructor(
 	 * Observable selected group tab for UI
 	 */
 	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = boundSpaceGroupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
 
@@ -149,6 +155,10 @@ class ExploreViewModel @Inject constructor(
 	 */
 	fun setSelectedGroupTab(tab: BrowseGroupTab) {
 		globalFavoritesState.setSelectedGroupTab(tab)
+	}
+
+	fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) {
+		boundSpaceId.value = spaceId
 	}
 
 	/**
@@ -253,7 +263,8 @@ class ExploreViewModel @Inject constructor(
 					if (id == -1L) flowOf(null)
 					else sourcePresetsRepository.observe(id)
 				}
-				.traceExploreInput("preset") { "value=${it?.id ?: "none"}" }
+				.traceExploreInput("preset") { "value=${it?.id ?: "none"}" },
+			spaceBrowseScope.observeAllowedSourceNames(boundSpaceId),
 		) { values: Array<Any?> ->
 			@Suppress("UNCHECKED_CAST")
 			buildList(
@@ -265,6 +276,7 @@ class ExploreViewModel @Inject constructor(
 				values[5] as Set<SourceTag>,
 				values[6] as Boolean,
 				values[7] as? org.skepsun.kototoro.explore.data.SourcePreset,
+				values[8] as? Set<String>,
 			)
 		}.onEach { models ->
 			traceExploreViewModel { "combined models=${models.size}" }
@@ -279,9 +291,10 @@ class ExploreViewModel @Inject constructor(
 		sourceTags: Set<SourceTag>,
 		isGroupedByLanguage: Boolean,
 		preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+		allowedSourceNames: Set<String>?,
 	): List<ListModel> {
 		// Apply group tab filtering
-		val filteredSources = applyGroupTabFilter(sources, groupTab, sourceTags, preset)
+		val filteredSources = applyGroupTabFilter(sources, groupTab, sourceTags, preset, allowedSourceNames)
 		
 		val result = ArrayList<ListModel>(filteredSources.size + 3)
 		if (filteredSources.isNotEmpty()) {
@@ -343,9 +356,13 @@ class ExploreViewModel @Inject constructor(
 		groupTab: BrowseGroupTab,
 		sourceTags: Set<SourceTag>,
 		preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+		allowedSourceNames: Set<String>?,
 	): List<ContentSourceInfo> {
 		val filtered = sources.filter { sourceInfo ->
 			val source = sourceInfo.mangaSource
+			if (allowedSourceNames != null && source.name !in allowedSourceNames) {
+				return@filter false
+			}
 			if (preset != null && source.name !in preset.sources) {
 				return@filter false
 			}

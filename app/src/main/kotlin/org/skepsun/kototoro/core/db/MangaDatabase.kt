@@ -77,6 +77,7 @@ import org.skepsun.kototoro.core.db.migrations.Migration69To70
 import org.skepsun.kototoro.core.db.migrations.Migration70To71
 import org.skepsun.kototoro.core.db.migrations.Migration71To72
 import org.skepsun.kototoro.core.db.migrations.Migration72To73
+import org.skepsun.kototoro.core.db.migrations.Migration73To74
 import org.skepsun.kototoro.core.db.migrations.Migration1To2
 import org.skepsun.kototoro.core.db.migrations.Migration20To21
 import org.skepsun.kototoro.core.db.migrations.Migration21To22
@@ -140,11 +141,13 @@ import org.skepsun.kototoro.space.data.SpaceSessionDao
 import org.skepsun.kototoro.space.data.SpaceSessionEntity
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesDao
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesEntity
+import org.skepsun.kototoro.space.data.SpaceDefinitionDao
+import org.skepsun.kototoro.space.data.SpaceDefinitionEntity
 
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 73
+const val DATABASE_VERSION = 74
 
 @Database(
 	entities = [
@@ -158,6 +161,7 @@ const val DATABASE_VERSION = 73
 		WorkMigrationLedgerEntity::class,
 		ReadingRecordEntity::class, ReadingJumpPointEntity::class,
 		SpaceSessionEntity::class, SpaceNavigationEntryEntity::class, SpaceRoutePreferencesEntity::class,
+		SpaceDefinitionEntity::class,
 		// EpubChapterEntity::class,
 	],
 	version = DATABASE_VERSION,
@@ -219,6 +223,8 @@ abstract class MangaDatabase : RoomDatabase() {
 	abstract fun getSpaceSessionDao(): SpaceSessionDao
 
 	abstract fun getSpaceRoutePreferencesDao(): SpaceRoutePreferencesDao
+
+	abstract fun getSpaceDefinitionDao(): SpaceDefinitionDao
 
 	// abstract fun getEpubChapterDao(): EpubChapterDao
 }
@@ -297,6 +303,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
 	Migration70To71(),
 	Migration71To72(),
 	Migration72To73(),
+	Migration73To74(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

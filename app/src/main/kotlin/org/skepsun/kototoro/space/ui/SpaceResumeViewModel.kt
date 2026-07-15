@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withTimeoutOrNull
@@ -26,8 +28,9 @@ import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
+import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import javax.inject.Inject
 
@@ -45,14 +48,27 @@ data class SpaceResumeUiState(
 @Reusable
 class SpaceResumeStateSource @Inject constructor(
 	historyRepository: HistoryRepository,
+	catalogRepository: SpaceCatalogRepository,
+	featureFlagsRepository: SpaceFeatureFlagsRepository,
 	private val networkState: NetworkState,
 	private val settings: AppSettings,
 ) {
-	private val recentBySpace = combine(
-		BuiltInSpaces.contexts.map { context ->
-			historyRepository.observeLast(context.id).map { context.id to it }
-		},
-	) { entries -> entries.toMap() }
+	private val activeContexts = combine(
+		catalogRepository.spaces,
+		featureFlagsRepository.flags,
+	) { contexts, flags ->
+		contexts.takeIf { flags.effectiveSwitcherEnabled }.orEmpty()
+	}
+
+	private val recentBySpace = activeContexts.flatMapLatest { contexts ->
+		if (contexts.isEmpty()) {
+			flowOf(emptyMap())
+		} else {
+			combine(contexts.map { context ->
+				historyRepository.observeLast(context.id).map { context.id to it }
+			}) { entries -> entries.toMap() }
+		}
+	}
 
 	fun observe() = combine(
 		recentBySpace,

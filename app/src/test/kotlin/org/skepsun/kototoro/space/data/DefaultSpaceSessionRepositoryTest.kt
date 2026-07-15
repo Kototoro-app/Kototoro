@@ -15,7 +15,7 @@ class DefaultSpaceSessionRepositoryTest {
 
 	private val dao = FakeSpaceSessionDao()
 	private val codec = SpaceRouteCodec(Json { ignoreUnknownKeys = true })
-	private val repository = DefaultSpaceSessionRepository(dao, codec)
+	private val repository = DefaultSpaceSessionRepository(dao, codec, TestSpaceCatalogRepository())
 
 	@Test
 	fun `save and load round trips one space snapshot`() = runTest {
