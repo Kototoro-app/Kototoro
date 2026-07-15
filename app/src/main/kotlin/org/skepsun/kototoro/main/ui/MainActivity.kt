@@ -240,11 +240,13 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val appUpdate by viewModel.appUpdate.collectAsState(initial = null)
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
+            val lastReadContent by viewModel.lastReadContent.collectAsState()
 
             KototoroApp(
                 appSettings = settings,
                 navStateFlow = navStateFlow,
                 pageSaveHelper = pageSaveHelper,
+                lastReadContent = lastReadContent,
                 suggestions = suggestions,
                 onQueryChanged = ::updateSearchQuery,
                 onSearch = { query -> submitSearch(query) },

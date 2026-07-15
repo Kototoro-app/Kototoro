@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import org.skepsun.kototoro.core.ui.glass.ApplyDynamicArtworkBlurDialogStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -379,6 +380,7 @@ fun <T> SettingsChoicePreference(
     }
 
     if (isDialogVisible) {
+        ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
             title = { Text(text = title) },
@@ -482,6 +484,7 @@ fun <T> SettingsMultiChoicePreference(
     }
 
     if (isDialogVisible) {
+        ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
             title = { Text(text = title) },
@@ -711,6 +714,7 @@ fun SettingsDialogTextPreference(
     }
 
     if (isDialogVisible) {
+        ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = {
                 isSuggestionsExpanded = false
@@ -847,6 +851,7 @@ fun SettingsReorderPreference(
     }
 
     if (isDialogVisible) {
+        ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
             title = { Text(text = title) },
