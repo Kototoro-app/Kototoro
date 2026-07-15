@@ -243,13 +243,13 @@ private fun android.content.Context.resolveComposeColorScheme(
         val liftedSurfaceContainerHigh = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerHigh.liftForDarkContrast(0.18f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF242424)
-            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF202026).copy(alpha = 0.58f)
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF202026).copy(alpha = 0.86f)
             else -> common.surfaceContainerHigh.liftForDarkContrast(0.18f)
         }
         val liftedSurfaceContainerHighest = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerHighest.liftForDarkContrast(0.20f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF2C2C2C)
-            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF26262E).copy(alpha = 0.64f)
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF26262E).copy(alpha = 0.90f)
             else -> common.surfaceContainerHighest.liftForDarkContrast(0.20f)
         }
         val liftedSurfaceVariant = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
@@ -271,6 +271,11 @@ private fun android.content.Context.resolveComposeColorScheme(
             common.secondaryContainer.copy(alpha = 0.55f)
         } else {
             common.secondaryContainer
+        }
+        val resolvedScrim = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+            Color(0xCC000000)
+        } else {
+            Color.Black
         }
 
         darkColorScheme(
@@ -302,7 +307,7 @@ private fun android.content.Context.resolveComposeColorScheme(
             onErrorContainer = common.onErrorContainer,
             outline = common.outline,
             outlineVariant = common.outlineVariant,
-            scrim = Color.Black,
+            scrim = resolvedScrim,
             surfaceBright = liftedSurfaceBright,
             surfaceDim = liftedSurfaceDim,
             surfaceContainerLowest = liftedSurfaceContainerLowest,
@@ -317,10 +322,15 @@ private fun android.content.Context.resolveComposeColorScheme(
         val lightSurfaceContainerLowest = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerLowest.copy(alpha = 0.45f) else common.surfaceContainerLowest
         val lightSurfaceContainerLow = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerLow.copy(alpha = 0.50f) else common.surfaceContainerLow
         val lightSurfaceContainer = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainer.copy(alpha = 0.56f) else common.surfaceContainer
-        val lightSurfaceContainerHigh = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerHigh.copy(alpha = 0.62f) else common.surfaceContainerHigh
-        val lightSurfaceContainerHighest = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerHighest.copy(alpha = 0.68f) else common.surfaceContainerHighest
+        val lightSurfaceContainerHigh = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerHigh.copy(alpha = 0.86f) else common.surfaceContainerHigh
+        val lightSurfaceContainerHighest = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerHighest.copy(alpha = 0.90f) else common.surfaceContainerHighest
         val lightSurfaceVariant = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceVariant.copy(alpha = 0.55f) else common.surfaceVariant
         val lightSecondaryContainer = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.secondaryContainer.copy(alpha = 0.60f) else common.secondaryContainer
+        val resolvedScrim = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+            Color(0xCC000000)
+        } else {
+            Color.Black
+        }
 
         lightColorScheme(
             primary = common.primary,
@@ -351,7 +361,7 @@ private fun android.content.Context.resolveComposeColorScheme(
             onErrorContainer = common.onErrorContainer,
             outline = common.outline,
             outlineVariant = common.outlineVariant,
-            scrim = Color.Black,
+            scrim = resolvedScrim,
             surfaceBright = common.surfaceBright,
             surfaceDim = common.surfaceDim,
             surfaceContainerLowest = lightSurfaceContainerLowest,
