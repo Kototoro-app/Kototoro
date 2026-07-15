@@ -67,6 +67,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.dp
@@ -120,6 +121,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -169,6 +172,7 @@ import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.space.ui.SpaceMotion
 import org.skepsun.kototoro.space.ui.SpaceMotionMode
+import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
 
 private const val SpaceFabTraceTag = "SpaceFabTrace"
 
@@ -376,6 +380,8 @@ fun KototoroApp(
     pendingSearchNavigation: SearchNavigationRequest? = null,
     onSearchNavigationHandled: () -> Unit = {},
     onFeedRefresh: () -> Unit = {},
+    isResumeEnabled: Boolean = false,
+    onResumeClick: () -> Unit = {},
     spaceUiState: SpaceUiState = SpaceUiState(),
     onSpaceAction: (SpaceAction) -> Unit = {},
     spaceNavigationSessionUiState: SpaceNavigationSessionUiState = SpaceNavigationSessionUiState(),
@@ -740,6 +746,12 @@ fun KototoroApp(
     val isContentListRoute = currentDestination?.hasRoute<ContentListRoute>() == true
     val isImmersiveRoute = isDetailsRoute || isContentListRoute
     val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
+    val mainFabMode = resolveMainFabMode(
+        spaceSwitcherEnabled = spaceUiState.switcherEnabled,
+        resumeEnabled = isResumeEnabled,
+    )
+    val showContinueReadingFab = mainFabMode == MainFabMode.CONTINUE_READING
+    val showMainFab = mainFabMode != MainFabMode.HIDDEN
     LaunchedEffect(shouldShowChrome, navigationSpaceId, isLandscapeNavigation) {
         traceSpaceFab {
             "space changed space=${navigationSpaceId.value} chrome=$shouldShowChrome landscape=$isLandscapeNavigation " +
@@ -1217,7 +1229,7 @@ fun KototoroApp(
                         onItemSelected = bottomNavDispatcher,
                         onItemReselected = bottomNavDispatcher,
                         railHeaderContent = null,
-                        adjacentAction = if (spaceUiState.switcherEnabled && !isLandscapeNavigation) {
+                        adjacentAction = if (showMainFab && !isLandscapeNavigation) {
                             {
                                 Box(
                                     modifier = Modifier
@@ -1400,6 +1412,26 @@ fun KototoroApp(
                     }
                 }
                 LaunchedEffect(
+                    spaceUiState.switcherEnabled,
+                    isDetailsRoute,
+                    spaceSwitcherFabTargetOffset,
+                    density,
+                ) {
+                    if (
+                        spaceUiState.switcherEnabled &&
+                        isDetailsRoute &&
+                        spaceSwitcherFabTargetOffset != null
+                    ) {
+                        val halfFabSize = with(density) { spaceSwitcherFabSize.toPx() / 2f }
+                        ImmersiveSpaceSwitcherTransition.updateDetailsOrigin(
+                            centerX = spaceSwitcherFabTargetOffset.x + halfFabSize,
+                            centerY = spaceSwitcherFabTargetOffset.y + halfFabSize,
+                        )
+                    } else {
+                        ImmersiveSpaceSwitcherTransition.clearDetailsOrigin()
+                    }
+                }
+                LaunchedEffect(
                     navigationSpaceId,
                     currentDestinationRoute,
                     spaceSwitcherFabTargetOffset,
@@ -1409,11 +1441,16 @@ fun KototoroApp(
                             "target=$spaceSwitcherFabTargetOffset anchor=$mainAnchorBounds root=$rootBounds"
                     }
                 }
-                if (
-                    spaceUiState.switcherEnabled &&
-                    spaceSwitcherFabTargetOffset != null &&
+                val showFabOnCurrentRoute = if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
                     (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
-                    (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
+                        (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
+                } else {
+                    showContinueReadingFab && shouldShowChrome
+                }
+                if (
+                    showMainFab &&
+                    spaceSwitcherFabTargetOffset != null &&
+                    showFabOnCurrentRoute
                 ) {
                     val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
                         targetValue = spaceSwitcherFabTargetOffset,
@@ -1424,15 +1461,23 @@ fun KototoroApp(
                         },
                         label = "space_switcher_fab_position",
                     )
-                    SpaceSwitcherFab(
-                        activeSpaceId = spaceUiState.activeSpaceId,
-                        expanded = false,
-                        onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset { animatedSpaceSwitcherFabOffset }
-                            .size(spaceSwitcherFabSize),
-                    )
+                    val fabModifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { animatedSpaceSwitcherFabOffset }
+                        .size(spaceSwitcherFabSize)
+                    if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
+                        SpaceSwitcherFab(
+                            activeSpaceId = spaceUiState.activeSpaceId,
+                            expanded = false,
+                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                            modifier = fabModifier,
+                        )
+                    } else {
+                        ContinueReadingFab(
+                            onClick = onResumeClick,
+                            modifier = fabModifier,
+                        )
+                    }
                 }
                 SpaceSwitcherSheet(
                     state = spaceUiState,
@@ -1827,6 +1872,27 @@ private fun MainSelectionTopChrome(
         is CompactTabsTopBarOverrideState -> Unit
         is LayeredTopBarOverrideState -> Unit
     }
+}
+
+@Composable
+private fun ContinueReadingFab(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ExtendedFloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        expanded = false,
+        icon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_read),
+                contentDescription = stringResource(R.string._continue),
+            )
+        },
+        text = { Text(stringResource(R.string._continue)) },
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    )
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)

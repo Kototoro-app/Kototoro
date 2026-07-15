@@ -7,6 +7,7 @@ sealed interface SettingsDestination {
 	data object Root : SettingsDestination
 	data object AppearanceSettings : SettingsDestination
 	data object UsersSettings : SettingsDestination
+	data object SpacesSettings : SettingsDestination
 	data object AISettings : SettingsDestination
 	data object OcrModelsSettings : SettingsDestination
 	data object AiImageEnhancementSettings : SettingsDestination

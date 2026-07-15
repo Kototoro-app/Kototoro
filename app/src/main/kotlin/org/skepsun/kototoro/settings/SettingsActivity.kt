@@ -111,6 +111,7 @@ import org.skepsun.kototoro.settings.compose.SettingsSectionScaffold
 import org.skepsun.kototoro.settings.compose.SettingsSearchTopBarAction
 import org.skepsun.kototoro.settings.compose.SettingsSearchTopAppBar
 import org.skepsun.kototoro.settings.compose.SettingsTopBarScaffold
+import org.skepsun.kototoro.settings.compose.SpacesSettingsRoute
 import org.skepsun.kototoro.settings.compose.buildSettingsRootSections
 import org.skepsun.kototoro.settings.nav.NavConfigRoute
 import org.skepsun.kototoro.settings.nav.NavConfigViewModel
@@ -523,6 +524,10 @@ class SettingsActivity :
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_USERS_SETTINGS)
 					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
+				SettingsDestination.SpacesSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SPACES_SETTINGS)
+					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
+				}
 				SettingsDestination.AISettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_SETTINGS)
 					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
@@ -758,6 +763,7 @@ class SettingsActivity :
 			)
 			SettingsDestination.AppearanceSettings,
 			SettingsDestination.UsersSettings,
+			SettingsDestination.SpacesSettings,
 			SettingsDestination.AISettings,
 			SettingsDestination.OcrModelsSettings,
 			SettingsDestination.AiImageEnhancementSettings,
@@ -985,6 +991,7 @@ class SettingsActivity :
 			SettingsDestination.Root -> COMPOSE_DESTINATION_ROOT
 			SettingsDestination.AppearanceSettings -> COMPOSE_DESTINATION_APPEARANCE_SETTINGS
 			SettingsDestination.UsersSettings -> COMPOSE_DESTINATION_USERS_SETTINGS
+			SettingsDestination.SpacesSettings -> COMPOSE_DESTINATION_SPACES_SETTINGS
 			SettingsDestination.AISettings -> COMPOSE_DESTINATION_AI_SETTINGS
 			SettingsDestination.OcrModelsSettings -> COMPOSE_DESTINATION_OCR_MODELS_SETTINGS
 			SettingsDestination.AiImageEnhancementSettings -> COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS
@@ -1022,6 +1029,7 @@ class SettingsActivity :
 			SettingsDestination.Root -> getString(R.string.settings)
 			SettingsDestination.AppearanceSettings -> getString(R.string.appearance)
 			SettingsDestination.UsersSettings -> getString(R.string.users)
+			SettingsDestination.SpacesSettings -> getString(R.string.spaces)
 			SettingsDestination.AISettings -> getString(R.string.ai_settings)
 			SettingsDestination.OcrModelsSettings -> getString(R.string.reader_translation_ocr_models_title)
 			SettingsDestination.AiImageEnhancementSettings -> getString(R.string.ai_image_enhancement_settings)
@@ -1088,6 +1096,9 @@ class SettingsActivity :
 						router.openScrobblerSettings(service)
 					},
 				)
+			}
+			SettingsDestination.SpacesSettings -> RenderComposeSection(title = getString(R.string.spaces)) {
+				SpacesSettingsRoute(settings = kototoroAppSettings)
 			}
 			SettingsDestination.AISettings -> RenderComposeSection(title = getString(R.string.ai_settings)) {
 				AISettingsRoute(
@@ -2113,6 +2124,7 @@ class SettingsActivity :
 		private const val COMPOSE_DESTINATION_ROOT = "root"
 		private const val COMPOSE_DESTINATION_APPEARANCE_SETTINGS = "appearance_settings"
 		private const val COMPOSE_DESTINATION_USERS_SETTINGS = "users_settings"
+		private const val COMPOSE_DESTINATION_SPACES_SETTINGS = "spaces_settings"
 		private const val COMPOSE_DESTINATION_AI_SETTINGS = "ai_settings"
 		private const val COMPOSE_DESTINATION_OCR_MODELS_SETTINGS = "ocr_models_settings"
 		private const val COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS = "ai_image_enhancement_settings"
@@ -2190,6 +2202,7 @@ class SettingsActivity :
 			COMPOSE_DESTINATION_ROOT -> SettingsDestination.Root
 			COMPOSE_DESTINATION_APPEARANCE_SETTINGS -> SettingsDestination.AppearanceSettings
 			COMPOSE_DESTINATION_USERS_SETTINGS -> SettingsDestination.UsersSettings
+			COMPOSE_DESTINATION_SPACES_SETTINGS -> SettingsDestination.SpacesSettings
 			COMPOSE_DESTINATION_AI_SETTINGS -> SettingsDestination.AISettings
 			COMPOSE_DESTINATION_OCR_MODELS_SETTINGS -> SettingsDestination.OcrModelsSettings
 			COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS -> SettingsDestination.AiImageEnhancementSettings

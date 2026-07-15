@@ -11,6 +11,8 @@ import android.content.ContentValues
 import android.os.Build
 import android.view.Gravity
 import androidx.core.view.isVisible
+import androidx.core.view.doOnLayout
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -613,11 +615,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
             onMediaUniverseContentClick = { content -> router.openResolvedDetails(content) },
         )
-        allControllers().forEach { controller ->
-            controller.findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(
-                R.id.immersive_space_switcher_fab,
-            )?.let(spaceSwitcherDelegate::installFab)
-        }
+        findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(
+            R.id.immersive_space_switcher_fab,
+        )?.let(spaceSwitcherDelegate::installFab)
 
         // 设置菜单点击监听并复用给两个 Toolbar
         val onMenuItemClick = androidx.appcompat.widget.Toolbar.OnMenuItemClickListener { item ->
@@ -2001,7 +2001,36 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         } else {
             viewBinding.toolbarProgress.isVisible = false
         }
-        spaceSwitcherDelegate.setControlsVisible(controlsVisible)
+        updateSpaceSwitcherFabPosition(controller, controlsVisible) {
+            spaceSwitcherDelegate.setControlsVisible(playerUiState == PlayerUiState.ControlsVisible)
+        }
+    }
+
+    private fun updateSpaceSwitcherFabPosition(
+        controller: PlayerControlView?,
+        controlsVisible: Boolean,
+        onPositioned: () -> Unit,
+    ) {
+        if (!controlsVisible || controller == null) {
+            onPositioned()
+            return
+        }
+        val fab = findViewById<View>(R.id.immersive_space_switcher_fab)
+        if (fab == null) {
+            onPositioned()
+            return
+        }
+        val updatePosition = {
+            fab.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
+                bottomMargin = controller.height + resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
+            }
+            onPositioned()
+        }
+        if (controller.isLaidOut && controller.height > 0) {
+            updatePosition()
+        } else {
+            controller.doOnLayout { updatePosition() }
+        }
     }
 
     // ==================== Screen Lock ====================

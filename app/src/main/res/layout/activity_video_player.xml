@@ -250,6 +250,8 @@
         android:focusable="false"
         android:importantForAccessibility="no" />
 
+    <include layout="@layout/view_immersive_space_switcher_fab" />
+
     <!-- Screen lock touch-intercepting overlay -->
     <View
         android:id="@+id/lock_overlay"

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.space.ui
 import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AnimationUtils
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -10,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -47,6 +49,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var onMediaUniverseContentClick: (org.skepsun.kototoro.parsers.model.Content) -> Unit = {}
 	private var featureEnabled = false
 	private var controlsVisible = false
+	private var launchOrigin: android.graphics.PointF? = null
 	private val fabs = LinkedHashSet<ExtendedFloatingActionButton>()
 	private var switcherOverlay: ComposeView? = null
 
@@ -64,6 +67,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 		this.availabilityProvider = availabilityProvider
 		this.progressFlusher = progressFlusher
 		this.onMediaUniverseContentClick = onMediaUniverseContentClick
+		launchOrigin = ImmersiveSpaceSwitcherTransition.consumeOrigin(activity.intent)
 		immersiveSessionRegistry.register(spaceRepository.activeSpace.value, activity)
 		featureEnabled = featureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled
 		activity.lifecycleScope.launch {
@@ -199,11 +203,35 @@ class SpaceSwitcherDelegate @Inject constructor(
 				context.getString(activeSpaceId.labelRes()),
 			)
 			if (shouldShowFab) {
+				target.bringToFront()
 				target.show()
+				animateFromLaunchOrigin(target)
 			} else {
 				target.hide()
 			}
 		}
+	}
+
+	private fun animateFromLaunchOrigin(target: ExtendedFloatingActionButton) {
+		val origin = launchOrigin ?: return
+		if (!target.isLaidOut) {
+			target.doOnLayout { animateFromLaunchOrigin(target) }
+			return
+		}
+		launchOrigin = null
+		val location = IntArray(2)
+		target.getLocationOnScreen(location)
+		val targetCenterX = location[0] + target.width / 2f
+		val targetCenterY = location[1] + target.height / 2f
+		target.animate().cancel()
+		target.translationX = origin.x - targetCenterX
+		target.translationY = origin.y - targetCenterY
+		target.animate()
+			.translationX(0f)
+			.translationY(0f)
+			.setDuration(target.resources.getInteger(android.R.integer.config_mediumAnimTime).toLong())
+			.setInterpolator(AnimationUtils.loadInterpolator(target.context, android.R.interpolator.fast_out_slow_in))
+			.start()
 	}
 
 	private fun showMessage(messageRes: Int) {

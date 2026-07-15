@@ -265,6 +265,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val suggestions by searchSuggestionViewModel.suggestion.collectAsState(initial = emptyList())
             val appUpdate by viewModel.appUpdate.collectAsState(initial = null)
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
+            val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
@@ -287,6 +288,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onSearchOverlayDismiss = ::syncSearchSuggestionFilters,
                 query = searchQuery,
                 onFeedRefresh = trackWorkerScheduler::startNow,
+                isResumeEnabled = isResumeEnabled,
+                onResumeClick = viewModel::openLastReader,
                 spaceUiState = spaceUiState,
                 onSpaceAction = { action ->
                     when (action) {
@@ -484,6 +487,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         }
 
         spaceResumeViewModel.onOpenReader.observeEvent(this) { content ->
+            router.openReader(content)
+        }
+        viewModel.onOpenReader.observeEvent(this) { content ->
             router.openReader(content)
         }
         viewModel.onFirstStart.observeEvent(this) { this.router.showWelcomeSheet() }

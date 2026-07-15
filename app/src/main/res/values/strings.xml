@@ -3154,4 +3154,16 @@
     <string name="media_universe_empty">No history or favorites yet</string>
     <string name="media_universe_history_and_favorites">History and favorites</string>
     <string name="media_universe_item_summary">%1$s · %2$s</string>
+    <string name="spaces">Spaces</string>
+    <string name="spaces_settings_summary">Separate manga, novels, and anime into independent contexts</string>
+    <string name="spaces_enabled">Enable Spaces</string>
+    <string name="spaces_enabled_summary">Keep each media space isolated with its own active context</string>
+    <string name="space_switcher_enabled">Show space switcher</string>
+    <string name="space_switcher_enabled_summary">Show the space switch button throughout the app</string>
+    <string name="space_persistent_navigation_enabled">Remember navigation per space</string>
+    <string name="space_persistent_navigation_enabled_summary">Restore each space to its most recent page and navigation stack</string>
+    <string name="space_immersive_switch_enabled">Switch in readers and players</string>
+    <string name="space_immersive_switch_enabled_summary">Allow space switching from details, readers, and the video player</string>
+    <string name="space_route_preferences_enabled">Remember page preferences per space</string>
+    <string name="space_route_preferences_enabled_summary">Keep supported page filters and layout choices separate for each space</string>
 </resources>

@@ -70,6 +70,13 @@ fun buildSettingsRootSections(
 		title = context.getString(R.string.users),
 		items = listOf(
 			settingsRootItem(
+				key = "spaces",
+				iconRes = R.drawable.ic_list_group,
+				title = context.getString(R.string.spaces),
+				summary = context.getString(R.string.spaces_settings_summary),
+				onClick = { onOpenDestination(SettingsDestination.SpacesSettings) },
+			),
+			settingsRootItem(
 				key = "sync",
 				iconRes = R.drawable.ic_sync,
 				title = context.getString(R.string.sync_settings),

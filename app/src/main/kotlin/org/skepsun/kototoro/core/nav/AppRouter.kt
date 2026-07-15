@@ -114,6 +114,7 @@ import org.skepsun.kototoro.parsers.util.ellipsize
 import org.skepsun.kototoro.parsers.util.isNullOrEmpty
 import org.skepsun.kototoro.parsers.util.mapToArray
 import org.skepsun.kototoro.reader.novel.NovelReaderActivity
+import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ContentDataRepository
@@ -347,9 +348,11 @@ class AppRouter private constructor(
         }
         if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
             startActivity(
-                Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
-                    .putExtra(KEY_MANGA, ParcelableContent(manga))
-                    .putExtra(KEY_ID, manga.id),
+                ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(
+                    Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
+                        .putExtra(KEY_MANGA, ParcelableContent(manga))
+                        .putExtra(KEY_ID, manga.id),
+                ),
                 anchor?.let { scaleUpActivityOptionsOf(it) },
             )
             return
@@ -472,7 +475,10 @@ class AppRouter private constructor(
                     if (state != null) {
                         novelIntent.putExtra(ReaderIntent.EXTRA_STATE, state)
                     }
-                    startActivity(novelIntent, anchor?.let { scaleUpActivityOptionsOf(it) })
+                    startActivity(
+                        ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(novelIntent),
+                        anchor?.let { scaleUpActivityOptionsOf(it) },
+                    )
                     return
                 }
 				if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
@@ -536,7 +542,10 @@ class AppRouter private constructor(
         if (settings.isReaderMultiTaskEnabled && activityIntent.data != null) {
             activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
         }
-        startActivity(activityIntent, anchor?.let { view -> scaleUpActivityOptionsOf(view) })
+        startActivity(
+            ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(activityIntent),
+            anchor?.let { view -> scaleUpActivityOptionsOf(view) },
+        )
     }
 
     fun openAlternatives(manga: Content) {
@@ -611,12 +620,14 @@ class AppRouter private constructor(
     ) {
         val ctx = contextOrNull() ?: return
         startActivity(
-            Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
-                .setData(Uri.parse(url))
-                .putExtra(KEY_URL, url)
-                .putExtra(KEY_SOURCE, source?.name)
-                .putExtra(KEY_TITLE, title)
-                .putExtra(ReaderIntent.EXTRA_STATE, state),
+            ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(
+                Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
+                    .setData(Uri.parse(url))
+                    .putExtra(KEY_URL, url)
+                    .putExtra(KEY_SOURCE, source?.name)
+                    .putExtra(KEY_TITLE, title)
+                    .putExtra(ReaderIntent.EXTRA_STATE, state),
+            ),
             null,
         )
     }
@@ -629,14 +640,16 @@ class AppRouter private constructor(
     ) {
         val ctx = contextOrNull() ?: return
         startActivity(
-            Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
-                .setData(Uri.parse(url))
-                .putExtra(KEY_URL, url)
-                .putExtra(KEY_SOURCE, manga.source.name)
-                .putExtra(KEY_TITLE, manga.title)
-                .putExtra(KEY_ID, manga.id)
-                .putExtra(KEY_MANGA, ParcelableContent(manga, withChapters = !manga.chapters.isNullOrEmpty()))
-                .putExtra(ReaderIntent.EXTRA_STATE, state),
+            ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(
+                Intent(ctx, org.skepsun.kototoro.video.ui.VideoPlayerActivity::class.java)
+                    .setData(Uri.parse(url))
+                    .putExtra(KEY_URL, url)
+                    .putExtra(KEY_SOURCE, manga.source.name)
+                    .putExtra(KEY_TITLE, manga.title)
+                    .putExtra(KEY_ID, manga.id)
+                    .putExtra(KEY_MANGA, ParcelableContent(manga, withChapters = !manga.chapters.isNullOrEmpty()))
+                    .putExtra(ReaderIntent.EXTRA_STATE, state),
+            ),
             null,
         )
     }

@@ -3048,4 +3048,16 @@ SHA-256 指纹:
     <string name="entity_organize_repair_dangling_work_anchors_title">修复无效投影锚点</string>
     <string name="entity_organize_repair_dangling_work_anchors_summary">%1$d 条作品状态缺少本地投影锚点，或锚点已失效。这会阻塞备份和同步。修复会优先把锚点迁移到同一实体内的其他可用投影；如果已经没有可安全导出的投影，则会停用或清理这部分状态。</string>
     <string name="entity_organize_repair_dangling_work_anchors_feedback">已修复 %1$d 条无效投影锚点。</string>
+    <string name="spaces">Spaces</string>
+    <string name="spaces_settings_summary">将漫画、小说和动画分隔为独立的使用环境</string>
+    <string name="spaces_enabled">启用 Spaces</string>
+    <string name="spaces_enabled_summary">为不同媒体空间保留各自独立的活动上下文</string>
+    <string name="space_switcher_enabled">显示 Space 切换按钮</string>
+    <string name="space_switcher_enabled_summary">在应用各处显示 Space 切换按钮</string>
+    <string name="space_persistent_navigation_enabled">记住每个 Space 的导航</string>
+    <string name="space_persistent_navigation_enabled_summary">恢复每个 Space 最近访问的页面和导航栈</string>
+    <string name="space_immersive_switch_enabled">在阅读器和播放器中切换</string>
+    <string name="space_immersive_switch_enabled_summary">允许从详情页、阅读器和视频播放器切换 Space</string>
+    <string name="space_route_preferences_enabled">记住每个 Space 的页面偏好</string>
+    <string name="space_route_preferences_enabled_summary">为每个 Space 分别保存受支持页面的筛选和布局选择</string>
 </resources>
