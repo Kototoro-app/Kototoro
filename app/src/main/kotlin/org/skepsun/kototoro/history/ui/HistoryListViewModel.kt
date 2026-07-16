@@ -73,11 +73,9 @@ import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.work.domain.WorkResolver
-import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
-import org.skepsun.kototoro.space.domain.SpaceRepository
-import org.skepsun.kototoro.space.domain.observeActiveSpaceScope
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 32
@@ -113,10 +111,9 @@ class HistoryListViewModel @Inject constructor(
 	private val entityGraphRepository: EntityGraphRepository,
 	private val historyPreviewCache: HistoryPreviewCache,
 	private val workResolver: WorkResolver,
-	spaceRepository: SpaceRepository,
-	spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository,
 	spaceBrowseScope: SpaceBrowseScope,
-) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener {
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener, SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
 	@Volatile
 	private var groupedHistoryIds: Map<Long, Set<Long>> = emptyMap()
@@ -130,20 +127,14 @@ class HistoryListViewModel @Inject constructor(
 
 	override val isFilterBarVisible = MutableStateFlow(true)
 	private val refreshTrigger = MutableStateFlow(Any())
-	private val activeSpaceScope = spaceRepository.observeActiveSpaceScope(spaceFeatureFlagsRepository)
-		.stateIn(
-			viewModelScope + Dispatchers.Default,
-			SharingStarted.Eagerly,
-			spaceRepository.activeSpace.value.takeIf {
-				spaceFeatureFlagsRepository.flags.value.effectiveSwitcherEnabled
-			},
-		)
+	private val activeSpaceScope = spaceBinding.spaceId
 
 
 	override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
+	override fun bindSpace(spaceId: SpaceId?) = spaceBinding.bindSpace(spaceId)
 	override val currentSourceTags = globalFavoritesState.selectedSourceTags
 
 	override fun setSelectedGroupTab(tab: BrowseGroupTab) {

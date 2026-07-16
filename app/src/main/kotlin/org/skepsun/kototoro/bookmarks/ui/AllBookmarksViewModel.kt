@@ -30,6 +30,7 @@ import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import javax.inject.Inject
 
@@ -40,7 +41,8 @@ class AllBookmarksViewModel @Inject constructor(
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	settings: AppSettings,
 	spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel() {
+) : BaseViewModel(), SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
 	val onActionDone = MutableEventFlow<ReversibleAction>()
 	val gridScale: StateFlow<Float> = settings.observeAsStateFlow(
@@ -50,9 +52,10 @@ class AllBookmarksViewModel @Inject constructor(
 	)
 
 	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
+	override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) = spaceBinding.bindSpace(spaceId)
 	val currentSourceTags: StateFlow<Set<SourceTag>> = globalFavoritesState.selectedSourceTags
 
 	val content: StateFlow<List<ListModel>> = combine(

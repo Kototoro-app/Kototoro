@@ -45,6 +45,7 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import javax.inject.Inject
 
@@ -74,13 +75,8 @@ class ExploreViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 	private val spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel() {
-	private val boundSpaceId = MutableStateFlow(spaceBrowseScope.currentSpaceId)
-	private val boundSpaceGroupTab = spaceBrowseScope.observeGroupTab(boundSpaceId).stateIn(
-		scope = viewModelScope + Dispatchers.Default,
-		started = SharingStarted.Eagerly,
-		initialValue = spaceBrowseScope.groupTab.value,
-	)
+) : BaseViewModel(), SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
 	val isGrid = settings.observeAsStateFlow(
 		key = AppSettings.KEY_SOURCES_GRID,
@@ -113,7 +109,7 @@ class ExploreViewModel @Inject constructor(
 	 * Observable selected group tab for UI
 	 */
 	val currentGroupTab: StateFlow<BrowseGroupTab> = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceGroupTab = boundSpaceGroupTab,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
 
@@ -157,8 +153,8 @@ class ExploreViewModel @Inject constructor(
 		globalFavoritesState.setSelectedGroupTab(tab)
 	}
 
-	fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) {
-		boundSpaceId.value = spaceId
+	override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) {
+		spaceBinding.bindSpace(spaceId)
 	}
 
 	/**
@@ -264,7 +260,7 @@ class ExploreViewModel @Inject constructor(
 					else sourcePresetsRepository.observe(id)
 				}
 				.traceExploreInput("preset") { "value=${it?.id ?: "none"}" },
-			spaceBrowseScope.observeAllowedSourceNames(boundSpaceId),
+			spaceBrowseScope.observeAllowedSourceNames(spaceBinding.spaceId),
 		) { values: Array<Any?> ->
 			@Suppress("UNCHECKED_CAST")
 			buildList(

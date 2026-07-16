@@ -70,6 +70,7 @@ import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
@@ -197,7 +198,7 @@ class HomeViewModel @Inject constructor(
     private val historyPreviewCache: HistoryPreviewCache,
     private val historyQuickFilter: HistoryListQuickFilter,
     spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel() {
+) : BaseViewModel(), SpaceBindableViewModel {
 
     private companion object {
         private const val TAG = "HomeViewModel"
@@ -213,8 +214,9 @@ class HomeViewModel @Inject constructor(
 
     val onActionDone = MutableEventFlow<ReversibleAction>()
 
+    private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     private val selectedBrowseGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
-        spaceBrowseScope = spaceBrowseScope,
+        spaceGroupTab = spaceBinding.groupTab,
         coroutineScope = viewModelScope + Dispatchers.Default,
     )
     private val selectedTabFlow = selectedBrowseGroupTab.map(BrowseGroupTab::toHomeContentTab)
@@ -678,6 +680,10 @@ class HomeViewModel @Inject constructor(
             null -> org.skepsun.kototoro.explore.ui.model.BrowseGroupTab.All
         }
         globalFavoritesState.setSelectedGroupTab(groupTab)
+    }
+
+    override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) {
+        spaceBinding.bindSpace(spaceId)
     }
 
     fun setSelectedSourceTags(tags: Set<org.skepsun.kototoro.explore.ui.model.SourceTag>) {

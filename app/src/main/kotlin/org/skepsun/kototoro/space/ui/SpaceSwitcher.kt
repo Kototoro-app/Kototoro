@@ -2,8 +2,6 @@ package org.skepsun.kototoro.space.ui
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,22 +59,10 @@ fun SpaceSwitcherFab(
 		modifier = modifier.semantics { contentDescription = description },
 		expanded = expanded,
 		icon = {
-			Crossfade(
-				targetState = iconState,
-				animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
-				label = "space_fab_icon",
-			) { target ->
-				SpaceGlyph(target.presentation, target.monogram)
-			}
+			SpaceGlyph(iconState.presentation, iconState.monogram)
 		},
 		text = {
-			Crossfade(
-				targetState = label,
-				animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
-				label = "space_fab_label",
-			) { target ->
-				Text(target)
-			}
+			Text(label)
 		},
 		containerColor = MaterialTheme.colorScheme.primaryContainer,
 		contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -94,13 +80,7 @@ fun SpaceSwitcherRailButton(
 		onClick = onClick,
 		modifier = modifier.size(48.dp),
 	) {
-		Crossfade(
-			targetState = activeSpaceId to activeSpace,
-			animationSpec = tween(SpaceMotion.IconCrossfadeMillis),
-			label = "space_rail_icon",
-		) { (targetId, targetSpace) ->
-			SpaceSwitcherIcon(activeSpaceId = targetId, activeSpace = targetSpace)
-		}
+		SpaceSwitcherIcon(activeSpaceId = activeSpaceId, activeSpace = activeSpace)
 	}
 }
 
@@ -121,6 +101,10 @@ fun SpaceSwitcherIcon(
 		SpaceGlyph(presentation, activeSpace?.customMonogram())
 	}
 }
+
+@Composable
+internal fun spaceDisplayLabel(spaceId: SpaceId, space: SpaceContext?): String =
+	space?.title ?: stringResource((space?.presentation() ?: spaceId.presentation()).labelRes)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

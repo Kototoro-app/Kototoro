@@ -24,8 +24,23 @@ import javax.inject.Singleton
 
 val LocalBrowseSpaceId = staticCompositionLocalOf<SpaceId?> { null }
 
-internal fun browseViewModelKey(spaceId: SpaceId?): String =
-	"explore-space:${spaceId?.value ?: "global"}"
+internal fun spaceViewModelKey(owner: String, spaceId: SpaceId?): String =
+	"$owner-space:${spaceId?.value ?: "global"}"
+
+internal interface SpaceBindableViewModel {
+	fun bindSpace(spaceId: SpaceId?)
+}
+
+internal class SpaceBrowseBinding(
+	private val mutableSpaceId: kotlinx.coroutines.flow.MutableStateFlow<SpaceId?>,
+	val groupTab: StateFlow<BrowseGroupTab?>,
+) : SpaceBindableViewModel {
+	val spaceId: StateFlow<SpaceId?> = mutableSpaceId
+
+	override fun bindSpace(spaceId: SpaceId?) {
+		mutableSpaceId.value = spaceId
+	}
+}
 
 @Singleton
 class SpaceBrowseScope @Inject constructor(
@@ -44,7 +59,7 @@ class SpaceBrowseScope @Inject constructor(
 		.stateIn(
 			scope = processLifecycleScope,
 			started = SharingStarted.Eagerly,
-			initialValue = currentSpaceId?.let { id -> catalogRepository.find(id)?.kind?.toBrowseGroupTab() },
+			initialValue = groupTabFor(currentSpaceId),
 		)
 
 	val allowedSourceNames: StateFlow<Set<String>?> = observeAllowedSourceNames(activeSpace)
@@ -59,6 +74,21 @@ class SpaceBrowseScope @Inject constructor(
 		catalogRepository.spaces,
 	) { spaceId, spaces ->
 		spaceId?.let { id -> spaces.firstOrNull { it.id == id }?.kind?.toBrowseGroupTab() }
+	}
+
+	internal fun groupTabFor(spaceId: SpaceId?): BrowseGroupTab? =
+		spaceId?.let { id -> catalogRepository.find(id)?.kind?.toBrowseGroupTab() }
+
+	internal fun createBinding(coroutineScope: CoroutineScope): SpaceBrowseBinding {
+		val spaceId = kotlinx.coroutines.flow.MutableStateFlow(currentSpaceId)
+		return SpaceBrowseBinding(
+			mutableSpaceId = spaceId,
+			groupTab = observeGroupTab(spaceId).stateIn(
+				scope = coroutineScope,
+				started = SharingStarted.Eagerly,
+				initialValue = groupTabFor(spaceId.value),
+			),
+		)
 	}
 
 	fun observeAllowedSourceNames(spaceIds: Flow<SpaceId?>): Flow<Set<String>?> = combine(

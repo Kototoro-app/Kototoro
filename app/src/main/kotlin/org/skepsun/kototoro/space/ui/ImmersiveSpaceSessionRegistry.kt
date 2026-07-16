@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.space.ui
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -53,21 +54,32 @@ class ImmersiveSpaceSessionRegistry @Inject constructor() {
 	fun hasActiveSession(spaceId: SpaceId): Boolean = activeActivity(spaceId) != null
 
 	@MainThread
-	fun restore(spaceId: SpaceId, context: Context): Boolean {
+	fun restore(spaceId: SpaceId, context: Context, suppressAnimation: Boolean = false): Boolean {
 		val activity = activeActivity(spaceId) ?: return false
 		val callerTaskId = (context as? Activity)?.taskId
+		val intentFlags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+			Intent.FLAG_ACTIVITY_SINGLE_TOP or
+			(if (suppressAnimation) Intent.FLAG_ACTIVITY_NO_ANIMATION else 0)
+		val intent = Intent(activity.intent)
+			.setClass(context, activity::class.java)
+			.addFlags(intentFlags)
+		val options = if (suppressAnimation) {
+			ActivityOptions.makeCustomAnimation(context, 0, 0).toBundle()
+		} else {
+			null
+		}
 		if (activity.taskId != callerTaskId) {
 			val appTask = context.getSystemService(ActivityManager::class.java).appTasks
 				.firstOrNull { it.taskInfo.taskId == activity.taskId }
 				?: return false
-			appTask.moveToFront()
+			if (suppressAnimation) {
+				appTask.startActivity(context, intent, options)
+			} else {
+				appTask.moveToFront()
+			}
 			return true
 		}
-		context.startActivity(
-			Intent(activity.intent)
-				.setClass(context, activity::class.java)
-				.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-		)
+		context.startActivity(intent, options)
 		return true
 	}
 

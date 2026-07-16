@@ -7,7 +7,8 @@ enum class SpaceMotionMode {
 }
 
 object SpaceMotion {
-	const val IconCrossfadeMillis = 120
+	const val CurtainCoverMillis = 90
+	const val CurtainRevealMillis = 140
 
 	fun resolveMode(
 		reducedVisualEffects: Boolean,

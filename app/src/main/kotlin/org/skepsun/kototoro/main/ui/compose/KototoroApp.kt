@@ -171,6 +171,9 @@ import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.space.ui.SpaceMotion
 import org.skepsun.kototoro.space.ui.SpaceMotionMode
+import org.skepsun.kototoro.space.ui.SpaceTransitionCurtain
+import org.skepsun.kototoro.space.ui.SpaceTransitionPhase
+import org.skepsun.kototoro.space.ui.SpaceTransitionState
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
 import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
 
@@ -404,6 +407,10 @@ fun KototoroApp(
     isResumeEnabled: Boolean = false,
     onResumeClick: () -> Unit = {},
     spaceUiState: SpaceUiState = SpaceUiState(),
+    spaceTransitionState: SpaceTransitionState = SpaceTransitionState(),
+    onSpaceTransitionCovered: suspend (SpaceId) -> Unit = {},
+    onSpaceCurtainCoverFinished: (SpaceId) -> Unit = {},
+    onSpaceCurtainRevealFinished: (SpaceId) -> Unit = {},
     onSpaceAction: (SpaceAction) -> Unit = {},
     spaceNavigationSessionUiState: SpaceNavigationSessionUiState = SpaceNavigationSessionUiState(),
     onSpaceSessionChanged: (SpaceSessionSnapshot) -> Unit = {},
@@ -461,12 +468,18 @@ fun KototoroApp(
     ) {
         isReducedVisualEffectsEnabled
     }
+    val suppressSpaceContentMotion = spaceTransitionState.phase == SpaceTransitionPhase.COVERED ||
+        spaceTransitionState.phase == SpaceTransitionPhase.REVEALING
     val effectiveSharedElementTransitionsEnabled =
-        isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
-    val spaceMotionMode = SpaceMotion.resolveMode(
-        reducedVisualEffects = isReducedVisualEffectsEnabled,
-        animatorDurationScale = context.animatorDurationScale,
-    )
+        isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled && !suppressSpaceContentMotion
+    val spaceMotionMode = if (suppressSpaceContentMotion) {
+        SpaceMotionMode.DISABLED
+    } else {
+        SpaceMotion.resolveMode(
+            reducedVisualEffects = isReducedVisualEffectsEnabled,
+            animatorDurationScale = context.animatorDurationScale,
+        )
+    }
     val isNavBarPinned by appSettings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }
     val isFloating = navigationPrefs.isFloating
     val activeSourcePresetId = displayPrefs.activeSourcePresetId
@@ -643,6 +656,21 @@ fun KototoroApp(
     val isActiveSpaceRestored = restoredSpaceIds[navigationSpaceId] == true
     val isActiveDatabaseSessionApplied = databaseRestoredSpaceIds[navigationSpaceId] == true
     val isActiveNavigationReady = !spaceNavigationSessionUiState.enabled || isActiveSpaceRestored
+    LaunchedEffect(
+        spaceTransitionState.phase,
+        spaceTransitionState.targetSpaceId,
+        navigationSpaceId,
+        isActiveNavigationReady,
+    ) {
+        if (
+            spaceTransitionState.phase == SpaceTransitionPhase.COVERED &&
+            spaceTransitionState.targetSpaceId == navigationSpaceId &&
+            isActiveNavigationReady
+        ) {
+            androidx.compose.runtime.withFrameNanos { }
+            onSpaceTransitionCovered(navigationSpaceId)
+        }
+    }
     LaunchedEffect(
         navigationSpaceId,
         isActiveNavigationReady,
@@ -1000,10 +1028,14 @@ fun KototoroApp(
     }
     val animatedChromeAlpha by animateFloatAsState(
         targetValue = effectiveChromeAlphaTarget,
-        animationSpec = tween(durationMillis = MainNavigationMotion.ChromeAlphaMillis),
+        animationSpec = if (suppressSpaceContentMotion) {
+            snap()
+        } else {
+            tween(durationMillis = MainNavigationMotion.ChromeAlphaMillis)
+        },
         label = "chrome_alpha",
     )
-    val chromeAlpha = animatedChromeAlpha
+    val chromeAlpha = if (suppressSpaceContentMotion) effectiveChromeAlphaTarget else animatedChromeAlpha
     val isHomeRoute = chromeTopLevelKey == HomeNavKey
     val supportsDisplayModeMenu = chromeTopLevelKey.supportsDisplayModeMenu()
     val supportsGridSizeSlider = chromeTopLevelKey.supportsGridSizeSlider()
@@ -1386,6 +1418,7 @@ fun KototoroApp(
                                     AppNavGraph(
                                         navController = renderedNavController,
                                         mainNavState = renderedNavigationState.mainNavState,
+                                        suppressNavigationTransitions = suppressSpaceContentMotion,
                                         isLandscapeNavigation = isLandscapeNavigation,
                                         startDestination = startDestination,
                                         contentPadding = contentPadding,
@@ -1461,7 +1494,9 @@ fun KototoroApp(
                             }
                         }
                         if (isActiveNavigationReady) {
-                            renderSpaceNavigation(navigationSpaceId)
+                            key(navigationSpaceId.value) {
+                                renderSpaceNavigation(navigationSpaceId)
+                            }
                         }
                     }
                 }
@@ -1643,6 +1678,13 @@ fun KototoroApp(
                         onVoiceInput = onVoiceInput,
                     )
                 }
+                SpaceTransitionCurtain(
+                    state = spaceTransitionState,
+                    spaces = spaceUiState.spaces,
+                    modifier = Modifier.fillMaxSize(),
+                    onCoverFinished = onSpaceCurtainCoverFinished,
+                    onRevealFinished = onSpaceCurtainRevealFinished,
+                )
             }
         }
     }

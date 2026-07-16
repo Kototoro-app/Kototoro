@@ -51,6 +51,7 @@ import org.skepsun.kototoro.work.domain.WorkResolver
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 32
@@ -69,7 +70,9 @@ class UpdatesViewModel @Inject constructor(
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 	spaceBrowseScope: SpaceBrowseScope,
-) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter {
+) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener by quickFilter,
+	SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
 	@Volatile
 	private var groupedRemovalIds: Map<Long, Set<Long>> = emptyMap()
@@ -89,9 +92,10 @@ class UpdatesViewModel @Inject constructor(
 	}
 
 	override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
+	override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) = spaceBinding.bindSpace(spaceId)
 
 	override fun setSelectedGroupTab(tab: org.skepsun.kototoro.explore.ui.model.BrowseGroupTab) {
 		globalFavoritesState.setSelectedGroupTab(tab)

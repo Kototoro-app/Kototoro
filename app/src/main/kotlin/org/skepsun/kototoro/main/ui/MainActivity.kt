@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withResumed
 import com.google.android.material.navigation.NavigationBarView
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -39,6 +40,7 @@ import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.util.ext.consume
+import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.databinding.ActivityMainBinding
@@ -67,6 +69,7 @@ import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSessionRegistry
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
+import org.skepsun.kototoro.space.ui.SpaceTransitionCurtainController
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
@@ -98,6 +101,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository
+
+    @Inject
+    lateinit var spaceTransitionCurtainController: SpaceTransitionCurtainController
 
     override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
         val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
@@ -279,6 +285,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
             val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
+            val spaceTransitionState by spaceTransitionCurtainController.state.collectAsStateWithLifecycle()
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
@@ -302,6 +309,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 isResumeEnabled = isResumeEnabled,
                 onResumeClick = viewModel::openLastReader,
                 spaceUiState = spaceUiState,
+                spaceTransitionState = spaceTransitionState,
+                onSpaceTransitionCovered = spaceTransitionCurtainController::reveal,
+                onSpaceCurtainCoverFinished = spaceTransitionCurtainController::markCovered,
+                onSpaceCurtainRevealFinished = spaceTransitionCurtainController::markRevealFinished,
                 onSpaceAction = { action ->
                     when (action) {
                         SpaceAction.OpenSwitcher,
@@ -529,24 +540,65 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private fun selectSpaceAndRestoreImmersiveSession(spaceId: SpaceId) {
         if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
             immersiveSpaceSessionRegistry.suppressMainTransitionTo(spaceId)
-            if (immersiveSpaceSessionRegistry.restore(spaceId, this)) {
-                lifecycleScope.launch {
-                    lifecycle.currentStateFlow.first { state ->
-                        !state.isAtLeast(Lifecycle.State.RESUMED)
-                    }
-                    if (!spaceViewModel.selectSpaceAndAwait(spaceId)) {
+            lifecycleScope.launch {
+                try {
+                    if (!coverSpaceTransition(spaceId)) {
                         immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+                        return@launch
                     }
+                if (immersiveSpaceSessionRegistry.restore(
+                    spaceId,
+                    this@MainActivity,
+                    suppressAnimation = true,
+                )) {
+                        lifecycle.currentStateFlow.first { state ->
+                            !state.isAtLeast(Lifecycle.State.RESUMED)
+                        }
+                        if (!spaceViewModel.selectSpaceAndAwait(spaceId)) {
+                            immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+                            spaceTransitionCurtainController.reveal(spaceId)
+                        }
+                    } else {
+                        immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+                        if (!spaceViewModel.selectSpaceAndAwait(spaceId)) {
+                            spaceTransitionCurtainController.reveal(spaceId)
+                        }
+                    }
+                } catch (error: CancellationException) {
+                    immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+                    spaceTransitionCurtainController.cancel(spaceId)
+                    throw error
                 }
-                return
             }
-            immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
+            return
         }
         lifecycleScope.launch {
-            if (spaceViewModel.selectSpaceAndAwait(spaceId)) {
-                immersiveSpaceSessionRegistry.restore(spaceId, this@MainActivity)
+            try {
+                if (!coverSpaceTransition(spaceId)) return@launch
+                if (spaceViewModel.selectSpaceAndAwait(spaceId)) {
+                    immersiveSpaceSessionRegistry.restore(
+                        spaceId,
+                        this@MainActivity,
+                        suppressAnimation = true,
+                    )
+                } else {
+                    spaceTransitionCurtainController.reveal(spaceId)
+                }
+            } catch (error: CancellationException) {
+                spaceTransitionCurtainController.cancel(spaceId)
+                throw error
             }
         }
+    }
+
+    private suspend fun coverSpaceTransition(spaceId: SpaceId): Boolean {
+        val activeSpaceId = spaceRepository.activeSpace.value
+        if (activeSpaceId == spaceId) return true
+        return spaceTransitionCurtainController.cover(
+            from = activeSpaceId,
+            target = spaceId,
+            animated = !settings.isReducedVisualEffectsEnabled && animatorDurationScale > 0f,
+        )
     }
 
     private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {

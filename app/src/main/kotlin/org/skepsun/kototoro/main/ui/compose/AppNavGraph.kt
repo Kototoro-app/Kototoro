@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.ViewModel
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
@@ -104,11 +105,23 @@ import org.skepsun.kototoro.remotelist.ui.ContentListSourceGateViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
-import org.skepsun.kototoro.space.ui.browseViewModelKey
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
+import org.skepsun.kototoro.space.ui.spaceViewModelKey
 import dev.chrisbanes.haze.hazeSource
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
+}
+
+@Composable
+private inline fun <reified VM> spaceBoundHiltViewModel(owner: String): VM
+    where VM : ViewModel, VM : SpaceBindableViewModel {
+    val spaceId = LocalBrowseSpaceId.current
+    val viewModel = hiltViewModel<VM>(key = spaceViewModelKey(owner, spaceId))
+    LaunchedEffect(viewModel, spaceId) {
+        viewModel.bindSpace(spaceId)
+    }
+    return viewModel
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.isMainRouteTransition(): Boolean {
@@ -232,6 +245,7 @@ fun AppNavGraph(
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     isLandscapeNavigation: Boolean = false,
     mainNavState: MainNavState? = null,
+    suppressNavigationTransitions: Boolean = false,
 ) {
     val activity = LocalContext.current as FragmentActivity
     val appRouter = activity.router
@@ -269,10 +283,10 @@ fun AppNavGraph(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
-        enterTransition = { mainRouteFadeIn() },
-        exitTransition = { mainRouteFadeOut() },
-        popEnterTransition = { mainRouteFadeIn() },
-        popExitTransition = { mainRouteFadeOut() },
+        enterTransition = { if (suppressNavigationTransitions) EnterTransition.None else mainRouteFadeIn() },
+        exitTransition = { if (suppressNavigationTransitions) ExitTransition.None else mainRouteFadeOut() },
+        popEnterTransition = { if (suppressNavigationTransitions) EnterTransition.None else mainRouteFadeIn() },
+        popExitTransition = { if (suppressNavigationTransitions) ExitTransition.None else mainRouteFadeOut() },
     ) {
         composable<MainShellRoute> { backStackEntry ->
             MainShellRouteContent(
@@ -892,7 +906,7 @@ internal fun HomeTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     isRouteVisible: Boolean = true,
 ) {
-    val viewModel = hiltViewModel<HomeViewModel>()
+    val viewModel = spaceBoundHiltViewModel<HomeViewModel>("home")
     val state by viewModel.summaryState.collectAsStateWithLifecycle()
     val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
 
@@ -1075,13 +1089,8 @@ internal fun BrowseTopLevelRouteContent(
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
-    val browseSpaceId = LocalBrowseSpaceId.current
-    val exploreViewModel = hiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>(
-        key = browseViewModelKey(browseSpaceId),
-    )
-    LaunchedEffect(exploreViewModel, browseSpaceId) {
-        exploreViewModel.bindSpace(browseSpaceId)
-    }
+    val exploreViewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.explore.ui.ExploreViewModel>("explore")
+    val discoverViewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.discover.ui.DiscoverViewModel>("discover")
     val selectedGroupTab by exploreViewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by exploreViewModel.currentSourceTags.collectAsStateWithLifecycle()
     val isEmptySourcesHidden by exploreViewModel.isEmptySourcesHidden.collectAsStateWithLifecycle()
@@ -1143,6 +1152,7 @@ internal fun BrowseTopLevelRouteContent(
             appRouter = appRouter,
             contentPadding = contentPadding,
             exploreViewModel = exploreViewModel,
+            discoverViewModel = discoverViewModel,
             onSourceSelectionTopBarChanged = {
                 onExploreSourceSelectionTopBarChanged(
                     RouteScopedTopBarOverrideState(ownerRoute, it),
@@ -1167,7 +1177,7 @@ internal fun FeedTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>("feed")
     val items by viewModel.content.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
@@ -1408,7 +1418,7 @@ internal fun SuggestionsTopLevelRouteContent(
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>("suggestions")
     var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
 
@@ -1488,7 +1498,7 @@ internal fun BookmarksTopLevelRouteContent(
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel>("bookmarks")
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
 
@@ -1536,7 +1546,7 @@ internal fun UpdatedTopLevelRouteContent(
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>("updated")
     var updatedContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
 
     SideEffect {
@@ -1609,7 +1619,7 @@ internal fun HistoryTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.history.ui.HistoryListViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.history.ui.HistoryListViewModel>("history")
     val context = LocalContext.current
     val entryPoint = remember(context.applicationContext) {
         runCatching {
@@ -1926,7 +1936,9 @@ internal fun FavoritesTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
-    val viewModel = hiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>()
+    val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel>(
+        "favorites",
+    )
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
     var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }

@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 
 @HiltViewModel
@@ -58,7 +59,8 @@ class FavouritesContainerViewModel @Inject constructor(
 	internal val globalFavoritesState: GlobalFavoritesState,
 	private val sourceGroupManager: SourceGroupManager,
 	spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel() {
+) : BaseViewModel(), SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 	init {
 		launchJob(Dispatchers.IO) {
 			sourcesRepository.getAllAvailableSourcesUnfiltered()
@@ -85,9 +87,10 @@ class FavouritesContainerViewModel @Inject constructor(
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.allFavoritesSortOrder)
 
 	val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
+	override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) = spaceBinding.bindSpace(spaceId)
 	val selectedSourceTags = globalFavoritesState.selectedSourceTags
 	val availableSourceTags = flowOf(SourceTag.quickFilterEntries.toSet())
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, SourceTag.quickFilterEntries.toSet())

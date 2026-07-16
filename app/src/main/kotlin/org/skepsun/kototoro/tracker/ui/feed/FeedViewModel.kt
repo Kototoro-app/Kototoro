@@ -62,6 +62,7 @@ import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 20
@@ -81,7 +82,8 @@ class FeedViewModel @Inject constructor(
 	private val dataRepository: ContentDataRepository,
 	private val workResolver: WorkResolver,
 	spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel(), QuickFilterListener by quickFilter {
+) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
 	private data class HeaderParams(
 		val hasHeader: Boolean,
@@ -118,9 +120,10 @@ class FeedViewModel @Inject constructor(
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, NO_ID)
 
 	val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
+	override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) = spaceBinding.bindSpace(spaceId)
 	val currentSourceTags = globalFavoritesState.selectedSourceTags
 
 	private val workerRunning = scheduler.observeIsRunning()

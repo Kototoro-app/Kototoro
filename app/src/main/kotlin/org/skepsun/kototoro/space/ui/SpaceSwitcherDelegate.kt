@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.space.ui
 
 import android.app.ActivityManager
+import android.app.ActivityOptions
 import android.content.Intent
 import android.content.Context
 import android.graphics.Canvas
@@ -21,6 +22,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
+import androidx.core.view.doOnPreDraw
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -33,8 +35,11 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
@@ -47,6 +52,7 @@ import org.skepsun.kototoro.space.domain.SpaceSwitchCoordinator
 import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
 import org.skepsun.kototoro.space.domain.SpaceSwitchResult
 import javax.inject.Inject
+import kotlin.coroutines.resume
 
 internal const val EXTRA_IMMERSIVE_SESSION_SPACE_ID =
 	"org.skepsun.kototoro.extra.IMMERSIVE_SESSION_SPACE_ID"
@@ -58,6 +64,8 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private val catalogRepository: SpaceCatalogRepository,
 	private val resumeStateSource: SpaceResumeStateSource,
 	private val immersiveSessionRegistry: ImmersiveSpaceSessionRegistry,
+	private val settings: AppSettings,
+	private val transitionController: SpaceTransitionCurtainController,
 ) {
 	private var activity: AppCompatActivity? = null
 	private var snackbarAnchor: View? = null
@@ -70,6 +78,9 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var launchOrigin: android.graphics.PointF? = null
 	private val fabs = LinkedHashSet<ExtendedFloatingActionButton>()
 	private var switcherOverlay: ComposeView? = null
+	private var transitionOverlay: ComposeView? = null
+	private var sessionSpaceId: SpaceId? = null
+	private var pendingRevealTarget: SpaceId? = null
 
 	fun bind(
 		activity: AppCompatActivity,
@@ -88,6 +99,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 			rawSpaceId = activity.intent.getStringExtra(EXTRA_IMMERSIVE_SESSION_SPACE_ID),
 			fallback = spaceRepository.activeSpace.value,
 		)
+		this.sessionSpaceId = sessionSpaceId
 		immersiveSessionRegistry.register(sessionSpaceId, activity)
 		activity.lifecycle.addObserver(
 			object : DefaultLifecycleObserver {
@@ -107,6 +119,11 @@ class SpaceSwitcherDelegate @Inject constructor(
 						}
 					}
 				}
+
+				override fun onDestroy(owner: LifecycleOwner) {
+					dismissSwitcher()
+					dismissTransitionOverlay()
+				}
 			},
 		)
 		featureEnabled = featureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled
@@ -117,12 +134,22 @@ class SpaceSwitcherDelegate @Inject constructor(
 					spaceRepository.activeSpace,
 					coordinator.state,
 					catalogRepository.spaces,
-				) { flags, activeSpace, switchState, _ ->
-					SwitcherChromeState(flags.effectiveImmersiveSwitchEnabled, activeSpace, switchState.inProgress)
+					transitionController.state,
+				) { flags, activeSpace, switchState, _, transitionState ->
+					SwitcherChromeState(
+						flags.effectiveImmersiveSwitchEnabled,
+						activeSpace,
+						switchState.inProgress || transitionState.isVisible,
+					)
 				}.collect { state ->
 					featureEnabled = state.enabled
 					refreshMenuItems(state.activeSpace, state.inProgress)
 				}
+			}
+		}
+		activity.lifecycleScope.launch {
+			activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
+				transitionController.state.collect(::updateTransitionOverlay)
 			}
 		}
 	}
@@ -131,7 +158,10 @@ class SpaceSwitcherDelegate @Inject constructor(
 		fabs += fab
 		fab.shrink()
 		fab.setOnClickListener { showSwitcher() }
-		refreshMenuItems(spaceRepository.activeSpace.value, coordinator.state.value.inProgress)
+		refreshMenuItems(
+			spaceRepository.activeSpace.value,
+			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
+		)
 	}
 
 	fun setControlsVisible(
@@ -140,7 +170,10 @@ class SpaceSwitcherDelegate @Inject constructor(
 	) {
 		controlsVisible = visible
 		this.hideWithControlsTransition = !visible && hideWithControlsTransition
-		refreshMenuItems(spaceRepository.activeSpace.value, coordinator.state.value.inProgress)
+		refreshMenuItems(
+			spaceRepository.activeSpace.value,
+			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
+		)
 	}
 
 	fun addControlsHideTransition(transition: TransitionSet) {
@@ -156,7 +189,10 @@ class SpaceSwitcherDelegate @Inject constructor(
 	}
 
 	fun invalidateAvailability() {
-		refreshMenuItems(spaceRepository.activeSpace.value, coordinator.state.value.inProgress)
+		refreshMenuItems(
+			spaceRepository.activeSpace.value,
+			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
+		)
 	}
 
 	private fun showSwitcher() {
@@ -178,13 +214,14 @@ class SpaceSwitcherDelegate @Inject constructor(
 			KototoroTheme {
 				val activeSpaceId by spaceRepository.activeSpace.collectAsState()
 				val switchState by coordinator.state.collectAsState()
+				val transitionState by transitionController.state.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
 				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
 				SpaceSwitcherSheet(
 					state = SpaceUiState(
 						activeSpaceId = activeSpaceId,
 						switcherVisible = true,
-						switchInProgress = switchState.inProgress,
+						switchInProgress = switchState.inProgress || transitionState.isVisible,
 						switcherEnabled = true,
 						spaces = catalogRepository.spaces.value,
 					),
@@ -212,8 +249,23 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private fun requestSwitch(target: SpaceId, resumeReading: Boolean = false) {
 		val activity = activity ?: return
 		activity.lifecycleScope.launch {
+			val activeSpaceId = spaceRepository.activeSpace.value
+			if (activeSpaceId == target || transitionController.state.value.isVisible) return@launch
 			immersiveSessionRegistry.suppressMainTransitionTo(target)
 			try {
+				val animated = !settings.isReducedVisualEffectsEnabled && activity.animatorDurationScale > 0f
+				val covered = transitionController.cover(
+					from = activeSpaceId,
+					target = target,
+					animated = animated,
+				)
+				if (!covered) {
+					immersiveSessionRegistry.completeMainTransitionSuppression(target)
+					return@launch
+				}
+				updateTransitionOverlay(transitionController.state.value)
+				awaitTransitionCurtainDraw()
+				dismissSwitcher()
 				when (val result = coordinator.requestSwitch(
 					target = target,
 					origin = origin,
@@ -221,26 +273,33 @@ class SpaceSwitcherDelegate @Inject constructor(
 					progressFlusher = progressFlusher,
 				)) {
 					is SpaceSwitchResult.Success -> {
-						dismissSwitcher()
-						if (!immersiveSessionRegistry.restore(result.targetSpaceId, activity)) {
+						if (!immersiveSessionRegistry.restore(
+							result.targetSpaceId,
+							activity,
+							suppressAnimation = true,
+						)) {
 							returnToMain(activity, result.targetSpaceId, resumeReading)
 						}
 					}
 					is SpaceSwitchResult.AlreadyActive -> {
 						immersiveSessionRegistry.completeMainTransitionSuppression(target)
+						transitionController.reveal(target)
 					}
 					is SpaceSwitchResult.Failed -> {
 						immersiveSessionRegistry.completeMainTransitionSuppression(target)
+						transitionController.reveal(target)
 						showMessage(R.string.space_switch_failed)
 					}
 					SpaceSwitchResult.ConfirmationRequired,
 					SpaceSwitchResult.Unavailable -> {
 						immersiveSessionRegistry.completeMainTransitionSuppression(target)
+						transitionController.reveal(target)
 						showMessage(R.string.space_switch_unavailable)
 					}
 				}
 			} catch (error: CancellationException) {
 				immersiveSessionRegistry.completeMainTransitionSuppression(target)
+				transitionController.cancel(target)
 				throw error
 			}
 		}
@@ -251,6 +310,67 @@ class SpaceSwitcherDelegate @Inject constructor(
 		switcherOverlay = null
 		overlay.disposeComposition()
 		(overlay.parent as? ViewGroup)?.removeView(overlay)
+	}
+
+	private fun updateTransitionOverlay(state: SpaceTransitionState) {
+		if (!state.isVisible) {
+			dismissTransitionOverlay()
+			return
+		}
+		val activity = activity ?: return
+		val overlay = transitionOverlay ?: ComposeView(activity).apply {
+			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+			activity.addContentView(
+				this,
+				ViewGroup.LayoutParams(
+					ViewGroup.LayoutParams.MATCH_PARENT,
+					ViewGroup.LayoutParams.MATCH_PARENT,
+				),
+			)
+			setContent {
+				KototoroTheme {
+					val transitionState by transitionController.state.collectAsState()
+					val spaces by catalogRepository.spaces.collectAsState()
+					SpaceTransitionCurtain(
+						state = transitionState,
+						spaces = spaces,
+						onCoverFinished = transitionController::markCovered,
+						onRevealFinished = transitionController::markRevealFinished,
+					)
+				}
+			}
+		}.also { transitionOverlay = it }
+		overlay.bringToFront()
+		val target = state.targetSpaceId
+		if (
+			state.phase == SpaceTransitionPhase.COVERED &&
+			target != null &&
+			target == sessionSpaceId &&
+			target == spaceRepository.activeSpace.value &&
+			pendingRevealTarget != target
+		) {
+			pendingRevealTarget = target
+			overlay.doOnPreDraw {
+				activity.lifecycleScope.launch { transitionController.reveal(target) }
+			}
+		}
+	}
+
+	private fun dismissTransitionOverlay() {
+		pendingRevealTarget = null
+		val overlay = transitionOverlay ?: return
+		transitionOverlay = null
+		overlay.disposeComposition()
+		(overlay.parent as? ViewGroup)?.removeView(overlay)
+	}
+
+	private suspend fun awaitTransitionCurtainDraw() {
+		val overlay = transitionOverlay ?: return
+		suspendCancellableCoroutine { continuation ->
+			overlay.doOnPreDraw {
+				if (continuation.isActive) continuation.resume(Unit)
+			}
+		}
 	}
 
 	private fun refreshMenuItems(activeSpaceId: SpaceId, inProgress: Boolean) {
@@ -312,7 +432,11 @@ class SpaceSwitcherDelegate @Inject constructor(
 		resumeReading: Boolean,
 	) {
 		val intent = Intent(activity, MainActivity::class.java)
-			.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+			.addFlags(
+				Intent.FLAG_ACTIVITY_CLEAR_TOP or
+					Intent.FLAG_ACTIVITY_SINGLE_TOP or
+					Intent.FLAG_ACTIVITY_NO_ANIMATION,
+			)
 			.putExtra(MainActivity.EXTRA_RESTORE_IMMERSIVE_SPACE_ID, targetSpaceId.value)
 		resumeSpaceExtraValue(targetSpaceId, resumeReading)?.let { spaceId ->
 			intent.putExtra(MainActivity.EXTRA_RESUME_SPACE_ID, spaceId)
@@ -321,11 +445,11 @@ class SpaceSwitcherDelegate @Inject constructor(
 		val mainTask = activityManager.appTasks.firstOrNull { task ->
 			task.taskInfo.baseIntent.component?.className == MainActivity::class.java.name
 		}
+		val options = ActivityOptions.makeCustomAnimation(activity, 0, 0).toBundle()
 		if (mainTask != null) {
-			mainTask.moveToFront()
-			mainTask.startActivity(activity, intent, null)
+			mainTask.startActivity(activity, intent, options)
 		} else {
-			activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+			activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options)
 		}
 	}
 

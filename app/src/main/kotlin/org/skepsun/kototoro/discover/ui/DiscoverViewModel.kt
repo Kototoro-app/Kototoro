@@ -53,6 +53,7 @@ import org.skepsun.kototoro.tracking.discovery.domain.displaySubtitle
 import org.skepsun.kototoro.tracking.discovery.domain.displayTitle
 import javax.inject.Inject
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
+import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.space.ui.toPrimaryContentType
 
@@ -65,7 +66,8 @@ class DiscoverViewModel @Inject constructor(
 	private val globalFavoritesState: GlobalFavoritesState,
 	val settings: AppSettings,
 	spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel() {
+) : BaseViewModel(), SpaceBindableViewModel {
+	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 
 	private val refreshTrigger = MutableStateFlow(0)
 	private val searchQuery = MutableStateFlow("")
@@ -73,9 +75,10 @@ class DiscoverViewModel @Inject constructor(
 	private val selectedCategoryOverride = MutableStateFlow<String?>(null)
 	private val forceLoadRecommendations = MutableStateFlow(false)
 	private val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
-		spaceBrowseScope = spaceBrowseScope,
+		spaceGroupTab = spaceBinding.groupTab,
 		coroutineScope = viewModelScope + Dispatchers.Default,
 	)
+	override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) = spaceBinding.bindSpace(spaceId)
 
 	private val preferredService = preferredTrackingSiteProvider.preferredSite
 		.stateIn(

@@ -11,11 +11,11 @@ import org.skepsun.kototoro.space.domain.BuiltInSpaces
 class SpaceBrowseScopeTest {
 
 	@Test
-	fun `browse view models are isolated by space`() {
-		browseViewModelKey(BuiltInSpaces.Manga) shouldBe "explore-space:builtin:manga"
-		browseViewModelKey(BuiltInSpaces.Novel) shouldBe "explore-space:builtin:novel"
-		browseViewModelKey(BuiltInSpaces.Anime) shouldBe "explore-space:builtin:anime"
-		browseViewModelKey(null) shouldBe "explore-space:global"
+	fun `main view models are isolated by owner and space`() {
+		spaceViewModelKey("home", BuiltInSpaces.Manga) shouldBe "home-space:builtin:manga"
+		spaceViewModelKey("explore", BuiltInSpaces.Novel) shouldBe "explore-space:builtin:novel"
+		spaceViewModelKey("history", BuiltInSpaces.Anime) shouldBe "history-space:builtin:anime"
+		spaceViewModelKey("favorites", null) shouldBe "favorites-space:global"
 	}
 
 	@Test
@@ -23,6 +23,19 @@ class SpaceBrowseScopeTest {
 		BuiltInSpaces.Manga.toBrowseGroupTab() shouldBe BrowseGroupTab.Content
 		BuiltInSpaces.Novel.toBrowseGroupTab() shouldBe BrowseGroupTab.Novel
 		BuiltInSpaces.Anime.toBrowseGroupTab() shouldBe BrowseGroupTab.Video
+	}
+
+	@Test
+	fun `space binding exposes target identity synchronously`() {
+		val mutableSpaceId = MutableStateFlow<org.skepsun.kototoro.space.domain.SpaceId?>(BuiltInSpaces.Manga)
+		val binding = SpaceBrowseBinding(
+			mutableSpaceId = mutableSpaceId,
+			groupTab = MutableStateFlow(BrowseGroupTab.Content),
+		)
+
+		binding.bindSpace(BuiltInSpaces.Novel)
+
+		binding.spaceId.value shouldBe BuiltInSpaces.Novel
 	}
 
 	@Test

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.favourites.ui.compose
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -16,6 +17,8 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
+import org.skepsun.kototoro.space.ui.spaceViewModelKey
 
 private const val FAVORITES_LOAD_MORE_VISIBLE_THRESHOLD = 48
 
@@ -34,10 +37,14 @@ fun KototoroFavoritesListScreen(
     modifier: Modifier = Modifier,
 ) {
     val mainActivity = LocalContext.current as? MainActivity
+    val spaceId = LocalBrowseSpaceId.current
     val viewModel = hiltViewModel<FavouritesListViewModel, FavouritesListViewModel.Factory>(
-        key = categoryId.toString(),
+        key = spaceViewModelKey("favorites-$categoryId", spaceId),
     ) { factory ->
         factory.create(categoryId)
+    }
+    LaunchedEffect(viewModel, spaceId) {
+        viewModel.bindSpace(spaceId)
     }
 
     AppContentListRoute(
