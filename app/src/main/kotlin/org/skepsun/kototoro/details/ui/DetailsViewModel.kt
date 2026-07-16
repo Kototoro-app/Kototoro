@@ -56,6 +56,7 @@ import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.resolvedContentTypeForSnapshot
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.getPreferredBranch
@@ -79,6 +80,7 @@ import org.skepsun.kototoro.details.data.DetailsTranslationCache
 import org.skepsun.kototoro.details.domain.BranchComparator
 import org.skepsun.kototoro.details.domain.DetailsInteractor
 import org.skepsun.kototoro.details.domain.DetailsLoadUseCase
+import org.skepsun.kototoro.details.domain.isDetailsProjectionAllowed
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.details.domain.ReadingTimeUseCase
 import org.skepsun.kototoro.details.domain.RelatedContentUseCase
@@ -157,6 +159,8 @@ import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.matches
 import org.skepsun.kototoro.work.domain.WorkDuplicateCandidateRepository
+import org.skepsun.kototoro.space.domain.SpaceContentPolicy
+import org.skepsun.kototoro.space.domain.SpaceId
 import kotlinx.coroutines.channels.BufferOverflow
 import java.io.File
 import java.util.Locale
@@ -502,6 +506,7 @@ class DetailsViewModel @Inject constructor(
 	private val sourceTypeIdentifier: SourceTypeIdentifier,
 	private val trackingRepository: TrackingRepository,
 	private val workResolver: org.skepsun.kototoro.work.domain.WorkResolver,
+	private val spaceContentPolicy: SpaceContentPolicy,
 ) : ChaptersPagesViewModel(
 	settings = settings,
 	interactor = interactor,
@@ -558,6 +563,10 @@ class DetailsViewModel @Inject constructor(
 	val readingSourceOptions = MutableStateFlow<List<DetailsSourceOption>>(emptyList())
 	val metadataChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
 	val readingChapterTabs = MutableStateFlow<List<DetailsChapterSourceTab>>(emptyList())
+	private var detailsSpaceId: SpaceId? = null
+	private var activeEntityContextId: Long? = null
+	private var activeEntityContextBindings: List<EntityBinding> = emptyList()
+	private var activeEntityContextBoundLocalId: Long? = null
 	private val sessionReadingProjectionLocalMangaId = MutableStateFlow<Long?>(null)
 	val supplementalMetadataProperties = MutableStateFlow<List<Pair<String, String>>>(emptyList())
 	val supplementalSections = MutableStateFlow<List<EntityRelationSection>>(emptyList())
@@ -1461,7 +1470,10 @@ class DetailsViewModel @Inject constructor(
 			syncDisplayedState()
 		}
 		val bindings = entityGraphRepository.getBindings(entityId)
+		activeEntityContextId = entityId
+		activeEntityContextBindings = bindings
 		if (entity.type != EntityType.WORK) {
+			activeEntityContextBoundLocalId = null
 			activeLocalSourceOptions.value = emptyList()
 			sessionReadingProjectionLocalMangaId.value = null
 			updateSourceOptions()
@@ -1490,6 +1502,7 @@ class DetailsViewModel @Inject constructor(
 					binding.externalId.toLongOrNull() == preferredId
 			}
 		} ?: bindings.firstOrNull { it.isLocalReadingSource() }?.externalId?.toLongOrNull()
+		activeEntityContextBoundLocalId = boundLocalId
 		val localBindingCount = bindings.count { binding ->
 			binding.isLocalReadingSource()
 		}
@@ -1514,6 +1527,22 @@ class DetailsViewModel @Inject constructor(
 			restoreEntityMetadataSourceSelection(entityId = entityId)
 		}
 		submitEntityRelationSections(buildEntityRelationSections(entityId))
+	}
+
+	fun setSpaceContext(spaceId: SpaceId?) {
+		if (detailsSpaceId == spaceId) {
+			return
+		}
+		detailsSpaceId = spaceId
+		val entityId = activeEntityContextId ?: return
+		viewModelScope.launch {
+			val bindings = activeEntityContextBindings
+			val boundLocalId = activeEntityContextBoundLocalId
+			activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
+			updateSourceOptions()
+			entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(boundLocalId)
+			Log.d("DetailsViewModel", "setSpaceContext: entityId=$entityId, spaceId=$spaceId")
+		}
 	}
 
 	init {
@@ -2549,17 +2578,26 @@ class DetailsViewModel @Inject constructor(
 					?.local
 					?.manga
 					?.source
-			source?.let {
-				listOf(
-					DetailsSourceOption(
-						key = "reading:${it.name}",
-						source = it,
-						title = baseContent?.title,
-						coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
-						isSelected = true,
-					),
-				)
-			}.orEmpty()
+				val spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes)
+				source
+					?.takeIf { candidate ->
+						isDetailsProjectionAllowed(
+							currentType = currentBaseContentType(),
+							projectionType = candidate.resolvedContentTypeForSnapshot(),
+							spaceAllowedTypes = spaceAllowedTypes,
+						)
+					}
+					?.let {
+						listOf(
+							DetailsSourceOption(
+								key = "reading:${it.name}",
+								source = it,
+								title = baseContent?.title,
+								coverUrl = baseContent?.coverUrl.normalizedImageUrl(),
+								isSelected = true,
+							),
+						)
+					}.orEmpty()
 		}
 		updateChapterSourceTabs()
 	}
@@ -4092,6 +4130,14 @@ class DetailsViewModel @Inject constructor(
 		bindings: List<EntityBinding>,
 		activeMangaId: Long?,
 	): List<ActiveLocalSourceOption> {
+		val currentType = activeMangaId
+			?.let { localMangaId ->
+				db.getMangaDao().find(localMangaId)?.manga?.let { manga ->
+					parseStoredContentType(manga.contentType) ?: ContentSource(manga.source).resolvedContentTypeForSnapshot()
+				}
+			}
+			?: currentBaseContentType()
+		val spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes)
 		val localMangaIds = bindings.asSequence()
 			.filter { it.isLocalReadingSource() }
 			.mapNotNull { it.externalId.toLongOrNull() }
@@ -4102,10 +4148,16 @@ class DetailsViewModel @Inject constructor(
 			if (manga.source.startsWith("TRACKING_")) {
 				return@mapNotNull null
 			}
+			val source = ContentSource(manga.source)
+			val projectionType = parseStoredContentType(manga.contentType)
+				?: source.resolvedContentTypeForSnapshot()
+			if (!isDetailsProjectionAllowed(currentType, projectionType, spaceAllowedTypes)) {
+				return@mapNotNull null
+			}
 			ActiveLocalSourceOption(
 				mangaId = localMangaId,
 				title = manga.title,
-				source = ContentSource(manga.source),
+				source = source,
 				isActive = localMangaId == activeMangaId,
 			)
 		}
@@ -4113,6 +4165,10 @@ class DetailsViewModel @Inject constructor(
 			return emptyList()
 		}
 		return localMangaOptions
+	}
+
+	private fun parseStoredContentType(value: String?): ContentType? {
+		return value?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
 	}
 
 	private fun updateActiveLocalSourceSelection(activeMangaId: Long) {
@@ -4134,14 +4190,30 @@ class DetailsViewModel @Inject constructor(
 		val manga = mangaId?.let { localMangaId ->
 			db.getMangaDao().find(localMangaId)?.manga
 		}
+		val source = manga?.source?.let(::ContentSource)
+		val projectionType = manga?.let { localManga ->
+			parseStoredContentType(localManga.contentType)
+				?: source?.resolvedContentTypeForSnapshot()
+		}
+		val isVisibleInDetails = isDetailsProjectionAllowed(
+			currentType = projectionType,
+			projectionType = projectionType,
+			spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes),
+		)
 		val projectionSnapshot = currentWorkProjectionSnapshot()
 		return EntityChapterSourceInfo(
-			source = manga?.source?.let(::ContentSource),
-			projectionTitle = manga?.title,
-			projectionCount = activeLocalSourceOptions.value.size.coerceAtLeast(if (manga != null) 1 else 0),
-			activeProjectionMangaId = activeProjectionMangaId ?: projectionSnapshot.activeLocalMangaId,
-			currentReadingProjectionMangaId = currentReadingProjectionMangaId
-				?: projectionSnapshot.currentReadingProjectionMangaId,
+			source = source?.takeIf { isVisibleInDetails },
+			projectionTitle = manga?.title?.takeIf { isVisibleInDetails },
+			projectionCount = if (isVisibleInDetails) {
+				activeLocalSourceOptions.value.size.coerceAtLeast(if (manga != null) 1 else 0)
+			} else {
+				0
+			},
+			activeProjectionMangaId = (activeProjectionMangaId ?: projectionSnapshot.activeLocalMangaId)
+				.takeIf { isVisibleInDetails },
+			currentReadingProjectionMangaId = (
+				currentReadingProjectionMangaId ?: projectionSnapshot.currentReadingProjectionMangaId
+			).takeIf { isVisibleInDetails },
 		)
 	}
 

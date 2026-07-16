@@ -12,6 +12,8 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.resolvedContentTypeForSnapshot
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
@@ -637,13 +639,26 @@ class EntityGraphRepository @Inject constructor(
 						val entityId = redirectedEntityIds[existingBinding.entityId] ?: existingBinding.entityId
 						val record = entityRecords[entityId] ?: dao.findEntity(entityId)
 						if (record != null) {
+							val typedRecord = record.withInferredContentType(
+								dao = dao,
+								fallback = content.source.contentType,
+							)
 							val merged = mergeEntityRecord(
-								record = record,
+								record = typedRecord,
 								primaryName = content.title,
 								aliases = content.altTitles.toList(),
 								now = now,
 							)
-							if (merged != record) {
+							if (!typedRecord.acceptsContentType(content.source.contentType)) {
+								val detached = createDetachedLocalWorkEntity(
+									content = content,
+									now = now,
+								)
+								entityRecords[detached.id] = detached.toRecord()
+								put(content.id, detached.id)
+								continue
+							}
+							if (merged != typedRecord || typedRecord != record) {
 								val resolved = updateEntityResolvingNameHashConflict(
 									dao = dao,
 									original = record,
@@ -676,6 +691,7 @@ class EntityGraphRepository @Inject constructor(
 							source = "local_manga",
 							externalId = content.id.toString(),
 							confidence = 1f,
+							contentType = content.source.contentType,
 							now = now,
 							createdBy = createdBy,
 						)
@@ -695,12 +711,19 @@ class EntityGraphRepository @Inject constructor(
 		db.withTransaction {
 			val dao = db.getEntityGraphDao()
 			val now = System.currentTimeMillis()
+			if (distinctContents.map { it.source.contentType }.distinct().size > 1) {
+				return@withTransaction null
+			}
 			val ensuredIds = ensureLocalWorkEntities(distinctContents)
 			val entityIds = distinctContents.mapNotNullTo(LinkedHashSet()) { ensuredIds[it.id] }
 			if (entityIds.isEmpty()) {
 				return@withTransaction null
 			}
 			val records = dao.findEntitiesByIds(entityIds.toList()).associateBy { it.id }
+			val entityTypes = entityIds.mapNotNull { records[it]?.contentType }.toSet()
+			if (entityTypes.size > 1 || (entityTypes.isNotEmpty() && entityIds.any { records[it]?.contentType == null })) {
+				return@withTransaction null
+			}
 			val targetEntityId = entityIds
 				.mapNotNull { records[it] }
 				.maxWithOrNull(
@@ -773,6 +796,10 @@ class EntityGraphRepository @Inject constructor(
 			val allIds = (distinctSourceIds + targetEntityId).distinct()
 			val records = dao.findEntitiesByIds(allIds).associateBy { it.id }.toMutableMap()
 			var mergedRecord = records[targetEntityId] ?: return@withTransaction null
+			if (!records.values.canMergeWorkContentTypes()) {
+				Log.w(TAG, "mergeEntities: refusing content-type conflict for entityIds=$allIds")
+				return@withTransaction null
+			}
 			distinctSourceIds.mapNotNull { records[it] }.forEach { record ->
 				mergedRecord = mergeEntityRecord(
 					record = mergedRecord,
@@ -786,7 +813,11 @@ class EntityGraphRepository @Inject constructor(
 			val absorbedIds = mutableSetOf<Long>()
 			var absorbAttempts = 0
 			while (absorbAttempts < 5) {
-				val conflicting = dao.findEntityByTypeAndNameHash(mergedRecord.type, mergedRecord.nameHash)
+				val conflicting = dao.findEntityByTypeAndNameHashAndContentType(
+					mergedRecord.type,
+					mergedRecord.nameHash,
+					mergedRecord.contentType,
+				)
 				if (conflicting == null || conflicting.id == targetEntityId) {
 					break
 				}
@@ -837,6 +868,11 @@ class EntityGraphRepository @Inject constructor(
 			val dao = db.getEntityGraphDao()
 			val now = System.currentTimeMillis()
 			var record = dao.findEntity(entityId) ?: return@withTransaction false
+			record = record.withInferredContentType(dao, distinctContents.first().source.contentType)
+			if (!distinctContents.map { it.source.contentType }.all { record.acceptsContentType(it) }) {
+				Log.w(TAG, "attachLocalWorksToEntity: refusing content-type conflict for entityId=$entityId")
+				return@withTransaction false
+			}
 			distinctContents.forEach { content ->
 				record = mergeEntityRecord(
 					record = record,
@@ -884,14 +920,21 @@ class EntityGraphRepository @Inject constructor(
 			if (existing != null) {
 				val dao = db.getEntityGraphDao()
 				val record = dao.findEntity(existing.entityId)
-				val resolvedEntityId = if (record != null) {
+				if (record != null) {
+					val typedRecord = record.withInferredContentType(
+						dao = dao,
+						fallback = content.source.contentType,
+					)
+					if (!typedRecord.acceptsContentType(content.source.contentType)) {
+						return@withTransaction createDetachedLocalWorkEntity(content, now)
+					}
 					val merged = mergeEntityRecord(
-						record = record,
+						record = typedRecord,
 						primaryName = content.title,
 						aliases = content.altTitles.toList(),
 						now = now,
 					)
-					updateEntityResolvingNameHashConflict(
+					val resolvedEntityId = updateEntityResolvingNameHashConflict(
 						dao = dao,
 						original = record,
 						merged = merged,
@@ -899,28 +942,26 @@ class EntityGraphRepository @Inject constructor(
 						aliases = content.altTitles.toList(),
 						now = now,
 					).id
-				} else {
-					existing.entityId
-				}
-				dao.upsertBindingForSource(
-					entityId = resolvedEntityId,
-					source = "local_manga",
-					externalId = content.id.toString(),
-					confidence = existing.confidence,
-					createdBy = createdBy,
-				)
-				if (projectionKey != null) {
 					dao.upsertBindingForSource(
 						entityId = resolvedEntityId,
-						source = content.source.name,
-						externalId = projectionKey,
+						source = "local_manga",
+						externalId = content.id.toString(),
 						confidence = existing.confidence,
 						createdBy = createdBy,
-						sourceKind = EntityBindingSourceKind.READING_SOURCE,
 					)
+					if (projectionKey != null) {
+						dao.upsertBindingForSource(
+							entityId = resolvedEntityId,
+							source = content.source.name,
+							externalId = projectionKey,
+							confidence = existing.confidence,
+							createdBy = createdBy,
+							sourceKind = EntityBindingSourceKind.READING_SOURCE,
+						)
+					}
+					dao.touchEntity(resolvedEntityId, now)
+					return@withTransaction requireNotNull(dao.findEntity(resolvedEntityId)).toModel()
 				}
-				dao.touchEntity(resolvedEntityId, now)
-				return@withTransaction requireNotNull(dao.findEntity(resolvedEntityId)).toModel()
 			}
 			val entity = if (projectionKey != null) {
 				resolveOrCreateEntity(
@@ -1425,6 +1466,66 @@ class EntityGraphRepository @Inject constructor(
 		}
 	}
 
+	suspend fun repairMixedWorkContentTypeEntities(): Int = withContext(Dispatchers.Default) {
+		val report = inspectRepairIssues()
+		report.issues
+			.asSequence()
+			.filter { it.kind == EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES }
+			.map { it.entityId }
+			.distinct()
+			.sumOf { entityId -> repairMixedWorkContentTypeEntity(entityId) }
+	}
+
+	suspend fun repairMixedWorkContentTypeEntity(
+		entityId: Long,
+		preferredLocalMangaId: Long? = null,
+	): Int = withContext(Dispatchers.Default) {
+		val dao = db.getEntityGraphDao()
+		val entity = dao.findEntity(entityId) ?: return@withContext 0
+		if (entity.type != EntityType.WORK.name) {
+			return@withContext 0
+		}
+		val projections = dao.findActiveLocalBindingsByEntity(entityId)
+			.mapNotNull { binding ->
+				val localMangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+				val manga = db.getMangaDao().find(localMangaId)?.manga ?: return@mapNotNull null
+				val contentType = manga.contentType
+					?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
+					?: ContentSource(manga.source).resolvedContentTypeForSnapshot()
+				Triple(localMangaId, contentType, manga.title)
+			}
+		val grouped = projections.filter { it.second != null }.groupBy { it.second }
+		if (grouped.size <= 1) {
+			return@withContext 0
+		}
+		val preferredType = projections
+			.firstOrNull { it.first == preferredLocalMangaId }
+			?.second
+			?: entity.contentType?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
+			?: grouped.entries
+			.maxWithOrNull(compareBy<Map.Entry<ContentType?, List<Triple<Long, ContentType?, String>>>> { it.value.size }
+				.thenBy { it.key?.name.orEmpty() })
+			?.key
+			?: return@withContext 0
+		val repaired = projections
+			.asSequence()
+			.filter { it.second != null && it.second != preferredType }
+			.map { it.first }
+			.distinct()
+			.count { localMangaId -> splitLocalWorkProjection(localMangaId) != null }
+		if (entity.contentType != preferredType.name) {
+			updateEntityResolvingNameHashConflict(
+				dao = dao,
+				original = entity,
+				merged = entity.copy(contentType = preferredType.name),
+				primaryName = entity.primaryName,
+				aliases = decodeStringList(entity.aliases),
+				now = System.currentTimeMillis(),
+			)
+		}
+		repaired
+	}
+
 	private suspend fun updateRelationState(
 		relationId: Long,
 		state: EntityRelationState,
@@ -1676,6 +1777,27 @@ class EntityGraphRepository @Inject constructor(
 				return@forEach
 			}
 			val entity = entitiesById[entityId] ?: return@forEach
+			val localProjectionTypes = localBindings.mapNotNull { binding ->
+				val localMangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+				val manga = db.getMangaDao().find(localMangaId)?.manga ?: return@mapNotNull null
+				val contentType = manga.contentType
+					?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
+					?: ContentSource(manga.source).resolvedContentTypeForSnapshot()
+				Triple(binding, localMangaId, contentType)
+			}
+			val distinctContentTypes = localProjectionTypes.mapNotNull { it.third }.distinct()
+			if (entity.type == EntityType.WORK.name && distinctContentTypes.size > 1) {
+				localProjectionTypes.forEach { (binding, localMangaId, _) ->
+					issues += EntityGraphRepairIssue(
+						kind = EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES,
+						entityId = entityId,
+						source = binding.source,
+						externalId = binding.externalId,
+						localMangaId = localMangaId,
+						count = distinctContentTypes.size,
+					)
+				}
+			}
 			val strictEntityNameKeys = entity.strictRepairNameKeys()
 			if (strictEntityNameKeys.isEmpty()) {
 				return@forEach
@@ -2198,6 +2320,9 @@ class EntityGraphRepository @Inject constructor(
 			val existingBinding = findBindingBySourceKey(source, externalId)
 			if (existingBinding != null) {
 				dao.findEntity(existingBinding.entityId)?.let { record ->
+					if (!record.acceptsContentType(contentType)) {
+						return@let
+					}
 					val merged = mergeEntityRecord(
 						record = record,
 						primaryName = primaryName,
@@ -2218,7 +2343,7 @@ class EntityGraphRepository @Inject constructor(
 			}
 		}
 
-		val animeOfflineCandidate = resolveAnimeOfflineCandidate(source, externalId, now)
+		val animeOfflineCandidate = resolveAnimeOfflineCandidate(source, externalId, contentType, now)
 		if (animeOfflineCandidate != null) {
 			return mergeIntoResolvedEntity(
 				entity = animeOfflineCandidate,
@@ -2227,6 +2352,7 @@ class EntityGraphRepository @Inject constructor(
 				source = source,
 				externalId = externalId,
 				confidence = 0.99f,
+				contentType = contentType,
 				now = now,
 				createdBy = createdBy,
 			)
@@ -2245,6 +2371,7 @@ class EntityGraphRepository @Inject constructor(
 				source = source,
 				externalId = externalId,
 				confidence = 0.98f,
+				contentType = contentType,
 				now = now,
 				createdBy = createdBy,
 			)
@@ -2253,6 +2380,7 @@ class EntityGraphRepository @Inject constructor(
 			type = type,
 			primaryName = primaryName,
 			aliases = aliases,
+			contentType = contentType,
 			now = now,
 		)
 		if (candidate != null) {
@@ -2264,10 +2392,11 @@ class EntityGraphRepository @Inject constructor(
 						aliases = aliases,
 						source = source,
 						externalId = externalId,
-							confidence = candidate.confidence,
-							now = now,
-							createdBy = createdBy,
-						)
+						contentType = contentType,
+						confidence = candidate.confidence,
+						now = now,
+						createdBy = createdBy,
+					)
 				}
 
 				EntityBindingStrength.WEAK_BIND -> {
@@ -2277,10 +2406,11 @@ class EntityGraphRepository @Inject constructor(
 						aliases = aliases,
 						source = source,
 						externalId = externalId,
-							confidence = 1f,
-							now = now,
-							createdBy = createdBy,
-						)
+						contentType = contentType,
+						confidence = 1f,
+						now = now,
+						createdBy = createdBy,
+					)
 					insertRelationIfAbsent(
 						fromEntityId = created.id,
 						toEntityId = candidate.entity.id,
@@ -2301,6 +2431,7 @@ class EntityGraphRepository @Inject constructor(
 			aliases = aliases,
 			source = source,
 			externalId = externalId,
+			contentType = contentType,
 			confidence = 1f,
 			now = now,
 			createdBy = createdBy,
@@ -2310,6 +2441,7 @@ class EntityGraphRepository @Inject constructor(
 	private suspend fun resolveAnimeOfflineCandidate(
 		source: String?,
 		externalId: String?,
+		contentType: ContentType?,
 		now: Long,
 	): Entity? {
 		val service = source.toScrobblerServiceOrNull() ?: return null
@@ -2318,6 +2450,7 @@ class EntityGraphRepository @Inject constructor(
 		return resolveMappedCandidate(
 			now = now,
 			mappings = mappings.map { it.service to it.remoteId },
+			contentType = contentType,
 		)
 	}
 
@@ -2334,12 +2467,14 @@ class EntityGraphRepository @Inject constructor(
 		return resolveMappedCandidate(
 			now = now,
 			mappings = mappings.map { it.service to it.remoteId },
+			contentType = contentType,
 		)
 	}
 
 	private suspend fun resolveMappedCandidate(
 		now: Long,
 		mappings: List<Pair<ScrobblerService, Long>>,
+		contentType: ContentType?,
 	): Entity? {
 		if (mappings.isEmpty()) {
 			return null
@@ -2348,7 +2483,9 @@ class EntityGraphRepository @Inject constructor(
 		for ((service, remoteId) in mappings) {
 			val binding = findBindingBySourceKey(service.id.toString(), remoteId.toString()) ?: continue
 			dao.touchEntity(binding.entityId, now)
-			return dao.findEntity(binding.entityId)?.toModel()
+			return dao.findEntity(binding.entityId)
+				?.takeIf { it.toModel().canAutoBindContentType(contentType) }
+				?.toModel()
 		}
 		return null
 	}
@@ -2360,12 +2497,13 @@ class EntityGraphRepository @Inject constructor(
 		source: String?,
 		externalId: String?,
 		confidence: Float,
+		contentType: ContentType? = null,
 		now: Long,
 		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.INGEST,
 	): Entity {
 		val dao = db.getEntityGraphDao()
 		val merged = mergeEntityRecord(
-			record = entity.toRecord(),
+			record = entity.toRecord().withContentType(contentType),
 			primaryName = primaryName,
 			aliases = aliases,
 			now = now,
@@ -2440,10 +2578,22 @@ class EntityGraphRepository @Inject constructor(
 			source = projection.source,
 			externalId = projection.externalId,
 		)
-		if (entity.syncId == projectionSyncId) {
+		val syncIdOwner = findEntityBySyncId(projectionSyncId)
+		val resolvedSyncId = entity.resolveProjectionSyncId(
+			projectionSyncId = projectionSyncId,
+			conflictingEntityId = syncIdOwner?.id,
+		)
+		if (syncIdOwner != null && syncIdOwner.id != entityId) {
+			Log.w(
+				TAG,
+				"reconcileProjectionSyncId: projection sync id is already owned by " +
+					"entityId=${syncIdOwner.id}; keeping entityId=$entityId syncId=$resolvedSyncId",
+			)
+		}
+		if (entity.syncId == resolvedSyncId) {
 			return
 		}
-		updateEntity(entity.copy(syncId = projectionSyncId))
+		updateEntity(entity.copy(syncId = resolvedSyncId))
 	}
 
 	private suspend fun EntityGraphDao.attachLocalWorkBindingForMerge(
@@ -2534,6 +2684,7 @@ class EntityGraphRepository @Inject constructor(
 		source: String?,
 		externalId: String?,
 		confidence: Float,
+		contentType: ContentType? = null,
 		now: Long,
 		createdBy: EntityBindingCreatedBy = EntityBindingCreatedBy.INGEST,
 	): Entity {
@@ -2542,6 +2693,7 @@ class EntityGraphRepository @Inject constructor(
 		val nameHash = computeNameHash(trimmedName)
 		val record = EntityRecord(
 			type = type.name,
+			contentType = contentType?.name,
 			syncId = if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
 				computeProjectionSyncId(source, externalId)
 			} else {
@@ -2554,12 +2706,15 @@ class EntityGraphRepository @Inject constructor(
 			lastAccessed = now,
 			accessCount = 1,
 		)
-		// INSERT OR IGNORE: if a concurrent request already created this entity (same type + name_hash),
+		// INSERT OR IGNORE: if a concurrent request already created this entity (same type + name_hash + content type),
 		// we fall back to merging into the existing one instead of creating a duplicate.
-		val id = dao.insertEntityIgnore(record)
+		var id = dao.insertEntityIgnore(record)
 		if (id == -1L) {
-			// Conflict — another call won the race. Resolve the existing entity.
-			val existing = dao.findEntityByTypeAndNameHash(type.name, nameHash)
+			val existing = dao.findEntityByTypeAndNameHashAndContentType(
+				type = type.name,
+				nameHash = nameHash,
+				contentType = contentType?.name,
+			)
 			if (existing != null) {
 				return mergeIntoResolvedEntity(
 					entity = existing.toModel(),
@@ -2568,10 +2723,17 @@ class EntityGraphRepository @Inject constructor(
 					source = source,
 					externalId = externalId,
 					confidence = confidence,
+					contentType = contentType,
 					now = now,
 					createdBy = createdBy,
 				)
 			}
+			id = dao.insertEntity(
+				record.copy(
+					syncId = java.util.UUID.randomUUID().toString(),
+					nameHash = "$nameHash|$now|${record.syncId}".longHashCode(),
+				),
+			)
 		}
 		if (!source.isNullOrBlank() && !externalId.isNullOrBlank()) {
 			dao.upsertBindingForSource(
@@ -2602,10 +2764,15 @@ class EntityGraphRepository @Inject constructor(
 				else -> "$baseName ($sourceLabel #${content.id}-$suffixIndex)"
 			}
 			val nameHash = computeNameHash(identityName)
-			if (dao.findEntityByTypeAndNameHash(EntityType.WORK.name, nameHash) == null) {
+			if (dao.findEntityByTypeAndNameHashAndContentType(
+					EntityType.WORK.name,
+					nameHash,
+					content.source.contentType.name,
+				) == null) {
 				id = dao.insertEntityIgnore(
 					EntityRecord(
 						type = EntityType.WORK.name,
+						contentType = content.source.contentType.name,
 						primaryName = baseName,
 						nameHash = nameHash,
 						aliases = encodeStringList(content.altTitles.distinct().take(MAX_ENTITY_ALIASES)),
@@ -2708,10 +2875,15 @@ class EntityGraphRepository @Inject constructor(
 				else -> "$baseName (local #$localMangaId-$suffixIndex)"
 			}
 			val nameHash = computeNameHash(identityName)
-			if (dao.findEntityByTypeAndNameHash(EntityType.WORK.name, nameHash) == null) {
+			if (dao.findEntityByTypeAndNameHashAndContentType(
+					EntityType.WORK.name,
+					nameHash,
+					previousEntity.contentType,
+				) == null) {
 				id = dao.insertEntityIgnore(
 					EntityRecord(
 						type = EntityType.WORK.name,
+						contentType = previousEntity.contentType,
 						primaryName = baseName,
 						nameHash = nameHash,
 						aliases = encodeStringList(
@@ -3087,11 +3259,13 @@ class EntityGraphRepository @Inject constructor(
 		type: EntityType,
 		primaryName: String,
 		aliases: List<String>,
+		contentType: ContentType?,
 		now: Long,
 	): CandidateMatch? {
 		val probe = Entity(
 			id = 0L,
 			type = type,
+			contentType = contentType,
 			primaryName = primaryName.trim(),
 			aliases = mergeAliases(primaryName, aliases).drop(1),
 			createdAt = now,
@@ -3176,6 +3350,25 @@ class EntityGraphRepository @Inject constructor(
 		)
 	}
 
+	private suspend fun EntityRecord.withInferredContentType(
+		dao: EntityGraphDao,
+		fallback: ContentType?,
+	): EntityRecord {
+		if (contentType != null || type != EntityType.WORK.name) {
+			return this
+		}
+		val knownTypes = dao.findActiveLocalBindingsByEntity(id)
+			.mapNotNull { binding ->
+				val localMangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+				val manga = db.getMangaDao().find(localMangaId)?.manga ?: return@mapNotNull null
+				manga.contentType?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
+					?: ContentSource(manga.source).resolvedContentTypeForSnapshot()
+			}
+			.toMutableSet()
+		fallback?.let(knownTypes::add)
+		return knownTypes.singleOrNull()?.name?.let { copy(contentType = it) } ?: this
+	}
+
 	private suspend fun updateEntityResolvingNameHashConflict(
 		dao: EntityGraphDao,
 		original: EntityRecord,
@@ -3184,7 +3377,11 @@ class EntityGraphRepository @Inject constructor(
 		aliases: List<String>,
 		now: Long,
 	): EntityRecord {
-		val conflict = dao.findEntityByTypeAndNameHash(merged.type, merged.nameHash)
+		val conflict = dao.findEntityByTypeAndNameHashAndContentType(
+			merged.type,
+			merged.nameHash,
+			merged.contentType,
+		)
 		if (conflict == null || conflict.id == original.id) {
 			dao.updateEntity(merged)
 			return merged
@@ -3266,6 +3463,7 @@ class EntityGraphRepository @Inject constructor(
 	private fun Entity.toRecord(): EntityRecord = EntityRecord(
 		id = id,
 		type = type.name,
+		contentType = contentType?.name,
 		primaryName = primaryName,
 		nameHash = computeNameHash(primaryName),
 		aliases = encodeStringList(aliases),
@@ -3464,6 +3662,7 @@ class EntityGraphRepository @Inject constructor(
 					dao = dao,
 					title = title,
 					canonicalMangaId = group.canonicalMangaId,
+					contentType = group.contentType,
 					syncId = resetProjectionSyncId(group, mangaById),
 					now = now,
 				) ?: return@forEach
@@ -3569,12 +3768,14 @@ class EntityGraphRepository @Inject constructor(
 		dao: EntityGraphDao,
 		title: String,
 		canonicalMangaId: Long,
+		contentType: String?,
 		syncId: String?,
 		now: Long,
 	): Long? {
 		val baseHash = "reset|$canonicalMangaId|$title".longHashCode()
 		val record = EntityRecord(
 			type = EntityType.WORK.name,
+			contentType = contentType,
 			syncId = syncId ?: java.util.UUID.randomUUID().toString(),
 			primaryName = title,
 			nameHash = baseHash,

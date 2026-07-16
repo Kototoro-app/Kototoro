@@ -56,6 +56,21 @@ class EntityIdentityResetPlannerTest {
 	}
 
 	@Test
+	fun `same location on different content types stays separate`() {
+		val groups = buildResetProjectionGroups(
+			mangaIds = listOf(1L, 2L),
+			mangaById = mapOf(
+				1L to manga(id = 1L, source = "SRC", url = "/same", contentType = "MANGA"),
+				2L to manga(id = 2L, source = "SRC", url = "/same", contentType = "VIDEO"),
+			),
+			workHistorySnapshot = emptyList(),
+			workFavouriteSnapshot = emptyList(),
+		)
+
+		assertEquals(listOf(listOf(1L), listOf(2L)), groups.map { it.mangaIds })
+	}
+
+	@Test
 	fun `canonical projection prefers newest work state`() {
 		val groups = buildResetProjectionGroups(
 			mangaIds = listOf(1L, 2L),
@@ -130,6 +145,7 @@ class EntityIdentityResetPlannerTest {
 		source: String,
 		url: String,
 		publicUrl: String = "",
+		contentType: String? = null,
 	): MangaEntity {
 		return MangaEntity(
 			id = id,
@@ -145,6 +161,7 @@ class EntityIdentityResetPlannerTest {
 			state = null,
 			authors = null,
 			source = source,
+			contentType = contentType,
 		)
 	}
 

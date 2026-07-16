@@ -160,6 +160,7 @@ class WorkDuplicateCandidateRepositoryTest {
 		return EntityRecord(
 			id = id,
 			type = EntityType.WORK.name,
+			contentType = ContentType.MANGA.name,
 			primaryName = title,
 			nameHash = computeNameHash(title),
 			aliases = null,

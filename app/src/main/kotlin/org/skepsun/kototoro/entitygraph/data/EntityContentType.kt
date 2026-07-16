@@ -1,0 +1,34 @@
+package org.skepsun.kototoro.entitygraph.data
+
+import org.skepsun.kototoro.entitygraph.domain.Entity
+import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.parsers.model.ContentType
+
+/**
+ * Work content type is an identity boundary. A null value represents legacy or
+ * unresolved data and must never be upgraded by title matching alone.
+ */
+internal fun EntityRecord.acceptsContentType(requested: ContentType?): Boolean {
+	return type != EntityType.WORK.name ||
+		(requested != null && contentType != null && contentType == requested.name)
+}
+
+internal fun Entity.canAutoBindContentType(requested: ContentType?): Boolean {
+	return type != EntityType.WORK ||
+		(requested != null && contentType != null && contentType == requested)
+}
+
+internal fun EntityRecord.withContentType(contentType: ContentType?): EntityRecord {
+	return if (contentType == null || this.contentType != null) {
+		this
+	} else {
+		copy(contentType = contentType.name)
+	}
+}
+
+internal fun Collection<EntityRecord>.canMergeWorkContentTypes(): Boolean {
+	val workTypes = filter { it.type == EntityType.WORK.name }
+	if (workTypes.isEmpty()) return true
+	val contentTypes = workTypes.map { it.contentType }.toSet()
+	return contentTypes.size == 1 && null !in contentTypes
+}

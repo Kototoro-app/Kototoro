@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.entitygraph.data
 
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.resolvedContentTypeForSnapshot
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
@@ -8,6 +10,7 @@ import org.skepsun.kototoro.history.data.WorkHistoryEntity
 internal data class ResetProjectionGroup(
 	val mangaIds: List<Long>,
 	val canonicalMangaId: Long,
+	val contentType: String? = null,
 )
 
 internal data class ResetProjectionBindingKey(
@@ -22,10 +25,13 @@ internal fun buildResetProjectionGroups(
 	workFavouriteSnapshot: List<WorkFavouriteEntity>,
 ): List<ResetProjectionGroup> {
 	val disjointSet = ResetProjectionDisjointSet(mangaIds)
-	val ownerByStrongKey = LinkedHashMap<String, Long>()
+	val ownerByStrongKey = LinkedHashMap<String, MutableMap<String?, Long>>()
 	mangaIds.forEach { mangaId ->
-		mangaById[mangaId]?.resetStrongProjectionKeys().orEmpty().forEach { key ->
-			val previousOwner = ownerByStrongKey.putIfAbsent(key, mangaId)
+		val manga = mangaById[mangaId] ?: return@forEach
+		val contentType = manga.resolvedResetContentType()
+		manga.resetStrongProjectionKeys().forEach { key ->
+			val ownerByType = ownerByStrongKey.getOrPut(key) { LinkedHashMap() }
+			val previousOwner = ownerByType.putIfAbsent(contentType, mangaId)
 			if (previousOwner != null) {
 				disjointSet.union(previousOwner, mangaId)
 			}
@@ -41,10 +47,16 @@ internal fun buildResetProjectionGroups(
 					compareByDescending<Long> { canonicalScoreByMangaId[it] ?: 0L }
 						.thenBy { it },
 				) ?: sortedIds.first(),
+				contentType = mangaById[sortedIds.first()]?.resolvedResetContentType(),
 			)
 		}
 		.sortedBy { it.canonicalMangaId }
 		.toList()
+}
+
+private fun MangaEntity.resolvedResetContentType(): String? {
+	return contentType?.takeIf { raw -> raw.isNotBlank() }
+		?: ContentSource(source).resolvedContentTypeForSnapshot()?.name
 }
 
 internal fun buildResetProjectionBindingKeys(

@@ -12,6 +12,7 @@ import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingStrength
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.entitygraph.domain.RelationType
+import org.skepsun.kototoro.parsers.model.ContentType
 
 class DefaultEntityBindingMatcherTest {
 
@@ -41,6 +42,22 @@ class DefaultEntityBindingMatcherTest {
     fun `different types never bind`() = runTest {
         val left = entity(id = 1L, type = EntityType.WORK, name = "Frieren")
         val right = entity(id = 2L, type = EntityType.CHARACTER, name = "Frieren")
+        val confidence = matcher.tryBindEntities(left, right)
+        assertEquals(0f, confidence)
+    }
+
+    @Test
+    fun `same title with different work content types never binds`() = runTest {
+        val left = entity(id = 1L, type = EntityType.WORK, name = "庙不可言", contentType = ContentType.MANGA)
+        val right = entity(id = 2L, type = EntityType.WORK, name = "庙不可言", contentType = ContentType.VIDEO)
+        val confidence = matcher.tryBindEntities(left, right)
+        assertEquals(0f, confidence)
+    }
+
+    @Test
+    fun `unknown work content type never auto binds by title`() = runTest {
+        val left = entity(id = 1L, type = EntityType.WORK, name = "庙不可言", contentType = null)
+        val right = entity(id = 2L, type = EntityType.WORK, name = "庙不可言", contentType = ContentType.VIDEO)
         val confidence = matcher.tryBindEntities(left, right)
         assertEquals(0f, confidence)
     }
@@ -76,9 +93,11 @@ class DefaultEntityBindingMatcherTest {
         id: Long,
         type: EntityType,
         name: String,
+        contentType: ContentType? = if (type == EntityType.WORK) ContentType.MANGA else null,
     ): Entity = Entity(
         id = id,
         type = type,
+        contentType = contentType,
         primaryName = name,
         aliases = emptyList(),
         createdAt = 1L,

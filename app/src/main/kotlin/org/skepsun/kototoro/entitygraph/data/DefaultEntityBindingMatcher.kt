@@ -24,6 +24,10 @@ class DefaultEntityBindingMatcher @Inject constructor(
 		if (entityA.type != entityB.type) {
 			return 0f
 		}
+		if (entityA.type == EntityType.WORK &&
+			!entityA.canAutoBindContentType(entityB.contentType)) {
+			return 0f
+		}
 		val nameScore = scoreNames(entityA, entityB)
 		if (nameScore <= 0f) {
 			return 0f

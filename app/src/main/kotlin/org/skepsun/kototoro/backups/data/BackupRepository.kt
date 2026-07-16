@@ -1571,14 +1571,24 @@ class BackupRepository @Inject constructor(
             )
         }
         val computedHash = computeNameHash(trimmedName)
-        val existing = syncId
+        val syncIdOwner = syncId
             .takeIf { it.isNotEmpty() }
             ?.let { dao.findEntityBySyncId(it) }
-            ?.takeIf { it.type == remote.type }
+        val existing = syncIdOwner
+            ?.takeIf {
+                it.type == remote.type &&
+                    (it.contentType == null || remote.contentType == null || it.contentType == remote.contentType)
+            }
         val localId = if (existing == null) {
+            val restoreSyncId = when {
+                syncId.isEmpty() -> java.util.UUID.randomUUID().toString()
+                syncIdOwner == null -> syncId
+                else -> java.util.UUID.randomUUID().toString()
+            }
             val newRecord = EntityRecord(
                 type = remote.type,
-                syncId = syncId.ifEmpty { java.util.UUID.randomUUID().toString() },
+                contentType = remote.contentType,
+                syncId = restoreSyncId,
                 primaryName = trimmedName,
                 nameHash = computedHash,
                 aliases = encodeStringList(mergeAliases(trimmedName, decodeStringList(remote.aliases)).drop(1)),
@@ -1603,6 +1613,7 @@ class BackupRepository @Inject constructor(
             )
             val newPrimary = mergedNames.firstOrNull() ?: existing.primaryName
             val merged = existing.copy(
+                contentType = existing.contentType ?: remote.contentType,
                 primaryName = newPrimary,
                 nameHash = computeNameHash(newPrimary),
                 aliases = encodeStringList(mergedNames.drop(1)),

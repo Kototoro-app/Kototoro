@@ -32,7 +32,7 @@ abstract class EntityGraphDao {
 	@Query(
 		"""
 		SELECT id, type, IFNULL(sync_id, '') AS sync_id, primary_name, name_hash, aliases,
-			created_at, last_accessed, access_count
+			content_type, created_at, last_accessed, access_count
 		FROM `entity`
 		ORDER BY id ASC
 		"""
@@ -83,12 +83,32 @@ abstract class EntityGraphDao {
 	@Query(
 		"""
 		SELECT * FROM `entity`
-		WHERE type = :type AND name_hash = :nameHash
+		WHERE type = :type
+			AND name_hash = :nameHash
+			AND ((content_type = :contentType) OR (content_type IS NULL AND :contentType IS NULL))
 		ORDER BY access_count DESC, last_accessed DESC, id DESC
 		LIMIT 1
-		"""
+		""",
 	)
-	abstract suspend fun findEntityByTypeAndNameHash(type: String, nameHash: Long): EntityRecord?
+	abstract suspend fun findEntityByTypeAndNameHashAndContentType(
+		type: String,
+		nameHash: Long,
+		contentType: String?,
+	): EntityRecord?
+
+	@Query(
+		"""
+		SELECT * FROM `entity`
+		WHERE type = :type AND content_type = :contentType
+		ORDER BY access_count DESC, last_accessed DESC, id DESC
+		LIMIT :limit
+		""",
+	)
+	abstract suspend fun findEntitiesByTypeAndContentType(
+		type: String,
+		contentType: String,
+		limit: Int,
+	): List<EntityRecord>
 
 	@Query(
 		"""

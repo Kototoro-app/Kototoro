@@ -444,6 +444,9 @@ fun DetailsScreen(
     var selectedSupplementalRelationItem by remember { mutableStateOf<EntityRelationItem?>(null) }
     var showMetadataSourceDialog by rememberSaveable { mutableStateOf(false) }
     var showReadingSourceDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(activeSpaceId) {
+        viewModel.setSpaceContext(activeSpaceId)
+    }
     LaunchedEffect(showMetadataSourceDialog) {
         if (showMetadataSourceDialog && !metadataSearchHasSearched && !metadataSearchLoading) {
             viewModel.searchMetadataBindings()

@@ -13,6 +13,7 @@ import org.skepsun.kototoro.entitygraph.data.WORK_PROJECTION_IDENTITY_STATUS_ACT
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 import javax.inject.Inject
 
 @Reusable
@@ -23,7 +24,11 @@ class WorkDuplicateCandidateRepository @Inject constructor(
 
 	suspend fun findCandidates(content: Content): List<WorkDuplicateCandidate> = withContext(Dispatchers.IO) {
 		val currentIdentity = workResolver.resolveByMangaId(content.id)
-		val projectionActionCandidate = findProjectionActionCandidate(content.id, currentIdentity.entityId)
+		val projectionActionCandidate = findProjectionActionCandidate(
+			localMangaId = content.id,
+			currentEntityId = currentIdentity.entityId,
+			contentType = content.source.contentType,
+		)
 		val titleHashes = content.identityTitleHashes()
 		if (titleHashes.isEmpty()) {
 			return@withContext listOfNotNull(projectionActionCandidate)
@@ -35,6 +40,7 @@ class WorkDuplicateCandidateRepository @Inject constructor(
 			.flatMap { dao.findEntitiesByTypeAndNameHashes(EntityType.WORK.name, it) }
 			.distinctBy { it.id }
 			.filterNot { it.id == currentIdentity.entityId }
+			.filter { it.contentType == content.source.contentType.name }
 		val titleCandidates = entities.map { entity ->
 			val bindings = dao.findActiveLocalBindingsByEntity(entity.id)
 			val projectionIds = bindings.mapNotNullTo(LinkedHashSet()) { it.externalId.toLongOrNull() }
@@ -60,6 +66,7 @@ class WorkDuplicateCandidateRepository @Inject constructor(
 	private suspend fun findProjectionActionCandidate(
 		localMangaId: Long,
 		currentEntityId: Long?,
+		contentType: ContentType,
 	): WorkDuplicateCandidate? {
 		val ledger = db.getWorkMigrationLedgerDao().findLatest(
 			legacyTable = WORK_PROJECTION_IDENTITY_ACTION_TABLE,
@@ -72,7 +79,9 @@ class WorkDuplicateCandidateRepository @Inject constructor(
 			return null
 		}
 		val action = parts.getOrNull(2).orEmpty()
-		val original = db.getEntityGraphDao().findEntity(originalEntityId) ?: return null
+		val original = db.getEntityGraphDao().findEntity(originalEntityId)
+			?.takeIf { it.contentType == contentType.name }
+			?: return null
 		return WorkDuplicateCandidate(
 			entityId = original.id,
 			title = original.primaryName,

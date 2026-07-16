@@ -1,165 +1,226 @@
-# 同名不同类型作品被自动合并：根因分析与修复方案（2026-07）
+# 同名不同内容类型作品的 Work 身份合并与详情投影泄漏：根因分析与修复计划（2026-07）
 
 ## 摘要
 
-用户反馈：**相同名称但不同类型**的作品（例如 MANGA 与 VIDEO、MANGA 与 NOVEL），打开后会被自动合并到同一个 WORK 实体。这违反 [entity-identity-migration-consolidation-plan-2026-06.md](./entity-identity-migration-consolidation-plan-2026-06.md) 中「实体只包含同类型投影」的约定，也违反该计划的硬性工程约束。
+已确认这是一个以实体身份污染为主、详情页 fallback 泄漏为表现的组合问题：
 
-本文档给出根因定位、对收敛计划的违规映射，以及待确认的修复方案（**尚未执行**）。
+1. Entity Graph 的 Work 身份边界没有包含 `ContentType`，同名漫画和动画可能被绑定到同一个 `entity_id`；这才是必须修复的主问题。
+2. 详情页在加载一个 Work 的本地投影时，没有按当前投影的内容类型或当前 Space 过滤 active local bindings，因此已污染实体中的漫画投影会出现在动画详情的播放源面板和章节来源面板中；这是对历史错误实体的 fallback 防线，不能替代实体拆分。
 
-## 问题现象
+这违反 [entity-identity-migration-consolidation-plan-2026-06.md](./entity-identity-migration-consolidation-plan-2026-06.md) 中“实体只包含同类型投影”的约定，也违反该计划关于禁止仅凭标题相似度自动确认身份的硬性约束。
 
-同名但 `ContentType` 不同的两个作品，先后打开后：
+本文档记录已通过代码检查和测试验证的事实、完整复现链路、修复边界以及对应 Trellis 任务：
+`.trellis/tasks/07-16-work-content-type-isolation/`。
 
-- 第二个作品不再创建独立 WORK 实体。
-- 两个作品绑定到同一个 `entity_id`。
-- 收藏、历史、统计、追踪等用户状态被错误地共享到同一身份键上。
+## 用户可复现现象
 
-## 根因
+以“庙不可言”为例：
 
-**核心事实：entity 身份边界完全不包含 `contentType`。**
+1. 用户先打开漫画版本并阅读过。
+2. 用户切换到视频 Space，搜索同名动画并打开。
+3. 动画详情页可以看到之前漫画投影的播放源。
+4. 章节面板的阅读/播放来源 Tab 中也包含漫画来源和漫画章节。
 
-| 层 | 现状 | 问题 |
+这说明污染不止影响收藏、历史、统计、追踪等用户状态键，也已经泄漏到了详情页的投影选择和章节展示层。
+
+## 已验证结论
+
+### 1. Entity 身份边界缺少 `ContentType`（主根因）
+
+修复前实现的事实如下：
+
+| 层 | 当前实现 | 结论 |
 | --- | --- | --- |
-| DB 表 `entity` | 无 `content_type` 列 | 无法持久化作品类型 |
-| 唯一索引 `idx_entity_name_hash` | `(type, name_hash)` UNIQUE | 同名不同类型被视为同一身份边界 |
-| 领域模型 `Entity` | 无 `contentType` 字段 | 匹配阶段无法携带类型信息 |
-| `pickCandidate(...)` 签名 | 只传 `type, primaryName, aliases, now` | 名称匹配时不区分类型 |
-| `DefaultEntityBindingMatcher.tryBindEntities` | 只比较 `type` 与名称 | 同名 + 同 `EntityType.WORK` 即可 AUTO_BIND |
-| `MangaSource.contentType` | 非空 `ContentType` | 运行时一定有值，但未被身份边界使用 |
+| DB 表 `entity` | `EntityRecord` 没有 `content_type` 列 | Work 类型无法持久化 |
+| 唯一索引 `idx_entity_name_hash` | `(type, name_hash)` UNIQUE | 同名不同内容类型共享冲突边界 |
+| 领域模型 `Entity` | 没有 `contentType` 字段 | 匹配器无法比较内容类型 |
+| `pickCandidate` | 只接收 `type, primaryName, aliases, now` | 名称候选不区分内容类型 |
+| `DefaultEntityBindingMatcher` | 先比较 `EntityType`，再比较名称 | 同名 Work 可得到 `1.0` |
+| `MangaSource.contentType` | 来源提供非空内容类型 | 输入信息存在，但未进入 Entity 身份边界 |
 
-### 入口链路
+证据：
 
-```
-用户打开 projection
-→ DefaultWorkResolver.ensureForProjection(content)
-→ EntityGraphRepository.ensureLocalWorkEntity(content)
-→ 无现成 binding 时
-→ resolveOrCreateEntity(type=WORK, ..., contentType=content.source.contentType)
-```
+- Entity 表索引和字段：[EntityGraphEntities.kt:20-40](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphEntities.kt:20)
+- DAO 的类型/名称哈希查询：[EntityGraphDao.kt:60-100](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphDao.kt:60)
+- `Entity` 领域模型和映射均无内容类型：[EntityGraphModels.kt:13-21](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/domain/EntityGraphModels.kt:13)、[EntityGraphMapping.kt:16-24](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphMapping.kt:16)
 
-`resolveOrCreateEntity`（`EntityGraphRepository.kt:2186`）确实拿到了 `contentType`，但**只用于 `resolveMalSyncCandidate`**，传给 `pickCandidate` 时丢掉了。
+### 2. 同名自动合并的真实链路（修复前）
 
-### 路径 A — pickCandidate 名称匹配（`EntityGraphRepository.kt:3086`）
+单投影详情入口会把 `content.source.contentType` 传入 `resolveOrCreateEntity`：[EntityGraphRepository.kt:873-946](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:873)。但该参数目前只用于 MAL-Sync 类型映射，调用 `pickCandidate` 时被丢弃：[EntityGraphRepository.kt:2186-2257](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:2186)。
 
-```kotlin
-pickCandidate(type, primaryName, aliases, now)   // 无 contentType
-  → dao.findEntitiesByType("WORK", 120)          // 扫描所有 WORK 实体
-  → bindingMatcher.tryBindEntities(probe, entity) // 只比 type + 名称
-  → 同名 → confidence = 1.0 > 0.90 → AUTO_BIND
-  → mergeIntoResolvedEntity(...)                  // 直接合并 ★
-```
+#### 路径 A：名称候选自动绑定
 
-同名不同类型作品：`type` 都是 `WORK`、名称相同 → `scoreNames` 返回 1.0 → `AUTO_BIND` → 直接合并。
-
-### 路径 B — createEntity 的 name_hash 唯一约束 fallback（`EntityGraphRepository.kt:2557`）
-
-```kotlin
-createEntity(type=WORK, primaryName=同名, ...)
-  → computeNameHash(同名)
-  → dao.insertEntityIgnore(record)               // (type, name_hash) UNIQUE 冲突
-  → id == -1L
-  → dao.findEntityByTypeAndNameHash("WORK", hash)
-  → mergeIntoResolvedEntity(...)                  // fallback 合并 ★
+```text
+resolveOrCreateEntity(type=WORK, ..., contentType=currentType)
+→ resolveAnimeOfflineCandidate / resolveMalSyncCandidate 未命中
+→ pickCandidate(type, primaryName, aliases, now)
+→ findEntitiesByType("WORK", ENTITY_SCAN_LIMIT)
+→ matcher 只比较 EntityType 和名称
+→ 同名得到 confidence = 1.0
+→ classify = AUTO_BIND
+→ mergeIntoResolvedEntity
 ```
 
-即使路径 A 因 `ENTITY_SCAN_LIMIT = 120` 没扫到候选，`INSERT OR IGNORE` 仍会因 `(type, name_hash)` 唯一冲突而 fallback 合并。
+对应代码：[pickCandidate](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:3086)、[DefaultEntityBindingMatcher.tryBindEntities](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/DefaultEntityBindingMatcher.kt:23)。
 
-### 结论
+这里的“会合并”不是无条件必然发生：候选必须在前 `ENTITY_SCAN_LIMIT` 条结果内，并且此前没有命中已存在 binding、Anime Offline 或 MAL-Sync 的更强映射。但在同名候选可见时，内容类型不会阻止 `AUTO_BIND`。
 
-两条路径都以 `(type=WORK, name_hash)` 为身份边界，**完全忽略 `contentType`**。同名不同类型必然被合并。这不是单点 bug，而是身份模型缺失一个维度。
+#### 路径 B：`name_hash` 唯一索引 fallback
+
+```text
+createEntity(type=WORK, primaryName=sameTitle, ...)
+→ computeNameHash(sameTitle)
+→ INSERT OR IGNORE
+→ (type, name_hash) 冲突
+→ findEntityByTypeAndNameHash("WORK", hash)
+→ mergeIntoResolvedEntity
+```
+
+对应代码：[EntityGraphRepository.kt:2530-2573](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:2530)。
+
+批量入口 `ensureLocalWorkEntities` 直接调用 `createEntity`，当前连 `contentType` 参数都没有传递：[EntityGraphRepository.kt:604-680](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:604)。
+
+### 3. 详情页投影泄漏的真实链路（历史脏数据的表现）
+
+视频搜索结果打开详情时，会先通过 `workResolver.resolveByMangaId(content.id)` 解析实体，并以 `DetailsOrigin.EntityGraph` 打开详情：[ContentListActivity.kt:233-251](../../app/src/main/kotlin/org/skepsun/kototoro/search/ui/ContentListActivity.kt:233)。如果漫画和动画已共享 `entity_id`，详情页上下文就是同一个 Work。
+
+详情页随后执行：
+
+```text
+applyEntityContext(entityId)
+→ entityGraphRepository.getBindings(entityId)
+→ buildActiveLocalSourceOptions(all bindings)
+→ updateSourceOptions()
+→ updateChapterSourceTabs()
+```
+
+关键事实：
+
+1. `applyEntityContext` 获取实体全部 bindings，并直接构建 active local source options：[DetailsViewModel.kt:1463-1516](../../app/src/main/kotlin/org/skepsun/kototoro/details/ui/DetailsViewModel.kt:1463)。
+2. `buildActiveLocalSourceOptions` 只检查 binding 是否为本地阅读来源，没有检查 `ContentType`、当前请求投影类型或 Space：[DetailsViewModel.kt:4091-4115](../../app/src/main/kotlin/org/skepsun/kototoro/details/ui/DetailsViewModel.kt:4091)。
+3. 所有 active local options 都被转换为阅读/播放源选项：[DetailsViewModel.kt:2523-2537](../../app/src/main/kotlin/org/skepsun/kototoro/details/ui/DetailsViewModel.kt:2523)。
+4. 所有阅读源选项又被转换为章节来源 Tab：[DetailsViewModel.kt:2567-2608](../../app/src/main/kotlin/org/skepsun/kototoro/details/ui/DetailsViewModel.kt:2567)。
+
+因此，问题不是“视频 Space 搜索结果把漫画搜出来了”，而是“动画和漫画先被错误归入同一 Work，详情页又把该 Work 的所有投影无条件暴露出来”。
+
+### 4. Space 过滤没有覆盖详情页
+
+Space 模型有 `allowedContentTypes`，列表聚合查询也存在可选的 `allowedContentTypes` 过滤：[SpaceModels.kt:15-25](../../app/src/main/kotlin/org/skepsun/kototoro/space/domain/SpaceModels.kt:15)、[WorkAggregateRepository.kt:528-549](../../app/src/main/kotlin/org/skepsun/kototoro/work/domain/WorkAggregateRepository.kt:528)。
+
+但 `DetailsViewModel` 的构造参数没有 `SpaceId` 或允许的内容类型：[DetailsViewModel.kt:465-505](../../app/src/main/kotlin/org/skepsun/kototoro/details/ui/DetailsViewModel.kt:465)，`DetailsScreen.activeSpaceId` 当前主要用于显示 Space 切换按钮：[DetailsScreen.kt:289-315](../../app/src/main/kotlin/org/skepsun/kototoro/details/ui/compose/DetailsScreen.kt:289)。详情页投影加载因此没有使用 Space 过滤条件。
 
 ## 对收敛计划的违规映射
 
-[entity-identity-migration-consolidation-plan-2026-06.md](./entity-identity-migration-consolidation-plan-2026-06.md) 的硬性工程约束：
+[entity-identity-migration-consolidation-plan-2026-06.md](./entity-identity-migration-consolidation-plan-2026-06.md) 的相关约束：
 
-| 计划条款 | 要求 | 违规点 |
-| --- | --- | --- |
-| 硬约束 3 | 禁止仅凭标题相似度自动合并 | 路径 A 仅凭同名 + 同 `type` 即 `AUTO_BIND` |
-| 硬约束 4 | `ensureForProjection` 不得因标题相似就把 projection 绑定到已有 work | `ensureForProjection` 正是这么做 |
-| 核心不变量 | `entity_id` = 作品级用户状态键 | 同名不同类型应是不同作品身份 |
-| Entity Identity 职责 | 只对 `WORK` 承担用户状态 owner 语义 | 不同类型作品被错合为一个 owner |
-| Entity Binding 规则 | authoritative projection binding 的 `external_id` 必须是 source-scoped key | 当前用 `(type, name_hash)` 作为隐式身份键，绕过了 binding 证据职责 |
+| 计划条款 | 当前违规 |
+| --- | --- |
+| 禁止仅凭标题相似度自动合并 | 同名 Work 可直接得到 `AUTO_BIND` |
+| `ensureForProjection` 不得成为隐式 owner 制造器 | 新投影会因名称候选吸附到已有 Work |
+| `entity_id` 是作品级用户状态键 | 漫画和动画共享收藏、历史、统计等状态 |
+| Entity 只包含同类型投影 | 详情页把漫画投影暴露给动画详情 |
+| binding 必须承担 source-scoped 证据职责 | `(type, name_hash)` 被错误地当作隐式身份依据 |
 
-## 相关代码位置
+## 修复目标与不变量
 
-- `app/src/main/kotlin/org/skepsun/kototoro/work/data/DefaultWorkResolver.kt` — `ensureForProjection` 入口
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:873` — `ensureLocalWorkEntity`
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:2186` — `resolveOrCreateEntity`（拿到 contentType 却未用于候选匹配）
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:3086` — `pickCandidate`（签名无 contentType）
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:2557` — `createEntity` 的 `insertEntityIgnore` + fallback 合并
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:2356` — `mergeIntoResolvedEntity`
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/DefaultEntityBindingMatcher.kt` — `tryBindEntities` / `classify`
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphEntities.kt:29` — `EntityRecord`（无 content_type 列）
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphEntities.kt:24` — `idx_entity_name_hash` 唯一索引 `(type, name_hash)`
-- `app/src/main/kotlin/org/skepsun/kototoro/entitygraph/domain/EntityGraphModels.kt:11` — `Entity` 领域模型（无 contentType 字段）
-- `parser-api/src/main/kotlin/org/koitharu/kotatsu/parsers/model/ContentType.kt` — `ContentType` 枚举
-- `parser-api/src/main/kotlin/org/koitharu/kotatsu/parsers/model/MangaSource.kt:7` — `MangaSource.contentType` 非空来源
-- `app/src/main/kotlin/org/skepsun/kototoro/core/db/entity/MangaEntity.kt:29` — `manga.content_type` 列（回填来源）
+修复后必须满足：
 
-当前数据库版本：`DATABASE_VERSION = 74`（`MangaDatabase.kt:150`）。
+1. 同名但不同 `ContentType` 的 Work 使用不同 `entity_id`。
+2. 同一 `ContentType` 的多个来源投影仍可以聚合到同一个 Work，但必须有可靠 binding 或明确的用户操作作为依据。
+3. 详情页默认只展示与当前请求投影内容类型一致的本地投影；如果存在 Space 约束，则还必须满足 Space 的 `allowedContentTypes`。
+4. 内容类型未知或历史数据缺失时，不得因为标题相同而自动升级为 `AUTO_BIND`。
+5. 已污染实体中的收藏、历史、统计、追踪和投影 binding 在拆分后必须可追溯，不能静默丢失。
 
-## 修复方案（待确认，尚未执行）
+## 修复方案
 
-核心思路：**让 `contentType` 进入 entity 的身份边界。同名不同 `ContentType` 的 WORK 是不同实体。**
+### 1. Entity Schema 与领域模型
 
-### 1. Schema（Migration 74 → 75）
+- `EntityRecord` 增加 nullable `content_type`。
+- `Entity` 增加 `ContentType?` 并完成 Record/Model 双向映射。
+- `idx_entity_name_hash` 从 `(type, name_hash)` 扩展为 `(type, name_hash, content_type)`。
+- 所有创建路径都必须传递内容类型，包括单投影入口、批量入口、detached entity、reset、restore 和同步导入。
+- 所有按 `(type, name_hash)` 查询的冲突检测和 fallback 都必须升级为内容类型感知查询。
 
-- `EntityRecord` 增加 `@ColumnInfo(name = "content_type") val contentType: String? = null`
-- 唯一索引 `idx_entity_name_hash` 从 `(type, name_hash)` 扩展为 `(type, name_hash, content_type)`
-  - SQLite 中多个 `NULL` 视为不同，`NULL` 不冲突 → 老数据 / 未知类型不会误冲突
-  - 显式相同 `contentType` 才冲突，自然区分同名不同类型
-- Migration 回填：`entity JOIN entity_binding(source='local_manga') JOIN manga.content_type`，把已有 WORK 实体的 `content_type` 补上（取众数或首个 active local binding 的类型）
+### 2. Migration 74 → 75 与历史数据
 
-### 2. 领域模型
+迁移不能简单地给一个混合实体选择“众数”或“首个”内容类型。当前采用“schema migration + 可重试 repair”两阶段，避免数据库升级阶段静默改变用户状态归属：
 
-- `Entity` 增加 `val contentType: ContentType? = null`
-- `EntityRecord.toModel()` / `Entity.toRecord()` 补全映射
+- 类型明确且只有一个分组时，回填该类型。
+- 类型明确但存在多个分组时，迁移保留 `content_type = null`，交由实体整理页的 `MIXED_WORK_CONTENT_TYPES` 诊断和一键拆分；不在 migration 中选 survivor。
+- 类型缺失或无法判定的 projection 不得被任意归类，应进入 repair/review，避免迁移再次制造错误身份。
+- repair 复用现有 split ledger，保留 `sync_id`、binding provenance、用户状态和操作记录。
 
-### 3. DAO
+### 3. Resolver、Matcher 与手动合并
 
-- `findEntityByTypeAndNameHash(type, nameHash)` → 增加 `contentType` 参数重载
-- 可选：`findEntitiesByTypeAndContentType(type, contentType, limit)` 让 `pickCandidate` 缩小扫描范围
+- `pickCandidate` 和 `EntityBindingMatcher` 增加 `contentType` 守卫。
+- 两个 Work 的内容类型都明确且不同时，候选必须是 `IGNORE`。
+- 一方内容类型为空时，名称匹配最多生成弱候选，不能自动绑定。
+- authoritative source-scoped binding、Anime Offline、MAL-Sync 映射命中后，也必须校验目标 Work 的内容类型；不能让强映射绕过类型边界。
+- `mergeEntities` 与 `mergeLocalWorkEntities` 在执行前拒绝内容类型冲突。当前代码不存在可复用的 `same_type_guard`，需要显式实现。
 
-### 4. `pickCandidate` 加 contentType（`EntityGraphRepository.kt:3086`）
+### 4. 详情页运行时防御
 
-- 签名加 `contentType: ContentType?`
-- probe 带上 `contentType`
-- 扫描候选时只匹配 `contentType` 相同（或候选 `contentType` 为 null）的实体
-- `resolveOrCreateEntity`（`:2186`）把已有的 `contentType` 传进来
+在数据库修复完成前，详情页必须先阻断已污染数据的 UI 泄漏：
 
-### 5. `DefaultEntityBindingMatcher.tryBindEntities` 加 contentType 守卫
+- 从当前请求投影解析有效 `ContentType`。
+- `buildActiveLocalSourceOptions` 只保留同类型 local projections。
+- `readingSourceOptions` 和 `readingChapterTabs` 只能从过滤后的集合生成。
+- 如果详情由 Space 打开，过滤条件取“当前投影类型”与 Space `allowedContentTypes` 的交集。
+- 详情页在无 Space 上下文打开时，仍必须按当前投影类型过滤，不能依赖 Space 作为唯一防线。
+- 过滤结果为空时保留当前投影作为唯一 fallback，但不能重新加入其他类型的 projection。
 
-- 两个 entity 都有 `contentType` 且不同 → 返回 0（`IGNORE`）
-- 一方为 null（老数据）：保留名称匹配，但**不升 `AUTO_BIND`**（降为 `WEAK_BIND`），避免老数据污染继续吸附
+### 5. 已污染数据的诊断与拆分
 
-### 6. `createEntity` 的 fallback（`EntityGraphRepository.kt:2557`）
+当前已有 `SUSPECT_MISMERGED_LOCAL_WORK`，但它主要检查标题不一致：[EntityGraphRepository.kt:1672-1700](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphRepository.kt:1672)。本任务新增明确的 `MIXED_WORK_CONTENT_TYPES` issue kind，检测同一 Work 下 active local bindings 的已知内容类型冲突，并在实体整理页顶部仅在发现问题时显示修复卡片。
 
-- `insertEntityIgnore` 冲突后，`findEntityByTypeAndNameHash` 改用带 `contentType` 的查询
-- 同名但不同 `contentType` 不再命中 → 创建独立实体
+repair 复用现有 `splitLocalWorkProjection` 能力，同时：
 
-### 7. 已污染数据修复（diagnostic + repair）
+- 保留一个明确的 survivor 类型；默认按已有 entity 类型、投影数量和稳定类型名确定，详情页后续可传入当前投影作为优先类型。
+- 对 null/未知类型不做无依据拆分；它们保留为待诊断数据，不会被自动归入某一类型。
+- 不因 repair 方便而把不同类型重新合并。
+- 每个投影沿用现有 split ledger、binding provenance 和收藏/历史/统计锚点迁移逻辑。
+- 拆分后重新协调投影 `sync_id` 时，必须先检查唯一值是否仍被旧实体占用；如果占用，保留新实体已有的唯一 ID，不能直接覆盖成冲突的投影 ID。
+- 诊断通过时不显示任何异常提示；只有 `MIXED_WORK_CONTENT_TYPES` 数量大于零时，实体整理页顶部才显示“一键拆分”卡片。
 
-- 新增 repair issue kind：检测同一 entity 下 active local bindings 包含不同 `contentType` 的 manga
-- 复用现有 entity organize split 流程，按 `contentType` 分组拆出独立 entity
-- 可提供批量自动拆分（按 `contentType` 分组）
+### 6. Backup、Restore 与 DAO 投影
 
-### 8. 测试要点
+需要同步更新：
 
-- 单测：同名 `MANGA` + `VIDEO` 两个 content，`ensureForProjection` 各自产生独立 entity
-- 单测：`pickCandidate` 不跨 `contentType` 匹配
-- 单测：`createEntity` 同名不同 `contentType` 不触发 fallback 合并
-- DAO 测试：`(type, name_hash, content_type)` 唯一性
-- Migration 测试：回填后老 WORK 实体 `content_type` 正确
+- `EntityGraphDao.dumpEntities()` 的显式字段列表；当前查询不会自动带出新列：[EntityGraphDao.kt:32-40](../../app/src/main/kotlin/org/skepsun/kototoro/entitygraph/data/EntityGraphDao.kt:32)。
+- Google Drive `SyncEntityRecord`、导出和导入映射。
+- restore/merge 的内容类型冲突策略。
+- Room schema、MigrationTestHelper 和数据库版本测试。
+
+### 7. 测试
+
+至少覆盖：
+
+- 同名 MANGA + VIDEO：各自产生不同 Work entity。
+- 同名同类型多来源：仍能按可靠 binding 聚合。
+- `pickCandidate` 不跨内容类型匹配。
+- null content type 不会触发自动绑定。
+- `createEntity` 的唯一索引 fallback 不跨内容类型合并。
+- 批量 `ensureLocalWorkEntities` 传递并持久化内容类型。
+- 详情页 source options/chapter tabs 不显示其他内容类型。
+- Migration 74 → 75 对单类型实体安全回填；混合实体保留 `content_type = null`，交由实体整理诊断/repair 拆分，避免迁移阶段用“首个/众数”静默丢失归属。
+- Entity organize diagnostics 在无问题时不显示卡片，在发现混合类型 Work 时显示顶部修复卡片；一键修复复用 projection split 并保留用户状态。
+- 手动 merge、backup/restore 和 sync 不跨内容类型丢失或合并实体。
 
 ## 影响面与风险
 
-- `ensureLocalWorkEntities` 批量入口走 `createEntity`，会受唯一索引扩展影响 → 同名不同类型不再冲突，**正向修复**
-- `mergeEntities` / `mergeLocalWorkEntities` 合并时需校验 `contentType` 一致，否则拒绝（与现有 manual merge `same_type_guard` 对齐）
-- backup / restore 的 entity 重建需带上 `content_type` 列
-- `computeNameHash` 本身无需改，唯一索引扩展即可
+- 新 schema 会改变 Entity Graph 的唯一性和所有冲突查询，必须同时更新所有创建、更新、restore 和 merge 路径。
+- 详情页过滤是必要的兼容性防线，但不能替代数据 repair；否则状态仍然挂在错误的 `entity_id` 上。
+- 历史混合实体拆分存在状态归属歧义，不能用标题或“首个 binding”静默决定全部归属。
+- `computeNameHash` 本身不需要包含内容类型；内容类型应作为独立持久化字段和唯一索引维度。
 
-## 状态
+## 当前实现状态
 
 - 根因定位：已完成
-- 修复方案：已定稿，待确认
-- 执行：尚未开始
+- 详情页投影泄漏链路：已完成
+- 修复边界：已完成
+- Trellis 任务：`.trellis/tasks/07-16-work-content-type-isolation/`，当前为 `in_progress`
+- Entity schema、Room 74 → 75、resolver/matcher/merge guard、backup/sync 字段贯通：已实现
+- 详情页按当前投影类型和 Space 过滤：已实现，作为历史脏数据的运行时防线
+- 混合类型 Work 诊断与实体整理页顶部一键拆分：已实现
+- repair 拆分中的 `sync_id` 唯一冲突保护：已实现并补充单测
+- 剩余工作：补齐迁移/repair/restore 的回归测试并执行 Trellis quality check

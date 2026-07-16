@@ -390,6 +390,15 @@ fun SourceMigrationPanel(
                 )
             }
 
+            if ((uiState.repairReport?.mixedWorkContentTypeEntityCount ?: 0) > 0) {
+                item {
+                    MixedWorkContentTypesRepairCard(
+                        uiState = uiState,
+                        onRepairClick = viewModel::repairMixedWorkContentTypeEntities,
+                    )
+                }
+            }
+
             if ((uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) > 0) {
                 item {
                     DanglingWorkAnchorsRepairCard(
@@ -587,6 +596,73 @@ private fun EntityOrganizeScopeSummary(
                 value = if (selectedCount > 0) selectedCount.toString() else stringResource(R.string.entity_organize_entry_count_all),
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+@Composable
+private fun MixedWorkContentTypesRepairCard(
+    uiState: MigrationUiState,
+    onRepairClick: () -> Unit,
+) {
+    val entityCount = uiState.repairReport?.mixedWorkContentTypeEntityCount ?: 0
+    val projectionCount = uiState.repairReport?.mixedWorkContentTypeProjectionCount ?: 0
+    OutlinedCard(
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.14f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.26f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MergeType,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_mixed_work_content_types_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.entity_organize_repair_mixed_work_content_types_summary,
+                            entityCount,
+                            projectionCount,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                OutlinedButton(
+                    onClick = onRepairClick,
+                    enabled = !uiState.isExecuting,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_mixed_work_content_types_action))
+                }
+            }
         }
     }
 }

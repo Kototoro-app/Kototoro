@@ -222,6 +222,98 @@ class MangaDatabaseTest {
 		}
 	}
 
+	@Test
+	fun migrate74To75BackfillsUnambiguousWorkTypesAndLeavesMixedTypesUnknown() {
+		helper.createDatabase(TEST_DB, 74).use { db ->
+			db.execSQL(
+				"""
+				INSERT INTO manga (
+					manga_id, title, url, public_url, rating, nsfw, cover_url, source, content_type
+				) VALUES (1, '同名作品', 'manga://1', '', 0.0, 0, '', 'manga-source', 'MANGA')
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO manga (
+					manga_id, title, url, public_url, rating, nsfw, cover_url, source, content_type
+				) VALUES (2, '同名作品', 'video://2', '', 0.0, 0, '', 'video-source', 'VIDEO')
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO manga (
+					manga_id, title, url, public_url, rating, nsfw, cover_url, source, content_type
+				) VALUES (3, '单类型作品', 'manga://3', '', 0.0, 0, '', 'manga-source', 'MANGA')
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO manga (
+					manga_id, title, url, public_url, rating, nsfw, cover_url, source, content_type
+				) VALUES (4, '类型未知作品', 'unknown://4', '', 0.0, 0, '', 'unknown-source', NULL)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO entity (id, type, sync_id, primary_name, name_hash, aliases, created_at, last_accessed, access_count)
+				VALUES (10, 'WORK', 'work-10', '同名作品', 10, NULL, 1, 1, 1)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO entity (id, type, sync_id, primary_name, name_hash, aliases, created_at, last_accessed, access_count)
+				VALUES (20, 'WORK', 'work-20', '单类型作品', 20, NULL, 1, 1, 1)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO entity_binding (entity_id, source, external_id, confidence, is_primary)
+				VALUES (10, 'local_manga', '1', 1.0, 1)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO entity_binding (entity_id, source, external_id, confidence, is_primary)
+				VALUES (10, 'local_manga', '2', 1.0, 0)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO entity_binding (entity_id, source, external_id, confidence, is_primary)
+				VALUES (20, 'local_manga', '3', 1.0, 1)
+				""".trimIndent(),
+			)
+			db.execSQL(
+				"""
+				INSERT INTO entity_binding (entity_id, source, external_id, confidence, is_primary)
+				VALUES (10, 'local_manga', '4', 1.0, 0)
+				""".trimIndent(),
+			)
+		}
+
+		helper.runMigrationsAndValidate(
+			TEST_DB,
+			75,
+			true,
+			migrations.single { it.startVersion == 74 && it.endVersion == 75 },
+		).use { db ->
+			db.query("SELECT id, content_type FROM entity ORDER BY id").use { cursor ->
+				cursor.moveToFirst()
+				assertEquals(10L, cursor.getLong(0))
+				assertEquals(null, cursor.getString(1))
+				cursor.moveToNext()
+				assertEquals(20L, cursor.getLong(0))
+				assertEquals("MANGA", cursor.getString(1))
+			}
+			db.query("PRAGMA index_info('idx_entity_name_hash')").use { cursor ->
+				val columns = buildList {
+					while (cursor.moveToNext()) add(cursor.getString(2))
+				}
+				assertEquals(listOf("type", "name_hash", "content_type"), columns)
+			}
+		}
+	}
+
 	private companion object {
 
 		const val TEST_DB = "test-db"

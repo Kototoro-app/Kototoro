@@ -12,10 +12,12 @@ import org.skepsun.kototoro.entitygraph.domain.isLocalEntityBindingSource
 import org.skepsun.kototoro.entitygraph.domain.toEntityBindingStateOrNull
 import org.skepsun.kototoro.entitygraph.domain.normalizeEntityName
 import org.skepsun.kototoro.parsers.util.longHashCode
+import org.skepsun.kototoro.parsers.model.ContentType
 
 internal fun EntityRecord.toModel(): Entity = Entity(
 	id = id,
 	type = runCatching { EntityType.valueOf(type) }.getOrDefault(EntityType.WORK),
+	contentType = contentType?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() },
 	primaryName = primaryName,
 	aliases = decodeStringList(aliases),
 	createdAt = createdAt,
@@ -120,6 +122,16 @@ internal fun computeProjectionSyncId(source: String, externalId: String): String
 	val normalizedSource = source.trim()
 	val normalizedExternalId = externalId.trim()
 	return "projection:${normalizedSource.length}:$normalizedSource:${normalizedExternalId.length}:$normalizedExternalId"
+}
+
+internal fun EntityRecord.resolveProjectionSyncId(
+	projectionSyncId: String,
+	conflictingEntityId: Long?,
+): String {
+	if (conflictingEntityId == null || conflictingEntityId == id) {
+		return projectionSyncId
+	}
+	return syncId.ifBlank { java.util.UUID.randomUUID().toString() }
 }
 
 internal fun EntityBindingRecord.isAuthoritativeProjectionBinding(): Boolean {

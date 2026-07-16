@@ -318,6 +318,7 @@ object GoogleDriveSyncMerger {
 				id = left.id,
 				syncId = left.syncId.ifBlank { right.syncId },
 				type = left.type,
+				contentType = left.contentType ?: right.contentType,
 				primaryName = newer.primaryName,
 				nameHash = newer.nameHash,
 				aliases = newer.aliases ?: left.aliases,
@@ -473,7 +474,7 @@ object GoogleDriveSyncMerger {
 	)
 
 	private data class BindingKey(val source: String, val externalId: String)
-	private data class EntitySyncKey(val type: String, val syncId: String)
+	private data class EntitySyncKey(val type: String, val contentType: String?, val syncId: String)
 	private data class RelationKey(val fromEntityId: Long, val toEntityId: Long, val type: String)
 	private data class WorkHistoryKey(val entityId: Long)
 	private data class WorkFavouriteKey(val entityId: Long, val categoryId: Long)
@@ -619,13 +620,13 @@ object GoogleDriveSyncMerger {
 		val localBySyncId = local.entityGraph.entities
 			.asSequence()
 			.filter { it.syncId.isNotBlank() }
-			.associateBy { EntitySyncKey(it.type, it.syncId) }
+			.associateBy { EntitySyncKey(it.type, it.contentType, it.syncId) }
 		var nextId = minOf(localIds.minOrNull() ?: 0L, remote.entityGraph.entities.minOfOrNull { it.id } ?: 0L, 0L) - 1L
 		val result = LinkedHashMap<Long, Long>()
 		remote.entityGraph.entities.forEach { remoteEntity ->
 			val matchingLocal = remoteEntity.syncId
 				.takeIf { it.isNotBlank() }
-				?.let { localBySyncId[EntitySyncKey(remoteEntity.type, it)] }
+				?.let { localBySyncId[EntitySyncKey(remoteEntity.type, remoteEntity.contentType, it)] }
 			if (matchingLocal != null) {
 				result[remoteEntity.id] = matchingLocal.id
 				return@forEach
@@ -671,6 +672,7 @@ object GoogleDriveSyncMerger {
 			id = id,
 			syncId = syncId,
 			type = type,
+			contentType = contentType,
 			primaryName = primaryName,
 			nameHash = nameHash,
 			aliases = aliases,

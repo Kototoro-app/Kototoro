@@ -7,6 +7,26 @@ import org.junit.jupiter.api.Test
 class EntityGraphModelsTest {
 
 	@Test
+	fun `repair report counts mixed content type entities once`() {
+		val report = EntityGraphRepairReport(
+			issues = listOf(
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES,
+					entityId = 7L,
+					localMangaId = 101L,
+				),
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES,
+					entityId = 7L,
+					localMangaId = 102L,
+				),
+			),
+		)
+		assertEquals(1, report.mixedWorkContentTypeEntityCount)
+		assertEquals(2, report.mixedWorkContentTypeProjectionCount)
+	}
+
+	@Test
 	fun `strict title key ignores case and punctuation`() {
 		assertEquals(
 			normalizeStrictTitleKey("Kami wa Game ni Ueteiru"),

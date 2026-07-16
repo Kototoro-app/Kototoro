@@ -101,6 +101,7 @@ class SyncEntityRecord(
 	@SerialName("id") val id: Long,
 	@SerialName("sync_id") val syncId: String = "",
 	@SerialName("type") val type: String,
+	@SerialName("content_type") val contentType: String? = null,
 	@SerialName("primary_name") val primaryName: String,
 	@SerialName("name_hash") val nameHash: Long,
 	@SerialName("aliases") val aliases: String? = null,

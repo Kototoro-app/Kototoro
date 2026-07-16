@@ -16,17 +16,17 @@ internal suspend fun MangaDatabase.restoreGoogleDriveSyncEntity(remote: EntityRe
 	val syncIdOwner = remote.syncId.trim()
 		.takeIf { it.isNotEmpty() }
 		?.let { dao.findEntityBySyncId(it) }
-		?.takeIf { it.type == remote.type }
+		?.takeIf { it.isCompatibleWith(remote) }
 	if (syncIdOwner != null) {
-		return dao.upsertGoogleDriveSyncEntity(
+	return dao.upsertGoogleDriveSyncEntity(
 			target = syncIdOwner,
 			remote = remote,
 			remotePrimaryName = trimmedName,
 		)
 	}
 	val existing = dao.findEntity(remote.id)
-		?.takeIf { it.type == remote.type }
-	val nameHashOwner = dao.findEntityByTypeAndNameHash(remote.type, computedHash)
+		?.takeIf { it.isCompatibleWith(remote) }
+	val nameHashOwner = dao.findEntityByTypeAndNameHashAndContentType(remote.type, computedHash, remote.contentType)
 	if (nameHashOwner != null && nameHashOwner.id != existing?.id) {
 		return dao.upsertGoogleDriveSyncEntity(
 			target = nameHashOwner,
@@ -35,18 +35,28 @@ internal suspend fun MangaDatabase.restoreGoogleDriveSyncEntity(remote: EntityRe
 		)
 	}
 	if (existing == null) {
+		val syncId = remote.syncId.trim()
+			.takeIf { it.isNotEmpty() }
+			?.let { candidate ->
+				dao.findEntityBySyncId(candidate)
+					?.takeUnless { it.isCompatibleWith(remote) }
+					?.let { java.util.UUID.randomUUID().toString() }
+					?: candidate
+			}
+			.orEmpty()
 		val newRecord = remote.toNormalizedGoogleDriveSyncEntity(
 			primaryName = trimmedName,
 			nameHash = computedHash,
+			syncId = syncId,
 		)
 		val insertedId = dao.insertEntityIgnore(newRecord)
 		if (insertedId != -1L) {
 			return insertedId
 		}
-		return dao.findEntityByTypeAndNameHash(newRecord.type, newRecord.nameHash)?.id
+		return dao.findEntityByTypeAndNameHashAndContentType(newRecord.type, newRecord.nameHash, newRecord.contentType)?.id
 			?: dao.insertEntity(newRecord)
 	}
-	return dao.upsertGoogleDriveSyncEntity(
+		return dao.upsertGoogleDriveSyncEntity(
 		target = existing,
 		remote = remote,
 		remotePrimaryName = trimmedName,
@@ -58,23 +68,33 @@ internal suspend fun MangaDatabase.restoreGoogleDriveSyncEntityIsolated(remote: 
 	remote.syncId.trim()
 		.takeIf { it.isNotEmpty() }
 		?.let { dao.findEntityBySyncId(it) }
-		?.takeIf { it.type == remote.type }
+		?.takeIf { it.isCompatibleWith(remote) }
 		?.let { return it.id }
 	val trimmedName = remote.primaryName.trim()
+	val syncId = remote.syncId.trim()
+		.takeIf { it.isNotEmpty() }
+		?.let { candidate ->
+			dao.findEntityBySyncId(candidate)
+				?.takeUnless { it.isCompatibleWith(remote) }
+				?.let { java.util.UUID.randomUUID().toString() }
+				?: candidate
+		}
+		.orEmpty()
 	val newRecord = remote.toNormalizedGoogleDriveSyncEntity(
 		primaryName = trimmedName,
 		nameHash = computeIsolatedGoogleDriveSyncNameHash(
 			remoteId = remote.id,
 			type = remote.type,
-			primaryName = trimmedName,
-			createdAt = remote.createdAt,
-		),
+				primaryName = trimmedName,
+				createdAt = remote.createdAt,
+			),
+		syncId = syncId,
 	)
 	val insertedId = dao.insertEntityIgnore(newRecord)
 	if (insertedId != -1L) {
 		return insertedId
 	}
-	return dao.findEntityByTypeAndNameHash(newRecord.type, newRecord.nameHash)?.id
+	return dao.findEntityByTypeAndNameHashAndContentType(newRecord.type, newRecord.nameHash, newRecord.contentType)?.id
 		?: dao.insertEntity(
 			newRecord.copy(
 				nameHash = computeIsolatedGoogleDriveSyncNameHash(
@@ -93,7 +113,11 @@ private suspend fun EntityGraphDao.upsertGoogleDriveSyncEntity(
 	remotePrimaryName: String,
 ): Long {
 	val merged = target.mergeWithGoogleDriveSyncEntity(remote, remotePrimaryName)
-	val nameHashOwner = findEntityByTypeAndNameHash(merged.type, merged.nameHash)
+	val nameHashOwner = findEntityByTypeAndNameHashAndContentType(
+		merged.type,
+		merged.nameHash,
+		merged.contentType,
+	)
 	if (nameHashOwner != null && nameHashOwner.id != target.id) {
 		val remapped = nameHashOwner.mergeWithGoogleDriveSyncEntity(merged, merged.primaryName)
 		upsertEntityRecord(remapped)
@@ -106,6 +130,7 @@ private suspend fun EntityGraphDao.upsertGoogleDriveSyncEntity(
 private fun EntityRecord.toNormalizedGoogleDriveSyncEntity(
 	primaryName: String,
 	nameHash: Long,
+	syncId: String = this.syncId,
 ): EntityRecord {
 	return copy(
 		id = 0L,
@@ -138,6 +163,7 @@ private fun EntityRecord.mergeWithGoogleDriveSyncEntity(
 	)
 	val newPrimary = mergedNames.firstOrNull() ?: primaryName
 	return copy(
+		contentType = contentType ?: remote.contentType,
 		primaryName = newPrimary,
 		nameHash = computeNameHash(newPrimary),
 		aliases = encodeStringList(mergedNames.drop(1)),
@@ -145,4 +171,9 @@ private fun EntityRecord.mergeWithGoogleDriveSyncEntity(
 		lastAccessed = maxOf(lastAccessed, remote.lastAccessed.coerceAtLeast(0L)),
 		accessCount = maxOf(accessCount, remote.accessCount.coerceAtLeast(1)),
 	)
+}
+
+private fun EntityRecord.isCompatibleWith(remote: EntityRecord): Boolean {
+	return type == remote.type &&
+		(contentType == null || remote.contentType == null || contentType == remote.contentType)
 }

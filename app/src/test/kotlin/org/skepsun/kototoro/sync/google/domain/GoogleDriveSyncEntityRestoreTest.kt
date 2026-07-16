@@ -32,7 +32,9 @@ class GoogleDriveSyncEntityRestoreTest {
 		)
 
 		coEvery { dao.findEntity(1L) } returns staleIdMatch
-		coEvery { dao.findEntityByTypeAndNameHash("WORK", computeNameHash("Frieren")) } returns hashOwner
+		coEvery {
+			dao.findEntityByTypeAndNameHashAndContentType("WORK", computeNameHash("Frieren"), null)
+		} returns hashOwner
 
 		val localId = db.restoreGoogleDriveSyncEntity(remote)
 
@@ -62,7 +64,9 @@ class GoogleDriveSyncEntityRestoreTest {
 		)
 
 		coEvery { dao.findEntity(100L) } returns null
-		coEvery { dao.findEntityByTypeAndNameHash("WORK", computeNameHash("Frieren")) } returns hashOwner
+		coEvery {
+			dao.findEntityByTypeAndNameHashAndContentType("WORK", computeNameHash("Frieren"), null)
+		} returns hashOwner
 
 		val localId = db.restoreGoogleDriveSyncEntity(remote)
 
@@ -80,16 +84,47 @@ class GoogleDriveSyncEntityRestoreTest {
 		}
 	}
 
+	@Test
+	fun `restore isolates incompatible sync id content type`() = runTest {
+		val localManga = entity(
+			id = 2L,
+			primaryName = "Frieren",
+			contentType = "MANGA",
+			syncId = "shared-sync-id",
+		)
+		val remoteVideo = entity(
+			id = 100L,
+			primaryName = "Frieren",
+			contentType = "VIDEO",
+			syncId = "shared-sync-id",
+		)
+
+		coEvery { dao.findEntityBySyncId("shared-sync-id") } returns localManga
+		coEvery { dao.findEntity(100L) } returns null
+		coEvery {
+			dao.findEntityByTypeAndNameHashAndContentType("WORK", computeNameHash("Frieren"), "VIDEO")
+		} returns null
+		coEvery {
+			dao.insertEntityIgnore(match { it.contentType == "VIDEO" && it.syncId != "shared-sync-id" })
+		} returns 50L
+
+		assertEquals(50L, db.restoreGoogleDriveSyncEntity(remoteVideo))
+	}
+
 	private fun entity(
 		id: Long,
 		primaryName: String,
 		createdAt: Long = 10L,
 		lastAccessed: Long = 10L,
 		accessCount: Int = 1,
+		contentType: String? = null,
+		syncId: String = "",
 	): EntityRecord {
 		return EntityRecord(
 			id = id,
 			type = "WORK",
+			contentType = contentType,
+			syncId = syncId,
 			primaryName = primaryName,
 			nameHash = computeNameHash(primaryName),
 			aliases = null,

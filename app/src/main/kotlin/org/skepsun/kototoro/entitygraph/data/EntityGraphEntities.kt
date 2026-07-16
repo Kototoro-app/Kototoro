@@ -21,7 +21,7 @@ import java.util.UUID
 	tableName = TABLE_ENTITY_GRAPH_ENTITY,
 	indices = [
 		Index(name = "idx_entity_name", value = ["primary_name"]),
-		Index(name = "idx_entity_name_hash", value = ["type", "name_hash"], unique = true),
+		Index(name = "idx_entity_name_hash", value = ["type", "name_hash", "content_type"], unique = true),
 		Index(name = "idx_entity_sync_id", value = ["sync_id"], unique = true),
 		Index(name = "idx_entity_type_access", value = ["type", "access_count", "last_accessed", "id"]),
 	],
@@ -30,6 +30,7 @@ data class EntityRecord(
 	@PrimaryKey(autoGenerate = true)
 	@ColumnInfo(name = "id") val id: Long = 0L,
 	@ColumnInfo(name = "type") val type: String,
+	@ColumnInfo(name = "content_type") val contentType: String? = null,
 	@ColumnInfo(name = "sync_id", defaultValue = "''") val syncId: String = UUID.randomUUID().toString(),
 	@ColumnInfo(name = "primary_name") val primaryName: String,
 	@ColumnInfo(name = "name_hash") val nameHash: Long = 0L,

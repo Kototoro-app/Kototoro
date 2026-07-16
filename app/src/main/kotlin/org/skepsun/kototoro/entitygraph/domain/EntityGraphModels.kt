@@ -13,6 +13,7 @@ enum class EntityType {
 data class Entity(
 	val id: Long,
 	val type: EntityType,
+	val contentType: ContentType? = null,
 	val primaryName: String,
 	val aliases: List<String>,
 	val createdAt: Long,
@@ -154,6 +155,7 @@ enum class EntityGraphRepairIssueKind {
 	SUSPECT_METADATA_SOURCE,
 	DANGLING_WORK_PROJECTION_ANCHOR,
 	WORK_ENTITY_MISSING_SYNC_ID,
+	MIXED_WORK_CONTENT_TYPES,
 }
 
 data class EntityGraphRepairIssue(
@@ -195,6 +197,15 @@ data class EntityGraphRepairReport(
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.DANGLING_WORK_PROJECTION_ANCHOR }
 	val workEntityMissingSyncIdCount: Int
 		get() = issues.count { it.kind == EntityGraphRepairIssueKind.WORK_ENTITY_MISSING_SYNC_ID }
+	val mixedWorkContentTypeEntityCount: Int
+		get() = issues
+			.asSequence()
+			.filter { it.kind == EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES }
+			.map { it.entityId }
+			.distinct()
+			.count()
+	val mixedWorkContentTypeProjectionCount: Int
+		get() = issues.count { it.kind == EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES }
 	val hasIssues: Boolean
 		get() = issues.isNotEmpty()
 }
