@@ -10,6 +10,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.app.ActivityCompat
@@ -65,13 +66,17 @@ import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
 import org.skepsun.kototoro.space.ui.SpaceViewModel
+import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSessionRegistry
 import org.skepsun.kototoro.space.ui.SpaceAction
+import org.skepsun.kototoro.space.ui.SpaceResumeUiState
 import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
+import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.space.ui.SpaceTransitionCurtainController
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.space.data.SpaceSourcePresetController
@@ -150,6 +155,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     }
 
     private var isFoldUnfolded = false
+    private var spaceResumeObserverInstalled = false
     private val navStateFlow = MutableStateFlow(BottomNavState())
     private lateinit var composeNavBarDelegator: ComposeAppNavBarDelegator
 
@@ -239,8 +245,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        spaceRoutePreferencesController.start()
-        spaceSourcePresetController.start()
+        syncSpaceRuntime()
         pageSaveHelper = pageSaveHelperFactory.create(this)
         searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
         applyConfiguredLanguagePreset()
@@ -282,9 +287,25 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
             val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
-            val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
-            val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
-            val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
+            val spaceFlags by spaceFeatureFlagsRepository.flags.collectAsStateWithLifecycle()
+            val spaceEnabled = spaceFlags.entitySpaceEnabled
+            val spaceUiState by if (spaceEnabled) {
+                spaceViewModel.uiState.collectAsStateWithLifecycle()
+            } else {
+                remember { mutableStateOf(SpaceUiState()) }
+            }
+            val spaceNavigationSessionUiState by if (spaceEnabled) {
+                spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
+            } else {
+                remember {
+                    mutableStateOf(SpaceNavigationSessionUiState())
+                }
+            }
+            val spaceResumeUiState by if (spaceEnabled) {
+                spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
+            } else {
+                remember { mutableStateOf(SpaceResumeUiState()) }
+            }
             // This state bridges tasks and must remain current while MainActivity is stopped;
             // lifecycle-gated collection would expose a stale IDLE frame when the task returns.
             val spaceTransitionState by spaceTransitionCurtainController.state.collectAsState()
@@ -315,28 +336,40 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onSpaceTransitionCovered = spaceTransitionCurtainController::reveal,
                 onSpaceCurtainCoverFinished = spaceTransitionCurtainController::markCovered,
                 onSpaceCurtainRevealFinished = spaceTransitionCurtainController::markRevealFinished,
-                onSpaceAction = { action ->
-                    when (action) {
-                        SpaceAction.OpenSwitcher,
-                        SpaceAction.DismissSwitcher -> spaceViewModel.onAction(action)
-                        is SpaceAction.SelectSpace -> {
-                            selectSpaceAndRestoreImmersiveSession(action.spaceId)
+                onSpaceAction = if (spaceEnabled) {
+                    { action ->
+                        when (action) {
+                            SpaceAction.OpenSwitcher,
+                            SpaceAction.DismissSwitcher -> spaceViewModel.onAction(action)
+                            is SpaceAction.SelectSpace -> {
+                                selectSpaceAndRestoreImmersiveSession(action.spaceId)
+                            }
                         }
                     }
+                } else {
+                    {}
                 },
                 spaceNavigationSessionUiState = spaceNavigationSessionUiState,
-                onSpaceSessionChanged = spaceNavigationSessionViewModel::save,
+                onSpaceSessionChanged = if (spaceEnabled) {
+                    { snapshot: SpaceSessionSnapshot -> spaceNavigationSessionViewModel.save(snapshot) }
+                } else {
+                    { _: SpaceSessionSnapshot -> }
+                },
                 spaceTransitionSuppressionTarget = mainTransitionSuppressionTarget,
                 onSpaceTransitionSuppressionConsumed =
                     immersiveSpaceSessionRegistry::completeMainTransitionSuppression,
                 spaceResumeUiState = spaceResumeUiState,
-                onSpaceResume = { spaceId ->
-                    spaceViewModel.onAction(SpaceAction.DismissSwitcher)
-                    if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
-                        selectSpaceAndRestoreImmersiveSession(spaceId)
-                    } else {
-                        spaceResumeViewModel.resume(spaceId)
+                onSpaceResume = if (spaceEnabled) {
+                    { spaceId ->
+                        spaceViewModel.onAction(SpaceAction.DismissSwitcher)
+                        if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
+                            selectSpaceAndRestoreImmersiveSession(spaceId)
+                        } else {
+                            spaceResumeViewModel.resume(spaceId)
+                        }
                     }
+                } else {
+                    {}
                 },
                 onContentSuggestionClick = { content ->
                     resolveDetailsOriginForContent(content) { origin ->
@@ -493,9 +526,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             )
         }
 
-        spaceResumeViewModel.onOpenReader.observeEvent(this) { request ->
-            router.openReader(request.content, contentTypeOverride = request.contentType)
-        }
+        installSpaceResumeObserverIfEnabled()
         viewModel.onOpenReader.observeEvent(this) { content ->
             router.openReader(content)
         }
@@ -517,6 +548,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     }
 
     private fun consumeResumeSpaceIntent(intent: Intent) {
+        if (!settings.isEntitySpaceEnabled) {
+            intent.removeExtra(EXTRA_RESTORE_IMMERSIVE_SPACE_ID)
+            intent.removeExtra(EXTRA_RESUME_SPACE_ID)
+            return
+        }
         intent.getStringExtra(EXTRA_RESTORE_IMMERSIVE_SPACE_ID)?.let { rawSpaceId ->
             intent.removeExtra(EXTRA_RESTORE_IMMERSIVE_SPACE_ID)
             val spaceId = SpaceId(rawSpaceId)
@@ -649,10 +685,30 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     override fun onResume() {
         super.onResume()
+        syncSpaceRuntime()
         if (currentFilterCallback != null) {
             refreshFilters()
         } else {
             clearActiveFilters()
+        }
+    }
+
+    private fun syncSpaceRuntime() {
+        if (settings.isEntitySpaceEnabled) {
+            spaceRoutePreferencesController.start()
+            spaceSourcePresetController.start()
+            installSpaceResumeObserverIfEnabled()
+        } else {
+            spaceRoutePreferencesController.stop()
+            spaceSourcePresetController.stop()
+        }
+    }
+
+    private fun installSpaceResumeObserverIfEnabled() {
+        if (spaceResumeObserverInstalled || !settings.isEntitySpaceEnabled) return
+        spaceResumeObserverInstalled = true
+        spaceResumeViewModel.onOpenReader.observeEvent(this) { request ->
+            router.openReader(request.content, contentTypeOverride = request.contentType)
         }
     }
 

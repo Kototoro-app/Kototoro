@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -30,33 +31,46 @@ class SpaceSourcePresetController @Inject constructor(
     private val currentSpace = MutableStateFlow<SpaceId?>(null)
     private val applying = MutableStateFlow(false)
     private var globalPresetId = settings.activeSourcePresetId
+    private var jobs: List<Job> = emptyList()
 
     fun start() {
+        if (!settings.isEntitySpaceEnabled) return
         if (!started.compareAndSet(false, true)) return
-        processLifecycleScope.launch(Dispatchers.Default) {
-            combine(
-                spaceRepository.activeSpace,
-                featureFlagsRepository.flags,
-            ) { spaceId, flags -> spaceId.takeIf { flags.entitySpaceEnabled } }
-                .distinctUntilChanged()
-                .collect(::activate)
-        }
-        processLifecycleScope.launch(Dispatchers.Default) {
-            combine(
-                settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId },
-                currentSpace,
-                applying,
-            ) { presetId, spaceId, isApplying -> Triple(presetId, spaceId, isApplying) }
-                .distinctUntilChanged()
-                .collect { (presetId, spaceId, isApplying) ->
-                    if (isApplying) return@collect
-                    if (spaceId == null) {
-                        globalPresetId = presetId
-                    } else {
-                        save(spaceId, presetId)
+        jobs = listOf(
+            processLifecycleScope.launch(Dispatchers.Default) {
+                combine(
+                    spaceRepository.activeSpace,
+                    featureFlagsRepository.flags,
+                ) { spaceId, flags -> spaceId.takeIf { flags.entitySpaceEnabled } }
+                    .distinctUntilChanged()
+                    .collect(::activate)
+            },
+            processLifecycleScope.launch(Dispatchers.Default) {
+                combine(
+                    settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId },
+                    currentSpace,
+                    applying,
+                ) { presetId, spaceId, isApplying -> Triple(presetId, spaceId, isApplying) }
+                    .distinctUntilChanged()
+                    .collect { (presetId, spaceId, isApplying) ->
+                        if (isApplying) return@collect
+                        if (spaceId == null) {
+                            globalPresetId = presetId
+                        } else {
+                            save(spaceId, presetId)
+                        }
                     }
-                }
-        }
+            },
+        )
+    }
+
+    fun stop() {
+        if (!started.compareAndSet(true, false)) return
+        jobs.forEach(Job::cancel)
+        jobs = emptyList()
+        settings.activeSourcePresetId = globalPresetId
+        currentSpace.value = null
+        applying.value = false
     }
 
     private suspend fun activate(spaceId: SpaceId?) {

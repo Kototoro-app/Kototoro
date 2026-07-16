@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.space.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -37,44 +38,56 @@ class SpaceRoutePreferencesController @Inject constructor(
 	private val currentSpace = MutableStateFlow<SpaceId?>(null)
 	private val applyingPreferences = MutableStateFlow(false)
 	private val defaults = currentPreferences()
+	private var jobs: List<Job> = emptyList()
 
 	fun start() {
+		if (!settings.isEntitySpaceEnabled) return
 		if (!started.compareAndSet(false, true)) return
-		processLifecycleScope.launch(Dispatchers.Default) {
-			combine(
-				spaceRepository.activeSpace,
-				featureFlagsRepository.flags,
-			) { spaceId, flags ->
-				spaceId.takeIf { flags.effectiveRoutePreferencesEnabled }
-			}.distinctUntilChanged().collect(::activate)
-		}
-		processLifecycleScope.launch(Dispatchers.Default) {
-			combine(
-				settings.observe(
-					AppSettings.KEY_LIST_MODE,
-					AppSettings.KEY_GRID_SIZE,
-					AppSettings.KEY_HISTORY_ORDER,
-					AppSettings.KEY_FAVORITES_ORDER,
-				).map { currentPreferences() },
-				globalFavoritesState.selectedSourceTags,
-				currentSpace,
-				applyingPreferences,
-			) { preferences, sourceTags, spaceId, applying ->
-				PreferenceChange(
-					spaceId = spaceId,
-					preferences = preferences.copy(sourceTags = sourceTags.mapTo(linkedSetOf(), SourceTag::id)),
-					applying = applying,
-				)
-			}.distinctUntilChanged().collect { change ->
-				val spaceId = change.spaceId ?: return@collect
-				if (change.applying) return@collect
-				mutex.withLock {
-					if (currentSpace.value == spaceId && !applyingPreferences.value) {
-						repository.save(spaceId, MAIN_LIST_ROUTE_KEY, change.preferences)
+		jobs = listOf(
+			processLifecycleScope.launch(Dispatchers.Default) {
+				combine(
+					spaceRepository.activeSpace,
+					featureFlagsRepository.flags,
+				) { spaceId, flags ->
+					spaceId.takeIf { flags.effectiveRoutePreferencesEnabled }
+				}.distinctUntilChanged().collect(::activate)
+			},
+			processLifecycleScope.launch(Dispatchers.Default) {
+				combine(
+					settings.observe(
+						AppSettings.KEY_LIST_MODE,
+						AppSettings.KEY_GRID_SIZE,
+						AppSettings.KEY_HISTORY_ORDER,
+						AppSettings.KEY_FAVORITES_ORDER,
+					).map { currentPreferences() },
+					globalFavoritesState.selectedSourceTags,
+					currentSpace,
+					applyingPreferences,
+				) { preferences, sourceTags, spaceId, applying ->
+					PreferenceChange(
+						spaceId = spaceId,
+						preferences = preferences.copy(sourceTags = sourceTags.mapTo(linkedSetOf(), SourceTag::id)),
+						applying = applying,
+					)
+				}.distinctUntilChanged().collect { change ->
+					val spaceId = change.spaceId ?: return@collect
+					if (change.applying) return@collect
+					mutex.withLock {
+						if (currentSpace.value == spaceId && !applyingPreferences.value) {
+							repository.save(spaceId, MAIN_LIST_ROUTE_KEY, change.preferences)
+						}
 					}
 				}
-			}
-		}
+			},
+		)
+	}
+
+	fun stop() {
+		if (!started.compareAndSet(true, false)) return
+		jobs.forEach(Job::cancel)
+		jobs = emptyList()
+		currentSpace.value = null
+		applyingPreferences.value = false
 	}
 
 	private suspend fun activate(spaceId: SpaceId?) {

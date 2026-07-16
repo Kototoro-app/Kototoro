@@ -6,7 +6,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourceRule
@@ -15,6 +18,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
+import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
@@ -91,26 +95,43 @@ class SpaceBrowseScope @Inject constructor(
 		)
 	}
 
-	fun observeAllowedSourceNames(spaceIds: Flow<SpaceId?>): Flow<Set<String>?> = combine(
-		spaceIds,
-		catalogRepository.spaces,
-		sourcesRepository.observeEnabledSources(),
-	) { spaceId, spaces, sources ->
-		val context = spaceId?.let { id -> spaces.firstOrNull { it.id == id } } ?: return@combine null
-		if (context.sourceLanguages.isEmpty() && context.sourceKinds.isEmpty() && context.isBuiltIn) {
-			null
-		} else {
-			sourceRuleResolver.resolveSourceNames(
-				SourceRule(
-					languages = context.sourceLanguages,
-					contentTypes = context.allowedContentTypes,
-					sourceTypes = context.sourceKinds,
-				),
-				sources,
-			)
+	fun observeAllowedSourceNames(spaceIds: Flow<SpaceId?>): Flow<Set<String>?> = observeAllowedSourceNames(
+		spaceIds = spaceIds,
+		spaces = catalogRepository.spaces,
+		observeSources = sourcesRepository::observeEnabledSources,
+		resolveSourceNames = sourceRuleResolver::resolveSourceNames,
+	)
+}
+
+internal fun observeAllowedSourceNames(
+	spaceIds: Flow<SpaceId?>,
+	spaces: Flow<List<SpaceContext>>,
+	observeSources: () -> StateFlow<List<ContentSourceInfo>>,
+	resolveSourceNames: (SourceRule, List<ContentSourceInfo>) -> Set<String>,
+): Flow<Set<String>?> = spaceIds.flatMapLatest { spaceId ->
+	if (spaceId == null) {
+		flowOf(null)
+	} else {
+		combine(
+			spaces,
+			observeSources(),
+		) { spaces, sources ->
+			val context = spaces.firstOrNull { it.id == spaceId } ?: return@combine null
+			if (context.sourceLanguages.isEmpty() && context.sourceKinds.isEmpty() && context.isBuiltIn) {
+				null
+			} else {
+				resolveSourceNames(
+					SourceRule(
+						languages = context.sourceLanguages,
+						contentTypes = context.allowedContentTypes,
+						sourceTypes = context.sourceKinds,
+					),
+					sources,
+				)
+			}
+			}
 		}
 	}
-}
 
 fun StateFlow<BrowseGroupTab>.scopedToSpace(
 	spaceBrowseScope: SpaceBrowseScope,

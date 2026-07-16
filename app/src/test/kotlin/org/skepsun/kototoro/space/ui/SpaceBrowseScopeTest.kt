@@ -2,11 +2,13 @@ package org.skepsun.kototoro.space.ui
 
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
+import org.skepsun.kototoro.space.domain.SpaceId
 
 class SpaceBrowseScopeTest {
 
@@ -68,5 +70,20 @@ class SpaceBrowseScopeTest {
 		spaceGroupTab.value = BrowseGroupTab.Video
 		runCurrent()
 		scoped.value shouldBe BrowseGroupTab.Video
+	}
+
+	@Test
+	fun `disabled space scope does not subscribe to enabled sources`() = runTest {
+		var sourcesObserved = false
+		observeAllowedSourceNames(
+			spaceIds = MutableStateFlow<SpaceId?>(null),
+			spaces = MutableStateFlow(emptyList()),
+			observeSources = {
+				sourcesObserved = true
+				MutableStateFlow(emptyList())
+			},
+			resolveSourceNames = { _, _ -> emptySet() },
+		).first() shouldBe null
+		sourcesObserved shouldBe false
 	}
 }
