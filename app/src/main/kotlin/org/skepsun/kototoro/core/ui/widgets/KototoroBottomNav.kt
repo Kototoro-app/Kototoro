@@ -54,6 +54,7 @@ private data class BottomNavPrefs(
     val navFloatingHeight: Int,
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KototoroBottomNav(
     state: StateFlow<BottomNavState>,
@@ -97,8 +98,8 @@ fun KototoroBottomNav(
     val useNavigationRail = remember(configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
         FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
     }
-    val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
-    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val systemBarsPadding = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
+    val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val railStartInset = systemBarsPadding.calculateStartPadding(layoutDirection)
     val railEndInset = systemBarsPadding.calculateEndPadding(layoutDirection)
     val railBottomInset = systemBarsPadding.calculateBottomPadding()
@@ -133,7 +134,13 @@ fun KototoroBottomNav(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = horizontalPadding, vertical = verticalPadding)
-                    .run { if (isFloating) navigationBarsPadding() else this }
+                    .run {
+                        if (isFloating) {
+                            windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
+                        } else {
+                            this
+                        }
+                    }
             },
         )
 
@@ -280,7 +287,7 @@ fun KototoroBottomNav(
     } else {
         Row(
             modifier = navBarModifier
-                .navigationBarsPadding()
+                .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
                 .then(if (adjacentAction != null) Modifier.padding(end = 12.dp) else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,

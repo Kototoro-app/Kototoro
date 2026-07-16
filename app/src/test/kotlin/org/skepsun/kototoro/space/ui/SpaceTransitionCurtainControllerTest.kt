@@ -10,6 +10,20 @@ import org.skepsun.kototoro.space.domain.BuiltInSpaces
 class SpaceTransitionCurtainControllerTest {
 
 	@Test
+	fun `only active target host can reveal curtain`() {
+		isSpaceCurtainRevealHost(
+			targetSpaceId = BuiltInSpaces.Novel,
+			hostSpaceId = BuiltInSpaces.Manga,
+			activeSpaceId = BuiltInSpaces.Novel,
+		) shouldBe false
+		isSpaceCurtainRevealHost(
+			targetSpaceId = BuiltInSpaces.Novel,
+			hostSpaceId = BuiltInSpaces.Novel,
+			activeSpaceId = BuiltInSpaces.Novel,
+		) shouldBe true
+	}
+
+	@Test
 	fun `transition follows actual curtain completion`() = runTest {
 		val controller = SpaceTransitionCurtainController()
 		val covering = async {
@@ -46,6 +60,25 @@ class SpaceTransitionCurtainControllerTest {
 
 		covering.await() shouldBe true
 		controller.state.value.phase shouldBe SpaceTransitionPhase.COVERED
+	}
+
+	@Test
+	fun `immersive handoff can keep target curtain hidden`() = runTest {
+		val controller = SpaceTransitionCurtainController()
+		val covering = async {
+			controller.cover(
+				from = BuiltInSpaces.Manga,
+				target = BuiltInSpaces.Anime,
+				animated = false,
+				showOnTarget = false,
+			)
+		}
+
+		runCurrent()
+		controller.state.value.showOnTarget shouldBe false
+		controller.markCovered(BuiltInSpaces.Anime)
+		runCurrent()
+		covering.await() shouldBe true
 	}
 
 	@Test

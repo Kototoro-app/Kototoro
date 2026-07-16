@@ -64,7 +64,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -126,6 +125,7 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.discover.ui.DiscoverViewModel
 import org.skepsun.kototoro.discover.ui.compose.DiscoverHeroCarousel
+import org.skepsun.kototoro.discover.ui.compose.discoverHeroHeight
 import org.skepsun.kototoro.discover.ui.model.DiscoverCarouselRow
 import org.skepsun.kototoro.explore.ui.ExploreViewModel
 import org.skepsun.kototoro.explore.ui.model.ContentSourceItem
@@ -305,7 +305,6 @@ fun KototoroExploreHostRoute(
     var shouldRestoreBrowseScroll by rememberSaveable { mutableStateOf(false) }
     var hasLeftBrowse by rememberSaveable { mutableStateOf(false) }
     var canRestoreBrowseScroll by rememberSaveable { mutableStateOf(false) }
-    var heroPx by rememberSaveable { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val context = LocalContext.current
     LaunchedEffect(discoverViewModel, context) {
@@ -342,13 +341,19 @@ fun KototoroExploreHostRoute(
     val isBrowseTrackingRecommendationsEnabled = screenPrefs.isBrowseTrackingRecommendationsEnabled
     val isBrowseMoreTrackingRecommendationsEnabled = screenPrefs.isBrowseMoreTrackingRecommendationsEnabled
     val posterStyle = remember(gridScale) { compactPosterRailCardStyle(gridScale) }
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val browseHeroHeight = discoverHeroHeight(
+        isLandscape = isLandscape,
+        detachedBottomContent = true,
+    ) + contentPadding.calculateTopPadding()
+    val browseHeroHeightPx = with(density) { browseHeroHeight.toPx() }
     // 实时读取 LazyColumn 第一个 item 的滚动偏移，驱动 Hero 跟随滚动
-    val heroScrollOffsetPx by remember(listState) {
+    val heroScrollOffsetPx by remember(listState, browseHeroHeightPx) {
         derivedStateOf {
             if (listState.firstVisibleItemIndex == 0) {
                 -listState.firstVisibleItemScrollOffset.toFloat()
             } else {
-                -heroPx.toFloat()
+                -browseHeroHeightPx
             }
         }
     }
@@ -375,7 +380,7 @@ fun KototoroExploreHostRoute(
     val popularItems = if (shouldShowMoreTrackingRecommendations) browseDiscoverItems.popularItems else emptyList()
     val isSourcesLoadingOnly = browseSourceItems.isLoadingOnly
     val isDiscoverLoadingOnly = browseDiscoverItems.isLoadingOnly
-    val shouldShowBrowseHero = isBrowseTrackingRecommendationsEnabled && (heroItems.isNotEmpty() || isDiscoverLoadingOnly)
+    val shouldShowBrowseHero = isBrowseTrackingRecommendationsEnabled
     val isBrowseContentReady = sources.isNotEmpty() ||
         heroItems.isNotEmpty() ||
         showcaseRows.isNotEmpty() ||
@@ -396,17 +401,17 @@ fun KototoroExploreHostRoute(
                 "left=$hasLeftBrowse canRestore=$canRestoreBrowseScroll"
         }
     }
-    val heroOverlapDp = if (shouldShowBrowseHero && (sources.isNotEmpty() || isSourcesLoadingOnly)) {
+    val heroOverlapDp = if (shouldShowBrowseHero) {
         BrowseHeroContentOverlap
     } else {
         0.dp
     }
-    val heroHeightDp by remember(heroPx, density, heroOverlapDp, shouldShowBrowseHero) {
+    val heroHeightDp by remember(browseHeroHeight, heroOverlapDp, shouldShowBrowseHero) {
         derivedStateOf {
             if (!shouldShowBrowseHero) {
                 0.dp
             } else {
-                (with(density) { heroPx.toDp() } - heroOverlapDp).coerceAtLeast(0.dp)
+                (browseHeroHeight - heroOverlapDp).coerceAtLeast(0.dp)
             }
         }
     }
@@ -707,56 +712,39 @@ fun KototoroExploreHostRoute(
                     }
                 }
 
+                sourceQuickAccessItems(
+                    metrics = sourceMetrics,
+                    browseListMode = browseListMode,
+                    columns = sourceColumns,
+                    visibleGroups = visibleSourceGroups,
+                    selectedSourceIds = selectedSourceIds,
+                    hasMoreSources = hasMoreSources,
+                    isExpanded = areSourcesExpanded,
+                    topBackgroundOverlap = heroOverlapDp,
+                    onToggleExpanded = { isSourcesExpanded = !isSourcesExpanded },
+                    onManageClick = appRouter::openManageSources,
+                    onSourceClick = { source ->
+                        if (selectedSourceIds.isNotEmpty()) {
+                            hapticFeedback.performSelectionHapticFeedback()
+                            selectedSourceIds = selectedSourceIds.toggle(source.id)
+                        } else {
+                            onOpenSourceList?.invoke(source.source) ?: appRouter.openList(source.source, null, null)
+                        }
+                    },
+                    onSourceLongClick = { source ->
+                        selectedSourceIds = selectedSourceIds.toggle(source.id)
+                    },
+                )
                 if (isSourcesLoadingOnly) {
-                    item(key = "discover_sources") {
-                        DetachedBottomContent(
-                            sources = emptyList(),
-                            isLoadingOnly = isSourcesLoadingOnly,
+                    item(key = "source_quick_access_loading", contentType = "source_quick_access_loading") {
+                        BrowseSourcesSkeleton(
                             metrics = sourceMetrics,
-                            browseListMode = browseListMode,
-                            isGroupedByLanguage = isSourcesGroupedByLanguage,
-                            selectedSourceIds = selectedSourceIds,
-                            onSourceClick = { source ->
-                                if (selectedSourceIds.isNotEmpty()) {
-                                    hapticFeedback.performSelectionHapticFeedback()
-                                    selectedSourceIds = selectedSourceIds.toggle(source.id)
-                                } else {
-                                    onOpenSourceList?.invoke(source.source) ?: appRouter.openList(source.source, null, null)
-                                }
-                            },
-                            onSourceLongClick = { source ->
-                                selectedSourceIds = selectedSourceIds.toggle(source.id)
-                            },
-                            onManageSourcesClick = appRouter::openManageSources,
-                            forceExpanded = shouldForceSourcesExpanded,
-                            topBackgroundOverlap = heroOverlapDp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.background)
+                                .padding(start = 16.dp, end = 16.dp, bottom = 36.dp),
                         )
                     }
-                }
-                if (sources.isNotEmpty()) {
-                    sourceQuickAccessItems(
-                        metrics = sourceMetrics,
-                        browseListMode = browseListMode,
-                        columns = sourceColumns,
-                        visibleGroups = visibleSourceGroups,
-                        selectedSourceIds = selectedSourceIds,
-                        hasMoreSources = hasMoreSources,
-                        isExpanded = areSourcesExpanded,
-                        topBackgroundOverlap = heroOverlapDp,
-                        onToggleExpanded = { isSourcesExpanded = !isSourcesExpanded },
-                        onManageClick = appRouter::openManageSources,
-                        onSourceClick = { source ->
-                            if (selectedSourceIds.isNotEmpty()) {
-                                hapticFeedback.performSelectionHapticFeedback()
-                                selectedSourceIds = selectedSourceIds.toggle(source.id)
-                            } else {
-                                onOpenSourceList?.invoke(source.source) ?: appRouter.openList(source.source, null, null)
-                            }
-                        },
-                        onSourceLongClick = { source ->
-                            selectedSourceIds = selectedSourceIds.toggle(source.id)
-                        },
-                    )
                 }
 
                 items(
@@ -905,11 +893,8 @@ fun KototoroExploreHostRoute(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopStart)
-                        .onSizeChanged { heroPx = it.height }
                         .graphicsLayer { translationY = heroScrollOffsetPx },
                 )
-            } else {
-                heroPx = 0
             }
 
         }
@@ -996,10 +981,17 @@ private fun BrowseHeroBlock(
             modifier = modifier,
         )
     } else {
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(topContentInset + 220.dp)
+                .height(
+                    topContentInset + discoverHeroHeight(
+                        isLandscape = isLandscape,
+                        detachedBottomContent = true,
+                    ),
+                )
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
@@ -1014,63 +1006,6 @@ private fun BrowseHeroBlock(
         ) {
             if (isLoadingOnly) {
                 BrowseHeroSkeleton()
-            }
-        }
-    }
-}
-
-@Composable
-private fun DetachedBottomContent(
-    sources: List<ContentSourceItem>,
-    isLoadingOnly: Boolean,
-    metrics: SourceQuickAccessMetrics,
-    browseListMode: ListMode,
-    isGroupedByLanguage: Boolean,
-    selectedSourceIds: Set<Long>,
-    onSourceClick: (ContentSourceItem) -> Unit,
-    onSourceLongClick: (ContentSourceItem) -> Unit,
-    onManageSourcesClick: () -> Unit,
-    forceExpanded: Boolean = false,
-    topBackgroundOverlap: androidx.compose.ui.unit.Dp = 0.dp,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background),
-    ) {
-        when {
-            sources.isNotEmpty() -> {
-                SourcesQuickAccessSection(
-                    sources = sources,
-                    metrics = metrics,
-                    browseListMode = browseListMode,
-                    isGroupedByLanguage = isGroupedByLanguage,
-                    selectedSourceIds = selectedSourceIds,
-                    forceExpanded = forceExpanded,
-                    onSourceClick = onSourceClick,
-                    onSourceLongClick = onSourceLongClick,
-                    onManageClick = onManageSourcesClick,
-                    modifier = Modifier.padding(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = topBackgroundOverlap,
-                        bottom = 8.dp,
-                    ),
-                )
-            }
-            isLoadingOnly -> {
-                BrowseSourcesSkeleton(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = topBackgroundOverlap + 36.dp,
-                            bottom = 36.dp,
-                        ),
-                    metrics = metrics,
-                )
             }
         }
     }
@@ -2119,11 +2054,6 @@ private fun BrowseSourcesSkeleton(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
     ) {
-        ExploreSkeletonBlock(
-            modifier = Modifier
-                .width(148.dp)
-                .height(18.dp),
-        )
         repeat(2) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

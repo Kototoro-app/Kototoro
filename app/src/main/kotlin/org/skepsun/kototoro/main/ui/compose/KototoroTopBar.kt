@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,10 +24,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
@@ -96,7 +96,7 @@ data class KototoroTopBarMenuAction(
     val onClick: () -> Unit,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun KototoroTopBar(
     query: String,
@@ -160,7 +160,7 @@ fun KototoroTopBar(
         pendingGridSize = gridSize
     }
 
-    val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
+    val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues()
     val collapsedAlpha by animateFloatAsState(
         targetValue = if (isCollapsedFullyTransparent) 0f else 1f,
         label = "top_bar_alpha",

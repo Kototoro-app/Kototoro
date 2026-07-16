@@ -258,6 +258,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 					from = activeSpaceId,
 					target = target,
 					animated = animated,
+					showOnTarget = false,
 				)
 				if (!covered) {
 					immersiveSessionRegistry.completeMainTransitionSuppression(target)
@@ -331,9 +332,16 @@ class SpaceSwitcherDelegate @Inject constructor(
 				KototoroTheme {
 					val transitionState by transitionController.state.collectAsState()
 					val spaces by catalogRepository.spaces.collectAsState()
+					val activeSpaceId by spaceRepository.activeSpace.collectAsState()
 					SpaceTransitionCurtain(
 						state = transitionState,
 						spaces = spaces,
+						isTargetHost = transitionState.targetSpaceId == sessionSpaceId,
+						allowReveal = isSpaceCurtainRevealHost(
+							targetSpaceId = transitionState.targetSpaceId,
+							hostSpaceId = sessionSpaceId,
+							activeSpaceId = activeSpaceId,
+						),
 						onCoverFinished = transitionController::markCovered,
 						onRevealFinished = transitionController::markRevealFinished,
 					)

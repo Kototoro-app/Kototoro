@@ -109,6 +109,15 @@ private val DiscoverHeroHeightLandscape = 220.dp
 private val DiscoverHeroBottomBlendHeightLandscape = 128.dp
 private val DiscoverHeroBottomBlendHeightDetachedLandscape = 112.dp
 
+internal fun discoverHeroHeight(
+    isLandscape: Boolean,
+    detachedBottomContent: Boolean,
+): Dp = when {
+    isLandscape -> DiscoverHeroHeightLandscape
+    detachedBottomContent -> DiscoverHeroHeightDetached
+    else -> DiscoverHeroHeight
+}
+
 @Immutable
 private data class DiscoverHeroPanoramaPrefs(
     val isEnabled: Boolean,
@@ -172,11 +181,10 @@ fun DiscoverHeroCarousel(
     val heroTransitionInProgress = LocalHeroTransitionInProgress.current
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val heroHeight = when {
-        isLandscape -> DiscoverHeroHeightLandscape
-        detachedBottomContent -> DiscoverHeroHeightDetached
-        else -> DiscoverHeroHeight
-    }
+    val heroHeight = discoverHeroHeight(
+        isLandscape = isLandscape,
+        detachedBottomContent = detachedBottomContent,
+    )
     val context = LocalContext.current
     val resolvedSettings = settings ?: remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val panoramaPrefs = rememberDiscoverHeroPanoramaPrefs(resolvedSettings)

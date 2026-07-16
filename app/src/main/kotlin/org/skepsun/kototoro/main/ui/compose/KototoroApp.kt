@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -24,12 +25,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -174,6 +175,7 @@ import org.skepsun.kototoro.space.ui.SpaceMotionMode
 import org.skepsun.kototoro.space.ui.SpaceTransitionCurtain
 import org.skepsun.kototoro.space.ui.SpaceTransitionPhase
 import org.skepsun.kototoro.space.ui.SpaceTransitionState
+import org.skepsun.kototoro.space.ui.isSpaceCurtainRevealHost
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
 import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
 
@@ -187,6 +189,7 @@ private class SpaceChromeScrollState {
         initialHeightOffset = 0f,
         initialContentOffset = 0f,
     )
+    val topBarHeightPx = mutableIntStateOf(0)
     val bottomNavOffset = mutableFloatStateOf(0f)
     val totalContentScrollOffset = mutableFloatStateOf(0f)
     val keepTabsExpandedByScrollDirection = mutableStateOf(false)
@@ -341,7 +344,7 @@ private fun Modifier.renderChromeInSharedTransitionOverlay(
 }
 
 
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun KototoroApp(
     appSettings: AppSettings,
@@ -530,7 +533,7 @@ fun KototoroApp(
         chromeScrollStates.keys.retainAll(activeSpaceIds)
     }
 
-    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    var topBarHeightPx by chromeScrollState.topBarHeightPx
     var bottomNavHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavOffset by chromeScrollState.bottomNavOffset
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
@@ -555,10 +558,10 @@ fun KototoroApp(
     val spaceSwitcherFabMargin = dimensionResource(R.dimen.space_switcher_fab_margin)
     val spaceSwitcherFabControlGap = dimensionResource(R.dimen.space_switcher_fab_control_gap)
     val statusBarHeightPx = with(density) {
-        WindowInsets.statusBars.asPaddingValues().calculateTopPadding().roundToPx()
+        WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding().roundToPx()
     }
     val navigationBarHeightPx = with(density) {
-        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().roundToPx()
+        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding().roundToPx()
     }
     var materialTopBarScrollEnabled by remember { mutableStateOf(true) }
     val topAppBarState = chromeScrollState.topAppBarState
@@ -1117,6 +1120,9 @@ fun KototoroApp(
         offsetDestinationRoute,
         offsetDestinationOwnerKey,
         isActiveSpaceRestored,
+        topBarHeightPx,
+        contentTopInsetPx,
+        contentBottomInsetPx,
     ) {
         traceSpaceChrome {
             "state space=${navigationSpaceId.value} nav=${System.identityHashCode(navController)} " +
@@ -1682,6 +1688,12 @@ fun KototoroApp(
                     state = spaceTransitionState,
                     spaces = spaceUiState.spaces,
                     modifier = Modifier.fillMaxSize(),
+                    isTargetHost = spaceTransitionState.targetSpaceId == navigationSpaceId,
+                    allowReveal = isSpaceCurtainRevealHost(
+                        targetSpaceId = spaceTransitionState.targetSpaceId,
+                        hostSpaceId = navigationSpaceId,
+                        activeSpaceId = spaceUiState.activeSpaceId,
+                    ),
                     onCoverFinished = onSpaceCurtainCoverFinished,
                     onRevealFinished = onSpaceCurtainRevealFinished,
                 )

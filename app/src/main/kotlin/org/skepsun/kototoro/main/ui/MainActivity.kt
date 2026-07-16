@@ -285,7 +285,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
             val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
-            val spaceTransitionState by spaceTransitionCurtainController.state.collectAsStateWithLifecycle()
+            // This state bridges tasks and must remain current while MainActivity is stopped;
+            // lifecycle-gated collection would expose a stale IDLE frame when the task returns.
+            val spaceTransitionState by spaceTransitionCurtainController.state.collectAsState()
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
@@ -542,15 +544,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             immersiveSpaceSessionRegistry.suppressMainTransitionTo(spaceId)
             lifecycleScope.launch {
                 try {
-                    if (!coverSpaceTransition(spaceId)) {
+                    if (!coverSpaceTransition(spaceId, showOnTarget = false)) {
                         immersiveSpaceSessionRegistry.completeMainTransitionSuppression(spaceId)
                         return@launch
                     }
-                if (immersiveSpaceSessionRegistry.restore(
-                    spaceId,
-                    this@MainActivity,
-                    suppressAnimation = true,
-                )) {
+                    if (immersiveSpaceSessionRegistry.restore(
+                        spaceId,
+                        this@MainActivity,
+                        suppressAnimation = true,
+                    )) {
                         lifecycle.currentStateFlow.first { state ->
                             !state.isAtLeast(Lifecycle.State.RESUMED)
                         }
@@ -591,13 +593,17 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         }
     }
 
-    private suspend fun coverSpaceTransition(spaceId: SpaceId): Boolean {
+    private suspend fun coverSpaceTransition(
+        spaceId: SpaceId,
+        showOnTarget: Boolean = true,
+    ): Boolean {
         val activeSpaceId = spaceRepository.activeSpace.value
         if (activeSpaceId == spaceId) return true
         return spaceTransitionCurtainController.cover(
             from = activeSpaceId,
             target = spaceId,
             animated = !settings.isReducedVisualEffectsEnabled && animatorDurationScale > 0f,
+            showOnTarget = showOnTarget,
         )
     }
 

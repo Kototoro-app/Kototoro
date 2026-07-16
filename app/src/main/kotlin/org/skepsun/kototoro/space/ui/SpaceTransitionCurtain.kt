@@ -46,10 +46,17 @@ data class SpaceTransitionState(
 	val fromSpaceId: SpaceId? = null,
 	val targetSpaceId: SpaceId? = null,
 	val animated: Boolean = true,
+	val showOnTarget: Boolean = true,
 ) {
 	val isVisible: Boolean
 		get() = phase != SpaceTransitionPhase.IDLE
 }
+
+internal fun isSpaceCurtainRevealHost(
+	targetSpaceId: SpaceId?,
+	hostSpaceId: SpaceId?,
+	activeSpaceId: SpaceId,
+): Boolean = targetSpaceId != null && targetSpaceId == hostSpaceId && targetSpaceId == activeSpaceId
 
 @Singleton
 class SpaceTransitionCurtainController @Inject constructor() {
@@ -58,7 +65,12 @@ class SpaceTransitionCurtainController @Inject constructor() {
 	private val mutableState = MutableStateFlow(SpaceTransitionState())
 	val state: StateFlow<SpaceTransitionState> = mutableState.asStateFlow()
 
-	suspend fun cover(from: SpaceId, target: SpaceId, animated: Boolean): Boolean {
+	suspend fun cover(
+		from: SpaceId,
+		target: SpaceId,
+		animated: Boolean,
+		showOnTarget: Boolean = true,
+	): Boolean {
 		if (from == target || mutableState.value.isVisible) return false
 		return coverMutex.withLock {
 			if (from == target || mutableState.value.isVisible) return@withLock false
@@ -67,6 +79,7 @@ class SpaceTransitionCurtainController @Inject constructor() {
 				fromSpaceId = from,
 				targetSpaceId = target,
 				animated = animated,
+				showOnTarget = showOnTarget,
 			)
 			try {
 				state.first { it.targetSpaceId != target || it.phase != SpaceTransitionPhase.COVERING }
@@ -120,18 +133,28 @@ fun SpaceTransitionCurtain(
 	state: SpaceTransitionState,
 	spaces: List<SpaceContext>,
 	modifier: Modifier = Modifier,
+	allowReveal: Boolean = true,
+	isTargetHost: Boolean = allowReveal,
 	onCoverFinished: (SpaceId) -> Unit = {},
 	onRevealFinished: (SpaceId) -> Unit = {},
 ) {
 	if (!state.isVisible) return
+	val hideOnTargetHost = isTargetHost && !state.showOnTarget
 	val initialAlpha = when (state.phase) {
 		SpaceTransitionPhase.COVERED,
 		SpaceTransitionPhase.REVEALING,
-		-> 1f
+		-> if (hideOnTargetHost) 0f else 1f
 		else -> 0f
 	}
 	val alpha = remember { Animatable(initialAlpha) }
-	LaunchedEffect(state.phase, state.targetSpaceId, state.animated) {
+	LaunchedEffect(
+		state.phase,
+		state.targetSpaceId,
+		state.animated,
+		isTargetHost,
+		allowReveal,
+		state.showOnTarget,
+	) {
 		val target = state.targetSpaceId ?: return@LaunchedEffect
 		when (state.phase) {
 			SpaceTransitionPhase.COVERING -> {
@@ -143,15 +166,25 @@ fun SpaceTransitionCurtain(
 				androidx.compose.runtime.withFrameNanos { }
 				onCoverFinished(target)
 			}
-			SpaceTransitionPhase.COVERED -> alpha.snapTo(1f)
+			SpaceTransitionPhase.COVERED -> alpha.snapTo(if (hideOnTargetHost) 0f else 1f)
 			SpaceTransitionPhase.REVEALING -> {
-				if (state.animated) {
-					alpha.animateTo(0f, tween(SpaceMotion.CurtainRevealMillis))
-				} else {
+				if (hideOnTargetHost) {
 					alpha.snapTo(0f)
+					if (allowReveal) {
+						androidx.compose.runtime.withFrameNanos { }
+						onRevealFinished(target)
+					}
+				} else if (!allowReveal) {
+					alpha.snapTo(1f)
+				} else {
+					if (state.animated) {
+						alpha.animateTo(0f, tween(SpaceMotion.CurtainRevealMillis))
+					} else {
+						alpha.snapTo(0f)
+					}
+					androidx.compose.runtime.withFrameNanos { }
+					onRevealFinished(target)
 				}
-				androidx.compose.runtime.withFrameNanos { }
-				onRevealFinished(target)
 			}
 			SpaceTransitionPhase.IDLE -> alpha.snapTo(0f)
 		}
