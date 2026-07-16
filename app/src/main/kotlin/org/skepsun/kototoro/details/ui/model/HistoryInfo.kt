@@ -4,6 +4,10 @@ import org.skepsun.kototoro.core.model.ContentHistory
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.data.ReadingTime
 import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.core.model.getMergeKey
+import org.skepsun.kototoro.core.model.mergeRepeated
+import org.skepsun.kototoro.core.model.isManga
+import org.skepsun.kototoro.core.model.getContentType
 
 private const val EPUB_HISTORY_MATCH_WINDOW = 1_000_000L
 
@@ -36,14 +40,29 @@ fun HistoryInfo(
 	history: ContentHistory?,
 	isIncognitoMode: Boolean,
 	estimatedTime: ReadingTime?,
+	isMergeRepeatedChapters: Boolean = false,
 ): HistoryInfo {
+	val contentType = manga?.toContent()?.source?.getContentType()
+	val useMerge = isMergeRepeatedChapters && contentType.isManga()
 	val chapters = if (manga?.chapters?.isEmpty() == true) {
 		emptyList()
+	} else if (useMerge && manga != null) {
+		val allBranches = manga.chapters.keys.toList()
+		val rawChapters = allBranches.flatMap { manga.chapters[it].orEmpty() }
+		rawChapters.mergeRepeated()
 	} else {
 		manga?.chapters?.get(branch)
 	}
 	var currentChapter = if (history != null && !chapters.isNullOrEmpty()) {
-		chapters.findChapterByHistory(history)?.let(chapters::indexOf) ?: -1
+		var index = chapters.findChapterByHistory(history)?.let(chapters::indexOf) ?: -1
+		if (index == -1 && useMerge && manga != null) {
+			val historyChapter = manga.allChapters.find { it.id == history.chapterId }
+			if (historyChapter != null) {
+				val historyKey = historyChapter.getMergeKey()
+				index = chapters.indexOfFirst { it.getMergeKey() == historyKey }
+			}
+		}
+		index
 	} else {
 		-2
 	}

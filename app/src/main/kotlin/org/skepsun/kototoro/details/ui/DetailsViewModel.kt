@@ -3094,9 +3094,10 @@ class DetailsViewModel @Inject constructor(
 		selectedBranch,
 		history,
 		interactor.observeIncognitoMode(manga),
-	) { m, b, h, im ->
+		isMergeRepeatedChapters,
+	) { m, b, h, im, mergeRepeated ->
 		val estimatedTime = readingTimeUseCase.invoke(m, b, h)
-		HistoryInfo(m, b, h, im == TriStateOption.ENABLED, estimatedTime)
+		HistoryInfo(m, b, h, im == TriStateOption.ENABLED, estimatedTime, mergeRepeated)
 	}.withErrorHandling()
 		.stateIn(
 			scope = viewModelScope + Dispatchers.Default,

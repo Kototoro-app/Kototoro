@@ -43,6 +43,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.resolvePreset
 import org.skepsun.kototoro.core.prefs.toFamily
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 
 private const val GLASS_SURFACE_TAG = "GlassSurface"
@@ -228,8 +230,16 @@ fun GlassSurface(
             }
         }
     }
+    if (dialogSurface) {
+        ApplyDynamicArtworkBlurDialogStyle()
+    }
+    val backgroundStyle = LocalBackgroundStyle.current
     val surfaceColor = when {
-        dialogSurface -> glassColors.containerColor
+        dialogSurface -> if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+            glassColors.containerColor.copy(alpha = 0.86f.coerceAtLeast(glassColors.containerColor.alpha))
+        } else {
+            glassColors.containerColor
+        }
         shouldUsePrototypeSurfaceFill -> runtimeChromeFillColor
         useRuntimeHaze && !dialogSurface -> Color.Transparent
         !useRuntimeHaze && glassPrefs.isGlassEffectEnabled && usesOfficialHazeMaterial -> {

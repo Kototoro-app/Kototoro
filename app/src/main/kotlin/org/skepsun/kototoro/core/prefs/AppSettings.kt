@@ -142,6 +142,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_THEME_AMOLED, false)
 		set(value) = prefs.edit { putBoolean(KEY_THEME_AMOLED, value) }
 
+	var backgroundStyle: BackgroundStyle
+		get() = prefs.getEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DEFAULT)
+		set(value) = prefs.edit { putEnumValue(KEY_BACKGROUND_STYLE, value) }
+
 	var tabletUiMode: TabletUiMode
 		get() = prefs.getEnumValue(KEY_TABLET_UI_MODE, TabletUiMode.RELAXED)
 		set(value) = prefs.edit { putEnumValue(KEY_TABLET_UI_MODE, value) }
@@ -2111,6 +2115,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_THEME = "theme"
 		const val KEY_COLOR_THEME = "color_theme"
 		const val KEY_THEME_AMOLED = "amoled_theme"
+		const val KEY_BACKGROUND_STYLE = "background_style"
 		const val KEY_MATERIAL_EXPRESSIVE_COMPONENTS = "material_expressive_components"
 		const val KEY_APP_FONT_PRESET = "app_font_preset"
 		const val KEY_EXPRESSIVE_APP_FONT_PRESET = "expressive_app_font_preset"

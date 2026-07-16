@@ -14,6 +14,11 @@ import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.model.getMergeKey
+import org.skepsun.kototoro.core.model.mergeRepeated
+import org.skepsun.kototoro.core.model.isManga
+import org.skepsun.kototoro.core.model.getContentType
 import javax.inject.Inject
 
 private const val PAGES_TRIM_THRESHOLD = 120
@@ -21,6 +26,7 @@ private const val PAGES_TRIM_THRESHOLD = 120
 @ViewModelScoped
 class ChaptersLoader @Inject constructor(
 	private val mangaRepositoryFactory: ContentRepository.Factory,
+	private val settings: AppSettings,
 ) {
 
 	private val chapters = LongSparseArray<ContentChapter>()
@@ -38,11 +44,32 @@ class ChaptersLoader @Inject constructor(
 	}
 
 	suspend fun loadPrevNextChapter(manga: ContentDetails, currentId: Long, isNext: Boolean): Boolean {
-		val chapters = manga.allChapters
-		val predicate: (ContentChapter) -> Boolean = { it.id == currentId }
-		val index = if (isNext) chapters.indexOfFirst(predicate) else chapters.indexOfLast(predicate)
+		val contentType = manga.toContent().source.getContentType()
+		val useMerge = settings.isMergeRepeatedChapters && contentType.isManga()
+		val chaptersList = if (useMerge) {
+			val allBranches = manga.chapters.keys.toList()
+			val rawChapters = allBranches.flatMap { manga.chapters[it].orEmpty() }
+			rawChapters.mergeRepeated()
+		} else {
+			manga.allChapters
+		}
+
+		val currentChapter = peekChapter(currentId) ?: manga.allChapters.find { it.id == currentId }
+		val index = if (currentChapter != null) {
+			val currentKey = if (useMerge) currentChapter.getMergeKey() else null
+			if (useMerge) {
+				chaptersList.indexOfFirst { it.getMergeKey() == currentKey }
+			} else {
+				val predicate: (ContentChapter) -> Boolean = { it.id == currentId }
+				if (isNext) chaptersList.indexOfFirst(predicate) else chaptersList.indexOfLast(predicate)
+			}
+		} else {
+			val predicate: (ContentChapter) -> Boolean = { it.id == currentId }
+			if (isNext) chaptersList.indexOfFirst(predicate) else chaptersList.indexOfLast(predicate)
+		}
+
 		if (index == -1) return false
-		val newChapter = chapters.getOrNull(if (isNext) index + 1 else index - 1) ?: return false
+		val newChapter = chaptersList.getOrNull(if (isNext) index + 1 else index - 1) ?: return false
 		val newPages = loadChapter(newChapter.id)
 		mutex.withLock {
 			if (chapterPages.chaptersSize > 1) {
@@ -62,6 +89,22 @@ class ChaptersLoader @Inject constructor(
 			}
 		}
 		return true
+	}
+
+	suspend fun keepOnlyChapter(chapterId: Long) = mutex.withLock {
+		if (chapterId !in chapterPages) {
+			chapterPages.clear()
+			return@withLock
+		}
+		while (chapterPages.chaptersSize > 1) {
+			if (chapterPages.first().chapterId != chapterId) {
+				chapterPages.removeFirst()
+			} else if (chapterPages.last().chapterId != chapterId) {
+				chapterPages.removeLast()
+			} else {
+				break
+			}
+		}
 	}
 
 	@CheckResult

@@ -63,6 +63,8 @@ fun KototoroBottomNav(
     onItemReselected: (Int) -> Unit,
     railHeaderContent: (@Composable () -> Unit)? = null,
     adjacentAction: (@Composable () -> Unit)? = null,
+    showContinueReadingButton: Boolean = false,
+    onContinueReadingClick: () -> Unit = {},
 ) {
     val navState by state.collectAsState()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
@@ -199,6 +201,15 @@ fun KototoroBottomNav(
                     if (railHeaderContent != null) {
                         item {
                             railHeaderContent()
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                    if (showContinueReadingButton) {
+                        item {
+                            ContinueReadingRailButton(
+                                onClick = onContinueReadingClick,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
@@ -353,6 +364,35 @@ fun KototoroBottomNav(
                 }
             }
             adjacentAction?.invoke()
+        }
+    }
+}
+
+@Composable
+private fun ContinueReadingRailButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_read),
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

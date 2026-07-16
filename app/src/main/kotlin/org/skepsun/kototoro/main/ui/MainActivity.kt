@@ -287,6 +287,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
             val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
+            val lastReadContent by viewModel.lastReadContent.collectAsState()
             val spaceFlags by spaceFeatureFlagsRepository.flags.collectAsStateWithLifecycle()
             val spaceEnabled = spaceFlags.entitySpaceEnabled
             val spaceUiState by if (spaceEnabled) {
@@ -312,11 +313,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
-
             KototoroApp(
                 appSettings = settings,
                 navStateFlow = navStateFlow,
                 pageSaveHelper = pageSaveHelper,
+                lastReadContent = lastReadContent,
                 suggestions = suggestions,
                 onQueryChanged = ::updateSearchQuery,
                 onSearch = { query -> submitSearch(query) },

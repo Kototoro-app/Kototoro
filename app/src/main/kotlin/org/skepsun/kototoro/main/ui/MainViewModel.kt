@@ -80,6 +80,14 @@ class MainViewModel @Inject constructor(
 			initialValue = false,
 		)
 
+	val lastReadContent = historyRepository.observeLast()
+		.withErrorHandling()
+		.stateIn(
+			scope = viewModelScope + Dispatchers.Default,
+			started = SharingStarted.WhileSubscribed(5000),
+			initialValue = null,
+		)
+
 	val appUpdate = appUpdateRepository.observeAvailableUpdate()
 
 	val feedCounter = trackingRepository.observeUnreadUpdatesCount()
