@@ -10,14 +10,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -194,11 +198,14 @@ fun SpaceTransitionCurtain(
 	val fromLabel = state.fromSpaceId?.let { spaceDisplayLabel(it, from) }.orEmpty()
 	val targetLabel = state.targetSpaceId?.let { spaceDisplayLabel(it, target) }.orEmpty()
 	val description = "$fromLabel → $targetLabel"
+	val colorScheme = MaterialTheme.colorScheme
+	val isDarkTheme = colorScheme.background.luminance() < 0.5f
+	val curtainContentColor = if (isDarkTheme) Color.White else colorScheme.onSurface
 	Box(
 		modifier = modifier
 			.fillMaxSize()
 			.alpha(alpha.value)
-			.background(MaterialTheme.colorScheme.surface)
+			.background(colorScheme.surface)
 			.pointerInput(Unit) {
 				awaitPointerEventScope {
 					while (true) awaitPointerEvent()
@@ -207,20 +214,22 @@ fun SpaceTransitionCurtain(
 			.semantics { contentDescription = description },
 		contentAlignment = Alignment.Center,
 	) {
-		Column(
-			horizontalAlignment = Alignment.CenterHorizontally,
-			verticalArrangement = Arrangement.spacedBy(12.dp),
-			modifier = Modifier.padding(32.dp),
-		) {
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(16.dp),
-				verticalAlignment = Alignment.CenterVertically,
+		CompositionLocalProvider(LocalContentColor provides curtainContentColor) {
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				verticalArrangement = Arrangement.spacedBy(12.dp),
+				modifier = Modifier.padding(32.dp),
 			) {
-				state.fromSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = from) }
-				Text(text = "→", style = MaterialTheme.typography.headlineSmall)
-				state.targetSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = target) }
+				Row(
+					horizontalArrangement = Arrangement.spacedBy(16.dp),
+					verticalAlignment = Alignment.CenterVertically,
+				) {
+					state.fromSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = from) }
+					Text(text = "→", style = MaterialTheme.typography.headlineSmall)
+					state.targetSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = target) }
+				}
+				Text(text = description, style = MaterialTheme.typography.titleMedium)
 			}
-			Text(text = description, style = MaterialTheme.typography.titleMedium)
 		}
 	}
 }

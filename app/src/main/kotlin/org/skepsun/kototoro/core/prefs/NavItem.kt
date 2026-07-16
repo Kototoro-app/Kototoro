@@ -6,7 +6,7 @@ import androidx.annotation.Keep
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.R
 
-const val MAX_MAIN_NAV_ITEM_COUNT = 4
+const val MAX_MAIN_NAV_ITEM_COUNT = 5
 
 internal fun Iterable<NavItem>.limitMainNavigationItems(): List<NavItem> =
 	distinct().take(MAX_MAIN_NAV_ITEM_COUNT)

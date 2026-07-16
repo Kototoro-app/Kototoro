@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -106,9 +107,6 @@ fun KototoroBottomNav(
 
     val targetAlpha = 0.84f
 
-    val horizontalPadding by androidx.compose.animation.core.animateDpAsState(
-        if (isFloating && !useNavigationRail) 12.dp else 0.dp,
-    )
     val verticalPadding by androidx.compose.animation.core.animateDpAsState(
         if (isFloating && !useNavigationRail) 16.dp else 0.dp,
     )
@@ -133,7 +131,7 @@ fun KototoroBottomNav(
             } else {
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+                    .padding(horizontal = if (isFloating) 12.dp else 0.dp, vertical = verticalPadding)
                     .run {
                         if (isFloating) {
                             windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
@@ -143,21 +141,16 @@ fun KototoroBottomNav(
                     }
             },
         )
+    val floatingNavModifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = verticalPadding)
+        .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
 
     val currentExplicitHeight by androidx.compose.animation.core.animateDpAsState(
         if (isFloating && !useNavigationRail) (navFloatingHeight + 4).dp else navHeight.dp
     )
     val nonFloatingContentHorizontalPadding = 6.dp
     val nonFloatingTopPadding = 4.dp
-    val floatingNavItemMinWidth = 48.dp
-    val floatingNavItemSpacing = 5.8.dp
-    val floatingNavHorizontalPadding = 6.2.dp
-    val floatingMinWidth = remember(activeItems.size) {
-        val itemCount = activeItems.size.coerceAtLeast(1)
-        (floatingNavItemMinWidth * itemCount) +
-            (floatingNavItemSpacing * (itemCount - 1)) +
-            (floatingNavHorizontalPadding * 2)
-    }.coerceAtLeast(168.dp)
     val railWidth = if (isFloating) {
         (navFloatingHeight + 4).dp.coerceIn(60.dp, 160.dp)
     } else {
@@ -250,19 +243,28 @@ fun KototoroBottomNav(
             }
         }
     } else if (isFloating) {
-        Box(
-            modifier = navBarModifier,
+        BoxWithConstraints(
+            modifier = floatingNavModifier,
             contentAlignment = Alignment.Center,
         ) {
+            val layoutSpec = remember(maxWidth, activeItems.size, adjacentAction != null, showSelectedLabels) {
+                resolveBottomNavLayout(
+                    availableWidth = maxWidth,
+                    itemCount = activeItems.size,
+                    fabWidth = 56.dp.takeIf { adjacentAction != null },
+                    showLabels = showSelectedLabels,
+                    isExpressivePill = isExpressivePillEnabled,
+                )
+            }
             Row(
-                modifier = Modifier.wrapContentWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .padding(horizontal = layoutSpec.outerHorizontalPadding),
+                horizontalArrangement = Arrangement.spacedBy(layoutSpec.fabGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 GlassBottomBarContainer(
-                    modifier = Modifier
-                        .widthIn(min = floatingMinWidth, max = 520.dp)
-                        .wrapContentWidth(),
+                    modifier = Modifier.wrapContentWidth(),
                     style = navContainerStyle,
                 ) {
                     FloatingBottomNavRow(
@@ -270,15 +272,17 @@ fun KototoroBottomNav(
                         selectedItemId = navState.selectedItemId,
                         badges = navState.badges,
                         clickPulses = clickPulses,
-                        showSelectedLabels = showSelectedLabels,
+                        showSelectedLabels = layoutSpec.showLabels,
                         useExpressivePill = isExpressivePillEnabled,
-                        itemSpacing = floatingNavItemSpacing,
+                        itemSpacing = layoutSpec.itemSpacing,
+                        labelScale = layoutSpec.labelScale,
+                        labelMaxWidth = layoutSpec.labelMaxWidth,
                         onItemSelected = onItemSelected,
                         onItemReselected = onItemReselected,
                         modifier = Modifier
                             .wrapContentWidth()
                             .height(currentExplicitHeight)
-                            .padding(horizontal = floatingNavHorizontalPadding),
+                            .padding(horizontal = layoutSpec.horizontalPadding),
                     )
                 }
                 adjacentAction?.invoke()
@@ -362,6 +366,8 @@ private fun FloatingBottomNavRow(
     showSelectedLabels: Boolean,
     useExpressivePill: Boolean,
     itemSpacing: Dp,
+    labelScale: Float,
+    labelMaxWidth: Dp?,
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -434,9 +440,16 @@ private fun FloatingBottomNavRow(
                             ) {
                                 Text(
                                     text = stringResource(item.title),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontSize = MaterialTheme.typography.labelMedium.fontSize * labelScale,
+                                    ),
                                     maxLines = 1,
-                                    modifier = Modifier.padding(start = 8.dp),
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .then(
+                                            labelMaxWidth?.let { Modifier.widthIn(max = it) } ?: Modifier,
+                                        ),
                                 )
                             }
                         }

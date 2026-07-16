@@ -1598,7 +1598,6 @@ fun KototoroApp(
                         SpaceSwitcherFab(
                             activeSpaceId = spaceUiState.activeSpaceId,
                             activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
-                            expanded = false,
                             onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
                             modifier = fabModifier,
                         )

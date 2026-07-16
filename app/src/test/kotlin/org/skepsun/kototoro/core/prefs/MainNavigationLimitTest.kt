@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 class MainNavigationLimitTest {
 
 	@Test
-	fun `main navigation keeps at most four distinct destinations`() {
+	fun `main navigation keeps at most five distinct destinations`() {
 		listOf(
 			NavItem.HOME,
 			NavItem.FAVORITES,
@@ -19,6 +19,7 @@ class MainNavigationLimitTest {
 			NavItem.FAVORITES,
 			NavItem.EXPLORE,
 			NavItem.HISTORY,
+			NavItem.FEED,
 		)
 	}
 }

@@ -16,6 +16,8 @@ import androidx.activity.viewModels
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
+import androidx.core.view.doOnNextLayout
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
@@ -274,6 +276,7 @@ class ReaderActivity :
         }
         viewModel.isZoomControlsEnabled.observe(this) {
             viewBinding.zoomControl.isVisible = it
+            updateSpaceSwitcherFabPosition()
         }
         settings.observeAsFlow(AppSettings.KEY_READER_TRANSLATION_ENABLED) {
             isReaderTranslationEnabled
@@ -377,6 +380,7 @@ class ReaderActivity :
 
     override fun onVisibilityChanged(v: View, visibility: Int) {
         updateScrollTimerButton()
+        updateSpaceSwitcherFabPosition()
     }
 
     override fun onZoomIn() {
@@ -630,6 +634,32 @@ class ReaderActivity :
             visible = isUiVisible,
             hideWithControlsTransition = !isUiVisible && isAnimationsEnabled,
         )
+        updateSpaceSwitcherFabPosition()
+    }
+
+    private fun updateSpaceSwitcherFabPosition() {
+        val root = viewBinding.root
+        if (!root.isLaidOut || root.height <= 0) {
+            root.doOnLayout { updateSpaceSwitcherFabPosition() }
+            return
+        }
+        val fab = root.findViewById<View>(R.id.immersive_space_switcher_fab) ?: return
+        val bottomObstruction = listOfNotNull(
+            viewBinding.toolbarDocked,
+            viewBinding.zoomControl,
+            viewBinding.buttonTimer,
+            viewBinding.timerControl,
+        ).asSequence()
+            .filter { it.isVisible && it !== fab }
+            .map { root.height - it.top }
+            .maxOrNull()
+            ?.coerceAtLeast(0)
+            ?: 0
+        val gap = resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
+        fab.updateLayoutParams<CoordinatorLayout.LayoutParams> {
+            bottomMargin = bottomObstruction + gap
+        }
+        fab.bringToFront()
     }
 
     override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
@@ -665,6 +695,9 @@ class ReaderActivity :
             systemBars.right,
             viewBinding.toolbarDocked?.takeIf { it.isVisible }?.height ?: systemBars.bottom,
         )
+        viewBinding.root.doOnNextLayout {
+            updateSpaceSwitcherFabPosition()
+        }
         return WindowInsetsCompat.Builder(insets)
             .setInsets(WindowInsetsCompat.Type.systemBars(), innerInsets)
             .build()
@@ -816,6 +849,7 @@ class ReaderActivity :
             val transition = Fade().addTarget(button)
             TransitionManager.beginDelayedTransition(viewBinding.root, transition)
             button.isVisible = isButtonVisible
+            updateSpaceSwitcherFabPosition()
         }
     }
 

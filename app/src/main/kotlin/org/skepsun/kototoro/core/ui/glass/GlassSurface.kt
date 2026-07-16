@@ -166,6 +166,7 @@ fun GlassSurface(
     shape: Shape = GlassDefaults.shape,
     allowRuntimeHaze: Boolean = true,
     dialogSurface: Boolean = false,
+    expandHazeLayerBounds: Boolean = !dialogSurface,
     visualTreatment: GlassVisualTreatment = GlassVisualTreatment.Standard,
     componentRole: GlassComponentRole = defaultGlassComponentRole(
         dialogSurface = dialogSurface,
@@ -318,7 +319,7 @@ fun GlassSurface(
                             }
                         }
                         clipToAreasBounds = true
-                        expandLayerBounds = !dialogSurface
+                        expandLayerBounds = expandHazeLayerBounds
                         forceInvalidateOnPreDraw = true
                     }
             } else {
