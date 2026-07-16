@@ -55,3 +55,9 @@ reasonix.toml
 /.vscode
 .pi-weave
 /models/
+
+# Trellis developer-local state
+/.trellis/workspace/
+/.trellis/.runtime/
+/.trellis/.developer
+/.trellis/.current-task
