@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,7 +19,6 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -131,8 +129,6 @@ fun SpaceSwitcherSheet(
 	onAction: (SpaceAction) -> Unit,
 	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
 	onResume: (SpaceId) -> Unit = {},
-	mediaUniverseState: MediaUniverseUiState = MediaUniverseUiState(),
-	onMediaUniverseContentClick: (org.skepsun.kototoro.parsers.model.Content) -> Unit = {},
 ) {
 	if (!state.switcherVisible) return
 	ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
@@ -160,43 +156,6 @@ fun SpaceSwitcherSheet(
 							onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
 						)
 					}
-				}
-			}
-			item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-			item {
-				Text(
-					text = stringResource(R.string.media_universe_title),
-					style = MaterialTheme.typography.titleMedium,
-					modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-				)
-			}
-			when {
-				mediaUniverseState.loading -> item {
-					Box(
-						modifier = Modifier
-							.fillMaxWidth()
-							.padding(16.dp),
-						contentAlignment = Alignment.Center,
-					) {
-						CircularProgressIndicator(modifier = Modifier.size(32.dp))
-					}
-				}
-				mediaUniverseState.items.isEmpty() -> item {
-					Text(
-						text = stringResource(R.string.media_universe_empty),
-						style = MaterialTheme.typography.bodyMedium,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-						modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-					)
-				}
-				else -> items(
-					items = mediaUniverseState.items,
-					key = { item -> "${item.content.source.name}:${item.content.id}" },
-				) { item ->
-					MediaUniverseRow(
-						item = item,
-						onClick = { onMediaUniverseContentClick(item.content) },
-					)
 				}
 			}
 			if (state.switchInProgress) {

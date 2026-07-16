@@ -108,6 +108,52 @@ class SpaceNavigationSessionViewModelTest {
 		viewModel.uiState.value.sessions[BuiltInSpaces.Manga] shouldBe latest
 	}
 
+	@Test
+	fun `unchanged navigation snapshot is not saved again when only timestamps differ`() = runTest {
+		val initial = snapshot(BuiltInSpaces.Manga, "home")
+		val repository = FakeSessionRepository(mapOf(BuiltInSpaces.Manga to initial))
+		val viewModel = SpaceNavigationSessionViewModel(
+			repository,
+			PassThroughValidator,
+			TestSpaceCatalogRepository(),
+			FakeSessionFlagsRepository(enabled = true),
+		)
+		advanceUntilIdle()
+
+		viewModel.save(initial.copy(lastAccessed = 2L, updatedAt = 2L))
+		advanceUntilIdle()
+
+		repository.saved shouldBe emptyList()
+	}
+
+	@Test
+	fun `unchanged navigation snapshot is coalesced while the first save is running`() = runTest {
+		val firstSaveStarted = CompletableDeferred<Unit>()
+		val releaseFirstSave = CompletableDeferred<Unit>()
+		val repository = FakeSessionRepository(
+			onSave = {
+				firstSaveStarted.complete(Unit)
+				releaseFirstSave.await()
+			},
+		)
+		val viewModel = SpaceNavigationSessionViewModel(
+			repository,
+			PassThroughValidator,
+			TestSpaceCatalogRepository(),
+			FakeSessionFlagsRepository(enabled = true),
+		)
+		advanceUntilIdle()
+		val snapshot = snapshot(BuiltInSpaces.Manga, "home")
+
+		viewModel.save(snapshot)
+		firstSaveStarted.await()
+		viewModel.save(snapshot.copy(lastAccessed = 2L, updatedAt = 2L))
+		releaseFirstSave.complete(Unit)
+		advanceUntilIdle()
+
+		repository.saved shouldBe listOf(snapshot)
+	}
+
 	private fun snapshot(spaceId: SpaceId, selected: String) = SpaceSessionSnapshot(
 		spaceId = spaceId,
 		selectedTopLevel = selected,

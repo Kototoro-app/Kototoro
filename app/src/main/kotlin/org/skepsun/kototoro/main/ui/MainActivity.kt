@@ -67,9 +67,9 @@ import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSessionRegistry
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
+import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
-import org.skepsun.kototoro.space.ui.MediaUniverseViewModel
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.space.data.SpaceSourcePresetController
 import org.skepsun.kototoro.tracker.work.TrackWorker
@@ -95,6 +95,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var immersiveSpaceSessionRegistry: ImmersiveSpaceSessionRegistry
+
+    @Inject
+    lateinit var spaceFeatureFlagsRepository: SpaceFeatureFlagsRepository
 
     override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
         val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
@@ -123,7 +126,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
     private val spaceResumeViewModel by viewModels<SpaceResumeViewModel>()
-    private val mediaUniverseViewModel by viewModels<MediaUniverseViewModel>()
 
     @Inject
     lateinit var pageSaveHelperFactory: org.skepsun.kototoro.reader.ui.PageSaveHelper.Factory
@@ -277,7 +279,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val spaceUiState by spaceViewModel.uiState.collectAsStateWithLifecycle()
             val spaceNavigationSessionUiState by spaceNavigationSessionViewModel.uiState.collectAsStateWithLifecycle()
             val spaceResumeUiState by spaceResumeViewModel.uiState.collectAsStateWithLifecycle()
-            val mediaUniverseUiState by mediaUniverseViewModel.uiState.collectAsStateWithLifecycle()
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
@@ -303,16 +304,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 spaceUiState = spaceUiState,
                 onSpaceAction = { action ->
                     when (action) {
-                        SpaceAction.OpenSwitcher -> {
-                            mediaUniverseViewModel.open()
-                            spaceViewModel.onAction(action)
-                        }
-                        SpaceAction.DismissSwitcher -> {
-                            mediaUniverseViewModel.dismiss()
-                            spaceViewModel.onAction(action)
-                        }
+                        SpaceAction.OpenSwitcher,
+                        SpaceAction.DismissSwitcher -> spaceViewModel.onAction(action)
                         is SpaceAction.SelectSpace -> {
-                            mediaUniverseViewModel.dismiss()
                             selectSpaceAndRestoreImmersiveSession(action.spaceId)
                         }
                     }
@@ -325,27 +319,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 spaceResumeUiState = spaceResumeUiState,
                 onSpaceResume = { spaceId ->
                     spaceViewModel.onAction(SpaceAction.DismissSwitcher)
-                    mediaUniverseViewModel.dismiss()
                     if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
                         selectSpaceAndRestoreImmersiveSession(spaceId)
                     } else {
                         spaceResumeViewModel.resume(spaceId)
-                    }
-                },
-                mediaUniverseUiState = mediaUniverseUiState,
-                onMediaUniverseContentClick = { content ->
-                    mediaUniverseViewModel.dismiss()
-                    spaceViewModel.onAction(SpaceAction.DismissSwitcher)
-                    resolveDetailsOriginForContent(content) { origin ->
-                        when (origin) {
-                            is DetailsOrigin.EntityGraph -> {
-                                router.openEntityDetails(
-                                    entityId = origin.entityId,
-                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                )
-                            }
-                            else -> router.openResolvedDetails(content)
-                        }
                     }
                 },
                 onContentSuggestionClick = { content ->
@@ -621,6 +598,19 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         }
     }
 
+    override fun onPostResume() {
+        super.onPostResume()
+        val activeSpaceId = spaceRepository.activeSpace.value
+        val shouldRestore = shouldRestoreImmersiveSessionFromMain(
+            immersiveSwitchEnabled = spaceFeatureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled,
+            hasActiveSession = immersiveSpaceSessionRegistry.hasActiveSession(activeSpaceId),
+            transitionSuppressionTarget = immersiveSpaceSessionRegistry.mainTransitionSuppressionTarget.value,
+        )
+        if (shouldRestore) {
+            immersiveSpaceSessionRegistry.restore(activeSpaceId, this)
+        }
+    }
+
     private fun submitSearch(query: String, kind: SearchKind = SearchKind.SIMPLE) {
         val trimmedQuery = query.trim()
         if (trimmedQuery.isEmpty()) {
@@ -814,6 +804,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     private fun adjustLayoutForFoldableState() { }
 }
+
+internal fun shouldRestoreImmersiveSessionFromMain(
+    immersiveSwitchEnabled: Boolean,
+    hasActiveSession: Boolean,
+    transitionSuppressionTarget: SpaceId?,
+): Boolean = immersiveSwitchEnabled && hasActiveSession && transitionSuppressionTarget == null
 
 private fun ContentType?.toSearchContentKinds(): Set<SearchContentKind> = when (this) {
     ContentType.MANGA -> setOf(SearchContentKind.MANGA)

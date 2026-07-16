@@ -59,7 +59,6 @@ import org.skepsun.kototoro.databinding.ActivityVideoPlayerBinding
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
-import org.skepsun.kototoro.core.nav.router
 import androidx.core.net.toUri
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.reader.ui.ReaderState
@@ -614,7 +613,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 if (isScreenLocked) SpaceSwitchAvailability.UNAVAILABLE else SpaceSwitchAvailability.SAVE_AND_SWITCH
             },
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
-            onMediaUniverseContentClick = { content -> router.openResolvedDetails(content) },
         )
         findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(
             R.id.immersive_space_switcher_fab,

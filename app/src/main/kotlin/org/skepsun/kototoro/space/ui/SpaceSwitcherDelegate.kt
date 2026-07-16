@@ -48,13 +48,15 @@ import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
 import org.skepsun.kototoro.space.domain.SpaceSwitchResult
 import javax.inject.Inject
 
+internal const val EXTRA_IMMERSIVE_SESSION_SPACE_ID =
+	"org.skepsun.kototoro.extra.IMMERSIVE_SESSION_SPACE_ID"
+
 class SpaceSwitcherDelegate @Inject constructor(
 	private val coordinator: SpaceSwitchCoordinator,
 	private val spaceRepository: SpaceRepository,
 	private val featureFlagsRepository: SpaceFeatureFlagsRepository,
 	private val catalogRepository: SpaceCatalogRepository,
 	private val resumeStateSource: SpaceResumeStateSource,
-	private val mediaUniverseStateSource: MediaUniverseStateSource,
 	private val immersiveSessionRegistry: ImmersiveSpaceSessionRegistry,
 ) {
 	private var activity: AppCompatActivity? = null
@@ -62,7 +64,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var origin = SpaceSwitchOrigin.READER
 	private var availabilityProvider: () -> SpaceSwitchAvailability = { SpaceSwitchAvailability.UNAVAILABLE }
 	private var progressFlusher = SpaceProgressFlusher {}
-	private var onMediaUniverseContentClick: (org.skepsun.kototoro.parsers.model.Content) -> Unit = {}
 	private var featureEnabled = false
 	private var controlsVisible = false
 	private var hideWithControlsTransition = false
@@ -76,16 +77,17 @@ class SpaceSwitcherDelegate @Inject constructor(
 		origin: SpaceSwitchOrigin,
 		availabilityProvider: () -> SpaceSwitchAvailability,
 		progressFlusher: SpaceProgressFlusher,
-		onMediaUniverseContentClick: (org.skepsun.kototoro.parsers.model.Content) -> Unit = {},
 	) {
 		this.activity = activity
 		this.snackbarAnchor = snackbarAnchor
 		this.origin = origin
 		this.availabilityProvider = availabilityProvider
 		this.progressFlusher = progressFlusher
-		this.onMediaUniverseContentClick = onMediaUniverseContentClick
 		launchOrigin = ImmersiveSpaceSwitcherTransition.consumeOrigin(activity.intent)
-		val sessionSpaceId = spaceRepository.activeSpace.value
+		val sessionSpaceId = immersiveSessionSpaceId(
+			rawSpaceId = activity.intent.getStringExtra(EXTRA_IMMERSIVE_SESSION_SPACE_ID),
+			fallback = spaceRepository.activeSpace.value,
+		)
 		immersiveSessionRegistry.register(sessionSpaceId, activity)
 		activity.lifecycle.addObserver(
 			object : DefaultLifecycleObserver {
@@ -161,7 +163,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 		val activity = activity ?: return
 		if (!featureEnabled || availabilityProvider() == SpaceSwitchAvailability.UNAVAILABLE) return
 		if (switcherOverlay != null) return
-		mediaUniverseStateSource.loadIfNeeded()
 		val overlay = ComposeView(activity).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
 		}
@@ -179,7 +180,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 				val switchState by coordinator.state.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
 				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
-				val mediaContentState by mediaUniverseStateSource.state.collectAsState()
 				SpaceSwitcherSheet(
 					state = SpaceUiState(
 						activeSpaceId = activeSpaceId,
@@ -203,15 +203,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 						} else {
 							requestSwitch(target, resumeReading = true)
 						}
-					},
-					mediaUniverseState = MediaUniverseUiState(
-						visible = true,
-						loading = mediaContentState.loading,
-						items = mediaContentState.items,
-					),
-					onMediaUniverseContentClick = { content ->
-						dismissSwitcher()
-						onMediaUniverseContentClick(content)
 					},
 				)
 			}
@@ -348,6 +339,9 @@ private data class SwitcherChromeState(
 
 internal fun resumeSpaceExtraValue(targetSpaceId: SpaceId, resumeReading: Boolean): String? =
 	targetSpaceId.value.takeIf { resumeReading }
+
+internal fun immersiveSessionSpaceId(rawSpaceId: String?, fallback: SpaceId): SpaceId =
+	rawSpaceId?.takeIf(String::isNotBlank)?.let(::SpaceId) ?: fallback
 
 internal fun shouldRestoreImmersiveSpaceOnResume(
 	sessionSpaceId: SpaceId,

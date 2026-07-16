@@ -115,6 +115,7 @@ import org.skepsun.kototoro.parsers.util.isNullOrEmpty
 import org.skepsun.kototoro.parsers.util.mapToArray
 import org.skepsun.kototoro.reader.novel.NovelReaderActivity
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSwitcherTransition
+import org.skepsun.kototoro.space.ui.EXTRA_IMMERSIVE_SESSION_SPACE_ID
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ContentDataRepository
@@ -180,9 +181,19 @@ class AppRouter private constructor(
         ).spaceFeatureFlagsRepository
     }
 
+    private val spaceRepository: org.skepsun.kototoro.space.domain.SpaceRepository by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(
+            checkNotNull(contextOrNull()),
+        ).spaceRepository
+    }
+
     private fun prepareImmersiveIntent(intent: Intent): Intent {
         ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(intent)
-        val flags = immersiveTaskFlags(spaceFeatureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled)
+        val immersiveSwitchEnabled = spaceFeatureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled
+        val flags = immersiveTaskFlags(immersiveSwitchEnabled)
+        if (immersiveSwitchEnabled) {
+            intent.putExtra(EXTRA_IMMERSIVE_SESSION_SPACE_ID, spaceRepository.activeSpace.value.value)
+        }
         if (flags != 0) {
             intent.addFlags(flags)
         }

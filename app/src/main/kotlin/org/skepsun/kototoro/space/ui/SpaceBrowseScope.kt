@@ -24,6 +24,9 @@ import javax.inject.Singleton
 
 val LocalBrowseSpaceId = staticCompositionLocalOf<SpaceId?> { null }
 
+internal fun browseViewModelKey(spaceId: SpaceId?): String =
+	"explore-space:${spaceId?.value ?: "global"}"
+
 @Singleton
 class SpaceBrowseScope @Inject constructor(
 	private val spaceRepository: SpaceRepository,

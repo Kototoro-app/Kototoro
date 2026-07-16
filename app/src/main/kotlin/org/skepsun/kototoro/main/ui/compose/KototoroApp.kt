@@ -4,12 +4,7 @@ import android.app.Activity
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.togetherWith
 import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -100,7 +95,6 @@ import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
 import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
 import org.skepsun.kototoro.space.ui.SpaceUiState
-import org.skepsun.kototoro.space.ui.MediaUniverseUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -417,8 +411,6 @@ fun KototoroApp(
     onSpaceTransitionSuppressionConsumed: (SpaceId) -> Unit = {},
     spaceResumeUiState: SpaceResumeUiState = SpaceResumeUiState(),
     onSpaceResume: (SpaceId) -> Unit = {},
-    mediaUniverseUiState: MediaUniverseUiState = MediaUniverseUiState(),
-    onMediaUniverseContentClick: (Content) -> Unit = {},
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -528,7 +520,6 @@ fun KototoroApp(
     var topBarHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavOffset by chromeScrollState.bottomNavOffset
-    var totalContentScrollOffset by chromeScrollState.totalContentScrollOffset
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
     var isSearchOverlayVisible by rememberSaveable { mutableStateOf(false) }
     var isSearchOverlayMounted by rememberSaveable { mutableStateOf(false) }
@@ -577,7 +568,8 @@ fun KototoroApp(
     ) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                totalContentScrollOffset = (totalContentScrollOffset + available.y).coerceAtMost(0f)
+                chromeScrollState.totalContentScrollOffset.floatValue =
+                    (chromeScrollState.totalContentScrollOffset.floatValue + available.y).coerceAtMost(0f)
                 if (isSearchOverlayMounted || isLandscapeRailInteracting) {
                     return androidx.compose.ui.geometry.Offset.Zero
                 }
@@ -601,7 +593,7 @@ fun KototoroApp(
         if (isSearchOverlayMounted) {
             topAppBarState.heightOffset = 0f
             bottomNavOffset = 0f
-            totalContentScrollOffset = 0f
+            chromeScrollState.totalContentScrollOffset.floatValue = 0f
             keepTabsExpandedByScrollDirection = false
         }
     }
@@ -977,7 +969,7 @@ fun KototoroApp(
             if (!isChromeOffsetFromCurrentDestination) {
                 topAppBarState.heightOffset = 0f
                 bottomNavOffset = 0f
-                totalContentScrollOffset = 0f
+                chromeScrollState.totalContentScrollOffset.floatValue = 0f
                 keepTabsExpandedByScrollDirection = false
             }
             offsetDestinationRoute = currentDestinationRoute
@@ -1139,11 +1131,6 @@ fun KototoroApp(
             val isDarkTheme = isSystemInDarkTheme()
             val immersiveBaseColor = if (isDarkTheme) Color.Black else Color.White
             val immersiveTransparent = Color.Transparent
-            val topGradientAlpha = if (topBarHeightPx > 0) {
-                (-totalContentScrollOffset / topBarHeightPx.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
             val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
             val topImmersiveHeight = with(density) {
                 (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
@@ -1165,7 +1152,14 @@ fun KototoroApp(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()
-                                .graphicsLayer { alpha = topGradientAlpha },
+                                .graphicsLayer {
+                                    alpha = if (topBarHeightPx > 0) {
+                                        (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat())
+                                            .coerceIn(0f, 1f)
+                                    } else {
+                                        0f
+                                    }
+                                },
                             height = topImmersiveHeight,
                             colors = listOf(
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
@@ -1384,122 +1378,90 @@ fun KototoroApp(
                                 }
                             }
                             spaceSaveableStateHolder.SaveableStateProvider(renderedSpaceId.value) {
-                                key(renderedSpaceId.value) {
-                                    CompositionLocalProvider(
-                                        LocalBrowseSpaceId provides renderedSpaceId.takeIf {
-                                            spaceUiState.switcherEnabled
+                                CompositionLocalProvider(
+                                    LocalBrowseSpaceId provides renderedSpaceId.takeIf {
+                                        spaceUiState.switcherEnabled
+                                    },
+                                ) {
+                                    AppNavGraph(
+                                        navController = renderedNavController,
+                                        mainNavState = renderedNavigationState.mainNavState,
+                                        isLandscapeNavigation = isLandscapeNavigation,
+                                        startDestination = startDestination,
+                                        contentPadding = contentPadding,
+                                        bottomBarOffsetPx = effectiveBottomNavOffset,
+                                        bottomBarHeightPx = bottomNavHeightPx,
+                                        pageSaveHelper = pageSaveHelper,
+                                        onDetailsTransitionRequested = {
+                                            isDetailsChromeTransitionPending = true
+                                            heroTransitionPhase = HeroTransitionPhase.EnteringDetails
+                                            lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
                                         },
-                                    ) {
-                                        AppNavGraph(
-                                            navController = renderedNavController,
-                                            mainNavState = renderedNavigationState.mainNavState,
-                                            isLandscapeNavigation = isLandscapeNavigation,
-                                            startDestination = startDestination,
-                                            contentPadding = contentPadding,
-                                            bottomBarOffsetPx = effectiveBottomNavOffset,
-                                            bottomBarHeightPx = bottomNavHeightPx,
-                                            pageSaveHelper = pageSaveHelper,
-                                            onDetailsTransitionRequested = {
+                                        onDetailsReturnTransitionRequested = {
+                                            if (effectiveSharedElementTransitionsEnabled) {
                                                 isDetailsChromeTransitionPending = true
-                                                heroTransitionPhase = HeroTransitionPhase.EnteringDetails
+                                                heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
                                                 lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                            },
-                                            onDetailsReturnTransitionRequested = {
-                                                if (effectiveSharedElementTransitionsEnabled) {
-                                                    isDetailsChromeTransitionPending = true
-                                                    heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
-                                                    lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                                }
-                                            },
-                                            onDetailsBottomPanelStateChanged = { expansion, obstruction ->
-                                                if (renderedSpaceId == navigationSpaceId) {
-                                                    detailsBottomPanelExpansion = expansion
-                                                    detailsBottomObstruction = obstruction
-                                                }
-                                            },
-                                            onExploreSourceSelectionTopBarChanged = { overrideState ->
-                                                when (overrideState) {
-                                                    is RouteScopedTopBarOverrideState -> {
-                                                        val ownerRoute = overrideState.ownerRoute
-                                                        val state = overrideState.state
-                                                        if (state == null) {
-                                                            if (ownerRoute in routeTopBarOverrideStates) {
-                                                                routeTopBarOverrideStates.remove(ownerRoute)
-                                                            }
-                                                        } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
-                                                            routeTopBarOverrideStates[ownerRoute] = state
+                                            }
+                                        },
+                                        onDetailsBottomPanelStateChanged = { expansion, obstruction ->
+                                            if (renderedSpaceId == navigationSpaceId) {
+                                                detailsBottomPanelExpansion = expansion
+                                                detailsBottomObstruction = obstruction
+                                            }
+                                        },
+                                        onExploreSourceSelectionTopBarChanged = { overrideState ->
+                                            when (overrideState) {
+                                                is RouteScopedTopBarOverrideState -> {
+                                                    val ownerRoute = overrideState.ownerRoute
+                                                    val state = overrideState.state
+                                                    if (state == null) {
+                                                        if (ownerRoute in routeTopBarOverrideStates) {
+                                                            routeTopBarOverrideStates.remove(ownerRoute)
                                                         }
-                                                    }
-                                                    else -> {
-                                                        if (globalTopBarOverrideState !== overrideState) {
-                                                            globalTopBarOverrideState = overrideState
-                                                        }
+                                                    } else if (routeTopBarOverrideStates[ownerRoute] !== state) {
+                                                        routeTopBarOverrideStates[ownerRoute] = state
                                                     }
                                                 }
-                                            },
-                                            onContextualMenuActionsChanged = { state ->
-                                                if (state.actions.isEmpty()) {
-                                                    routeContextualMenuActions.remove(state.ownerRoute)
-                                                } else {
-                                                    routeContextualMenuActions[state.ownerRoute] = state.actions
-                                                }
-                                            },
-                                            onOpenSearch = { request ->
-                                                val route = SearchNavigation.createRoute(request)
-                                                if (renderedNavController.currentDestination?.hasRoute<SearchRoute>() == true) {
-                                                    renderedNavController.navigate(route) {
-                                                        popUpTo<SearchRoute> { inclusive = true }
-                                                        launchSingleTop = true
-                                                    }
-                                                } else {
-                                                    renderedNavController.navigate(route) {
-                                                        launchSingleTop = true
+                                                else -> {
+                                                    if (globalTopBarOverrideState !== overrideState) {
+                                                        globalTopBarOverrideState = overrideState
                                                     }
                                                 }
-                                            },
-                                            mainShellChrome = {
-                                                if (renderedSpaceId == navigationSpaceId) {
-                                                    mainShellChrome()
+                                            }
+                                        },
+                                        onContextualMenuActionsChanged = { state ->
+                                            if (state.actions.isEmpty()) {
+                                                routeContextualMenuActions.remove(state.ownerRoute)
+                                            } else {
+                                                routeContextualMenuActions[state.ownerRoute] = state.actions
+                                            }
+                                        },
+                                        onOpenSearch = { request ->
+                                            val route = SearchNavigation.createRoute(request)
+                                            if (renderedNavController.currentDestination?.hasRoute<SearchRoute>() == true) {
+                                                renderedNavController.navigate(route) {
+                                                    popUpTo<SearchRoute> { inclusive = true }
+                                                    launchSingleTop = true
                                                 }
-                                            },
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    }
+                                            } else {
+                                                renderedNavController.navigate(route) {
+                                                    launchSingleTop = true
+                                                }
+                                            }
+                                        },
+                                        mainShellChrome = {
+                                            if (renderedSpaceId == navigationSpaceId) {
+                                                mainShellChrome()
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
                                 }
                             }
                         }
                         if (isActiveNavigationReady) {
-                            AnimatedContent(
-                                targetState = navigationSpaceId,
-                                transitionSpec = {
-                                    if (
-                                        spaceMotionMode == SpaceMotionMode.DISABLED ||
-                                        targetState == spaceTransitionSuppressionTarget
-                                    ) {
-                                        EnterTransition.None togetherWith ExitTransition.None
-                                    } else {
-                                        val initialIndex = spaceUiState.spaces.indexOfFirst { it.id == initialState }
-                                        val targetIndex = spaceUiState.spaces.indexOfFirst { it.id == targetState }
-                                        val direction = if (targetIndex >= initialIndex) {
-                                            AnimatedContentTransitionScope.SlideDirection.Left
-                                        } else {
-                                            AnimatedContentTransitionScope.SlideDirection.Right
-                                        }
-                                        val duration = if (spaceMotionMode == SpaceMotionMode.FULL) {
-                                            SpaceMotion.NavigationSlideMillis
-                                        } else {
-                                            SpaceMotion.ReducedNavigationSlideMillis
-                                        }
-                                        slideIntoContainer(direction, tween(duration)) togetherWith
-                                            slideOutOfContainer(direction, tween(duration))
-                                    }
-                                },
-                                contentKey = { it.value },
-                                label = "space_navigation",
-                                modifier = Modifier.fillMaxSize(),
-                            ) { renderedSpaceId ->
-                                renderSpaceNavigation(renderedSpaceId)
-                            }
+                            renderSpaceNavigation(navigationSpaceId)
                         }
                     }
                 }
@@ -1611,8 +1573,6 @@ fun KototoroApp(
                     onAction = onSpaceAction,
                     resumeItems = spaceResumeUiState.items,
                     onResume = onSpaceResume,
-                    mediaUniverseState = mediaUniverseUiState,
-                    onMediaUniverseContentClick = onMediaUniverseContentClick,
                 )
 
                 if (isSearchOverlayMounted) {

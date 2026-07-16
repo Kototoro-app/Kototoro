@@ -41,6 +41,7 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 	private val saveMutex = Mutex()
 	private val saveGeneration = AtomicLong(0L)
 	private val latestSaveGeneration = ConcurrentHashMap<SpaceId, Long>()
+	private val latestRequestedSnapshots = ConcurrentHashMap<SpaceId, SpaceSessionSnapshot>()
 
 	private val mutableUiState = MutableStateFlow(
 		SpaceNavigationSessionUiState(
@@ -63,6 +64,9 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 
 	fun save(snapshot: SpaceSessionSnapshot) {
 		if (!uiState.value.enabled || !uiState.value.restorationReady) return
+		val previous = latestRequestedSnapshots[snapshot.spaceId] ?: uiState.value.sessions[snapshot.spaceId]
+		if (previous?.hasSameNavigationState(snapshot) == true) return
+		latestRequestedSnapshots[snapshot.spaceId] = snapshot
 		val generation = saveGeneration.incrementAndGet()
 		latestSaveGeneration[snapshot.spaceId] = generation
 		viewModelScope.launch {
@@ -74,6 +78,10 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 							state.copy(sessions = state.sessions + (snapshot.spaceId to snapshot))
 						}
 					}
+				}.onFailure {
+					if (latestSaveGeneration[snapshot.spaceId] == generation) {
+						latestRequestedSnapshots.remove(snapshot.spaceId, snapshot)
+					}
 				}
 			}
 		}
@@ -82,6 +90,7 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 	private suspend fun onCatalogChanged(enabled: Boolean, spaces: List<SpaceContext>) {
 		if (!enabled) {
 			latestSaveGeneration.clear()
+			latestRequestedSnapshots.clear()
 			mutableUiState.value = SpaceNavigationSessionUiState()
 			return
 		}
@@ -100,3 +109,9 @@ class SpaceNavigationSessionViewModel @Inject constructor(
 		)
 	}
 }
+
+private fun SpaceSessionSnapshot.hasSameNavigationState(other: SpaceSessionSnapshot): Boolean =
+	spaceId == other.spaceId &&
+		selectedTopLevel == other.selectedTopLevel &&
+		resumeRoute == other.resumeRoute &&
+		stacks == other.stacks

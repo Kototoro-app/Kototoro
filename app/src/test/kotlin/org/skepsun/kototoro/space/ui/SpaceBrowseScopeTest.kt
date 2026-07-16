@@ -11,6 +11,14 @@ import org.skepsun.kototoro.space.domain.BuiltInSpaces
 class SpaceBrowseScopeTest {
 
 	@Test
+	fun `browse view models are isolated by space`() {
+		browseViewModelKey(BuiltInSpaces.Manga) shouldBe "explore-space:builtin:manga"
+		browseViewModelKey(BuiltInSpaces.Novel) shouldBe "explore-space:builtin:novel"
+		browseViewModelKey(BuiltInSpaces.Anime) shouldBe "explore-space:builtin:anime"
+		browseViewModelKey(null) shouldBe "explore-space:global"
+	}
+
+	@Test
 	fun `built in spaces map to their browse content group`() {
 		BuiltInSpaces.Manga.toBrowseGroupTab() shouldBe BrowseGroupTab.Content
 		BuiltInSpaces.Novel.toBrowseGroupTab() shouldBe BrowseGroupTab.Novel

@@ -18,6 +18,16 @@ class SpaceSwitcherDelegateTest {
 	}
 
 	@Test
+	fun `immersive activity keeps its explicit space identity after recreation`() {
+		immersiveSessionSpaceId(BuiltInSpaces.Novel.value, BuiltInSpaces.Manga) shouldBe BuiltInSpaces.Novel
+	}
+
+	@Test
+	fun `legacy immersive activity falls back to active space`() {
+		immersiveSessionSpaceId(null, BuiltInSpaces.Manga) shouldBe BuiltInSpaces.Manga
+	}
+
+	@Test
 	fun `resumed immersive session restores its own space`() {
 		shouldRestoreImmersiveSpaceOnResume(
 			sessionSpaceId = BuiltInSpaces.Novel,

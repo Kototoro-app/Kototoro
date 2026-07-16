@@ -175,7 +175,6 @@ class ReaderActivity :
             progressFlusher = SpaceProgressFlusher {
                 viewModel.flushForSpaceSwitch(readerManager.currentReader?.getCurrentState())
             },
-            onMediaUniverseContentClick = { content -> router.openResolvedDetails(content) },
         )
         spaceSwitcherDelegate.installFab(findViewById(R.id.immersive_space_switcher_fab))
         spaceSwitcherDelegate.setControlsVisible(viewBinding.appbarTop.isVisible)

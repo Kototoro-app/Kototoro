@@ -58,6 +58,7 @@ export default defineConfig({
           { text: "Entity Space Plan", link: "/architecture/entity-space-implementation-plan-2026-07" },
           { text: "Entity Source Governance", link: "/architecture/entity-source-governance-plan" },
           { text: "Entity Source Boundary Audit", link: "/architecture/entity-graph-source-boundary-audit-2026-06" },
+          { text: "Entity Content-Type Merge Bug", link: "/architecture/entity-content-type-merge-bug-analysis-2026-07" },
           { text: "Work Migration Status Audit", link: "/architecture/work-migration-status-audit-2026-06" },
           { text: "OCR Architecture Review", link: "/architecture/ocr-architecture-review" },
           { text: "OCR Pipeline", link: "/architecture/ocr-pipeline-v2" },
