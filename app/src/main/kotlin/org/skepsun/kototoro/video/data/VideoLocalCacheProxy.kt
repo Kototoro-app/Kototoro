@@ -403,6 +403,18 @@ class VideoLocalCacheProxy @Inject constructor(
                         header("Range", if (it.end != null) "bytes=${it.start}-${it.end}" else "bytes=${it.start}-")
                     }
                 }
+                // Override Referer to the target URL's origin. When Video.headers is
+                // null (common for Aniyomi extensions), CommonHeadersInterceptor would
+                // fall back to the source's domain (e.g. jkanime.net) as Referer, which
+                // CDNs reject. Using the URL's own origin is always safe: CDNs accept
+                // same-origin Referer, and for the source itself it's equivalent.
+                val urlOrigin = runCatching {
+                    val uri = URI(source.url)
+                    "${uri.scheme}://${uri.host}"
+                }.getOrNull()
+                if (urlOrigin != null) {
+                    header("Referer", urlOrigin)
+                }
             }.build()
             val upstreamResponse = runCatching { okHttpClient.newCall(upstreamRequest).execute() }.getOrNull()
                 ?: return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Upstream error")

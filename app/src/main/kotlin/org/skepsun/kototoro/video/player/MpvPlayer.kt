@@ -40,6 +40,9 @@ class MpvPlayer(
 
 	fun initialize() {
 		if (isInitialized) return
+		// Disable built-in ytdl_hook: Android devices don't have yt-dlp,
+		// and the hook interferes with some Aniyomi video URLs.
+		mpv.setOptionString("ytdl", "no")
 		mpv.observeProperty("time-pos", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
 		mpv.observeProperty("duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
 		mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)

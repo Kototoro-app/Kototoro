@@ -4493,7 +4493,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun updateChapterNavButtons() {
         // 从 ViewModel 读取实时章节列表，而不是 intent 启动时的快照
-        val chapters = chaptersViewModel.chapters.value.map { it.chapter }
+        val chapters = chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
+            currentMangaContent()?.chapters.orEmpty()
+        }
         if (chapters.isEmpty()) {
             allControllers().forEach { ctl ->
                 ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_prev_chapter)?.apply {
