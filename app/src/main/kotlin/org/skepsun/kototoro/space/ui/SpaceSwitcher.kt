@@ -2,8 +2,6 @@ package org.skepsun.kototoro.space.ui
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,16 +18,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -41,12 +37,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.BreakIterator
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
+
+private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
 
 @Composable
 fun SpaceSwitcherFab(
@@ -64,35 +59,21 @@ fun SpaceSwitcherFab(
 	)
 	val colorScheme = MaterialTheme.colorScheme
 	val fabAccentColor = colorScheme.primaryContainer
-	GlassSurface(
+	Surface(
+		onClick = onClick,
 		modifier = modifier
-			.clip(CircleShape)
-			.clickable(
-				role = Role.Button,
-				onClick = onClick,
-			)
 			.semantics { contentDescription = description },
-		style = GlassDefaults.prominentStyle().copy(
-			containerAlpha = 0.84f,
-			borderAlpha = 0.18f,
-			shadowElevation = 8.dp,
-		),
 		shape = CircleShape,
-		expandHazeLayerBounds = false,
-		componentRole = GlassComponentRole.Surface,
+		color = fabAccentColor.copy(alpha = SPACE_SWITCHER_FAB_MIN_ALPHA),
+		contentColor = colorScheme.onPrimaryContainer,
+		tonalElevation = 0.dp,
+		shadowElevation = 0.dp,
 	) {
-		CompositionLocalProvider(LocalContentColor provides colorScheme.onPrimaryContainer) {
-			Box(
-				modifier = Modifier
-					.fillMaxSize()
-					.background(
-						color = fabAccentColor.copy(alpha = 0.86f),
-						shape = CircleShape,
-					),
-				contentAlignment = Alignment.Center,
-			) {
-				SpaceGlyph(iconState.presentation, iconState.monogram)
-			}
+		Box(
+			modifier = Modifier.fillMaxSize(),
+			contentAlignment = Alignment.Center,
+		) {
+			SpaceGlyph(iconState.presentation, iconState.monogram)
 		}
 	}
 }

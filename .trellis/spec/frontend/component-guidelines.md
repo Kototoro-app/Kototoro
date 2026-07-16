@@ -152,3 +152,25 @@ KototoroBottomNav(
     onContinueReadingClick = onResumeClick,
 )
 ```
+
+## Scenario: Standalone Space Switcher FAB
+
+The Space switcher FAB is a small fixed action control, not a glass panel.
+Keep it independent from the shared Haze/GlassSurface pipeline so its shape
+and bounds cannot inherit expanded blur layers or light-theme artifacts.
+
+```kotlin
+Surface(
+    onClick = onClick,
+    shape = CircleShape,
+    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.60f),
+    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    tonalElevation = 0.dp,
+    shadowElevation = 0.dp,
+) { /* icon */ }
+```
+
+The container alpha must remain at least `0.60f`; apply alpha to the container
+color rather than the whole modifier so the icon keeps its readable content
+color. The rail button is a separate component and should not inherit this
+FAB implementation.
