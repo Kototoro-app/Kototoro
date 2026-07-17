@@ -1,0 +1,6 @@
+# ESR personal workspace (per-developer journals)
+workspace/
+# ESR runtime session state
+.runtime/
+# ESR log files
+*.log
