@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,6 +27,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 
 enum class SelectionAction {
     SELECT_ALL,
@@ -110,12 +110,9 @@ fun KototoroSelectionTopBar(
                     IconButton(onClick = { showOverflowMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More")
                     }
-                    DropdownMenu(
+                    GlassDropdownMenu(
                         expanded = showOverflowMenu,
                         onDismissRequest = { showOverflowMenu = false },
-                        shape = MaterialTheme.shapes.extraSmall,
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp,
                     ) {
                         overflowActions.forEach { action ->
                             DropdownMenuItem(

@@ -128,11 +128,14 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.LiquidGlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuDivider
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
@@ -441,7 +444,10 @@ fun DetailsHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+            .padding(
+                horizontal = AppLayoutTokens.screenHorizontalPadding,
+                vertical = 12.dp,
+            ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
@@ -803,7 +809,7 @@ private fun DetailsInfoPanelSurface(
     content: @Composable () -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    GlassSurface(
+    LiquidGlassSurface(
         modifier = modifier,
         style = GlassDefaults.subtleStyle().copy(
             containerAlpha = if (expressive) 0.78f else 0.76f,
@@ -1741,7 +1747,7 @@ fun MetadataSourceSheet(
                                         }
                                     },
                                 )
-                                DropdownMenu(
+                                GlassDropdownMenu(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false },
                                 ) {
@@ -2017,7 +2023,7 @@ fun ReadingSourceSheet(
                                         }
                                     },
                                 )
-                                DropdownMenu(
+                                GlassDropdownMenu(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false },
                                 ) {
@@ -2028,7 +2034,7 @@ fun ReadingSourceSheet(
                                             onDeleteProjection(option)
                                         },
                                     )
-                                    HorizontalDivider()
+                                    CompactDropdownMenuDivider()
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.details_activate_projection)) },
                                         onClick = {

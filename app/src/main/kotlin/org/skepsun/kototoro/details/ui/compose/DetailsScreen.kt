@@ -151,6 +151,7 @@ import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocalizedTitle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
@@ -225,6 +226,7 @@ import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.DuplicateFavoritePromptDialog
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -1056,11 +1058,7 @@ fun DetailsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     ) {
-                        GlassSurface(
-                            shape = CompactTopBarPillShape,
-                            style = GlassDefaults.subtleStyle(),
-                            visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                        ) {
+                        TopBarControlSurface {
                             CompositionLocalProvider(
                                 LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
                             ) {
@@ -1095,11 +1093,7 @@ fun DetailsScreen(
                             )
                         }
 
-                        GlassSurface(
-                            shape = CompactTopBarPillShape,
-                            style = GlassDefaults.subtleStyle(),
-                            visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                        ) {
+                        TopBarControlSurface {
                             CompositionLocalProvider(
                                 LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
                             ) {
@@ -2909,12 +2903,7 @@ private fun DetailsDockContainer(
 ) {
     if (modernStyle) {
         GlassBottomBarContainer(
-            modifier = modifier
-                .shadow(
-                    elevation = 12.dp,
-                    shape = RoundedCornerShape(32.dp),
-                    clip = false,
-                ),
+            modifier = modifier,
         ) {
             content()
         }
@@ -3319,28 +3308,41 @@ private fun DetailsPaneActionsRow(
                             }
 
                             DetailsPaneTopBarMode.ExpandedGridTools -> {
-                                Spacer(modifier = Modifier.weight(1f))
-                                DetailsChromeButton(
-                                    onClick = onTogglePageThumbnailsFitPreview,
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterEnd,
                                 ) {
-                                    Icon(
-                                        painter = rememberSafePainter(R.drawable.ic_aspect_ratio),
-                                        contentDescription = stringResource(R.string.fit_page_thumbnails),
-                                        tint = if (isPageThumbnailsFitPreview) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        },
-                                    )
-                                }
-                                DetailsChromeButton(
-                                    onClick = detailsPaneState::showGridSizeControls,
-                                ) {
-                                    Icon(
-                                        painter = rememberSafePainter(R.drawable.ic_size_large),
-                                        contentDescription = stringResource(R.string.grid_size),
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    )
+                                    DetailsDockContainer(
+                                        modernStyle = isModernDockEnabled,
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            DetailsChromeButton(
+                                                onClick = onTogglePageThumbnailsFitPreview,
+                                            ) {
+                                                Icon(
+                                                    painter = rememberSafePainter(R.drawable.ic_aspect_ratio),
+                                                    contentDescription = stringResource(R.string.fit_page_thumbnails),
+                                                    tint = if (isPageThumbnailsFitPreview) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onSurface
+                                                    },
+                                                )
+                                            }
+                                            DetailsChromeButton(
+                                                onClick = detailsPaneState::showGridSizeControls,
+                                            ) {
+                                                Icon(
+                                                    painter = rememberSafePainter(R.drawable.ic_size_large),
+                                                    contentDescription = stringResource(R.string.grid_size),
+                                                    tint = MaterialTheme.colorScheme.onSurface,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -5078,12 +5080,12 @@ fun DetailsRelationSections(
             DetailsRelationSectionContainer(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
             ) {
                 EntityRelationSectionHeader(section = section)
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding),
                 ) {
                     items(
                         items = section.items,
@@ -5113,11 +5115,11 @@ private fun DetailsRelatedContentSection(
             text = stringResource(R.string.details_related_works),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding),
         ) {
             items(
                 items = items,
@@ -5143,7 +5145,7 @@ private fun DetailsSupplementMetadataCard(
     GlassSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
         style = GlassDefaults.subtleStyle(),
         shape = RoundedCornerShape(24.dp),
     ) {
@@ -5192,7 +5194,7 @@ private fun EntityRelationSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

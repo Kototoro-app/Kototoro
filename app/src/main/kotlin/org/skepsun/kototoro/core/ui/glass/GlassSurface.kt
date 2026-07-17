@@ -2,6 +2,8 @@ package org.skepsun.kototoro.core.ui.glass
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,7 +47,15 @@ import org.skepsun.kototoro.core.prefs.resolvePreset
 import org.skepsun.kototoro.core.prefs.toFamily
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 private const val GLASS_SURFACE_TAG = "GlassSurface"
 
@@ -359,6 +369,57 @@ fun GlassSurface(
     }
 }
 
+/**
+ * A root-layer liquid glass surface for content panels.
+ *
+ * Backdrop is only used when the current composition owns a same-window
+ * backdrop source. Popup/dialog surfaces continue to use the regular GlassSurface
+ * fallback because their coordinate space is a separate window.
+ */
+@Composable
+fun LiquidGlassSurface(
+    modifier: Modifier = Modifier,
+    style: GlassStyle = GlassDefaults.regularStyle(),
+    shape: Shape = GlassDefaults.shape,
+    componentRole: GlassComponentRole = GlassComponentRole.Surface,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val exportedBackdrop = rememberLayerBackdrop()
+    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    if (!useBackdrop) {
+        GlassSurface(
+            modifier = modifier,
+            style = style,
+            shape = shape,
+            componentRole = componentRole,
+            content = content,
+        )
+        return
+    }
+
+    Box(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.18f), shape)
+            .drawBackdrop(
+                backdrop = backdrop!!,
+                exportedBackdrop = exportedBackdrop,
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                    blur(8.dp.toPx())
+                    lens(
+                        refractionHeight = 12.dp.toPx(),
+                        refractionAmount = 10.dp.toPx(),
+                        chromaticAberration = false,
+                    )
+                },
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.16f), shape),
+        content = content,
+    )
+}
+
 private fun Modifier.debugGlassBounds(
     debugLabel: String?,
     lastBounds: String?,
@@ -427,14 +488,40 @@ fun GlassBottomBarContainer(
     style: GlassStyle = GlassDefaults.bottomBarChromeStyle(),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    GlassSurface(
-        modifier = modifier,
-        style = style,
-        shape = RoundedCornerShape(32.dp),
-        visualTreatment = GlassVisualTreatment.TopBarPrototype,
-        componentRole = GlassComponentRole.BottomBar,
-        content = content,
-    )
+    val shape = RoundedCornerShape(32.dp)
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val exportedBackdrop = rememberLayerBackdrop()
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null) {
+        Box(
+            modifier = modifier
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.24f), shape)
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    exportedBackdrop = exportedBackdrop,
+                    shape = { shape },
+                    effects = {
+                        vibrancy()
+                        blur(5.dp.toPx())
+                        lens(
+                            refractionHeight = 10.dp.toPx(),
+                            refractionAmount = 10.dp.toPx(),
+                            chromaticAberration = true,
+                        )
+                    },
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.20f), shape),
+            content = content,
+        )
+    } else {
+        GlassSurface(
+            modifier = modifier,
+            style = style,
+            shape = shape,
+            visualTreatment = GlassVisualTreatment.TopBarPrototype,
+            componentRole = GlassComponentRole.BottomBar,
+            content = content,
+        )
+    }
 }
 
 private fun computeGlassColors(

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,7 +41,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.parsers.model.ContentType
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 private val CompactFilterChipSize = 36.dp
 
@@ -80,11 +91,36 @@ fun SwipeableFilterChip(
 
     val exp = expansion.value
     val animatedWidth = CompactFilterChipSize * (1f + exp) // collapsed=1cell, expanded=2 layout cells
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val exportedBackdrop = rememberLayerBackdrop()
+    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
 
     Box(
         modifier = modifier
             .width(animatedWidth)
             .height(CompactFilterChipSize)
+            .then(
+                if (useBackdrop) {
+                    Modifier
+                        .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(999.dp))
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            exportedBackdrop = exportedBackdrop,
+                            shape = { RoundedCornerShape(999.dp) },
+                            effects = {
+                                vibrancy()
+                                blur(4.dp.toPx())
+                                lens(
+                                    refractionHeight = 8.dp.toPx(),
+                                    refractionAmount = 8.dp.toPx(),
+                                    chromaticAberration = false,
+                                )
+                            },
+                        )
+                } else {
+                    Modifier
+                },
+            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

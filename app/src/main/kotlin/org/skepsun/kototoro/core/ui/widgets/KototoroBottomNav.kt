@@ -626,8 +626,12 @@ private fun FloatingBottomNavRow(
                         if (useSharedLiquidGlassPill) {
                             var pointerX = 0f
                             detectDragGestures(
-                                onDragStart = {
-                                    pointerX = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
+                                onDragStart = { startOffset ->
+                                    val itemOffset = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
+                                    // detectDragGestures reports startOffset in the item's
+                                    // local coordinates; convert it to the shared row space
+                                    // before comparing against sibling bounds.
+                                    pointerX = itemOffset + startOffset.x
                                     dragPreviewItemId = item.id
                                 },
                                 onDrag = { change, dragAmount ->

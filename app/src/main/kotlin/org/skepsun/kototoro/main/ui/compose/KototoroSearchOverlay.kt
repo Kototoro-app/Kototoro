@@ -70,6 +70,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -333,7 +334,17 @@ fun KototoroSearchOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.24f * progress)),
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.24f * progress))
+                // A background is visual-only and does not enter Compose's hit-test
+                // chain. Consume the whole scrim so empty search areas cannot
+                // forward taps or drags to the screen underneath.
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent().changes.forEach { it.consume() }
+                        }
+                    }
+                },
         )
         Column(
             modifier = Modifier

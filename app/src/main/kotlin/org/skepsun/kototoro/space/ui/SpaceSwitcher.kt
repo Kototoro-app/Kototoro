@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -29,8 +32,10 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -49,14 +54,16 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
+import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
 
@@ -77,9 +84,12 @@ fun SpaceSwitcherFab(
 	val colorScheme = MaterialTheme.colorScheme
 	val fabAccentColor = colorScheme.primaryContainer
 	val backdrop = LocalLiquidGlassBackdrop.current
+	val exportedBackdrop = rememberLayerBackdrop()
 	val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
 	val fabModifier = modifier
 		.clickable(
+			interactionSource = remember { MutableInteractionSource() },
+			indication = null,
 			role = Role.Button,
 			onClick = onClick,
 		)
@@ -115,15 +125,11 @@ fun SpaceSwitcherFab(
 				.background(Color.White.copy(alpha = 0.08f), CircleShape)
 				.drawBackdrop(
 					backdrop = backdrop,
+					exportedBackdrop = exportedBackdrop,
 					shape = { CircleShape },
 					effects = {
 						vibrancy()
 						blur(4.dp.toPx())
-						lens(
-							refractionHeight = 10.dp.toPx(),
-							refractionAmount = 12.dp.toPx(),
-							chromaticAberration = true,
-						)
 					},
 				)
 				.border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
@@ -189,46 +195,47 @@ fun SpaceSwitcherSheet(
 	onAction: (SpaceAction) -> Unit,
 	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
 	onResume: (SpaceId) -> Unit = {},
+	anchorBounds: Rect? = null,
 ) {
 	if (!state.switcherVisible) return
-	ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
-		LazyColumn(
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(bottom = 24.dp),
-		) {
-			item {
-				Text(
-					text = stringResource(R.string.space_switcher_title),
-					style = MaterialTheme.typography.titleLarge,
-					modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+	val menuContent: @Composable ColumnScope.() -> Unit = {
+		CompactDropdownMenuText(stringResource(R.string.space_switcher_title))
+		state.spaces.forEach { context ->
+			SpaceRow(
+				context = context,
+				selected = context.id == state.activeSpaceId,
+					enabled = !state.switchInProgress,
+					resumeItem = resumeItems[context.id],
+					onResume = { onResume(context.id) },
+					onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+					compactMenu = anchorBounds != null,
 				)
+		}
+		if (state.switchInProgress) {
+			Box(
+				modifier = Modifier.fillMaxWidth().padding(8.dp),
+				contentAlignment = Alignment.Center,
+			) {
+				CircularProgressIndicator(modifier = Modifier.size(28.dp))
 			}
-			item {
-				Column(modifier = Modifier.selectableGroup()) {
-					state.spaces.forEach { context ->
-						SpaceRow(
-							context = context,
-							selected = context.id == state.activeSpaceId,
-							enabled = !state.switchInProgress,
-							resumeItem = resumeItems[context.id],
-							onResume = { onResume(context.id) },
-							onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
-						)
-					}
-				}
-			}
-			if (state.switchInProgress) {
-				item {
-					Box(
-						modifier = Modifier
-							.fillMaxWidth()
-							.padding(8.dp),
-						contentAlignment = Alignment.Center,
-					) {
-						CircularProgressIndicator(modifier = Modifier.size(32.dp))
-					}
-				}
+		}
+	}
+	if (anchorBounds != null) {
+		GlassDropdownMenu(
+			expanded = true,
+			onDismissRequest = { onAction(SpaceAction.DismissSwitcher) },
+			anchorBounds = anchorBounds,
+			useRootOverlay = true,
+			alignToAnchorEnd = true,
+		) {
+			menuContent()
+		}
+	} else {
+		ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
+			LazyColumn(
+				modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+			) {
+				item { menuContent() }
 			}
 		}
 	}
@@ -242,12 +249,19 @@ private fun SpaceRow(
 	resumeItem: SpaceResumeItem?,
 	onResume: () -> Unit,
 	onClick: () -> Unit,
+	compactMenu: Boolean = false,
 ) {
 	val presentation = context.presentation()
 	val hapticFeedback = LocalHapticFeedback.current
 	Row(
 		modifier = Modifier
-			.fillMaxWidth()
+			.then(
+				if (compactMenu) {
+					Modifier.widthIn(min = 220.dp, max = 280.dp)
+				} else {
+					Modifier.fillMaxWidth()
+				},
+			)
 			.selectable(
 				selected = selected,
 				enabled = enabled,
@@ -259,7 +273,10 @@ private fun SpaceRow(
 				},
 				role = Role.RadioButton,
 			)
-			.padding(horizontal = 24.dp, vertical = 12.dp),
+			.padding(
+				horizontal = if (compactMenu) 12.dp else 24.dp,
+				vertical = if (compactMenu) 6.dp else 12.dp,
+			),
 		verticalAlignment = Alignment.CenterVertically,
 		horizontalArrangement = Arrangement.spacedBy(16.dp),
 	) {
@@ -271,12 +288,12 @@ private fun SpaceRow(
 		Column(modifier = Modifier.weight(1f)) {
 			Text(
 				text = context.title ?: stringResource(presentation.labelRes),
-				style = MaterialTheme.typography.titleMedium,
+				style = if (compactMenu) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium,
 			)
 			resumeItem?.let { item ->
 				Text(
 					text = stringResource(R.string.space_recent_context, item.title),
-					style = MaterialTheme.typography.bodySmall,
+					style = if (compactMenu) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 					maxLines = 1,
 					overflow = TextOverflow.Ellipsis,
@@ -294,7 +311,12 @@ private fun SpaceRow(
 				)
 			}
 		}
-		RadioButton(selected = selected, onClick = null, enabled = enabled)
+			RadioButton(
+				selected = selected,
+				onClick = null,
+				enabled = enabled,
+				modifier = if (compactMenu) Modifier.size(28.dp) else Modifier,
+			)
 	}
 }
 

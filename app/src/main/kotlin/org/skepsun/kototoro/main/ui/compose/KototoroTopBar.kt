@@ -90,6 +90,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -313,7 +314,7 @@ fun KototoroTopBar(
                                             },
                                         )
 
-                                        HorizontalDivider()
+                                        CompactDropdownMenuDivider()
                                     }
                                     if (isLanguagePresetFilterVisible) {
                                         CompactDropdownMenuItem(
@@ -323,7 +324,7 @@ fun KototoroTopBar(
                                                 isLanguagePresetMenuExpanded = true
                                             },
                                         )
-                                        HorizontalDivider()
+                                        CompactDropdownMenuDivider()
                                     }
                                     if (showSourceSettingsEntry) {
                                         CompactDropdownMenuItem(
@@ -347,7 +348,7 @@ fun KototoroTopBar(
                                                 onTrackingAccountsClick()
                                             },
                                         )
-                                        HorizontalDivider()
+                                        CompactDropdownMenuDivider()
                                     }
                                     contextualMenuActions.forEach { action ->
                                         CompactDropdownMenuItem(
@@ -359,7 +360,7 @@ fun KototoroTopBar(
                                         )
                                     }
                                     if (contextualMenuActions.isNotEmpty()) {
-                                        HorizontalDivider()
+                                        CompactDropdownMenuDivider()
                                     }
                                     CompactDropdownMenuItem(
                                         text = { CompactDropdownMenuText(stringResource(R.string.settings)) },
@@ -421,7 +422,7 @@ fun KototoroTopBar(
                                             },
                                         )
                                     }
-                                    HorizontalDivider()
+                                    CompactDropdownMenuDivider()
                                     CompactDropdownMenuItem(
                                         text = { CompactDropdownMenuText(stringResource(R.string.manage_language_presets)) },
                                         onClick = {
@@ -532,13 +533,17 @@ internal fun TopBarControlSurface(
             GlassDefaults.topBarChromeStyle()
         }
     val backdrop = LocalLiquidGlassBackdrop.current
-    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val exportedBackdrop = rememberLayerBackdrop()
+    val useBackdrop = allowRuntimeHaze &&
+        LocalInterfaceStyle.current == InterfaceStyle.IOS &&
+        backdrop != null
     if (useBackdrop) {
         Box(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.26f), shape)
                 .drawBackdrop(
                     backdrop = backdrop,
+                    exportedBackdrop = exportedBackdrop,
                     shape = { shape },
                     effects = {
                         vibrancy()
@@ -574,12 +579,8 @@ fun CompactTopBarTabsRail(
     val density = LocalDensity.current
     val listState = rememberLazyListState()
     EnsureItemFullyVisible(listState = listState, targetIndex = state.items.indexOfFirst { it.id == state.selectedItemId })
-    GlassSurface(
+    TopBarControlSurface(
         modifier = modifier,
-        shape = CompactTopBarPillShape,
-        style = GlassDefaults.topBarChromeStyle(),
-        visualTreatment = GlassVisualTreatment.TopBarPrototype,
-        componentRole = GlassComponentRole.TopBar,
     ) {
         LazyRow(
             state = listState,
@@ -659,12 +660,8 @@ private fun InlineCompactTopBarTabsRail(
             onExpandedChange(false)
         }
     }
-    GlassSurface(
+    TopBarControlSurface(
         modifier = modifier,
-        shape = CompactTopBarPillShape,
-        style = GlassDefaults.topBarChromeStyle(),
-        visualTreatment = GlassVisualTreatment.TopBarPrototype,
-        componentRole = GlassComponentRole.TopBar,
     ) {
         LazyRow(
             state = listState,
@@ -717,29 +714,26 @@ fun CompactTopBarFilterRail(
         val maxVisible = visibleItems.maxOfOrNull { it.index } ?: -1
         (minVisible - 2).coerceAtLeast(0)..(maxVisible + 2).coerceAtLeast(-1)
     }
-    LazyRow(
-        state = listState,
+    TopBarControlSurface(
         modifier = modifier
             .fillMaxWidth()
             .height(CompactTopFilterRailHeight),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        contentPadding = PaddingValues(horizontal = 12.dp),
     ) {
-        items(
-            items = state.items,
-            key = { it.id },
-        ) { item ->
-            val itemIndex = remember(state.items, item.id) {
-                state.items.indexOfFirst { it.id == item.id }
-            }
-            val shouldLoadIcon = itemIndex in visibleItemRange
-            GlassSurface(
-                shape = RoundedCornerShape(22.dp),
-                style = GlassDefaults.topBarChromeStyle(),
-                visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                componentRole = GlassComponentRole.TopBar,
-            ) {
+        LazyRow(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(horizontal = 12.dp),
+        ) {
+            items(
+                items = state.items,
+                key = { it.id },
+            ) { item ->
+                val itemIndex = remember(state.items, item.id) {
+                    state.items.indexOfFirst { it.id == item.id }
+                }
+                val shouldLoadIcon = itemIndex in visibleItemRange
                 Row(
                     modifier = Modifier
                         .clickable { item.onClick() }

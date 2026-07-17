@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
@@ -90,7 +91,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -605,9 +605,12 @@ fun KototoroApp(
     ) {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (isSearchOverlayMounted) {
+                    return androidx.compose.ui.geometry.Offset.Zero
+                }
                 chromeScrollState.totalContentScrollOffset.floatValue =
                     (chromeScrollState.totalContentScrollOffset.floatValue + available.y).coerceAtMost(0f)
-                if (isSearchOverlayMounted || isLandscapeRailInteracting) {
+                if (isLandscapeRailInteracting) {
                     return androidx.compose.ui.geometry.Offset.Zero
                 }
                 val dy = available.y
@@ -1217,6 +1220,55 @@ fun KototoroApp(
                     .coerceAtLeast(if (!isLandscapeNavigation && shouldShowChrome) bottomNavHeightPx else navigationBarHeightPx / 2)
                     .toDp()
             }
+            val spaceSwitcherFabSize = 56.dp
+            val spaceSwitcherFabBaseBottom = WindowInsets.safeDrawing
+                .asPaddingValues()
+                .calculateBottomPadding() + spaceSwitcherFabMargin
+            val rootBounds = rootContentBounds
+            val mainAnchorBounds = mainSpaceSwitcherFabBounds
+            val shouldAnchorSpaceSwitcherFabToMainChrome = shouldShowChrome && !isLandscapeNavigation
+            val spaceSwitcherFabTargetOffset = rootBounds?.let { bounds ->
+                if (shouldAnchorSpaceSwitcherFabToMainChrome) {
+                    val anchorBounds = mainAnchorBounds ?: return@let null
+                    androidx.compose.ui.unit.IntOffset(
+                        x = (anchorBounds.left - bounds.left).roundToInt(),
+                        y = (anchorBounds.top - bounds.top).roundToInt(),
+                    )
+                } else {
+                    val detailsLift = if (isDetailsRoute && !isLandscapeNavigation) {
+                        (detailsBottomObstruction + spaceSwitcherFabControlGap - spaceSwitcherFabBaseBottom)
+                            .coerceAtLeast(0.dp)
+                    } else {
+                        0.dp
+                    }
+                    androidx.compose.ui.unit.IntOffset(
+                        x = (bounds.width - with(density) {
+                            spaceSwitcherFabMargin.roundToPx() + spaceSwitcherFabSize.roundToPx()
+                        }).roundToInt(),
+                        y = (bounds.height - with(density) {
+                            spaceSwitcherFabBaseBottom.roundToPx() +
+                                detailsLift.roundToPx() +
+                                spaceSwitcherFabSize.roundToPx()
+                        }).roundToInt(),
+                    )
+                }
+            }
+            val spaceSwitcherFabAnchorBounds = rootBounds?.let { bounds ->
+                spaceSwitcherFabTargetOffset?.let { offset ->
+                    androidx.compose.ui.geometry.Rect(
+                        left = bounds.left + offset.x,
+                        top = bounds.top + offset.y,
+                        right = bounds.left + offset.x + with(density) { spaceSwitcherFabSize.toPx() },
+                        bottom = bounds.top + offset.y + with(density) { spaceSwitcherFabSize.toPx() },
+                    )
+                }
+            }
+            val showFabOnCurrentRoute = if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
+                (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
+                    (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
+            } else {
+                showContinueReadingFab && shouldShowChrome
+            }
             val mainShellChrome: @Composable BoxScope.() -> Unit = {
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
                     if (!isImmersiveRoute) {
@@ -1406,6 +1458,45 @@ fun KototoroApp(
                         },
                     )
                 }
+                if (
+                    showMainFab &&
+                    spaceSwitcherFabTargetOffset != null &&
+                    showFabOnCurrentRoute
+                ) {
+                    val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
+                        targetValue = spaceSwitcherFabTargetOffset,
+                        animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
+                            tween(durationMillis = MainNavigationMotion.DetailsRouteSlideMillis)
+                        } else {
+                            snap()
+                        },
+                        label = "space_switcher_fab_position",
+                    )
+                    val fabModifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { animatedSpaceSwitcherFabOffset }
+                        .size(spaceSwitcherFabSize)
+                    if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
+                        SpaceSwitcherFab(
+                            activeSpaceId = spaceUiState.activeSpaceId,
+                            activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
+                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                            modifier = fabModifier,
+                        )
+                    } else {
+                        ContinueReadingFab(
+                            onClick = onResumeClick,
+                            modifier = fabModifier,
+                        )
+                    }
+                }
+                SpaceSwitcherSheet(
+                    state = spaceUiState,
+                    onAction = onSpaceAction,
+                    resumeItems = spaceResumeUiState.items,
+                    onResume = onSpaceResume,
+                    anchorBounds = spaceSwitcherFabAnchorBounds,
+                )
             }
             Box(modifier = Modifier
                 .fillMaxSize()
@@ -1583,40 +1674,6 @@ fun KototoroApp(
                         }
                     }
                 }
-                val spaceSwitcherFabSize = 56.dp
-                val spaceSwitcherFabBaseBottom = WindowInsets.safeDrawing
-                    .asPaddingValues()
-                    .calculateBottomPadding() + spaceSwitcherFabMargin
-                val rootBounds = rootContentBounds
-                val mainAnchorBounds = mainSpaceSwitcherFabBounds
-                val shouldAnchorSpaceSwitcherFabToMainChrome =
-                    shouldShowChrome && !isLandscapeNavigation
-                val spaceSwitcherFabTargetOffset = rootBounds?.let { bounds ->
-                    if (shouldAnchorSpaceSwitcherFabToMainChrome) {
-                        val anchorBounds = mainAnchorBounds ?: return@let null
-                        androidx.compose.ui.unit.IntOffset(
-                            x = (anchorBounds.left - bounds.left).roundToInt(),
-                            y = (anchorBounds.top - bounds.top).roundToInt(),
-                        )
-                    } else {
-                        val detailsLift = if (isDetailsRoute && !isLandscapeNavigation) {
-                            (detailsBottomObstruction + spaceSwitcherFabControlGap - spaceSwitcherFabBaseBottom)
-                                .coerceAtLeast(0.dp)
-                        } else {
-                            0.dp
-                        }
-                        androidx.compose.ui.unit.IntOffset(
-                            x = (bounds.width - with(density) {
-                                spaceSwitcherFabMargin.roundToPx() + spaceSwitcherFabSize.roundToPx()
-                            }).roundToInt(),
-                            y = (bounds.height - with(density) {
-                                spaceSwitcherFabBaseBottom.roundToPx() +
-                                    detailsLift.roundToPx() +
-                                    spaceSwitcherFabSize.roundToPx()
-                            }).roundToInt(),
-                        )
-                    }
-                }
                 LaunchedEffect(
                     spaceUiState.switcherEnabled,
                     isDetailsRoute,
@@ -1647,51 +1704,6 @@ fun KototoroApp(
                             "target=$spaceSwitcherFabTargetOffset anchor=$mainAnchorBounds root=$rootBounds"
                     }
                 }
-                val showFabOnCurrentRoute = if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
-                    (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
-                        (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
-                } else {
-                    showContinueReadingFab && shouldShowChrome
-                }
-                if (
-                    showMainFab &&
-                    spaceSwitcherFabTargetOffset != null &&
-                    showFabOnCurrentRoute
-                ) {
-                    val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
-                        targetValue = spaceSwitcherFabTargetOffset,
-                        animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
-                            tween(durationMillis = MainNavigationMotion.DetailsRouteSlideMillis)
-                        } else {
-                            snap()
-                        },
-                        label = "space_switcher_fab_position",
-                    )
-                    val fabModifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset { animatedSpaceSwitcherFabOffset }
-                        .size(spaceSwitcherFabSize)
-                    if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
-                        SpaceSwitcherFab(
-                            activeSpaceId = spaceUiState.activeSpaceId,
-                            activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
-                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
-                            modifier = fabModifier,
-                        )
-                    } else {
-                        ContinueReadingFab(
-                            onClick = onResumeClick,
-                            modifier = fabModifier,
-                        )
-                    }
-                }
-                SpaceSwitcherSheet(
-                    state = spaceUiState,
-                    onAction = onSpaceAction,
-                    resumeItems = spaceResumeUiState.items,
-                    onResume = onSpaceResume,
-                )
-
                 if (isSearchOverlayMounted) {
                     KototoroSearchOverlay(
                         visible = isSearchOverlayVisible,
@@ -2113,24 +2125,25 @@ private fun ContinueReadingFab(
     modifier: Modifier = Modifier,
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
+    val exportedBackdrop = rememberLayerBackdrop()
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
     if (useBackdrop) {
         Box(
-            modifier = modifier
-                .size(56.dp)
-                .clickable(onClick = onClick)
+                modifier = modifier
+                    .size(56.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick,
+                    )
                 .background(Color.White.copy(alpha = 0.08f), CircleShape)
                 .drawBackdrop(
                     backdrop = backdrop,
+                    exportedBackdrop = exportedBackdrop,
                     shape = { CircleShape },
                     effects = {
                         vibrancy()
                         blur(4.dp.toPx())
-                        lens(
-                            refractionHeight = 10.dp.toPx(),
-                            refractionAmount = 12.dp.toPx(),
-                            chromaticAberration = true,
-                        )
                     },
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),

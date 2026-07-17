@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.settings.search.SettingsItem
@@ -132,7 +133,7 @@ private fun SettingsSectionCard(
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(
-                horizontal = if (expressive) 12.dp else 14.dp,
+                horizontal = AppLayoutTokens.screenHorizontalPadding,
                 vertical = 4.dp,
             ),
         )
@@ -211,9 +212,15 @@ private fun SettingsSearchResultRow(
             .clickable(onClick = onClick)
             .then(
                 if (expressive) {
-                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    Modifier.padding(
+                        horizontal = AppLayoutTokens.screenHorizontalPadding,
+                        vertical = 10.dp,
+                    )
                 } else {
-                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    Modifier.padding(
+                        horizontal = AppLayoutTokens.screenHorizontalPadding,
+                        vertical = 12.dp,
+                    )
                 },
             ),
         verticalAlignment = Alignment.CenterVertically,
@@ -257,9 +264,15 @@ private fun SettingsRootRow(
             .clickable(onClick = item.onClick)
             .then(
                 if (expressive) {
-                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    Modifier.padding(
+                        horizontal = AppLayoutTokens.screenHorizontalPadding,
+                        vertical = 10.dp,
+                    )
                 } else {
-                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    Modifier.padding(
+                        horizontal = AppLayoutTokens.screenHorizontalPadding,
+                        vertical = 12.dp,
+                    )
                 },
             ),
         verticalAlignment = Alignment.CenterVertically,

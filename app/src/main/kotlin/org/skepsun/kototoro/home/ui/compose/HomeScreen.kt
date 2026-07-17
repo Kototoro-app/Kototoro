@@ -1007,6 +1007,9 @@ private fun HomeContentRowSection(
                         .extendHorizontalViewport(CompactTopBarHorizontalPadding),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     contentPadding = PaddingValues(
+                        // The viewport is extended by one edge inset. Add the target
+                        // anchor inset on top so snap positions remain aligned with
+                        // the section title instead of the expanded viewport edge.
                         start = CompactTopBarHorizontalPadding * 2,
                         end = 0.dp,
                     ),
@@ -1046,6 +1049,9 @@ private fun HomeContentRowSection(
                     }
                     val rowSpacing = 12.dp
                     val horizontalPadding = PaddingValues(
+                        // Compensate for the expanded viewport when calculating the
+                        // snap anchor. The end stays open so the final page can reach
+                        // the physical screen edge.
                         start = CompactTopBarHorizontalPadding * 2,
                         end = 0.dp,
                     )

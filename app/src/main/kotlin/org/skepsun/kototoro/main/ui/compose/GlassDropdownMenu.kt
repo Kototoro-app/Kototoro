@@ -4,14 +4,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.widthIn
@@ -21,7 +23,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -104,6 +106,7 @@ internal fun RootGlassMenuOverlay(
                 .widthIn(max = 280.dp)
                 .wrapContentWidth()
                 .heightIn(max = maxHeight * 0.65f)
+                .zIndex(1f)
                 .onGloballyPositioned { measuredMenuWidthPx = it.size.width }
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.48f), request.shape)
                 .drawBackdrop(
@@ -214,14 +217,29 @@ internal fun CompactDropdownMenuItem(
     leadingIcon: (@Composable (() -> Unit))? = null,
     trailingIcon: (@Composable (() -> Unit))? = null,
 ) {
-    DropdownMenuItem(
-        text = text,
-        onClick = onClick,
-        modifier = modifier.height(40.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        leadingIcon = leadingIcon,
-        trailingIcon = trailingIcon,
-    )
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        leadingIcon?.let {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                it()
+            }
+        }
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            text()
+        }
+        trailingIcon?.let {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                it()
+            }
+        }
+    }
 }
 
 @Composable
@@ -244,5 +262,16 @@ internal fun CompactDropdownMenuText(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium,
+    )
+}
+
+@Composable
+internal fun CompactDropdownMenuDivider() {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .width(96.dp)
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)),
     )
 }

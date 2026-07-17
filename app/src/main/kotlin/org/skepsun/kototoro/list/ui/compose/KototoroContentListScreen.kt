@@ -58,6 +58,7 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.VerticalRailAnimatedVisibility
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
@@ -618,7 +619,7 @@ private fun ListHeaderItem(item: ListHeader) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -661,7 +662,7 @@ fun QuickFilterSection(
     }
     LazyRow(
         state = listState,
-        contentPadding = PaddingValues(horizontal = CompactTopBarHorizontalPadding, vertical = 6.dp),
+        contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -679,33 +680,21 @@ fun QuickFilterSection(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
-            GlassSurface(
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
-                style = GlassDefaults.subtleStyle(),
-            ) {
-                CompositionLocalProvider(LocalContentColor provides contentColor) {
-                    Row(
-                        modifier = Modifier
-                            .then(
-                                if (option != null) {
-                                    Modifier.clickable { onQuickFilterOptionClick(option) }
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .height(QuickFilterChipHeight)
-                            .background(
-                                color = if (chip.isChecked) {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)
-                                } else {
-                                    Color.Transparent
-                                },
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
-                            )
-                            .padding(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+            CompositionLocalProvider(LocalContentColor provides contentColor) {
+                Row(
+                    modifier = Modifier
+                        .then(
+                            if (option != null) {
+                                Modifier.clickable { onQuickFilterOptionClick(option) }
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .height(QuickFilterChipHeight)
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                         chipIcon(chip)?.invoke()
                         Text(
                             text = buildChipLabel(context, chip, entryPoint),
@@ -718,7 +707,6 @@ fun QuickFilterSection(
                             },
                             maxLines = 1,
                         )
-                    }
                 }
             }
         }
@@ -730,7 +718,7 @@ private fun InfoCard(item: InfoModel) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 8.dp),
     ) {
         Row(
             modifier = Modifier
@@ -891,7 +879,7 @@ private fun LinearLoadingSkeleton(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         repeat(3) {
