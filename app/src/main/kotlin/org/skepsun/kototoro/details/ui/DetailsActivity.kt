@@ -9,13 +9,9 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.Flow
@@ -111,23 +107,17 @@ class DetailsActivity :
                     LocalLiquidGlassBackdrop provides backdrop,
                     LocalLiquidGlassLayerBackdrop provides backdrop,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .layerBackdrop(backdrop),
-                    ) {
-                        DetailsScreen(
-                            viewModel = viewModel,
-                            pagesViewModel = pagesViewModel,
-                            bookmarksViewModel = bookmarksViewModel,
-                            settings = settings,
-                            appRouter = router,
-                            pageSaveHelper = pageSaveHelper,
-                            onBackClick = { onBackPressedDispatcher.onBackPressed() },
-                            onActionClick = ::handleActionClick,
-                            isTemporaryReadOnly = intent.getBooleanExtra(AppRouter.KEY_TEMPORARY_DETAILS, false),
-                        )
-                    }
+                    DetailsScreen(
+                        viewModel = viewModel,
+                        pagesViewModel = pagesViewModel,
+                        bookmarksViewModel = bookmarksViewModel,
+                        settings = settings,
+                        appRouter = router,
+                        pageSaveHelper = pageSaveHelper,
+                        onBackClick = { onBackPressedDispatcher.onBackPressed() },
+                        onActionClick = ::handleActionClick,
+                        isTemporaryReadOnly = intent.getBooleanExtra(AppRouter.KEY_TEMPORARY_DETAILS, false),
+                    )
                 }
             }
         }

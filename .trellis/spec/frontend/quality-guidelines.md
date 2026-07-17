@@ -77,3 +77,50 @@ can sample the wrong location, commonly the screen origin.
   measured and after rotation or window-size changes.
 - Run `:app:compileDebugKotlin` and `git diff --check`; do not run Gradle lint
   unless explicitly requested.
+
+## Scenario: Backdrop Source and Effect Isolation
+
+`LayerBackdrop` is coordinate-dependent and records the content of its
+`Modifier.layerBackdrop` node. A source node must not contain a consumer that
+draws the same backdrop.
+
+### Required pattern
+
+- Create and provide one shared `LayerBackdrop` at the screen owner.
+- Attach `Modifier.layerBackdrop` only to the background/content layer that is
+  safe to record.
+- Render `drawBackdrop` glass controls as later siblings or overlays outside
+  that source subtree.
+- Keep `exportedBackdrop` on glass-on-glass components; it does not make it safe
+  to wrap the consumer in the root source.
+- When Haze and Backdrop support the same screen, prefer the same source-layer
+  boundary for `hazeSource` and `layerBackdrop`.
+
+| Condition | Required behavior |
+|---|---|
+| Backdrop is available and iOS style is active | Register the pure background/content source |
+| Backdrop is absent or another style is active | Skip `layerBackdrop` and use the existing fallback |
+| A consumer is inside the proposed source subtree | Move the source boundary; do not create another nested backdrop |
+| A Popup/Dialog uses another window | Use the static fallback unless a same-window overlay host exists |
+
+#### Wrong
+
+```kotlin
+Box(Modifier.layerBackdrop(backdrop)) {
+    ScreenContent()
+    GlassChrome(Modifier.drawBackdrop(backdrop, /* ... */))
+}
+```
+
+#### Correct
+
+```kotlin
+Box {
+    ScreenContent(Modifier.layerBackdrop(backdrop))
+    GlassChrome(Modifier.drawBackdrop(backdrop, /* ... */))
+}
+```
+
+Validation must confirm that the source has non-zero bounds, precedes the
+consumer in draw order, excludes every consumer of the same backdrop, and
+continues to compile and fall back safely without the CompositionLocal source.

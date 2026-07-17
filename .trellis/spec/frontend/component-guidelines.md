@@ -174,3 +174,69 @@ The container alpha must remain at least `0.60f`; apply alpha to the container
 color rather than the whole modifier so the icon keeps its readable content
 color. The rail button is a separate component and should not inherit this
 FAB implementation.
+
+## Scenario: Edge-to-Edge Rails Inside Inset Content
+
+When a horizontal `LazyRow` lives inside a screen content column with horizontal
+padding, keep the section header inset while allowing the scrolling viewport to
+reach both screen edges.
+
+### Contract
+
+- The custom layout modifier may measure the `LazyRow` at
+  `viewportWidth + startExtension + endExtension`.
+- The modifier must report the original constrained `viewportWidth` to its
+  parent. Reporting the expanded width violates the parent contract and causes
+  asymmetric apparent placement or clipping.
+- Place the expanded child at the negative start extension with
+  `placeRelative`, preserving RTL behavior.
+- `LazyRow.contentPadding` is content spacing, not container expansion. Use one
+  start extension to keep the first item aligned with the section header; do
+  not double-count the viewport extension.
+
+```kotlin
+private fun Modifier.extendHorizontalViewport(extension: Dp): Modifier = layout {
+    measurable, constraints ->
+    val extensionPx = extension.roundToPx()
+    val viewportWidth = constraints.maxWidth.takeIf { constraints.hasBoundedWidth }
+    val expandedWidth = viewportWidth?.let { it + extensionPx * 2 }
+    val placeable = measurable.measure(
+        expandedWidth?.let { constraints.copy(minWidth = it, maxWidth = it) } ?: constraints,
+    )
+    layout(viewportWidth ?: placeable.width, placeable.height) {
+        placeable.placeRelative(if (viewportWidth != null) -extensionPx else 0, 0)
+    }
+}
+```
+
+Validation must cover grid and list rail modes, the initial item/header anchor,
+the final item reaching the end edge, and an unbounded-width fallback that does
+not apply a negative offset.
+
+## Scenario: Adaptive Menu Width With Full-Row Hit Targets
+
+When a compact menu wraps its content width, determine one shared intrinsic
+width for the menu before making each action row fill that width. Otherwise the
+panel follows its longest label while shorter rows remain clickable only over
+their own text or icons.
+
+```kotlin
+Column(Modifier.width(IntrinsicSize.Max)) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+    ) { /* icon and label */ }
+}
+```
+
+Keep `clickable` before visual padding so the padding and trailing blank area
+belong to the same pointer and semantics target. Do not use `fillMaxWidth()` on
+rows inside an otherwise unconstrained wrapping parent without first defining
+the parent's intrinsic or explicit width; doing so can expand a root overlay to
+its maximum allowed width instead of its content width.
+
+Validation must cover a menu with labels of different lengths, a row with a
+leading or trailing control, clicks near both horizontal edges, the fixed-width
+Popup path, and the content-wrapping root-overlay path.

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.Box
@@ -221,8 +222,8 @@ internal fun CompactDropdownMenuItem(
         modifier = modifier
             .height(40.dp)
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -250,6 +251,7 @@ private fun CompactMenuContent(
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
         Column(
             modifier = Modifier
+                .width(IntrinsicSize.Max)
                 .verticalScroll(scrollState)
                 .padding(vertical = 4.dp),
             content = content,

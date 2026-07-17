@@ -163,9 +163,11 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -182,6 +184,7 @@ import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
@@ -231,6 +234,7 @@ import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import com.kyant.backdrop.backdrops.layerBackdrop
 import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -899,6 +903,14 @@ fun DetailsScreen(
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
     val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val liquidGlassLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
+    val liquidGlassSourceModifier = if (
+        LocalInterfaceStyle.current == InterfaceStyle.IOS && liquidGlassLayerBackdrop != null
+    ) {
+        Modifier.layerBackdrop(liquidGlassLayerBackdrop)
+    } else {
+        Modifier
+    }
     val effectivePanoramaInfoCardMidPx = if (
         panoramaPrefs.isScrollLinkedEnabled &&
         initialInfoCardMidPx.isFinite()
@@ -981,6 +993,7 @@ fun DetailsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(liquidGlassSourceModifier)
                     .then(if (useBackgroundHaze) Modifier.hazeSource(detailsHazeState) else Modifier),
             ) {
                 Box(
