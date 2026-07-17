@@ -12,6 +12,8 @@ import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
@@ -84,6 +86,13 @@ import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.ui.compose.ExploreSelectionTopBar
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
@@ -134,9 +143,12 @@ import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroReturnTransitionInProgress
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
@@ -1166,17 +1178,30 @@ fun KototoroApp(
 
     KototoroTheme(cornerRadius = cornerRadius) {
         val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
+        val backdropBackground = MaterialTheme.colorScheme.background
+        val backdrop = rememberLayerBackdrop {
+            drawRect(backdropBackground)
+            drawContent()
+        }
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
         val useRuntimeHaze = glassPrefs.isGlassEffectEnabled && supportsRuntimeHaze()
         CompositionLocalProvider(
+            LocalLiquidGlassBackdrop provides backdrop,
+            LocalLiquidGlassLayerBackdrop provides backdrop,
             LocalHazeState provides hazeState,
             LocalGlassPrefs provides glassPrefs,
             LocalRailAnimationFactor provides railAnimationFactor,
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val isDarkTheme = isSystemInDarkTheme()
-            val immersiveBaseColor = if (isDarkTheme) Color.Black else Color.White
+            val immersiveBaseColor = if (
+                isDarkTheme || LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+            ) {
+                Color.Black
+            } else {
+                Color.White
+            }
             val immersiveTransparent = Color.Transparent
             val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
             val topImmersiveHeight = with(density) {
@@ -2087,20 +2112,52 @@ private fun ContinueReadingFab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        modifier = modifier,
-        expanded = false,
-        icon = {
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    if (useBackdrop) {
+        Box(
+            modifier = modifier
+                .size(56.dp)
+                .clickable(onClick = onClick)
+                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { CircleShape },
+                    effects = {
+                        vibrancy()
+                        blur(4.dp.toPx())
+                        lens(
+                            refractionHeight = 10.dp.toPx(),
+                            refractionAmount = 12.dp.toPx(),
+                            chromaticAberration = true,
+                        )
+                    },
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
                 painter = painterResource(R.drawable.ic_read),
                 contentDescription = stringResource(R.string._continue),
+                tint = MaterialTheme.colorScheme.onSurface,
             )
-        },
-        text = { Text(stringResource(R.string._continue)) },
-        containerColor = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-    )
+        }
+    } else {
+        ExtendedFloatingActionButton(
+            onClick = onClick,
+            modifier = modifier,
+            expanded = false,
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_read),
+                    contentDescription = stringResource(R.string._continue),
+                )
+            },
+            text = { Text(stringResource(R.string._continue)) },
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)

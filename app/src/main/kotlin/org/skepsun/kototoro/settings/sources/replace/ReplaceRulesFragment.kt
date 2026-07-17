@@ -97,6 +97,9 @@ private fun ReplaceRulesScreen(
         topBar = {
             TopAppBar(
                 title = { Text("替换规则") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.80f),
+                ),
                 actions = {
                     IconButton(onClick = {
                         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {

@@ -341,6 +341,7 @@ configurations.all {
 	implementation libs.haze.blur
 	implementation libs.haze.blur.materials
 	implementation libs.haze.utils
+	implementation libs.backdrop
 
 	coreLibraryDesugaring libs.desugar.jdk.libs
 	implementation libs.kotlin.stdlib

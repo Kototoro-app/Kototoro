@@ -58,6 +58,9 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import kotlin.math.roundToInt
 
 data class SettingsChoiceOption<T>(
@@ -70,10 +73,16 @@ fun SettingsGroupSurface(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+        shape = RoundedCornerShape(tokens.groupCornerRadius),
+        color = if (isIosStyle) {
+            MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.74f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
+        },
     ) {
         Column(content = content)
     }
@@ -89,14 +98,14 @@ fun SettingsPreferenceSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = if (expressive) 8.dp else 6.dp),
     ) {
         if (title.isNotBlank()) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = if (expressive) 10.dp else 8.dp),
             )
         }
         if (expressive) {
@@ -114,11 +123,15 @@ fun SettingsGroupLabel(
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+        modifier = modifier.padding(
+            horizontal = if (expressive) 16.dp else 20.dp,
+            vertical = 10.dp,
+        ),
     )
 }
 
@@ -276,6 +289,7 @@ fun SettingsSwitchPreference(
     title: String,
     checked: Boolean,
     summary: String? = null,
+    styleHint: String? = null,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -306,6 +320,13 @@ fun SettingsSwitchPreference(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            if (styleHint != null) {
+                Text(
+                    text = styleHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         Spacer(modifier = Modifier.width(8.dp))
         Switch(
@@ -322,6 +343,7 @@ fun <T> SettingsChoicePreference(
     value: T,
     options: List<SettingsChoiceOption<T>>,
     summary: String? = null,
+    styleHint: String? = null,
     enabled: Boolean = true,
 	onSettingsClick: (() -> Unit)? = null,
 	settingsContentDescription: String? = null,
@@ -361,6 +383,13 @@ fun <T> SettingsChoicePreference(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            if (styleHint != null) {
+                Text(
+                    text = styleHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
         Spacer(modifier = Modifier.width(8.dp))
 		if (onSettingsClick != null) {
@@ -383,6 +412,7 @@ fun <T> SettingsChoicePreference(
         ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
+            shape = MaterialTheme.shapes.extraLarge,
             title = { Text(text = title) },
             text = {
                 LazyColumn(
@@ -487,6 +517,7 @@ fun <T> SettingsMultiChoicePreference(
         ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
+            shape = MaterialTheme.shapes.extraLarge,
             title = { Text(text = title) },
             text = {
                 LazyColumn(
@@ -755,6 +786,7 @@ fun SettingsDialogTextPreference(
                     DropdownMenu(
                         expanded = isSuggestionsExpanded && suggestions.isNotEmpty(),
                         onDismissRequest = { isSuggestionsExpanded = false },
+                        shape = MaterialTheme.shapes.large,
                     ) {
                         suggestions.forEach { suggestion ->
                             DropdownMenuItem(
@@ -959,16 +991,14 @@ fun SettingsGroupDivider(
 @Composable
 private fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val tokens = LocalInterfaceStyleTokens.current
     return fillMaxWidth()
         .alpha(if (enabled) 1f else 0.5f)
         .then(
             if (expressive) {
                 Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(0.dp),
-                    )
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .heightIn(min = tokens.controlHeight)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             } else {
                 Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
             },

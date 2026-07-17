@@ -79,6 +79,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.image.panoramaBlur
 import org.skepsun.kototoro.core.ui.image.rememberPanoramaRequestSize
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
@@ -456,7 +457,7 @@ fun DiscoverHeroCarousel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = CompactTopBarHorizontalPadding),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -589,7 +590,7 @@ fun DiscoverHeroCarousel(
                             )
                             onItemClick(item, coverBounds, sharedElementKey)
                         }
-                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                        .padding(horizontal = CompactTopBarHorizontalPadding, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -694,7 +695,7 @@ fun DiscoverHeroCarousel(
                 HeroPagerIndicator(
                     pageCount = items.size,
                     currentPage = selectedIndex,
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding),
                     activeColor = heroContentColor,
                     inactiveColor = heroContentColor.copy(alpha = 0.34f),
                     pageCounter = "${selectedIndex + 1} / ${items.size}",
@@ -713,7 +714,7 @@ fun DiscoverHeroCarousel(
                 currentPage = selectedIndex,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+                    .padding(start = CompactTopBarHorizontalPadding, end = CompactTopBarHorizontalPadding, bottom = 14.dp),
                 activeColor = heroContentColor,
                 inactiveColor = heroContentColor.copy(alpha = 0.34f),
                 pageCounter = "${selectedIndex + 1} / ${items.size}",

@@ -32,8 +32,10 @@ import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
 val LocalMaterialExpressiveComponentsEnabled = staticCompositionLocalOf { false }
+val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MATERIAL_3 }
 val LocalBackgroundStyle = staticCompositionLocalOf { BackgroundStyle.DEFAULT }
 
 @Composable
@@ -46,9 +48,11 @@ fun KototoroTheme(
     val context = LocalContext.current
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
-    val expressiveComponents by settings.observeAsState(AppSettings.KEY_MATERIAL_EXPRESSIVE_COMPONENTS) {
-        isMaterialExpressiveComponentsEnabled
+    val interfaceStyle by settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) {
+        interfaceStyle
     }
+    val expressiveComponents = interfaceStyle == InterfaceStyle.IOS
+    val styleTokens = interfaceStyle.tokens()
     val appFontPreset by settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) {
         appFontPreset
     }
@@ -58,21 +62,20 @@ fun KototoroTheme(
     val backgroundStyle by settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) {
         backgroundStyle
     }
-    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle) {
-        context.resolveComposeColorScheme(darkTheme, backgroundStyle)
+    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle, interfaceStyle) {
+        context.resolveComposeColorScheme(darkTheme, backgroundStyle, interfaceStyle)
     }
     
     val radius = when {
         cornerRadius != -1 -> cornerRadius.dp
-        expressiveComponents -> 18.dp
-        else -> 12.dp
+        else -> styleTokens.groupCornerRadius
     }
     val shapes = Shapes(
-        extraSmall = RoundedCornerShape(if (expressiveComponents) 12.dp else radius.coerceAtMost(14.dp)),
-        small = RoundedCornerShape(if (expressiveComponents) 18.dp else radius.coerceAtMost(18.dp)),
+        extraSmall = RoundedCornerShape(styleTokens.controlCornerRadius.coerceAtMost(14.dp)),
+        small = RoundedCornerShape(styleTokens.controlCornerRadius),
         medium = RoundedCornerShape(radius),
-        large = RoundedCornerShape(radius * 1.5f),
-        extraLarge = RoundedCornerShape(radius * 2f),
+        large = RoundedCornerShape(styleTokens.groupCornerRadius),
+        extraLarge = RoundedCornerShape(styleTokens.groupCornerRadius),
     )
     val activeFontPreset = if (expressiveComponents) expressiveAppFontPreset else appFontPreset
     val googleFontProvider = remember {
@@ -87,13 +90,15 @@ fun KototoroTheme(
     }
     val typography = remember(expressiveComponents, fontFamily) {
         kototoroTypography(
-            expressive = expressiveComponents,
+            isIosStyle = expressiveComponents,
             defaultFontFamily = fontFamily,
         )
     }
 
     CompositionLocalProvider(
         LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
+        LocalInterfaceStyle provides interfaceStyle,
+        LocalInterfaceStyleTokens provides styleTokens,
         LocalBackgroundStyle provides backgroundStyle,
     ) {
         MaterialTheme(
@@ -111,19 +116,21 @@ private fun AppFontPreset.toFontFamily(provider: GoogleFont.Provider): FontFamil
         AppFontPreset.ROBOTO -> "Roboto"
         AppFontPreset.ROBOTO_FLEX -> "Roboto Flex"
         AppFontPreset.GOOGLE_SANS -> "Google Sans"
+        AppFontPreset.NOTO_SANS -> "Noto Sans"
+        AppFontPreset.INTER -> "Inter"
     }
     return FontFamily(Font(googleFont = GoogleFont(fontName), fontProvider = provider))
 }
 
 private fun kototoroTypography(
-    expressive: Boolean,
+    isIosStyle: Boolean,
     defaultFontFamily: FontFamily?,
 ): Typography {
     val base = Typography()
     fun androidx.compose.ui.text.TextStyle.withDefaultFont(): androidx.compose.ui.text.TextStyle {
         return if (defaultFontFamily == null) this else copy(fontFamily = defaultFontFamily)
     }
-    if (!expressive) {
+    if (!isIosStyle) {
         return base.copy(
             displayLarge = base.displayLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
             displayMedium = base.displayMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
@@ -149,21 +156,22 @@ private fun kototoroTypography(
         headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
         headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
         headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 23.sp, lineHeight = 30.sp, letterSpacing = 0.sp).withDefaultFont(),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 24.sp, letterSpacing = 0.sp).withDefaultFont(),
-        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, letterSpacing = 0.sp).withDefaultFont(),
-        bodyLarge = base.bodyLarge.copy(fontSize = 16.sp, lineHeight = 25.sp, letterSpacing = 0.sp).withDefaultFont(),
-        bodyMedium = base.bodyMedium.copy(fontSize = 14.sp, lineHeight = 21.sp, letterSpacing = 0.sp).withDefaultFont(),
-        bodySmall = base.bodySmall.copy(fontSize = 12.sp, lineHeight = 18.sp, letterSpacing = 0.sp).withDefaultFont(),
-        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp).withDefaultFont(),
-        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp, lineHeight = 17.sp, letterSpacing = 0.sp).withDefaultFont(),
-        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 15.sp, letterSpacing = 0.sp).withDefaultFont(),
+        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = 0.sp).withDefaultFont(),
+        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Medium, fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = 0.sp).withDefaultFont(),
+        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp).withDefaultFont(),
+        bodyLarge = base.bodyLarge.copy(fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = 0.sp).withDefaultFont(),
+        bodyMedium = base.bodyMedium.copy(fontSize = 15.sp, lineHeight = 21.sp, letterSpacing = 0.sp).withDefaultFont(),
+        bodySmall = base.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.sp).withDefaultFont(),
+        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp).withDefaultFont(),
+        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.sp).withDefaultFont(),
+        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.sp).withDefaultFont(),
     )
 }
 
 private fun android.content.Context.resolveComposeColorScheme(
     darkTheme: Boolean,
     backgroundStyle: BackgroundStyle,
+    interfaceStyle: InterfaceStyle,
 ): ColorScheme {
     val background = themeColor(android.R.attr.colorBackground)
     val surface = themeColorByName("colorSurface", background)
@@ -172,7 +180,7 @@ private fun android.content.Context.resolveComposeColorScheme(
     val surfaceContainer = themeColorByName("colorSurfaceContainer", surface)
     val surfaceContainerHigh = themeColorByName("colorSurfaceContainerHigh", surfaceContainer)
 
-    val common = ThemeColorSnapshot(
+    val baseCommon = ThemeColorSnapshot(
         primary = primary,
         onPrimary = themeColorByName("colorOnPrimary"),
         primaryContainer = themeColorByName("colorPrimaryContainer", primary),
@@ -209,51 +217,81 @@ private fun android.content.Context.resolveComposeColorScheme(
         surfaceContainerHighest = themeColorByName("colorSurfaceContainerHighest", surfaceContainerHigh),
     )
 
-    return if (darkTheme) {
+    val common = if (interfaceStyle == InterfaceStyle.IOS) {
+        val primary = if (darkTheme) Color(0xFF0A84FF) else Color(0xFF007AFF)
+        val secondary = if (darkTheme) Color(0xFF64D2FF) else Color(0xFF5856D6)
+        baseCommon.copy(
+            primary = primary,
+            onPrimary = Color.White,
+            primaryContainer = if (darkTheme) Color(0xFF153A61) else Color(0xFFDCEEFF),
+            onPrimaryContainer = if (darkTheme) Color(0xFFE7F3FF) else Color(0xFF003B6F),
+            secondary = secondary,
+            onSecondary = Color.White,
+            secondaryContainer = if (darkTheme) Color(0xFF34305F) else Color(0xFFE8E6FF),
+            onSecondaryContainer = if (darkTheme) Color(0xFFF0EEFF) else Color(0xFF25215D),
+        )
+    } else {
+        baseCommon
+    }
+
+    val isArtworkBlur = backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    return if (darkTheme || isArtworkBlur) {
+        val onBackground = if (isArtworkBlur) Color.White else common.onBackground
+        val onSurface = if (isArtworkBlur) Color.White else common.onSurface
+        val onSurfaceVariant = if (isArtworkBlur) Color(0xFFE4E1E9) else common.onSurfaceVariant
         val baseBg = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(Color(0xFF0C0D0F), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color.Black
             BackgroundStyle.DEFAULT -> Color.Black
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color.Transparent
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF101114)
         }
         val baseSurface = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(Color(0xFF111316), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF141414)
             BackgroundStyle.DEFAULT -> Color.Black
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF0A0A0E).copy(alpha = 0.45f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF17181D)
         }
         val liftedSurfaceContainerLowest = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerLowest.liftForDarkContrast(0.10f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF121212)
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF121216).copy(alpha = 0.40f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF141519)
             else -> common.surfaceContainerLowest.liftForDarkContrast(0.10f)
         }
         val liftedSurfaceContainerLow = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerLow.liftForDarkContrast(0.14f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF161616)
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF16161A).copy(alpha = 0.46f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF1B1C21)
             else -> common.surfaceContainerLow.liftForDarkContrast(0.14f)
         }
         val liftedSurfaceContainer = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainer.liftForDarkContrast(0.16f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF1E1E1E)
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF1A1A20).copy(alpha = 0.52f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF222329)
             else -> common.surfaceContainer.liftForDarkContrast(0.16f)
         }
         val liftedSurfaceContainerHigh = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerHigh.liftForDarkContrast(0.18f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF242424)
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF202026).copy(alpha = 0.86f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF2B2C33)
             else -> common.surfaceContainerHigh.liftForDarkContrast(0.18f)
         }
         val liftedSurfaceContainerHighest = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerHighest.liftForDarkContrast(0.20f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF2C2C2C)
             BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF26262E).copy(alpha = 0.90f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF34353D)
             else -> common.surfaceContainerHighest.liftForDarkContrast(0.20f)
         }
         val liftedSurfaceVariant = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
             common.surfaceVariant.copy(alpha = 0.52f)
+        } else if (backgroundStyle == BackgroundStyle.DYNAMIC_TONAL_GLASS) {
+            common.surfaceVariant.copy(alpha = 0.72f)
         } else {
             common.surfaceVariant
         }
@@ -269,6 +307,8 @@ private fun android.content.Context.resolveComposeColorScheme(
         }
         val liftedSecondaryContainer = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
             common.secondaryContainer.copy(alpha = 0.55f)
+        } else if (backgroundStyle == BackgroundStyle.DYNAMIC_TONAL_GLASS) {
+            lerp(common.secondaryContainer, common.primaryContainer, 0.35f)
         } else {
             common.secondaryContainer
         }
@@ -293,11 +333,11 @@ private fun android.content.Context.resolveComposeColorScheme(
             tertiaryContainer = common.tertiaryContainer,
             onTertiaryContainer = common.onTertiaryContainer,
             background = baseBg,
-            onBackground = common.onBackground,
+            onBackground = onBackground,
             surface = baseSurface,
-            onSurface = common.onSurface,
+            onSurface = onSurface,
             surfaceVariant = liftedSurfaceVariant,
-            onSurfaceVariant = common.onSurfaceVariant,
+            onSurfaceVariant = onSurfaceVariant,
             surfaceTint = common.primary,
             inverseSurface = common.inverseSurface,
             inverseOnSurface = common.inverseOnSurface,
@@ -317,15 +357,51 @@ private fun android.content.Context.resolveComposeColorScheme(
             surfaceContainerHighest = liftedSurfaceContainerHighest,
         )
     } else {
-        val lightBg = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) Color.Transparent else common.background
-        val lightSurface = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surface.copy(alpha = 0.55f) else common.surface
-        val lightSurfaceContainerLowest = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerLowest.copy(alpha = 0.45f) else common.surfaceContainerLowest
-        val lightSurfaceContainerLow = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerLow.copy(alpha = 0.50f) else common.surfaceContainerLow
-        val lightSurfaceContainer = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainer.copy(alpha = 0.56f) else common.surfaceContainer
-        val lightSurfaceContainerHigh = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerHigh.copy(alpha = 0.86f) else common.surfaceContainerHigh
-        val lightSurfaceContainerHighest = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceContainerHighest.copy(alpha = 0.90f) else common.surfaceContainerHighest
-        val lightSurfaceVariant = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.surfaceVariant.copy(alpha = 0.55f) else common.surfaceVariant
-        val lightSecondaryContainer = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) common.secondaryContainer.copy(alpha = 0.60f) else common.secondaryContainer
+        val lightBg = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color.Transparent
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFF6F6F8)
+            else -> common.background
+        }
+        val lightSurface = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surface.copy(alpha = 0.55f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFFFFFFF)
+            else -> common.surface
+        }
+        val lightSurfaceContainerLowest = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainerLowest.copy(alpha = 0.45f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFF9F9FB)
+            else -> common.surfaceContainerLowest
+        }
+        val lightSurfaceContainerLow = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainerLow.copy(alpha = 0.50f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFEFEFF3)
+            else -> common.surfaceContainerLow
+        }
+        val lightSurfaceContainer = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainer.copy(alpha = 0.56f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFE9E9EE)
+            else -> common.surfaceContainer
+        }
+        val lightSurfaceContainerHigh = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainerHigh.copy(alpha = 0.86f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFE2E2E8)
+            else -> common.surfaceContainerHigh
+        }
+        val lightSurfaceContainerHighest = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainerHighest.copy(alpha = 0.90f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFDADAE1)
+            else -> common.surfaceContainerHighest
+        }
+        val lightSurfaceVariant = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceVariant.copy(alpha = 0.55f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> common.surfaceVariant.copy(alpha = 0.72f)
+            else -> common.surfaceVariant
+        }
+        val lightSecondaryContainer = when (backgroundStyle) {
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.secondaryContainer.copy(alpha = 0.60f)
+            BackgroundStyle.DYNAMIC_TONAL_GLASS -> lerp(common.secondaryContainer, common.primaryContainer, 0.35f)
+            else -> common.secondaryContainer
+        }
         val resolvedScrim = if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
             Color(0xCC000000)
         } else {

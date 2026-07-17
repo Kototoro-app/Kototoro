@@ -27,6 +27,7 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.util.ActionModeDelegate
 import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.core.util.ext.isWebViewUnavailable
@@ -69,7 +70,7 @@ abstract class BaseActivity<B : ViewBinding> :
 		if (isAmoledTheme) {
 			setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
 		}
-		if (settings.isMaterialExpressiveComponentsEnabled) {
+		if (settings.interfaceStyle == InterfaceStyle.IOS) {
 			setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)
 		}
 		when(settings.loadingCircleStyle) {

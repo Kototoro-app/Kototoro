@@ -3,9 +3,11 @@ package org.skepsun.kototoro.space.ui
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -44,9 +47,16 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
 
@@ -66,35 +76,72 @@ fun SpaceSwitcherFab(
 	)
 	val colorScheme = MaterialTheme.colorScheme
 	val fabAccentColor = colorScheme.primaryContainer
-	GlassSurface(
-		modifier = modifier
-			.clickable(
-				role = Role.Button,
-				onClick = onClick,
-			)
-			.semantics { contentDescription = description },
-		style = GlassDefaults.topBarChromeStyle().copy(
-			containerAlpha = SPACE_SWITCHER_FAB_MIN_ALPHA,
-			borderAlpha = 0.24f,
-		),
-		shape = CircleShape,
-		expandHazeLayerBounds = false,
-		visualTreatment = GlassVisualTreatment.TopBarPrototype,
-		componentRole = GlassComponentRole.TopBar,
-	) {
+	val backdrop = LocalLiquidGlassBackdrop.current
+	val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+	val fabModifier = modifier
+		.clickable(
+			role = Role.Button,
+			onClick = onClick,
+		)
+		.semantics { contentDescription = description }
+	val content: @Composable BoxScope.() -> Unit = {
 		Box(
 			modifier = Modifier
 				.fillMaxSize()
 				.background(
-					color = fabAccentColor.copy(alpha = SPACE_SWITCHER_FAB_MIN_ALPHA),
+					color = if (useBackdrop) {
+						Color.White.copy(alpha = 0.06f)
+					} else {
+						fabAccentColor.copy(alpha = SPACE_SWITCHER_FAB_MIN_ALPHA)
+					},
 					shape = CircleShape,
 				),
 			contentAlignment = Alignment.Center,
 		) {
-			CompositionLocalProvider(LocalContentColor provides colorScheme.onPrimaryContainer) {
+			CompositionLocalProvider(
+				LocalContentColor provides if (useBackdrop) {
+					colorScheme.onSurface
+				} else {
+					colorScheme.onPrimaryContainer
+				},
+			) {
 				SpaceGlyph(iconState.presentation, iconState.monogram)
 			}
 		}
+	}
+	if (useBackdrop) {
+		Box(
+			modifier = fabModifier
+				.background(Color.White.copy(alpha = 0.08f), CircleShape)
+				.drawBackdrop(
+					backdrop = backdrop,
+					shape = { CircleShape },
+					effects = {
+						vibrancy()
+						blur(4.dp.toPx())
+						lens(
+							refractionHeight = 10.dp.toPx(),
+							refractionAmount = 12.dp.toPx(),
+							chromaticAberration = true,
+						)
+					},
+				)
+				.border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
+			content = content,
+		)
+	} else {
+		GlassSurface(
+			modifier = fabModifier,
+			style = GlassDefaults.topBarChromeStyle().copy(
+				containerAlpha = SPACE_SWITCHER_FAB_MIN_ALPHA,
+				borderAlpha = 0.24f,
+			),
+			shape = CircleShape,
+			expandHazeLayerBounds = false,
+			visualTreatment = GlassVisualTreatment.TopBarPrototype,
+			componentRole = GlassComponentRole.TopBar,
+			content = content,
+		)
 	}
 }
 

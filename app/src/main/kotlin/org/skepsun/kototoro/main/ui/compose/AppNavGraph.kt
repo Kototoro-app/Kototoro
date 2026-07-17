@@ -69,12 +69,18 @@ import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.handleDetailsAction
@@ -715,25 +721,47 @@ internal fun MainShellRouteContent(
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val hazeState = LocalHazeState.current
-    val useRuntimeHaze = (LocalGlassPrefs.current?.isGlassEffectEnabled == true) && supportsRuntimeHaze()
+    val rootGlassMenuHost = remember { RootGlassMenuHost() }
     val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
         SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
     }
     Box(modifier = Modifier.fillMaxSize()) {
-        MainTopLevelNavDisplay(
-            navState = mainNavState,
-            modifier = Modifier.fillMaxSize(),
-            sharedTransitionScope = sharedTransitionScope,
-            animatedVisibilityScopeOverride = animatedVisibilityScope,
-        ) { key ->
+        val providedLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
+        val backdropBackground = MaterialTheme.colorScheme.background
+        val layerBackdrop = if (providedLayerBackdrop != null) {
+            providedLayerBackdrop
+        } else {
+            rememberLayerBackdrop {
+                drawRect(backdropBackground)
+                drawContent()
+            }
+        }
+        val backdrop = LocalLiquidGlassBackdrop.current ?: layerBackdrop
+        val useLiquidGlass = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val useRuntimeHaze = !useLiquidGlass &&
+            (LocalGlassPrefs.current?.isGlassEffectEnabled == true) &&
+            supportsRuntimeHaze()
+        CompositionLocalProvider(
+            LocalLiquidGlassBackdrop provides backdrop,
+            LocalLiquidGlassLayerBackdrop provides layerBackdrop,
+            LocalRootGlassMenuHost provides rootGlassMenuHost,
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(if (useLiquidGlass) Modifier.layerBackdrop(layerBackdrop) else Modifier)
                     .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
             ) {
-                MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                    MainShellTopLevelEntryContent(
-                        key = key,
+                MainTopLevelNavDisplay(
+                    navState = mainNavState,
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScopeOverride = animatedVisibilityScope,
+                ) { key ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
+                            MainShellTopLevelEntryContent(
+                                key = key,
                         navController = navController,
                         activity = activity,
                         mainActivity = mainActivity,
@@ -752,12 +780,15 @@ internal fun MainShellRouteContent(
                         onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                         onOpenSearch = onOpenSearch,
                         navigateToDetailsWithContent = navigateToDetailsWithContent,
-                        navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                    )
+                                navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                            )
+                        }
+                    }
                 }
             }
+            mainShellChrome()
+            RootGlassMenuOverlay(rootGlassMenuHost)
         }
-        mainShellChrome()
     }
 }
 

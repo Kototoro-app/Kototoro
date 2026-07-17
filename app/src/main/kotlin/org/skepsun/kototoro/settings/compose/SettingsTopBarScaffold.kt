@@ -33,12 +33,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 
 private val SettingsSearchTopBarHeight = 56.dp
 internal val SettingsContentHorizontalPadding = CompactTopBarHorizontalPadding
@@ -138,11 +137,12 @@ private fun SettingsSeparatedTopAppBar(
 	actions: (@Composable BoxScope.() -> Unit)?,
 ) {
 	val colorScheme = MaterialTheme.colorScheme
+	val tokens = LocalInterfaceStyleTokens.current
 	SettingsTopBarSurface {
 		Row(
 			modifier = Modifier
 				.fillMaxWidth()
-				.height(CompactTopBarPillHeight),
+				.height(tokens.compactControlHeight),
 			horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
@@ -184,7 +184,11 @@ private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
 			modifier = Modifier
 				.fillMaxWidth()
 				.statusBarsPadding()
-				.padding(horizontal = CompactTopBarHorizontalPadding),
+				.padding(
+					start = CompactTopBarHorizontalPadding,
+					end = CompactTopBarHorizontalPadding,
+					bottom = 6.dp,
+				),
 			content = { content() },
 		)
 	}
@@ -195,9 +199,10 @@ private fun SettingsTopBarIconButton(
 	onClick: () -> Unit,
 	content: @Composable () -> Unit,
 ) {
+	val tokens = LocalInterfaceStyleTokens.current
 	Surface(
 		onClick = onClick,
-		modifier = Modifier.size(CompactTopBarCompactButtonSize),
+		modifier = Modifier.size(tokens.topBarButtonSize),
 		shape = CircleShape,
 		color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
 		border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),

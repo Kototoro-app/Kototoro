@@ -7,6 +7,7 @@ avifDecoder = "1.1.1.14d8e3c4"
 biometric = "1.4.0-alpha04"
 coil = "3.4.0"
 haze = "2.0.0-alpha03"
+backdrop = "2.0.0-alpha03"
 collections = "1.5.0"
 # https://github.com/google/conscrypt/issues/1268
 #noinspection NewerVersionAvailable,GradleDependency - 2.5.3 cause crashes
@@ -216,6 +217,7 @@ haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
 haze-blur-materials = { module = "dev.chrisbanes.haze:haze-blur-materials", version.ref = "haze" }
 haze-utils = { module = "dev.chrisbanes.haze:haze-utils", version.ref = "haze" }
+backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
 
 [plugins]
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

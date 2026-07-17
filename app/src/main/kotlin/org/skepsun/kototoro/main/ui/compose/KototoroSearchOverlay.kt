@@ -47,6 +47,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -55,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +74,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -84,11 +87,17 @@ import coil3.request.crossfade
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.entitygraph.domain.EntityType
@@ -130,17 +139,18 @@ private data class SearchOverlayStyle(
 private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val colorScheme = MaterialTheme.colorScheme
+    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
     return if (expressive) {
         SearchOverlayStyle(
             collapsedCornerRadius = 28.dp,
-            inputHeight = 52.dp,
+            inputHeight = CompactTopBarPillHeight,
             inputCornerRadius = 26.dp,
-            inputContainerColor = colorScheme.surfaceContainerHigh,
-            panelContainerColor = colorScheme.surfaceContainerLowest,
+            inputContainerColor = colorScheme.surfaceContainerHigh.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surfaceContainerHigh.alpha),
+            panelContainerColor = colorScheme.surfaceContainerLowest.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surfaceContainerLowest.alpha),
             listHorizontalPadding = 12.dp,
             listVerticalSpacing = 4.dp,
             rowCornerRadius = 18.dp,
-            rowContainerColor = colorScheme.surfaceContainerLow,
+            rowContainerColor = colorScheme.surfaceContainerLow.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surfaceContainerLow.alpha),
             rowVerticalPadding = 10.dp,
             chipHeight = 28.dp,
             chipCornerRadius = 14.dp,
@@ -150,14 +160,14 @@ private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
     } else {
         SearchOverlayStyle(
             collapsedCornerRadius = 16.dp,
-            inputHeight = 48.dp,
+            inputHeight = CompactTopBarPillHeight,
             inputCornerRadius = 12.dp,
-            inputContainerColor = colorScheme.surfaceVariant.copy(alpha = 0.72f),
-            panelContainerColor = colorScheme.surface,
+            inputContainerColor = colorScheme.surfaceVariant.copy(alpha = if (isArtworkBackground) 1f else 0.72f),
+            panelContainerColor = colorScheme.surface.copy(alpha = if (isArtworkBackground) 1f else colorScheme.surface.alpha),
             listHorizontalPadding = 8.dp,
             listVerticalSpacing = 0.dp,
             rowCornerRadius = 0.dp,
-            rowContainerColor = Color.Transparent,
+            rowContainerColor = if (isArtworkBackground) colorScheme.surfaceContainerLow.copy(alpha = 1f) else Color.Transparent,
             rowVerticalPadding = 12.dp,
             chipHeight = 32.dp,
             chipCornerRadius = 8.dp,
@@ -342,15 +352,22 @@ fun KototoroSearchOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                        .padding(horizontal = CompactTopBarHorizontalPadding),
+                    horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = onDismissRequest) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
+                    TopBarControlSurface(allowRuntimeHaze = false) {
+                        IconButton(
+                            onClick = onDismissRequest,
+                            modifier = Modifier.size(CompactTopBarPillHeight),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                                modifier = Modifier.size(CompactTopBarIconSize),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                     SearchInputField(
                         value = query,
@@ -401,37 +418,48 @@ fun KototoroSearchOverlay(
                             },
                         ),
                     )
-                    IconButton(
-                        onClick = { showAdvanced = !showAdvanced },
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (showAdvanced)
-                                Icons.Filled.KeyboardArrowUp
-                            else
-                                Icons.Filled.KeyboardArrowDown,
-                            contentDescription = stringResource(
-                                if (showAdvanced) R.string.collapse else R.string.expand
-                            ),
-                            modifier = Modifier.size(20.dp),
-                            tint = if (showAdvanced) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(
-                        onClick = { showFilterSheet = true },
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_filter_menu),
-                            contentDescription = stringResource(R.string.display_options),
-                            modifier = Modifier.size(20.dp),
-                            tint = if (selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
-                                      selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size ||
-                                      pinnedOnly || hideEmpty)
-                                MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    TopBarControlSurface(allowRuntimeHaze = false) {
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
+                            Row(
+                                modifier = Modifier
+                                    .height(CompactTopBarPillHeight)
+                                    .padding(horizontal = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                IconButton(
+                                    onClick = { showAdvanced = !showAdvanced },
+                                    modifier = Modifier.size(CompactTopBarPillHeight),
+                                ) {
+                                    Icon(
+                                        imageVector = if (showAdvanced)
+                                            Icons.Filled.KeyboardArrowUp
+                                        else
+                                            Icons.Filled.KeyboardArrowDown,
+                                        contentDescription = stringResource(
+                                            if (showAdvanced) R.string.collapse else R.string.expand
+                                        ),
+                                        modifier = Modifier.size(CompactTopBarIconSize),
+                                        tint = if (showAdvanced) MaterialTheme.colorScheme.primary
+                                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { showFilterSheet = true },
+                                    modifier = Modifier.size(CompactTopBarPillHeight),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_filter_menu),
+                                        contentDescription = stringResource(R.string.display_options),
+                                        modifier = Modifier.size(CompactTopBarIconSize),
+                                        tint = if (selectedSourceTypes.size < ALL_SOURCE_TYPES.size ||
+                                                  selectedContentKinds.size < ALL_SEARCH_CONTENT_KINDS.size ||
+                                                  pinnedOnly || hideEmpty)
+                                            MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 if (showAdvanced) {
@@ -486,7 +514,10 @@ fun KototoroSearchOverlay(
                     }
                 }
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f))
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f),
+            )
             SuggestionList(
                 suggestions = suggestions,
                 bottomPadding = navigationBarPadding.calculateBottomPadding(),
@@ -676,10 +707,12 @@ private fun SuggestionList(
                         state = dismissState,
                         modifier = Modifier.fillMaxWidth(),
                         backgroundContent = {
-                            RecentQueryDismissBackground(
-                                dismissDirection = dismissState.dismissDirection,
-                                style = style,
-                            )
+                            if (dismissState.dismissDirection != SwipeToDismissBoxValue.Settled) {
+                                RecentQueryDismissBackground(
+                                    dismissDirection = dismissState.dismissDirection,
+                                    style = style,
+                                )
+                            }
                         },
                         enableDismissFromStartToEnd = true,
                         enableDismissFromEndToStart = true,
@@ -912,7 +945,9 @@ private fun SearchSuggestionRow(
                 modifier = Modifier.size(24.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                leadingIcon()
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    leadingIcon()
+                }
             }
             Text(
                 text = text,

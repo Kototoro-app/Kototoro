@@ -102,6 +102,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
@@ -694,7 +695,11 @@ fun KototoroExploreHostRoute(
         modifier = Modifier.fillMaxSize(),
         indicatorTopInset = contentPadding,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
             // ===== 内容流 =====
             LazyColumn(
                 state = listState,
@@ -742,7 +747,7 @@ fun KototoroExploreHostRoute(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.background)
-                                .padding(start = 16.dp, end = 16.dp, bottom = 36.dp),
+                                .padding(start = CompactTopBarHorizontalPadding, end = CompactTopBarHorizontalPadding, bottom = 36.dp),
                         )
                     }
                 }
@@ -759,7 +764,7 @@ fun KototoroExploreHostRoute(
                             title = stringResource(row.category.nameResId),
                             items = showcaseRow.items,
                             posterStyle = posterStyle,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding, vertical = 5.dp),
                             onItemClick = { item, sharedElementKey ->
                                 markBrowseDetailsNavigation()
                                 val didNavigate = openTrackingItem(
@@ -787,7 +792,7 @@ fun KototoroExploreHostRoute(
                     item(key = "popular_header") {
                         BrowsePopularHeader(
                             title = stringResource(R.string.popular),
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding, vertical = 5.dp),
                         )
                     }
                     itemsIndexed(
@@ -813,7 +818,7 @@ fun KototoroExploreHostRoute(
                                 posterStyle = posterStyle,
                                 sharedElementKey = sharedElementKey,
                                 panoramaCoverBlur = panoramaCoverBlur,
-                                modifier = animatedModifier.padding(horizontal = 16.dp, vertical = 5.dp),
+                                modifier = animatedModifier.padding(horizontal = CompactTopBarHorizontalPadding, vertical = 5.dp),
                                 onClick = {
                                     markBrowseDetailsNavigation()
                                     val didNavigate = openTrackingItem(
@@ -837,7 +842,7 @@ fun KototoroExploreHostRoute(
                     item(key = "popular_loading") {
                         BrowsePopularLoadingSection(
                             posterStyle = posterStyle,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding, vertical = 5.dp),
                         )
                     }
                 }
@@ -1190,8 +1195,8 @@ private fun LazyListScope.sourceQuickAccessItems(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(
-                    start = 16.dp,
-                    end = 16.dp,
+                    start = CompactTopBarHorizontalPadding,
+                    end = CompactTopBarHorizontalPadding,
                     top = topBackgroundOverlap,
                     bottom = 4.dp,
                 ),
@@ -1235,8 +1240,8 @@ private fun LazyListScope.sourceQuickAccessItems(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background)
                     .padding(
-                        start = 16.dp,
-                        end = 16.dp,
+                        start = CompactTopBarHorizontalPadding,
+                        end = CompactTopBarHorizontalPadding,
                         bottom = if (rowIndex == rows.lastIndex) 0.dp else metrics.gridSpacing,
                     ),
             )
@@ -2025,7 +2030,7 @@ private fun BrowseHeroSkeleton(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = CompactTopBarHorizontalPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ExploreSkeletonBlock(

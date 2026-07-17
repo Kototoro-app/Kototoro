@@ -100,6 +100,8 @@ enum class AppFontPreset {
 	ROBOTO,
 	ROBOTO_FLEX,
 	GOOGLE_SANS,
+	NOTO_SANS,
+	INTER,
 }
 
 @Singleton
@@ -199,19 +201,35 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, value) }
 
 	var isNavExpressivePillEnabled: Boolean
-		get() = prefs.getBoolean(KEY_NAV_EXPRESSIVE_PILL, false)
+		get() = prefs.getBoolean(KEY_NAV_EXPRESSIVE_PILL, interfaceStyle == InterfaceStyle.IOS)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_EXPRESSIVE_PILL, value) }
 
+	@Deprecated("Use interfaceStyle instead")
 	var isMaterialExpressiveComponentsEnabled: Boolean
 		get() = prefs.getBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, false)
 		set(value) = prefs.edit { putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value) }
+
+	var interfaceStyle: InterfaceStyle
+		get() = prefs.getEnumValue(
+			KEY_INTERFACE_STYLE,
+			if (isMaterialExpressiveComponentsEnabled) InterfaceStyle.IOS else InterfaceStyle.MATERIAL_3,
+		)
+		set(value) {
+			prefs.edit {
+				putEnumValue(KEY_INTERFACE_STYLE, value)
+				putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value == InterfaceStyle.IOS)
+				if (value == InterfaceStyle.IOS && !prefs.contains(KEY_BACKGROUND_STYLE)) {
+					putEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DYNAMIC_TONAL_GLASS)
+				}
+			}
+		}
 
 	var appFontPreset: AppFontPreset
 		get() = prefs.getEnumValue(KEY_APP_FONT_PRESET, AppFontPreset.SYSTEM)
 		set(value) = prefs.edit { putEnumValue(KEY_APP_FONT_PRESET, value) }
 
 	var expressiveAppFontPreset: AppFontPreset
-		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.ROBOTO_FLEX)
+		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.NOTO_SANS)
 		set(value) = prefs.edit { putEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, value) }
 
 	var navHeight: Int
@@ -2117,6 +2135,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_THEME_AMOLED = "amoled_theme"
 		const val KEY_BACKGROUND_STYLE = "background_style"
 		const val KEY_MATERIAL_EXPRESSIVE_COMPONENTS = "material_expressive_components"
+		const val KEY_INTERFACE_STYLE = "interface_style"
 		const val KEY_APP_FONT_PRESET = "app_font_preset"
 		const val KEY_EXPRESSIVE_APP_FONT_PRESET = "expressive_app_font_preset"
 		const val KEY_TABLET_UI_MODE = "tablet_ui_mode"

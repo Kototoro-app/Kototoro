@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
@@ -34,7 +36,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,7 +57,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -65,6 +69,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -79,6 +85,11 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -150,6 +161,7 @@ fun KototoroTopBar(
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var isLanguagePresetMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var topBarMenuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     var showDisplayOptionsSheet by rememberSaveable { mutableStateOf(false) }
     var areCompactTabsExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingListMode by remember(showDisplayOptionsSheet) { mutableStateOf(currentListMode) }
@@ -267,7 +279,11 @@ fun KototoroTopBar(
                                 )
                             }
                             if (showMoreActions) {
-                                Box {
+                                Box(
+                                    modifier = Modifier.onGloballyPositioned {
+                                        topBarMenuAnchorBounds = it.boundsInRoot()
+                                    },
+                                ) {
                                     IconButton(
                                         onClick = { isMoreMenuExpanded = true },
                                         modifier = Modifier.size(CompactTopBarPillHeight),
@@ -282,12 +298,15 @@ fun KototoroTopBar(
                                         expanded = isMoreMenuExpanded,
                                         onDismissRequest = { isMoreMenuExpanded = false },
                                         offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
+                                        alignToAnchorEnd = true,
+                                        useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                        anchorBounds = topBarMenuAnchorBounds,
                                         shape = CompactTopBarPillShape,
                                         style = GlassDefaults.subtleStyle(),
                                     ) {
                                     if (supportsDisplayModeMenu || supportsGridSizeSlider || displayOptionsExtraContent != null) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.display_options)) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(stringResource(R.string.display_options)) },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 showDisplayOptionsSheet = true
@@ -297,8 +316,8 @@ fun KototoroTopBar(
                                         HorizontalDivider()
                                     }
                                     if (isLanguagePresetFilterVisible) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.show_language_preset_filter)) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(stringResource(R.string.show_language_preset_filter)) },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 isLanguagePresetMenuExpanded = true
@@ -307,22 +326,22 @@ fun KototoroTopBar(
                                         HorizontalDivider()
                                     }
                                     if (showSourceSettingsEntry) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.extension_management)) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(stringResource(R.string.extension_management)) },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 onManageSourcesClick()
                                             },
                                         )
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.manage_sources)) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(stringResource(R.string.manage_sources)) },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 onSourceSettingsClick()
                                             },
                                         )
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.tracking_accounts)) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(stringResource(R.string.tracking_accounts)) },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 onTrackingAccountsClick()
@@ -331,8 +350,8 @@ fun KototoroTopBar(
                                         HorizontalDivider()
                                     }
                                     contextualMenuActions.forEach { action ->
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(action.titleRes)) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(stringResource(action.titleRes)) },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 action.onClick()
@@ -342,15 +361,15 @@ fun KototoroTopBar(
                                     if (contextualMenuActions.isNotEmpty()) {
                                         HorizontalDivider()
                                     }
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.settings)) },
+                                    CompactDropdownMenuItem(
+                                        text = { CompactDropdownMenuText(stringResource(R.string.settings)) },
                                         onClick = {
                                             isMoreMenuExpanded = false
                                             onSettingsClick()
                                         },
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.incognito_mode)) },
+                                    CompactDropdownMenuItem(
+                                        text = { CompactDropdownMenuText(stringResource(R.string.incognito_mode)) },
                                         trailingIcon = {
                                             Checkbox(
                                                 checked = isIncognitoModeEnabled,
@@ -368,11 +387,14 @@ fun KototoroTopBar(
                                     expanded = isLanguagePresetMenuExpanded,
                                     onDismissRequest = { isLanguagePresetMenuExpanded = false },
                                     offset = DpOffset(x = 0.dp, y = 4.dp),
+                                    alignToAnchorEnd = true,
+                                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                    anchorBounds = topBarMenuAnchorBounds,
                                     shape = CompactTopBarPillShape,
                                     style = GlassDefaults.subtleStyle(),
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.all)) },
+                                    CompactDropdownMenuItem(
+                                        text = { CompactDropdownMenuText(stringResource(R.string.all)) },
                                         onClick = {
                                             onLanguagePresetSelected(-1L)
                                             isLanguagePresetMenuExpanded = false
@@ -385,8 +407,8 @@ fun KototoroTopBar(
                                         },
                                     )
                                     languagePresetEntries.forEach { preset ->
-                                        DropdownMenuItem(
-                                            text = { Text(preset.title) },
+                                        CompactDropdownMenuItem(
+                                            text = { CompactDropdownMenuText(preset.title) },
                                             onClick = {
                                                 onLanguagePresetSelected(preset.id)
                                                 isLanguagePresetMenuExpanded = false
@@ -400,8 +422,8 @@ fun KototoroTopBar(
                                         )
                                     }
                                     HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.manage_language_presets)) },
+                                    CompactDropdownMenuItem(
+                                        text = { CompactDropdownMenuText(stringResource(R.string.manage_language_presets)) },
                                         onClick = {
                                             isLanguagePresetMenuExpanded = false
                                             onManageLanguagePresets()
@@ -494,26 +516,54 @@ fun KototoroTopBar(
 }
 
 @Composable
-private fun TopBarControlSurface(
+internal fun TopBarControlSurface(
+    allowRuntimeHaze: Boolean = true,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    GlassSurface(
-        modifier = modifier,
-        shape = if (expressive) RoundedCornerShape(999.dp) else CompactTopBarPillShape,
-        style = if (expressive) {
+    val shape = if (expressive) RoundedCornerShape(999.dp) else CompactTopBarPillShape
+    val style = if (expressive) {
             GlassDefaults.topBarChromeStyle().copy(
                 containerAlpha = 0.90f,
                 borderAlpha = 0.24f,
             )
         } else {
             GlassDefaults.topBarChromeStyle()
-        },
-        visualTreatment = GlassVisualTreatment.TopBarPrototype,
-        componentRole = GlassComponentRole.TopBar,
-        content = content,
-    )
+        }
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    if (useBackdrop) {
+        Box(
+            modifier = modifier
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.26f), shape)
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { shape },
+                    effects = {
+                        vibrancy()
+                        blur(4.dp.toPx())
+                        lens(
+                            refractionHeight = 10.dp.toPx(),
+                            refractionAmount = 12.dp.toPx(),
+                            chromaticAberration = true,
+                        )
+                    },
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+            content = content,
+        )
+    } else {
+        GlassSurface(
+            modifier = modifier,
+            allowRuntimeHaze = allowRuntimeHaze,
+            shape = shape,
+            style = style,
+            visualTreatment = GlassVisualTreatment.TopBarPrototype,
+            componentRole = GlassComponentRole.TopBar,
+            content = content,
+        )
+    }
 }
 
 @Composable

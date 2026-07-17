@@ -123,6 +123,7 @@ fun SettingsRootScreen(
 private fun SettingsSectionCard(
     section: SettingsRootSection,
 ) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -130,9 +131,12 @@ private fun SettingsSectionCard(
             text = section.title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+            modifier = Modifier.padding(
+                horizontal = if (expressive) 12.dp else 14.dp,
+                vertical = 4.dp,
+            ),
         )
-        if (LocalMaterialExpressiveComponentsEnabled.current) {
+        if (expressive) {
             SettingsGroupSurface {
                 section.items.forEachIndexed { index, item ->
                     SettingsRootRow(item = item)
@@ -163,7 +167,7 @@ private fun SettingsSearchResultsCard(
         if (results.isEmpty()) {
             Text(
                 text = stringResource(R.string.nothing_found),
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

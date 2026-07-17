@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.home.ui.compose
 
+import android.content.res.Configuration
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -69,7 +70,9 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -109,6 +112,7 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -266,9 +270,9 @@ fun HomeScreen(
                 .nestedScroll(rememberNestedScrollInteropConnection())
                 .verticalScroll(scrollState)
                 .padding(
-                    start = systemBarsPadding.calculateLeftPadding(layoutDirection) + 8.dp,
+                    start = systemBarsPadding.calculateLeftPadding(layoutDirection) + CompactTopBarHorizontalPadding,
                     top = scrollTopInset,
-                    end = systemBarsPadding.calculateRightPadding(layoutDirection) + 8.dp,
+                    end = systemBarsPadding.calculateRightPadding(layoutDirection) + CompactTopBarHorizontalPadding,
                     bottom = contentPadding.calculateBottomPadding(),
                 )
                 .padding(bottom = 12.dp),
@@ -400,10 +404,10 @@ private fun HomeHighlightsSections(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (historyItems.isNotEmpty()) {
-            Surface(
+            HomeHighlightSectionContainer(
+                expressive = expressive,
                 shape = sectionShape,
                 color = sectionColor,
-                tonalElevation = 0.dp,
             ) {
                 HomeContentRowSection(
                     title = stringResource(R.string.recent_history),
@@ -416,15 +420,15 @@ private fun HomeHighlightsSections(
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllRecentClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
         }
         if (updateItems.isNotEmpty()) {
-            Surface(
+            HomeHighlightSectionContainer(
+                expressive = expressive,
                 shape = sectionShape,
                 color = sectionColor,
-                tonalElevation = 0.dp,
             ) {
                 HomeContentRowSection(
                     title = stringResource(R.string.home_recent_updates),
@@ -437,15 +441,15 @@ private fun HomeHighlightsSections(
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllUpdatesClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
         }
         if (recommendationItems.isNotEmpty()) {
-            Surface(
+            HomeHighlightSectionContainer(
+                expressive = expressive,
                 shape = sectionShape,
                 color = sectionColor,
-                tonalElevation = 0.dp,
             ) {
                 HomeContentRowSection(
                     title = stringResource(R.string.suggestions),
@@ -458,7 +462,7 @@ private fun HomeHighlightsSections(
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllRecommendationsClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
         }
@@ -468,6 +472,25 @@ private fun HomeHighlightsSections(
                 onQueryClick = onRecentSearchClick,
             )
         }
+    }
+}
+
+@Composable
+private fun HomeHighlightSectionContainer(
+    expressive: Boolean,
+    shape: RoundedCornerShape,
+    color: Color,
+    content: @Composable () -> Unit,
+) {
+    if (expressive) {
+        content()
+    } else {
+        Surface(
+            shape = shape,
+            color = color,
+            tonalElevation = 0.dp,
+            content = content,
+        )
     }
 }
 
@@ -513,17 +536,28 @@ private fun HomeHeroSection(
             .fillMaxWidth()
             .padding(top = topContentInset),
     ) {
-        val pagerWidth = maxWidth.coerceAtMost(HOME_HERO_PAGER_MAX_WIDTH)
+        val edgePadding = CompactTopBarHorizontalPadding
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val portraitViewportWidth = if (isLandscape) {
+            LocalConfiguration.current.screenHeightDp.dp
+        } else {
+            maxWidth
+        }
+        val cardWidth = (portraitViewportWidth - edgePadding * 2)
+            .coerceAtLeast(0.dp)
+            .coerceAtMost(HOME_HERO_PAGER_MAX_WIDTH)
         val pageSpacing = 12.dp
-        val cardWidth = calculateHomeHeroCardWidth(
-            viewportWidth = pagerWidth,
-            pageSpacing = pageSpacing,
-        )
-        val contentPadding = 16.dp
+        val contentPadding = if (isLandscape) {
+            PaddingValues(start = edgePadding, end = 0.dp)
+        } else {
+            val horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(edgePadding)
+            PaddingValues(horizontal = horizontal)
+        }
+        val viewportWidth = maxWidth
         val density = LocalDensity.current
-        val contentPadPx = with(density) { contentPadding.toPx() }
+        val contentPadPx = with(density) { contentPadding.calculateLeftPadding(LocalLayoutDirection.current).toPx() }
         val stepPx = with(density) { (cardWidth + pageSpacing).toPx() }
-        val pagerWidthPx = with(density) { pagerWidth.toPx() }
+        val pagerWidthPx = with(density) { viewportWidth.toPx() }
         val cardWidthPx = with(density) { cardWidth.toPx() }
 
         Box(
@@ -535,13 +569,13 @@ private fun HomeHeroSection(
                 pageSize = PageSize.Fixed(cardWidth),
                 pageSpacing = pageSpacing,
                 beyondViewportPageCount = 2,
-                contentPadding = PaddingValues(horizontal = contentPadding),
+                contentPadding = contentPadding,
                 key = { page ->
                     entries.getOrNull(page)?.let { entry ->
                         "home_hero_${entry.kind.name}_${entry.groupKey}_${entry.content.id}"
                     } ?: "home_hero_pending_$page"
                 },
-                modifier = Modifier.width(pagerWidth),
+                modifier = Modifier.width(viewportWidth),
             ) { page ->
                 entries.getOrNull(page)?.let { entry ->
                     HomeHeroCard(
@@ -938,16 +972,13 @@ private fun HomeContentRowSection(
             }
             if (showMoreButton) {
                 if (expressive) {
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.clickable(onClick = onMoreClick),
+                    TextButton(
+                        onClick = onMoreClick,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.more),
                             style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         )
                     }
                 } else {
@@ -971,9 +1002,14 @@ private fun HomeContentRowSection(
                 LazyRow(
                     state = rowState,
                     flingBehavior = rememberSnapFlingBehavior(rowState),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .extendHorizontalViewport(CompactTopBarHorizontalPadding),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    contentPadding = PaddingValues(
+                        start = CompactTopBarHorizontalPadding * 2,
+                        end = 0.dp,
+                    ),
                 ) {
                     itemsIndexed(
                         items = items,
@@ -1009,16 +1045,21 @@ private fun HomeContentRowSection(
                         calculateHomeListRailPageWidth(maxWidth, listMode)
                     }
                     val rowSpacing = 12.dp
-                    val horizontalPadding = 4.dp
+                    val horizontalPadding = PaddingValues(
+                        start = CompactTopBarHorizontalPadding * 2,
+                        end = 0.dp,
+                    )
                     LazyRow(
                         state = rowState,
                         flingBehavior = rememberSnapFlingBehavior(
                             lazyListState = rowState,
                             snapPosition = SnapPosition.Start,
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .extendHorizontalViewport(CompactTopBarHorizontalPadding),
                         horizontalArrangement = Arrangement.spacedBy(rowSpacing),
-                        contentPadding = PaddingValues(horizontal = horizontalPadding),
+                        contentPadding = horizontalPadding,
                     ) {
                         itemsIndexed(
                             items = railPages,
@@ -1052,6 +1093,26 @@ private fun HomeContentRowSection(
     }
 }
 
+private fun Modifier.extendHorizontalViewport(extension: Dp): Modifier = layout {
+    measurable, constraints ->
+    val extensionPx = extension.roundToPx()
+    val expandedMinWidth = (constraints.minWidth + extensionPx * 2).coerceAtLeast(0)
+    val expandedMaxWidth = if (constraints.hasBoundedWidth) {
+        constraints.maxWidth + extensionPx * 2
+    } else {
+        constraints.maxWidth
+    }
+    val placeable = measurable.measure(
+        constraints.copy(
+            minWidth = expandedMinWidth,
+            maxWidth = expandedMaxWidth,
+        ),
+    )
+    layout(placeable.width, placeable.height) {
+        placeable.placeRelative(-extensionPx, 0)
+    }
+}
+
 @Composable
 private fun HomeListRailPage(
     items: List<HomeCoverDisplayItem>,
@@ -1059,25 +1120,16 @@ private fun HomeListRailPage(
     onItemClick: (Content, Rect?, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items.forEach { item ->
-                HomeListRailRowItem(
-                    item = item,
-                    listMode = listMode,
-                    onClick = onItemClick,
-                )
-            }
+        items.forEach { item ->
+            HomeListRailRowItem(
+                item = item,
+                listMode = listMode,
+                onClick = onItemClick,
+            )
         }
     }
 }
@@ -1311,16 +1363,6 @@ private fun HomeCoverRowItem(
 
 private fun itemNewChaptersText(label: String, count: Int): String = "$label $count"
 
-private fun calculateHomeHeroCardWidth(
-    viewportWidth: Dp,
-    pageSpacing: Dp,
-): Dp {
-    val referenceViewportWidth = viewportWidth.coerceAtMost(HOME_HERO_REFERENCE_VIEWPORT_WIDTH)
-    return (referenceViewportWidth - (HOME_HERO_COMPACT_EDGE_PEEK * 2) - (pageSpacing * 2))
-        .coerceAtLeast(HOME_HERO_CARD_MIN_WIDTH)
-        .coerceAtMost(HOME_HERO_CARD_MAX_WIDTH)
-}
-
 private fun calculateHomeListRailPageWidth(maxWidth: Dp, listMode: ListMode): Dp {
     val referenceWidth = maxWidth.coerceAtMost(HOME_LIST_RAIL_REFERENCE_VIEWPORT_WIDTH)
     val targetWidth = when (listMode) {
@@ -1364,11 +1406,7 @@ private data class HomeCoverSupportingText(
 
 private const val HOME_LIST_RAIL_PAGE_SIZE = 3
 private const val HOME_CONTENT_RAIL_PREVIEW_LIMIT = 24
-private val HOME_HERO_CARD_MIN_WIDTH = 264.dp
-private val HOME_HERO_CARD_MAX_WIDTH = 360.dp
 private val HOME_HERO_PAGER_MAX_WIDTH = 1240.dp
-private val HOME_HERO_REFERENCE_VIEWPORT_WIDTH = 392.dp
-private val HOME_HERO_COMPACT_EDGE_PEEK = 4.dp
 private val HOME_LIST_RAIL_PAGE_MIN_WIDTH = 280.dp
 private val HOME_LIST_RAIL_PAGE_MAX_WIDTH = 320.dp
 private val HOME_DETAILED_RAIL_PAGE_MAX_WIDTH = 368.dp
@@ -1383,8 +1421,7 @@ private fun QuickActionsSection(
 ) {
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 2.dp),
+            .fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
@@ -1459,8 +1496,7 @@ private fun QuickAccessButton(
                 HomeQuickActionIcon(
                     iconRes = action.iconRes,
                     enabled = action.enabled,
-                    expressive = expressive,
-                    modifier = Modifier.size(if (expressive) 36.dp else 18.dp),
+                    modifier = Modifier.size(if (expressive) 22.dp else 18.dp),
                 )
                 Text(
                     text = action.label,
@@ -1485,8 +1521,7 @@ private fun QuickAccessButton(
                 HomeQuickActionIcon(
                     iconRes = action.iconRes,
                     enabled = action.enabled,
-                    expressive = expressive,
-                    modifier = Modifier.size(if (expressive) 38.dp else 20.dp),
+                    modifier = Modifier.size(if (expressive) 24.dp else 20.dp),
                 )
                 Text(
                     text = action.label,
@@ -1505,7 +1540,6 @@ private fun QuickAccessButton(
 private fun HomeQuickActionIcon(
     iconRes: Int,
     enabled: Boolean,
-    expressive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val tint = if (enabled) {
@@ -1513,33 +1547,12 @@ private fun HomeQuickActionIcon(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     }
-    if (expressive) {
-        Surface(
-            modifier = modifier,
-            shape = RoundedCornerShape(999.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (enabled) 0.88f else 0.36f),
-            contentColor = tint,
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = tint,
-                )
-            }
-        }
-    } else {
-        Icon(
-            painter = painterResource(iconRes),
-            contentDescription = null,
-            modifier = modifier,
-            tint = tint,
-        )
-    }
+    Icon(
+        painter = painterResource(iconRes),
+        contentDescription = null,
+        modifier = modifier,
+        tint = tint,
+    )
 }
 
 @Composable

@@ -2,13 +2,17 @@ package org.skepsun.kototoro.core.ui.widgets
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.animateIntSizeAsState
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
@@ -18,17 +22,26 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.geometry.Offset
+import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.android.material.navigation.NavigationBarView
@@ -39,13 +52,21 @@ import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 @Immutable
 private data class BottomNavPrefs(
@@ -172,11 +193,19 @@ fun KototoroBottomNav(
             shadowElevation = 0.dp,
         )
     }
+    val navBackdrop = LocalLiquidGlassBackdrop.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 
     if (useNavigationRail) {
-        GlassBottomBarContainer(
-            modifier = navBarModifier,
+        MainNavBottomContainer(
+            modifier = navBarModifier.mainNavBackdrop(
+                shape = RoundedCornerShape(24.dp),
+                enabled = isIosStyle,
+                backdrop = navBackdrop,
+            ),
             style = navContainerStyle,
+            useBackdrop = isIosStyle && navBackdrop != null,
+            backdrop = navBackdrop,
         ) {
             NavigationRail(
                 containerColor = Color.Transparent,
@@ -274,9 +303,17 @@ fun KototoroBottomNav(
                 horizontalArrangement = Arrangement.spacedBy(layoutSpec.fabGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassBottomBarContainer(
-                    modifier = Modifier.wrapContentWidth(),
+                MainNavBottomContainer(
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .mainNavBackdrop(
+                            shape = RoundedCornerShape(28.dp),
+                            enabled = isIosStyle,
+                            backdrop = navBackdrop,
+                        ),
                     style = navContainerStyle,
+                    useBackdrop = isIosStyle && navBackdrop != null,
+                    backdrop = navBackdrop,
                 ) {
                     FloatingBottomNavRow(
                         items = activeItems,
@@ -307,12 +344,18 @@ fun KototoroBottomNav(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            GlassSurface(
-                modifier = Modifier.weight(1f),
+                MainNavSurface(
+                modifier = Modifier
+                    .weight(1f)
+                    .mainNavBackdrop(
+                        shape = RoundedCornerShape(0.dp),
+                        enabled = isIosStyle,
+                        backdrop = navBackdrop,
+                    ),
                 style = navContainerStyle,
                 shape = RoundedCornerShape(0.dp),
-                visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                componentRole = GlassComponentRole.BottomBar,
+                useBackdrop = isIosStyle && navBackdrop != null,
+                backdrop = navBackdrop,
             ) {
                 NavigationBar(
                     containerColor = Color.Transparent,
@@ -369,6 +412,84 @@ fun KototoroBottomNav(
 }
 
 @Composable
+private fun MainNavBottomContainer(
+    modifier: Modifier,
+    style: GlassStyle,
+    useBackdrop: Boolean = false,
+    backdrop: com.kyant.backdrop.Backdrop? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    if (useBackdrop && backdrop != null) {
+        Box(
+            modifier = modifier
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), RoundedCornerShape(24.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp)),
+        ) {
+            content()
+        }
+    } else {
+        GlassBottomBarContainer(
+            modifier = modifier,
+            style = style,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun MainNavSurface(
+    modifier: Modifier,
+    style: GlassStyle,
+    shape: Shape,
+    useBackdrop: Boolean,
+    backdrop: com.kyant.backdrop.Backdrop?,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    if (useBackdrop && backdrop != null) {
+        Box(
+            modifier = modifier
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), shape)
+                .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+        ) {
+            content()
+        }
+    } else {
+        GlassSurface(
+            modifier = modifier,
+            style = style,
+            shape = shape,
+            visualTreatment = GlassVisualTreatment.TopBarPrototype,
+            componentRole = GlassComponentRole.BottomBar,
+            content = content,
+        )
+    }
+}
+
+private fun Modifier.mainNavBackdrop(
+    shape: Shape,
+    enabled: Boolean,
+    backdrop: com.kyant.backdrop.Backdrop?,
+): Modifier = then(
+    if (enabled && backdrop != null) {
+        Modifier.drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                blur(4.dp.toPx())
+                lens(
+                    refractionHeight = 10.dp.toPx(),
+                    refractionAmount = 12.dp.toPx(),
+                    chromaticAberration = true,
+                )
+            },
+        )
+    } else {
+        Modifier
+    },
+)
+
+@Composable
 private fun ContinueReadingRailButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -412,13 +533,63 @@ private fun FloatingBottomNavRow(
     onItemReselected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.animateContentSize(),
-        horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val useSharedLiquidGlassPill = useExpressivePill && isIosStyle && backdrop != null
+    val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
+    var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var dragPreviewItemId by remember { mutableStateOf<Int?>(null) }
+    val displayedSelectedItemId = dragPreviewItemId ?: selectedItemId
+    val selectedBounds = itemBounds[displayedSelectedItemId]
+    val density = LocalDensity.current
+    val targetIndicatorOffset = selectedBounds?.offset?.copy(
+        y = selectedBounds.offset.y + with(density) { 4.dp.roundToPx() },
+    ) ?: IntOffset.Zero
+    val targetIndicatorSize = selectedBounds?.size?.let {
+        IntSize(it.width, with(density) { 40.dp.roundToPx() })
+    } ?: IntSize.Zero
+    val indicatorOffset by animateIntOffsetAsState(
+        targetValue = targetIndicatorOffset,
+        label = "bottomNavGlassPillOffset",
+    )
+    val indicatorSize by animateIntSizeAsState(
+        targetValue = targetIndicatorSize,
+        label = "bottomNavGlassPillSize",
+    )
+
+    Box(
+        modifier = modifier
+            .animateContentSize()
+            .onGloballyPositioned { coordinates ->
+                containerPositionInRoot = coordinates.positionInRoot()
+            },
+        contentAlignment = Alignment.Center,
     ) {
+        if (useSharedLiquidGlassPill && indicatorSize != IntSize.Zero) {
+            val indicatorShape = RoundedCornerShape(20.dp)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset { indicatorOffset }
+                    .size(
+                        width = with(density) { indicatorSize.width.toDp() },
+                        height = with(density) { indicatorSize.height.toDp() },
+                    )
+                    .background(Color.White.copy(alpha = 0.12f), indicatorShape)
+                    .mainNavBackdrop(
+                        shape = indicatorShape,
+                        enabled = true,
+                        backdrop = backdrop,
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.28f), indicatorShape),
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         items.forEach { item ->
-            val isSelected = selectedItemId == item.id
+            val isSelected = displayedSelectedItemId == item.id
             val interactionSource = remember(item.id) { MutableInteractionSource() }
             val iconOffsetY by androidx.compose.animation.core.animateDpAsState(
                 targetValue = if (isSelected && !useExpressivePill) (-3).dp else 0.dp,
@@ -428,14 +599,61 @@ private fun FloatingBottomNavRow(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
+            val useLiquidGlassPill = isSelected && useExpressivePill && isIosStyle && backdrop != null
             val selectedContainerColor = if (isSelected && useExpressivePill) {
-                MaterialTheme.colorScheme.secondaryContainer
+                if (useLiquidGlassPill) {
+                    Color.White.copy(alpha = 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                }
             } else {
                 Color.Transparent
             }
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 val itemModifier = Modifier
                     .widthIn(min = 48.dp)
+                    .onGloballyPositioned { coordinates ->
+                        if (useSharedLiquidGlassPill) {
+                            val position = coordinates.positionInRoot() - containerPositionInRoot
+                            itemBounds[item.id] = NavItemBounds(
+                                itemId = item.id,
+                                offset = IntOffset(position.x.roundToInt(), position.y.roundToInt()),
+                                size = IntSize(coordinates.size.width, coordinates.size.height),
+                            )
+                        }
+                    }
+                    .pointerInput(useSharedLiquidGlassPill, item.id) {
+                        if (useSharedLiquidGlassPill) {
+                            var pointerX = 0f
+                            detectDragGestures(
+                                onDragStart = {
+                                    pointerX = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
+                                    dragPreviewItemId = item.id
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    pointerX += dragAmount.x
+                                    val targetItemId = itemBounds
+                                        .values
+                                        .firstOrNull { it.containsHorizontal(pointerX) }
+                                        ?.itemId
+                                    if (targetItemId != null) {
+                                        dragPreviewItemId = targetItemId
+                                    }
+                                },
+                                onDragCancel = {
+                                    dragPreviewItemId = null
+                                },
+                                onDragEnd = {
+                                    val targetItemId = dragPreviewItemId
+                                    dragPreviewItemId = null
+                                    if (targetItemId != null && targetItemId != selectedItemId) {
+                                        onItemSelected(targetItemId)
+                                    }
+                                },
+                            )
+                        }
+                    }
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,
@@ -461,7 +679,30 @@ private fun FloatingBottomNavRow(
                                 .height(40.dp)
                                 .widthIn(min = 40.dp)
                                 .animateContentSize(alignment = Alignment.Center)
-                                .background(selectedContainerColor, CircleShape)
+                                .then(
+                                    if (useSharedLiquidGlassPill) {
+                                        Modifier
+                                    } else {
+                                        Modifier
+                                            .background(selectedContainerColor, CircleShape)
+                                            .mainNavBackdrop(
+                                                shape = CircleShape,
+                                                enabled = useLiquidGlassPill,
+                                                backdrop = backdrop,
+                                            )
+                                            .then(
+                                                if (useLiquidGlassPill) {
+                                                    Modifier.border(
+                                                        1.dp,
+                                                        Color.White.copy(alpha = 0.28f),
+                                                        CircleShape,
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                },
+                                            )
+                                    },
+                                )
                                 .padding(horizontal = if (isSelected) 8.dp else 0.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
@@ -523,7 +764,17 @@ private fun FloatingBottomNavRow(
                 }
             }
         }
+        }
     }
+}
+
+private data class NavItemBounds(
+    val itemId: Int,
+    val offset: IntOffset,
+    val size: IntSize,
+) {
+    fun containsHorizontal(positionX: Float): Boolean =
+        positionX >= offset.x && positionX <= offset.x + size.width
 }
 
 @Composable

@@ -20,14 +20,21 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.lens
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
-private val KototoroSliderTrackHeight = 8.dp
-private val KototoroSliderThumbContainerWidth = 24.dp
-private val KototoroSliderThumbContainerHeight = 32.dp
+val LocalLiquidGlassBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+val LocalLiquidGlassLayerBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +48,9 @@ fun KototoroSlider(
     onValueChangeFinished: (() -> Unit)? = null,
     colors: SliderColors = SliderDefaults.colors(),
 ) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val backdrop = LocalLiquidGlassBackdrop.current
     val interactionSource = remember { MutableInteractionSource() }
     Slider(
         value = value,
@@ -56,16 +66,18 @@ fun KototoroSlider(
             KototoroSliderThumb(
                 interactionSource = interactionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
+                isIosStyle = isIosStyle,
+                backdrop = backdrop,
             )
         },
         track = { state ->
             SliderDefaults.Track(
                 sliderState = state,
-                modifier = Modifier.height(KototoroSliderTrackHeight),
+                modifier = Modifier.height(tokens.sliderTrackHeight),
                 enabled = enabled,
                 colors = colors,
                 thumbTrackGapSize = 0.dp,
-                trackInsideCornerSize = KototoroSliderTrackHeight / 2,
+                trackInsideCornerSize = tokens.sliderTrackHeight / 2,
             )
         },
     )
@@ -83,6 +95,9 @@ fun KototoroRangeSlider(
     onValueChangeFinished: (() -> Unit)? = null,
     colors: SliderColors = SliderDefaults.colors(),
 ) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val backdrop = LocalLiquidGlassBackdrop.current
     val startInteractionSource = remember { MutableInteractionSource() }
     val endInteractionSource = remember { MutableInteractionSource() }
     RangeSlider(
@@ -100,22 +115,26 @@ fun KototoroRangeSlider(
             KototoroSliderThumb(
                 interactionSource = startInteractionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
+                isIosStyle = isIosStyle,
+                backdrop = backdrop,
             )
         },
         endThumb = {
             KototoroSliderThumb(
                 interactionSource = endInteractionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
+                isIosStyle = isIosStyle,
+                backdrop = backdrop,
             )
         },
         track = { state ->
             SliderDefaults.Track(
                 rangeSliderState = state,
-                modifier = Modifier.height(KototoroSliderTrackHeight),
+                modifier = Modifier.height(tokens.sliderTrackHeight),
                 enabled = enabled,
                 colors = colors,
                 thumbTrackGapSize = 0.dp,
-                trackInsideCornerSize = KototoroSliderTrackHeight / 2,
+                trackInsideCornerSize = tokens.sliderTrackHeight / 2,
             )
         },
     )
@@ -125,29 +144,58 @@ fun KototoroRangeSlider(
 private fun KototoroSliderThumb(
     interactionSource: MutableInteractionSource,
     color: Color,
+    isIosStyle: Boolean,
+    backdrop: Backdrop?,
 ) {
+    val tokens = LocalInterfaceStyleTokens.current
     val pressed by interactionSource.collectIsPressedAsState()
     val dragged by interactionSource.collectIsDraggedAsState()
     val active = pressed || dragged
     val width by animateDpAsState(
-        targetValue = if (active) 24.dp else 6.dp,
+        targetValue = if (active) {
+            tokens.sliderPressedThumbWidth
+        } else if (isIosStyle) {
+            tokens.sliderThumbSize
+        } else {
+            6.dp
+        },
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
         label = "sliderThumbWidth",
     )
     val height by animateDpAsState(
-        targetValue = if (active) 32.dp else 24.dp,
+        targetValue = if (active) {
+            tokens.sliderPressedThumbHeight
+        } else {
+            tokens.sliderThumbSize
+        },
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
         label = "sliderThumbHeight",
     )
     Box(
-        modifier = Modifier.size(KototoroSliderThumbContainerWidth, KototoroSliderThumbContainerHeight),
+        modifier = Modifier.size(tokens.sliderThumbSize),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
                 .width(width)
                 .height(height)
-                .background(color.copy(alpha = if (active) 0.88f else 1f), CircleShape)
+                .then(
+                    if (isIosStyle && backdrop != null) {
+                        Modifier.drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { CircleShape },
+                            effects = {
+                                lens(
+                                    refractionHeight = 8.dp.toPx(),
+                                    refractionAmount = 10.dp.toPx(),
+                                    chromaticAberration = true,
+                                )
+                            },
+                        )
+                    } else {
+                        Modifier.background(color.copy(alpha = if (active) 0.88f else 1f), CircleShape)
+                    },
+                )
                 .border(1.dp, Color.White.copy(alpha = if (active) 0.28f else 0f), CircleShape),
         )
     }

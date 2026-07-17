@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialFamily
@@ -153,13 +154,10 @@ private class AppearanceSettingsCoordinator(
     fun Render() {
         val coroutineScope = rememberCoroutineScope()
         val colorScheme = settings.observeAsState(AppSettings.KEY_COLOR_THEME) { colorScheme }.value
+        val interfaceStyle = settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) { interfaceStyle }.value
         val theme = settings.observeAsState(AppSettings.KEY_THEME) { theme }.value
         val backgroundStyle = settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) { backgroundStyle }.value
         val isAmoledTheme = settings.observeAsState(AppSettings.KEY_THEME_AMOLED) { isAmoledTheme }.value
-        val isMaterialExpressiveComponentsEnabled =
-            settings.observeAsState(AppSettings.KEY_MATERIAL_EXPRESSIVE_COMPONENTS) {
-                isMaterialExpressiveComponentsEnabled
-            }.value
         val appFontPreset = settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) { appFontPreset }.value
         val expressiveAppFontPreset =
             settings.observeAsState(AppSettings.KEY_EXPRESSIVE_APP_FONT_PRESET) { expressiveAppFontPreset }.value
@@ -284,6 +282,7 @@ private class AppearanceSettingsCoordinator(
 
         val options = AppearanceSettingsOptions(
             colorSchemes = buildColorSchemeOptions(),
+            interfaceStyles = buildInterfaceStyleOptions(),
             themes = buildThemeOptions(),
             backgroundStyles = buildBackgroundStyleOptions(),
             fontPresets = buildFontPresetOptions(),
@@ -307,11 +306,11 @@ private class AppearanceSettingsCoordinator(
 
         val uiState = AppearanceSettingsUiState(
             navSummary = buildNavSummary(mainNavItems),
+            interfaceStyle = interfaceStyle,
             colorScheme = colorScheme,
             theme = theme,
             backgroundStyle = backgroundStyle,
             isAmoledTheme = isAmoledTheme,
-            isMaterialExpressiveComponentsEnabled = isMaterialExpressiveComponentsEnabled,
             appFontPreset = appFontPreset,
             expressiveAppFontPreset = expressiveAppFontPreset,
             isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
@@ -383,13 +382,11 @@ private class AppearanceSettingsCoordinator(
             state = uiState,
             options = options,
             emptySelectionText = context.getString(R.string.none),
+            onInterfaceStyleChange = { updateAndRestart(coroutineScope) { settings.interfaceStyle = it } },
             onColorSchemeChange = { updateAndRestart(coroutineScope) { settings.colorScheme = it } },
             onThemeChange = ::updateTheme,
             onBackgroundStyleChange = { updateAndRestart(coroutineScope) { settings.backgroundStyle = it } },
             onAmoledThemeChange = { updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
-            onMaterialExpressiveComponentsChange = {
-                updateAndRestart(coroutineScope) { settings.isMaterialExpressiveComponentsEnabled = it }
-            },
             onAppFontPresetChange = {
                 updateAndRestart(coroutineScope) { settings.appFontPreset = it }
             },
@@ -524,6 +521,15 @@ private class AppearanceSettingsCoordinator(
         }
     }
 
+    private fun buildInterfaceStyleOptions(): List<SettingsChoiceOption<InterfaceStyle>> {
+        return InterfaceStyle.entries.map {
+            SettingsChoiceOption(
+                value = it,
+                label = context.getString(it.titleResId),
+            )
+        }
+    }
+
     private fun buildThemeOptions(): List<SettingsChoiceOption<Int>> {
         val labels = context.resources.getStringArray(R.array.themes)
         val values = context.resources.getStringArray(R.array.values_theme).map { it.toInt() }
@@ -534,6 +540,7 @@ private class AppearanceSettingsCoordinator(
         return listOf(
             SettingsChoiceOption(BackgroundStyle.DEFAULT, context.getString(R.string.bg_style_default)),
             SettingsChoiceOption(BackgroundStyle.DYNAMIC_ARTWORK_BLUR, context.getString(R.string.bg_style_artwork_blur)),
+            SettingsChoiceOption(BackgroundStyle.DYNAMIC_TONAL_GLASS, context.getString(R.string.bg_style_tonal_glass)),
             SettingsChoiceOption(BackgroundStyle.SYSTEM_DYNAMIC_TINT, context.getString(R.string.bg_style_system_tint)),
             SettingsChoiceOption(BackgroundStyle.ELEVATED_CONTAINERS, context.getString(R.string.bg_style_elevated_containers)),
         )
@@ -555,6 +562,8 @@ private class AppearanceSettingsCoordinator(
             SettingsChoiceOption(AppFontPreset.ROBOTO, "Roboto"),
             SettingsChoiceOption(AppFontPreset.ROBOTO_FLEX, "Roboto Flex"),
             SettingsChoiceOption(AppFontPreset.GOOGLE_SANS, "Google Sans"),
+            SettingsChoiceOption(AppFontPreset.NOTO_SANS, context.getString(R.string.font_preset_noto_sans)),
+            SettingsChoiceOption(AppFontPreset.INTER, context.getString(R.string.font_preset_inter)),
         )
     }
 

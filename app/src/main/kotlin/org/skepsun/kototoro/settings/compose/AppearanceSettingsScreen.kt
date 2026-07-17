@@ -26,6 +26,8 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialPreset
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.tokens
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
@@ -33,11 +35,11 @@ import org.skepsun.kototoro.core.prefs.TabletUiMode
 
 data class AppearanceSettingsUiState(
     val navSummary: String,
+    val interfaceStyle: InterfaceStyle,
     val colorScheme: ColorScheme,
     val theme: Int,
     val backgroundStyle: BackgroundStyle,
     val isAmoledTheme: Boolean,
-    val isMaterialExpressiveComponentsEnabled: Boolean,
     val appFontPreset: AppFontPreset,
     val expressiveAppFontPreset: AppFontPreset,
     val isReducedVisualEffectsEnabled: Boolean,
@@ -107,6 +109,7 @@ data class AppearanceSettingsUiState(
 
 data class AppearanceSettingsOptions(
     val colorSchemes: List<SettingsChoiceOption<ColorScheme>>,
+    val interfaceStyles: List<SettingsChoiceOption<InterfaceStyle>>,
     val themes: List<SettingsChoiceOption<Int>>,
     val backgroundStyles: List<SettingsChoiceOption<BackgroundStyle>>,
     val fontPresets: List<SettingsChoiceOption<AppFontPreset>>,
@@ -133,11 +136,11 @@ fun AppearanceSettingsScreen(
     state: AppearanceSettingsUiState,
     options: AppearanceSettingsOptions,
     emptySelectionText: String,
+    onInterfaceStyleChange: (InterfaceStyle) -> Unit,
     onColorSchemeChange: (ColorScheme) -> Unit,
     onThemeChange: (Int) -> Unit,
     onBackgroundStyleChange: (BackgroundStyle) -> Unit,
     onAmoledThemeChange: (Boolean) -> Unit,
-    onMaterialExpressiveComponentsChange: (Boolean) -> Unit,
     onAppFontPresetChange: (AppFontPreset) -> Unit,
     onExpressiveAppFontPresetChange: (AppFontPreset) -> Unit,
     onReducedVisualEffectsChange: (Boolean) -> Unit,
@@ -203,8 +206,9 @@ fun AppearanceSettingsScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -217,14 +221,26 @@ fun AppearanceSettingsScreen(
         item(key = "appearance") {
             SettingsPreferenceSection(title = stringResource(R.string.appearance)) {
                 SettingsChoicePreference(
+                    title = stringResource(R.string.interface_style),
+                    value = state.interfaceStyle,
+                    options = options.interfaceStyles,
+                    onValueChange = onInterfaceStyleChange,
+                )
+                SettingsSectionDivider()
+                SettingsChoicePreference(
                     title = stringResource(R.string.color_theme),
                     value = state.colorScheme,
                     options = options.colorSchemes,
+                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        stringResource(R.string.appearance_color_scheme_ios_note)
+                    } else {
+                        null
+                    },
                     onValueChange = onColorSchemeChange,
                 )
                 SettingsSectionDivider()
                 SettingsChoicePreference(
-                    title = stringResource(R.string.theme),
+                    title = stringResource(R.string.appearance_mode),
                     value = state.theme,
                     options = options.themes,
                     onValueChange = onThemeChange,
@@ -235,6 +251,11 @@ fun AppearanceSettingsScreen(
                     value = state.backgroundStyle,
                     options = options.backgroundStyles,
                     summary = stringResource(R.string.background_style_summary),
+                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        stringResource(R.string.appearance_background_ios_note)
+                    } else {
+                        null
+                    },
                     onValueChange = onBackgroundStyleChange,
                 )
                 SettingsSectionDivider()
@@ -245,27 +266,28 @@ fun AppearanceSettingsScreen(
                     onCheckedChange = onAmoledThemeChange,
                 )
                 SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.pref_material_expressive_components),
-                    checked = state.isMaterialExpressiveComponentsEnabled,
-                    summary = stringResource(R.string.pref_material_expressive_components_summary),
-                    onCheckedChange = onMaterialExpressiveComponentsChange,
-                )
-                SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.pref_app_font_preset),
-                    value = state.appFontPreset,
+                    value = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        state.expressiveAppFontPreset
+                    } else {
+                        state.appFontPreset
+                    },
                     options = options.fontPresets,
                     summary = stringResource(R.string.pref_app_font_preset_summary),
-                    onValueChange = onAppFontPresetChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.pref_expressive_app_font_preset),
-                    value = state.expressiveAppFontPreset,
-                    options = options.fontPresets,
-                    summary = stringResource(R.string.pref_expressive_app_font_preset_summary),
-                    onValueChange = onExpressiveAppFontPresetChange,
+                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        stringResource(
+                            R.string.appearance_ios_font_note,
+                            options.fontPresets.firstOrNull { it.value == state.expressiveAppFontPreset }?.label.orEmpty(),
+                        )
+                    } else {
+                        null
+                    },
+                    onValueChange = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        onExpressiveAppFontPresetChange
+                    } else {
+                        onAppFontPresetChange
+                    },
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
@@ -288,6 +310,11 @@ fun AppearanceSettingsScreen(
                     value = state.glassMaterialFamily,
                     options = options.glassMaterialFamilies,
                     summary = stringResource(R.string.pref_blur_mode_summary),
+                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        stringResource(R.string.appearance_glass_material_ios_note)
+                    } else {
+                        null
+                    },
                     enabled = state.isGlassEffectDetailSettingsEnabled,
                     onValueChange = onGlassMaterialFamilyChange,
                 )
@@ -360,6 +387,15 @@ fun AppearanceSettingsScreen(
                     title = stringResource(R.string.pref_popup_radius),
                     value = state.popupRadius,
                     options = options.popupRadii,
+                    styleHint = stringResource(
+                        if (state.popupRadius == -1) {
+                            R.string.appearance_style_default_value
+                        } else {
+                            R.string.appearance_style_custom_override
+                        },
+                        stringResource(state.interfaceStyle.titleResId),
+                        "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
+                    ),
                     onValueChange = onPopupRadiusChange,
                 )
             }
@@ -646,6 +682,15 @@ fun AppearanceSettingsScreen(
                     title = stringResource(R.string.pref_nav_expressive_pill),
                     checked = state.isNavExpressivePillEnabled,
                     summary = stringResource(R.string.pref_nav_expressive_pill_summary),
+                    styleHint = stringResource(
+                        R.string.appearance_style_default_value,
+                        stringResource(state.interfaceStyle.titleResId),
+                        if (state.interfaceStyle == InterfaceStyle.IOS) {
+                            stringResource(R.string.enabled)
+                        } else {
+                            stringResource(R.string.disabled)
+                        },
+                    ),
                     enabled = state.isNavFloating,
                     onCheckedChange = onNavExpressivePillChange,
                 )

@@ -18,6 +18,10 @@ enum class BackgroundStyle(
 		titleResId = R.string.bg_style_artwork_blur,
 		summaryResId = R.string.bg_style_artwork_blur_summary,
 	),
+	DYNAMIC_TONAL_GLASS(
+		titleResId = R.string.bg_style_tonal_glass,
+		summaryResId = R.string.bg_style_tonal_glass_summary,
+	),
 	SYSTEM_DYNAMIC_TINT(
 		titleResId = R.string.bg_style_system_tint,
 		summaryResId = R.string.bg_style_system_tint_summary,

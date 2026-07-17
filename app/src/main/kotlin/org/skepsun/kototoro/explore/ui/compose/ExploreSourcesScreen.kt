@@ -34,6 +34,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.iconResForUi
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -122,7 +123,7 @@ fun KototoroExploreSourcesScreen(
                                         }
                                     }
                                 )
-                                .padding(horizontal = 16.dp, vertical = 24.dp),
+                                .padding(horizontal = CompactTopBarHorizontalPadding, vertical = 24.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {

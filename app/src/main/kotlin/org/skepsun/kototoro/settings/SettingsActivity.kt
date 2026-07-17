@@ -74,8 +74,10 @@ import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.FileSize
@@ -178,6 +180,9 @@ class SettingsActivity :
 
 	@Inject
 	lateinit var storageManager: LocalStorageManager
+
+	@Inject
+	lateinit var historyRepository: HistoryRepository
 
 	@Inject
 	lateinit var downloadsScheduler: DownloadWorker.Scheduler
@@ -401,15 +406,18 @@ class SettingsActivity :
 			ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
 		)
 		viewBinding.containerCompose.setContent {
+			val lastReadContent by historyRepository.observeLast().collectAsStateWithLifecycle(initialValue = null)
 			KototoroTheme {
-				SettingsAdaptiveShell(
-					isTwoPane = isMasterDetails,
-					destination = composeDestination,
-					destinationKey = ::composeDestinationStateKey,
-					modifier = Modifier.fillMaxSize(),
-					rootContent = { modifier -> RenderSettingsRootContent(modifier) },
-					destinationContent = { destination -> RenderComposeDestination(destination) },
-				)
+				DynamicArtworkBackdrop(content = lastReadContent) {
+					SettingsAdaptiveShell(
+						isTwoPane = isMasterDetails,
+						destination = composeDestination,
+						destinationKey = ::composeDestinationStateKey,
+						modifier = Modifier.fillMaxSize(),
+						rootContent = { modifier -> RenderSettingsRootContent(modifier) },
+						destinationContent = { destination -> RenderComposeDestination(destination) },
+					)
+				}
 			}
 		}
 		masterContainerComposeView()?.setViewCompositionStrategy(
