@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.content.Intent
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
@@ -31,6 +32,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.transition.Slide
 import androidx.transition.TransitionSet
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.combine
@@ -77,7 +79,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var hideWithControlsTransition = false
 	private var launchOrigin: android.graphics.PointF? = null
 	private val fabs = LinkedHashSet<ExtendedFloatingActionButton>()
-	private val fabOverlays = LinkedHashMap<ExtendedFloatingActionButton, ComposeView>()
 	private var switcherOverlay: ComposeView? = null
 	private var transitionOverlay: ComposeView? = null
 	private var sessionSpaceId: SpaceId? = null
@@ -124,7 +125,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 				override fun onDestroy(owner: LifecycleOwner) {
 					dismissSwitcher()
 					dismissTransitionOverlay()
-					fabOverlays.keys.toList().forEach(::removeFabOverlay)
 				}
 			},
 		)
@@ -160,7 +160,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 		fabs += fab
 		fab.shrink()
 		fab.setOnClickListener { showSwitcher() }
-		fab.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> syncFabOverlay(fab) }
 		refreshMenuItems(
 			spaceRepository.activeSpace.value,
 			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
@@ -410,64 +409,29 @@ class SpaceSwitcherDelegate @Inject constructor(
 			} else {
 				target.hide()
 			}
-			syncFabOverlay(target)
 		}
 	}
 
 	private fun applyFabStyle(fab: ExtendedFloatingActionButton, isIosStyle: Boolean) {
 		if (isIosStyle) {
-			fab.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
-			fab.iconTint = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+			val surfaceColor = MaterialColors.getColor(
+				fab,
+				com.google.android.material.R.attr.colorSurface,
+			)
+			val onSurfaceColor = MaterialColors.getColor(
+				fab,
+				com.google.android.material.R.attr.colorOnSurface,
+			)
+			fab.backgroundTintList = ColorStateList.valueOf(
+				androidx.core.graphics.ColorUtils.setAlphaComponent(surfaceColor, 0xB8),
+			)
+			fab.iconTint = ColorStateList.valueOf(onSurfaceColor)
 			fab.elevation = 0f
-			ensureFabOverlay(fab)
-		} else {
-			removeFabOverlay(fab)
+			fab.shapeAppearanceModel = fab.shapeAppearanceModel
+				.toBuilder()
+				.setAllCornerSizes(10_000f)
+				.build()
 		}
-	}
-
-	private fun ensureFabOverlay(fab: ExtendedFloatingActionButton) {
-		if (fabOverlays.containsKey(fab)) return
-		val activity = activity ?: return
-		val parent = fab.parent as? ViewGroup ?: return
-		val overlay = ComposeView(activity).apply {
-			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-			isClickable = false
-			importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-			setContent {
-				KototoroTheme {
-					val activeSpaceId by spaceRepository.activeSpace.collectAsState()
-					val spaces by catalogRepository.spaces.collectAsState()
-					ViewSpaceSwitcherFab(
-						activeSpaceId = activeSpaceId,
-						activeSpace = spaces.firstOrNull { it.id == activeSpaceId },
-					)
-				}
-			}
-		}
-		parent.addView(overlay)
-		fabOverlays[fab] = overlay
-		syncFabOverlay(fab)
-	}
-
-	private fun syncFabOverlay(fab: ExtendedFloatingActionButton) {
-		val overlay = fabOverlays[fab] ?: return
-		val parent = fab.parent as? ViewGroup ?: return
-		if (overlay.parent !== parent) return
-		overlay.layoutParams = overlay.layoutParams.apply {
-			width = fab.width
-			height = fab.height
-		}
-		overlay.x = fab.left.toFloat()
-		overlay.y = fab.top.toFloat()
-		overlay.visibility = fab.visibility
-		overlay.alpha = fab.alpha
-		fab.bringToFront()
-	}
-
-	private fun removeFabOverlay(fab: ExtendedFloatingActionButton) {
-		val overlay = fabOverlays.remove(fab) ?: return
-		overlay.disposeComposition()
-		(overlay.parent as? ViewGroup)?.removeView(overlay)
 	}
 
 	private fun animateFromLaunchOrigin(target: ExtendedFloatingActionButton) {
