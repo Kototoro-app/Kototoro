@@ -64,6 +64,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -86,13 +88,13 @@ import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
-import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.compose.LiquidGlassBackdropHost
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.ui.compose.ExploreSelectionTopBar
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
@@ -565,6 +567,7 @@ fun KototoroApp(
     var isDetailsChromeTransitionPending by rememberSaveable { mutableStateOf(false) }
     var detailsBottomPanelExpansion by remember { mutableFloatStateOf(0f) }
     var detailsBottomObstruction by remember { mutableStateOf(0.dp) }
+    var detailsBottomPanelRoute by remember { mutableStateOf<String?>(null) }
     var mainSpaceSwitcherFabBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var canMeasureMainSpaceSwitcherFab by remember { mutableStateOf(true) }
     var rootContentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -848,6 +851,17 @@ fun KototoroApp(
     val isContentListRoute = currentDestination?.hasRoute<ContentListRoute>() == true
     val isImmersiveRoute = isDetailsRoute || isContentListRoute
     val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
+    LaunchedEffect(currentDestinationRoute) {
+        if (isDetailsRoute) {
+            detailsBottomPanelExpansion = 0f
+            detailsBottomObstruction = 0.dp
+            detailsBottomPanelRoute = null
+        } else if (!isContentListRoute) {
+            detailsBottomPanelExpansion = 0f
+            detailsBottomObstruction = 0.dp
+            detailsBottomPanelRoute = null
+        }
+    }
     val mainFabMode = resolveMainFabMode(
         spaceSwitcherEnabled = spaceUiState.switcherEnabled,
         resumeEnabled = isResumeEnabled,
@@ -1181,17 +1195,19 @@ fun KototoroApp(
 
     KototoroTheme(cornerRadius = cornerRadius) {
         val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-        val backdropBackground = MaterialTheme.colorScheme.background
-        val backdrop = rememberLayerBackdrop {
-            drawRect(backdropBackground)
-            drawContent()
+        val liquidGlassBackdropHost = remember { LiquidGlassBackdropHost() }
+        val rootGlassMenuHost = remember { RootGlassMenuHost() }
+        val expectedLiquidGlassOwnerKey = navBackStackEntry?.id?.let { entryId ->
+            entryId
         }
+        val activeLiquidGlassBackdrop = liquidGlassBackdropHost.backdropFor(expectedLiquidGlassOwnerKey)
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
-        val useRuntimeHaze = glassPrefs.isGlassEffectEnabled && supportsRuntimeHaze()
         CompositionLocalProvider(
-            LocalLiquidGlassBackdrop provides backdrop,
-            LocalLiquidGlassLayerBackdrop provides backdrop,
+            LocalLiquidGlassBackdrop provides activeLiquidGlassBackdrop,
+            LocalLiquidGlassLayerBackdrop provides activeLiquidGlassBackdrop,
+            LocalLiquidGlassBackdropHost provides liquidGlassBackdropHost,
+            LocalRootGlassMenuHost provides rootGlassMenuHost,
             LocalHazeState provides hazeState,
             LocalGlassPrefs provides glassPrefs,
             LocalRailAnimationFactor provides railAnimationFactor,
@@ -1228,8 +1244,8 @@ fun KototoroApp(
             val mainAnchorBounds = mainSpaceSwitcherFabBounds
             val shouldAnchorSpaceSwitcherFabToMainChrome = shouldShowChrome && !isLandscapeNavigation
             val spaceSwitcherFabTargetOffset = rootBounds?.let { bounds ->
-                if (shouldAnchorSpaceSwitcherFabToMainChrome) {
-                    val anchorBounds = mainAnchorBounds ?: return@let null
+                if (shouldAnchorSpaceSwitcherFabToMainChrome && mainAnchorBounds != null) {
+                    val anchorBounds = mainAnchorBounds
                     androidx.compose.ui.unit.IntOffset(
                         x = (anchorBounds.left - bounds.left).roundToInt(),
                         y = (anchorBounds.top - bounds.top).roundToInt(),
@@ -1243,7 +1259,13 @@ fun KototoroApp(
                     }
                     androidx.compose.ui.unit.IntOffset(
                         x = (bounds.width - with(density) {
-                            spaceSwitcherFabMargin.roundToPx() + spaceSwitcherFabSize.roundToPx()
+                            displayCutoutEndDp.roundToPx() +
+                                (if (isDetailsRoute) {
+                                    CompactTopBarHorizontalPadding
+                                } else {
+                                    spaceSwitcherFabMargin
+                                }).roundToPx() +
+                                spaceSwitcherFabSize.roundToPx()
                         }).roundToInt(),
                         y = (bounds.height - with(density) {
                             spaceSwitcherFabBaseBottom.roundToPx() +
@@ -1253,8 +1275,24 @@ fun KototoroApp(
                     )
                 }
             }
+            var lastValidSpaceSwitcherFabTarget by remember { mutableStateOf<androidx.compose.ui.unit.IntOffset?>(null) }
+            LaunchedEffect(spaceSwitcherFabTargetOffset) {
+                if (spaceSwitcherFabTargetOffset != null) {
+                    lastValidSpaceSwitcherFabTarget = spaceSwitcherFabTargetOffset
+                }
+            }
+            val fabTargetForAnimation = spaceSwitcherFabTargetOffset ?: lastValidSpaceSwitcherFabTarget
+            val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
+                targetValue = fabTargetForAnimation ?: androidx.compose.ui.unit.IntOffset.Zero,
+                animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
+                    tween(durationMillis = MainNavigationMotion.DetailsRouteSlideMillis)
+                } else {
+                    snap()
+                },
+                label = "space_switcher_fab_position",
+            )
             val spaceSwitcherFabAnchorBounds = rootBounds?.let { bounds ->
-                spaceSwitcherFabTargetOffset?.let { offset ->
+                fabTargetForAnimation?.let { offset ->
                     androidx.compose.ui.geometry.Rect(
                         left = bounds.left + offset.x,
                         top = bounds.top + offset.y,
@@ -1265,9 +1303,36 @@ fun KototoroApp(
             }
             val showFabOnCurrentRoute = if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
                 (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
-                    (!isDetailsRoute || detailsBottomPanelExpansion <= 0.01f)
+                    (!isDetailsRoute ||
+                        detailsBottomPanelRoute != currentDestinationRoute ||
+                        detailsBottomPanelExpansion <= 0.01f)
             } else {
                 showContinueReadingFab && shouldShowChrome
+            }
+            val mainFloatingAction: @Composable BoxScope.() -> Unit = {
+                if (
+                    showMainFab &&
+                    fabTargetForAnimation != null &&
+                    showFabOnCurrentRoute
+                ) {
+                    val fabModifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset { animatedSpaceSwitcherFabOffset }
+                        .size(spaceSwitcherFabSize)
+                    if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
+                        SpaceSwitcherFab(
+                            activeSpaceId = spaceUiState.activeSpaceId,
+                            activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
+                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                            modifier = fabModifier,
+                        )
+                    } else {
+                        ContinueReadingFab(
+                            onClick = onResumeClick,
+                            modifier = fabModifier,
+                        )
+                    }
+                }
             }
             val mainShellChrome: @Composable BoxScope.() -> Unit = {
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
@@ -1277,12 +1342,16 @@ fun KototoroApp(
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()
                                 .graphicsLayer {
-                                    alpha = if (topBarHeightPx > 0) {
+                                    val contentScrollAlpha = if (topBarHeightPx > 0) {
                                         (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat())
                                             .coerceIn(0f, 1f)
                                     } else {
                                         0f
                                     }
+                                    alpha = resolveTopImmersiveAlpha(
+                                        contentScrollAlpha = contentScrollAlpha,
+                                        chromeAlpha = chromeAlpha,
+                                    )
                                 },
                             height = topImmersiveHeight,
                             colors = listOf(
@@ -1458,45 +1527,6 @@ fun KototoroApp(
                         },
                     )
                 }
-                if (
-                    showMainFab &&
-                    spaceSwitcherFabTargetOffset != null &&
-                    showFabOnCurrentRoute
-                ) {
-                    val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
-                        targetValue = spaceSwitcherFabTargetOffset,
-                        animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
-                            tween(durationMillis = MainNavigationMotion.DetailsRouteSlideMillis)
-                        } else {
-                            snap()
-                        },
-                        label = "space_switcher_fab_position",
-                    )
-                    val fabModifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset { animatedSpaceSwitcherFabOffset }
-                        .size(spaceSwitcherFabSize)
-                    if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
-                        SpaceSwitcherFab(
-                            activeSpaceId = spaceUiState.activeSpaceId,
-                            activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
-                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
-                            modifier = fabModifier,
-                        )
-                    } else {
-                        ContinueReadingFab(
-                            onClick = onResumeClick,
-                            modifier = fabModifier,
-                        )
-                    }
-                }
-                SpaceSwitcherSheet(
-                    state = spaceUiState,
-                    onAction = onSpaceAction,
-                    resumeItems = spaceResumeUiState.items,
-                    onResume = onSpaceResume,
-                    anchorBounds = spaceSwitcherFabAnchorBounds,
-                )
             }
             Box(modifier = Modifier
                 .fillMaxSize()
@@ -1613,6 +1643,7 @@ fun KototoroApp(
                                         },
                                         onDetailsBottomPanelStateChanged = { expansion, obstruction ->
                                             if (renderedSpaceId == navigationSpaceId) {
+                                                detailsBottomPanelRoute = currentDestinationRoute
                                                 detailsBottomPanelExpansion = expansion
                                                 detailsBottomObstruction = obstruction
                                             }
@@ -1662,6 +1693,11 @@ fun KototoroApp(
                                                 mainShellChrome()
                                             }
                                         },
+                                        routeFab = {
+                                            if (renderedSpaceId == navigationSpaceId) {
+                                                mainFloatingAction()
+                                            }
+                                        },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
@@ -1674,6 +1710,18 @@ fun KototoroApp(
                         }
                     }
                 }
+                SpaceSwitcherSheet(
+                    state = spaceUiState,
+                    onAction = onSpaceAction,
+                    resumeItems = spaceResumeUiState.items,
+                    onResume = onSpaceResume,
+                    anchorBounds = spaceSwitcherFabAnchorBounds,
+                    useGlobalRootMenu = true,
+                )
+                RootGlassMenuOverlay(
+                    host = rootGlassMenuHost,
+                    modifier = Modifier.matchParentSize(),
+                )
                 LaunchedEffect(
                     spaceUiState.switcherEnabled,
                     isDetailsRoute,
@@ -2125,7 +2173,6 @@ private fun ContinueReadingFab(
     modifier: Modifier = Modifier,
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
-    val exportedBackdrop = rememberLayerBackdrop()
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
     if (useBackdrop) {
         Box(
@@ -2139,7 +2186,6 @@ private fun ContinueReadingFab(
                 .background(Color.White.copy(alpha = 0.08f), CircleShape)
                 .drawBackdrop(
                     backdrop = backdrop,
-                    exportedBackdrop = exportedBackdrop,
                     shape = { CircleShape },
                     effects = {
                         vibrancy()

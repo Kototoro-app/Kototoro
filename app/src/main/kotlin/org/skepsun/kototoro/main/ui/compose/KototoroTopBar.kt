@@ -39,6 +39,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -538,26 +539,28 @@ internal fun TopBarControlSurface(
         LocalInterfaceStyle.current == InterfaceStyle.IOS &&
         backdrop != null
     if (useBackdrop) {
-        Box(
-            modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.26f), shape)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    exportedBackdrop = exportedBackdrop,
-                    shape = { shape },
-                    effects = {
-                        vibrancy()
-                        blur(4.dp.toPx())
-                        lens(
-                            refractionHeight = 10.dp.toPx(),
-                            refractionAmount = 12.dp.toPx(),
-                            chromaticAberration = true,
-                        )
-                    },
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
-            content = content,
-        )
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            Box(
+                modifier = modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.26f), shape)
+                    .drawBackdrop(
+                        backdrop = backdrop,
+                        exportedBackdrop = exportedBackdrop,
+                        shape = { shape },
+                        effects = {
+                            vibrancy()
+                            blur(4.dp.toPx())
+                            lens(
+                                refractionHeight = 10.dp.toPx(),
+                                refractionAmount = 12.dp.toPx(),
+                                chromaticAberration = true,
+                            )
+                        },
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+                content = content,
+            )
+        }
     } else {
         GlassSurface(
             modifier = modifier,

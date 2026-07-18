@@ -3,17 +3,18 @@ package org.skepsun.kototoro.main.ui.compose
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.DpOffset
@@ -21,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 
 private val CompactSourceTagButtonSize = 36.dp
@@ -42,6 +45,7 @@ fun SourceTagDropdown(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var anchorBounds by remember { mutableStateOf<Rect?>(null) }
 
     val iconRes = if (selectedTags.size == 1) {
         selectedTags.first().iconRes
@@ -57,7 +61,9 @@ fun SourceTagDropdown(
         entries.sortedBy { tag -> tag !in selectedTags }
     }
 
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() },
+    ) {
         IconButton(
             onClick = {
                 if (!onButtonClickIntercept(null)) {
@@ -78,9 +84,11 @@ fun SourceTagDropdown(
             onDismissRequest = { expanded = false },
             offset = DpOffset(x = 0.dp, y = 4.dp),
             style = GlassDefaults.subtleStyle(),
+            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            anchorBounds = anchorBounds,
         ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.all)) },
+            CompactDropdownMenuItem(
+                text = { CompactDropdownMenuText(stringResource(R.string.all)) },
                 onClick = {
                     expanded = false
                     onTagSelected(null)
@@ -95,8 +103,8 @@ fun SourceTagDropdown(
             )
 
             sortedEntries.forEach { tag ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(tag.titleRes)) },
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(stringResource(tag.titleRes)) },
                     onClick = {
                         expanded = false
                         onTagSelected(tag)
@@ -106,7 +114,7 @@ fun SourceTagDropdown(
                         Icon(
                             painter = rememberSafePainter(tag.iconRes),
                             contentDescription = null,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = if (tag in selectedTags) {
                                 MaterialTheme.colorScheme.primary
                             } else {

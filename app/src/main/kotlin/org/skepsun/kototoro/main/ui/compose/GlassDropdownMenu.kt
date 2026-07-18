@@ -24,6 +24,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -35,9 +37,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.DpOffset
@@ -46,6 +50,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.MaterialTheme
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -65,8 +70,10 @@ internal val LocalRootGlassMenuHost = staticCompositionLocalOf<RootGlassMenuHost
 
 internal data class RootGlassMenuRequest(
     val id: Any,
+    val backdrop: Backdrop,
     val anchorBounds: Rect,
     val shape: RoundedCornerShape,
+    val openAboveAnchor: Boolean,
     val scrollState: androidx.compose.foundation.ScrollState,
     val onDismissRequest: () -> Unit,
     val content: @Composable ColumnScope.() -> Unit,
@@ -78,21 +85,27 @@ internal fun RootGlassMenuOverlay(
     modifier: Modifier = Modifier,
 ) {
     val request = host.request ?: return
-    val backdrop = LocalLiquidGlassBackdrop.current
     val surfaceColor = MaterialTheme.colorScheme.surfaceContainer
     val density = LocalDensity.current
     val menuGapPx = with(density) { 4.dp.roundToPx() }
     var measuredMenuWidthPx by remember(request.id) { mutableStateOf(0) }
+    var measuredMenuHeightPx by remember(request.id) { mutableStateOf(0) }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .zIndex(100f),
     ) {
-        val rootWidthPx = with(density) { maxWidth.roundToPx() }
-        val menuWidthPx = measuredMenuWidthPx
-        val x = (request.anchorBounds.right.toInt() - menuWidthPx)
-            .coerceIn(0, (rootWidthPx - menuWidthPx).coerceAtLeast(0))
+        val menuOffset = calculateRootGlassMenuOffset(
+            rootSize = IntSize(
+                width = with(density) { maxWidth.roundToPx() },
+                height = with(density) { maxHeight.roundToPx() },
+            ),
+            menuSize = IntSize(measuredMenuWidthPx, measuredMenuHeightPx),
+            anchorBounds = request.anchorBounds,
+            gapPx = menuGapPx,
+            openAboveAnchor = request.openAboveAnchor,
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -103,24 +116,23 @@ internal fun RootGlassMenuOverlay(
         )
         Box(
             modifier = Modifier
-                .offset { IntOffset(x, request.anchorBounds.bottom.toInt() + menuGapPx) }
-                .widthIn(max = 280.dp)
+                .offset { menuOffset }
+                .alpha(if (measuredMenuWidthPx > 0 && measuredMenuHeightPx > 0) 1f else 0f)
+                .widthIn(max = maxWidth)
                 .wrapContentWidth()
                 .heightIn(max = maxHeight * 0.65f)
                 .zIndex(1f)
-                .onGloballyPositioned { measuredMenuWidthPx = it.size.width }
+                .onGloballyPositioned {
+                    measuredMenuWidthPx = it.size.width
+                    measuredMenuHeightPx = it.size.height
+                }
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.48f), request.shape)
                 .drawBackdrop(
-                    backdrop = backdrop!!,
+                    backdrop = request.backdrop,
                     shape = { request.shape },
                     effects = {
                         vibrancy()
                         blur(6.dp.toPx())
-                        lens(
-                            refractionHeight = 8.dp.toPx(),
-                            refractionAmount = 8.dp.toPx(),
-                            chromaticAberration = false,
-                        )
                     },
                     onDrawSurface = {
                         drawRect(surfaceColor.copy(alpha = 0.42f))
@@ -128,9 +140,29 @@ internal fun RootGlassMenuOverlay(
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.22f), request.shape),
         ) {
-            CompactMenuContent(request.scrollState, request.content)
+            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                CompactMenuContent(request.scrollState, request.content)
+            }
         }
     }
+}
+
+internal fun calculateRootGlassMenuOffset(
+    rootSize: IntSize,
+    menuSize: IntSize,
+    anchorBounds: Rect,
+    gapPx: Int,
+    openAboveAnchor: Boolean,
+): IntOffset {
+    val x = (anchorBounds.right.toInt() - menuSize.width)
+        .coerceIn(0, (rootSize.width - menuSize.width).coerceAtLeast(0))
+    val preferredY = if (openAboveAnchor) {
+        anchorBounds.top.toInt() - menuSize.height - gapPx
+    } else {
+        anchorBounds.bottom.toInt() + gapPx
+    }
+    val y = preferredY.coerceIn(0, (rootSize.height - menuSize.height).coerceAtLeast(0))
+    return IntOffset(x, y)
 }
 
 @Composable
@@ -142,6 +174,7 @@ fun GlassDropdownMenu(
     alignToAnchorEnd: Boolean = false,
     useRootOverlay: Boolean = false,
     anchorBounds: Rect? = null,
+    openAboveAnchor: Boolean = false,
     shape: RoundedCornerShape = RoundedCornerShape(20.dp),
     style: GlassStyle = GlassDefaults.prominentStyle(),
     content: @Composable ColumnScope.() -> Unit,
@@ -152,8 +185,13 @@ fun GlassDropdownMenu(
         (configuration.screenHeightDp.dp * 0.65f).coerceAtLeast(320.dp)
     }
     val rootHost = LocalRootGlassMenuHost.current
+    val backdrop = LocalLiquidGlassBackdrop.current
     val requestId = remember { Any() }
-    val useRootMenu = useRootOverlay && expanded && anchorBounds != null && rootHost != null
+    val useRootMenu = useRootOverlay &&
+        expanded &&
+        anchorBounds != null &&
+        rootHost != null &&
+        backdrop != null
 
     DisposableEffect(useRootOverlay, rootHost, requestId) {
         onDispose {
@@ -166,8 +204,10 @@ fun GlassDropdownMenu(
         SideEffect {
             rootHost?.request = RootGlassMenuRequest(
                 id = requestId,
+                backdrop = backdrop!!,
                 anchorBounds = anchorBounds!!,
                 shape = shape,
+                openAboveAnchor = openAboveAnchor,
                 scrollState = scrollState,
                 onDismissRequest = onDismissRequest,
                 content = content,
@@ -179,7 +219,7 @@ fun GlassDropdownMenu(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         offset = if (alignToAnchorEnd) {
-            DpOffset(x = -152.dp + offset.x, y = offset.y)
+            offset
         } else {
             offset
         },
@@ -191,7 +231,7 @@ fun GlassDropdownMenu(
         ) {
         val menuModifier = Modifier
             .heightIn(max = maxMenuHeight)
-            .then(if (alignToAnchorEnd) Modifier.width(192.dp) else Modifier.widthIn(min = 176.dp))
+            .wrapContentWidth()
             .wrapContentWidth()
         GlassSurface(
             modifier = menuModifier,
@@ -215,29 +255,33 @@ internal fun CompactDropdownMenuItem(
     text: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     leadingIcon: (@Composable (() -> Unit))? = null,
     trailingIcon: (@Composable (() -> Unit))? = null,
 ) {
-    Row(
-        modifier = modifier
-            .height(40.dp)
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        leadingIcon?.let {
-            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                it()
+    CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.labelMedium) {
+        Row(
+            modifier = modifier
+                .height(40.dp)
+                .fillMaxWidth()
+                .alpha(if (enabled) 1f else 0.38f)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            leadingIcon?.let {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    it()
+                }
             }
-        }
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-            text()
-        }
-        trailingIcon?.let {
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                it()
+                text()
+            }
+            trailingIcon?.let {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    it()
+                }
             }
         }
     }
@@ -260,9 +304,13 @@ private fun CompactMenuContent(
 }
 
 @Composable
-internal fun CompactDropdownMenuText(text: String) {
+internal fun CompactDropdownMenuText(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
     Text(
         text = text,
+        modifier = modifier,
         style = MaterialTheme.typography.labelMedium,
     )
 }

@@ -132,21 +132,22 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
-import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
+import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.util.AlphanumComparator
@@ -156,6 +157,11 @@ import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
 import org.skepsun.kototoro.filter.ui.tags.TagsCatalogRoute
@@ -511,7 +517,19 @@ fun AppSearchContentListRoute(
     val wideListState = remember { LazyListState() }
     val wideDetailedListState = remember { LazyListState() }
     val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-    val useRuntimeHaze = remember { supportsRuntimeHaze() }
+    val useRuntimeHaze = isRuntimeHazeAvailable()
+    val providedLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
+    val backdropBackground = MaterialTheme.colorScheme.background
+    val fallbackLayerBackdrop = rememberLayerBackdrop {
+        drawRect(backdropBackground)
+        drawContent()
+    }
+    val listLayerBackdrop = providedLayerBackdrop ?: fallbackLayerBackdrop
+    val liquidGlassSourceModifier = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        Modifier.layerBackdrop(listLayerBackdrop)
+    } else {
+        Modifier
+    }
 
     fun restoreFilterPane() {
         previewContent = null
@@ -644,7 +662,11 @@ fun AppSearchContentListRoute(
         }
     }
 
-    CompositionLocalProvider(LocalHazeState provides hazeState) {
+    CompositionLocalProvider(
+        LocalHazeState provides hazeState,
+        LocalLiquidGlassBackdrop provides listLayerBackdrop,
+        LocalLiquidGlassLayerBackdrop provides listLayerBackdrop,
+    ) {
         androidx.compose.material3.Scaffold(contentWindowInsets = WindowInsets.navigationBars) { paddingValues ->
             if (isWideSplitLayout) {
                 Row(
@@ -660,6 +682,7 @@ fun AppSearchContentListRoute(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .then(liquidGlassSourceModifier)
                                 .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
                         ) {
                             KototoroContentListScreen(
@@ -823,6 +846,7 @@ fun AppSearchContentListRoute(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .then(liquidGlassSourceModifier)
                             .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
                     ) {
                         KototoroContentListScreen(
@@ -1169,7 +1193,10 @@ private fun SearchContentTopBar(
     val compactTopBarAlpha = if (topActionsHeightPx == 0f) 1f else {
         ((topActionsHeightPx - topActionsCollapsedPx) / topActionsHeightPx).coerceIn(0f, 1f)
     }
-    val topGradientAlpha = (1f - compactTopBarAlpha).coerceIn(0f, 1f)
+    val topGradientAlpha = resolveTopImmersiveAlpha(
+        contentScrollAlpha = (1f - compactTopBarAlpha).coerceIn(0f, 1f),
+        chromeAlpha = compactTopBarAlpha,
+    )
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
     val statusBarTopPadding = statusBarPadding.calculateTopPadding()
     val glassPrefs = rememberGlassPrefsOrFallback()
@@ -1432,12 +1459,8 @@ private fun SourceListTopActionsRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
         ) {
-            GlassSurface(
+            TopBarControlSurface(
                 modifier = Modifier.wrapContentWidth(),
-                shape = CompactTopBarPillShape,
-                style = GlassDefaults.subtleStyle(),
-                visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                componentRole = GlassComponentRole.TopBar,
             ) {
                 IconButton(
                     onClick = onBackClick,
@@ -1461,12 +1484,8 @@ private fun SourceListTopActionsRow(
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
-            GlassSurface(
+            TopBarControlSurface(
                 modifier = Modifier.wrapContentWidth(),
-                shape = CompactTopBarPillShape,
-                style = GlassDefaults.subtleStyle(),
-                visualTreatment = GlassVisualTreatment.TopBarPrototype,
-                componentRole = GlassComponentRole.TopBar,
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides SearchTopPrimaryActionButtonSize) {
                     Row(
@@ -1847,15 +1866,11 @@ private fun PinnedRowPill(
         Color.Transparent
     }
 
-    GlassSurface(
+    TopBarControlSurface(
         modifier = modifier
             .height(SearchPinnedChipHeight)
             .clip(CircleShape)
             .clickable(enabled = enabled, onClick = onClick),
-        style = GlassDefaults.subtleStyle(),
-        shape = CircleShape,
-        visualTreatment = GlassVisualTreatment.TopBarPrototype,
-        componentRole = GlassComponentRole.TopBar,
     ) {
         Row(
             modifier = Modifier

@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.favourites.ui.compose
 
-import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -48,6 +47,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
+import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
@@ -254,7 +254,7 @@ fun KototoroFavoritesHostRoute(
     }
 
     val hazeState = remember { HazeState() }
-    val useBackgroundHaze = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val useBackgroundHaze = isRuntimeHazeAvailable()
 
     if (uiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

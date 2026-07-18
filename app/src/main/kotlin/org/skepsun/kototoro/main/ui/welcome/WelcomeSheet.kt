@@ -82,6 +82,7 @@ import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
+import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -170,6 +171,7 @@ private fun WelcomeRoute(
 	var showDisclaimer by rememberSaveable { mutableStateOf(false) }
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
 	val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
+	val useRuntimeHaze = isRuntimeHazeAvailable()
 
 	BackHandler(enabled = pagerState.currentPage > 0 && !isInitializing) {
 		scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
@@ -182,7 +184,9 @@ private fun WelcomeRoute(
 		HorizontalPager(
 			state = pagerState,
 			userScrollEnabled = !isInitializing,
-			modifier = Modifier.fillMaxSize().hazeSource(hazeState),
+			modifier = Modifier
+				.fillMaxSize()
+				.then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
 		) { page ->
 			Column(
 				modifier = Modifier

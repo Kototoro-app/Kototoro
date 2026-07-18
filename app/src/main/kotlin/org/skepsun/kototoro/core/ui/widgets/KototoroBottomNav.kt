@@ -204,7 +204,7 @@ fun KototoroBottomNav(
                 backdrop = navBackdrop,
             ),
             style = navContainerStyle,
-            useBackdrop = isIosStyle && navBackdrop != null,
+            useBackdrop = isIosStyle,
             backdrop = navBackdrop,
         ) {
             NavigationRail(
@@ -312,7 +312,7 @@ fun KototoroBottomNav(
                             backdrop = navBackdrop,
                         ),
                     style = navContainerStyle,
-                    useBackdrop = isIosStyle && navBackdrop != null,
+                    useBackdrop = isIosStyle,
                     backdrop = navBackdrop,
                 ) {
                     FloatingBottomNavRow(
@@ -354,7 +354,7 @@ fun KototoroBottomNav(
                     ),
                 style = navContainerStyle,
                 shape = RoundedCornerShape(0.dp),
-                useBackdrop = isIosStyle && navBackdrop != null,
+                useBackdrop = isIosStyle,
                 backdrop = navBackdrop,
             ) {
                 NavigationBar(
@@ -419,7 +419,7 @@ private fun MainNavBottomContainer(
     backdrop: com.kyant.backdrop.Backdrop? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (useBackdrop && backdrop != null) {
+    if (useBackdrop) {
         Box(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), RoundedCornerShape(24.dp))
@@ -445,7 +445,7 @@ private fun MainNavSurface(
     backdrop: com.kyant.backdrop.Backdrop?,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (useBackdrop && backdrop != null) {
+    if (useBackdrop) {
         Box(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), shape)
@@ -535,7 +535,7 @@ private fun FloatingBottomNavRow(
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val useSharedLiquidGlassPill = useExpressivePill && isIosStyle && backdrop != null
+    val useSharedLiquidGlassPill = useExpressivePill && isIosStyle
     val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
     var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var dragPreviewItemId by remember { mutableStateOf<Int?>(null) }
@@ -556,7 +556,6 @@ private fun FloatingBottomNavRow(
         targetValue = targetIndicatorSize,
         label = "bottomNavGlassPillSize",
     )
-
     Box(
         modifier = modifier
             .animateContentSize()
@@ -565,7 +564,7 @@ private fun FloatingBottomNavRow(
             },
         contentAlignment = Alignment.Center,
     ) {
-        if (useSharedLiquidGlassPill && indicatorSize != IntSize.Zero) {
+        if (useSharedLiquidGlassPill && targetIndicatorSize != IntSize.Zero) {
             val indicatorShape = RoundedCornerShape(20.dp)
             Box(
                 modifier = Modifier
@@ -578,7 +577,7 @@ private fun FloatingBottomNavRow(
                     .background(Color.White.copy(alpha = 0.12f), indicatorShape)
                     .mainNavBackdrop(
                         shape = indicatorShape,
-                        enabled = true,
+                        enabled = backdrop != null,
                         backdrop = backdrop,
                     )
                     .border(1.dp, Color.White.copy(alpha = 0.28f), indicatorShape),
@@ -599,8 +598,8 @@ private fun FloatingBottomNavRow(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
-            val useLiquidGlassPill = isSelected && useExpressivePill && isIosStyle && backdrop != null
-            val selectedContainerColor = if (isSelected && useExpressivePill) {
+            val useLiquidGlassPill = isSelected && useExpressivePill && isIosStyle
+            val selectedContainerColor = if (isSelected && useExpressivePill && !isIosStyle) {
                 if (useLiquidGlassPill) {
                     Color.White.copy(alpha = 0.12f)
                 } else {
@@ -691,7 +690,7 @@ private fun FloatingBottomNavRow(
                                             .background(selectedContainerColor, CircleShape)
                                             .mainNavBackdrop(
                                                 shape = CircleShape,
-                                                enabled = useLiquidGlassPill,
+                                                enabled = useLiquidGlassPill && backdrop != null,
                                                 backdrop = backdrop,
                                             )
                                             .then(

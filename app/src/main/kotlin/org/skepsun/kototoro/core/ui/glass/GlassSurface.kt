@@ -188,7 +188,19 @@ fun GlassSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val glassPrefs = rememberGlassPrefsOrFallback()
+    val backdrop = LocalLiquidGlassBackdrop.current
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null && !dialogSurface) {
+        LiquidGlassSurface(
+            modifier = modifier,
+            style = style,
+            shape = shape,
+            componentRole = componentRole,
+            content = content,
+        )
+        return
+    }
     val hazeState = LocalHazeState.current
+    val interfaceStyle = LocalInterfaceStyle.current
     val colorScheme = MaterialTheme.colorScheme
     val isDarkTheme = colorScheme.background.luminance() < 0.5f
     val usesOfficialHazeMaterial = glassPrefs.materialPreset.usesOfficialHazeMaterial()
@@ -203,7 +215,9 @@ fun GlassSurface(
     }
     val glassColors = rememberGlassSurfaceColors(style = effectiveStyle, glassPrefs = glassPrefs)
 
-    val useRuntimeHaze = glassPrefs.isGlassEffectEnabled && allowRuntimeHaze && supportsRuntimeHaze()
+    val useRuntimeHaze = glassPrefs.isGlassEffectEnabled &&
+        allowRuntimeHaze &&
+        isRuntimeHazeAvailable()
     val shouldUsePrototypeSurfaceFill = useRuntimeHaze &&
         usePrototypeChrome &&
         !dialogSurface &&
@@ -300,7 +314,8 @@ fun GlassSurface(
     var lastDebugConfig by remember(debugLabel) { mutableStateOf<String?>(null) }
     if (BuildConfig.DEBUG && debugLabel != null) {
         val debugConfig =
-            "$debugLabel config useRuntimeHaze=$useRuntimeHaze allowRuntimeHaze=$allowRuntimeHaze " +
+            "$debugLabel config interfaceStyle=$interfaceStyle useRuntimeHaze=$useRuntimeHaze " +
+                "allowRuntimeHaze=$allowRuntimeHaze " +
                 "dialogSurface=$dialogSurface material=${glassPrefs.materialPreset} " +
                 "componentRole=$componentRole " +
                 "opacity=${glassPrefs.hazeOpacityPercent} blurPref=${glassPrefs.blurStrengthPercent} " +
@@ -491,25 +506,26 @@ fun GlassBottomBarContainer(
     val shape = RoundedCornerShape(32.dp)
     val backdrop = LocalLiquidGlassBackdrop.current
     val exportedBackdrop = rememberLayerBackdrop()
-    if (LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null) {
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
         Box(
             modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.24f), shape)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    exportedBackdrop = exportedBackdrop,
-                    shape = { shape },
-                    effects = {
-                        vibrancy()
-                        blur(5.dp.toPx())
-                        lens(
-                            refractionHeight = 10.dp.toPx(),
-                            refractionAmount = 10.dp.toPx(),
-                            chromaticAberration = true,
+                .background(Color.White.copy(alpha = 0.08f), shape)
+                .then(
+                    if (backdrop != null) {
+                        Modifier.drawBackdrop(
+                            backdrop = backdrop,
+                            exportedBackdrop = exportedBackdrop,
+                            shape = { shape },
+                            effects = {
+                                vibrancy()
+                                blur(8.dp.toPx())
+                            },
                         )
+                    } else {
+                        Modifier
                     },
                 )
-                .border(1.dp, Color.White.copy(alpha = 0.20f), shape),
+                .border(1.dp, Color.White.copy(alpha = 0.24f), shape),
             content = content,
         )
     } else {

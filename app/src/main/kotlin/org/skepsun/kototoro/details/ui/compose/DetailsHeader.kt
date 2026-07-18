@@ -49,7 +49,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -114,6 +113,7 @@ import org.skepsun.kototoro.core.model.containsAdultTagKeyword
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
@@ -134,7 +134,9 @@ import org.skepsun.kototoro.core.ui.glass.LiquidGlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuDivider
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
@@ -1076,6 +1078,7 @@ private fun RatingStatusChip(
     onUpdateStatus: (ScrobblingStatus) -> Unit,
 ) {
     var expanded by remember(status, linkedTrackingItems) { mutableStateOf(false) }
+    var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     val supportedStatuses = remember(linkedTrackingItems) {
         linkedTrackingItems
             .map { supportedStatusesForService(it.service).toSet() }
@@ -1084,7 +1087,9 @@ private fun RatingStatusChip(
             ?.toList()
             ?: ScrobblingStatus.entries
     }
-    Box {
+    Box(
+        modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
+    ) {
         Surface(
             modifier = Modifier.height(32.dp),
             shape = RoundedCornerShape(999.dp),
@@ -1130,9 +1135,11 @@ private fun RatingStatusChip(
             onDismissRequest = { expanded = false },
             shape = RoundedCornerShape(28.dp),
             style = GlassDefaults.subtleStyle(),
+            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            anchorBounds = menuAnchorBounds,
         ) {
             supportedStatuses.forEach { candidate ->
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = {
                         Text(
                             text = scrobblingStatuses.getOrElse(candidate.ordinal) { candidate.name },
@@ -1166,9 +1173,12 @@ private fun CompactRatingChip(
 ) {
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
+    var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     val score = (rating.coerceIn(0f, 1f) * 10f).roundToInt()
     val contentAlpha = if (score > 0) 1f else 0.62f
-    Box {
+    Box(
+        modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
+    ) {
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
@@ -1213,9 +1223,11 @@ private fun CompactRatingChip(
             onDismissRequest = { expanded = false },
             shape = RoundedCornerShape(24.dp),
             style = GlassDefaults.subtleStyle(),
+            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            anchorBounds = menuAnchorBounds,
         ) {
             (0..10).forEach { candidate ->
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(candidate.toString()) },
                     onClick = {
                         expanded = false
@@ -1430,6 +1442,7 @@ private fun SourceOptionCard(
     var statusMenuExpanded by remember(displayModel.linkedTrackingItem?.service, displayModel.linkedTrackingItem?.remoteId) {
         mutableStateOf(false)
     }
+    var statusMenuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val optionCardColors = rememberGlassSurfaceColors(style = GlassDefaults.subtleStyle())
     Surface(
@@ -1564,7 +1577,9 @@ private fun SourceOptionCard(
             val linkedTrackingItem = displayModel.linkedTrackingItem
             if (linkedTrackingItem != null && linkedTrackingItem.status != null && onTrackingStatusClick != null) {
                 Spacer(Modifier.height(6.dp))
-                Box {
+                    Box(
+                        modifier = Modifier.onGloballyPositioned { statusMenuAnchorBounds = it.boundsInRoot() },
+                    ) {
                     SuggestionChip(
                         onClick = { statusMenuExpanded = true },
                         label = {
@@ -1594,9 +1609,11 @@ private fun SourceOptionCard(
                         onDismissRequest = { statusMenuExpanded = false },
                         shape = RoundedCornerShape(28.dp),
                         style = GlassDefaults.subtleStyle(),
+                        useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                        anchorBounds = statusMenuAnchorBounds,
                     ) {
                         supportedStatusesForService(linkedTrackingItem.service).forEach { status ->
-                            DropdownMenuItem(
+                            CompactDropdownMenuItem(
                                 text = {
                                     Text(
                                         text = scrobblingStatuses.getOrElse(status.ordinal) { status.name },
@@ -1721,7 +1738,10 @@ fun MetadataSourceSheet(
 	                                linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
 	                            }
                             var showMenu by remember(option.key) { mutableStateOf(false) }
-                            Box {
+                            var menuAnchorBounds by remember(option.key) { mutableStateOf<Rect?>(null) }
+                            Box(
+                                modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
+                            ) {
                                 SourceOptionCard(
                                     displayModel = option.resolveDisplayModel(
                                         role = DetailsSourceRole.ENTITY_METADATA,
@@ -1750,8 +1770,10 @@ fun MetadataSourceSheet(
                                 GlassDropdownMenu(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false },
+                                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                    anchorBounds = menuAnchorBounds,
                                 ) {
-                                    DropdownMenuItem(
+                                    CompactDropdownMenuItem(
                                         text = { Text(stringResource(R.string.details_remove_metadata_binding)) },
                                         onClick = {
                                             showMenu = false
@@ -1991,7 +2013,10 @@ fun ReadingSourceSheet(
                                 option.targetMangaId != null &&
                                     entityChapterSourceInfo?.activeProjectionMangaId == option.targetMangaId
                             var showMenu by remember(option.key) { mutableStateOf(false) }
-                            Box {
+                            var menuAnchorBounds by remember(option.key) { mutableStateOf<Rect?>(null) }
+                            Box(
+                                modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
+                            ) {
                                 SourceOptionCard(
                                     displayModel = option.resolveDisplayModel(
                                         role = DetailsSourceRole.READING_PROJECTION,
@@ -2026,8 +2051,10 @@ fun ReadingSourceSheet(
                                 GlassDropdownMenu(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false },
+                                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                    anchorBounds = menuAnchorBounds,
                                 ) {
-                                    DropdownMenuItem(
+                                    CompactDropdownMenuItem(
                                         text = { Text(stringResource(R.string.details_remove_projection)) },
                                         onClick = {
                                             showMenu = false
@@ -2035,7 +2062,7 @@ fun ReadingSourceSheet(
                                         },
                                     )
                                     CompactDropdownMenuDivider()
-                                    DropdownMenuItem(
+                                    CompactDropdownMenuItem(
                                         text = { Text(stringResource(R.string.details_activate_projection)) },
                                         onClick = {
                                             showMenu = false

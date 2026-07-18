@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.selection.selectable
@@ -56,6 +57,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.LocalRootGlassMenuHost
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
@@ -63,7 +65,6 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
 
@@ -84,8 +85,7 @@ fun SpaceSwitcherFab(
 	val colorScheme = MaterialTheme.colorScheme
 	val fabAccentColor = colorScheme.primaryContainer
 	val backdrop = LocalLiquidGlassBackdrop.current
-	val exportedBackdrop = rememberLayerBackdrop()
-	val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	val fabModifier = modifier
 		.clickable(
 			interactionSource = remember { MutableInteractionSource() },
@@ -119,19 +119,24 @@ fun SpaceSwitcherFab(
 			}
 		}
 	}
-	if (useBackdrop) {
-		Box(
-			modifier = fabModifier
-				.background(Color.White.copy(alpha = 0.08f), CircleShape)
-				.drawBackdrop(
-					backdrop = backdrop,
-					exportedBackdrop = exportedBackdrop,
-					shape = { CircleShape },
-					effects = {
-						vibrancy()
-						blur(4.dp.toPx())
-					},
-				)
+    if (useBackdrop) {
+        Box(
+            modifier = fabModifier
+                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                .then(
+                    if (backdrop != null) {
+                        Modifier.drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { CircleShape },
+                            effects = {
+                                vibrancy()
+                                blur(4.dp.toPx())
+                            },
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
 				.border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
 			content = content,
 		)
@@ -196,20 +201,32 @@ fun SpaceSwitcherSheet(
 	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
 	onResume: (SpaceId) -> Unit = {},
 	anchorBounds: Rect? = null,
+	useGlobalRootMenu: Boolean = false,
 ) {
+	val backdrop = LocalLiquidGlassBackdrop.current
+	val rootMenuHost = LocalRootGlassMenuHost.current
 	if (!state.switcherVisible) return
+	if (useGlobalRootMenu && (anchorBounds == null || backdrop == null || rootMenuHost == null)) return
+	val compactMenu = useGlobalRootMenu
 	val menuContent: @Composable ColumnScope.() -> Unit = {
-		CompactDropdownMenuText(stringResource(R.string.space_switcher_title))
+		if (compactMenu) {
+			CompactDropdownMenuText(
+				text = stringResource(R.string.space_switcher_title),
+				modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+			)
+		} else {
+			CompactDropdownMenuText(stringResource(R.string.space_switcher_title))
+		}
 		state.spaces.forEach { context ->
 			SpaceRow(
 				context = context,
 				selected = context.id == state.activeSpaceId,
-					enabled = !state.switchInProgress,
-					resumeItem = resumeItems[context.id],
-					onResume = { onResume(context.id) },
-					onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
-					compactMenu = anchorBounds != null,
-				)
+				enabled = !state.switchInProgress,
+				resumeItem = resumeItems[context.id],
+				onResume = { onResume(context.id) },
+				onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+				compactMenu = compactMenu,
+			)
 		}
 		if (state.switchInProgress) {
 			Box(
@@ -220,13 +237,13 @@ fun SpaceSwitcherSheet(
 			}
 		}
 	}
-	if (anchorBounds != null) {
+	if (useGlobalRootMenu) {
 		GlassDropdownMenu(
 			expanded = true,
 			onDismissRequest = { onAction(SpaceAction.DismissSwitcher) },
 			anchorBounds = anchorBounds,
 			useRootOverlay = true,
-			alignToAnchorEnd = true,
+			openAboveAnchor = true,
 		) {
 			menuContent()
 		}
@@ -257,7 +274,7 @@ private fun SpaceRow(
 		modifier = Modifier
 			.then(
 				if (compactMenu) {
-					Modifier.widthIn(min = 220.dp, max = 280.dp)
+					Modifier.wrapContentWidth()
 				} else {
 					Modifier.fillMaxWidth()
 				},

@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,11 +22,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
 enum class SelectionAction {
     SELECT_ALL,
@@ -59,6 +65,7 @@ fun KototoroSelectionTopBar(
     modifier: Modifier = Modifier
 ) {
     var showOverflowMenu by remember { mutableStateOf(false) }
+    var overflowAnchorBounds by remember { mutableStateOf<Rect?>(null) }
 
     val allActions = supportedActions?.toList() ?: defaultSelectionActions(showRemoveOption)
     val inlineActions = preferredInlineActions
@@ -106,18 +113,22 @@ fun KototoroSelectionTopBar(
             // Overflow menu - shows actions beyond the first 4 inline, plus FIX/EDIT_OVERRIDE/FAVOURITE
             val hasOverflow = overflowActions.isNotEmpty()
             if (hasOverflow) {
-                Box {
+                Box(
+                    modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
+                ) {
                     IconButton(onClick = { showOverflowMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More")
                     }
                     GlassDropdownMenu(
                         expanded = showOverflowMenu,
                         onDismissRequest = { showOverflowMenu = false },
+                        useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                        anchorBounds = overflowAnchorBounds,
                     ) {
                         overflowActions.forEach { action ->
-                            DropdownMenuItem(
+                            CompactDropdownMenuItem(
                                 text = {
-                                    Text(
+                                    CompactDropdownMenuText(
                                         text = selectionActionTitle(
                                             action = action,
                                             allPinned = allPinned,

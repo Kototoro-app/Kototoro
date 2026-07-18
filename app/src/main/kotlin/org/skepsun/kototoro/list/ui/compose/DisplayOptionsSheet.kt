@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,6 +47,8 @@ import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 
 private const val DISPLAY_OPTIONS_SHEET_TAG = "DisplayOptionsSheet"
 
@@ -327,8 +328,8 @@ private fun SortOrderSection(
                 onDismissRequest = { expanded = false },
             ) {
                 sortOrders.forEach { order ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(order.titleResId)) },
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(order.titleResId)) },
                         onClick = {
                             expanded = false
                             onSortOrderSelected(order)

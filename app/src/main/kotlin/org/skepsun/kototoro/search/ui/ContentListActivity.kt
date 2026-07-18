@@ -35,7 +35,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
-import org.skepsun.kototoro.core.ui.glass.supportsRuntimeHaze
+import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
@@ -115,7 +115,7 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                 isSharedElementTransitionsEnabled
             }.value
         val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-        val useRuntimeHaze = remember { supportsRuntimeHaze() }
+        val useRuntimeHaze = isRuntimeHazeAvailable()
 
         CompositionLocalProvider(LocalHazeState provides hazeState) {
             Box(

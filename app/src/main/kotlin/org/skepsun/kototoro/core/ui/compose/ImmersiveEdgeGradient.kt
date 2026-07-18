@@ -11,6 +11,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 
+internal fun resolveTopImmersiveAlpha(
+    contentScrollAlpha: Float,
+    chromeAlpha: Float,
+): Float = maxOf(contentScrollAlpha, chromeAlpha).coerceIn(0f, 1f)
+
 @Composable
 fun BoxScope.ImmersiveEdgeGradient(
     height: Dp,

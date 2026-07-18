@@ -57,7 +57,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -167,6 +166,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
@@ -182,6 +182,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
+import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -229,12 +230,14 @@ import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.DuplicateFavoritePromptDialog
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialog
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dev.chrisbanes.haze.HazePositionStrategy
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -902,12 +905,23 @@ fun DetailsScreen(
 
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-    val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val liquidGlassLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
-    val liquidGlassSourceModifier = if (
-        LocalInterfaceStyle.current == InterfaceStyle.IOS && liquidGlassLayerBackdrop != null
+    val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && isRuntimeHazeAvailable()
+    val routeLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
+    val detailsBackdropBackground = MaterialTheme.colorScheme.background
+    val detailsBackgroundBackdrop = rememberLayerBackdrop {
+        drawRect(detailsBackdropBackground)
+        drawContent()
+    }
+    val detailsContentBackdrop = rememberLayerBackdrop()
+    val routeLiquidGlassSourceModifier = if (
+        LocalInterfaceStyle.current == InterfaceStyle.IOS && routeLayerBackdrop != null
     ) {
-        Modifier.layerBackdrop(liquidGlassLayerBackdrop)
+        Modifier.layerBackdrop(routeLayerBackdrop)
+    } else {
+        Modifier
+    }
+    val detailsBackgroundSourceModifier = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        Modifier.layerBackdrop(detailsBackgroundBackdrop)
     } else {
         Modifier
     }
@@ -986,14 +1000,20 @@ fun DetailsScreen(
         }
     }
 
-    CompositionLocalProvider(LocalHazeState provides detailsHazeState) {
+    CompositionLocalProvider(
+        LocalHazeState provides detailsHazeState,
+        LocalLiquidGlassBackdrop provides detailsBackgroundBackdrop,
+        LocalLiquidGlassLayerBackdrop provides detailsBackgroundBackdrop,
+    ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(routeLiquidGlassSourceModifier),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(liquidGlassSourceModifier)
+                    .then(detailsBackgroundSourceModifier)
                     .then(if (useBackgroundHaze) Modifier.hazeSource(detailsHazeState) else Modifier),
             ) {
                 Box(
@@ -1232,12 +1252,27 @@ fun DetailsScreen(
                                 .fillMaxHeight(),
                             containerColor = Color.Transparent,
                             snackbarHost = { SnackbarHost(snackbarHostState) },
-                            topBar = commonTopBar,
+                            topBar = {
+                                CompositionLocalProvider(
+                                    LocalLiquidGlassBackdrop provides detailsContentBackdrop,
+                                    LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                                ) {
+                                    commonTopBar()
+                                }
+                            },
                         ) { paddingValues ->
                             KototoroPullToRefreshBox(
                                 isRefreshing = isLoading,
                                 onRefresh = { viewModel.reload() },
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(
+                                        if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                                            Modifier.layerBackdrop(detailsContentBackdrop)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
                                 indicatorTopInset = paddingValues,
                             ) {
                                 DetailsScrollableContent(
@@ -1329,7 +1364,11 @@ fun DetailsScreen(
                                 shape = RoundedCornerShape(28.dp),
                                 tonalElevation = 0.dp,
                             ) {
-                                DetailsPaneContent(
+                                CompositionLocalProvider(
+                                    LocalLiquidGlassBackdrop provides detailsContentBackdrop,
+                                    LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                                ) {
+                                    DetailsPaneContent(
                                     detailsPaneState = detailsPaneState,
                                     contentType = contentType,
                                     historyInfo = historyInfo,
@@ -1381,7 +1420,8 @@ fun DetailsScreen(
                                     isModernDockCompact = false,
                                     onSelectedTabIdChange = persistSelectedPaneTab,
                                     onActionClick = handleActionClick,
-                                )
+                                    )
+                                }
                             }
                         }
                     }
@@ -1399,11 +1439,18 @@ fun DetailsScreen(
                     containerColor = Color.Transparent,
                     snackbarHost = { SnackbarHost(snackbarHostState) },
                 ) { paddingValues ->
-                    KototoroPullToRefreshBox(
-                        isRefreshing = isLoading,
-                        onRefresh = { viewModel.reload() },
-                        modifier = Modifier
-                            .fillMaxSize(),
+                            KototoroPullToRefreshBox(
+                                isRefreshing = isLoading,
+                                onRefresh = { viewModel.reload() },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(
+                                        if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                                            Modifier.layerBackdrop(detailsContentBackdrop)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
                         indicatorTopInset = paddingValues,
                     ) {
                         if (compactSheetExpansionProgress < 0.995f) {
@@ -1496,7 +1543,11 @@ fun DetailsScreen(
                             .align(Alignment.TopCenter)
                             .fillMaxWidth(),
                     ) {
-                        DetailsPaneContent(
+                                CompositionLocalProvider(
+                                    LocalLiquidGlassBackdrop provides detailsContentBackdrop,
+                                    LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                                ) {
+                            DetailsPaneContent(
                             detailsPaneState = detailsPaneState,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1550,7 +1601,8 @@ fun DetailsScreen(
                             isModernDockCompact = isModernDockCompact,
                             onSelectedTabIdChange = persistSelectedPaneTab,
                             onActionClick = handleActionClick,
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -2840,7 +2892,7 @@ private fun DetailsPaneContent(
                     ),
                 shape = paneShape,
                 style = paneGlassStyle,
-                dialogSurface = true,
+                dialogSurface = LocalInterfaceStyle.current != InterfaceStyle.IOS,
                 componentRole = GlassComponentRole.Dialog,
             ) {
                 Box(
@@ -3654,7 +3706,7 @@ private fun ExpandedPaneUtilityDock(
                     onDismissRequest = { expanded = false },
                     offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
                 ) {
-                    DropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.reverse)) },
                         leadingIcon = {
                             MenuSelectionIndicator(selected = isChaptersReversed)
@@ -3664,7 +3716,7 @@ private fun ExpandedPaneUtilityDock(
                             onToggleChaptersReversed()
                         },
                     )
-                    DropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.chapters_grid_view)) },
                         leadingIcon = {
                             MenuSelectionIndicator(selected = isChaptersInGridView)
@@ -3674,7 +3726,7 @@ private fun ExpandedPaneUtilityDock(
                             onToggleChaptersGrid()
                         },
                     )
-                    DropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.hide_read_chapters)) },
                         leadingIcon = {
                             MenuSelectionIndicator(selected = isHideReadChapters)
@@ -3685,7 +3737,7 @@ private fun ExpandedPaneUtilityDock(
                         },
                     )
                     if (showMergeRepeatedChapters) {
-                        DropdownMenuItem(
+                        CompactDropdownMenuItem(
                             text = { Text(stringResource(R.string.merge_repeated_chapters)) },
                             leadingIcon = {
                                 MenuSelectionIndicator(selected = isMergeRepeatedChapters)
@@ -3697,7 +3749,7 @@ private fun ExpandedPaneUtilityDock(
                         )
                     }
                     if (isChaptersInGridView) {
-                        DropdownMenuItem(
+                        CompactDropdownMenuItem(
                             text = { Text(stringResource(R.string.display_options)) },
                             onClick = {
                                 expanded = false
@@ -3706,7 +3758,7 @@ private fun ExpandedPaneUtilityDock(
                         )
                     }
                     if (isDownloadedFilterVisible) {
-                        DropdownMenuItem(
+                        CompactDropdownMenuItem(
                             text = { Text(stringResource(R.string.downloaded)) },
                             leadingIcon = {
                                 MenuSelectionIndicator(selected = isDownloadedOnly)
@@ -3763,17 +3815,13 @@ internal fun DetailsDockActionButton(
     onClick: () -> Unit,
 ) {
     val containerColor by animateColorAsState(
-        targetValue = if (modernStyle && isSelected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f)
-        } else {
-            Color.Transparent
-        },
+        targetValue = Color.Transparent,
         animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "detailsDockSelectionColor",
     )
     val contentColor by animateColorAsState(
         targetValue = when {
-            modernStyle && isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+            modernStyle && isSelected -> MaterialTheme.colorScheme.primary
             modernStyle -> MaterialTheme.colorScheme.onSurfaceVariant
             isSelected -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.onSurface
@@ -3923,6 +3971,7 @@ private fun ReadDock(
     onBranchSelected: (String?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     val hasBranchOptions = branches.size > 1
     val canOpenIncognito = !historyInfo.isIncognitoMode
     val canForgetHistory = historyInfo.history != null
@@ -4041,7 +4090,8 @@ private fun ReadDock(
         Box(
             modifier = Modifier
                 .width(if (modernStyle) ModernDetailsDockMoreButtonWidth else 50.dp)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
@@ -4089,9 +4139,12 @@ private fun ReadDock(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
                 offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
+                useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                anchorBounds = menuAnchorBounds,
+                openAboveAnchor = true,
             ) {
                 if (canOpenIncognito) {
-                    DropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.incognito_mode)) },
                         onClick = {
                             expanded = false
@@ -4100,7 +4153,7 @@ private fun ReadDock(
                     )
                 }
                 if (canForgetHistory) {
-                    DropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.remove_from_history)) },
                         onClick = {
                             expanded = false
@@ -4109,7 +4162,7 @@ private fun ReadDock(
                     )
                 }
                 if (isDownloadAvailable) {
-                    DropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.download)) },
                         onClick = {
                             expanded = false
@@ -4121,7 +4174,7 @@ private fun ReadDock(
                     HorizontalDivider()
                 }
                 if (showMergeRepeatedChapters) {
-                    DropdownMenuItem(
+                        CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.merge_repeated_chapters)) },
                         leadingIcon = {
                             MenuSelectionIndicator(selected = isMergeRepeatedChapters)
@@ -4137,7 +4190,7 @@ private fun ReadDock(
                 }
                 if (!isMergeRepeatedChapters) {
                     branches.forEach { branch ->
-                        DropdownMenuItem(
+                        CompactDropdownMenuItem(
                             text = {
                                 Text(
                                     text = buildString {
@@ -4761,8 +4814,11 @@ private fun DetailsOverflowMenu(
     onActionClick: (DetailsAction) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
 
-    Box {
+    Box(
+        modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
+    ) {
         DetailsChromeButton(
             onClick = { expanded = true },
             modifier = Modifier.size(DetailsTopPrimaryActionButtonSize),
@@ -4777,9 +4833,11 @@ private fun DetailsOverflowMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             style = GlassDefaults.subtleStyle(),
+            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            anchorBounds = menuAnchorBounds,
         ) {
             if (showTranslateAction) {
-                DropdownMenuItem(
+                        CompactDropdownMenuItem(
                     text = {
                         Text(
                             stringResource(
@@ -4807,7 +4865,7 @@ private fun DetailsOverflowMenu(
                 )
             }
             if (isReadingRecordAvailable) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.reading_record)) },
                     onClick = {
                         expanded = false
@@ -4815,7 +4873,7 @@ private fun DetailsOverflowMenu(
                     },
                 )
             }
-            DropdownMenuItem(
+            CompactDropdownMenuItem(
                 text = { Text(stringResource(if (isNsfw) R.string.mark_as_safe else R.string.mark_as_nsfw)) },
                 onClick = {
                     expanded = false
@@ -4823,7 +4881,7 @@ private fun DetailsOverflowMenu(
                 },
             )
             if (isDeleteLocalAvailable) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.delete)) },
                     onClick = {
                         expanded = false
@@ -4834,7 +4892,7 @@ private fun DetailsOverflowMenu(
                 )
             }
             if (isEditOverrideAvailable) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.edit)) },
                     onClick = {
                         expanded = false
@@ -4843,7 +4901,7 @@ private fun DetailsOverflowMenu(
                 )
             }
             if (isShortcutSupported) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.create_shortcut)) },
                     onClick = {
                         expanded = false
@@ -4851,7 +4909,7 @@ private fun DetailsOverflowMenu(
                     },
                 )
             }
-            DropdownMenuItem(
+            CompactDropdownMenuItem(
                 text = { Text(stringResource(R.string.find_similar)) },
                 onClick = {
                     expanded = false
@@ -4859,7 +4917,7 @@ private fun DetailsOverflowMenu(
                 },
             )
             if (hasOnlineVariant) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.online_variant)) },
                     onClick = {
                         expanded = false
@@ -4868,7 +4926,7 @@ private fun DetailsOverflowMenu(
                 )
             }
             if (hasMetadataBrowserTarget) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.open_metadata_in_browser)) },
                     onClick = {
                         expanded = false
@@ -4877,7 +4935,7 @@ private fun DetailsOverflowMenu(
                 )
             }
             if (hasLocalBrowserTarget) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(localBrowserTitleRes)) },
                     onClick = {
                         expanded = false
@@ -4886,7 +4944,7 @@ private fun DetailsOverflowMenu(
                 )
             }
             if (isStatsAvailable) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.statistics)) },
                     onClick = {
                         expanded = false
