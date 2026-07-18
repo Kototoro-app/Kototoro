@@ -1365,8 +1365,8 @@ fun DetailsScreen(
                                 tonalElevation = 0.dp,
                             ) {
                                 CompositionLocalProvider(
-                                    LocalLiquidGlassBackdrop provides detailsContentBackdrop,
-                                    LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                                    LocalLiquidGlassBackdrop provides detailsBackgroundBackdrop,
+                                    LocalLiquidGlassLayerBackdrop provides detailsBackgroundBackdrop,
                                 ) {
                                     DetailsPaneContent(
                                     detailsPaneState = detailsPaneState,
@@ -1544,8 +1544,8 @@ fun DetailsScreen(
                             .fillMaxWidth(),
                     ) {
                                 CompositionLocalProvider(
-                                    LocalLiquidGlassBackdrop provides detailsContentBackdrop,
-                                    LocalLiquidGlassLayerBackdrop provides detailsContentBackdrop,
+                                    LocalLiquidGlassBackdrop provides detailsBackgroundBackdrop,
+                                    LocalLiquidGlassLayerBackdrop provides detailsBackgroundBackdrop,
                                 ) {
                             DetailsPaneContent(
                             detailsPaneState = detailsPaneState,
