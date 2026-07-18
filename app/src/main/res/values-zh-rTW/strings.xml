@@ -1026,7 +1026,7 @@
     <string name="details_tracking_suggestion_view">查看候選</string>
     <string name="details_translate_button_visible">在詳情頁顯示翻譯按鈕</string>
     <string name="details_translate_button_visible_summary">當翻譯可用時，在作品詳情頁顯示翻譯操作按鈕</string>
-    <string name="modern_details_dock">現代詳細資訊 Dock</string>
+    <string name="modern_details_dock">iOS 詳細資訊 Dock</string>
     <string name="modern_details_dock_summary">使用分層玻璃底欄、清晰的選取狀態和突出的主要操作</string>
     <string name="details_translate_title_and_description_hint">翻譯標題和描述</string>
     <string name="disable_captcha_auto_solve">禁用自動人機驗證</string>

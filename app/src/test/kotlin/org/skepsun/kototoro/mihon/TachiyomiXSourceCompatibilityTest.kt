@@ -1,26 +1,73 @@
 package org.skepsun.kototoro.mihon
 
+import androidx.arch.core.executor.ArchTaskExecutor
+import androidx.arch.core.executor.TaskExecutor
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.CookieJar
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.brotli.BrotliInterceptor
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.zstd.Zstd
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.cache.MemoryContentCache
+import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
+import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import rx.Observable
 
 @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 class TachiyomiXSourceCompatibilityTest {
+
+	@Test
+	fun `host provides OkHttp Zstandard support for Mihon extensions`() {
+		assertEquals("zstd", Zstd.encoding)
+	}
+
+	@Test
+	fun `default client starts with Mihon compatibility interceptors`() {
+		val baseClient = OkHttpClient.Builder()
+			.addInterceptor(BrotliInterceptor)
+			.addNetworkInterceptor(BrotliInterceptor)
+			.build()
+		val network = KotoNetworkHelper(
+			baseClient = baseClient,
+			cookieJar = CookieJar.NO_COOKIES,
+		)
+
+		assertEquals(UncaughtExceptionInterceptor::class.java, network.client.interceptors[0].javaClass)
+		assertEquals(UserAgentInterceptor::class.java, network.client.interceptors[1].javaClass)
+		assertEquals(CloudflareInterceptor::class.java, network.client.interceptors[2].javaClass)
+		assertFalse(network.client.interceptors.any { it === BrotliInterceptor })
+		assertFalse(network.client.networkInterceptors.any { it === BrotliInterceptor })
+	}
 
 	@Test
 	fun `getMangaUpdate bridges to legacy detail and chapter APIs`() = runTest {
@@ -54,6 +101,46 @@ class TachiyomiXSourceCompatibilityTest {
 
 		assertSame(originalManga, update.manga)
 		assertSame(oldChapters, update.chapters)
+	}
+
+	@Test
+	fun `combined manga update bypasses unsupported legacy request helpers`() = runTest {
+		val source = CombinedUpdateHttpSource()
+
+		val update = source.getMangaUpdate(
+			manga = manga("token", "Original"),
+			chapters = emptyList(),
+			fetchDetails = true,
+			fetchChapters = true,
+		)
+
+		assertEquals("Combined Details", update.manga.title)
+		assertEquals(listOf("Combined Chapter"), update.chapters.map { it.name })
+	}
+
+	@OptIn(ExperimentalCoroutinesApi::class)
+	@Test
+	fun `repository preserves manga and chapter memo across list details and pages`() = runTest {
+		Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+		ArchTaskExecutor.getInstance().setDelegate(IMMEDIATE_TASK_EXECUTOR)
+		try {
+			val catalogueSource = MemoDependentHttpSource()
+			val source = MihonMangaSource(catalogueSource, "test.extension")
+			val repository = MihonMangaRepository(source, mockk<MemoryContentCache>(relaxed = true))
+
+			val listedManga = repository.getList(offset = 0, order = null, filter = null).single()
+			val details = repository.getDetails(listedManga, ContentRepository.DetailsFetchMode.FORCE_REFRESH)
+			val pages = repository.getPages(details.chapters.orEmpty().single())
+
+			assertEquals("required-slug", catalogueSource.receivedSlug)
+			assertEquals("required-manga-id", catalogueSource.receivedMangaId)
+			assertEquals("Combined Details", details.title)
+			assertEquals(listOf("Combined Chapter"), details.chapters?.map { it.title })
+			assertEquals(listOf("https://example.org/page.webp"), pages.map { it.url })
+		} finally {
+			ArchTaskExecutor.getInstance().setDelegate(null)
+			Dispatchers.resetMain()
+		}
 	}
 
 	@Test
@@ -140,6 +227,23 @@ class TachiyomiXSourceCompatibilityTest {
 		}
 	}
 
+	@Test
+	fun `HttpSource legacy manga details fetch can delegate to super without recursion`() = runTest {
+		val server = MockWebServer()
+		server.enqueue(MockResponse().setBody("Details From Super"))
+		server.start()
+		try {
+			val source = SuperDelegatingFetchDetailsHttpSource(server.url("/").toString().removeSuffix("/"))
+
+			val details = source.getMangaDetails(manga("/manga", "Manga"))
+
+			assertEquals("Details From Super!", details.title)
+			assertEquals("/manga", server.takeRequest().path)
+		} finally {
+			server.shutdown()
+		}
+	}
+
 	private class LegacyCatalogueSource : CatalogueSource {
 		override val id: Long = 1L
 		override val name: String = "Legacy"
@@ -167,6 +271,93 @@ class TachiyomiXSourceCompatibilityTest {
 		override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
 			return Observable.just(listOf(chapter("/new", "New")))
 		}
+	}
+
+	private class CombinedUpdateHttpSource : HttpSource() {
+		override val baseUrl: String = "https://example.org"
+		override val lang: String = "en"
+		override val name: String = "Combined Update"
+		override val supportsLatest: Boolean = false
+
+		override suspend fun getMangaUpdate(
+			manga: SManga,
+			chapters: List<SChapter>,
+			fetchDetails: Boolean,
+			fetchChapters: Boolean,
+		): SMangaUpdate {
+			return SMangaUpdate(
+				manga = TachiyomiXSourceCompatibilityTest.manga("token", "Combined Details"),
+				chapters = listOf(chapter("chapter-token", "Combined Chapter")),
+			)
+		}
+
+		override fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()
+		override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+		override fun popularMangaRequest(page: Int): Request = unused()
+		override fun popularMangaParse(response: Response): MangasPage = unused()
+		override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = unused()
+		override fun searchMangaParse(response: Response): MangasPage = unused()
+		override fun latestUpdatesRequest(page: Int): Request = unused()
+		override fun latestUpdatesParse(response: Response): MangasPage = unused()
+		override fun mangaDetailsParse(response: Response): SManga = unused()
+		override fun chapterListParse(response: Response): List<SChapter> = unused()
+		override fun pageListParse(response: Response): List<Page> = unused()
+		override fun imageUrlParse(response: Response): String = unused()
+	}
+
+	private class MemoDependentHttpSource : HttpSource() {
+		override val baseUrl: String = "https://example.org"
+		override val lang: String = "en"
+		override val name: String = "Memo Dependent"
+		override val supportsLatest: Boolean = false
+		var receivedSlug: String? = null
+		var receivedMangaId: String? = null
+
+		override suspend fun getPopularManga(page: Int): MangasPage {
+			return MangasPage(
+				mangas = listOf(
+					manga("token", "Listed Manga").apply {
+						memo = buildJsonObject { put("slug", "required-slug") }
+					},
+				),
+				hasNextPage = false,
+			)
+		}
+
+		override suspend fun getMangaUpdate(
+			manga: SManga,
+			chapters: List<SChapter>,
+			fetchDetails: Boolean,
+			fetchChapters: Boolean,
+		): SMangaUpdate {
+			receivedSlug = manga.memo["slug"]?.jsonPrimitive?.content
+			checkNotNull(receivedSlug)
+			return SMangaUpdate(
+				manga = manga.copy().apply { title = "Combined Details" },
+				chapters = listOf(
+					chapter("chapter-token", "Combined Chapter").apply {
+						memo = buildJsonObject { put("mangaId", "required-manga-id") }
+					},
+				),
+			)
+		}
+
+		override suspend fun getPageList(chapter: SChapter): List<Page> {
+			receivedMangaId = chapter.memo["mangaId"]?.jsonPrimitive?.content
+			checkNotNull(receivedMangaId)
+			return listOf(Page(index = 0, imageUrl = "https://example.org/page.webp"))
+		}
+
+		override fun popularMangaRequest(page: Int): Request = unused()
+		override fun popularMangaParse(response: Response): MangasPage = unused()
+		override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = unused()
+		override fun searchMangaParse(response: Response): MangasPage = unused()
+		override fun latestUpdatesRequest(page: Int): Request = unused()
+		override fun latestUpdatesParse(response: Response): MangasPage = unused()
+		override fun mangaDetailsParse(response: Response): SManga = unused()
+		override fun chapterListParse(response: Response): List<SChapter> = unused()
+		override fun pageListParse(response: Response): List<Page> = unused()
+		override fun imageUrlParse(response: Response): String = unused()
 	}
 
 	private class CoroutineHttpSource(
@@ -314,7 +505,44 @@ class TachiyomiXSourceCompatibilityTest {
 		override fun imageUrlParse(response: Response): String = unused()
 	}
 
+	private class SuperDelegatingFetchDetailsHttpSource(
+		override val baseUrl: String,
+	) : HttpSource() {
+		override val client: OkHttpClient = OkHttpClient()
+		override val lang: String = "en"
+		override val name: String = "Super Delegating Details Fetch"
+		override val supportsLatest: Boolean = false
+
+		override fun headersBuilder(): Headers.Builder = Headers.Builder()
+
+		override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+			return super.fetchMangaDetails(manga).map { details ->
+				details.apply { title += "!" }
+			}
+		}
+
+		override fun mangaDetailsParse(response: Response): SManga {
+			return manga("/manga", response.body.string())
+		}
+
+		override fun popularMangaRequest(page: Int): Request = unused()
+		override fun popularMangaParse(response: Response): MangasPage = unused()
+		override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = unused()
+		override fun searchMangaParse(response: Response): MangasPage = unused()
+		override fun latestUpdatesRequest(page: Int): Request = unused()
+		override fun latestUpdatesParse(response: Response): MangasPage = unused()
+		override fun chapterListParse(response: Response): List<SChapter> = unused()
+		override fun pageListParse(response: Response): List<Page> = unused()
+		override fun imageUrlParse(response: Response): String = unused()
+	}
+
 	private companion object {
+		private val IMMEDIATE_TASK_EXECUTOR = object : TaskExecutor() {
+			override fun executeOnDiskIO(runnable: Runnable) = runnable.run()
+			override fun postToMainThread(runnable: Runnable) = runnable.run()
+			override fun isMainThread(): Boolean = true
+		}
+
 		fun manga(url: String, title: String): SManga {
 			return SManga.create().apply {
 				this.url = url

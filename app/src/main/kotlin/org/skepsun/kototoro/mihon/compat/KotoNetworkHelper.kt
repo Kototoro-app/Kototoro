@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.mihon.compat
 
-import eu.kanade.tachiyomi.network.NetworkHelper
 import android.webkit.CookieManager
+import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
+import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -13,6 +16,8 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.brotli.BrotliInterceptor
+import okhttp3.zstd.Zstd
 import okio.IOException
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
@@ -43,6 +48,9 @@ class KotoNetworkHelper(
     val cookieJar: okhttp3.CookieJar,
     private val webViewExecutor: WebViewExecutor? = null,
 ) : NetworkHelper() {
+
+    // Dynamically loaded extensions reference this class outside the app's static dex graph.
+    private val zstdRuntimeDependency = Zstd
     
     /**
      * The OkHttpClient for Mihon extensions.
@@ -65,30 +73,27 @@ class KotoNetworkHelper(
         builder.followSslRedirects(baseClient.followSslRedirects)
         builder.retryOnConnectionFailure(baseClient.retryOnConnectionFailure)
         
-        // Wrap exceptions thrown by subsequent interceptors (especially from extensions)
-        builder.addInterceptor { chain ->
-            try {
-                chain.proceed(chain.request())
-            } catch (e: Throwable) {
-                // OkHttp Dispatcher will crash the app if intercepted throws unchecked exception instead of IOException.
-                // Extensions (like Baozi) might throw plain Exceptions for errors like "Socket closed".
-                if (e is java.io.IOException) throw e
-                throw java.io.IOException(e.message, e)
-            }
-        }
+        // Newer Mihon extensions validate these concrete interceptors and their order.
+        builder.addInterceptor(UncaughtExceptionInterceptor())
+        builder.addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
+        builder.addInterceptor(CloudflareInterceptor())
         
-        // Copy interceptors but exclude GZipInterceptor
+        // Mihon extensions handle compression and require Brotli to be absent from the default client.
         baseClient.interceptors.forEach { interceptor ->
-            if (interceptor.javaClass.simpleName != "GZipInterceptor") {
+            if (interceptor.javaClass.simpleName != "GZipInterceptor" && interceptor !== BrotliInterceptor) {
                 builder.addInterceptor(interceptor)
             } else {
-                android.util.Log.d("KotoNetworkHelper", "Skipping GZipInterceptor for Mihon client")
+                android.util.Log.d("KotoNetworkHelper", "Skipping ${interceptor.javaClass.simpleName} for Mihon client")
             }
         }
         
-        // Copy network interceptors
+        // Copy compatible network interceptors.
         baseClient.networkInterceptors.forEach { interceptor ->
-            builder.addNetworkInterceptor(interceptor)
+            if (interceptor !== BrotliInterceptor) {
+                builder.addNetworkInterceptor(interceptor)
+            } else {
+                android.util.Log.d("KotoNetworkHelper", "Skipping BrotliInterceptor for Mihon client")
+            }
         }
 
         // Add a Mihon-specific fallback detector.

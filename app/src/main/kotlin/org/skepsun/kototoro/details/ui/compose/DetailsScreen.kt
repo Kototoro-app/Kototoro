@@ -995,7 +995,7 @@ fun DetailsScreen(
                     scrollState.value
                 }
                 val fadeProgress = easedOpacityProgress(scrollValue / panoramaFadeDistancePx)
-                (0.6f * (1f - fadeProgress)).coerceIn(0f, 0.6f)
+                (1f - fadeProgress).coerceIn(0f, 1f)
             }
         }
     }
@@ -1050,7 +1050,7 @@ fun DetailsScreen(
                             model = request,
                             placeholderMemoryCacheKey = panoramaPlaceholderCacheKey,
                             snapshotKey = sharedElementKey,
-                            contentAlpha = 0.6f,
+                            contentAlpha = 1f,
                             contentAlphaProvider = panoramaContentAlphaProvider,
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             crossfadeEnabled = false,

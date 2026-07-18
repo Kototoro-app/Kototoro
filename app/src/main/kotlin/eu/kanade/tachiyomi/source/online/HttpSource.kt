@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source.online
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.newCachelessCallWithProgress
@@ -11,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -97,9 +97,10 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPopularManga"))
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.fromCallable {
-            runBlocking { getPopularManga(page) }
-        }
+        return legacyFetch(
+            request = { popularMangaRequest(page) },
+            parser = ::popularMangaParse,
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -131,9 +132,10 @@ abstract class HttpSource : CatalogueSource {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
-        return Observable.fromCallable {
-            runBlocking { getSearchManga(page, query, filters) }
-        }
+        return legacyFetch(
+            request = { searchMangaRequest(page, query, filters) },
+            parser = ::parseSearchResponse,
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -151,21 +153,8 @@ abstract class HttpSource : CatalogueSource {
         }
         return try {
             val request = tagRequest(searchMangaRequest(page, query, filters))
-            val response = client.newCall(request).awaitSuccess()
-            val responseBody = response.body.string()
-            val contentType = response.body.contentType()
-            response.use {
-                val parseResponse = response.newBuilder()
-                    .body(responseBody.toResponseBody(contentType))
-                    .build()
-                runCatching {
-                    searchMangaParse(parseResponse)
-                }.getOrElse { error ->
-                    val fallbackResponse = response.newBuilder()
-                        .body(responseBody.toResponseBody(contentType))
-                        .build()
-                    parseSearchRedirectedToDetails(fallbackResponse, error)
-                }
+            client.newCall(request).awaitSuccess().use { response ->
+                parseSearchResponse(response)
             }
         } catch (e: UnsupportedOperationException) {
             customFetchFallback(e, "fetchSearchManga", Integer.TYPE, String::class.java, FilterList::class.java) {
@@ -181,6 +170,22 @@ abstract class HttpSource : CatalogueSource {
     ): Request
 
     protected abstract fun searchMangaParse(response: Response): MangasPage
+
+    private fun parseSearchResponse(response: Response): MangasPage {
+        val responseBody = response.body.string()
+        val contentType = response.body.contentType()
+        val parseResponse = response.newBuilder()
+            .body(responseBody.toResponseBody(contentType))
+            .build()
+        return runCatching {
+            searchMangaParse(parseResponse)
+        }.getOrElse { error ->
+            val fallbackResponse = response.newBuilder()
+                .body(responseBody.toResponseBody(contentType))
+                .build()
+            parseSearchRedirectedToDetails(fallbackResponse, error)
+        }
+    }
 
     private fun parseSearchRedirectedToDetails(response: Response, error: Throwable): MangasPage {
         val finalUrl = response.header(KotoNetworkHelper.WEBVIEW_FINAL_URL_HEADER)
@@ -208,9 +213,10 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getLatestUpdates"))
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return Observable.fromCallable {
-            runBlocking { getLatestUpdates(page) }
-        }
+        return legacyFetch(
+            request = { latestUpdatesRequest(page) },
+            parser = ::latestUpdatesParse,
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -255,9 +261,10 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getMangaDetails"))
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.fromCallable {
-            runBlocking { getMangaDetails(manga) }
-        }
+        return legacyFetch(
+            request = { mangaDetailsRequest(manga) },
+            parser = { response -> mangaDetailsParse(response).apply { initialized = true } },
+        )
     }
 
     open fun mangaDetailsRequest(manga: SManga): Request {
@@ -298,12 +305,10 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getChapterList"))
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return sourceObservable {
-            val request = tagRequest(chapterListRequest(manga))
-            client.newCall(request).execute().use { response ->
-                chapterListParse(response)
-            }
-        }
+        return legacyFetch(
+            request = { chapterListRequest(manga) },
+            parser = ::chapterListParse,
+        )
     }
 
     protected open fun chapterListRequest(manga: SManga): Request {
@@ -333,9 +338,10 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getPageList"))
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.fromCallable {
-            runBlocking { getPageList(chapter) }
-        }
+        return legacyFetch(
+            request = { pageListRequest(chapter) },
+            parser = ::pageListParse,
+        )
     }
 
     protected open fun pageListRequest(chapter: SChapter): Request {
@@ -365,9 +371,10 @@ abstract class HttpSource : CatalogueSource {
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getImageUrl"))
     open fun fetchImageUrl(page: Page): Observable<String> {
-        return Observable.fromCallable {
-            runBlocking { getImageUrl(page) }
-        }
+        return legacyFetch(
+            request = { imageUrlRequest(page) },
+            parser = ::imageUrlParse,
+        )
     }
 
     protected open fun imageUrlRequest(page: Page): Request {
@@ -391,6 +398,20 @@ abstract class HttpSource : CatalogueSource {
     private fun <T> sourceObservable(block: () -> T): Observable<T> {
         return Observable.fromCallable {
             MihonRequestContext.withSourceBlocking(mihonContentSource(), block)
+        }
+    }
+
+    private fun <T> legacyFetch(
+        request: () -> Request,
+        parser: (Response) -> T,
+    ): Observable<T> {
+        return sourceObservable {
+            client.newCall(tagRequest(request())).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw HttpException(response.code)
+                }
+                parser(response)
+            }
         }
     }
 

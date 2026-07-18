@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.mihon
 
+import androidx.collection.LruCache
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,6 +40,8 @@ class MihonMangaRepository(
     
     companion object {
         private const val TAG = "MihonMangaRepository"
+        private const val MANGA_SNAPSHOT_CACHE_SIZE = 100
+        private const val CHAPTER_SNAPSHOT_CACHE_SIZE = 500
         
         private fun extractChapterNumber(name: String): Float {
             // Try Chinese format: 第X话
@@ -63,6 +68,8 @@ class MihonMangaRepository(
 
     private var lastOffset = -1
     private var currentPage = 1
+    private val mangaSnapshots = LruCache<String, SManga>(MANGA_SNAPSHOT_CACHE_SIZE)
+    private val chapterSnapshots = LruCache<String, SChapter>(CHAPTER_SNAPSHOT_CACHE_SIZE)
     
     val mihonSource = source.catalogueSource
     
@@ -118,6 +125,7 @@ class MihonMangaRepository(
         }
         
         mangasPage.mangas.map { sContent ->
+            rememberMihonManga(sContent)
             sContent.toKotoContent(
                 source = source,
                 publicUrl = (mihonSource as? HttpSource)?.getPublicContentUrl(sContent) ?: "",
@@ -126,58 +134,39 @@ class MihonMangaRepository(
     }
     
     override suspend fun getDetailsImpl(manga: Content): Content = withContext(Dispatchers.IO) {
-        val sContent = manga.toMihonManga()
-        
-        val details = try {
-            rethrowMihonWrappedExceptions {
-                withMihonSourceContext {
-                    mihonSource.getMangaDetails(sContent)
-                }
+        val sContent = mangaSnapshots[manga.url]?.copy() ?: manga.toMihonManga()
+
+        suspend fun fetchUpdate() = rethrowMihonWrappedExceptions {
+            withMihonSourceContext {
+                mihonSource.getMangaUpdate(
+                    manga = sContent,
+                    chapters = emptyList(),
+                    fetchDetails = true,
+                    fetchChapters = true,
+                )
             }
+        }
+
+        val update = try {
+            fetchUpdate()
         } catch (e: Exception) {
             val ioException = when {
                 e is java.io.IOException -> e
                 e.cause is java.io.IOException -> e.cause as java.io.IOException
                 else -> null
             }
-            
+
             if (ioException != null) {
                 kotlinx.coroutines.delay(500)
-                rethrowMihonWrappedExceptions {
-                    withMihonSourceContext {
-                        mihonSource.getMangaDetails(sContent)
-                    }
-                }
+                fetchUpdate()
             } else {
                 throw e
             }
         }
-        
-        val rawChapters = try {
-            rethrowMihonWrappedExceptions {
-                withMihonSourceContext {
-                    mihonSource.getChapterList(sContent)
-                }
-            }
-        } catch (e: Exception) {
-            val ioException = when {
-                e is java.io.IOException -> e
-                e.cause is java.io.IOException -> e.cause as java.io.IOException
-                else -> null
-            }
-            
-            if (ioException != null) {
-                kotlinx.coroutines.delay(500)
-                rethrowMihonWrappedExceptions {
-                    withMihonSourceContext {
-                        mihonSource.getChapterList(sContent)
-                    }
-                }
-            } else {
-                throw e
-            }
-        }
-        
+
+        val details = update.manga
+        val rawChapters = update.chapters
+
         val totalChapters = rawChapters.size
         android.util.Log.d("MihonMangaRepository", "rawChapters count: $totalChapters, source: ${source.name}")
         rawChapters.take(15).forEachIndexed { idx, ch ->
@@ -187,6 +176,7 @@ class MihonMangaRepository(
         // 这能确保 Page 1 对应 1.0，Page 15 对应 15.0，解决排序识别反向的问题。
         val chapters = rawChapters.asReversed()
             .mapIndexed { index, sChapter ->
+                rememberMihonChapter(sChapter)
                 // 如果插件有提供合法的编号则保留，否则使用我们在反转列表中的索引位置。
                 val chapterNumber = if (sChapter.chapter_number >= 0) {
                     sChapter.chapter_number
@@ -200,6 +190,7 @@ class MihonMangaRepository(
         // Copy missing fields from original manga to details
         // Some sources don't return all fields in getContentDetails, or return them empty.
         details.url = sContent.url
+        rememberMihonManga(details)
         
         // Title fallback
         val detailsTitle = try { details.title } catch (e: Exception) { "" }
@@ -230,7 +221,7 @@ class MihonMangaRepository(
     }
     
     override suspend fun getPagesImpl(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = withContext(Dispatchers.IO) {
-        val sChapter = chapter.toMihonChapter()
+        val sChapter = chapterSnapshots[chapter.url]?.snapshot() ?: chapter.toMihonChapter()
         val pages = rethrowMihonWrappedExceptions {
             withMihonSourceContext {
                 mihonSource.getPageList(sChapter)
@@ -425,6 +416,18 @@ class MihonMangaRepository(
     private suspend fun <T> withMihonSourceContext(block: suspend () -> T): T {
         return MihonRequestContext.withSource(source, block)
     }
+
+    private fun rememberMihonManga(manga: SManga) {
+        val url = runCatching { manga.url }.getOrNull()?.takeIf(String::isNotBlank) ?: return
+        mangaSnapshots.put(url, manga.copy())
+    }
+
+    private fun rememberMihonChapter(chapter: SChapter) {
+        val url = runCatching { chapter.url }.getOrNull()?.takeIf(String::isNotBlank) ?: return
+        chapterSnapshots.put(url, chapter.snapshot())
+    }
+
+    private fun SChapter.snapshot(): SChapter = SChapter.create().also { it.copyFrom(this) }
     
     override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
         return RelatedContentSearchFallback.find(seed) { query ->

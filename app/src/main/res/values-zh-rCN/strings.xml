@@ -492,9 +492,9 @@
     <string name="color_theme">配色方案</string>
     <string name="appearance_color_scheme_ios_note">iOS风格下，只有部分配色设置生效。</string>
     <string name="interface_style">界面风格</string>
-    <string name="interface_style_material3">Material 3</string>
+    <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
-    <string name="interface_style_ios">iOS 风格</string>
+    <string name="interface_style_ios">ios (modern)</string>
     <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、分组 Haze 和柔和菜单</string>
     <string name="appearance_style_override_note">当前 %1$s 风格下实际使用：%2$s</string>
     <string name="appearance_style_default_value">当前 %1$s 风格默认值：%2$s</string>
@@ -2345,7 +2345,7 @@
     <string name="details_remove_projection">拆出投影</string>
     <string name="details_translate_button_visible">在详情页显示翻译按钮</string>
     <string name="details_translate_button_visible_summary">当翻译可用时，在作品详情页显示翻译操作按钮</string>
-    <string name="modern_details_dock">现代详情页 Dock</string>
+    <string name="modern_details_dock">iOS 详情页 Dock</string>
     <string name="modern_details_dock_summary">使用分层玻璃底栏、清晰的选中状态和突出的主要操作</string>
     <string name="details_translate_title_and_description_hint">翻译标题和描述</string>
     <string name="disable_favourites_nsfw">从收藏中隐藏</string>
