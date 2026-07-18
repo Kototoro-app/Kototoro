@@ -701,7 +701,7 @@ class HomeViewModel @Inject constructor(
 
     fun openRandom() {
         if (isRandomLoading.value) return
-        viewModelScope.launch(Dispatchers.Default) {
+        launchJob(Dispatchers.Default) {
             isRandomLoading.value = true
             try {
                 val manga = exploreRepository.findRandomContent(tagsLimit = 8)

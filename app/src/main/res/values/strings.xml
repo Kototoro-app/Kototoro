@@ -819,7 +819,7 @@
     <string name="theme_name_dynamic">Dynamic</string>
     <string name="theme_name_expressive">Expressive (Test)</string>
     <string name="color_theme">Color theme</string>
-    <string name="appearance_color_scheme_ios_note">The iOS style uses a fixed system color palette; this setting is not applied.</string>
+    <string name="appearance_color_scheme_ios_note">Modern style uses a system-inspired color palette; some color settings still apply.</string>
     <string name="interface_style">Interface style</string>
     <string name="interface_style_material3">Legacy</string>
     <string name="interface_style_material3_summary">Android-native controls, spacing, and surfaces</string>
