@@ -399,6 +399,14 @@
 		<item name="drawableSize">@dimen/m3_chip_icon_size</item>
 	</style>
 
+	<style name="FaviconDrawable.SourceIcon">
+		<item name="backgroundColor">@android:color/transparent</item>
+		<item name="strokeColor">@android:color/transparent</item>
+		<item name="strokeWidth">0dp</item>
+		<item name="cornerSize">0dp</item>
+		<item name="centerText">true</item>
+	</style>
+
 	<!-- Compact action button for SearchBar filter icons -->
 	<style name="Widget.Kototoro.ActionButton.Compact" parent="Widget.AppCompat.ActionButton">
 		<item name="android:minWidth">36dp</item>

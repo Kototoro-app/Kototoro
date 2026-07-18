@@ -45,6 +45,7 @@ open class FaviconDrawable(
 	private val letter = name.take(1).uppercase()
 	private var cornerSize = 0f
 	private var intrinsicSize = -1
+	private var centerText = false
 	private val textBounds = Rect()
 	private val tempRect = Rect()
 	private val boundsF = RectF()
@@ -57,6 +58,7 @@ open class FaviconDrawable(
 			cornerSize = getDimension(R.styleable.FaviconFallbackDrawable_cornerSize, cornerSize)
 			paint.strokeWidth = getDimension(R.styleable.FaviconFallbackDrawable_strokeWidth, 0f) * 2f
 			intrinsicSize = getDimensionPixelSize(R.styleable.FaviconFallbackDrawable_drawableSize, intrinsicSize)
+			centerText = getBoolean(R.styleable.FaviconFallbackDrawable_centerText, false)
 		}
 		paint.textAlign = Paint.Align.CENTER
 		paint.isFakeBoldText = true
@@ -117,7 +119,11 @@ open class FaviconDrawable(
 		// letter
 		paint.color = currentForegroundColor
 		val cx = (boundsF.left + boundsF.right) * 0.6f
-		val ty = boundsF.bottom * 0.7f + textBounds.height() * 0.5f - textBounds.bottom
+		val ty = if (centerText) {
+			boundsF.centerY() - (paint.ascent() + paint.descent()) * 0.5f
+		} else {
+			boundsF.bottom * 0.7f + textBounds.height() * 0.5f - textBounds.bottom
+		}
 		canvas.drawText(letter, cx, ty, paint)
 		if (paint.strokeWidth > 0f) {
 			// stroke

@@ -821,9 +821,9 @@
     <string name="color_theme">Color theme</string>
     <string name="appearance_color_scheme_ios_note">The iOS style uses a fixed system color palette; this setting is not applied.</string>
     <string name="interface_style">Interface style</string>
-    <string name="interface_style_material3">Material 3</string>
+    <string name="interface_style_material3">Legacy</string>
     <string name="interface_style_material3_summary">Android-native controls, spacing, and surfaces</string>
-    <string name="interface_style_ios">iOS-inspired</string>
+    <string name="interface_style_ios">Modern</string>
     <string name="interface_style_ios_summary">Rounder controls, quieter surfaces, grouped Haze, and softer menus</string>
     <string name="appearance_style_override_note">Effective in the current %1$s style: %2$s</string>
     <string name="appearance_style_default_value">Current %1$s style default: %2$s</string>

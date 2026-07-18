@@ -829,10 +829,17 @@ internal fun MainShellRouteContent(
                         }
                     }
                 }
-                routeFab()
+                mainShellChrome()
+                CompositionLocalProvider(
+                    LocalLiquidGlassBackdrop provides layerBackdrop,
+                    LocalLiquidGlassLayerBackdrop provides layerBackdrop,
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        routeFab()
+                    }
+                }
             }
         }
-        mainShellChrome()
     }
 }
 

@@ -98,6 +98,7 @@ data class GlassStyle(
     val borderAlpha: Float,
     val tonalElevation: Dp,
     val shadowElevation: Dp,
+    val minimumContainerAlpha: Float = 0f,
 )
 
 enum class GlassComponentRole {
@@ -553,6 +554,7 @@ private fun computeGlassColors(
     val effectiveContainerAlpha = resolveContainerAlpha(
         preferenceAlpha = preferenceAlpha,
         styleContainerAlpha = style.containerAlpha,
+        minimumContainerAlpha = style.minimumContainerAlpha,
     )
     if (!isGlassEffectEnabled) {
         val fallbackBaseColor = when {
@@ -619,16 +621,18 @@ private fun computeGlassColors(
 private fun resolveContainerAlpha(
     preferenceAlpha: Float,
     styleContainerAlpha: Float,
+    minimumContainerAlpha: Float,
 ): Float {
     val normalizedPreferenceAlpha = preferenceAlpha.coerceIn(0f, 1f)
     val normalizedStyleAlpha = styleContainerAlpha.coerceIn(0f, 1f)
+    val normalizedMinimumAlpha = minimumContainerAlpha.coerceIn(0f, normalizedStyleAlpha)
     val defaultPreferenceAlpha = AppSettings.GlassMaterialDefaults.STYLE_BASELINE_OPACITY_PERCENT / 100f
     return if (normalizedPreferenceAlpha <= defaultPreferenceAlpha) {
         (normalizedPreferenceAlpha / defaultPreferenceAlpha) * normalizedStyleAlpha
     } else {
         val boostProgress = (normalizedPreferenceAlpha - defaultPreferenceAlpha) / (1f - defaultPreferenceAlpha)
         normalizedStyleAlpha + ((1f - normalizedStyleAlpha) * boostProgress)
-    }.coerceIn(0f, 1f)
+    }.coerceIn(normalizedMinimumAlpha, 1f)
 }
 
 @Composable

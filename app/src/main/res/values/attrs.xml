@@ -157,6 +157,7 @@
 		<attr name="strokeWidth" />
 		<attr name="cornerSize" />
 		<attr name="drawableSize" />
+		<attr name="centerText" format="boolean" />
 	</declare-styleable>
 
 	<declare-styleable name="NestedRecyclerView">

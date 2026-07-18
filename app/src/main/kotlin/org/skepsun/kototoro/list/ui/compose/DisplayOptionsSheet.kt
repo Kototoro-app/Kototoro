@@ -79,7 +79,6 @@ fun DisplayOptionsSheet(
     val showExtraInfo by settings.observeAsState(
         org.skepsun.kototoro.core.prefs.AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
     ) { showExtraInfoOnCards }
-
     if (BuildConfig.DEBUG) {
         DisposableEffect(Unit) {
             Log.d(
@@ -115,17 +114,20 @@ fun DisplayOptionsSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(28.dp),
-                style = GlassDefaults.prominentStyle(),
+                style = GlassDefaults.prominentStyle().copy(
+                    containerAlpha = 0.8f,
+                    minimumContainerAlpha = 0.6f,
+                ),
                 dialogSurface = true,
                 componentRole = GlassComponentRole.Sheet,
                 debugLabel = "display_options_glass",
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 32.dp, top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .padding(bottom = 24.dp, top = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     SheetDragHandle(
                         modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -134,7 +136,7 @@ fun DisplayOptionsSheet(
                         text = stringResource(R.string.display_options),
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
 
                     if (supportsDisplayModeMenu) {

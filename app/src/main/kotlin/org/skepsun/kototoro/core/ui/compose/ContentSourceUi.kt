@@ -136,7 +136,7 @@ fun rememberSourceChipMeta(source: ContentSource): ContentSourceChipMeta? {
 fun ContentSourceIcon(
     source: ContentSource,
     modifier: Modifier = Modifier,
-    styleResId: Int = R.style.FaviconDrawable_Small,
+    styleResId: Int = R.style.FaviconDrawable_SourceIcon,
     animated: Boolean = false,
     loadEnabled: Boolean = true,
     throttleNetworkLoad: Boolean = false,
@@ -158,7 +158,7 @@ fun ContentSourceIcon(
 fun ContentSourceResolvedIcon(
     source: ContentSource,
     modifier: Modifier = Modifier,
-    styleResId: Int = R.style.FaviconDrawable_Small,
+    styleResId: Int = R.style.FaviconDrawable_SourceIcon,
     animated: Boolean = false,
     loadEnabled: Boolean = true,
     throttleNetworkLoad: Boolean = false,

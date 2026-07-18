@@ -1369,11 +1369,11 @@ private fun SourceQuickAccessCard(
             else -> 12.dp
         },
     )
-    val iconShape = RoundedCornerShape(if (expressive) 14.dp else if (isGridCard) 14.dp else 12.dp)
     val cardBackground = when {
         isSelected -> MaterialTheme.colorScheme.secondaryContainer
         else -> MaterialTheme.colorScheme.background
     }
+    val iconShape = RoundedCornerShape(if (expressive) 14.dp else if (isGridCard) 14.dp else 12.dp)
     val iconBackground = MaterialTheme.colorScheme.surfaceVariant.copy(
         alpha = if (expressive) 0.62f else if (isGridCard) 0.44f else 0.52f,
     )
@@ -1403,6 +1403,7 @@ private fun SourceQuickAccessCard(
                 ContentSourceResolvedIcon(
                     source = actualSource,
                     modifier = Modifier.size(metrics.iconSize),
+                    styleResId = R.style.FaviconDrawable_SourceIcon,
                     throttleNetworkLoad = true,
                     contentDescription = title,
                 )
@@ -1469,6 +1470,7 @@ private fun SourceQuickAccessCard(
                 ContentSourceResolvedIcon(
                     source = actualSource,
                     modifier = Modifier.size(28.dp),
+                    styleResId = R.style.FaviconDrawable_SourceIcon,
                     throttleNetworkLoad = true,
                     contentDescription = title,
                 )
