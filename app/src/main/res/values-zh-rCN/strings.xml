@@ -490,7 +490,7 @@
     <string name="show_suspicious_content">显示可疑内容</string>
     <string name="theme_name_dynamic">动态</string>
     <string name="color_theme">配色方案</string>
-    <string name="appearance_color_scheme_ios_note">Modern 风格使用系统风格配色，部分配色设置仍会生效。</string>
+    <string name="appearance_color_scheme_ios_note">iOS风格下，只有部分配色设置生效。</string>
     <string name="interface_style">界面风格</string>
     <string name="interface_style_material3">Material 3</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
