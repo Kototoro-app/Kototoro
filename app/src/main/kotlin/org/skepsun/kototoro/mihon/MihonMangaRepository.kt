@@ -176,14 +176,15 @@ class MihonMangaRepository(
         // 这能确保 Page 1 对应 1.0，Page 15 对应 15.0，解决排序识别反向的问题。
         val chapters = rawChapters.asReversed()
             .mapIndexed { index, sChapter ->
-                rememberMihonChapter(sChapter)
                 // 如果插件有提供合法的编号则保留，否则使用我们在反转列表中的索引位置。
                 val chapterNumber = if (sChapter.chapter_number >= 0) {
                     sChapter.chapter_number
                 } else {
                     (index + 1).toFloat()
                 }
-                sChapter.toKotoChapter(source, chapterNumber)
+                sChapter.toKotoChapter(source, chapterNumber, sContent.url).also { chapter ->
+                    rememberMihonChapter(chapter.id, sChapter)
+                }
             }
             .sortedBy { it.number } // Kototoro 内部列表始终保持升序
         
@@ -221,7 +222,7 @@ class MihonMangaRepository(
     }
     
     override suspend fun getPagesImpl(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = withContext(Dispatchers.IO) {
-        val sChapter = chapterSnapshots[chapter.url]?.snapshot() ?: chapter.toMihonChapter()
+        val sChapter = chapterSnapshots[chapter.id.toString()]?.snapshot() ?: chapter.toMihonChapter()
         val pages = rethrowMihonWrappedExceptions {
             withMihonSourceContext {
                 mihonSource.getPageList(sChapter)
@@ -230,7 +231,7 @@ class MihonMangaRepository(
         
         pages.mapIndexed { index, page ->
             if (mihonSource !is HttpSource) {
-                return@mapIndexed page.toKotoPage(source, sChapter)
+                return@mapIndexed page.toKotoPage(source, sChapter, chapter.id)
             }
 
             val headers = try {
@@ -248,7 +249,7 @@ class MihonMangaRepository(
                 emptyMap()
             }
 
-            page.toKotoPage(source, sChapter, headers).let { kotoPage ->
+            page.toKotoPage(source, sChapter, chapter.id, headers).let { kotoPage ->
                 if (page.imageUrl.isNullOrBlank() && page.url.isNotBlank()) {
                     kotoPage.copy(
                         url = "mihon://resolve?page_url=${java.net.URLEncoder.encode(page.url, "UTF-8")}&index=$index"
@@ -422,9 +423,8 @@ class MihonMangaRepository(
         mangaSnapshots.put(url, manga.copy())
     }
 
-    private fun rememberMihonChapter(chapter: SChapter) {
-        val url = runCatching { chapter.url }.getOrNull()?.takeIf(String::isNotBlank) ?: return
-        chapterSnapshots.put(url, chapter.snapshot())
+    private fun rememberMihonChapter(chapterId: Long, chapter: SChapter) {
+        chapterSnapshots.put(chapterId.toString(), chapter.snapshot())
     }
 
     private fun SChapter.snapshot(): SChapter = SChapter.create().also { it.copyFrom(this) }

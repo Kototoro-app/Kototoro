@@ -40,7 +40,8 @@ abstract class CachingContentRepository(
 	)
 
 	final override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = pagesMutex.withLock(chapter.cacheLockKey()) {
-		cache.getPages(source, chapter.url)?.let {
+		val cacheUrl = chapter.cacheUrl()
+		cache.getPages(source, cacheUrl)?.let {
 			if (it.isNotEmpty()) {
 				Log.w("CachingRepo", "getPages cache-hit chapterId=${chapter.id} url=${chapter.url} pages=${it.size}")
 				return it
@@ -51,7 +52,7 @@ abstract class CachingContentRepository(
 			Log.d("CachingRepo", "getPages getPagesImpl chapterId=${chapter.id} url=${chapter.url}")
 			getPagesImpl(chapter, nextChapterUrl).distinctById()
 		}
-		cache.putPages(source, chapter.url, pages)
+		cache.putPages(source, cacheUrl, pages)
 		pages
 	}.await()
 
@@ -129,8 +130,10 @@ abstract class CachingContentRepository(
 
 	private fun ContentChapter.cacheLockKey() = ContentCacheLockKey(
 		source = source.name,
-		url = url.ifBlank { id.toString() },
+		url = cacheUrl(),
 	)
+
+	private fun ContentChapter.cacheUrl() = "$id#${url.ifBlank { id.toString() }}"
 
 	private data class ContentCacheLockKey(
 		val source: String,

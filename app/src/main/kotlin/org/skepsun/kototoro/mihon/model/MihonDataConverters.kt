@@ -236,8 +236,12 @@ fun Content.toMihonManga(): SManga {
 /**
  * Convert Mihon SChapter to Kototoro ContentChapter.
  */
-fun SChapter.toKotoChapter(source: ContentSource, overrideNumber: Float? = null): ContentChapter {
-    val chapterId = generateChapterId(url, source.name)
+fun SChapter.toKotoChapter(
+    source: ContentSource,
+    overrideNumber: Float? = null,
+    parentUrl: String? = null,
+): ContentChapter {
+    val chapterId = generateChapterId(url, source.name, parentUrl)
     val finalNumber = overrideNumber ?: try {
         number?.toFloatOrNullCompat() ?: (if (chapter_number >= 0) chapter_number else 0f)
     } catch (e: NoSuchMethodError) {
@@ -301,13 +305,14 @@ fun ContentChapter.toMihonChapter(): SChapter {
  * cache conflicts in the reader.
  */
 fun Page.toKotoPage(
-    source: ContentSource, 
+    source: ContentSource,
     chapter: eu.kanade.tachiyomi.source.model.SChapter,
-    headers: Map<String, String> = emptyMap()
+    chapterId: Long? = null,
+    headers: Map<String, String> = emptyMap(),
 ): ContentPage {
     // Generate a unique page ID by combining chapter URL and page index
     // This prevents cache collisions between pages from different chapters
-    val pageId = "${chapter.url}|page|$index".hashCode().toLong() and Long.MAX_VALUE
+    val pageId = "${chapterId ?: chapter.url}|page|$index".hashCode().toLong() and Long.MAX_VALUE
     
     return ContentPage(
         id = pageId,
@@ -342,8 +347,13 @@ private fun generateContentId(url: String, sourceName: String, title: String): L
 /**
  * Generate a stable ID for a chapter based on URL and source.
  */
-private fun generateChapterId(url: String, sourceName: String): Long {
-    return "$sourceName|chapter|$url".hashCode().toLong() and Long.MAX_VALUE
+private fun generateChapterId(url: String, sourceName: String, parentUrl: String? = null): Long {
+    val identity = if (parentUrl == null) {
+        "$sourceName|chapter|$url"
+    } else {
+        "$sourceName|chapter|$parentUrl|$url"
+    }
+    return identity.hashCode().toLong() and Long.MAX_VALUE
 }
 
 // ============ URL Helpers ============

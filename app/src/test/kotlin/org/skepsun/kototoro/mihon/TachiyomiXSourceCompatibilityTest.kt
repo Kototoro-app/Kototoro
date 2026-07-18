@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
+import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,9 +40,11 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.cache.MemoryContentCache
+import org.skepsun.kototoro.core.cache.SafeDeferred
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
+import org.skepsun.kototoro.parsers.model.ContentPage
 import rx.Observable
 
 @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
@@ -126,17 +130,30 @@ class TachiyomiXSourceCompatibilityTest {
 		try {
 			val catalogueSource = MemoDependentHttpSource()
 			val source = MihonMangaSource(catalogueSource, "test.extension")
-			val repository = MihonMangaRepository(source, mockk<MemoryContentCache>(relaxed = true))
+			val pageCache = mutableMapOf<String, SafeDeferred<List<ContentPage>>>()
+			val cache = mockk<MemoryContentCache>(relaxed = true) {
+				coEvery { getPages(any(), any()) } coAnswers {
+					pageCache[secondArg()]?.awaitOrNull()
+				}
+				every { putPages(any(), any(), any()) } answers {
+					pageCache[secondArg()] = thirdArg()
+				}
+			}
+			val repository = MihonMangaRepository(source, cache)
 
-			val listedManga = repository.getList(offset = 0, order = null, filter = null).single()
-			val details = repository.getDetails(listedManga, ContentRepository.DetailsFetchMode.FORCE_REFRESH)
-			val pages = repository.getPages(details.chapters.orEmpty().single())
+			val listedManga = repository.getList(offset = 0, order = null, filter = null)
+			val firstDetails = repository.getDetails(listedManga[0], ContentRepository.DetailsFetchMode.FORCE_REFRESH)
+			val firstChapter = firstDetails.chapters.orEmpty().single()
+			val firstPages = repository.getPages(firstChapter)
+			val secondDetails = repository.getDetails(listedManga[1], ContentRepository.DetailsFetchMode.FORCE_REFRESH)
+			val secondChapter = secondDetails.chapters.orEmpty().single()
+			val secondPages = repository.getPages(secondChapter)
 
-			assertEquals("required-slug", catalogueSource.receivedSlug)
-			assertEquals("required-manga-id", catalogueSource.receivedMangaId)
-			assertEquals("Combined Details", details.title)
-			assertEquals(listOf("Combined Chapter"), details.chapters?.map { it.title })
-			assertEquals(listOf("https://example.org/page.webp"), pages.map { it.url })
+			assertFalse(firstChapter.id == secondChapter.id)
+			assertEquals(listOf("https://example.org/first-manga.webp"), firstPages.map { it.url })
+			assertEquals(listOf("https://example.org/second-manga.webp"), secondPages.map { it.url })
+			assertEquals("second-slug", catalogueSource.receivedSlug)
+			assertEquals("second-manga", catalogueSource.receivedMangaId)
 		} finally {
 			ArchTaskExecutor.getInstance().setDelegate(null)
 			Dispatchers.resetMain()
@@ -316,8 +333,11 @@ class TachiyomiXSourceCompatibilityTest {
 		override suspend fun getPopularManga(page: Int): MangasPage {
 			return MangasPage(
 				mangas = listOf(
-					manga("token", "Listed Manga").apply {
-						memo = buildJsonObject { put("slug", "required-slug") }
+					manga("first-token", "First Manga").apply {
+						memo = buildJsonObject { put("slug", "first-slug") }
+					},
+					manga("second-token", "Second Manga").apply {
+						memo = buildJsonObject { put("slug", "second-slug") }
 					},
 				),
 				hasNextPage = false,
@@ -331,12 +351,16 @@ class TachiyomiXSourceCompatibilityTest {
 			fetchChapters: Boolean,
 		): SMangaUpdate {
 			receivedSlug = manga.memo["slug"]?.jsonPrimitive?.content
-			checkNotNull(receivedSlug)
+			val mangaId = when (checkNotNull(receivedSlug)) {
+				"first-slug" -> "first-manga"
+				"second-slug" -> "second-manga"
+				else -> error("Unexpected slug: $receivedSlug")
+			}
 			return SMangaUpdate(
-				manga = manga.copy().apply { title = "Combined Details" },
+				manga = manga.copy().apply { title = "$mangaId Details" },
 				chapters = listOf(
-					chapter("chapter-token", "Combined Chapter").apply {
-						memo = buildJsonObject { put("mangaId", "required-manga-id") }
+					chapter("1", "Chapter 1").apply {
+						memo = buildJsonObject { put("mangaId", mangaId) }
 					},
 				),
 			)
@@ -344,8 +368,7 @@ class TachiyomiXSourceCompatibilityTest {
 
 		override suspend fun getPageList(chapter: SChapter): List<Page> {
 			receivedMangaId = chapter.memo["mangaId"]?.jsonPrimitive?.content
-			checkNotNull(receivedMangaId)
-			return listOf(Page(index = 0, imageUrl = "https://example.org/page.webp"))
+			return listOf(Page(index = 0, imageUrl = "https://example.org/${checkNotNull(receivedMangaId)}.webp"))
 		}
 
 		override fun popularMangaRequest(page: Int): Request = unused()
