@@ -15,9 +15,12 @@ import androidx.compose.ui.platform.LocalContext
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Size
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.parsers.model.Content
+
+internal val DynamicArtworkRequestSize = Size(width = 1280, height = 1280)
 
 @Composable
 fun DynamicArtworkBackdrop(
@@ -38,6 +41,7 @@ fun DynamicArtworkBackdrop(
                 painter = rememberAsyncImagePainter(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(cover)
+                        .size(DynamicArtworkRequestSize)
                         .crossfade(true)
                         .build(),
                 ),

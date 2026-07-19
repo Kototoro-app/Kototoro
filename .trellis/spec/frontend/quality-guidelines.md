@@ -211,6 +211,45 @@ Do not derive the gradient only from forward-scroll collapse. Validate the
 initial state, fully collapsed state, and reverse-scroll interval where chrome
 has reappeared but the content-derived alpha is falling.
 
+## Scenario: Dynamic Artwork Decode Bound
+
+`rememberAsyncImagePainter` does not automatically guarantee a constraint-sized
+request. Full-screen artwork backgrounds are heavily blurred and must not
+decode an arbitrary source image at its original dimensions.
+
+### Contract
+
+- Every dynamic artwork background request uses a bounded `ImageRequest.size`.
+- The shared bound is `DynamicArtworkRequestSize = Size(1280, 1280)` for both
+  the reusable backdrop component and the main shell implementation.
+- This bound applies only to the blurred background; poster/detail images keep
+  their own display sizing and quality contracts.
+
+### Wrong vs Correct
+
+Wrong:
+
+```kotlin
+rememberAsyncImagePainter(
+    ImageRequest.Builder(context).data(cover).build(),
+)
+```
+
+Correct:
+
+```kotlin
+rememberAsyncImagePainter(
+    ImageRequest.Builder(context)
+        .data(cover)
+        .size(DynamicArtworkRequestSize)
+        .build(),
+)
+```
+
+Validation must cover both dynamic artwork entry points, Kotlin compilation,
+and `git diff --check`. Do not respond to an OOM report by globally clearing
+the image cache or catching `OutOfMemoryError` around rendering.
+
 ## Scenario: Global Space Switcher Ownership
 
 The Space switcher FAB is a global navigation control. It must remain available

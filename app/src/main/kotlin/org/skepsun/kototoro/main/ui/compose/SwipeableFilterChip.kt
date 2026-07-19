@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -90,7 +91,7 @@ fun SwipeableFilterChip(
     val iconAll = painterResource(R.drawable.ic_filter_content_type)
 
     val exp = expansion.value
-    val animatedWidth = CompactFilterChipSize * (1f + exp) // collapsed=1cell, expanded=2 layout cells
+    val animatedWidth = CompactFilterChipSize * swipeableFilterChipWidthMultiplier(exp)
     val backdrop = LocalLiquidGlassBackdrop.current
     val exportedBackdrop = rememberLayerBackdrop()
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
@@ -118,7 +119,10 @@ fun SwipeableFilterChip(
                             },
                         )
                 } else {
-                    Modifier
+                    Modifier.background(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                        shape = RoundedCornerShape(999.dp),
+                    )
                 },
             )
             .clickable(
@@ -133,6 +137,12 @@ fun SwipeableFilterChip(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     down.consume() // Consume immediately so DockedSearchBar doesn't trigger!
+
+                    val longPress = awaitLongPressOrCancellation(down.id)
+                    if (longPress == null) {
+                        return@awaitEachGesture
+                    }
+                    longPress.consume()
 
                     isPressed = true
                     highlightIndex = currentSelectedType
@@ -169,11 +179,7 @@ fun SwipeableFilterChip(
                             
                             if (moveX != 0f) {
                                 dragOffsetX += moveX
-                                val newIndex = when {
-                                    dragOffsetX < -swipeThresholdPx -> 0
-                                    dragOffsetX > swipeThresholdPx -> 2
-                                    else -> 1
-                                }
+                                val newIndex = resolveSwipeableFilterIndex(dragOffsetX, swipeThresholdPx)
                                 if (newIndex != highlightIndex && types[newIndex] in enabledTypes) {
                                     highlightIndex = newIndex
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -302,4 +308,17 @@ private fun ContentType.toSwipeableIndex(): Int? = when (this) {
     ContentType.MANGA, ContentType.HENTAI_MANGA -> 1
     ContentType.NOVEL, ContentType.HENTAI_NOVEL -> 2
     else -> null
+}
+
+internal fun swipeableFilterChipWidthMultiplier(expansion: Float): Float {
+    return 1f + 2f * expansion.coerceIn(0f, 1f)
+}
+
+internal fun resolveSwipeableFilterIndex(dragOffset: Float, threshold: Float): Int {
+    val safeThreshold = threshold.coerceAtLeast(0f)
+    return when {
+        dragOffset < -safeThreshold -> 0
+        dragOffset > safeThreshold -> 2
+        else -> 1
+    }
 }

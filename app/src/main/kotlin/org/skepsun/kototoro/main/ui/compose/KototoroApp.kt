@@ -92,6 +92,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.LiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
+import org.skepsun.kototoro.core.ui.compose.DynamicArtworkRequestSize
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
@@ -1559,6 +1560,7 @@ fun KototoroApp(
                                 painter = rememberAsyncImagePainter(
                                     model = ImageRequest.Builder(LocalContext.current)
                                         .data(cover)
+                                        .size(DynamicArtworkRequestSize)
                                         .crossfade(true)
                                         .build()
                                 ),

@@ -90,7 +90,9 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 				ACRA.errorReporter.putCustomData("isMiui", RomCompat.isMiui.getOrNull().toString())
 			}
 		}
-		if (!entryPoint.settings().isEntityGraphMigrated) {
+		if (!entryPoint.settings().isEntityGraphMigrated ||
+			!entryPoint.settings().isLegacyFavouriteProjectionMigrationCompleted
+		) {
 			val request = OneTimeWorkRequestBuilder<org.skepsun.kototoro.entitygraph.work.EntityGraphMigrationWorker>().build()
 			WorkManager.getInstance(this).enqueue(request)
 			entryPoint.settings().isEntityGraphMigrated = true

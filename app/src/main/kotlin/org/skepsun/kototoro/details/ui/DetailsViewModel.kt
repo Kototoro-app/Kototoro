@@ -943,6 +943,7 @@ class DetailsViewModel @Inject constructor(
 
 	private fun currentBaseContentType(): ContentType? {
 		return baseLoadedDetails?.toContent()?.source?.getContentType()
+			?: mangaDetails.safeValueOrNull()?.toContent()?.source?.getContentType()
 			?: originContent?.source?.getContentType()
 	}
 
@@ -1527,6 +1528,18 @@ class DetailsViewModel @Inject constructor(
 			restoreEntityMetadataSourceSelection(entityId = entityId)
 		}
 		submitEntityRelationSections(buildEntityRelationSections(entityId))
+	}
+
+	private suspend fun refreshActiveEntitySourceOptions() {
+		if (activeEntityContextId == null) {
+			return
+		}
+		val activeMangaId = activeMangaIdFlow.value ?: activeEntityContextBoundLocalId
+		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(
+			bindings = activeEntityContextBindings,
+			activeMangaId = activeMangaId,
+		)
+		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(activeMangaId)
 	}
 
 	fun setSpaceContext(spaceId: SpaceId?) {
@@ -5322,6 +5335,7 @@ class DetailsViewModel @Inject constructor(
 
 	private fun doLoad(force: Boolean) = launchLoadingJob(Dispatchers.Default) {
 		val resolvedIntent = currentLoadIntentOverride ?: intent
+		val requestedMangaId = resolvedIntent.mangaId.takeIf { it != ContentIntent.ID_NONE }
 		if (resolvedIntent.mangaId == 0L && resolvedIntent.manga == null) return@launchLoadingJob
 		detailsLoadUseCase.invoke(resolvedIntent, force)
 			.onEachWhile {
@@ -5336,6 +5350,9 @@ class DetailsViewModel @Inject constructor(
 					false
 				}
 			}.collect { details ->
+				if (requestedMangaId != null && activeMangaIdFlow.value != requestedMangaId) {
+					return@collect
+				}
 				android.util.Log.d(
 					"DetailsViewModel",
 					"doLoad.collect: incoming details id=${details.id}, allChapters=${details.allChapters.size}, branches=${details.chapters.mapValues { it.value.size }}, selectedBranchBefore=${selectedBranch.value}",
@@ -5363,6 +5380,7 @@ class DetailsViewModel @Inject constructor(
 					"doLoad.collect: final details id=${finalDetails.id}, allChapters=${finalDetails.allChapters.size}, branches=${finalDetails.chapters.mapValues { it.value.size }}, selectedBranchAfter=${selectedBranch.value}",
 				)
 				baseLoadedDetails = finalDetails
+				refreshActiveEntitySourceOptions()
 				syncDisplayedState()
 				trackingRepository.clearReadUpdates(finalDetails.id)
 				val localEntityId = entityGraphRepository.findEntityByBinding("0", finalDetails.id.toString())?.id

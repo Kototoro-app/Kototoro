@@ -21,4 +21,15 @@
 	<!-- Monet theme only support S+ -->
 	<style name="ThemeOverlay.Kototoro.Monet" parent="ThemeOverlay.Material3.DynamicColors.Dark" />
 
+	<style name="ThemeOverlay.Kototoro.IosPalette" parent="">
+		<item name="colorPrimary">@color/ios_primary</item>
+		<item name="colorOnPrimary">@color/ios_onPrimary</item>
+		<item name="colorPrimaryContainer">@color/ios_primaryContainer</item>
+		<item name="colorOnPrimaryContainer">@color/ios_onPrimaryContainer</item>
+		<item name="colorSecondary">@color/ios_secondary</item>
+		<item name="colorOnSecondary">@color/ios_onSecondary</item>
+		<item name="colorSecondaryContainer">@color/ios_secondaryContainer</item>
+		<item name="colorOnSecondaryContainer">@color/ios_onSecondaryContainer</item>
+	</style>
+
 </resources>

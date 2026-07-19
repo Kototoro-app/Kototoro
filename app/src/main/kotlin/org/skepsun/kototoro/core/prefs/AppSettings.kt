@@ -137,7 +137,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_THEME, value.toString()) }
 
 	var colorScheme: ColorScheme
-		get() = prefs.getEnumValue(KEY_COLOR_THEME, ColorScheme.default)
+		get() = prefs.getEnumValue(
+			KEY_COLOR_THEME,
+			if (interfaceStyle == InterfaceStyle.IOS) ColorScheme.IOS else ColorScheme.default,
+		)
 		set(value) = prefs.edit { putEnumValue(KEY_COLOR_THEME, value) }
 
 	var isAmoledTheme: Boolean
@@ -188,6 +191,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_ENTITY_GRAPH_MIGRATED, false)
 		set(value) = prefs.edit { putBoolean(KEY_ENTITY_GRAPH_MIGRATED, value) }
 
+	var isLegacyFavouriteProjectionMigrationCompleted: Boolean
+		get() = prefs.getBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, false)
+		set(value) = prefs.edit { putBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, value) }
+
 	var isNavBarPinned: Boolean
 		get() = prefs.getBoolean(KEY_NAV_PINNED, true)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_PINNED, value) }
@@ -218,6 +225,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			prefs.edit {
 				putEnumValue(KEY_INTERFACE_STYLE, value)
 				putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value == InterfaceStyle.IOS)
+				if (value == InterfaceStyle.IOS && !prefs.contains(KEY_COLOR_THEME)) {
+					putEnumValue(KEY_COLOR_THEME, ColorScheme.IOS)
+				} else if (value == InterfaceStyle.MATERIAL_3 &&
+					prefs.getString(KEY_COLOR_THEME, null) == ColorScheme.IOS.name
+				) {
+					putEnumValue(KEY_COLOR_THEME, ColorScheme.default)
+				}
 				if (value == InterfaceStyle.IOS && !prefs.contains(KEY_BACKGROUND_STYLE)) {
 					putEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DYNAMIC_TONAL_GLASS)
 				}
@@ -2550,6 +2564,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_SELECTED_SOURCE_TAGS = "selected_source_tags"
 		const val KEY_SELECTED_ADULT_FILTER = "selected_adult_filter"
 		const val KEY_ENTITY_GRAPH_MIGRATED = "entity_graph_migrated"
+		const val KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED =
+			"legacy_favourite_projection_migration_completed"
 
 		// keys for non-persistent preferences
 		const val KEY_APP_VERSION = "app_version"

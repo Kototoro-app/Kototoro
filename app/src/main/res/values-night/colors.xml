@@ -16,6 +16,14 @@
 	<color name="nsfw_16">#FF6F00</color>
 
 	<!-- Color schemes colors -->
+	<color name="ios_primary">#0A84FF</color>
+	<color name="ios_onPrimary">#FFFFFF</color>
+	<color name="ios_primaryContainer">#153A61</color>
+	<color name="ios_onPrimaryContainer">#E7F3FF</color>
+	<color name="ios_secondary">#64D2FF</color>
+	<color name="ios_onSecondary">#FFFFFF</color>
+	<color name="ios_secondaryContainer">#34305F</color>
+	<color name="ios_onSecondaryContainer">#F0EEFF</color>
 	<color name="background_miku">#191C1C</color>
 	<color name="background_asuka">#201A1A</color>
 	<color name="background_mion">#191C1A</color>

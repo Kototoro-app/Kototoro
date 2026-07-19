@@ -10,6 +10,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import org.json.JSONArray
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership as attachTrackingLinkOwnership
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
@@ -30,6 +31,7 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
     private val entityGraphRepository: EntityGraphRepository,
     private val favouritesRepository: FavouritesRepository,
     private val workResolver: WorkResolver,
+    private val settings: AppSettings,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
@@ -76,6 +78,10 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
                     )
                 }
             }
+            // Build bindings from every legacy favourite projection first. The aggregate
+            // display projection is intentionally only one item per Work and is not a
+            // complete migration input.
+            favouritesRepository.ensureLegacyFavouriteProjectionsForMigration()
             favouritesRepository.getAllContent().forEach { content ->
                 workResolver.ensureForProjection(
                     content = content,
@@ -91,6 +97,7 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
             //    After Migration50To51, existing entities had name_hash set to row-id as a temporary value.
             //    This step recomputes the true normalised name hash.
             backfillNameHashes()
+            settings.isLegacyFavouriteProjectionMigrationCompleted = true
 
             Result.success()
         } catch (e: Throwable) {

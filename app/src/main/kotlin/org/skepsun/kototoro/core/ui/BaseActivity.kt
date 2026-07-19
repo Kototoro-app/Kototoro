@@ -27,6 +27,7 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.util.ActionModeDelegate
 import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
@@ -69,6 +70,9 @@ abstract class BaseActivity<B : ViewBinding> :
 		setTheme(settings.colorScheme.styleResId)
 		if (isAmoledTheme) {
 			setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
+		}
+		if (settings.interfaceStyle == InterfaceStyle.IOS && settings.colorScheme == ColorScheme.IOS) {
+			setTheme(R.style.ThemeOverlay_Kototoro_IosPalette)
 		}
 		if (settings.interfaceStyle == InterfaceStyle.IOS) {
 			setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)

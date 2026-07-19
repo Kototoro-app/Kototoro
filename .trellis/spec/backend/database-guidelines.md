@@ -134,3 +134,77 @@ concern.
 <!-- Database-related mistakes your team has made -->
 
 (To be filled by the team)
+
+## Scenario: Legacy Favourite Projection Migration
+
+### 1. Scope / Trigger
+
+Applies when migrating the legacy `favourites` table into Work-centred
+favourites or rebuilding EntityGraph bindings after a database upgrade.
+
+### 2. Signatures
+
+```kotlin
+suspend fun FavouritesRepository.ensureLegacyFavouriteProjectionsForMigration()
+internal fun selectLegacyFavouriteMangaIds(
+    entries: Collection<FavouriteEntity>,
+    availableMangaIds: Set<Long>,
+): List<Long>
+```
+
+### 3. Contracts
+
+- Active rows in the legacy table are the projection-level source of truth for
+  rebuilding bindings; rows marked deleted must not create new bindings.
+- During favourite-row normalization, an existing binding may still be used to
+  preserve a deleted row's state, but a deleted-only projection does not block
+  cleanup.
+- A Work aggregate's `displayProjection` is one presentation choice and must
+  not be used as a complete migration input.
+- Missing manga rows are logged with their IDs and are not silently treated as
+  successfully migrated.
+- The legacy table may be cleared only after every legacy row has a resolved
+  Work entity; otherwise unresolved rows remain available for diagnosis or a
+  later retry.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| 1, 4, or 7+ valid projections | Ensure every projection binding; do not cap the collection |
+| Duplicate legacy rows for one projection | Ensure it once, preserve favourite row semantics |
+| Missing active manga row | Log the projection ID and retain the legacy row |
+| Deleted-only projection without an entity | Do not import it or block cleanup |
+| One Work has multiple projections | Keep all active projection bindings in the aggregate |
+
+### 5. Good/Base/Bad Cases
+
+- Good: iterate all legacy projection IDs, call `ensureForProjection` for each,
+  then normalize Work favourites.
+- Base: use the Work display projection only for presentation after bindings
+  have been rebuilt.
+- Bad: call `getAllContent()` as the migration source and clear `favourites`
+  when one projection cannot be resolved.
+
+### 6. Tests Required
+
+- Unit-test that 1, 4, and 7 projection IDs are all selected.
+- Test that missing IDs are excluded from the ensure list and remain
+  diagnosable by the caller.
+- Verify aggregate projection mapping has no fixed-count truncation.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```kotlin
+favouritesRepository.getAllContent().forEach(::ensureForProjection)
+db.getFavouritesDao().clear()
+```
+
+Correct:
+
+```kotlin
+favouritesRepository.ensureLegacyFavouriteProjectionsForMigration()
+// Clear legacy rows only after normalization confirms every row is resolved.
+```

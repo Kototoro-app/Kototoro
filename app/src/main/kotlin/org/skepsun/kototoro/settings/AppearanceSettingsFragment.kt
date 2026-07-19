@@ -281,7 +281,7 @@ private class AppearanceSettingsCoordinator(
             isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
 
         val options = AppearanceSettingsOptions(
-            colorSchemes = buildColorSchemeOptions(),
+			colorSchemes = buildColorSchemeOptions(interfaceStyle),
             interfaceStyles = buildInterfaceStyleOptions(),
             themes = buildThemeOptions(),
             backgroundStyles = buildBackgroundStyleOptions(),
@@ -512,14 +512,16 @@ private class AppearanceSettingsCoordinator(
         return items.joinToString { context.getString(it.title) }
     }
 
-    private fun buildColorSchemeOptions(): List<SettingsChoiceOption<ColorScheme>> {
-        return ColorScheme.getAvailableList().map {
-            SettingsChoiceOption(
-                value = it,
-                label = context.getString(it.titleResId),
-            )
-        }
-    }
+	private fun buildColorSchemeOptions(interfaceStyle: InterfaceStyle): List<SettingsChoiceOption<ColorScheme>> {
+		return ColorScheme.getAvailableList()
+			.filter { interfaceStyle == InterfaceStyle.IOS || it != ColorScheme.IOS }
+			.map {
+				SettingsChoiceOption(
+					value = it,
+					label = context.getString(it.titleResId),
+				)
+			}
+	}
 
     private fun buildInterfaceStyleOptions(): List<SettingsChoiceOption<InterfaceStyle>> {
         return InterfaceStyle.entries.map {

@@ -37,6 +37,10 @@ import org.skepsun.kototoro.parsers.util.recoverNotNull
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import javax.inject.Inject
 
+internal fun Content.hasCompleteDetailsSnapshot(): Boolean {
+	return !chapters.isNullOrEmpty() && description != null
+}
+
 class DetailsLoadUseCase @Inject constructor(
 	private val mangaDataRepository: ContentDataRepository,
 	private val localContentRepository: LocalMangaRepository,
@@ -277,10 +281,6 @@ class DetailsLoadUseCase @Inject constructor(
 		}
 	}
 
-	private fun Content.hasCompleteDetailsSnapshot(): Boolean {
-		return !chapters.isNullOrEmpty() && description != null
-	}
-	
 	/**
 	 * 如果manga有EPUB下载章节，从数据库加载内部章节并展开
 	 * 

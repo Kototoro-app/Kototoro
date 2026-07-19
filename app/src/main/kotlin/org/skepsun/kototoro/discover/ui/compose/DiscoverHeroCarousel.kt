@@ -52,12 +52,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -107,8 +110,6 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 private val DiscoverHeroHeight = 340.dp
 private val DiscoverHeroHeightDetached = 262.dp
 private val DiscoverHeroHeightLandscape = 220.dp
-private val DiscoverHeroBottomBlendHeightLandscape = 128.dp
-private val DiscoverHeroBottomBlendHeightDetachedLandscape = 112.dp
 
 internal fun discoverHeroHeight(
     isLandscape: Boolean,
@@ -204,13 +205,6 @@ fun DiscoverHeroCarousel(
         heightOverscan = 0.64f,
         downsample = panoramaPrefs.downsampleEnabled,
     )
-    val heroBottomBlendHeight = when {
-        detachedBottomContent && isLandscape -> DiscoverHeroBottomBlendHeightDetachedLandscape
-        detachedBottomContent -> panoramaPrefs.blendHeight.dp
-        isLandscape -> DiscoverHeroBottomBlendHeightLandscape
-        else -> panoramaPrefs.blendHeight.dp
-    }
-    val pageBackground = MaterialTheme.colorScheme.background
     val heroContentColor = Color.White
     val heroSecondaryContentColor = Color.White.copy(alpha = 0.82f)
     val heroControlContainerColor = Color.Black.copy(alpha = 0.42f)
@@ -221,6 +215,25 @@ fun DiscoverHeroCarousel(
     val density = LocalDensity.current
     val horizontalPanPx = with(density) { animationMotion.horizontalPan.toPx() }
     val verticalPanPx = with(density) { animationMotion.verticalPan.toPx() }
+    val heroBackgroundFadeModifier = Modifier
+        .graphicsLayer {
+            compositingStrategy = CompositingStrategy.Offscreen
+        }
+        .drawWithCache {
+            val backgroundEndAlpha = resolveDiscoverHeroBackgroundEndAlpha(panoramaGradientAlphaFactor)
+            val alphaMask = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to Color.White,
+                    0.62f to Color.White,
+                    0.86f to Color.White.copy(alpha = (backgroundEndAlpha + 1f) / 2f),
+                    1f to Color.White.copy(alpha = backgroundEndAlpha),
+                ),
+            )
+            onDrawWithContent {
+                drawContent()
+                drawRect(alphaMask, blendMode = BlendMode.DstIn)
+            }
+        }
     val pagerState = rememberPagerState(pageCount = { items.size })
     val selectedIndex by remember(items, pagerState) {
         derivedStateOf { pagerState.currentPage.coerceIn(0, items.lastIndex) }
@@ -295,16 +308,12 @@ fun DiscoverHeroCarousel(
             .height(heroHeight + topContentInset)
             .clipToBounds()
 
-        Box(
-            modifier = heroImageModifier
-                .background(pageBackground),
-        )
         if (isPanoramaEnabled) {
             Crossfade(
                 targetState = selectedItem.id,
                 animationSpec = tween(if (heroTransitionInProgress) 0 else 180),
                 label = "discover_hero_background",
-                modifier = heroImageModifier,
+                modifier = heroImageModifier.then(heroBackgroundFadeModifier),
             ) { currentId ->
                 val backgroundItem = items.firstOrNull { it.id == currentId } ?: selectedItem
                 val backgroundRequest = remember(
@@ -354,85 +363,18 @@ fun DiscoverHeroCarousel(
         Box(
             modifier = heroImageModifier
                 .drawBehind {
-                    val verticalScrim = if (detachedBottomContent) {
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Transparent,
-                                0.28f to Color.Transparent,
-                                0.52f to pageBackground.copy(alpha = 0.08f * panoramaGradientAlphaFactor),
-                                0.72f to pageBackground.copy(alpha = 0.24f * panoramaGradientAlphaFactor),
-                                0.88f to pageBackground.copy(alpha = 0.50f * panoramaGradientAlphaFactor),
-                                1.0f to pageBackground.copy(alpha = 0.78f * panoramaGradientAlphaFactor),
-                            ),
-                        )
-                    } else {
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Transparent,
-                                0.36f to Color.Transparent,
-                                0.54f to pageBackground.copy(alpha = 0.08f * panoramaGradientAlphaFactor),
-                                0.70f to pageBackground.copy(alpha = 0.22f * panoramaGradientAlphaFactor),
-                                0.84f to pageBackground.copy(alpha = 0.52f * panoramaGradientAlphaFactor),
-                                0.94f to pageBackground.copy(alpha = 0.82f * panoramaGradientAlphaFactor),
-                                1.0f to pageBackground,
-                            ),
-                        )
-                    }
-                    drawRect(verticalScrim)
-                    drawRect(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                pageBackground.copy(alpha = 0.24f),
-                                Color.Transparent,
-                                pageBackground.copy(alpha = 0.14f),
-                            ),
-                        ),
-                    )
                     drawRect(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.0f to Color.Black.copy(alpha = 0.38f),
                                 0.18f to Color.Black.copy(alpha = 0.22f),
                                 0.48f to Color.Black.copy(alpha = 0.18f),
-                                0.72f to Color.Black.copy(alpha = if (detachedBottomContent) 0.28f else 0.36f),
-                                1.0f to Color.Black.copy(alpha = if (detachedBottomContent) 0.34f else 0.44f),
+                                0.72f to Color.Black.copy(alpha = 0.08f),
+                                1.0f to Color.Transparent,
                             ),
                         ),
                     )
                 },
-        )
-        // 底部渐变固定在 hero 图片区域底部，不随 bottomContent 延伸
-        Spacer(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth()
-                .padding(top = topContentInset + heroHeight - heroBottomBlendHeight)
-                .height(heroBottomBlendHeight)
-                .background(
-                    if (detachedBottomContent) {
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Transparent,
-                                0.18f to pageBackground.copy(alpha = 0.04f * panoramaGradientAlphaFactor),
-                                0.42f to pageBackground.copy(alpha = 0.16f * panoramaGradientAlphaFactor),
-                                0.68f to pageBackground.copy(alpha = 0.42f * panoramaGradientAlphaFactor),
-                                0.88f to pageBackground.copy(alpha = 0.78f * panoramaGradientAlphaFactor),
-                                1.0f to pageBackground,
-                            ),
-                        )
-                    } else {
-                        Brush.verticalGradient(
-                            colorStops = arrayOf(
-                                0.0f to Color.Transparent,
-                                0.14f to pageBackground.copy(alpha = 0.06f * panoramaGradientAlphaFactor),
-                                0.36f to pageBackground.copy(alpha = 0.22f * panoramaGradientAlphaFactor),
-                                0.64f to pageBackground.copy(alpha = 0.58f * panoramaGradientAlphaFactor),
-                                0.84f to pageBackground.copy(alpha = 0.86f * panoramaGradientAlphaFactor),
-                                1.0f to pageBackground,
-                            ),
-                        )
-                    },
-                ),
         )
 
         Column(
@@ -721,6 +663,14 @@ fun DiscoverHeroCarousel(
             )
         }
     }
+}
+
+internal fun resolveDiscoverHeroBlendAlpha(alpha: Float, strength: Float): Float {
+    return (alpha.coerceIn(0f, 1f) * strength.coerceIn(0f, 1f)).coerceIn(0f, 1f)
+}
+
+internal fun resolveDiscoverHeroBackgroundEndAlpha(strength: Float): Float {
+    return 1f - strength.coerceIn(0f, 1f)
 }
 
 @Composable

@@ -489,8 +489,9 @@
     <string name="enable_logging_summary">出于调试目的记录一些操作，若不知道有何用处请不要自行开启</string>
     <string name="show_suspicious_content">显示可疑内容</string>
     <string name="theme_name_dynamic">动态</string>
+    <string name="theme_name_ios">iOS 蓝</string>
     <string name="color_theme">配色方案</string>
-    <string name="appearance_color_scheme_ios_note">iOS风格下，只有部分配色设置生效。</string>
+    <string name="appearance_color_scheme_ios_note">iOS 风格默认使用 iOS 蓝配色，也可以在此修改。</string>
     <string name="interface_style">界面风格</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>

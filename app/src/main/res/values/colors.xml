@@ -31,6 +31,14 @@
 	<color name="orange_900">#E65100</color>
 
 	<!-- Color schemes colors -->
+	<color name="ios_primary">#007AFF</color>
+	<color name="ios_onPrimary">#FFFFFF</color>
+	<color name="ios_primaryContainer">#DCEEFF</color>
+	<color name="ios_onPrimaryContainer">#003B6F</color>
+	<color name="ios_secondary">#5856D6</color>
+	<color name="ios_onSecondary">#FFFFFF</color>
+	<color name="ios_secondaryContainer">#E8E6FF</color>
+	<color name="ios_onSecondaryContainer">#25215D</color>
 	<color name="background_miku">#F7FAF8</color>
 	<color name="background_asuka">#FFF8F7</color>
 	<color name="background_mion">#F8FAF6</color>

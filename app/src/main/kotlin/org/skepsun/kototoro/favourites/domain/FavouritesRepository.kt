@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.favourites.domain
 
+import android.util.Log
 import androidx.room.withTransaction
 import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,7 @@ import org.skepsun.kototoro.core.util.ext.mapItems
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.stabilizeActiveWorkFavouriteAnchor
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
@@ -46,6 +48,20 @@ import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.space.domain.SpaceId
 import javax.inject.Inject
+
+private const val TAG = "FavouritesRepository"
+
+internal fun selectLegacyFavouriteMangaIds(
+	entries: Collection<FavouriteEntity>,
+	availableMangaIds: Set<Long>,
+): List<Long> {
+	return entries.asSequence()
+		.filter { it.deletedAt == 0L }
+		.map(FavouriteEntity::mangaId)
+		.distinct()
+		.filter(availableMangaIds::contains)
+		.toList()
+}
 
 @Reusable
 class FavouritesRepository @Inject constructor(
@@ -707,6 +723,31 @@ class FavouritesRepository @Inject constructor(
 		}
 	}
 
+	/**
+	 * Ensures every legacy favourite projection is represented in EntityGraph before
+	 * the work-favourite rows are read by the migration worker.
+	 */
+	suspend fun ensureLegacyFavouriteProjectionsForMigration() {
+		val legacyEntries = db.getFavouritesDao().findAllActiveEntries()
+		if (legacyEntries.isEmpty()) {
+			return
+		}
+		val mangaIds = legacyEntries.map(FavouriteEntity::mangaId).distinct()
+		val mangaById = db.getMangaDao()
+			.findEntitiesByIds(mangaIds)
+			.associateBy { it.id }
+		val missingMangaIds = mangaIds.filterNot(mangaById::containsKey)
+		if (missingMangaIds.isNotEmpty()) {
+			Log.w(TAG, "Legacy favourite projections are missing from manga: $missingMangaIds")
+		}
+		selectLegacyFavouriteMangaIds(legacyEntries, mangaById.keys).forEach { mangaId ->
+			workResolver.ensureForProjection(
+				content = mangaById.getValue(mangaId).toContent(tags = emptySet(), chapters = null),
+				provenance = WorkIdentityProvenance.MIGRATION,
+			)
+		}
+	}
+
 	suspend fun normalizeWorkFavouritesIfNeeded() {
 		if (!settings.requiresWorkMigrationNormalization) {
 			return
@@ -734,9 +775,26 @@ class FavouritesRepository @Inject constructor(
 			.findEntitiesByIds(localFavourites.map { it.mangaId }.distinct())
 			.associateBy { it.id }
 		val contentById = mangaById.mapValues { (_, manga) -> manga.toContent(tags = emptySet(), chapters = null) }
-		val ensuredEntityIds = ensureMigrationWorkEntities(contentById.values)
+		val activeMangaIds = localFavourites
+			.asSequence()
+			.filter { it.deletedAt == 0L }
+			.map(FavouriteEntity::mangaId)
+			.toSet()
+		val ensuredEntityIds = ensureMigrationWorkEntities(
+			contentById.filterKeys(activeMangaIds::contains).values,
+		)
 		val existingEntityIds = resolveEntityIdsByMangaIds(localFavourites.map { it.mangaId })
 		val entityIdsByMangaId = existingEntityIds + ensuredEntityIds
+		val unresolvedActiveMangaIds = localFavourites
+			.asSequence()
+			.filter { it.deletedAt == 0L }
+			.map(FavouriteEntity::mangaId)
+			.distinct()
+			.filterNot(entityIdsByMangaId::containsKey)
+			.toList()
+		if (unresolvedActiveMangaIds.isNotEmpty()) {
+			Log.w(TAG, "Keeping legacy favourites with unresolved projections: $unresolvedActiveMangaIds")
+		}
 		val normalized = LinkedHashMap<WorkFavouriteNormalizationKey, WorkFavouriteEntity>()
 		for (favourite in localFavourites) {
 			val entityId = entityIdsByMangaId[favourite.mangaId] ?: continue
@@ -761,6 +819,10 @@ class FavouritesRepository @Inject constructor(
 				mergeNormalizedWorkFavourite(existing, candidate)
 			}
 		}
+		if (normalized.isEmpty() && unresolvedActiveMangaIds.isEmpty()) {
+			db.withTransaction { db.getFavouritesDao().clear() }
+			return
+		}
 		if (normalized.isEmpty()) {
 			return
 		}
@@ -776,7 +838,9 @@ class FavouritesRepository @Inject constructor(
 					},
 				)
 			}
-			db.getFavouritesDao().clear()
+			if (unresolvedActiveMangaIds.isEmpty()) {
+				db.getFavouritesDao().clear()
+			}
 		}
 	}
 

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -139,6 +140,9 @@ abstract class BaseComposeActivity :
         setTheme(settings.colorScheme.styleResId)
         if (isAmoledTheme) {
             setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
+        }
+        if (settings.interfaceStyle == InterfaceStyle.IOS && settings.colorScheme == ColorScheme.IOS) {
+            setTheme(R.style.ThemeOverlay_Kototoro_IosPalette)
         }
         if (settings.interfaceStyle == InterfaceStyle.IOS) {
             setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)

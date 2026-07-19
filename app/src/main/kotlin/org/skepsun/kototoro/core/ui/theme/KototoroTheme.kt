@@ -62,8 +62,11 @@ fun KototoroTheme(
     val backgroundStyle by settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) {
         backgroundStyle
     }
-    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle, interfaceStyle) {
-        context.resolveComposeColorScheme(darkTheme, backgroundStyle, interfaceStyle)
+    val selectedColorScheme by settings.observeAsState(AppSettings.KEY_COLOR_THEME) {
+        colorScheme
+    }
+    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle, interfaceStyle, selectedColorScheme) {
+        context.resolveComposeColorScheme(darkTheme, backgroundStyle)
     }
     
     val radius = when {
@@ -171,7 +174,6 @@ private fun kototoroTypography(
 private fun android.content.Context.resolveComposeColorScheme(
     darkTheme: Boolean,
     backgroundStyle: BackgroundStyle,
-    interfaceStyle: InterfaceStyle,
 ): ColorScheme {
     val background = themeColor(android.R.attr.colorBackground)
     val surface = themeColorByName("colorSurface", background)
@@ -216,23 +218,7 @@ private fun android.content.Context.resolveComposeColorScheme(
         surfaceContainerHigh = surfaceContainerHigh,
         surfaceContainerHighest = themeColorByName("colorSurfaceContainerHighest", surfaceContainerHigh),
     )
-
-    val common = if (interfaceStyle == InterfaceStyle.IOS) {
-        val primary = if (darkTheme) Color(0xFF0A84FF) else Color(0xFF007AFF)
-        val secondary = if (darkTheme) Color(0xFF64D2FF) else Color(0xFF5856D6)
-        baseCommon.copy(
-            primary = primary,
-            onPrimary = Color.White,
-            primaryContainer = if (darkTheme) Color(0xFF153A61) else Color(0xFFDCEEFF),
-            onPrimaryContainer = if (darkTheme) Color(0xFFE7F3FF) else Color(0xFF003B6F),
-            secondary = secondary,
-            onSecondary = Color.White,
-            secondaryContainer = if (darkTheme) Color(0xFF34305F) else Color(0xFFE8E6FF),
-            onSecondaryContainer = if (darkTheme) Color(0xFFF0EEFF) else Color(0xFF25215D),
-        )
-    } else {
-        baseCommon
-    }
+    val common = baseCommon
 
     val isArtworkBlur = backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
     return if (darkTheme || isArtworkBlur) {
