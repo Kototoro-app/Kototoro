@@ -101,6 +101,10 @@
 -dontwarn okio.**
 -dontwarn okhttp3.**
 
+# zstd-kmp resolves these classes from native code via JNI FindClass.
+-keep class com.squareup.zstd.** { *; }
+-keep interface com.squareup.zstd.** { *; }
+
 # Keep the Mihon / Aniyomi bridge and model classes - preserve constructors for reflection
 -keep class org.skepsun.kototoro.mihon.** { *; }
 -keepclassmembers class org.skepsun.kototoro.mihon.** {
