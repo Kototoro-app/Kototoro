@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.launchIn
@@ -98,6 +99,9 @@ import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
+import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
+import org.skepsun.kototoro.core.parser.ContentSourceResolutionPipeline
+import org.skepsun.kototoro.ireader.IReaderExtensionManager
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.domain.ContentListMapper
@@ -528,6 +532,9 @@ class DetailsViewModel @Inject constructor(
 	mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
 	private val contentSourcesRepository: ContentSourcesRepository,
 	private val mihonExtensionManager: MihonExtensionManager,
+	private val aniyomiExtensionManager: AniyomiExtensionManager,
+	private val ireaderExtensionManager: IReaderExtensionManager,
+	private val contentSourceResolutionPipeline: ContentSourceResolutionPipeline,
 	private val sourcePresetsRepository: SourcePresetsRepository,
 	private val trackingSiteMatcher: TrackingSiteMatcher,
 	private val dataRepository: org.skepsun.kototoro.core.parser.ContentDataRepository,
@@ -984,10 +991,7 @@ class DetailsViewModel @Inject constructor(
 
 	private fun org.skepsun.kototoro.parsers.model.ContentSource.resolveDetailsSource(): org.skepsun.kototoro.parsers.model.ContentSource {
 		allEnabledSourceInfos.value.firstOrNull { it.mangaSource.name == name }?.mangaSource?.let { return it }
-		if (name.startsWith("MIHON_")) {
-			mihonExtensionManager.getMihonMangaSourceByName(name)?.let { return it }
-		}
-		val resolved = ContentSource(name)
+		val resolved = contentSourceResolutionPipeline.resolve(ContentSource(name))
 		return resolved.takeIf {
 			it.resolvedContentTypeForSnapshot() != null || it.locale.isNotBlank()
 		} ?: this
@@ -1727,7 +1731,11 @@ class DetailsViewModel @Inject constructor(
 		}
 
 		launchJob(Dispatchers.Default) {
-			mihonExtensionManager.changes.collect {
+			merge(
+				mihonExtensionManager.changes,
+				aniyomiExtensionManager.changes,
+				ireaderExtensionManager.changes,
+			).collect {
 				updateSourceOptions()
 				refreshResolvedPresentationState()
 			}

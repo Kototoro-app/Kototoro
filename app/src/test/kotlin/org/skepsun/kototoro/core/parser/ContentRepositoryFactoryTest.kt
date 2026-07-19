@@ -197,6 +197,17 @@ class ContentRepositoryFactoryTest {
 	}
 
 	@Test
+	fun `resolution pipeline resolves installed but disabled aniyomi source`() {
+		val source = namedSource("ANIYOMI_7")
+		val resolvedSource = mockk<AniyomiAnimeSource>(relaxed = true)
+		every { aniyomiContentSourceResolver.supports(source) } returns true
+		every { aniyomiContentSourceResolver.resolve(source) } returns resolvedSource
+		every { aniyomiContentSourceResolver.supports(resolvedSource) } returns false
+
+		assertSame(resolvedSource, sourceResolutionPipeline.resolve(source))
+	}
+
+	@Test
 	fun `factory caches by resolved source`() {
 		val shellA = namedSource("SHELL_A")
 		val shellB = namedSource("SHELL_B")

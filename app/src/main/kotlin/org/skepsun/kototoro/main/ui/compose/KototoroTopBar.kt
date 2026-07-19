@@ -254,27 +254,23 @@ fun KototoroTopBar(
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (isContentTypeFilterVisible) {
-                        SwipeableFilterChip(
-                            selectedType = selectedContentType,
-                            enabledTypes = enabledContentTypes,
-                            onTypeSelected = onContentTypeSelected,
-                            modifier = Modifier.zIndex(1f),
-                        )
-                    }
-                    TopBarControlSurface {
-                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
-                            Row(
-                                modifier = Modifier
-                                    .widthIn(min = CompactTopBarPillHeight)
-                                    .height(CompactTopBarPillHeight)
-                                    .padding(start = 2.dp, end = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                TopBarControlSurface {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
+                        Row(
+                            modifier = Modifier
+                                .widthIn(min = CompactTopBarPillHeight)
+                                .height(CompactTopBarPillHeight)
+                                .padding(start = 2.dp, end = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (isContentTypeFilterVisible) {
+                                SwipeableFilterChip(
+                                    selectedType = selectedContentType,
+                                    enabledTypes = enabledContentTypes,
+                                    onTypeSelected = onContentTypeSelected,
+                                    modifier = Modifier.zIndex(1f),
+                                )
+                            }
                             if (isSourceTagFilterVisible) {
                                 SourceTagDropdown(
                                     selectedTags = selectedSourceTags,
@@ -443,7 +439,6 @@ fun KototoroTopBar(
                     }
                 }
             }
-        }
         filterRailState?.let { state ->
             CompactTopBarFilterRail(
                 state = state,

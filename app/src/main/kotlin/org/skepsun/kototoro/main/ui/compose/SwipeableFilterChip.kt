@@ -7,53 +7,59 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.positionChange
-import kotlinx.coroutines.CancellationException
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.parsers.model.ContentType
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 
 private val CompactFilterChipSize = 36.dp
 
+/** A fixed-center, three-slot swipe filter: Video | Manga | Novel. */
 @Composable
 fun SwipeableFilterChip(
     selectedType: ContentType?,
@@ -64,92 +70,69 @@ fun SwipeableFilterChip(
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-
-    val currentSelectedType by rememberUpdatedState(selectedType)
     val currentOnTypeSelected by rememberUpdatedState(onTypeSelected)
+    var displayedSelectedType by remember { mutableStateOf(selectedType) }
+    LaunchedEffect(selectedType) {
+        displayedSelectedType = selectedType
+    }
+    val swipeThresholdPx = with(density) { 28.dp.toPx() }
 
-    val swipeThresholdPx = with(density) { 24.dp.toPx() }
-
-    // 0 = collapsed, 1 = fully expanded
     val expansion = remember { Animatable(0f) }
     var isPressed by remember { mutableStateOf(false) }
-    var highlightIndex by remember { mutableIntStateOf(1) } // 0=left, 1=center, 2=right
+    var highlightIndex by remember { mutableIntStateOf(1) }
     var dragOffsetX by remember { mutableStateOf(0f) }
-
     val types = listOf(ContentType.VIDEO, ContentType.MANGA, ContentType.NOVEL)
 
-    // Colors
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
-
-    // Icons
-    val iconVideo = painterResource(R.drawable.ic_content_video)
-    val iconManga = painterResource(R.drawable.ic_content_manga)
-    val iconNovel = painterResource(R.drawable.ic_content_novel)
+    val icons = listOf(
+        painterResource(R.drawable.ic_content_video),
+        painterResource(R.drawable.ic_content_manga),
+        painterResource(R.drawable.ic_content_novel),
+    )
     val iconAll = painterResource(R.drawable.ic_filter_content_type)
-
+    val filterDescription = stringResource(R.string.content_type_filter)
     val exp = expansion.value
-    val animatedWidth = CompactFilterChipSize * swipeableFilterChipWidthMultiplier(exp)
+    val slotWidth = CompactFilterChipSize * (1f + exp)
+    val panelWidth = CompactFilterChipSize * swipeableFilterChipWidthMultiplier(exp)
+    val panelShape = RoundedCornerShape(999.dp)
     val backdrop = LocalLiquidGlassBackdrop.current
     val exportedBackdrop = rememberLayerBackdrop()
-    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val useBackdrop = exp > 0.01f && LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+
+    fun selectCenterType(): Boolean {
+        if (ContentType.MANGA !in enabledTypes) return false
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        val nextType = resolveSwipeableFilterTapSelection(displayedSelectedType)
+        displayedSelectedType = nextType
+        currentOnTypeSelected(nextType)
+        return true
+    }
 
     Box(
         modifier = modifier
-            .width(animatedWidth)
+            .width(slotWidth)
             .height(CompactFilterChipSize)
-            .then(
-                if (useBackdrop) {
-                    Modifier
-                        .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(999.dp))
-                        .drawBackdrop(
-                            backdrop = backdrop,
-                            exportedBackdrop = exportedBackdrop,
-                            shape = { RoundedCornerShape(999.dp) },
-                            effects = {
-                                vibrancy()
-                                blur(4.dp.toPx())
-                                lens(
-                                    refractionHeight = 8.dp.toPx(),
-                                    refractionAmount = 8.dp.toPx(),
-                                    chromaticAberration = false,
-                                )
-                            },
-                        )
-                } else {
-                    Modifier.background(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
-                        shape = RoundedCornerShape(999.dp),
-                    )
-                },
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {}
-            )
-            .pointerInput(enabledTypes, currentSelectedType) {
-                if (enabledTypes.isEmpty()) {
-                    return@pointerInput
-                }
+            .semantics {
+                role = Role.Button
+                contentDescription = filterDescription
+                onClick { selectCenterType() }
+            }
+            .pointerInput(enabledTypes, displayedSelectedType) {
+                if (enabledTypes.isEmpty()) return@pointerInput
+
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    down.consume() // Consume immediately so DockedSearchBar doesn't trigger!
-
-                    val longPress = awaitLongPressOrCancellation(down.id)
-                    if (longPress == null) {
-                        return@awaitEachGesture
-                    }
-                    longPress.consume()
+                    down.consume()
 
                     isPressed = true
-                    highlightIndex = currentSelectedType
+                    highlightIndex = displayedSelectedType
                         ?.toSwipeableIndex()
-                        ?.takeIf { index -> types[index] in enabledTypes }
-                        ?: types.indexOf(ContentType.MANGA).takeIf { index -> index >= 0 && types[index] in enabledTypes }
-                        ?: types.indexOfFirst { type -> type in enabledTypes }.takeIf { it >= 0 }
+                        ?.takeIf { types[it] in enabledTypes }
+                        ?: ContentType.MANGA.toSwipeableIndex()!!.takeIf { types[it] in enabledTypes }
+                        ?: types.indexOfFirst { it in enabledTypes }.takeIf { it >= 0 }
                         ?: 1
                     dragOffsetX = 0f
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -167,16 +150,9 @@ fun SwipeableFilterChip(
                     try {
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull()
-
-                            if (change == null) break
-
-                            // Read position change BEFORE consuming, otherwise it returns zero!
+                            val change = event.changes.firstOrNull() ?: break
                             val moveX = change.positionChange().x
-                            
-                            // Consume the position change immediately to stop ANY parent scrolling/interactions
                             change.consume()
-                            
                             if (moveX != 0f) {
                                 dragOffsetX += moveX
                                 val newIndex = resolveSwipeableFilterIndex(dragOffsetX, swipeThresholdPx)
@@ -186,16 +162,20 @@ fun SwipeableFilterChip(
                                 }
                             }
                         } while (event.changes.any { it.pressed })
-                    } catch (e: CancellationException) {
+                    } catch (_: CancellationException) {
                         dragCanceled = true
                     }
 
                     isPressed = false
-
                     if (!dragCanceled) {
                         val newType = types[highlightIndex]
                         if (newType in enabledTypes) {
-                            val finalType = if (newType == currentSelectedType) null else newType
+                            val finalType = if (newType.toSwipeableIndex() == displayedSelectedType?.toSwipeableIndex()) {
+                                null
+                            } else {
+                                newType
+                            }
+                            displayedSelectedType = finalType
                             currentOnTypeSelected(finalType)
                         }
                     }
@@ -211,84 +191,75 @@ fun SwipeableFilterChip(
                     }
                 }
             },
-        contentAlignment = Alignment.Center,
     ) {
-        Canvas(
-            modifier = Modifier.fillMaxSize(),
+        Box(
+            modifier = Modifier
+                .requiredWidth(panelWidth)
+                .height(CompactFilterChipSize)
+                .offset(x = CompactFilterChipSize * 0.5f * exp)
+                .zIndex(1f)
+                .then(
+                    if (exp > 0.01f) {
+                        if (useBackdrop) {
+                            Modifier
+                                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.22f), panelShape)
+                                .drawBackdrop(
+                                    backdrop = backdrop!!,
+                                    exportedBackdrop = exportedBackdrop,
+                                    shape = { panelShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(4.dp.toPx())
+                                        lens(
+                                            refractionHeight = 8.dp.toPx(),
+                                            refractionAmount = 8.dp.toPx(),
+                                            chromaticAberration = false,
+                                        )
+                                    },
+                                )
+                        } else {
+                            Modifier.background(surfaceVariant.copy(alpha = 0.92f), panelShape)
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
         ) {
-            val baseW = size.height
-            val totalW = baseW * (1f + 2f * exp)
+            Canvas(modifier = Modifier.fillMaxSize()) {
+            val baseW = with(density) { CompactFilterChipSize.toPx() }
             val h = size.height
+            val totalW = baseW * (1f + 2f * exp)
             val radius = h / 2f
-            val cr = CornerRadius(radius, radius)
+            val cornerRadius = CornerRadius(radius, radius)
             val iconPadding = baseW * 0.25f
             val iconSize = baseW - iconPadding * 2f
-            val centerSlotLeft = (totalW - baseW) / 2f
 
-            if (exp > 0.01f) {
-                drawRoundRect(
-                    color = surfaceVariant.copy(alpha = exp),
-                    topLeft = Offset.Zero,
-                    size = Size(totalW, h),
-                    cornerRadius = cr,
-                )
-
+            if (exp > 0.01f && isPressed) {
                 val highlightX = when (highlightIndex) {
-                    0 -> centerSlotLeft - baseW
-                    2 -> centerSlotLeft + baseW
-                    else -> centerSlotLeft
+                    0 -> 0f
+                    2 -> baseW * 2f * exp
+                    else -> baseW * exp
                 }
                 drawRoundRect(
                     color = primaryContainer.copy(alpha = exp),
                     topLeft = Offset(highlightX, 0f),
                     size = Size(baseW, h),
-                    cornerRadius = cr,
+                    cornerRadius = cornerRadius,
                 )
             }
 
-            if (exp < 0.99f && !isPressed) {
-                // Collapsed: draw single icon
-                val collapsedIcon = when (selectedType) {
-                    ContentType.VIDEO, ContentType.HENTAI_VIDEO -> iconVideo
-                    ContentType.MANGA, ContentType.HENTAI_MANGA -> iconManga
-                    ContentType.NOVEL, ContentType.HENTAI_NOVEL -> iconNovel
-                    else -> iconAll
-                }
-                val tint = if (selectedType != null) onPrimaryContainer else onSurfaceVariant
-                val iconOffset = centerSlotLeft + (baseW - iconSize) / 2f
-                translate(left = iconOffset, top = (h - iconSize) / 2f) {
-                    with(collapsedIcon) {
-                        draw(
-                            size = Size(iconSize, iconSize),
-                            alpha = 1f - exp,
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
-                        )
-                    }
-                }
-            }
-
             if (exp > 0.01f) {
-                // Expanded: draw 3 icons
-                val icons = listOf(iconVideo, iconManga, iconNovel)
                 for (i in 0..2) {
                     val isEnabled = types[i] in enabledTypes
                     val centerX = when (i) {
-                        0 -> centerSlotLeft + baseW / 2f - baseW
-                        2 -> centerSlotLeft + baseW / 2f + baseW
-                        else -> centerSlotLeft + baseW / 2f
+                        0 -> baseW / 2f
+                        2 -> baseW / 2f + baseW * 2f * exp
+                        else -> baseW / 2f + baseW * exp
                     }
                     val isHighlighted = i == highlightIndex
-                    val alpha = if (isEnabled) {
-                        exp * if (isHighlighted) 1f else 0.5f
-                    } else {
-                        exp * 0.24f
-                    }
+                    val alpha = if (isEnabled) exp * if (isHighlighted) 1f else 0.5f else exp * 0.24f
                     val tint = if (isEnabled && isHighlighted) onPrimaryContainer else onSurfaceVariant
-
-                    translate(
-                        left = centerX - iconSize / 2f,
-                        top = (h - iconSize) / 2f,
-                    ) {
+                    translate(left = centerX - iconSize / 2f, top = (h - iconSize) / 2f) {
                         with(icons[i]) {
                             draw(
                                 size = Size(iconSize, iconSize),
@@ -296,6 +267,35 @@ fun SwipeableFilterChip(
                                 colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
                             )
                         }
+                    }
+                }
+            }
+            }
+        }
+        if (exp < 0.99f && !isPressed) {
+            Canvas(
+                modifier = Modifier
+                    .width(CompactFilterChipSize)
+                    .height(CompactFilterChipSize)
+                    .zIndex(2f),
+            ) {
+                val baseW = with(density) { CompactFilterChipSize.toPx() }
+                val iconPadding = baseW * 0.25f
+                val iconSize = baseW - iconPadding * 2f
+                val collapsedIcon = when (displayedSelectedType) {
+                    ContentType.VIDEO, ContentType.HENTAI_VIDEO -> icons[0]
+                    ContentType.MANGA, ContentType.HENTAI_MANGA -> icons[1]
+                    ContentType.NOVEL, ContentType.HENTAI_NOVEL -> icons[2]
+                    else -> iconAll
+                }
+                val tint = if (displayedSelectedType != null) onPrimaryContainer else onSurfaceVariant
+                translate(left = iconPadding, top = (size.height - iconSize) / 2f) {
+                    with(collapsedIcon) {
+                        draw(
+                            size = Size(iconSize, iconSize),
+                            alpha = 1f - exp,
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
+                        )
                     }
                 }
             }
@@ -310,9 +310,8 @@ private fun ContentType.toSwipeableIndex(): Int? = when (this) {
     else -> null
 }
 
-internal fun swipeableFilterChipWidthMultiplier(expansion: Float): Float {
-    return 1f + 2f * expansion.coerceIn(0f, 1f)
-}
+internal fun swipeableFilterChipWidthMultiplier(expansion: Float): Float =
+    1f + 2f * expansion.coerceIn(0f, 1f)
 
 internal fun resolveSwipeableFilterIndex(dragOffset: Float, threshold: Float): Int {
     val safeThreshold = threshold.coerceAtLeast(0f)
@@ -322,3 +321,6 @@ internal fun resolveSwipeableFilterIndex(dragOffset: Float, threshold: Float): I
         else -> 1
     }
 }
+
+internal fun resolveSwipeableFilterTapSelection(selectedType: ContentType?): ContentType? =
+    if (selectedType == ContentType.MANGA || selectedType == ContentType.HENTAI_MANGA) null else ContentType.MANGA
