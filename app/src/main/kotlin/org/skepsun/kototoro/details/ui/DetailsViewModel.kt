@@ -85,6 +85,7 @@ import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.details.domain.ReadingTimeUseCase
 import org.skepsun.kototoro.details.domain.RelatedContentUseCase
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.details.ui.model.ContentBranch
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
@@ -97,6 +98,7 @@ import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
+import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -164,6 +166,36 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import kotlinx.coroutines.channels.BufferOverflow
 import java.io.File
 import java.util.Locale
+
+private const val SYNTHETIC_ENTITY_GRAPH_SOURCE = "Entity Graph"
+private const val DETAILS_TRACE_TAG = "DetailsTrace"
+
+private fun Content?.detailsTraceSummary(): String {
+	return this?.let {
+		"id=${it.id} source=${it.source.name} locale=${it.source.locale} chapters=${it.chapters?.size ?: 0}"
+	} ?: "null"
+}
+
+private fun DetailsOrigin?.detailsTraceSummary(): String = when (this) {
+	null -> "null"
+	is DetailsOrigin.EntityGraph ->
+		"EntityGraph(entityId=$entityId, preferred=$preferredLocalMangaId, initial=$initialProjectionLocalMangaId)"
+	is DetailsOrigin.LocalMangaId -> "LocalMangaId(mangaId=$mangaId)"
+	is DetailsOrigin.LocalMangaContent -> "LocalMangaContent(${manga.detailsTraceSummary()})"
+	is DetailsOrigin.TrackingEntity -> "TrackingEntity(service=$serviceId, type=$entityTypeName, remote=$remoteId)"
+	is DetailsOrigin.TrackingItem -> "TrackingItem(service=$serviceId, remote=$remoteId)"
+}
+
+internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (this) {
+	is DetailsOrigin.EntityGraph -> initialProjectionLocalMangaId
+	is DetailsOrigin.LocalMangaId -> mangaId
+	is DetailsOrigin.LocalMangaContent -> manga.id
+	is DetailsOrigin.TrackingEntity,
+	is DetailsOrigin.TrackingItem,
+	-> null
+}
+
+internal fun Content.isSyntheticEntityGraphContent(): Boolean = source.name == SYNTHETIC_ENTITY_GRAPH_SOURCE
 
 private const val ENTITY_RELATION_SECTIONS_DEBOUNCE_MS = 120L
 private const val TRACKING_SUGGESTION_THRESHOLD = 0.9f
@@ -495,6 +527,7 @@ class DetailsViewModel @Inject constructor(
 	private val mergeBackAndAddFavouriteUseCase: MergeBackAndAddFavouriteUseCase,
 	mangaRepositoryFactory: org.skepsun.kototoro.core.parser.ContentRepository.Factory,
 	private val contentSourcesRepository: ContentSourcesRepository,
+	private val mihonExtensionManager: MihonExtensionManager,
 	private val sourcePresetsRepository: SourcePresetsRepository,
 	private val trackingSiteMatcher: TrackingSiteMatcher,
 	private val dataRepository: org.skepsun.kototoro.core.parser.ContentDataRepository,
@@ -526,11 +559,9 @@ class DetailsViewModel @Inject constructor(
 		org.skepsun.kototoro.core.nav.AppRouter.KEY_TEMPORARY_DETAILS,
 	) == true
 	private val originContent = (activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent)?.manga
-	private val initialLoadIntentOverride = when (val origin = activeExternalOrigin) {
-		is org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent -> ContentIntent.of(origin.manga)
-		is org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaId -> ContentIntent.of(origin.mangaId)
-		else -> null
-	}
+	private val initialLoadIntentOverride = activeExternalOrigin
+		?.initialProjectionLocalMangaIdOrNull()
+		?.let(ContentIntent::of)
 	private var loadingJob: Job = Job()
 	private var translateAvailabilityJob: Job? = null
 	private var readingSearchJob: Job? = null
@@ -540,11 +571,8 @@ class DetailsViewModel @Inject constructor(
 	private var translationCacheSourceLang: String? = null
 	private var translationCacheTargetLang: String? = null
 	private val activeMangaIdFlow = kotlinx.coroutines.flow.MutableStateFlow(
-		when (val origin = activeExternalOrigin) {
-			is org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaId -> origin.mangaId.takeIf { it != 0L }
-			is org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent -> origin.manga.id.takeIf { it != 0L }
-			else -> intent.mangaId.takeIf { it != 0L }
-		},
+		activeExternalOrigin?.initialProjectionLocalMangaIdOrNull()
+			?: intent.mangaId.takeIf { it != 0L },
 	)
 	val mangaId: Long get() = activeMangaIdFlow.value ?: intent.mangaId
 
@@ -567,6 +595,7 @@ class DetailsViewModel @Inject constructor(
 	private var activeEntityContextId: Long? = null
 	private var activeEntityContextBindings: List<EntityBinding> = emptyList()
 	private var activeEntityContextBoundLocalId: Long? = null
+	private var activeProjectionStoredContentType: ContentType? = null
 	private val sessionReadingProjectionLocalMangaId = MutableStateFlow<Long?>(null)
 	val supplementalMetadataProperties = MutableStateFlow<List<Pair<String, String>>>(emptyList())
 	val supplementalSections = MutableStateFlow<List<EntityRelationSection>>(emptyList())
@@ -942,9 +971,26 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private fun currentBaseContentType(): ContentType? {
-		return baseLoadedDetails?.toContent()?.source?.getContentType()
-			?: mangaDetails.safeValueOrNull()?.toContent()?.source?.getContentType()
-			?: originContent?.source?.getContentType()
+		return baseLoadedDetails?.toContent()?.source
+			?.resolveDetailsSource()
+			?.getContentType()
+			?: mangaDetails.safeValueOrNull()?.toContent()?.source
+				?.resolveDetailsSource()
+				?.getContentType()
+			?: originContent?.source
+				?.resolveDetailsSource()
+				?.getContentType()
+	}
+
+	private fun org.skepsun.kototoro.parsers.model.ContentSource.resolveDetailsSource(): org.skepsun.kototoro.parsers.model.ContentSource {
+		allEnabledSourceInfos.value.firstOrNull { it.mangaSource.name == name }?.mangaSource?.let { return it }
+		if (name.startsWith("MIHON_")) {
+			mihonExtensionManager.getMihonMangaSourceByName(name)?.let { return it }
+		}
+		val resolved = ContentSource(name)
+		return resolved.takeIf {
+			it.resolvedContentTypeForSnapshot() != null || it.locale.isNotBlank()
+		} ?: this
 	}
 
 	private fun currentMetadataContentType(): ContentType? {
@@ -961,9 +1007,14 @@ class DetailsViewModel @Inject constructor(
 	private fun currentMetadataLanguageCode(): String? {
 		return when (selectedMetadataSource.value) {
 			MetadataSourceSelection.Base -> {
-				baseLoadedDetails?.toContent()?.source?.locale
+				baseLoadedDetails?.toContent()?.source
+					?.resolveDetailsSource()
+					?.locale
 					?.takeIf { it.isNotBlank() }
-					?: originContent?.source?.locale?.takeIf { it.isNotBlank() }
+					?: originContent?.source
+						?.resolveDetailsSource()
+						?.locale
+						?.takeIf { it.isNotBlank() }
 			}
 			is MetadataSourceSelection.Tracking -> {
 				currentTrackingMetadataDetails()?.let { details ->
@@ -991,9 +1042,13 @@ class DetailsViewModel @Inject constructor(
 				.orEmpty()
 				.firstOrNull { it.isActive }
 				?.source
+				?.resolveDetailsSource()
 				?.locale
 				?.takeIf { it.isNotBlank() }
-			?: baseLoadedDetails?.local?.manga?.source?.locale?.takeIf { it.isNotBlank() }
+			?: baseLoadedDetails?.local?.manga?.source
+				?.resolveDetailsSource()
+				?.locale
+				?.takeIf { it.isNotBlank() }
 	}
 
 	private fun String.normalizedLanguageCode(): String {
@@ -1131,6 +1186,7 @@ class DetailsViewModel @Inject constructor(
 				)
 			}
 		}
+
 		return episodes.mapIndexed { index, episode ->
 			ContentChapter(
 				id = syntheticChapterId(details.service, details.remoteId, episode.url, index),
@@ -1440,9 +1496,37 @@ class DetailsViewModel @Inject constructor(
 		initialProjectionLocalMangaId: Long? = null,
 		populateSyntheticHeader: Boolean,
 	) {
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"entity.apply start entityId=$entityId preferred=$preferredLocalMangaId " +
+				"initial=$initialProjectionLocalMangaId populateSyntheticHeader=$populateSyntheticHeader " +
+				"activeMangaId=${activeMangaIdFlow.value} displayed=${mangaDetails.value?.toContent().detailsTraceSummary()}",
+		)
 		val entity = entityGraphRepository.getEntity(entityId) ?: return
 		isWorkDetails.value = entity.type == EntityType.WORK
-		val entityTrackingDetails = if (populateSyntheticHeader) {
+		val cachedProjectionId = (initialProjectionLocalMangaId ?: preferredLocalMangaId)
+			?.takeIf { it != 0L }
+		val cachedProjection = if (populateSyntheticHeader) {
+			cachedProjectionId?.let { projectionId ->
+				dataRepository.findContentById(projectionId, withChapters = true)
+				}
+		} else {
+			null
+		}
+		activeProjectionStoredContentType = cachedProjectionId?.let { projectionId ->
+			db.getMangaDao().find(projectionId)?.manga?.contentType?.let(::parseStoredContentType)
+		}
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"entity.apply cache entityId=$entityId cachedProjection=${cachedProjection.detailsTraceSummary()} " +
+				"storedContentType=$activeProjectionStoredContentType",
+		)
+		if (populateSyntheticHeader && cachedProjection != null && mangaDetails.value == null) {
+			baseLoadedDetails = ContentDetails(cachedProjection)
+			Log.i(DETAILS_TRACE_TAG, "entity.apply initialState=cached ${cachedProjection.detailsTraceSummary()}")
+			syncDisplayedState()
+		}
+		val entityTrackingDetails = if (populateSyntheticHeader && mangaDetails.value == null) {
 			loadEntityTrackingDetails(entity)
 		} else {
 			null
@@ -1450,7 +1534,7 @@ class DetailsViewModel @Inject constructor(
 		if (populateSyntheticHeader && mangaDetails.value == null) {
 			val entityCoverUrl = entityTrackingDetails?.coverUrl.normalizedImageUrl() ?: resolveEntityCoverUrl(entityId)
 			baseLoadedDetails = ContentDetails(
-				Content(
+				cachedProjection ?: Content(
 					id = entityId,
 					title = entity.primaryName,
 					altTitles = setOfNotNull(entityTrackingDetails?.altTitle?.takeIf { it.isNotBlank() }),
@@ -1465,8 +1549,12 @@ class DetailsViewModel @Inject constructor(
 					authors = emptySet(),
 					description = entityTrackingDetails?.description,
 					chapters = null,
-					source = syntheticSource("Entity Graph", ContentType.MANGA),
+					source = syntheticSource(SYNTHETIC_ENTITY_GRAPH_SOURCE, ContentType.MANGA),
 				),
+			)
+			Log.i(
+				DETAILS_TRACE_TAG,
+				"entity.apply initialState=synthetic entityId=$entityId source=$SYNTHETIC_ENTITY_GRAPH_SOURCE",
 			)
 			syncDisplayedState()
 		}
@@ -1504,11 +1592,14 @@ class DetailsViewModel @Inject constructor(
 			}
 		} ?: bindings.firstOrNull { it.isLocalReadingSource() }?.externalId?.toLongOrNull()
 		activeEntityContextBoundLocalId = boundLocalId
+		activeProjectionStoredContentType = boundLocalId?.let { projectionId ->
+			db.getMangaDao().find(projectionId)?.manga?.contentType?.let(::parseStoredContentType)
+		}
 		val localBindingCount = bindings.count { binding ->
 			binding.isLocalReadingSource()
 		}
 		android.util.Log.d(
-			"DetailsViewModel",
+			DETAILS_TRACE_TAG,
 			"applyEntityContext: entityId=$entityId, preferredLocalMangaId=$preferredLocalMangaId, " +
 				"initialProjectionLocalMangaId=$initialProjectionLocalMangaId, " +
 				"persistedPreferredLocalId=$persistedPreferredLocalId, boundLocalId=$boundLocalId, " +
@@ -1516,6 +1607,11 @@ class DetailsViewModel @Inject constructor(
 		)
 		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, boundLocalId)
 		sessionReadingProjectionLocalMangaId.value = requestedProjectionLocalId ?: boundLocalId
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"entity.apply bindings entityId=$entityId boundLocalId=$boundLocalId requestedProjection=$requestedProjectionLocalId " +
+				"activeOptions=${activeLocalSourceOptions.value.map { "${it.mangaId}:${it.source.name}:${it.source.locale}:${it.isActive}" }}",
+		)
 		updateSourceOptions()
 		if (boundLocalId != null && activeMangaIdFlow.value != boundLocalId) {
 			currentLoadIntentOverride = ContentIntent.of(boundLocalId)
@@ -1559,6 +1655,11 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	init {
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"vm.init origin=${activeExternalOrigin.detailsTraceSummary()} intentId=${intent.mangaId} " +
+				"initialOverride=${initialLoadIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
+		)
 		// Apply instant first paint only from the explicit DetailsOrigin payload.
 		// Raw intent seed should not predefine current details before real resolution.
 		baseLoadedDetails = originContent?.let { ContentDetails(it) }
@@ -1617,9 +1718,18 @@ class DetailsViewModel @Inject constructor(
 				sources.filterByPreset(preset)
 			}.collect { sources ->
 				allEnabledSourceInfos.value = sources
+				updateSourceOptions()
+				refreshResolvedPresentationState()
 				refreshReadingSearchSources()
 				allEnabledSourcesLoaded = true
 				maybeAutoSearchReadingSourcesForTrackingWork()
+			}
+		}
+
+		launchJob(Dispatchers.Default) {
+			mihonExtensionManager.changes.collect {
+				updateSourceOptions()
+				refreshResolvedPresentationState()
 			}
 		}
 
@@ -2421,9 +2531,10 @@ class DetailsViewModel @Inject constructor(
 			base != null -> base
 			else -> null
 		}
-		android.util.Log.d(
-			"DetailsViewModel",
-			"syncDisplayedState: baseId=${base?.id}, baseChapters=${base?.allChapters?.size ?: 0}, displayedId=${mangaDetails.value?.id}, displayedChapters=${mangaDetails.value?.allChapters?.size ?: 0}, tracking=${trackingDetails != null}",
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"state.sync base=${base?.toContent().detailsTraceSummary()} displayed=${mangaDetails.value?.toContent().detailsTraceSummary()} " +
+				"tracking=${trackingDetails != null} entityId=$activeEntityContextId activeMangaId=${activeMangaIdFlow.value}",
 		)
 		updateSourceOptions()
 		refreshReadingSearchSources()
@@ -2464,6 +2575,12 @@ class DetailsViewModel @Inject constructor(
 		resolvedMetadataContentType.value = currentMetadataContentType()
 		resolvedMetadataLanguage.value = metadataLanguage
 		resolvedReadingLanguage.value = readingLanguage
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"state.presentation metadataSource=${metadataSourceOptions.value.map { "${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
+				"readingSource=${readingSourceOptions.value.map { "${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
+				"metadataLanguage=$metadataLanguage readingLanguage=$readingLanguage contentType=${currentMetadataContentType()}",
+		)
 		refreshActiveLocalBrowserContent()
 		refreshTranslateActionVisibility(metadataLanguage)
 	}
@@ -2517,7 +2634,7 @@ class DetailsViewModel @Inject constructor(
 	private fun updateSourceOptions() {
 		val selection = selectedMetadataSource.value
 		val baseContent = baseLoadedDetails?.toContent() ?: originContent
-		val baseSource = baseContent?.source
+		val baseSource = baseContent?.source?.resolveDetailsSource()
 		val baseLooksLikeTracking = baseSource?.name?.startsWith("TRACKING_") == true
 		val metadata = buildList {
 			if (baseSource != null && !baseLooksLikeTracking) {
@@ -2578,28 +2695,34 @@ class DetailsViewModel @Inject constructor(
 				)
 			}
 		} else {
-			val source = baseLoadedDetails
-				?.toContent()
-				?.source
+			val source = baseSource
 				?.takeUnless { it.name.startsWith("TRACKING_") }
 				?: currentDisplayedDetails
 					?.toContent()
 					?.source
+					?.resolveDetailsSource()
 					?.takeUnless { it.name.startsWith("TRACKING_") }
 				?: currentDisplayedDetails
 					?.takeIf { it.isLocal }
 					?.local
 					?.manga
 					?.source
-				val spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes)
-				source
-					?.takeIf { candidate ->
-						isDetailsProjectionAllowed(
-							currentType = currentBaseContentType(),
-							projectionType = candidate.resolvedContentTypeForSnapshot(),
-							spaceAllowedTypes = spaceAllowedTypes,
-						)
-					}
+			val spaceAllowedTypes = detailsSpaceId?.let(spaceContentPolicy::allowedTypes)
+			val currentType = currentBaseContentType()
+			val projectionType = source?.resolvedContentTypeForSnapshot() ?: activeProjectionStoredContentType
+			val isAllowed = source != null && isDetailsProjectionAllowed(
+				currentType = currentType,
+				projectionType = projectionType,
+				spaceAllowedTypes = spaceAllowedTypes,
+			)
+			Log.i(
+				DETAILS_TRACE_TAG,
+				"state.readingCandidate source=${source?.name} sourceLocale=${source?.locale} " +
+					"currentType=$currentType projectionType=$projectionType spaceId=$detailsSpaceId " +
+					"spaceAllowedTypes=$spaceAllowedTypes storedContentType=$activeProjectionStoredContentType accepted=$isAllowed",
+			)
+			source
+				?.takeIf { isAllowed }
 					?.let {
 						listOf(
 							DetailsSourceOption(
@@ -2613,6 +2736,12 @@ class DetailsViewModel @Inject constructor(
 					}.orEmpty()
 		}
 		updateChapterSourceTabs()
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"state.options base=${baseContent.detailsTraceSummary()} activeLocal=${activeLocalOptions.map { "${it.mangaId}:${it.source.name}:${it.source.locale}:${it.isActive}" }} " +
+				"metadata=${metadataSourceOptions.value.map { "${it.key}:${it.source?.name}:${it.isSelected}" }} " +
+				"reading=${readingSourceOptions.value.map { "${it.key}:${it.source?.name}:${it.source?.locale}:${it.isSelected}" }}",
+		)
 	}
 
 	private fun updateChapterSourceTabs() {
@@ -3248,7 +3377,7 @@ class DetailsViewModel @Inject constructor(
 	}.mapLatest { (localMangaId, details) ->
 		val seed = localMangaId
 			?.let { db.getMangaDao().find(it)?.toContent() }
-			?: details?.toContent()
+			?: details?.toContent()?.takeUnless { it.isSyntheticEntityGraphContent() }
 		if (seed != null && settings.isRelatedContentEnabled) {
 			mangaListMapper.toListModelList(
 				manga = relatedContentUseCase(seed).orEmpty(),
@@ -4162,7 +4291,7 @@ class DetailsViewModel @Inject constructor(
 			if (manga.source.startsWith("TRACKING_")) {
 				return@mapNotNull null
 			}
-			val source = ContentSource(manga.source)
+			val source = ContentSource(manga.source).resolveDetailsSource()
 			val projectionType = parseStoredContentType(manga.contentType)
 				?: source.resolvedContentTypeForSnapshot()
 			if (!isDetailsProjectionAllowed(currentType, projectionType, spaceAllowedTypes)) {
@@ -5336,8 +5465,17 @@ class DetailsViewModel @Inject constructor(
 	private fun doLoad(force: Boolean) = launchLoadingJob(Dispatchers.Default) {
 		val resolvedIntent = currentLoadIntentOverride ?: intent
 		val requestedMangaId = resolvedIntent.mangaId.takeIf { it != ContentIntent.ID_NONE }
-		if (resolvedIntent.mangaId == 0L && resolvedIntent.manga == null) return@launchLoadingJob
-		detailsLoadUseCase.invoke(resolvedIntent, force)
+		Log.i(
+			DETAILS_TRACE_TAG,
+			"load.start force=$force intentId=${resolvedIntent.mangaId} requestedMangaId=$requestedMangaId " +
+				"activeMangaId=${activeMangaIdFlow.value} currentOverride=${currentLoadIntentOverride?.mangaId}",
+		)
+		if (resolvedIntent.mangaId == 0L && resolvedIntent.manga == null) {
+			Log.w(DETAILS_TRACE_TAG, "load.skip reason=emptyIntent")
+			return@launchLoadingJob
+		}
+		try {
+			detailsLoadUseCase.invoke(resolvedIntent, force)
 			.onEachWhile {
 				if (it.allChapters.isNotEmpty()) {
 					val manga = it.toContent()
@@ -5351,11 +5489,16 @@ class DetailsViewModel @Inject constructor(
 				}
 			}.collect { details ->
 				if (requestedMangaId != null && activeMangaIdFlow.value != requestedMangaId) {
+					Log.w(
+						DETAILS_TRACE_TAG,
+						"load.drop reason=staleRequest requestedMangaId=$requestedMangaId activeMangaId=${activeMangaIdFlow.value} details=${details.toContent().detailsTraceSummary()}",
+					)
 					return@collect
 				}
-				android.util.Log.d(
-					"DetailsViewModel",
-					"doLoad.collect: incoming details id=${details.id}, allChapters=${details.allChapters.size}, branches=${details.chapters.mapValues { it.value.size }}, selectedBranchBefore=${selectedBranch.value}",
+					Log.i(
+						DETAILS_TRACE_TAG,
+						"load.emit details=${details.toContent().detailsTraceSummary()} isLoaded=${details.isLoaded} " +
+							"selectedBranchBefore=${selectedBranch.value}",
 				)
 				// For EPUB sources, DetailsLoadUseCase already handles chapter expansion
 				// We just need to reset selectedBranch to null for EPUB chapters
@@ -5375,11 +5518,12 @@ class DetailsViewModel @Inject constructor(
 				} else {
 					details
 				}
-				android.util.Log.d(
-					"DetailsViewModel",
-					"doLoad.collect: final details id=${finalDetails.id}, allChapters=${finalDetails.allChapters.size}, branches=${finalDetails.chapters.mapValues { it.value.size }}, selectedBranchAfter=${selectedBranch.value}",
+				Log.i(
+					DETAILS_TRACE_TAG,
+					"load.apply details=${finalDetails.toContent().detailsTraceSummary()} selectedBranchAfter=${selectedBranch.value}",
 				)
 				baseLoadedDetails = finalDetails
+				activeProjectionStoredContentType = db.getMangaDao().find(finalDetails.id)?.manga?.contentType?.let(::parseStoredContentType)
 				refreshActiveEntitySourceOptions()
 				syncDisplayedState()
 				trackingRepository.clearReadUpdates(finalDetails.id)
@@ -5389,6 +5533,12 @@ class DetailsViewModel @Inject constructor(
 					restoreEntityMetadataSourceSelection(entityId = localEntityId)
 				}
 				}
+		} catch (error: Throwable) {
+			if (error !is CancellationException) {
+				Log.e(DETAILS_TRACE_TAG, "load.failed force=$force requestedMangaId=$requestedMangaId", error)
+			}
+			throw error
+		}
 	}
 
 	private fun contentTitleFallback(service: org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService): String {

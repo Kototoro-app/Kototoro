@@ -40,6 +40,10 @@ public data class ContentChapter(
 	 */
 	@JvmField public val branch: String?,
 	@JvmField public val source: ContentSource,
+	/**
+	 * Opaque source-owned metadata preserved across storage and adapter round trips.
+	 */
+	@JvmField public val sourceData: String? = null,
 ) {
 
 	@Deprecated("Use title instead of name", ReplaceWith("ContentChapter(id, title, number, volume, url, scanlator, uploadDate, branch, source)"))
@@ -53,7 +57,7 @@ public data class ContentChapter(
 		uploadDate: Long,
 		branch: String?,
 		source: ContentSource,
-		@Suppress("UNUSED_PARAMETER") dummy: Boolean = false,
+		@Suppress("UNUSED_PARAMETER") dummy: Boolean,
 	) : this(
 		id = id,
 		title = name,

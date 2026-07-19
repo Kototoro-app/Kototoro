@@ -84,6 +84,10 @@ builder.addInterceptor(CloudflareInterceptor())
 - `CloudflareInterceptor` is third and provides the concrete Mihon runtime type. Kototoro's existing downstream Cloudflare detector remains responsible for its host-specific challenge flow.
 - Additional Kototoro interceptors may follow these three entries.
 - `BrotliInterceptor` must be filtered from both `interceptors` and `networkInterceptors` when copying the Kototoro base client. Mihon extensions manage Brotli compatibility themselves and may reject a default client that installs it.
+- Keep a separate legacy compatibility client exposed through the existing
+  `cloudflareClient` property with `BrotliInterceptor` in its network chain.
+  Legacy `HttpSource` clients use this path; `KeiSource` must continue using
+  the Brotli-free `NetworkHelper.client` path.
 - The host runtime must package `okhttp3.zstd.Zstd` through the OkHttp-version-matched `okhttp-zstd` artifact. Dynamic extension references are not visible to the app compiler, so keep a host-side reference and retain `okhttp3.**` in release rules.
 
 ### 4. Validation & Error Matrix
@@ -223,11 +227,16 @@ suspend fun getMangaUpdate(
 ): SMangaUpdate
 ```
 
-For a full details load, call it with `chapters = emptyList()`, `fetchDetails = true`, and `fetchChapters = true`.
+For a full details load, pass the current content's chapter snapshots when
+available, otherwise an empty list; use `fetchDetails = true` and
+`fetchChapters = true`.
 
 ### 3. Contracts
 
 - `MihonMangaRepository.getDetailsImpl` makes one logical combined update call and consumes both `SMangaUpdate.manga` and `SMangaUpdate.chapters`.
+- Existing `Content.chapters` are converted back to `SChapter` snapshots for
+  the combined call, so sources that use the supplied chapter state receive
+  the same context as the UI currently holds.
 - Do not split a full details load into repository calls to `getMangaDetails` and `getChapterList`.
 - Legacy sources remain supported by the default `Source.getMangaUpdate` implementation, which delegates to the separate legacy-compatible methods.
 - Sources overriding `getMangaUpdate` may leave `mangaDetailsRequest` and `chapterListRequest` unsupported.
@@ -296,4 +305,120 @@ val sourceChapter = contentChapter.toMihonChapter()
 // Correct: use a defensive snapshot when available, with generic conversion as fallback.
 val sourceChapter = chapterSnapshots[contentChapter.url]?.snapshot()
     ?: contentChapter.toMihonChapter()
+```
+
+## Scenario: Entity Graph Projection Details Resolution
+
+### 1. Scope / Trigger
+
+Applies when a details route is opened from History, Favourites, or another
+Entity Graph entry and the route carries a concrete local projection ID. It
+also applies when a cached Mihon projection must recover its source, locale,
+or content type before the enabled-source registry has finished loading.
+
+### 2. Signatures
+
+```kotlin
+data class DetailsOrigin.EntityGraph(
+    val entityId: Long,
+    val preferredLocalMangaId: Long? = null,
+    val initialProjectionLocalMangaId: Long? = null,
+)
+
+data class MangaEntity(
+    // Persisted projection identity and type fallback.
+    val source: String,
+    val contentType: String? = null,
+)
+
+private fun ContentSource.resolveDetailsSource(): ContentSource
+```
+
+The history/navigation boundary must pass the originating projection's local
+`manga.id` as `initialProjectionLocalMangaId`; the Work/entity ID is not a
+substitute.
+
+### 3. Contracts
+
+- Resolve and load the explicit initial projection before constructing a
+  synthetic Entity Graph header. When available, the cached projection is the
+  first details state and remains the provider/chapter/related-content seed.
+- Synthetic `Entity Graph` content is presentation-only. It must never be
+  passed to `ContentRepositoryFactory`, chapter mapping, related-content
+  loading, or a Mihon repository when a real local projection exists.
+- Resolve a cached `MIHON_*` source in this order: enabled source registry,
+  installed Mihon source registry (including installed-but-disabled sources),
+  then the generic `ContentSource` fallback. The resolved source supplies the
+  display locale and source content type.
+- Use persisted `MangaEntity.contentType` as the projection type fallback
+  when the anonymous cached source cannot infer its real type. Keep the
+  content-type/Space compatibility filter from issue 409; source resolution
+  fixes its inputs and must not remove the filter.
+- Re-run source options and presentation resolution when the Mihon extension
+  manager changes, so a source installed after the first render can restore
+  language and reading-source labels without pull-to-refresh.
+- Do not infer a language from the Work/entity header or treat an empty locale
+  as a valid language.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Entity Graph has a valid initial projection | Load that local projection first and preserve its ID |
+| Initial projection is absent or missing | Keep the entity route diagnosable; do not use the entity ID as a local manga ID |
+| Cached projection exists before enabled sources load | Show its metadata/reading source from the cached projection where possible |
+| Mihon source is installed but disabled | Resolve its locale and content type from `MihonExtensionManager` |
+| Cached source type differs from real Mihon source type | Prefer persisted projection type and real-source resolution; retain issue 409 filtering |
+| Synthetic `Entity Graph` source reaches a provider request | Invalid; provider lookup may return `EmptyContentRepository` |
+| Source registry changes after first render | Recompute source options and language without requiring manual refresh |
+| Source locale is blank | Display unknown language; never display a guessed locale |
+
+### 5. Good / Base / Bad Cases
+
+- Good: History passes the AllManga projection ID, the cached projection is
+  displayed immediately, and the installed source later supplies `en` for
+  both metadata and reading-source presentation.
+- Base: An enabled ordinary Mihon source resolves from the active registry and
+  behaves as before.
+- Bad: Seed the ViewModel with the Work ID or synthetic `Entity Graph` source,
+  then query providers before applying the cached projection; this hides the
+  real reading source and can trigger unsupported-source failures.
+
+### 6. Tests Required
+
+- Test that an Entity Graph origin preserves `initialProjectionLocalMangaId`
+  through ViewModel initialization and projection selection.
+- Test that a cached real projection is preferred over a synthetic entity
+  header and is not replaced by an `Entity Graph` provider seed.
+- Test that persisted `contentType` restores projection filtering when the
+  anonymous cached Mihon source has a different inferred type.
+- Test source resolution for an installed-but-disabled Mihon source and
+  assert that its locale is exposed in metadata/reading-source state.
+- Test that issue 409 content-type filtering still rejects an incompatible
+  projection while accepting a projection after source/type reconciliation.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```kotlin
+val origin = DetailsOrigin.EntityGraph(entityId = entity.id)
+val source = ContentSource(cachedManga.source)
+val provider = contentRepositoryFactory.create(Content(entityId, source))
+```
+
+Correct:
+
+```kotlin
+val origin = DetailsOrigin.EntityGraph(
+    entityId = entity.id,
+    initialProjectionLocalMangaId = historyContent.id,
+)
+val cachedProjection = dataRepository.findContentById(
+    origin.initialProjectionLocalMangaId,
+    withChapters = true,
+)
+val source = cachedProjection.source.resolveDetailsSource()
+// Use cachedProjection for provider/chapter flows; synthetic entity content
+// remains a presentation fallback only.
 ```

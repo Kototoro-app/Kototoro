@@ -5,6 +5,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.toFloatOrNullCompat
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import org.skepsun.kototoro.core.model.isAdultTagKeyword
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.Content
@@ -30,6 +33,7 @@ fun SManga.toKotoContent(
     chapters: List<ContentChapter>? = null,
     publicUrl: String = "",
 ): Content {
+	val safeMemo = runCatching { memo }.getOrDefault(JsonObject(emptyMap()))
     // Get baseUrl from source if available to resolve relative URLs
     val baseUrl = (source.catalogueSource as? HttpSource)?.baseUrl ?: ""
     
@@ -147,8 +151,9 @@ fun SManga.toKotoContent(
         },
         description = safeDescription,
         chapters = chapters,
-        source = source,
-    )
+		source = source,
+		sourceData = safeMemo.takeIf { it.isNotEmpty() }?.toString(),
+	)
 }
 
 /**
@@ -214,8 +219,11 @@ fun Content.toMihonManga(): SManga {
             else -> SManga.UNKNOWN
         }
         this.thumbnail_url = this@toMihonManga.coverUrl
-        this.initialized = true
-        try {
+		this.initialized = true
+		this@toMihonManga.sourceData
+			?.let { sourceData -> runCatching { Json.parseToJsonElement(sourceData).jsonObject }.getOrNull() }
+			?.let { this.memo = it }
+		try {
             this.genres = this@toMihonManga.tags.map { it.title }
             this.altTitles = this@toMihonManga.altTitles.toList()
             this.banner = this@toMihonManga.largeCoverUrl
@@ -241,6 +249,7 @@ fun SChapter.toKotoChapter(
     overrideNumber: Float? = null,
     parentUrl: String? = null,
 ): ContentChapter {
+	val safeMemo = runCatching { memo }.getOrDefault(JsonObject(emptyMap()))
     val chapterId = generateChapterId(url, source.name, parentUrl)
     val finalNumber = overrideNumber ?: try {
         number?.toFloatOrNullCompat() ?: (if (chapter_number >= 0) chapter_number else 0f)
@@ -271,8 +280,9 @@ fun SChapter.toKotoChapter(
         scanlator = finalScanlator,
         uploadDate = date_upload,
         branch = finalScanlator, // Use scanlator as branch for grouping
-        source = source,
-    )
+		source = source,
+		sourceData = safeMemo.takeIf { it.isNotEmpty() }?.toString(),
+	)
 }
 
 /**
@@ -285,14 +295,17 @@ fun ContentChapter.toMihonChapter(): SChapter {
         this.chapter_number = this@toMihonChapter.number
         this.date_upload = this@toMihonChapter.uploadDate
         this.scanlator = this@toMihonChapter.scanlator
-        try {
-            this.number = this@toMihonChapter.number.toString()
+		try {
+			this.number = this@toMihonChapter.number.toString()
             this.volume = this@toMihonChapter.volume.takeIf { it > 0 }?.toString()
             this.scanlators = this@toMihonChapter.scanlator?.let { listOf(it) } ?: emptyList()
-        } catch (e: NoSuchMethodError) {
-            // Fallback
-        }
-    }
+		} catch (e: NoSuchMethodError) {
+			// Fallback
+		}
+		this@toMihonChapter.sourceData
+			?.let { sourceData -> runCatching { Json.parseToJsonElement(sourceData).jsonObject }.getOrNull() }
+			?.let { this.memo = it }
+	}
 }
 
 // ============ Page <-> ContentPage ============

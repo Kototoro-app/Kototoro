@@ -62,9 +62,10 @@ fun MangaEntity.toContent(tags: Set<ContentTag>, chapters: List<ChapterEntity>?)
             } else {
                 chapter
             }
-        },
-        description = this.description,
-    )
+		},
+		description = this.description,
+		sourceData = this.sourceData,
+	)
 }
 fun MangaWithTags.toContent(chapters: List<ChapterEntity>? = null) = manga.toContent(tags.toContentTags(), chapters)
 
@@ -79,8 +80,9 @@ fun ChapterEntity.toContentChapter() = ContentChapter(
 	scanlator = scanlator,
 	uploadDate = uploadDate,
 	branch = branch,
-	source = ContentSource(source),
-)
+		source = ContentSource(source),
+		sourceData = sourceData,
+	)
 
 fun Collection<ChapterEntity>.toContentChapters() = map { it.toContentChapter() }
 
@@ -102,6 +104,7 @@ fun Content.toEntity() = MangaEntity(
 	authors = authors.joinToString(VALUES_DIVIDER.toString()),
 	description = description,
 	contentType = source.resolvedContentTypeForSnapshot()?.name,
+	sourceData = sourceData,
 )
 
 fun ContentTag.toEntity() = TagEntity(
@@ -124,10 +127,11 @@ fun Iterable<IndexedValue<ContentChapter>>.toEntities(mangaId: Long) = map { (in
 		url = chapter.url,
 		scanlator = chapter.scanlator,
 		uploadDate = chapter.uploadDate,
-		branch = chapter.branch,
-		source = chapter.source.name,
-		index = index,
-	)
+			branch = chapter.branch,
+			source = chapter.source.name,
+			index = index,
+			sourceData = chapter.sourceData,
+		)
 }
 
 // Other

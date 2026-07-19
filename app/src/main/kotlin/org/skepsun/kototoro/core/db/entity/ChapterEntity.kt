@@ -29,4 +29,5 @@ data class ChapterEntity(
 	@ColumnInfo(name = "branch") val branch: String?,
 	@ColumnInfo(name = "source") val source: String,
 	@ColumnInfo(name = "index") val index: Int,
+	@ColumnInfo(name = "source_data") val sourceData: String? = null,
 )

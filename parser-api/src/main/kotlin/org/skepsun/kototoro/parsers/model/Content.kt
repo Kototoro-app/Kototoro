@@ -69,6 +69,10 @@ public data class Content(
 	 * Content source
 	 */
 	@JvmField public val source: ContentSource,
+	/**
+	 * Opaque source-owned metadata preserved across storage and adapter round trips.
+	 */
+	@JvmField public val sourceData: String? = null,
 ) {
 
 	@Deprecated("Accepts rating as Int; use Float in range 0..1 instead")

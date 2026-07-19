@@ -54,24 +54,17 @@ class KotoNetworkHelper(
     
     /**
      * The OkHttpClient for Mihon extensions.
-     * We rebuild without GZipInterceptor to prevent incorrect Content-Encoding headers.
+     *
+     * Start from the application client so proxy, TLS, cache, DNS, and
+     * connection settings survive. Only the interceptor lists are rebuilt:
+     * Mihon/Keiyoushi sources own response compression.
      */
     override val client: OkHttpClient = run {
-        val builder = OkHttpClient.Builder()
-        
-        // Copy configuration from base client
-        builder.connectTimeout(baseClient.connectTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-        builder.readTimeout(baseClient.readTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-        builder.writeTimeout(baseClient.writeTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-        builder.callTimeout(baseClient.callTimeoutMillis.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
-        builder.cookieJar(baseClient.cookieJar)
-        builder.dns(baseClient.dns)
-        builder.cache(baseClient.cache)
-        builder.dispatcher(baseClient.dispatcher)
-        builder.connectionPool(baseClient.connectionPool)
-        builder.followRedirects(baseClient.followRedirects)
-        builder.followSslRedirects(baseClient.followSslRedirects)
-        builder.retryOnConnectionFailure(baseClient.retryOnConnectionFailure)
+        val builder = baseClient.newBuilder().apply {
+            interceptors().clear()
+            networkInterceptors().clear()
+            cookieJar(cookieJar)
+        }
         
         // Newer Mihon extensions validate these concrete interceptors and their order.
         builder.addInterceptor(UncaughtExceptionInterceptor())
@@ -80,7 +73,7 @@ class KotoNetworkHelper(
         
         // Mihon extensions handle compression and require Brotli to be absent from the default client.
         baseClient.interceptors.forEach { interceptor ->
-            if (interceptor.javaClass.simpleName != "GZipInterceptor" && interceptor !== BrotliInterceptor) {
+            if (isCompatibleInterceptor(interceptor) && !isDefaultMihonInterceptor(interceptor)) {
                 builder.addInterceptor(interceptor)
             } else {
                 android.util.Log.d("KotoNetworkHelper", "Skipping ${interceptor.javaClass.simpleName} for Mihon client")
@@ -89,10 +82,10 @@ class KotoNetworkHelper(
         
         // Copy compatible network interceptors.
         baseClient.networkInterceptors.forEach { interceptor ->
-            if (interceptor !== BrotliInterceptor) {
+            if (isCompatibleInterceptor(interceptor)) {
                 builder.addNetworkInterceptor(interceptor)
             } else {
-                android.util.Log.d("KotoNetworkHelper", "Skipping BrotliInterceptor for Mihon client")
+                android.util.Log.d("KotoNetworkHelper", "Skipping ${interceptor.javaClass.simpleName} for Mihon client")
             }
         }
 
@@ -326,12 +319,32 @@ class KotoNetworkHelper(
         
         builder.build()
     }
-    
+
+    private fun isCompatibleInterceptor(interceptor: okhttp3.Interceptor): Boolean {
+        return interceptor !== BrotliInterceptor &&
+            interceptor.javaClass.simpleName != "GZipInterceptor" &&
+            interceptor.javaClass.simpleName != "IgnoreGzipInterceptor"
+    }
+
+    private fun isDefaultMihonInterceptor(interceptor: okhttp3.Interceptor): Boolean {
+        return interceptor.javaClass.simpleName in setOf(
+            "UncaughtExceptionInterceptor",
+            "UserAgentInterceptor",
+            "CloudflareInterceptor",
+        )
+    }
+
     /**
-     * @deprecated Since extension-lib 1.5, CloudFlare is handled by the regular client.
+     * Compatibility client for legacy Mihon sources that relied on Mihon's
+     * pre-1.6 default Brotli network interceptor.
+     *
+     * KeiSource must continue using [client], which intentionally omits this
+     * interceptor and installs CompressionInterceptor itself.
      */
     @Deprecated("The regular client handles Cloudflare by default")
-    override val cloudflareClient: OkHttpClient = client
+    override val cloudflareClient: OkHttpClient = client.newBuilder()
+        .addNetworkInterceptor(BrotliInterceptor)
+        .build()
     
     /**
      * Returns the default user agent string.

@@ -62,9 +62,14 @@ abstract class HttpSource : CatalogueSource {
 
     /**
      * Default network client for doing requests.
+     *
+     * Legacy Mihon sources historically received Brotli decoding through
+     * NetworkHelper.cloudflareClient. KeiSource overrides this property and
+     * uses the Brotli-free NetworkHelper.client required by its own
+     * CompressionInterceptor contract.
      */
     open val client: OkHttpClient
-        get() = network.client
+        get() = network.cloudflareClient
 
     /**
      * Generates a unique ID for the source.
@@ -238,7 +243,20 @@ abstract class HttpSource : CatalogueSource {
 
     protected abstract fun latestUpdatesRequest(page: Int): Request
 
-    protected abstract fun latestUpdatesParse(response: Response): MangasPage
+	protected abstract fun latestUpdatesParse(response: Response): MangasPage
+
+	// ======== Related manga ========
+
+	override val supportsRelatedMangas: Boolean
+		get() = false
+
+	protected open fun relatedMangaListRequest(manga: SManga): Request {
+		throw UnsupportedOperationException("Related manga request is not implemented")
+	}
+
+	protected open fun relatedMangaListParse(response: Response): List<SManga> {
+		throw UnsupportedOperationException("Related manga parser is not implemented")
+	}
 
     // ======== Content details ========
 

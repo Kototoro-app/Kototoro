@@ -27,4 +27,5 @@ data class MangaEntity(
 	@ColumnInfo(name = "source") val source: String,
 	@ColumnInfo(name = "description") val description: String? = null,
 	@ColumnInfo(name = "content_type") val contentType: String? = null,
+	@ColumnInfo(name = "source_data") val sourceData: String? = null,
 )

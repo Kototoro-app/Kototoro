@@ -395,6 +395,23 @@ fun DetailsScreen(
     val initialContent = remember { PendingDetailsNavigation.lastContent() }
     val content = mangaDetails?.toContent() ?: initialContent
     val contentType = resolvedMetadataContentType
+	LaunchedEffect(
+		content?.id,
+		content?.source?.name,
+		content?.source?.locale,
+		metadataSourceOptions,
+		readingSourceOptions,
+		resolvedMetadataLanguage,
+		resolvedReadingLanguage,
+	) {
+		Log.i(
+			"DetailsTrace",
+			"ui.state contentId=${content?.id} contentSource=${content?.source?.name} " +
+				"contentLocale=${content?.source?.locale} metadata=${metadataSourceOptions.map { "${it.key}:${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
+				"reading=${readingSourceOptions.map { "${it.key}:${it.source?.name}:${it.source?.locale}:${it.isSelected}" }} " +
+				"metadataLanguage=$resolvedMetadataLanguage readingLanguage=$resolvedReadingLanguage",
+		)
+	}
     val selectedMetadataOption = metadataSourceOptions.firstOrNull { it.isSelected }
         ?: metadataSourceOptions.firstOrNull()
     val metadataBrowserTarget = remember(selectedMetadataOption, content) {

@@ -41,6 +41,12 @@ internal fun Content.hasCompleteDetailsSnapshot(): Boolean {
 	return !chapters.isNullOrEmpty() && description != null
 }
 
+private const val DETAILS_TRACE_TAG = "DetailsTrace"
+
+private fun Content.traceSummary(): String {
+	return "id=$id source=${source.name} locale=${source.locale} chapters=${chapters?.size ?: 0}"
+}
+
 class DetailsLoadUseCase @Inject constructor(
 	private val mangaDataRepository: ContentDataRepository,
 	private val localContentRepository: LocalMangaRepository,
@@ -56,6 +62,11 @@ class DetailsLoadUseCase @Inject constructor(
 			"Cannot resolve intent $intent"
 		}
 		val manga = mangaDataRepository.resolveStoredProjection(intentManga)
+		android.util.Log.i(
+			DETAILS_TRACE_TAG,
+			"load.invoke intentId=${intent.mangaId} force=$force intentManga=${intentManga.traceSummary()} " +
+				"resolvedManga=${manga.traceSummary()}",
+		)
 		val override = mangaDataRepository.getOverride(manga.id)
 		emit(
 			ContentDetails(
@@ -146,10 +157,13 @@ class DetailsLoadUseCase @Inject constructor(
 		}
 		val hasCachedDetails = !force && cachedProjection?.hasCompleteDetailsSnapshot() == true
 
-		val skipNetworkLoad = !force && (networkState.isOfflineOrRestricted() || hasCachedDetails)
+		val isOfflineOrRestricted = !force && networkState.isOfflineOrRestricted()
+		val skipNetworkLoad = !force && (isOfflineOrRestricted || hasCachedDetails)
 		android.util.Log.d(
-			"DetailsLoadUseCase",
-			"loadRemote: mangaId=${manga.id}, localContentChapters=${localContent?.manga?.chapters?.size ?: 0}, skipNetworkLoad=$skipNetworkLoad, hasCachedDetails=$hasCachedDetails, force=$force",
+			DETAILS_TRACE_TAG,
+			"load.remote manga=${manga.traceSummary()} cached=${cachedProjection?.traceSummary()} " +
+				"localContent=${localContent?.manga?.traceSummary()} skipNetworkLoad=$skipNetworkLoad " +
+				"hasCachedDetails=$hasCachedDetails offline=$isOfflineOrRestricted",
 		)
 
 		if (skipNetworkLoad) {
@@ -195,7 +209,7 @@ class DetailsLoadUseCase @Inject constructor(
 		}
 		val remoteResult = remoteDeferred.await()
 		android.util.Log.d(
-			"DetailsLoadUseCase",
+			DETAILS_TRACE_TAG,
 			"loadRemote: remoteDeferred completed for mangaId=${manga.id}, success=${remoteResult.isSuccess}, exception=${remoteResult.exceptionOrNull()?.javaClass?.simpleName}",
 		)
 		val remoteDetails = if (localContent != null) {
@@ -208,7 +222,7 @@ class DetailsLoadUseCase @Inject constructor(
 		if (remoteDetails != null) {
 			val storedDetails = mangaDataRepository.updateProjectionSnapshot(remoteDetails)
 			android.util.Log.d(
-				"DetailsLoadUseCase",
+				DETAILS_TRACE_TAG,
 				"loadRemote: remote details ready, mangaId=${storedDetails.id}, chapters=${storedDetails.chapters?.size ?: 0}, localChapters=${localContent?.manga?.chapters?.size ?: 0}",
 			)
 			emit(
@@ -238,6 +252,10 @@ class DetailsLoadUseCase @Inject constructor(
 	private suspend fun getDetails(seed: Content, force: Boolean) = runCatchingCancellable {
 		val start = SystemClock.elapsedRealtime()
 		val repository = mangaRepositoryFactory.create(seed.source)
+		android.util.Log.i(
+			DETAILS_TRACE_TAG,
+			"load.provider start seed=${seed.traceSummary()} force=$force repository=${repository::class.java.name}",
+		)
 		
 		// 对于EPUB源（NoveliaWenku等），强制从服务器获取最新章节列表
 		// 这样可以确保未下载的EPUB临时章节不会丢失
@@ -251,7 +269,7 @@ class DetailsLoadUseCase @Inject constructor(
 			repository.getDetails(seed)
 		}
 		android.util.Log.d(
-			"DetailsLoadUseCase",
+			DETAILS_TRACE_TAG,
 			"getDetails: repository returned in ${SystemClock.elapsedRealtime() - start}ms for mangaId=${seed.id}",
 		)
 		

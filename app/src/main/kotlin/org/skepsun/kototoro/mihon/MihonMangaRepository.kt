@@ -140,7 +140,7 @@ class MihonMangaRepository(
             withMihonSourceContext {
                 mihonSource.getMangaUpdate(
                     manga = sContent,
-                    chapters = emptyList(),
+                    chapters = manga.chapters.orEmpty().map(ContentChapter::toMihonChapter),
                     fetchDetails = true,
                     fetchChapters = true,
                 )
@@ -430,6 +430,25 @@ class MihonMangaRepository(
     private fun SChapter.snapshot(): SChapter = SChapter.create().also { it.copyFrom(this) }
     
     override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
+        if (mihonSource.supportsRelatedMangas && !mihonSource.disableRelatedMangas) {
+            val manga = mangaSnapshots[seed.url]?.copy() ?: seed.toMihonManga()
+            val related = rethrowMihonWrappedExceptions {
+                withMihonSourceContext {
+                    mihonSource.fetchRelatedMangaList(manga)
+                }
+            }
+
+            return related.map { relatedManga ->
+                rememberMihonManga(relatedManga)
+                relatedManga.toKotoContent(
+                    source = source,
+                    publicUrl = (mihonSource as? HttpSource)?.getPublicContentUrl(relatedManga) ?: "",
+                )
+            }
+        }
+
+        if (mihonSource.disableRelatedMangasBySearch) return emptyList()
+
         return RelatedContentSearchFallback.find(seed) { query ->
             getList(
                 offset = 0,

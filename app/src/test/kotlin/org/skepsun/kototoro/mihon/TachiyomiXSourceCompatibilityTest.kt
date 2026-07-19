@@ -28,6 +28,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.CookieJar
 import okhttp3.Headers
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -44,6 +45,7 @@ import org.skepsun.kototoro.core.cache.SafeDeferred
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
+import org.skepsun.kototoro.mihon.model.toKotoContent
 import org.skepsun.kototoro.parsers.model.ContentPage
 import rx.Observable
 
@@ -71,6 +73,55 @@ class TachiyomiXSourceCompatibilityTest {
 		assertEquals(CloudflareInterceptor::class.java, network.client.interceptors[2].javaClass)
 		assertFalse(network.client.interceptors.any { it === BrotliInterceptor })
 		assertFalse(network.client.networkInterceptors.any { it === BrotliInterceptor })
+	}
+
+	@Test
+	fun `default client keeps base settings and removes legacy compression interceptors`() {
+		val proxy = java.net.Proxy(
+			java.net.Proxy.Type.HTTP,
+			java.net.InetSocketAddress("127.0.0.1", 8123),
+		)
+		val baseClient = OkHttpClient.Builder()
+			.proxy(proxy)
+			.addInterceptor(GZipInterceptor())
+			.addNetworkInterceptor(IgnoreGzipInterceptor())
+			.build()
+		val network = KotoNetworkHelper(
+			baseClient = baseClient,
+			cookieJar = CookieJar.NO_COOKIES,
+		)
+
+		assertEquals(proxy, network.client.proxy)
+		assertFalse(network.client.interceptors.any { it.javaClass.simpleName == "GZipInterceptor" })
+		assertFalse(network.client.networkInterceptors.any { it.javaClass.simpleName == "IgnoreGzipInterceptor" })
+	}
+
+	@Test
+	fun `default client does not duplicate Mihon compatibility interceptors`() {
+		val baseClient = OkHttpClient.Builder()
+			.addInterceptor(UncaughtExceptionInterceptor())
+			.addInterceptor(UserAgentInterceptor { "base-agent" })
+			.addInterceptor(CloudflareInterceptor())
+			.build()
+		val network = KotoNetworkHelper(
+			baseClient = baseClient,
+			cookieJar = CookieJar.NO_COOKIES,
+		)
+
+		assertEquals(1, network.client.interceptors.count { it.javaClass == UncaughtExceptionInterceptor::class.java })
+		assertEquals(1, network.client.interceptors.count { it.javaClass == UserAgentInterceptor::class.java })
+		assertEquals(1, network.client.interceptors.count { it.javaClass == CloudflareInterceptor::class.java })
+	}
+
+	@Test
+	fun `legacy compatibility client keeps Brotli separate from KeiSource client`() {
+		val network = KotoNetworkHelper(
+			baseClient = OkHttpClient.Builder().build(),
+			cookieJar = CookieJar.NO_COOKIES,
+		)
+
+		assertFalse(network.client.networkInterceptors.any { it === BrotliInterceptor })
+		assertEquals(1, network.cloudflareClient.networkInterceptors.count { it === BrotliInterceptor })
 	}
 
 	@Test
@@ -154,6 +205,46 @@ class TachiyomiXSourceCompatibilityTest {
 			assertEquals(listOf("https://example.org/second-manga.webp"), secondPages.map { it.url })
 			assertEquals("second-slug", catalogueSource.receivedSlug)
 			assertEquals("second-manga", catalogueSource.receivedMangaId)
+		} finally {
+			ArchTaskExecutor.getInstance().setDelegate(null)
+			Dispatchers.resetMain()
+		}
+	}
+
+	@Test
+	fun `history content preserves Mihon memo without a repository list snapshot`() = runTest {
+		val catalogueSource = MemoDependentHttpSource()
+		val source = MihonMangaSource(catalogueSource, "test.extension")
+		val historyContent = manga("first-token", "First Manga").apply {
+			memo = buildJsonObject { put("slug", "first-slug") }
+		}.toKotoContent(source).copy(id = 42L)
+		val repository = MihonMangaRepository(source, mockk<MemoryContentCache>(relaxed = true))
+
+		val details = repository.getDetails(historyContent, ContentRepository.DetailsFetchMode.FORCE_REFRESH)
+		val pages = repository.getPages(details.chapters.orEmpty().single())
+
+		assertEquals("first-slug", catalogueSource.receivedSlug)
+		assertEquals("first-manga", catalogueSource.receivedMangaId)
+		assertEquals(listOf("https://example.org/first-manga.webp"), pages.map { it.url })
+	}
+
+	@OptIn(ExperimentalCoroutinesApi::class)
+	@Test
+	fun `repository uses v16 direct related manga contract`() = runTest {
+		Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+		ArchTaskExecutor.getInstance().setDelegate(IMMEDIATE_TASK_EXECUTOR)
+		try {
+			val catalogueSource = RelatedMangaHttpSource()
+			val source = MihonMangaSource(catalogueSource, "test.extension")
+			val seed = manga("seed", "Seed").toKotoContent(source)
+			val cache = mockk<MemoryContentCache>(relaxed = true)
+			coEvery { cache.getRelatedContent(any(), any()) } returns null
+			val repository = MihonMangaRepository(source, cache)
+
+			val related = repository.getRelated(seed)
+
+			assertEquals(listOf("Related"), related.map { it.title })
+			assertEquals(1, catalogueSource.relatedCalls)
 		} finally {
 			ArchTaskExecutor.getInstance().setDelegate(null)
 			Dispatchers.resetMain()
@@ -383,6 +474,32 @@ class TachiyomiXSourceCompatibilityTest {
 		override fun imageUrlParse(response: Response): String = unused()
 	}
 
+	private class RelatedMangaHttpSource : HttpSource() {
+		override val baseUrl: String = "https://example.org"
+		override val lang: String = "en"
+		override val name: String = "Related Manga"
+		override val supportsLatest: Boolean = false
+		override val supportsRelatedMangas: Boolean = true
+		override val disableRelatedMangasBySearch: Boolean = true
+		var relatedCalls: Int = 0
+
+		override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> {
+			relatedCalls++
+		return listOf(manga("related", "Related"))
+		}
+
+		override fun popularMangaRequest(page: Int): Request = unused()
+		override fun popularMangaParse(response: Response): MangasPage = unused()
+		override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = unused()
+		override fun searchMangaParse(response: Response): MangasPage = unused()
+		override fun latestUpdatesRequest(page: Int): Request = unused()
+		override fun latestUpdatesParse(response: Response): MangasPage = unused()
+		override fun mangaDetailsParse(response: Response): SManga = unused()
+		override fun chapterListParse(response: Response): List<SChapter> = unused()
+		override fun pageListParse(response: Response): List<Page> = unused()
+		override fun imageUrlParse(response: Response): String = unused()
+	}
+
 	private class CoroutineHttpSource(
 		override val baseUrl: String,
 	) : HttpSource() {
@@ -592,5 +709,13 @@ class TachiyomiXSourceCompatibilityTest {
 		}
 
 		fun unused(): Nothing = throw UnsupportedOperationException("Unused in this test")
+	}
+
+	private class GZipInterceptor : Interceptor {
+		override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(chain.request())
+	}
+
+	private class IgnoreGzipInterceptor : Interceptor {
+		override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(chain.request())
 	}
 }
