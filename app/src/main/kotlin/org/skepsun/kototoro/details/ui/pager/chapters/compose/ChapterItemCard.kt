@@ -18,6 +18,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.luminance
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -36,77 +38,98 @@ fun ChapterListCard(
 	}
 	val alphaFactor = if (item.isUnread || item.isCurrent) 1.0f else 0.6f
 	val titleWeight = if (item.isCurrent) androidx.compose.ui.text.font.FontWeight.Bold else null
+	
+	val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 	val containerColor = when {
-		isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-		else -> Color.Transparent
+		isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.5f else 0.7f)
+		else -> if (isDark) {
+			Color.Black.copy(alpha = 0.25f)
+		} else {
+			Color.White.copy(alpha = 0.40f)
+		}
+	}
+	val borderColor = if (isDark) {
+		Color.White.copy(alpha = 0.08f)
+	} else {
+		Color.Black.copy(alpha = 0.06f)
 	}
 
-	Row(
+	Card(
 		modifier = modifier
 			.fillMaxWidth()
-			.heightIn(min = 64.dp)
-			.background(containerColor)
+			.padding(vertical = 4.dp)
 			.combinedClickable(
 				onClick = onClick,
 				onLongClick = onLongClick
-			)
-			.padding(horizontal = 16.dp, vertical = 8.dp),
-		verticalAlignment = Alignment.CenterVertically
+			),
+		shape = RoundedCornerShape(12.dp),
+		colors = CardDefaults.cardColors(
+			containerColor = containerColor
+		),
+		border = BorderStroke(1.dp, borderColor)
 	) {
-		if (item.isCurrent) {
-			Icon(
-				painter = painterResource(id = R.drawable.ic_current_chapter),
-				contentDescription = null,
-				tint = MaterialTheme.colorScheme.primary,
-				modifier = Modifier.padding(end = 8.dp).size(16.dp)
-			)
-		}
-		Column(
+		Row(
 			modifier = Modifier
-				.weight(1f)
-				.alpha(alphaFactor)
+				.fillMaxWidth()
+				.heightIn(min = 64.dp)
+				.padding(horizontal = 16.dp, vertical = 8.dp),
+			verticalAlignment = Alignment.CenterVertically
 		) {
-			Text(
-				text = item.getTitle(context.resources),
-				style = MaterialTheme.typography.bodyLarge,
-				fontWeight = titleWeight,
-				color = titleColor,
-				maxLines = 1,
-				overflow = TextOverflow.Ellipsis
-			)
-			val desc = item.description
-			if (!desc.isNullOrBlank()) {
-				Text(
-					text = desc,
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-					modifier = Modifier.padding(top = 2.dp)
+			if (item.isCurrent) {
+				Icon(
+					painter = painterResource(id = R.drawable.ic_current_chapter),
+					contentDescription = null,
+					tint = MaterialTheme.colorScheme.primary,
+					modifier = Modifier.padding(end = 8.dp).size(16.dp)
 				)
 			}
-		}
-
-		if (item.isBookmarked) {
-			Icon(
-				painter = painterResource(id = R.drawable.ic_bookmark),
-				contentDescription = "Bookmarked",
-				tint = MaterialTheme.colorScheme.primary,
+			Column(
 				modifier = Modifier
-					.padding(start = 8.dp)
-					.size(24.dp)
-			)
-		}
+					.weight(1f)
+					.alpha(alphaFactor)
+			) {
+				Text(
+					text = item.getTitle(context.resources),
+					style = MaterialTheme.typography.bodyLarge,
+					fontWeight = titleWeight,
+					color = titleColor,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+				val desc = item.description
+				if (!desc.isNullOrBlank()) {
+					Text(
+						text = desc,
+						style = MaterialTheme.typography.bodySmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						modifier = Modifier.padding(top = 2.dp)
+					)
+				}
+			}
 
-		if (item.isDownloaded) {
-			Icon(
-				painter = painterResource(id = R.drawable.ic_storage),
-				contentDescription = "Downloaded",
-				tint = MaterialTheme.colorScheme.onSurfaceVariant,
-				modifier = Modifier
-					.padding(start = 8.dp)
-					.size(24.dp)
-			)
+			if (item.isBookmarked) {
+				Icon(
+					painter = painterResource(id = R.drawable.ic_bookmark),
+					contentDescription = "Bookmarked",
+					tint = MaterialTheme.colorScheme.primary,
+					modifier = Modifier
+						.padding(start = 8.dp)
+						.size(24.dp)
+				)
+			}
+
+			if (item.isDownloaded) {
+				Icon(
+					painter = painterResource(id = R.drawable.ic_storage),
+					contentDescription = "Downloaded",
+					tint = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier
+						.padding(start = 8.dp)
+						.size(24.dp)
+				)
+			}
 		}
 	}
 }
