@@ -96,12 +96,7 @@ abstract class Scrobbler(
 		val chapter = checkNotNull(chapters.findById(chapterId)) {
 			"Chapter $chapterId not found in this manga"
 		}
-		val number = if (chapter.number > 0f) {
-			chapter.number.toInt()
-		} else {
-			chapters = chapters.filter { x -> x.branch == chapter.branch }
-			chapters.indexOf(chapter) + 1
-		}
+		val number = resolveAbsoluteChapterNumber(chapters, chapter)
 		val entity = resolveScrobblingEntity(manga.id) ?: return
 		repository.updateRate(entity.id, entity.mangaId, number)
 	}
