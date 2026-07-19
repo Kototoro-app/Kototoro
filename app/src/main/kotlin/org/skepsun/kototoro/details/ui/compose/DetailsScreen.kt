@@ -3688,6 +3688,7 @@ private fun ExpandedPaneUtilityDock(
         Row(
             modifier = Modifier
                 .height(ModernDetailsDockChromeHeight)
+                .fillMaxWidth()
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
