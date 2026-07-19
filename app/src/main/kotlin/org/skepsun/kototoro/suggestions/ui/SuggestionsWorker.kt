@@ -39,13 +39,6 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.assisted.AssistedFactory
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
@@ -62,7 +55,6 @@ import org.skepsun.kototoro.core.util.ext.asArrayList
 import org.skepsun.kototoro.core.util.ext.awaitUniqueWorkInfoByName
 import org.skepsun.kototoro.core.util.ext.awaitWorkInfosByTag
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
-import org.skepsun.kototoro.core.util.ext.flatten
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -86,6 +78,7 @@ import org.skepsun.kototoro.settings.work.PeriodicWorkScheduler
 import org.skepsun.kototoro.suggestions.domain.ContentSuggestion
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
+import org.skepsun.kototoro.suggestions.domain.collectSourceResults
 import org.skepsun.kototoro.suggestions.domain.selectBalancedBySource
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -195,22 +188,12 @@ class SuggestionsWorker @AssistedInject constructor(
 		val whitelistTags = appSettings.suggestionsTagsWhitelist.toList()
 		val tags = (whitelistTags + seed.flatMap { it.tags.map { x -> x.title } }.takeMostFrequent(10)).distinct()
 
-		val semaphore = Semaphore(MAX_PARALLELISM)
-		val producer = channelFlow {
-			for (it in sources) {
-				if (it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)) {
-					continue
-				}
-				launch {
-					semaphore.withPermit {
-						send(getList(it, tags, tagsBlacklist))
-					}
-				}
-			}
-		}
-		val suggestions = producer
-			.toList()
-			.flatten()
+		val rawResults = collectSourceResults(
+			sources = sources.filterNot {
+				it.isNsfw() && (appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled)
+			},
+		) { source -> getList(source, tags, tagsBlacklist) }
+		val suggestions = rawResults
 			.map { manga ->
 				ContentSuggestion(
 					manga = manga,
@@ -497,7 +480,6 @@ class SuggestionsWorker @AssistedInject constructor(
 		const val GROUP_SUGGESTION = "org.skepsun.kototoro.SUGGESTIONS"
 		const val WORKER_NOTIFICATION_ID = 36
 		const val MAX_RESULTS = 160
-		const val MAX_PARALLELISM = 3
 		const val MAX_SOURCE_RESULTS = 20
 		const val MAX_RESULTS_PER_SOURCE = 12
 		const val TAG_EQ_THRESHOLD = 0.4f
