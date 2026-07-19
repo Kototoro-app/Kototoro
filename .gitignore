@@ -57,6 +57,7 @@ reasonix.toml
 /models/
 
 # Trellis developer-local state
+/.trellis/
 /.trellis/workspace/
 /.trellis/.runtime/
 /.trellis/.developer
