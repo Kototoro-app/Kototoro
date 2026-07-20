@@ -26,6 +26,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
+import org.skepsun.kototoro.core.util.ext.findInteractiveActionRequiredException
 import org.skepsun.kototoro.core.util.ext.restartApplication
 import org.skepsun.kototoro.details.ui.pager.EmptyContentReason
 import org.skepsun.kototoro.parsers.exception.AuthRequiredException
@@ -72,7 +73,10 @@ class ExceptionResolver private constructor(
     }
 
     suspend fun resolve(e: Throwable, tryAutoResolve: Boolean = true): Boolean = host.lifecycleScope.async {
-        when (e) {
+        val interactiveAction = e.findInteractiveActionRequiredException()
+        if (interactiveAction != null) {
+            resolveBrowserAction(interactiveAction)
+        } else when (e) {
             is CloudFlareProtectedException -> resolveCF(e, tryAutoResolve)
             is AuthRequiredException -> resolveAuthException(e.source)
             is SSLException,
@@ -80,8 +84,6 @@ class ExceptionResolver private constructor(
                 showSslErrorDialog()
                 false
             }
-
-            is InteractiveActionRequiredException -> resolveBrowserAction(e)
 
             is ProxyConfigException -> {
                 host.router.openProxySettings()
@@ -292,7 +294,7 @@ class ExceptionResolver private constructor(
                 else -> 0
             }
 
-            else -> 0
+            else -> if (e.findInteractiveActionRequiredException() != null) R.string._continue else 0
         }
 
         fun canResolve(e: Throwable) = getResolveStringId(e) != 0

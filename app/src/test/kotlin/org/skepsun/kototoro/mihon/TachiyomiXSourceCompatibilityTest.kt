@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.cache.SafeDeferred
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.network.CloudFlareInterceptor as KototoroCloudFlareInterceptor
 import org.skepsun.kototoro.mihon.compat.KotoNetworkHelper
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.mihon.model.toKotoContent
@@ -111,6 +112,18 @@ class TachiyomiXSourceCompatibilityTest {
 		assertEquals(1, network.client.interceptors.count { it.javaClass == UncaughtExceptionInterceptor::class.java })
 		assertEquals(1, network.client.interceptors.count { it.javaClass == UserAgentInterceptor::class.java })
 		assertEquals(1, network.client.interceptors.count { it.javaClass == CloudflareInterceptor::class.java })
+	}
+
+	@Test
+	fun `default client excludes Kototoro Cloudflare interceptor`() {
+		val network = KotoNetworkHelper(
+			baseClient = OkHttpClient.Builder()
+				.addInterceptor(KototoroCloudFlareInterceptor())
+				.build(),
+			cookieJar = CookieJar.NO_COOKIES,
+		)
+
+		assertFalse(network.client.interceptors.any { it is KototoroCloudFlareInterceptor })
 	}
 
 	@Test
