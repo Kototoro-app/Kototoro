@@ -88,7 +88,7 @@
     <string name="manga_downloading_">下載中…</string>
     <string name="download_complete">已下載</string>
     <string name="filter">篩選器</string>
-    <string name="theme">主題</string>
+    <string name="theme">明暗模式</string>
     <string name="light">淺色</string>
     <string name="clear">清除</string>
     <string name="remove">移除</string>
@@ -1623,6 +1623,15 @@
     <string name="pref_nav_floating_height">浮動導航欄高度</string>
     <string name="pref_nav_floating_summary">在底部導航欄周圍添加邊距，使其呈現懸浮效果</string>
     <string name="pref_nav_height">導航欄高度</string>
+    <string name="pref_nav_expressive_pill">導航膠囊按鈕</string>
+    <string name="pref_nav_expressive_pill_summary">在懸浮導航欄中使用膠囊形選中項和橫向展開標籤</string>
+    <string name="pref_material_expressive_components">Material 3 Expressive 組件</string>
+    <string name="pref_material_expressive_components_summary">為 View 按鈕、工具列、搜尋欄、滑桿和導航組件使用 Expressive 樣式。會重新啟動目前畫面</string>
+    <string name="pref_app_font_preset">應用字型</string>
+    <string name="pref_app_font_preset_summary">Material 3 界面風格使用的字型</string>
+    <string name="pref_expressive_app_font_preset">iOS 字型</string>
+    <string name="pref_expressive_app_font_preset_summary">iOS 界面風格使用的字型</string>
+    <string name="font_preset_system">系統預設</string>
     <string name="pref_panorama_animation">全景封面動畫</string>
     <string name="pref_panorama_animation_speed">全景動畫速度</string>
     <string name="pref_panorama_animation_summary">爲全景封面背景啓用微妙的運動效果</string>
@@ -2609,4 +2618,79 @@ SHA-256 指紋:
     <!-- 章節範圍選擇 -->
     <string name="chapter_range_selection_hint">提示：選中兩個章節後，長按它們之間的可見章節可補全範圍。</string>
     <string name="hide_read_chapters">隱藏已讀章節</string>
+
+    <!-- 外觀與界面風格 -->
+    <string name="appearance_mode">明暗模式</string>
+    <string name="background_style">背景與界面材質</string>
+    <string name="background_style_summary">選擇頁面背景，以及內容表面的呈現方式</string>
+    <string name="appearance_background_ios_note">iOS 風格預設使用色調玻璃，也可以在此修改。</string>
+    <string name="appearance_glass_material_ios_note">iOS 風格預設使用色調玻璃材質。</string>
+    <string name="bg_style_default">純黑</string>
+    <string name="bg_style_default_summary">簡約純黑背景，同時適合 OLED 螢幕省電</string>
+    <string name="bg_style_artwork_blur">圖片背景</string>
+    <string name="bg_style_artwork_blur_summary">使用柔化後的作品封面作為應用背景</string>
+    <string name="bg_style_tonal_glass">色調玻璃</string>
+    <string name="bg_style_tonal_glass_summary">使用高級純色基底和克制的 Haze 表面（推薦）</string>
+    <string name="bg_style_system_tint">系統配色</string>
+    <string name="bg_style_system_tint_summary">使用系統桌布顏色為深色界面添加色調</string>
+    <string name="bg_style_elevated_containers">層次表面</string>
+    <string name="bg_style_elevated_containers_summary">使用更明亮的表面和圓角容器營造層次感</string>
+    <string name="welcome_spaces_title">劃分獨立 Space</string>
+    <string name="welcome_spaces_summary">Spaces 會為漫畫、小說和動畫分別保留導航、瀏覽偏好以及閱讀或播放上下文。之後可在「設定 - 使用者 - Spaces」中調整進階選項並建立自訂 Space。</string>
+    <string name="theme_name_ios">iOS 藍</string>
+    <string name="appearance_color_scheme_ios_note">iOS 風格預設使用 iOS 藍配色，也可以在此修改。</string>
+    <string name="interface_style">界面風格</string>
+    <string name="interface_style_material3">md3 (legacy)</string>
+    <string name="interface_style_material3_summary">保留 Android 原生的控制項、間距和表面層級</string>
+    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios_summary">更圓潤的控制項、更克制的表面、分組 Haze 和柔和選單</string>
+    <string name="appearance_style_override_note">目前 %1$s 風格下實際使用：%2$s</string>
+    <string name="appearance_style_default_value">目前 %1$s 風格預設值：%2$s</string>
+    <string name="appearance_style_custom_override">目前 %1$s 風格預設值為 %2$s，目前使用手動值</string>
+    <string name="appearance_ios_font_note">iOS 風格預設使用 %1$s，也可以在此修改。</string>
+    <string name="font_preset_noto_sans">Noto Sans</string>
+    <string name="font_preset_inter">Inter</string>
+
+    <!-- 實體整理 - 混合內容類型 -->
+    <string name="entity_organize_repair_mixed_work_content_types_title">修復混合內容類型的作品實體</string>
+    <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d 個作品實體包含 %2$d 個來自不同內容類型的本地投影。將投影拆分為獨立作品實體以恢復類型隔離。</string>
+    <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合內容類型作品</string>
+    <string name="entity_organize_repair_mixed_work_content_types_feedback">已將 %1$d 個混合內容類型投影拆分為獨立作品實體。</string>
+
+    <!-- Spaces 功能 -->
+    <string name="space_switcher_title">切換 Space</string>
+    <string name="space_switcher_content_description">目前：%1$s。切換 Space</string>
+    <string name="space_recent_context">最近：%1$s</string>
+    <string name="space_continue_content_description">繼續 %1$s</string>
+    <string name="space_switch_failed">無法儲存進度。Space 未切換。</string>
+    <string name="space_switch_unavailable">Space 切換暫時無法使用。</string>
+    <string name="space_manga">漫畫 Space</string>
+    <string name="space_novel">小說 Space</string>
+    <string name="space_anime">動畫 Space</string>
+    <string name="media_universe_title">媒體宇宙</string>
+    <string name="media_universe_empty">暫無歷史記錄或收藏</string>
+    <string name="media_universe_history_and_favorites">歷史記錄與收藏</string>
+    <string name="media_universe_item_summary">%1$s · %2$s</string>
+    <string name="spaces">Spaces</string>
+    <string name="spaces_settings_summary">將漫畫、小說和動畫分隔為獨立的使用環境</string>
+    <string name="spaces_enabled">啟用 Spaces</string>
+    <string name="spaces_enabled_summary">為不同媒體空間保留各自獨立的活動上下文</string>
+    <string name="space_switcher_enabled">顯示 Space 切換按鈕</string>
+    <string name="space_switcher_enabled_summary">在應用各處顯示 Space 切換按鈕</string>
+    <string name="space_persistent_navigation_enabled">記住每個 Space 的導航</string>
+    <string name="space_persistent_navigation_enabled_summary">恢復每個 Space 最近存取的頁面和導航堆疊</string>
+    <string name="space_immersive_switch_enabled">在閱讀器和播放器中切換</string>
+    <string name="space_immersive_switch_enabled_summary">允許從詳細資訊頁、閱讀器和影片播放器切換 Space</string>
+    <string name="space_route_preferences_enabled">記住每個 Space 的頁面偏好</string>
+    <string name="space_route_preferences_enabled_summary">為每個 Space 分別儲存受支援頁面的篩選和版面配置選擇</string>
+    <string name="custom_spaces">Space 定義</string>
+    <string name="add_custom_space">新增自訂 Space</string>
+    <string name="edit_custom_space">編輯自訂 Space</string>
+    <string name="delete_custom_space">刪除自訂 Space</string>
+    <string name="delete_custom_space_message">刪除「%1$s」及其儲存的導航狀態？</string>
+    <string name="custom_space_limit">最多可建立 %1$d 個自訂 Space</string>
+    <string name="built_in_space">內建</string>
+    <string name="content_types">內容類型</string>
+    <string name="source_types">內容來源類型</string>
+    <string name="custom_space_rule_summary">%1$d 種內容類型 · %2$d 種語言 · %3$d 種內容來源類型</string>
 </resources>

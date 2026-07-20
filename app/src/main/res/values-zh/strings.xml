@@ -596,7 +596,7 @@
     <string name="color_correction_apply_text">这些设置可以全局应用，也可以只应用于当前漫画。即使全局应用，也不会覆盖单独的设置。</string>
     <string name="color_dark">深色</string>
     <string name="color_light">浅色</string>
-    <string name="color_theme">配色主题</string>
+    <string name="color_theme">配色方案</string>
     <string name="color_white">白色</string>
     <string name="comics_archive">漫画压缩包</string>
     <string name="comics_archive_import_description">可选择一个或多个 CBZ 或 ZIP 文件，每个文件都将识别为一个单独的漫画。</string>
@@ -1507,6 +1507,15 @@
     <string name="pref_nav_floating_height">浮动导航栏高度</string>
     <string name="pref_nav_floating_summary">在底部导航栏周围添加边距，使其呈现悬浮效果</string>
     <string name="pref_nav_height">导航栏高度</string>
+    <string name="pref_nav_expressive_pill">导航胶囊按钮</string>
+    <string name="pref_nav_expressive_pill_summary">在悬浮导航栏中使用胶囊形选中项和横向展开标签</string>
+    <string name="pref_material_expressive_components">Material 3 Expressive 组件</string>
+    <string name="pref_material_expressive_components_summary">为 View 按钮、工具栏、搜索栏、滑块和导航组件使用 Expressive 样式。会重启当前界面</string>
+    <string name="pref_app_font_preset">应用字体</string>
+    <string name="pref_app_font_preset_summary">Material 3 界面风格使用的字体</string>
+    <string name="pref_expressive_app_font_preset">iOS 字体</string>
+    <string name="pref_expressive_app_font_preset_summary">iOS 界面风格使用的字体</string>
+    <string name="font_preset_system">系统默认</string>
     <string name="pref_panorama_animation_speed">全景动画速度</string>
     <string name="pref_panorama_blur">封面模糊度</string>
     <string name="pref_panorama_cover">全景封面</string>
@@ -2279,7 +2288,7 @@
     <string name="text_search_holder_secondary">试试换一个关键词再搜索</string>
     <string name="text_suggestion_holder">开始阅读，即可获取个性化推荐</string>
     <string name="text_unsaved_changes_prompt">保存还是放弃未保存的更改？</string>
-    <string name="theme">颜色模式</string>
+    <string name="theme">明暗模式</string>
     <string name="theme_name_asuka">Asuka</string>
     <string name="theme_name_dynamic">动态</string>
     <string name="theme_name_expressive">印象 (实验性)</string>
@@ -2713,4 +2722,79 @@ SHA-256 指纹:
     <string name="novel_page_turn_animation">翻页动画</string>
     <string name="novel_page_turn_slide">平移</string>
     <string name="novel_page_turn_simulation">仿真</string>
+
+    <!-- 外观与界面风格 -->
+    <string name="appearance_mode">明暗模式</string>
+    <string name="background_style">背景与界面材质</string>
+    <string name="background_style_summary">选择页面背景，以及内容表面的呈现方式</string>
+    <string name="appearance_background_ios_note">iOS 风格默认使用色调玻璃，也可以在此修改。</string>
+    <string name="appearance_glass_material_ios_note">iOS 风格默认使用色调玻璃材质。</string>
+    <string name="bg_style_default">纯黑</string>
+    <string name="bg_style_default_summary">简约纯黑背景，同时适合 OLED 屏幕省电</string>
+    <string name="bg_style_artwork_blur">图片背景</string>
+    <string name="bg_style_artwork_blur_summary">使用柔化后的作品封面作为应用背景</string>
+    <string name="bg_style_tonal_glass">色调玻璃</string>
+    <string name="bg_style_tonal_glass_summary">使用高级纯色基底和克制的 Haze 表面（推荐）</string>
+    <string name="bg_style_system_tint">系统配色</string>
+    <string name="bg_style_system_tint_summary">使用系统壁纸颜色为深色界面添加色调</string>
+    <string name="bg_style_elevated_containers">层次表面</string>
+    <string name="bg_style_elevated_containers_summary">使用更明亮的表面和圆角容器营造层次感</string>
+    <string name="welcome_spaces_title">划分独立 Space</string>
+    <string name="welcome_spaces_summary">Spaces 会为漫画、小说和动画分别保留导航、浏览偏好以及阅读或播放上下文。之后可在“设置 - 用户 - Spaces”中调整高级选项并创建自定义 Space。</string>
+    <string name="theme_name_ios">iOS 蓝</string>
+    <string name="appearance_color_scheme_ios_note">iOS 风格默认使用 iOS 蓝配色，也可以在此修改。</string>
+    <string name="interface_style">界面风格</string>
+    <string name="interface_style_material3">md3 (legacy)</string>
+    <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
+    <string name="interface_style_ios">ios (modern)</string>
+    <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、分组 Haze 和柔和菜单</string>
+    <string name="appearance_style_override_note">当前 %1$s 风格下实际使用：%2$s</string>
+    <string name="appearance_style_default_value">当前 %1$s 风格默认值：%2$s</string>
+    <string name="appearance_style_custom_override">当前 %1$s 风格默认值为 %2$s，当前使用手动值</string>
+    <string name="appearance_ios_font_note">iOS 风格默认使用 %1$s，也可以在此修改。</string>
+    <string name="font_preset_noto_sans">Noto Sans</string>
+    <string name="font_preset_inter">Inter</string>
+
+    <!-- 实体整理 - 混合内容类型 -->
+    <string name="entity_organize_repair_mixed_work_content_types_title">修复混合内容类型的作品实体</string>
+    <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d 个作品实体包含 %2$d 个来自不同内容类型的本地投影。将投影拆分为独立作品实体以恢复类型隔离。</string>
+    <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合内容类型作品</string>
+    <string name="entity_organize_repair_mixed_work_content_types_feedback">已将 %1$d 个混合内容类型投影拆分为独立作品实体。</string>
+
+    <!-- Spaces 功能 -->
+    <string name="space_switcher_title">切换 Space</string>
+    <string name="space_switcher_content_description">当前：%1$s。切换 Space</string>
+    <string name="space_recent_context">最近：%1$s</string>
+    <string name="space_continue_content_description">继续 %1$s</string>
+    <string name="space_switch_failed">无法保存进度。Space 未切换。</string>
+    <string name="space_switch_unavailable">Space 切换暂不可用。</string>
+    <string name="space_manga">漫画 Space</string>
+    <string name="space_novel">小说 Space</string>
+    <string name="space_anime">动画 Space</string>
+    <string name="media_universe_title">媒体宇宙</string>
+    <string name="media_universe_empty">暂无历史记录或收藏</string>
+    <string name="media_universe_history_and_favorites">历史记录与收藏</string>
+    <string name="media_universe_item_summary">%1$s · %2$s</string>
+    <string name="spaces">Spaces</string>
+    <string name="spaces_settings_summary">将漫画、小说和动画分隔为独立的使用环境</string>
+    <string name="spaces_enabled">启用 Spaces</string>
+    <string name="spaces_enabled_summary">为不同媒体空间保留各自独立的活动上下文</string>
+    <string name="space_switcher_enabled">显示 Space 切换按钮</string>
+    <string name="space_switcher_enabled_summary">在应用各处显示 Space 切换按钮</string>
+    <string name="space_persistent_navigation_enabled">记住每个 Space 的导航</string>
+    <string name="space_persistent_navigation_enabled_summary">恢复每个 Space 最近访问的页面和导航栈</string>
+    <string name="space_immersive_switch_enabled">在阅读器和播放器中切换</string>
+    <string name="space_immersive_switch_enabled_summary">允许从详情页、阅读器和视频播放器切换 Space</string>
+    <string name="space_route_preferences_enabled">记住每个 Space 的页面偏好</string>
+    <string name="space_route_preferences_enabled_summary">为每个 Space 分别保存受支持页面的筛选和布局选择</string>
+    <string name="custom_spaces">Space 定义</string>
+    <string name="add_custom_space">添加自定义 Space</string>
+    <string name="edit_custom_space">编辑自定义 Space</string>
+    <string name="delete_custom_space">删除自定义 Space</string>
+    <string name="delete_custom_space_message">删除“%1$s”及其保存的导航状态？</string>
+    <string name="custom_space_limit">最多可创建 %1$d 个自定义 Space</string>
+    <string name="built_in_space">内置</string>
+    <string name="content_types">内容类型</string>
+    <string name="source_types">内容源类型</string>
+    <string name="custom_space_rule_summary">%1$d 种内容类型 · %2$d 种语言 · %3$d 种内容源类型</string>
 </resources>
