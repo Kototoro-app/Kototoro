@@ -4,7 +4,8 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,12 +34,20 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -73,6 +82,11 @@ fun SpaceSwitcherFab(
 	activeSpaceId: SpaceId,
 	activeSpace: SpaceContext? = null,
 	onClick: () -> Unit,
+	onLongClick: () -> Unit = onClick,
+	onDragStart: (Offset) -> Unit = {},
+	onDragPositionChanged: (Offset) -> Unit = {},
+	onDragEnd: () -> Unit = {},
+	onDragCancel: () -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	val presentation = activeSpace?.presentation() ?: activeSpaceId.presentation()
@@ -82,16 +96,40 @@ fun SpaceSwitcherFab(
 		R.string.space_switcher_content_description,
 		label,
 	)
+	val longClickLabel = stringResource(R.string.space_workbench_open)
 	val colorScheme = MaterialTheme.colorScheme
 	val fabAccentColor = colorScheme.primaryContainer
 	val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS
+	val currentOnDragStart by rememberUpdatedState(onDragStart)
+	val currentOnDragPositionChanged by rememberUpdatedState(onDragPositionChanged)
+	val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+	val currentOnDragCancel by rememberUpdatedState(onDragCancel)
+	var fabCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+	fun positionInRoot(position: Offset): Offset {
+		val coordinates = fabCoordinates
+		return if (coordinates?.isAttached == true) coordinates.localToRoot(position) else position
+	}
 	val fabModifier = modifier
-		.clickable(
+		.onGloballyPositioned { coordinates -> fabCoordinates = coordinates }
+		.pointerInput(Unit) {
+			detectDragGesturesAfterLongPress(
+				onDragStart = { position -> currentOnDragStart(positionInRoot(position)) },
+				onDragEnd = currentOnDragEnd,
+				onDragCancel = currentOnDragCancel,
+				onDrag = { change, _ ->
+					change.consume()
+					currentOnDragPositionChanged(positionInRoot(change.position))
+				},
+			)
+		}
+		.combinedClickable(
 			interactionSource = remember { MutableInteractionSource() },
 			indication = null,
 			role = Role.Button,
 			onClick = onClick,
+			onLongClickLabel = longClickLabel,
+			onLongClick = onLongClick,
 		)
 		.semantics { contentDescription = description }
 	val content: @Composable BoxScope.() -> Unit = {

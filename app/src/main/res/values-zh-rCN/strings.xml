@@ -3106,6 +3106,10 @@ SHA-256 指纹:
     <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合内容类型作品</string>
     <string name="entity_organize_repair_mixed_work_content_types_feedback">已将 %1$d 个混合内容类型投影拆分为独立作品实体。</string>
     <string name="space_switcher_title">切换 Space</string>
+    <string name="space_workbench_title">空间</string>
+    <string name="space_workbench_open">打开空间工作台</string>
+    <string name="space_workbench_dismiss">关闭空间工作台</string>
+    <string name="space_workbench_empty_preview">暂无最近活动</string>
     <string name="space_switcher_content_description">当前：%1$s。切换 Space</string>
     <string name="space_recent_context">最近：%1$s</string>
     <string name="space_continue_content_description">继续 %1$s</string>

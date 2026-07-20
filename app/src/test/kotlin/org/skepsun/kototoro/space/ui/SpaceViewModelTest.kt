@@ -58,6 +58,48 @@ class SpaceViewModelTest {
 	}
 
 	@Test
+	fun `workbench and compact switcher are mutually exclusive`() = runTest {
+		val repository = FakeSpaceRepository()
+		val viewModel = SpaceViewModel(
+			repository,
+			TestSpaceCatalogRepository(),
+			FakeFeatureFlagsRepository(enabledFlags()),
+		)
+		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+		viewModel.onAction(SpaceAction.OpenSwitcher)
+		assertTrue(viewModel.uiState.value.switcherVisible)
+
+		viewModel.onAction(SpaceAction.OpenWorkbench)
+		assertFalse(viewModel.uiState.value.switcherVisible)
+		assertTrue(viewModel.uiState.value.workbenchVisible)
+
+		viewModel.onAction(SpaceAction.OpenSwitcher)
+		assertTrue(viewModel.uiState.value.switcherVisible)
+		assertFalse(viewModel.uiState.value.workbenchVisible)
+		collection.cancel()
+	}
+
+	@Test
+	fun `selecting from workbench closes overview after activation`() = runTest {
+		val repository = FakeSpaceRepository()
+		val viewModel = SpaceViewModel(
+			repository,
+			TestSpaceCatalogRepository(),
+			FakeFeatureFlagsRepository(enabledFlags()),
+		)
+		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+		viewModel.onAction(SpaceAction.OpenWorkbench)
+		viewModel.onAction(SpaceAction.SelectSpace(BuiltInSpaces.Anime))
+		advanceUntilIdle()
+
+		assertEquals(BuiltInSpaces.Anime, viewModel.uiState.value.activeSpaceId)
+		assertFalse(viewModel.uiState.value.workbenchVisible)
+		collection.cancel()
+	}
+
+	@Test
 	fun `parent feature gate closes and blocks switcher`() = runTest {
 		val repository = FakeSpaceRepository()
 		val flags = FakeFeatureFlagsRepository(enabledFlags().copy(entitySpaceEnabled = false))
@@ -65,6 +107,8 @@ class SpaceViewModelTest {
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		viewModel.onAction(SpaceAction.OpenSwitcher)
+		viewModel.onAction(SpaceAction.OpenWorkbench)
+		assertFalse(viewModel.uiState.value.workbenchVisible)
 		viewModel.onAction(SpaceAction.SelectSpace(BuiltInSpaces.Anime))
 		advanceUntilIdle()
 

@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -61,6 +62,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
@@ -107,6 +109,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
 import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
+import org.skepsun.kototoro.space.ui.SpaceWorkbench
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
@@ -654,6 +657,14 @@ fun KototoroApp(
     var mainSpaceSwitcherFabMeasurementSpaceId by remember { mutableStateOf(navigationSpaceId) }
     var mainSpaceSwitcherFabCandidate by remember {
         mutableStateOf<Pair<SpaceId, androidx.compose.ui.geometry.Rect>?>(null)
+    }
+    var spaceWorkbenchDragPosition by remember { mutableStateOf<Offset?>(null) }
+    var hoveredWorkbenchSpaceId by remember { mutableStateOf<SpaceId?>(null) }
+    LaunchedEffect(spaceUiState.workbenchVisible) {
+        if (!spaceUiState.workbenchVisible) {
+            spaceWorkbenchDragPosition = null
+            hoveredWorkbenchSpaceId = null
+        }
     }
     val spaceSaveableStateHolder = rememberSaveableStateHolder()
     val restoredSpaceIds = remember { mutableStateMapOf<SpaceId, Boolean>() }
@@ -1325,6 +1336,36 @@ fun KototoroApp(
                             activeSpaceId = spaceUiState.activeSpaceId,
                             activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
                             onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                            onLongClick = {
+                                spaceWorkbenchDragPosition = null
+                                hoveredWorkbenchSpaceId = null
+                                onSpaceAction(SpaceAction.OpenWorkbench)
+                            },
+                            onDragStart = { position ->
+                                hoveredWorkbenchSpaceId = null
+                                onSpaceAction(SpaceAction.OpenWorkbench)
+                                spaceWorkbenchDragPosition = position
+                            },
+                            onDragPositionChanged = { position ->
+                                spaceWorkbenchDragPosition = position
+                            },
+                            onDragEnd = {
+                                val targetSpaceId = hoveredWorkbenchSpaceId
+                                spaceWorkbenchDragPosition = null
+                                hoveredWorkbenchSpaceId = null
+                                when {
+                                    targetSpaceId == null -> Unit
+                                    targetSpaceId == spaceUiState.activeSpaceId -> {
+                                        onSpaceAction(SpaceAction.DismissWorkbench)
+                                    }
+                                    else -> onSpaceAction(SpaceAction.SelectSpace(targetSpaceId))
+                                }
+                            },
+                            onDragCancel = {
+                                spaceWorkbenchDragPosition = null
+                                hoveredWorkbenchSpaceId = null
+                                onSpaceAction(SpaceAction.DismissWorkbench)
+                            },
                             modifier = fabModifier,
                         )
                     } else {
@@ -1529,6 +1570,16 @@ fun KototoroApp(
                     )
                 }
             }
+            val workbenchProgress by animateFloatAsState(
+                targetValue = if (spaceUiState.workbenchVisible) 1f else 0f,
+                animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
+                    tween(durationMillis = 280)
+                } else {
+                    snap()
+                },
+                label = "space_workbench_progress",
+            )
+            val workbenchContentShape = remember { RoundedCornerShape(28.dp) }
             Box(modifier = Modifier
                 .fillMaxSize()
                 .background(
@@ -1580,7 +1631,20 @@ fun KototoroApp(
                         }
                     }
                 }
-                SharedTransitionLayout {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val scale = 1f - (0.18f * workbenchProgress)
+                            scaleX = scale
+                            scaleY = scale
+                            transformOrigin = TransformOrigin(0f, 0.5f)
+                            shape = workbenchContentShape
+                            clip = workbenchProgress > 0.001f
+                            shadowElevation = 20.dp.toPx() * workbenchProgress
+                        },
+                ) {
+                    SharedTransitionLayout {
                     SideEffect {
                         chromeSharedTransitionScope = if (effectiveSharedElementTransitionsEnabled) {
                             this@SharedTransitionLayout
@@ -1711,7 +1775,25 @@ fun KototoroApp(
                             }
                         }
                     }
+                    }
                 }
+                SpaceWorkbench(
+                    state = spaceUiState,
+                    resumeItems = spaceResumeUiState.items,
+                    dragPosition = spaceWorkbenchDragPosition,
+                    onDismiss = {
+                        spaceWorkbenchDragPosition = null
+                        hoveredWorkbenchSpaceId = null
+                        onSpaceAction(SpaceAction.DismissWorkbench)
+                    },
+                    onSelectSpace = {
+                        spaceWorkbenchDragPosition = null
+                        hoveredWorkbenchSpaceId = null
+                        onSpaceAction(SpaceAction.SelectSpace(it))
+                    },
+                    onHoveredSpaceChanged = { hoveredWorkbenchSpaceId = it },
+                    modifier = Modifier.matchParentSize(),
+                )
                 SpaceSwitcherSheet(
                     state = spaceUiState,
                     onAction = onSpaceAction,

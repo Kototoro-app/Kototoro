@@ -21,6 +21,7 @@ import javax.inject.Inject
 data class SpaceUiState(
 	val activeSpaceId: SpaceId = BuiltInSpaces.Manga,
 	val switcherVisible: Boolean = false,
+	val workbenchVisible: Boolean = false,
 	val switchInProgress: Boolean = false,
 	val switcherEnabled: Boolean = false,
 	val persistentNavigationEnabled: Boolean = false,
@@ -30,6 +31,8 @@ data class SpaceUiState(
 sealed interface SpaceAction {
 	data object OpenSwitcher : SpaceAction
 	data object DismissSwitcher : SpaceAction
+	data object OpenWorkbench : SpaceAction
+	data object DismissWorkbench : SpaceAction
 	data class SelectSpace(val spaceId: SpaceId) : SpaceAction
 }
 
@@ -54,6 +57,7 @@ class SpaceViewModel @Inject constructor(
 			persistentNavigationEnabled = flags.effectivePersistentNavigationEnabled,
 			spaces = spaces,
 			switcherVisible = transient.switcherVisible && flags.effectiveSwitcherEnabled,
+			workbenchVisible = transient.workbenchVisible && flags.effectiveSwitcherEnabled,
 		)
 	}.stateIn(
 		scope = viewModelScope,
@@ -69,9 +73,19 @@ class SpaceViewModel @Inject constructor(
 	fun onAction(action: SpaceAction) {
 		when (action) {
 			SpaceAction.OpenSwitcher -> transientState.update { state ->
-				state.copy(switcherVisible = uiState.value.switcherEnabled)
+				state.copy(
+					switcherVisible = uiState.value.switcherEnabled,
+					workbenchVisible = false,
+				)
 			}
 			SpaceAction.DismissSwitcher -> transientState.update { it.copy(switcherVisible = false) }
+			SpaceAction.OpenWorkbench -> transientState.update { state ->
+				state.copy(
+					switcherVisible = false,
+					workbenchVisible = uiState.value.switcherEnabled,
+				)
+			}
+			SpaceAction.DismissWorkbench -> transientState.update { it.copy(workbenchVisible = false) }
 			is SpaceAction.SelectSpace -> viewModelScope.launch { selectSpaceAndAwait(action.spaceId) }
 		}
 	}
@@ -90,6 +104,7 @@ class SpaceViewModel @Inject constructor(
 				it.copy(
 					switchInProgress = false,
 					switcherVisible = false,
+					workbenchVisible = false,
 				)
 			}
 		}

@@ -230,7 +230,9 @@ class SpaceSwitcherDelegate @Inject constructor(
 					onAction = { action ->
 						when (action) {
 							SpaceAction.DismissSwitcher -> dismissSwitcher()
-							SpaceAction.OpenSwitcher -> Unit
+							SpaceAction.OpenSwitcher,
+							SpaceAction.OpenWorkbench,
+							SpaceAction.DismissWorkbench -> Unit
 							is SpaceAction.SelectSpace -> requestSwitch(action.spaceId)
 						}
 					},

@@ -341,7 +341,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                     { action ->
                         when (action) {
                             SpaceAction.OpenSwitcher,
-                            SpaceAction.DismissSwitcher -> spaceViewModel.onAction(action)
+                            SpaceAction.DismissSwitcher,
+                            SpaceAction.OpenWorkbench,
+                            SpaceAction.DismissWorkbench -> spaceViewModel.onAction(action)
                             is SpaceAction.SelectSpace -> {
                                 selectSpaceAndRestoreImmersiveSession(action.spaceId)
                             }
@@ -363,6 +365,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onSpaceResume = if (spaceEnabled) {
                     { spaceId ->
                         spaceViewModel.onAction(SpaceAction.DismissSwitcher)
+                        spaceViewModel.onAction(SpaceAction.DismissWorkbench)
                         if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
                             selectSpaceAndRestoreImmersiveSession(spaceId)
                         } else {

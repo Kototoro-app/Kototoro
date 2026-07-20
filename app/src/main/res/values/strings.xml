@@ -3177,6 +3177,10 @@
     <string name="restore_jump_point">Tap to restore the position before this jump</string>
     <string name="reading_chapter_record_format">%1$d sessions · %2$s</string>
     <string name="space_switcher_title">Switch space</string>
+    <string name="space_workbench_title">Spaces</string>
+    <string name="space_workbench_open">Open Space workbench</string>
+    <string name="space_workbench_dismiss">Close Space workbench</string>
+    <string name="space_workbench_empty_preview">No recent activity</string>
     <string name="space_switcher_content_description">Current: %1$s. Switch space</string>
     <string name="space_recent_context">Recent: %1$s</string>
     <string name="space_continue_content_description">Continue %1$s</string>
