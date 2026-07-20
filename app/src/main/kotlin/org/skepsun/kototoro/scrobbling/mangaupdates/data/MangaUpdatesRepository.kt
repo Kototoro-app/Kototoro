@@ -45,6 +45,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.io.IOException
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 private const val TAG = "MURepo"
 private const val BASE_API_URL = "https://api.mangaupdates.com/v1"
@@ -53,7 +54,47 @@ private const val COMMENTS_PAGE_SIZE = 10
 private const val REVIEW_PAGE_SIZE = 3
 private const val DISCOVERY_PAGE_SIZE = 25
 private const val USER_RATING_SYNC_CONCURRENCY = 4
-private val CONTENT_TYPE = "application/vnd.api+json".toMediaType()
+private val CONTENT_TYPE = "application/json".toMediaType()
+
+internal fun toMangaUpdatesRating(rating: Float): Int {
+	return (rating.coerceIn(0f, 1f) * 10f).roundToInt().coerceIn(0, 10)
+}
+
+internal fun normalizeMangaUpdatesRating(rawValue: Double): Float {
+	if (!rawValue.isFinite()) return 0f
+	return (rawValue / 10.0).coerceIn(0.0, 1.0).toFloat()
+}
+
+internal fun parseMangaUpdatesUserRating(response: JSONObject): Float? {
+	return response.optNormalizedMangaUpdatesRating("rating")
+		?: response.optNormalizedMangaUpdatesRating("user_rating")
+		?: response.optJSONObject("record")?.optNormalizedMangaUpdatesRating("rating")
+		?: response.optJSONObject("record")?.optNormalizedMangaUpdatesRating("user_rating")
+		?: response.optJSONObject("status")?.optNormalizedMangaUpdatesRating("rating")
+}
+
+private fun JSONObject.optNormalizedMangaUpdatesRating(key: String): Float? {
+	if (!has(key) || isNull(key)) return null
+	val raw = opt(key) ?: return null
+	return when (raw) {
+		is Number -> normalizeMangaUpdatesRating(raw.toDouble())
+		is String -> raw.toDoubleOrNull()?.let(::normalizeMangaUpdatesRating)
+		is JSONObject -> raw.optNumericMangaUpdatesRating("rating")
+			?: raw.optNumericMangaUpdatesRating("value")
+			?: raw.optNumericMangaUpdatesRating("score")
+		else -> null
+	}
+}
+
+private fun JSONObject.optNumericMangaUpdatesRating(key: String): Float? {
+	if (!has(key) || isNull(key)) return null
+	val raw = opt(key) ?: return null
+	return when (raw) {
+		is Number -> normalizeMangaUpdatesRating(raw.toDouble())
+		is String -> raw.toDoubleOrNull()?.let(::normalizeMangaUpdatesRating)
+		else -> null
+	}
+}
 
 class MangaUpdatesRepository(
 	private val okHttp: OkHttpClient,
@@ -100,6 +141,23 @@ class MangaUpdatesRepository(
 			json
 		}
 		storage.accessToken = response.extractSessionToken()
+		// If no token in body, try loginWithCookie for cookie-based session
+		if (storage.accessToken == null) {
+			Log.d(TAG, "authorize: no session_token in login response, trying loginWithCookie")
+			try {
+				val cookieRequest = Request.Builder()
+					.put(payload.toString().toRequestBody(CONTENT_TYPE))
+					.url("$BASE_API_URL/account/loginWithCookie")
+				okHttp.newCall(cookieRequest.build()).await().use { cookieResponse ->
+					if (cookieResponse.isSuccessful) {
+						val cookieJson = cookieResponse.body.string().toJsonObject("loginWithCookie")
+						storage.accessToken = cookieJson.extractSessionToken()
+					}
+				}
+			} catch (e: Exception) {
+				Log.w(TAG, "authorize: loginWithCookie also failed", e)
+			}
+		}
 		if (storage.accessToken == null && !hasSessionCookies()) {
 			Log.e(TAG, "authorize: login succeeded but no session token or cookies")
 			throw IOException(
@@ -152,11 +210,19 @@ class MangaUpdatesRepository(
 	}
 
 	private fun JSONObject.extractSessionToken(): String? {
+		// Try top-level session_token first
+		getStringOrNull("session_token")?.takeIf { it.isNotBlank() }?.let { return it }
+		// Try context.session_token (legacy path)
 		optJSONObject("context")
 			?.getStringOrNull("session_token")
 			?.takeIf { it.isNotBlank() }
 			?.let { return it }
-		return getStringOrNull("session_token")?.takeIf { it.isNotBlank() }
+		// Try context wrapped in "data"
+		optJSONObject("data")
+			?.getStringOrNull("session_token")
+			?.takeIf { it.isNotBlank() }
+			?.let { return it }
+		return null
 	}
 
 	private fun JSONObject.extractFailureReason(): String? {
@@ -843,22 +909,35 @@ class MangaUpdatesRepository(
 		val request = Request.Builder()
 			.post(payload.toString().toRequestBody(CONTENT_TYPE))
 			.url("$BASE_API_URL/lists/series/update")
-			
-		okHttp.newCall(request.build()).await()
-		
-		if (rating > 0f) {
+
+		okHttp.newCall(request.build()).await().use { response ->
+			if (!response.isSuccessful) {
+				throw IOException("Failed to update MangaUpdates list entry: HTTP ${response.code}")
+			}
+		}
+
+		val remoteRating = toMangaUpdatesRating(rating)
+		if (remoteRating > 0) {
 			val scorePayload = JSONObject().apply {
-				put("rating", (rating * 10).toInt())
+				put("rating", remoteRating)
 			}
 			val ratingRequest = Request.Builder()
 				.put(scorePayload.toString().toRequestBody(CONTENT_TYPE))
 				.url("$BASE_API_URL/series/$rateId/rating")
-			okHttp.newCall(ratingRequest.build()).await()
+			okHttp.newCall(ratingRequest.build()).await().use { response ->
+				if (!response.isSuccessful) {
+					throw IOException("Failed to update MangaUpdates rating: HTTP ${response.code}")
+				}
+			}
 		} else {
 			val ratingRequest = Request.Builder()
 				.delete()
 				.url("$BASE_API_URL/series/$rateId/rating")
-			okHttp.newCall(ratingRequest.build()).await()
+			okHttp.newCall(ratingRequest.build()).await().use { response ->
+				if (!response.isSuccessful && response.code != 404) {
+					throw IOException("Failed to delete MangaUpdates rating: HTTP ${response.code}")
+				}
+			}
 		}
 
 		val updated = entity.copy(status = status, rating = rating, comment = comment)
@@ -1011,13 +1090,21 @@ class MangaUpdatesRepository(
 
 			for (i in 0 until results.length()) {
 				val result = results.getJSONObject(i)
-				val record = result.getJSONObject("record")
-				val series = record.optJSONObject("series") ?: continue
-				val targetId = series.optLong("id", 0L)
-				if (targetId == 0L) continue
+				// Try nested structure: result.record.series.{id, title, url}
+				val record = result.optJSONObject("record")
+				val series = record?.optJSONObject("series")
+				val targetId = series?.optLong("id", 0L)?.takeIf { it > 0L }
+					?: result.optLong("series_id", 0L).takeIf { it > 0L }
+				if (targetId == null || targetId == 0L) continue
 
-				val status = record.optJSONObject("status")
-				val chapter = status?.optInt("chapter", 0) ?: 0
+				val status = record?.optJSONObject("status")
+				val chapter = status?.optInt("chapter", 0)
+					?: result.optInt("chapter", 0)
+
+				val seriesTitle = series?.optString("title")?.takeIf { it.isNotBlank() }
+					?: result.optString("series_title").takeIf { it.isNotBlank() }
+				val seriesUrl = series?.optString("url")?.takeIf { it.isNotBlank() }
+					?: result.optString("series_url").takeIf { it.isNotBlank() }
 
 				val existing = existingEntries[targetId]
 				val mangaId = existing?.mangaId ?: 0L
@@ -1032,9 +1119,9 @@ class MangaUpdatesRepository(
 					comment = existing?.comment,
 					rating = existing?.rating ?: 0f,
 					mediaType = existing?.mediaType ?: "",
-					remoteTitle = series.optString("title").takeIf { it.isNotBlank() } ?: existing?.remoteTitle,
+					remoteTitle = seriesTitle ?: existing?.remoteTitle,
 					remoteCoverUrl = existing?.remoteCoverUrl,
-					remoteUrl = series.optString("url").takeIf { it.isNotBlank() } ?: existing?.remoteUrl,
+					remoteUrl = seriesUrl ?: existing?.remoteUrl,
 				)
 				Log.d(TAG, "fetchListSeries: targetId=$targetId, title=${entity.remoteTitle}, coverUrl=${entity.remoteCoverUrl}")
 				synced.add(entity)
@@ -1091,51 +1178,12 @@ class MangaUpdatesRepository(
 				return null
 			}
 			val json = response.parseJson()
-			parseUserSeriesRating(json)?.also { rating ->
+			parseMangaUpdatesUserRating(json)?.also { rating ->
 				Log.d(TAG, "fetchUserSeriesRating: targetId=$targetId rating=$rating")
 			}
 		}.getOrElse { error ->
 			Log.w(TAG, "fetchUserSeriesRating: targetId=$targetId failed", error)
 			null
-		}
-	}
-
-	private fun parseUserSeriesRating(response: JSONObject): Float? {
-		return response.optNormalizedUserRating("rating")
-			?: response.optNormalizedUserRating("user_rating")
-			?: response.optJSONObject("record")?.optNormalizedUserRating("rating")
-			?: response.optJSONObject("record")?.optNormalizedUserRating("user_rating")
-			?: response.optJSONObject("status")?.optNormalizedUserRating("rating")
-	}
-
-	private fun JSONObject.optNormalizedUserRating(key: String): Float? {
-		if (!has(key) || isNull(key)) return null
-		val raw = opt(key) ?: return null
-		return when (raw) {
-			is Number -> normalizeUserRatingValue(raw.toDouble())
-			is String -> raw.toDoubleOrNull()?.let(::normalizeUserRatingValue)
-			is JSONObject -> raw.optNumeric("rating")
-				?: raw.optNumeric("value")
-				?: raw.optNumeric("score")
-			else -> null
-		}
-	}
-
-	private fun JSONObject.optNumeric(key: String): Float? {
-		if (!has(key) || isNull(key)) return null
-		val raw = opt(key) ?: return null
-		return when (raw) {
-			is Number -> normalizeUserRatingValue(raw.toDouble())
-			is String -> raw.toDoubleOrNull()?.let(::normalizeUserRatingValue)
-			else -> null
-		}
-	}
-
-	private fun normalizeUserRatingValue(rawValue: Double): Float {
-		return when {
-			rawValue <= 0.0 -> 0f
-			rawValue > 10.0 -> (rawValue / 10.0).toFloat()
-			else -> rawValue.toFloat()
 		}
 	}
 
