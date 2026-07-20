@@ -200,6 +200,11 @@ internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (
 	-> null
 }
 
+internal fun DetailsOrigin.initialProjectionIntentOrNull(): ContentIntent? = when (this) {
+	is DetailsOrigin.LocalMangaContent -> ContentIntent.of(manga)
+	else -> initialProjectionLocalMangaIdOrNull()?.let(ContentIntent::of)
+}
+
 internal fun Content.isSyntheticEntityGraphContent(): Boolean = source.name == SYNTHETIC_ENTITY_GRAPH_SOURCE
 
 private const val ENTITY_RELATION_SECTIONS_DEBOUNCE_MS = 120L
@@ -567,15 +572,13 @@ class DetailsViewModel @Inject constructor(
 		org.skepsun.kototoro.core.nav.AppRouter.KEY_TEMPORARY_DETAILS,
 	) == true
 	private val originContent = (activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.LocalMangaContent)?.manga
-	private val initialLoadIntentOverride = activeExternalOrigin
-		?.initialProjectionLocalMangaIdOrNull()
-		?.let(ContentIntent::of)
+	private val initialProjectionIntentOverride = activeExternalOrigin?.initialProjectionIntentOrNull()
 	private var loadingJob: Job = Job()
 	private var translateAvailabilityJob: Job? = null
 	private var readingSearchJob: Job? = null
 	private var readingSearchGeneration: Int = 0
 	private var allEnabledSourcesLoaded = false
-	private var currentLoadIntentOverride: ContentIntent? = initialLoadIntentOverride
+	private var currentLoadIntentOverride: ContentIntent? = initialProjectionIntentOverride
 	private var translationCacheSourceLang: String? = null
 	private var translationCacheTargetLang: String? = null
 	private val activeMangaIdFlow = kotlinx.coroutines.flow.MutableStateFlow(
@@ -1663,7 +1666,7 @@ class DetailsViewModel @Inject constructor(
 		Log.i(
 			DETAILS_TRACE_TAG,
 			"vm.init origin=${activeExternalOrigin.detailsTraceSummary()} intentId=${intent.mangaId} " +
-				"initialOverride=${initialLoadIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
+				"initialOverride=${initialProjectionIntentOverride?.mangaId} activeMangaId=${activeMangaIdFlow.value}",
 		)
 		// Apply instant first paint only from the explicit DetailsOrigin payload.
 		// Raw intent seed should not predefine current details before real resolution.
@@ -3531,7 +3534,7 @@ class DetailsViewModel @Inject constructor(
 		get() = selectedBranch.value
 
 	init {
-		if (initialLoadIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
+		if (initialProjectionIntentOverride?.mangaId?.takeIf { it != 0L } != null || intent.mangaId != 0L || intent.manga != null) {
 			loadingJob = doLoad(force = false)
 		}
 		scrobblingInfo
