@@ -230,6 +230,38 @@ class TachiyomiXSourceCompatibilityTest {
 
 	@OptIn(ExperimentalCoroutinesApi::class)
 	@Test
+	fun `repository normalizes partial legacy details before snapshotting`() = runTest {
+		Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+		ArchTaskExecutor.getInstance().setDelegate(IMMEDIATE_TASK_EXECUTOR)
+		try {
+			val catalogueSource = PartialDetailsCatalogueSource()
+			val source = MihonMangaSource(catalogueSource, "test.partial.extension")
+			val repository = MihonMangaRepository(source, mockk<MemoryContentCache>(relaxed = true))
+			val listedManga = repository.getList(offset = 0, order = null, filter = null).single()
+
+			val firstDetails = repository.getDetails(
+				listedManga,
+				ContentRepository.DetailsFetchMode.FORCE_REFRESH,
+			)
+			val secondDetails = repository.getDetails(
+				firstDetails,
+				ContentRepository.DetailsFetchMode.FORCE_REFRESH,
+			)
+
+			assertEquals("Listed title", firstDetails.title)
+			assertEquals("Listed title", secondDetails.title)
+			assertEquals("https://example.org/listed.jpg", firstDetails.coverUrl)
+			assertEquals("Details from partial model", firstDetails.description)
+			assertEquals(listOf("Listed title", "Listed title"), catalogueSource.receivedTitles)
+			assertEquals(listOf("list-token", "list-token"), catalogueSource.receivedTokens)
+		} finally {
+			ArchTaskExecutor.getInstance().setDelegate(null)
+			Dispatchers.resetMain()
+		}
+	}
+
+	@OptIn(ExperimentalCoroutinesApi::class)
+	@Test
 	fun `repository uses v16 direct related manga contract`() = runTest {
 		Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
 		ArchTaskExecutor.getInstance().setDelegate(IMMEDIATE_TASK_EXECUTOR)
@@ -378,6 +410,54 @@ class TachiyomiXSourceCompatibilityTest {
 
 		override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
 			return Observable.just(listOf(chapter("/new", "New")))
+		}
+	}
+
+	private class PartialDetailsCatalogueSource : CatalogueSource {
+		override val id: Long = 2L
+		override val name: String = "Partial details"
+		override val lang: String = "en"
+		override val supportsLatest: Boolean = false
+		val receivedTitles = mutableListOf<String>()
+		val receivedTokens = mutableListOf<String?>()
+
+		override fun getFilterList(): FilterList = FilterList()
+
+		override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+			return Observable.just(
+				MangasPage(
+					mangas = listOf(
+						manga("/listed", "Listed title").apply {
+							thumbnail_url = "https://example.org/listed.jpg"
+							memo = buildJsonObject { put("token", "list-token") }
+						},
+					),
+					hasNextPage = false,
+				),
+			)
+		}
+
+		override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+			return Observable.just(MangasPage(emptyList(), false))
+		}
+
+		override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+			return Observable.just(MangasPage(emptyList(), false))
+		}
+
+		override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+			receivedTitles += manga.title
+			receivedTokens += manga.memo["token"]?.jsonPrimitive?.content
+			return Observable.just(
+				SManga.create().apply {
+					description = "Details from partial model"
+					initialized = true
+				},
+			)
+		}
+
+		override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+			return Observable.just(emptyList())
 		}
 	}
 

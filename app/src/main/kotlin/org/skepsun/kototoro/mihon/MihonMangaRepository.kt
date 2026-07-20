@@ -5,9 +5,11 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
@@ -188,27 +190,9 @@ class MihonMangaRepository(
             }
             .sortedBy { it.number } // Kototoro 内部列表始终保持升序
         
-        // Copy missing fields from original manga to details
-        // Some sources don't return all fields in getContentDetails, or return them empty.
-        details.url = sContent.url
+        // Legacy sources may return a partial SManga whose required lateinit fields are unset.
+        details.applyDetailFallbacks(sContent)
         rememberMihonManga(details)
-        
-        // Title fallback
-        val detailsTitle = try { details.title } catch (e: Exception) { "" }
-        if (detailsTitle.isBlank()) {
-            details.title = sContent.title
-        }
-        
-        // Thumbnail fallback - IMPORTANT: many sources return empty or same-as-manga-url thumbnail in details
-        val detailsThumb = try { details.thumbnail_url } catch (e: Exception) { null }
-        val searchThumb = try { sContent.thumbnail_url } catch (e: Exception) { null }
-        
-        if (detailsThumb.isNullOrBlank() || detailsThumb == details.url || detailsThumb == sContent.url) {
-            if (!searchThumb.isNullOrBlank()) {
-                android.util.Log.d("MihonMangaRepository", "Detail thumb is invalid/missing, falling back to search thumb: $searchThumb")
-                details.thumbnail_url = searchThumb
-            }
-        }
         
         android.util.Log.d("MihonMangaRepository", "Final details thumbnail: ${try { details.thumbnail_url } catch (e: Exception) { "uninitialized" }}")
         
@@ -419,8 +403,83 @@ class MihonMangaRepository(
     }
 
     private fun rememberMihonManga(manga: SManga) {
-        val url = runCatching { manga.url }.getOrNull()?.takeIf(String::isNotBlank) ?: return
-        mangaSnapshots.put(url, manga.copy())
+        val url = manga.readMihonField("") { url }.takeIf(String::isNotBlank) ?: return
+        mangaSnapshots.put(url, manga.snapshot(url))
+    }
+
+    private fun SManga.applyDetailFallbacks(original: SManga) {
+        val originalUrl = original.readMihonField("") { url }
+        url = originalUrl
+
+        if (readMihonField("") { title }.isBlank()) {
+            title = original.readMihonField("Unknown") { title }.ifBlank { "Unknown" }
+        }
+
+        val detailsThumbnail = readMihonField<String?>(null) { thumbnail_url }
+        val originalThumbnail = original.readMihonField<String?>(null) { thumbnail_url }
+        if (
+            (detailsThumbnail.isNullOrBlank() || detailsThumbnail == originalUrl) &&
+            !originalThumbnail.isNullOrBlank()
+        ) {
+            android.util.Log.d(
+                TAG,
+                "Detail thumb is invalid/missing, falling back to search thumb: $originalThumbnail",
+            )
+            thumbnail_url = originalThumbnail
+        }
+
+        val detailsMemo = readMihonField(JsonObject(emptyMap())) { memo }
+        if (detailsMemo.isEmpty()) {
+            val originalMemo = original.readMihonField(JsonObject(emptyMap())) { memo }
+            if (originalMemo.isNotEmpty()) {
+                memo = originalMemo
+            }
+        }
+    }
+
+    private fun SManga.snapshot(url: String): SManga = SManga.create().also { snapshot ->
+        snapshot.url = url
+        snapshot.title = readMihonField("") { title }
+        snapshot.artist = readMihonField<String?>(null) { artist }
+        snapshot.author = readMihonField<String?>(null) { author }
+        snapshot.description = readMihonField<String?>(null) { description }
+        snapshot.genre = readMihonField<String?>(null) { genre }
+        snapshot.status = readMihonField(SManga.UNKNOWN) { status }
+        snapshot.thumbnail_url = readMihonField<String?>(null) { thumbnail_url }
+        snapshot.update_strategy = readMihonField(UpdateStrategy.ALWAYS_UPDATE) { update_strategy }
+        snapshot.initialized = readMihonField(false) { initialized }
+
+        copyCompatibleMihonField { snapshot.genres = genres }
+        copyCompatibleMihonField { snapshot.altTitles = altTitles }
+        copyCompatibleMihonField { snapshot.banner = banner }
+        copyCompatibleMihonField { snapshot.contentRating = contentRating }
+        copyCompatibleMihonField { snapshot.score = score }
+        copyCompatibleMihonField { snapshot.readingMode = readingMode }
+        copyCompatibleMihonField { snapshot.memo = memo }
+    }
+
+    private inline fun <T> SManga.readMihonField(defaultValue: T, getter: SManga.() -> T): T {
+        return try {
+            getter()
+        } catch (_: UninitializedPropertyAccessException) {
+            defaultValue
+        } catch (_: AbstractMethodError) {
+            defaultValue
+        } catch (_: NoSuchMethodError) {
+            defaultValue
+        }
+    }
+
+    private inline fun copyCompatibleMihonField(copy: () -> Unit) {
+        try {
+            copy()
+        } catch (_: UninitializedPropertyAccessException) {
+            // Partial legacy model; the snapshot keeps its default value.
+        } catch (_: AbstractMethodError) {
+            // Extension was compiled against an older source API.
+        } catch (_: NoSuchMethodError) {
+            // Extension was compiled against an older source API.
+        }
     }
 
     private fun rememberMihonChapter(chapterId: Long, chapter: SChapter) {
