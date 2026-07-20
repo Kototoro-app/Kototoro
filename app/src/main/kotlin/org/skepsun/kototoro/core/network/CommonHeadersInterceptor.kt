@@ -17,6 +17,7 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 
+import org.koitharu.kotatsu.parsers.model.MangaSource as KTMangaSource
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.mergeWith
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
@@ -34,6 +35,7 @@ class CommonHeadersInterceptor @Inject constructor(
 	override fun intercept(chain: Chain): Response {
 		val request = chain.request()
 		val source = request.tag(ContentSource::class.java)
+			?: request.tag(KTMangaSource::class.java)?.let { org.skepsun.kototoro.core.model.ContentSource(it.name) }
 			?: request.headers[CommonHeaders.MANGA_SOURCE]?.let { ContentSource(it) }
 		val repository = if (source != null) {
 			mangaRepositoryFactoryLazy.get().create(source)
