@@ -192,7 +192,11 @@ class PageLoader @Inject constructor(
 		return null
 	}
 
-	fun loadPageAsync(page: ContentPage, force: Boolean): ProgressDeferred<Uri, Float> {
+	fun loadPageAsync(
+		page: ContentPage,
+		force: Boolean,
+		pageUrlOverride: String? = null,
+	): ProgressDeferred<Uri, Float> {
 		val currentSignature = enhancementController.currentWorkSignature()
 		val taskKey = page.taskKey()
 		var task = tasks[taskKey]
@@ -204,7 +208,12 @@ class PageLoader @Inject constructor(
 		} else if (task?.isCancelled == false) {
 			return task
 		}
-		task = loadPageAsyncImpl(page, skipCache = force, isPrefetch = false)
+		task = loadPageAsyncImpl(
+			page,
+			skipCache = force,
+			isPrefetch = false,
+			pageUrlOverride = pageUrlOverride,
+		)
 		synchronized(tasks) {
 			tasks[taskKey] = PageTaskRecord(
 				task = task,
@@ -341,6 +350,7 @@ class PageLoader @Inject constructor(
 		page: ContentPage,
 		skipCache: Boolean,
 		isPrefetch: Boolean,
+		pageUrlOverride: String? = null,
 	): ProgressDeferred<Uri, Float> {
 		val progress = MutableStateFlow(PROGRESS_UNDEFINED)
 		val deferred = loaderScope.async {
@@ -351,6 +361,7 @@ class PageLoader @Inject constructor(
 					progress = progress,
 					isPrefetch = isPrefetch,
 					skipCache = skipCache,
+					pageUrlOverride = pageUrlOverride,
 				)
 			} finally {
 				if (counter.decrementAndGet() == 0) {
@@ -378,10 +389,11 @@ class PageLoader @Inject constructor(
 		progress: MutableStateFlow<Float>,
 		isPrefetch: Boolean,
 		skipCache: Boolean,
+		pageUrlOverride: String?,
 	): Uri {
 		// Phase 1: Download + prepare — holds semaphore (fast: network I/O only)
 		val preparedPage = semaphore.withPermit {
-			val pageUrl = getPageUrl(page)
+			val pageUrl = pageUrlOverride ?: getPageUrl(page)
 			check(pageUrl.isNotBlank()) { "Cannot obtain full image url for $page" }
 			val sourceUri = if (!skipCache) {
 				cache.get(pageUrl)?.toUri()

@@ -81,6 +81,7 @@
     <string name="chapter_d_of_d">%1$d/%2$d 章</string>
     <string name="close">关闭</string>
     <string name="try_again">重试</string>
+    <string name="open_in_reader_browser">在内置浏览器中打开</string>
     <string name="clear_history">清除阅读记录</string>
     <string name="nothing_found">结果为空</string>
     <string name="history_is_empty">暂无历史记录</string>

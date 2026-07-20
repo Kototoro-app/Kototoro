@@ -33,7 +33,9 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.core.javascript.BrowserVerificationBridge
 import org.skepsun.kototoro.core.os.NetworkState
+import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.ui.list.lifecycle.LifecycleAwareViewHolder
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -83,6 +85,7 @@ abstract class BasePageHolder<B : ViewBinding>(
 	private var lastTranslationContentSignature: String? = null
 	private var pendingAnimatedUri: Uri? = null
 	private var autoBackgroundJob: Job? = null
+	private var browserVerificationJob: Job? = null
 	private var autoBackgroundSource: Uri? = null
 	private var autoBackgroundColor: Int? = null
 
@@ -101,10 +104,35 @@ abstract class BasePageHolder<B : ViewBinding>(
 				)
 
 				R.id.button_error_details -> viewModel.showErrorDetails(boundData?.url)
+
+				R.id.button_open_in_browser -> {
+					val page = boundData?.toContentPage() ?: return@OnClickListener
+					viewModel.openInBrowser(page) { url ->
+						browserVerificationJob?.cancel()
+						browserVerificationJob = lifecycleScope.launch {
+							val token = BrowserVerificationBridge.register()
+							context.startActivity(
+								AppRouter.browserIntent(context, url, page.source, null)
+									.putExtra(AppRouter.KEY_BROWSER_WAIT_TOKEN, token)
+									.putExtra(AppRouter.KEY_BROWSER_REFETCH_AFTER_SUCCESS, false),
+							)
+							val result = withContext(Dispatchers.IO) {
+								BrowserVerificationBridge.await(token, BROWSER_WAIT_TIMEOUT_SECONDS)
+							}
+							val verifiedUrl = result?.url?.takeIf {
+								it != url && (it.startsWith("http://") || it.startsWith("https://"))
+							}
+							if (verifiedUrl != null && boundData?.id == page.id) {
+								viewModel.retry(page, isFromUser = false, pageUrlOverride = verifiedUrl)
+							}
+						}
+					}
+				}
 			}
 		}
 		bindingInfo.buttonRetry.setOnClickListener(clickListener)
 		bindingInfo.buttonErrorDetails.setOnClickListener(clickListener)
+		bindingInfo.buttonOpenInBrowser.setOnClickListener(clickListener)
 	}
 
 	@CallSuper
@@ -192,6 +220,7 @@ abstract class BasePageHolder<B : ViewBinding>(
 	}
 
 	override fun onDestroy() {
+		browserVerificationJob?.cancel()
 		context.unregisterComponentCallbacks(this)
 		super.onDestroy()
 	}
@@ -252,6 +281,7 @@ abstract class BasePageHolder<B : ViewBinding>(
 					ExceptionResolver.getResolveStringId(e).ifZero { R.string.try_again },
 				)
 				bindingInfo.buttonErrorDetails.isVisible = e.isSerializable()
+				bindingInfo.buttonOpenInBrowser.isVisible = viewModel.canOpenInBrowser()
 				bindingInfo.layoutError.isVisible = true
 				bindingInfo.progressBar.hide()
 			}
@@ -400,5 +430,6 @@ abstract class BasePageHolder<B : ViewBinding>(
 
 	private companion object {
 		const val AUTO_BACKGROUND_SAMPLE_SIZE = 96
+		const val BROWSER_WAIT_TIMEOUT_SECONDS = 300L
 	}
 }

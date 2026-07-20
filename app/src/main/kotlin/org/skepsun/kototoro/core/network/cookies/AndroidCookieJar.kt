@@ -20,9 +20,18 @@ class AndroidCookieJar : MutableCookieJar {
 	@WorkerThread
 	override fun loadForRequest(url: HttpUrl): List<Cookie> {
 		val rawCookie = cookieManager.getCookie(url.toString()) ?: return emptyList()
-		return rawCookie.split(';').mapNotNull {
+		val cookies = rawCookie.split(';').mapNotNull {
 			Cookie.parse(url, it)
 		}
+		val deduplicated = cookies.distinctBy { it.name to it.value }
+		if (deduplicated.size != cookies.size) {
+			android.util.Log.d(
+				"MihonNetwork",
+				"AndroidCookieJar deduplicated identical cookies: url=${url.host}, " +
+					"before=${cookies.size}, after=${deduplicated.size}",
+			)
+		}
+		return deduplicated
 	}
 
 	@WorkerThread
