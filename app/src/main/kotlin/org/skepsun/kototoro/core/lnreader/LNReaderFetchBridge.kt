@@ -53,7 +53,7 @@ class LNReaderFetchBridge(
 			}
 			
 			val method = (init?.optString("method"))?.ifEmpty { "GET" }?.uppercase() ?: "GET"
-			val headersMap = extractHeaders(init)
+			val headersMap = extractRequestHeaders(init, includeOrigin = method != "GET" && method != "HEAD")
 			val body = extractBody(init)
 			
 			// Build OkHttp request
@@ -143,7 +143,7 @@ class LNReaderFetchBridge(
 			} catch (e: Exception) {
 				null
 			}
-			val headersMap = extractHeaders(init)
+			val headersMap = extractRequestHeaders(init, includeOrigin = true)
 			val requestBodyBytes = Base64.getDecoder().decode(bodyBase64)
 			val contentType = headersMap["Content-Type"] ?: "application/octet-stream"
 			val requestBody = requestBodyBytes.toRequestBody(contentType.toMediaType())
@@ -581,7 +581,32 @@ class LNReaderFetchBridge(
 		}
 		return result
 	}
-	
+
+	private fun extractRequestHeaders(
+		init: org.json.JSONObject?,
+		includeOrigin: Boolean,
+	): Map<String, String> {
+		val result = extractHeaders(init).toMutableMap()
+		val referrer = init?.optString("referrer")?.takeIf { it.isNotBlank() }
+		if (referrer != null && result.keys.none { it.equals("Referer", ignoreCase = true) }) {
+			result["Referer"] = referrer
+		}
+		if (includeOrigin && referrer != null && result.keys.none { it.equals("Origin", ignoreCase = true) }) {
+			runCatching {
+				val referrerUri = URI(referrer)
+				if (!referrerUri.scheme.isNullOrBlank() && !referrerUri.host.isNullOrBlank()) {
+					result["Origin"] = buildString {
+						append(referrerUri.scheme)
+						append("://")
+						append(referrerUri.host)
+						if (referrerUri.port > 0) append(":${referrerUri.port}")
+					}
+				}
+			}
+		}
+		return result
+	}
+
 	private fun extractBody(init: org.json.JSONObject?): String? {
 		if (init == null || !init.has("body")) return null
 		val body = init.opt("body")

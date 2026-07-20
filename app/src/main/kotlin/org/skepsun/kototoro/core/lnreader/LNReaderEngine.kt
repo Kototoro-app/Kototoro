@@ -349,13 +349,18 @@ class LNReaderEngine(
 				globalThis.atob = function(str) {
 					const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 					let output = '';
-					str = String(str).replace(/=+${'$'}/, '');
+					str = String(str).replace(/\s/g, '');
 					if (str.length % 4 === 1) throw new Error('Invalid base64 string');
 					for (let i = 0; i < str.length;) {
 						const enc1 = chars.indexOf(str.charAt(i++));
 						const enc2 = chars.indexOf(str.charAt(i++));
-						const enc3 = chars.indexOf(str.charAt(i++));
-						const enc4 = chars.indexOf(str.charAt(i++));
+						const char3 = str.charAt(i++);
+						const char4 = str.charAt(i++);
+						const enc3 = char3 ? chars.indexOf(char3) : 64;
+						const enc4 = char4 ? chars.indexOf(char4) : 64;
+						if (enc1 < 0 || enc2 < 0 || enc3 < 0 || enc4 < 0) {
+							throw new Error('Invalid base64 string');
+						}
 						const chr1 = (enc1 << 2) | (enc2 >> 4);
 						const chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
 						const chr3 = ((enc3 & 3) << 6) | enc4;
