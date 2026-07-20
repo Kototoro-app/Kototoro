@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.favourites.ui.container
 
 import android.content.Context
+import androidx.room.withTransaction
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -596,15 +597,15 @@ class FavouritesContainerViewModel @Inject constructor(
 
 				var deletedCount = 0
 				var deduplicatedSeries = 0
-				val idsToDelete = mutableListOf<Long>()
+				val groupsToDeduplicate = mutableListOf<DuplicatesGroup>()
 				for (fg in finalGroups) {
-					idsToDelete.addAll(fg.duplicates.map { it.id })
+					groupsToDeduplicate.add(fg)
 					deletedCount += fg.duplicates.size
 					deduplicatedSeries++
 				}
 
-				if (idsToDelete.isNotEmpty()) {
-					favouritesRepository.removeFromFavourites(idsToDelete)
+				if (groupsToDeduplicate.isNotEmpty()) {
+					performDeduplication(groupsToDeduplicate)
 				}
 
 				duplicatesFinderState.value = null
@@ -785,19 +786,19 @@ class FavouritesContainerViewModel @Inject constructor(
 		val current = duplicatesFinderState.value ?: return
 		launchJob(Dispatchers.Default) {
 			try {
-				val idsToDelete = mutableListOf<Long>()
+				val groupsToDeduplicate = mutableListOf<DuplicatesGroup>()
 				var deletedCount = 0
 				var deduplicatedSeries = 0
 				for (group in current.groups) {
 					if (group.isChecked) {
-						idsToDelete.addAll(group.duplicates.map { it.id })
+						groupsToDeduplicate.add(group)
 						deletedCount += group.duplicates.size
 						deduplicatedSeries++
 					}
 				}
 
-				if (idsToDelete.isNotEmpty()) {
-					favouritesRepository.removeFromFavourites(idsToDelete)
+				if (groupsToDeduplicate.isNotEmpty()) {
+					performDeduplication(groupsToDeduplicate)
 				}
 
 				duplicatesFinderState.value = null
@@ -809,6 +810,45 @@ class FavouritesContainerViewModel @Inject constructor(
 
 			} catch (e: Exception) {
 			}
+		}
+	}
+
+	private suspend fun performDeduplication(groupsToDelete: List<DuplicatesGroup>) {
+		db.withTransaction {
+			for (group in groupsToDelete) {
+				val rep = group.representative
+				val repProjectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(rep.url, rep.publicUrl)
+				val repEntityId = repProjectionKey?.let { db.getEntityGraphDao().findActiveBinding(rep.source.name, it)?.entityId }
+					?: db.getEntityGraphDao().findActiveBinding("local_manga", rep.id.toString())?.entityId
+					?: db.getEntityGraphDao().findActiveBinding("0", rep.id.toString())?.entityId
+
+				for (dup in group.duplicates) {
+					val projectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(dup.url, dup.publicUrl)
+					val dupEntityId = projectionKey?.let { db.getEntityGraphDao().findActiveBinding(dup.source.name, it)?.entityId }
+						?: db.getEntityGraphDao().findActiveBinding("local_manga", dup.id.toString())?.entityId
+						?: db.getEntityGraphDao().findActiveBinding("0", dup.id.toString())?.entityId
+
+					// 1. Delete entity bindings for the duplicate projection
+					if (projectionKey != null) {
+						db.getEntityGraphDao().deleteBindingBySource(dup.source.name, projectionKey)
+					}
+					db.getEntityGraphDao().deleteBindingBySource("local_manga", dup.id.toString())
+					db.getEntityGraphDao().deleteBindingBySource("0", dup.id.toString())
+
+					// 2. If it was a separate work, remove it from work_favourites
+					if (dupEntityId != null && dupEntityId != repEntityId) {
+						db.getWorkFavouritesDao().delete(dupEntityId)
+					}
+
+					// 3. Clear the duplicate manga metadata and its chapters from database
+					db.getMangaDao().find(dup.id)?.manga?.let { entity ->
+						db.getMangaDao().delete(listOf(entity))
+					}
+					db.getChaptersDao().deleteAll(dup.id)
+				}
+			}
+			// Final GC sweeps
+			db.getChaptersDao().gc()
 		}
 	}
 }
