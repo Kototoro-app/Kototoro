@@ -30,6 +30,17 @@ class DetailsProjectionFilterTest {
 	}
 
 	@Test
+	fun `different manga subtypes are allowed in the same work`() {
+		assertTrue(
+			isDetailsProjectionAllowed(
+				currentType = ContentType.MANGA,
+				projectionType = ContentType.MANHUA,
+				spaceAllowedTypes = null,
+			),
+		)
+	}
+
+	@Test
 	fun `space restriction is applied after content type matching`() {
 		assertFalse(
 			isDetailsProjectionAllowed(

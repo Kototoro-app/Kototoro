@@ -12,7 +12,11 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.work.domain.WorkIdentity
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkMigrationState
+import org.skepsun.kototoro.work.domain.WorkProjectionBindingAction
+import org.skepsun.kototoro.work.domain.WorkProjectionBindingConflict
+import org.skepsun.kototoro.work.domain.WorkProjectionBindingResult
 import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.work.domain.isWorkContentTypeCompatibleWith
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,6 +44,14 @@ class DefaultWorkResolver @Inject constructor(
 			bindings = dao.findActiveLocalBindingsByEntity(entityId),
 			prefs = dao.findEntityPrefs(entityId),
 		)
+	}
+
+	override suspend fun resolveBindingsByEntityId(entityId: Long) = withContext(Dispatchers.IO) {
+		if (resolveByEntityId(entityId) == null) {
+			emptyList()
+		} else {
+			entityGraphRepository.getBindings(entityId)
+		}
 	}
 
 	override suspend fun resolveManyByMangaIds(mangaIds: Collection<Long>): Map<Long, WorkIdentity> = withContext(Dispatchers.IO) {
@@ -104,6 +116,119 @@ class DefaultWorkResolver @Inject constructor(
 		)
 	}
 
+	override suspend fun bindProjectionToEntity(
+		targetEntityId: Long,
+		projection: Content,
+	): WorkProjectionBindingResult = withContext(Dispatchers.IO) {
+		val targetEntity = entityGraphRepository.getEntity(targetEntityId)
+		if (targetEntity?.type != EntityType.WORK) {
+			return@withContext bindingConflict(
+				reason = WorkProjectionBindingConflict.TARGET_ENTITY_MISSING,
+				targetEntityId = targetEntityId,
+				projectionId = projection.id,
+			)
+		}
+		if (!targetEntity.contentType.isWorkContentTypeCompatibleWith(projection.source.contentType)) {
+			return@withContext bindingConflict(
+				reason = WorkProjectionBindingConflict.TARGET_CONTENT_TYPE_CONFLICT,
+				targetEntityId = targetEntityId,
+				projectionId = projection.id,
+			)
+		}
+
+		val currentIdentity = resolveByMangaId(projection.id)
+		val sourceEntityId = currentIdentity.entityId
+		val action = when {
+			sourceEntityId == null -> {
+				val attached = entityGraphRepository.attachLocalWorkProjectionToEntity(
+					entityId = targetEntityId,
+					content = projection,
+					selectAsPreferred = true,
+				)
+				if (!attached) {
+					return@withContext bindingConflict(
+						reason = WorkProjectionBindingConflict.BINDING_FAILED,
+						targetEntityId = targetEntityId,
+						projectionId = projection.id,
+					)
+				}
+				WorkProjectionBindingAction.ATTACHED
+			}
+
+			sourceEntityId == targetEntityId -> {
+				if (!entityGraphRepository.selectPreferredLocalWorkProjection(targetEntityId, projection.id)) {
+					return@withContext bindingConflict(
+						reason = WorkProjectionBindingConflict.OWNER_CHANGED,
+						targetEntityId = targetEntityId,
+						sourceEntityId = sourceEntityId,
+						projectionId = projection.id,
+					)
+				}
+				WorkProjectionBindingAction.REUSED
+			}
+
+			else -> {
+				val sourceIdentity = resolveByEntityId(sourceEntityId)
+				if (sourceIdentity == null || projection.id !in sourceIdentity.localMangaIds) {
+					return@withContext bindingConflict(
+						reason = WorkProjectionBindingConflict.SOURCE_IDENTITY_INVALID,
+						targetEntityId = targetEntityId,
+						sourceEntityId = sourceEntityId,
+						projectionId = projection.id,
+					)
+				}
+				if (sourceIdentity.localMangaIds.size == 1) {
+					val mergedEntityId = entityGraphRepository.mergeEntities(
+						targetEntityId = targetEntityId,
+						sourceEntityIds = listOf(sourceEntityId),
+						preferredLocalMangaId = projection.id,
+						allowCompatibleContentTypes = true,
+					)
+					if (mergedEntityId != targetEntityId) {
+						return@withContext bindingConflict(
+							reason = WorkProjectionBindingConflict.BINDING_FAILED,
+							targetEntityId = targetEntityId,
+							sourceEntityId = sourceEntityId,
+							projectionId = projection.id,
+						)
+					}
+					WorkProjectionBindingAction.MERGED_SINGLE_PROJECTION_WORK
+				} else {
+					val moved = entityGraphRepository.moveLocalWorkProjectionToEntity(
+						localMangaId = projection.id,
+						targetEntityId = targetEntityId,
+						expectedSourceEntityId = sourceEntityId,
+						selectAsPreferred = true,
+					)
+					if (!moved.isSuccess) {
+						return@withContext bindingConflict(
+							reason = moved.failure.toBindingConflict(),
+							targetEntityId = targetEntityId,
+							sourceEntityId = sourceEntityId,
+							projectionId = projection.id,
+						)
+					}
+					WorkProjectionBindingAction.MOVED_PROJECTION
+				}
+			}
+		}
+
+		val authoritativeIdentity = resolveByMangaId(projection.id)
+		if (authoritativeIdentity.entityId != targetEntityId || projection.id !in authoritativeIdentity.localMangaIds) {
+			return@withContext bindingConflict(
+				reason = WorkProjectionBindingConflict.OWNER_CHANGED,
+				targetEntityId = targetEntityId,
+				sourceEntityId = authoritativeIdentity.entityId,
+				projectionId = projection.id,
+			)
+		}
+		WorkProjectionBindingResult.Success(
+			entityId = targetEntityId,
+			projection = projection,
+			action = action,
+		)
+	}
+
 	override suspend fun selectPreferredProjection(entityId: Long): Long? = withContext(Dispatchers.IO) {
 		val dao = db.getEntityGraphDao()
 		val prefs = dao.findEntityPrefs(entityId)
@@ -150,6 +275,34 @@ class DefaultWorkResolver @Inject constructor(
 			.filter { it.source == "local_manga" || it.source == "0" }
 			.mapNotNull { it.externalId.toLongOrNull() }
 			.toCollection(LinkedHashSet())
+	}
+
+	private fun bindingConflict(
+		reason: WorkProjectionBindingConflict,
+		targetEntityId: Long,
+		sourceEntityId: Long? = null,
+		projectionId: Long? = null,
+	): WorkProjectionBindingResult.Conflict {
+		return WorkProjectionBindingResult.Conflict(
+			reason = reason,
+			targetEntityId = targetEntityId,
+			sourceEntityId = sourceEntityId,
+			projectionId = projectionId,
+		)
+	}
+
+	private fun EntityGraphRepository.MoveLocalWorkProjectionFailure?.toBindingConflict(): WorkProjectionBindingConflict {
+		return when (this) {
+			EntityGraphRepository.MoveLocalWorkProjectionFailure.CONTENT_TYPE_CONFLICT ->
+				WorkProjectionBindingConflict.TARGET_CONTENT_TYPE_CONFLICT
+			EntityGraphRepository.MoveLocalWorkProjectionFailure.OWNER_CHANGED ->
+				WorkProjectionBindingConflict.OWNER_CHANGED
+			EntityGraphRepository.MoveLocalWorkProjectionFailure.NO_ACTIVE_LOCAL_BINDING,
+			EntityGraphRepository.MoveLocalWorkProjectionFailure.SOURCE_ENTITY_MISSING,
+			EntityGraphRepository.MoveLocalWorkProjectionFailure.LOCAL_CONTENT_MISSING,
+				-> WorkProjectionBindingConflict.SOURCE_IDENTITY_INVALID
+			else -> WorkProjectionBindingConflict.BINDING_FAILED
+		}
 	}
 
 	private fun WorkIdentityProvenance.toBindingCreatedBy(): EntityBindingCreatedBy = when (this) {

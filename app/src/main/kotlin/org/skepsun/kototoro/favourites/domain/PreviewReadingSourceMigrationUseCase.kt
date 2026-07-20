@@ -15,6 +15,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchV2Helper
+import org.skepsun.kototoro.work.domain.isWorkContentTypeCompatibleWith
 import javax.inject.Inject
 
 private const val TAG = "ReadingPreview"
@@ -141,7 +142,7 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
                 "entityId=$entityId queries=${searchQueries.joinToString()}",
         )
         for (targetSource in targetSources) {
-            if (!targetSource.contentType.isCompatibleWith(sourceType)) {
+            if (!targetSource.contentType.isWorkContentTypeCompatibleWith(sourceType)) {
                 Log.d(
                     TAG,
                     "findBestMatch:skipType mangaId=${favourite.manga.id} target=${targetSource.name} " +
@@ -279,21 +280,4 @@ class PreviewReadingSourceMigrationUseCase @Inject constructor(
         val content: Content,
         val action: ReadingSourcePreviewAction,
     )
-}
-
-private fun ContentType.isCompatibleWith(other: ContentType): Boolean {
-    return normalizedFamily() == other.normalizedFamily()
-}
-
-private fun ContentType.normalizedFamily(): String = when (this) {
-    ContentType.MANGA,
-    ContentType.HENTAI_MANGA -> "manga"
-
-    ContentType.NOVEL,
-    ContentType.HENTAI_NOVEL -> "novel"
-
-    ContentType.VIDEO,
-    ContentType.HENTAI_VIDEO -> "video"
-
-    else -> name
 }

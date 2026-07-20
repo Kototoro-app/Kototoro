@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.domain
 
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.work.domain.isWorkContentTypeCompatibleWith
 
 /**
  * A work details page may only expose projections from the same content-type
@@ -12,7 +13,6 @@ internal fun isDetailsProjectionAllowed(
 	projectionType: ContentType?,
 	spaceAllowedTypes: Set<ContentType>?,
 ): Boolean {
-	return currentType != null &&
-		projectionType == currentType &&
+	return currentType.isWorkContentTypeCompatibleWith(projectionType) &&
 		(spaceAllowedTypes == null || projectionType in spaceAllowedTypes)
 }

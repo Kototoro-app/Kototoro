@@ -4,6 +4,7 @@ import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.entitygraph.domain.EntityBinding
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
@@ -11,6 +12,7 @@ import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.work.domain.WorkIdentity
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkMigrationState
+import org.skepsun.kototoro.work.domain.WorkProjectionBindingResult
 import org.skepsun.kototoro.work.domain.WorkResolver
 
 class DefaultSpaceSessionValidatorTest {
@@ -99,8 +101,15 @@ private class FakeWorkResolver(
 
 	override suspend fun resolveManyByMangaIds(mangaIds: Collection<Long>): Map<Long, WorkIdentity> = error("Not used")
 
+	override suspend fun resolveBindingsByEntityId(entityId: Long): List<EntityBinding> = error("Not used")
+
 	override suspend fun ensureForProjection(content: Content, provenance: WorkIdentityProvenance): WorkIdentity =
 		error("Not used")
+
+	override suspend fun bindProjectionToEntity(
+		targetEntityId: Long,
+		projection: Content,
+	): WorkProjectionBindingResult = error("Not used")
 
 	override suspend fun selectPreferredProjection(entityId: Long): Long? = error("Not used")
 }

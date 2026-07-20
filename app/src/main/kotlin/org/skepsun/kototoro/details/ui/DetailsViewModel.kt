@@ -47,7 +47,7 @@ import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
 import androidx.room.withTransaction
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.alternatives.domain.MigrateUseCase
+import org.skepsun.kototoro.favourites.domain.AttachReadingSourceToEntityUseCase
 import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.toListItem
@@ -83,6 +83,7 @@ import org.skepsun.kototoro.details.domain.DetailsInteractor
 import org.skepsun.kototoro.details.domain.DetailsLoadUseCase
 import org.skepsun.kototoro.details.domain.isDetailsProjectionAllowed
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
+import org.skepsun.kototoro.work.domain.WorkProjectionBindingResult
 import org.skepsun.kototoro.details.domain.ReadingTimeUseCase
 import org.skepsun.kototoro.details.domain.RelatedContentUseCase
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
@@ -520,7 +521,7 @@ class DetailsViewModel @Inject constructor(
 	private val detailsLoadUseCase: DetailsLoadUseCase,
 	private val progressUpdateUseCase: ProgressUpdateUseCase,
 	private val readingTimeUseCase: ReadingTimeUseCase,
-	private val migrateUseCase: MigrateUseCase,
+	private val attachReadingSourceToEntityUseCase: AttachReadingSourceToEntityUseCase,
 	statsRepository: StatsRepository,
 	private val epubChapterMappingDao: org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao,
 	private val localEpubSource: org.skepsun.kototoro.local.epub.LocalEpubSource,
@@ -2988,21 +2989,15 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private suspend fun resolveContextualEntityId(): Long? {
+		activeEntityContextId?.let { return it }
 		val localMangaId = currentObservedLocalMangaIdSnapshot() ?: baseLoadedDetails?.local?.manga?.id
 		if (localMangaId != null) {
-			entityGraphRepository.findEntityByBinding("0", localMangaId.toString())?.let {
+			workResolver.resolveByMangaId(localMangaId).entityId?.let { entityId ->
 				android.util.Log.d(
 					"DetailsViewModel",
-					"resolveContextualEntityId: resolved from source=0, localMangaId=$localMangaId, entityId=${it.id}",
+					"resolveContextualEntityId: resolved localMangaId=$localMangaId, entityId=$entityId",
 				)
-				return it.id
-			}
-			entityGraphRepository.findEntityByBinding("local_manga", localMangaId.toString())?.let {
-				android.util.Log.d(
-					"DetailsViewModel",
-					"resolveContextualEntityId: resolved from source=local_manga, localMangaId=$localMangaId, entityId=${it.id}",
-				)
-				return it.id
+				return entityId
 			}
 		}
 		val currentSelection = selectedMetadataSource.value
@@ -4437,7 +4432,10 @@ class DetailsViewModel @Inject constructor(
 				loadingJob.cancel()
 				loadingJob = doLoad(force = false)
 			}
-			refreshEntityBoundLocalSources(nextActiveMangaId ?: return@launchJob)
+			refreshEntityBoundLocalSources(
+				entityId = entityId,
+				activeMangaId = nextActiveMangaId ?: return@launchJob,
+			)
 		}
 	}
 
@@ -5182,28 +5180,34 @@ class DetailsViewModel @Inject constructor(
 	fun bindReadingCandidateToTracking(content: Content, onComplete: (() -> Unit)? = null) {
 		val selection = selectedMetadataSource.value as? MetadataSourceSelection.Tracking
 		launchJob(Dispatchers.IO + SkipErrors) {
+			var bindingSucceeded = false
 			try {
-				val currentContent = getContentOrNull()
-				val targetContent = if (currentContent != null && currentContent.id != content.id) {
-					runCatchingCancellable {
-						migrateUseCase(currentContent, content)
-						dataRepository.findContentById(content.id, withChapters = false)
-							?: content
-					}.getOrElse { content }
-				} else {
-					runCatchingCancellable {
-						dataRepository.storeContentAndReturn(content, replaceExisting = false)
-					}.getOrDefault(content)
+				val targetEntityId = activeEntityContextId ?: resolveContextualEntityId()
+				if (targetEntityId == null) {
+					errorEvent.call(IllegalStateException("Unable to resolve the current Work"))
+					return@launchJob
 				}
-				runCatchingCancellable {
-					bindReadingCandidateToCurrentEntity(targetContent.id)
+				val bindingResult = attachReadingSourceToEntityUseCase.attachToEntity(
+					targetEntityId = targetEntityId,
+					newContent = content,
+				)
+				if (bindingResult !is WorkProjectionBindingResult.Success) {
+					val conflict = bindingResult as WorkProjectionBindingResult.Conflict
+					Log.w(
+						DETAILS_TRACE_TAG,
+						"reading source bind rejected: targetEntityId=$targetEntityId " +
+							"projectionId=${conflict.projectionId} reason=${conflict.reason}",
+					)
+					errorEvent.call(IllegalStateException("Reading source binding failed: ${conflict.reason}"))
+					return@launchJob
 				}
-				runCatchingCancellable {
-					persistPreferredLocalSourceForCurrentEntity(targetContent.id)
-				}
+				val targetContent = bindingResult.projection
+				refreshEntityBoundLocalSources(
+					entityId = bindingResult.entityId,
+					activeMangaId = targetContent.id,
+				)
 				activeMangaIdFlow.value = targetContent.id
 				currentLoadIntentOverride = ContentIntent.of(targetContent.id)
-				refreshEntityBoundLocalSources(targetContent.id)
 				loadingJob.cancel()
 				loadingJob = doLoad(force = true)
 				if (selection != null) {
@@ -5214,17 +5218,29 @@ class DetailsViewModel @Inject constructor(
 						persistMetadataSourceSelectionForCurrentEntity()
 					}
 				}
+				bindingSucceeded = true
 			} finally {
-				withContext(Dispatchers.Main) {
-					onComplete?.invoke()
+				if (bindingSucceeded) {
+					withContext(Dispatchers.Main) {
+						onComplete?.invoke()
+					}
 				}
 			}
 		}
 	}
 
-	private suspend fun refreshEntityBoundLocalSources(activeMangaId: Long) {
-		val entityId = resolveContextualEntityId() ?: return
-		val bindings = entityGraphRepository.getBindings(entityId)
+	private suspend fun refreshEntityBoundLocalSources(
+		entityId: Long,
+		activeMangaId: Long,
+	) {
+		val identity = workResolver.resolveByEntityId(entityId) ?: return
+		if (activeMangaId !in identity.localMangaIds) {
+			return
+		}
+		val bindings = workResolver.resolveBindingsByEntityId(entityId)
+		activeEntityContextId = entityId
+		activeEntityContextBindings = bindings
+		activeEntityContextBoundLocalId = activeMangaId
 		sessionReadingProjectionLocalMangaId.value = activeMangaId
 		activeLocalSourceOptions.value = buildActiveLocalSourceOptions(bindings, activeMangaId)
 		entityChapterSourceInfo.value = resolveEntityChapterSourceInfo(
@@ -5234,24 +5250,6 @@ class DetailsViewModel @Inject constructor(
 		)
 		updateSourceOptions()
 		refreshResolvedPresentationState()
-	}
-
-	private suspend fun bindReadingCandidateToCurrentEntity(mangaId: Long) {
-		if (mangaId <= 0L) {
-			return
-		}
-		val entityId = resolveContextualEntityId() ?: return
-		if (entityGraphRepository.findLocalReadingBinding(mangaId) != null) {
-			return
-		}
-			val currentConfidence = currentObservedLocalMangaIdSnapshot()?.let { activeMangaId ->
-			entityGraphRepository.findLocalReadingBinding(activeMangaId)?.confidence
-		} ?: 1f
-		entityGraphRepository.attachLocalReadingBinding(
-			entityId = entityId,
-			localMangaId = mangaId,
-			confidence = currentConfidence,
-		)
 	}
 
 	private suspend fun resolveCurrentLocalMangaId(): Long? {

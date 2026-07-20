@@ -30,6 +30,7 @@ import org.skepsun.kototoro.favourites.domain.MigrationItem
 import org.skepsun.kototoro.favourites.domain.MigrationStatus
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.work.domain.WorkProjectionBindingResult
 import org.skepsun.kototoro.R
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
@@ -174,7 +175,8 @@ class SourceMigrationWorker @AssistedInject constructor(
                             val result = runCatchingCancellable {
                                 attachReadingSourceToEntityUseCase(oldContent, match)
                             }
-                            if (result.isSuccess) {
+                            val bindingResult = result.getOrNull()
+                            if (bindingResult is WorkProjectionBindingResult.Success) {
                                 items[index] = currentItem.copy(status = MigrationStatus.SUCCESS)
                                 completedCount.incrementAndGet()
                                 when (planItem?.action) {
@@ -183,7 +185,10 @@ class SourceMigrationWorker @AssistedInject constructor(
                                     null -> Unit
                                 }
                             } else {
-                                val error = result.exceptionOrNull()?.message ?: "unknown"
+                                val error = when (bindingResult) {
+                                    is WorkProjectionBindingResult.Conflict -> bindingResult.reason.name
+                                    else -> result.exceptionOrNull()?.message ?: "unknown"
+                                }
                                 items[index] = currentItem.copy(status = MigrationStatus.ERROR, errorMessage = error)
                                 failedCount.incrementAndGet()
                             }

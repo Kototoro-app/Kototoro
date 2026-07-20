@@ -52,6 +52,7 @@ import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.malsync.data.MALSyncMappingRepository
 import org.skepsun.kototoro.parsers.util.longHashCode
 import org.skepsun.kototoro.work.data.WorkMigrationLedgerEntity
+import org.skepsun.kototoro.work.domain.isWorkContentTypeCompatibleWith
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,6 +71,7 @@ internal const val WORK_PROJECTION_IDENTITY_STATUS_ACTIVE = "ACTIVE"
 internal const val WORK_PROJECTION_IDENTITY_STATUS_MERGED_BACK = "MERGED_BACK"
 internal const val WORK_PROJECTION_IDENTITY_ACTION_SPLIT = "SPLIT"
 internal const val WORK_PROJECTION_IDENTITY_ACTION_DETACH = "DETACH"
+internal const val WORK_PROJECTION_IDENTITY_ACTION_MOVE = "MOVE"
 
 @Singleton
 class EntityGraphRepository @Inject constructor(
@@ -511,6 +513,253 @@ class EntityGraphRepository @Inject constructor(
 		}
 	}
 
+	suspend fun moveLocalWorkProjectionToEntity(
+		localMangaId: Long,
+		targetEntityId: Long,
+		expectedSourceEntityId: Long,
+		selectAsPreferred: Boolean = false,
+	): MoveLocalWorkProjectionResult = withContext(Dispatchers.Default) {
+		if (localMangaId == 0L || targetEntityId == 0L || expectedSourceEntityId == 0L) {
+			return@withContext MoveLocalWorkProjectionResult.failed(
+				localMangaId = localMangaId,
+				sourceEntityId = expectedSourceEntityId,
+				targetEntityId = targetEntityId,
+				reason = MoveLocalWorkProjectionFailure.INVALID_ARGUMENT,
+			)
+		}
+		try {
+			db.withTransaction {
+				val dao = db.getEntityGraphDao()
+				val content = db.getMangaDao().find(localMangaId)?.toContent()
+					?: return@withTransaction MoveLocalWorkProjectionResult.failed(
+						localMangaId = localMangaId,
+						sourceEntityId = expectedSourceEntityId,
+						targetEntityId = targetEntityId,
+						reason = MoveLocalWorkProjectionFailure.LOCAL_CONTENT_MISSING,
+					)
+				val existingBinding = findEntityByLocalMangaId(localMangaId)
+					?: return@withTransaction MoveLocalWorkProjectionResult.failed(
+						localMangaId = localMangaId,
+						sourceEntityId = expectedSourceEntityId,
+						targetEntityId = targetEntityId,
+						reason = MoveLocalWorkProjectionFailure.NO_ACTIVE_LOCAL_BINDING,
+					)
+				if (existingBinding.entityId == targetEntityId) {
+					if (selectAsPreferred) {
+						setPreferredLocalProjectionInTransaction(
+							dao = dao,
+							entityId = targetEntityId,
+							localMangaId = localMangaId,
+							now = System.currentTimeMillis(),
+						)
+					}
+					return@withTransaction MoveLocalWorkProjectionResult(
+						localMangaId = localMangaId,
+						sourceEntityId = expectedSourceEntityId,
+						targetEntityId = targetEntityId,
+					)
+				}
+				if (existingBinding.entityId != expectedSourceEntityId) {
+					return@withTransaction MoveLocalWorkProjectionResult.failed(
+						localMangaId = localMangaId,
+						sourceEntityId = existingBinding.entityId,
+						targetEntityId = targetEntityId,
+						reason = MoveLocalWorkProjectionFailure.OWNER_CHANGED,
+					)
+				}
+				val sourceEntity = dao.findEntity(expectedSourceEntityId)
+					?: return@withTransaction MoveLocalWorkProjectionResult.failed(
+						localMangaId = localMangaId,
+						sourceEntityId = expectedSourceEntityId,
+						targetEntityId = targetEntityId,
+						reason = MoveLocalWorkProjectionFailure.SOURCE_ENTITY_MISSING,
+					)
+				val targetEntity = dao.findEntity(targetEntityId)
+					?: return@withTransaction MoveLocalWorkProjectionResult.failed(
+						localMangaId = localMangaId,
+						sourceEntityId = expectedSourceEntityId,
+						targetEntityId = targetEntityId,
+						reason = MoveLocalWorkProjectionFailure.TARGET_ENTITY_MISSING,
+					)
+				val typedTarget = targetEntity.withInferredContentType(
+					dao = dao,
+					fallback = content.source.contentType,
+				)
+				if (!typedTarget.acceptsCompatibleWorkContentType(content.source.contentType)) {
+					return@withTransaction MoveLocalWorkProjectionResult.failed(
+						localMangaId = localMangaId,
+						sourceEntityId = expectedSourceEntityId,
+						targetEntityId = targetEntityId,
+						reason = MoveLocalWorkProjectionFailure.CONTENT_TYPE_CONFLICT,
+					)
+				}
+
+				val now = System.currentTimeMillis()
+				deleteLocalProjectionBindings(dao, content)
+				dao.attachLocalWorkBindingForMerge(
+					entityId = targetEntityId,
+					externalId = localMangaId.toString(),
+					now = now,
+					confidence = existingBinding.confidence,
+				)
+				dao.attachProjectionBindingWithoutSyncIdRewrite(
+					entityId = targetEntityId,
+					content = content,
+					now = now,
+					confidence = existingBinding.confidence,
+				)
+				val movedOwner = findEntityByLocalMangaId(localMangaId)?.entityId
+				if (movedOwner != targetEntityId) {
+					throw MoveLocalWorkProjectionTransactionException(
+						MoveLocalWorkProjectionFailure.REBIND_FAILED,
+					)
+				}
+
+				reconcileSourceEntityWorkStateAfterProjectionSplit(
+					dao = dao,
+					entityId = expectedSourceEntityId,
+					detachedLocalMangaId = localMangaId,
+					now = now,
+				)
+				updateEntityAfterLocalProjectionSplit(
+					dao = dao,
+					entity = sourceEntity,
+					namesToRemove = content.localProjectionNameKeys(),
+					now = now,
+				)
+				if (typedTarget != targetEntity) {
+					dao.updateEntity(typedTarget.copy(lastAccessed = now))
+				}
+				if (selectAsPreferred) {
+					setPreferredLocalProjectionInTransaction(
+						dao = dao,
+						entityId = targetEntityId,
+						localMangaId = localMangaId,
+						now = now,
+					)
+				}
+				dao.touchEntity(targetEntityId, now)
+				recordProjectionIdentityActionInTransaction(
+					localMangaId = localMangaId,
+					oldEntityId = expectedSourceEntityId,
+					newEntityId = targetEntityId,
+					action = WORK_PROJECTION_IDENTITY_ACTION_MOVE,
+					status = WORK_PROJECTION_IDENTITY_STATUS_ACTIVE,
+					now = now,
+				)
+				MoveLocalWorkProjectionResult(
+					localMangaId = localMangaId,
+					sourceEntityId = expectedSourceEntityId,
+					targetEntityId = targetEntityId,
+				)
+			}
+		} catch (error: MoveLocalWorkProjectionTransactionException) {
+			MoveLocalWorkProjectionResult.failed(
+				localMangaId = localMangaId,
+				sourceEntityId = expectedSourceEntityId,
+				targetEntityId = targetEntityId,
+				reason = error.reason,
+			)
+		}
+	}
+
+	suspend fun attachLocalWorkProjectionToEntity(
+		entityId: Long,
+		content: Content,
+		confidence: Float = 1f,
+		selectAsPreferred: Boolean = false,
+	): Boolean = withContext(Dispatchers.Default) {
+		if (entityId == 0L || content.id == 0L) {
+			return@withContext false
+		}
+		try {
+			db.withTransaction {
+				val dao = db.getEntityGraphDao()
+				val existingOwner = findEntityByLocalMangaId(content.id)?.entityId
+				if (existingOwner != null) {
+					if (existingOwner != entityId) {
+						return@withTransaction false
+					}
+					if (selectAsPreferred) {
+						setPreferredLocalProjectionInTransaction(
+							dao = dao,
+							entityId = entityId,
+							localMangaId = content.id,
+							now = System.currentTimeMillis(),
+						)
+					}
+					return@withTransaction true
+				}
+				val targetEntity = dao.findEntity(entityId) ?: return@withTransaction false
+				val typedTarget = targetEntity.withInferredContentType(
+					dao = dao,
+					fallback = content.source.contentType,
+				)
+				if (!typedTarget.acceptsCompatibleWorkContentType(content.source.contentType)) {
+					return@withTransaction false
+				}
+				val now = System.currentTimeMillis()
+				dao.attachLocalWorkBindingForMerge(
+					entityId = entityId,
+					externalId = content.id.toString(),
+					now = now,
+					confidence = confidence,
+				)
+				dao.attachProjectionBindingWithoutSyncIdRewrite(
+					entityId = entityId,
+					content = content,
+					now = now,
+					confidence = confidence,
+				)
+				if (typedTarget != targetEntity) {
+					dao.updateEntity(typedTarget.copy(lastAccessed = now))
+				}
+				if (findEntityByLocalMangaId(content.id)?.entityId != entityId) {
+					throw MoveLocalWorkProjectionTransactionException(
+						MoveLocalWorkProjectionFailure.REBIND_FAILED,
+					)
+				}
+				if (selectAsPreferred) {
+					setPreferredLocalProjectionInTransaction(
+						dao = dao,
+						entityId = entityId,
+						localMangaId = content.id,
+						now = now,
+					)
+				}
+				dao.touchEntity(entityId, now)
+				true
+			}
+		} catch (_: MoveLocalWorkProjectionTransactionException) {
+			false
+		}
+	}
+
+	suspend fun selectPreferredLocalWorkProjection(
+		entityId: Long,
+		localMangaId: Long,
+	): Boolean = withContext(Dispatchers.Default) {
+		if (entityId == 0L || localMangaId == 0L) {
+			return@withContext false
+		}
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val owner = findEntityByLocalMangaId(localMangaId)?.entityId
+			if (owner != entityId) {
+				return@withTransaction false
+			}
+			val now = System.currentTimeMillis()
+			setPreferredLocalProjectionInTransaction(
+				dao = dao,
+				entityId = entityId,
+				localMangaId = localMangaId,
+				now = now,
+			)
+			dao.touchEntity(entityId, now)
+			true
+		}
+	}
+
 	suspend fun attachEntityTrackingBinding(
 		entityId: Long,
 		service: ScrobblerService,
@@ -781,6 +1030,8 @@ class EntityGraphRepository @Inject constructor(
 	suspend fun mergeEntities(
 		targetEntityId: Long,
 		sourceEntityIds: Collection<Long>,
+		preferredLocalMangaId: Long? = null,
+		allowCompatibleContentTypes: Boolean = false,
 	): Long? = withContext(Dispatchers.Default) {
 		val distinctSourceIds = sourceEntityIds
 			.asSequence()
@@ -796,7 +1047,13 @@ class EntityGraphRepository @Inject constructor(
 			val allIds = (distinctSourceIds + targetEntityId).distinct()
 			val records = dao.findEntitiesByIds(allIds).associateBy { it.id }.toMutableMap()
 			var mergedRecord = records[targetEntityId] ?: return@withTransaction null
-			if (!records.values.canMergeWorkContentTypes()) {
+			if (preferredLocalMangaId != null) {
+				val preferredOwner = findEntityByLocalMangaId(preferredLocalMangaId)?.entityId
+				if (preferredOwner !in allIds) {
+					return@withTransaction null
+				}
+			}
+			if (!records.values.canMergeWorkContentTypes(allowCompatibleContentTypes)) {
 				Log.w(TAG, "mergeEntities: refusing content-type conflict for entityIds=$allIds")
 				return@withTransaction null
 			}
@@ -826,6 +1083,10 @@ class EntityGraphRepository @Inject constructor(
 				}
 				Log.w(TAG, "mergeEntities: absorbing conflicting entity ${conflicting.id} (type=${conflicting.type}, nameHash=${conflicting.nameHash})")
 				// Remap bindings/relations from conflicting entity to target, then delete it
+				remapWorkOwnedState(
+					sourceEntityId = conflicting.id,
+					targetEntityId = targetEntityId,
+				)
 				remapBindingsAndRelations(dao, targetEntityId, listOf(conflicting.id))
 				dao.deleteEntitiesByIds(listOf(conflicting.id))
 				absorbedIds.add(conflicting.id)
@@ -843,6 +1104,12 @@ class EntityGraphRepository @Inject constructor(
 				return@withTransaction null
 			}
 			dao.updateEntity(mergedRecord)
+			distinctSourceIds.forEach { sourceEntityId ->
+				remapWorkOwnedState(
+					sourceEntityId = sourceEntityId,
+					targetEntityId = targetEntityId,
+				)
+			}
 			// Remap bindings and relations from source entities to target
 			remapBindingsAndRelations(
 				dao = dao,
@@ -851,6 +1118,14 @@ class EntityGraphRepository @Inject constructor(
 			)
 			// FK constraints (CASCADE) handle deletions automatically on source entities
 			dao.deleteEntitiesByIds(distinctSourceIds)
+			if (preferredLocalMangaId != null) {
+				setPreferredLocalProjectionInTransaction(
+					dao = dao,
+					entityId = targetEntityId,
+					localMangaId = preferredLocalMangaId,
+					now = now,
+				)
+			}
 			dao.touchEntity(targetEntityId, now)
 			targetEntityId
 		}
@@ -2600,6 +2875,7 @@ class EntityGraphRepository @Inject constructor(
 		entityId: Long,
 		externalId: String,
 		now: Long,
+		confidence: Float = 1f,
 	) {
 		deleteBindingBySource("0", externalId)
 		upsertBinding(
@@ -2607,7 +2883,7 @@ class EntityGraphRepository @Inject constructor(
 				entityId = entityId,
 				source = "local_manga",
 				externalId = externalId,
-				confidence = 1f,
+				confidence = confidence,
 				isPrimary = findActiveBindingsByEntity(entityId).isEmpty(),
 				state = EntityBindingState.MANUAL.name,
 				createdBy = EntityBindingCreatedBy.USER.name,
@@ -2620,6 +2896,7 @@ class EntityGraphRepository @Inject constructor(
 		entityId: Long,
 		content: Content,
 		now: Long,
+		confidence: Float = 1f,
 	) {
 		val projectionKey = ProjectionIdentityKeys.bindingKey(content.url, content.publicUrl) ?: return
 		val existing = findBinding(content.source.name, projectionKey)
@@ -2631,7 +2908,7 @@ class EntityGraphRepository @Inject constructor(
 				entityId = entityId,
 				source = content.source.name,
 				externalId = projectionKey,
-				confidence = 1f,
+				confidence = confidence,
 				isPrimary = false,
 				sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
 				state = EntityBindingState.MANUAL.name,
@@ -3024,6 +3301,20 @@ class EntityGraphRepository @Inject constructor(
 		)
 	}
 
+	private suspend fun setPreferredLocalProjectionInTransaction(
+		dao: EntityGraphDao,
+		entityId: Long,
+		localMangaId: Long,
+		now: Long,
+	) {
+		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId, now))
+		dao.updateEntityPreferredLocalMangaId(
+			entityId = entityId,
+			preferredLocalMangaId = localMangaId,
+			updatedAt = now,
+		)
+	}
+
 	private suspend fun reconcileDetachedLocalProjectionAnchors(
 		entityId: Long,
 		detachedLocalMangaId: Long,
@@ -3366,7 +3657,10 @@ class EntityGraphRepository @Inject constructor(
 			}
 			.toMutableSet()
 		fallback?.let(knownTypes::add)
-		return knownTypes.singleOrNull()?.name?.let { copy(contentType = it) } ?: this
+		val inferredType = knownTypes.firstOrNull()?.takeIf { first ->
+			knownTypes.all { first.isWorkContentTypeCompatibleWith(it) }
+		}
+		return inferredType?.name?.let { copy(contentType = it) } ?: this
 	}
 
 	private suspend fun updateEntityResolvingNameHashConflict(
@@ -3416,6 +3710,15 @@ class EntityGraphRepository @Inject constructor(
 				.joinToString(":")
 				.takeIf { it.isNotEmpty() }
 			?: "Untitled"
+	}
+
+	private suspend fun remapWorkOwnedState(
+		sourceEntityId: Long,
+		targetEntityId: Long,
+	) {
+		db.getWorkFavouritesDao().remapEntityId(sourceEntityId, targetEntityId)
+		db.getWorkHistoryDao().remapEntityId(sourceEntityId, targetEntityId)
+		db.getWorkStatsDao().remapEntityId(sourceEntityId, targetEntityId)
 	}
 
 	/**
@@ -3507,6 +3810,45 @@ class EntityGraphRepository @Inject constructor(
 			}
 		}
 	}
+
+	data class MoveLocalWorkProjectionResult(
+		val localMangaId: Long,
+		val sourceEntityId: Long,
+		val targetEntityId: Long,
+		val failure: MoveLocalWorkProjectionFailure? = null,
+	) {
+		val isSuccess: Boolean
+			get() = failure == null
+
+		companion object {
+			fun failed(
+				localMangaId: Long,
+				sourceEntityId: Long,
+				targetEntityId: Long,
+				reason: MoveLocalWorkProjectionFailure,
+			): MoveLocalWorkProjectionResult = MoveLocalWorkProjectionResult(
+				localMangaId = localMangaId,
+				sourceEntityId = sourceEntityId,
+				targetEntityId = targetEntityId,
+				failure = reason,
+			)
+		}
+	}
+
+	enum class MoveLocalWorkProjectionFailure {
+		INVALID_ARGUMENT,
+		LOCAL_CONTENT_MISSING,
+		NO_ACTIVE_LOCAL_BINDING,
+		OWNER_CHANGED,
+		SOURCE_ENTITY_MISSING,
+		TARGET_ENTITY_MISSING,
+		CONTENT_TYPE_CONFLICT,
+		REBIND_FAILED,
+	}
+
+	private class MoveLocalWorkProjectionTransactionException(
+		val reason: MoveLocalWorkProjectionFailure,
+	) : IllegalStateException(reason.name)
 
 	enum class SplitLocalWorkProjectionFailure {
 		INVALID_LOCAL_ID,

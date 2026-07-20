@@ -45,6 +45,32 @@ public data class ContentChapter(
 	 */
 	@JvmField public val sourceData: String? = null,
 ) {
+	@Deprecated(
+		message = "Binary compatibility bridge for parsers compiled before sourceData",
+		level = DeprecationLevel.HIDDEN,
+	)
+	public constructor(
+		id: Long,
+		title: String?,
+		number: Float,
+		volume: Int,
+		url: String,
+		scanlator: String?,
+		uploadDate: Long,
+		branch: String?,
+		source: ContentSource,
+	) : this(
+		id = id,
+		title = title,
+		number = number,
+		volume = volume,
+		url = url,
+		scanlator = scanlator,
+		uploadDate = uploadDate,
+		branch = branch,
+		source = source,
+		sourceData = null,
+	)
 
 	@Deprecated("Use title instead of name", ReplaceWith("ContentChapter(id, title, number, volume, url, scanlator, uploadDate, branch, source)"))
 	public constructor(
@@ -89,5 +115,37 @@ public data class ContentChapter(
 		volume.toString()
 	} else {
 		null
+	}
+
+	public companion object {
+		@Suppress("UNUSED_PARAMETER")
+		@JvmStatic
+		public fun `copy$default`(
+			chapter: ContentChapter,
+			id: Long,
+			title: String?,
+			number: Float,
+			volume: Int,
+			url: String?,
+			scanlator: String?,
+			uploadDate: Long,
+			branch: String?,
+			source: ContentSource?,
+			mask: Int,
+			marker: Any?,
+		): ContentChapter {
+			return chapter.copy(
+				id = id.takeUnless { mask and (1 shl 0) != 0 } ?: chapter.id,
+				title = if (mask and (1 shl 1) != 0) chapter.title else title,
+				number = number.takeUnless { mask and (1 shl 2) != 0 } ?: chapter.number,
+				volume = volume.takeUnless { mask and (1 shl 3) != 0 } ?: chapter.volume,
+				url = if (mask and (1 shl 4) != 0) chapter.url else requireNotNull(url),
+				scanlator = if (mask and (1 shl 5) != 0) chapter.scanlator else scanlator,
+				uploadDate = uploadDate.takeUnless { mask and (1 shl 6) != 0 } ?: chapter.uploadDate,
+				branch = if (mask and (1 shl 7) != 0) chapter.branch else branch,
+				source = if (mask and (1 shl 8) != 0) chapter.source else requireNotNull(source),
+				sourceData = chapter.sourceData,
+			)
+		}
 	}
 }
