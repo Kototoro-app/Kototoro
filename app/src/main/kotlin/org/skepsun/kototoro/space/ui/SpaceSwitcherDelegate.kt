@@ -4,6 +4,10 @@ import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.content.Intent
 import android.content.Context
+import android.content.ComponentCallbacks
+import android.content.res.Configuration
+import android.content.pm.ActivityInfo
+import android.os.Build
 import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -14,6 +18,8 @@ import android.graphics.drawable.Drawable
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.view.animation.AnimationUtils
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.collectAsState
@@ -21,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
 import androidx.core.view.doOnPreDraw
@@ -46,6 +53,7 @@ import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
+import org.skepsun.kototoro.space.domain.SpaceCockpitRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
 import org.skepsun.kototoro.space.domain.SpaceRepository
@@ -68,6 +76,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private val immersiveSessionRegistry: ImmersiveSpaceSessionRegistry,
 	private val settings: AppSettings,
 	private val transitionController: SpaceTransitionCurtainController,
+	private val cockpitRepository: SpaceCockpitRepository,
 ) {
 	private var activity: AppCompatActivity? = null
 	private var snackbarAnchor: View? = null
@@ -81,8 +90,13 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private val fabs = LinkedHashSet<ExtendedFloatingActionButton>()
 	private var switcherOverlay: ComposeView? = null
 	private var transitionOverlay: ComposeView? = null
+	private var cockpitSpaceOverlay: ComposeView? = null
+	private var cockpitCommandOverlay: ComposeView? = null
+	private var cockpitContentRoot: View? = null
 	private var sessionSpaceId: SpaceId? = null
 	private var pendingRevealTarget: SpaceId? = null
+	private var initialRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+	private var configurationCallbacks: ComponentCallbacks? = null
 
 	fun bind(
 		activity: AppCompatActivity,
@@ -91,11 +105,21 @@ class SpaceSwitcherDelegate @Inject constructor(
 		availabilityProvider: () -> SpaceSwitchAvailability,
 		progressFlusher: SpaceProgressFlusher,
 	) {
+		suppressWindowTransitionIfCockpit(activity)
 		this.activity = activity
 		this.snackbarAnchor = snackbarAnchor
 		this.origin = origin
 		this.availabilityProvider = availabilityProvider
 		this.progressFlusher = progressFlusher
+		initialRequestedOrientation = activity.requestedOrientation
+		cockpitContentRoot = activity.findViewById<ViewGroup>(android.R.id.content)?.getChildAt(0)
+		configurationCallbacks = object : ComponentCallbacks {
+			override fun onConfigurationChanged(newConfig: Configuration) {
+				if (cockpitRepository.isEnabled.value) updateImmersiveCockpit(activity, enabled = true)
+			}
+
+			override fun onLowMemory() = Unit
+		}.also(activity::registerComponentCallbacks)
 		launchOrigin = ImmersiveSpaceSwitcherTransition.consumeOrigin(activity.intent)
 		val sessionSpaceId = immersiveSessionSpaceId(
 			rawSpaceId = activity.intent.getStringExtra(EXTRA_IMMERSIVE_SESSION_SPACE_ID),
@@ -122,13 +146,24 @@ class SpaceSwitcherDelegate @Inject constructor(
 					}
 				}
 
-				override fun onDestroy(owner: LifecycleOwner) {
+					override fun onDestroy(owner: LifecycleOwner) {
+						configurationCallbacks?.let(activity::unregisterComponentCallbacks)
+						configurationCallbacks = null
 					dismissSwitcher()
-					dismissTransitionOverlay()
+						dismissTransitionOverlay()
+						dismissCockpitOverlay()
 				}
 			},
 		)
 		featureEnabled = featureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled
+		activity.lifecycleScope.launch {
+			activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
+				cockpitRepository.isEnabled.collect { enabled ->
+					updateCockpitOrientation(activity, enabled)
+					updateImmersiveCockpit(activity, enabled)
+				}
+			}
+		}
 		activity.lifecycleScope.launch {
 			activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				combine(
@@ -153,6 +188,171 @@ class SpaceSwitcherDelegate @Inject constructor(
 			activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
 				transitionController.state.collect(::updateTransitionOverlay)
 			}
+		}
+	}
+
+	@Suppress("DEPRECATION")
+	private fun suppressWindowTransitionIfCockpit(activity: AppCompatActivity) {
+		if (!cockpitRepository.isEnabled.value) return
+		activity.window.apply {
+			enterTransition = null
+			exitTransition = null
+			sharedElementEnterTransition = null
+			sharedElementExitTransition = null
+			setWindowAnimations(0)
+		}
+		if (Build.VERSION.SDK_INT >= 34) {
+			activity.overrideActivityTransition(android.app.Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+		} else {
+			activity.overridePendingTransition(0, 0)
+		}
+	}
+
+	private fun updateImmersiveCockpit(activity: AppCompatActivity, enabled: Boolean) {
+		val content = cockpitContentRoot ?: return
+		if (!enabled) {
+			content.animate().cancel()
+			content.scaleX = 1f
+			content.scaleY = 1f
+			dismissCockpitOverlay()
+			return
+		}
+		val configuration = activity.resources.configuration
+		val layoutSpec = resolveSpaceCockpitLayoutSpec(
+			availableWidth = configuration.screenWidthDp.dp,
+			availableHeight = configuration.screenHeightDp.dp,
+		)
+		content.doOnLayout { view ->
+			view.pivotX = 0f
+			view.pivotY = view.height.toFloat()
+			view.animate()
+				.scaleX(layoutSpec.workspaceScale)
+				.scaleY(layoutSpec.workspaceScale)
+				.setDuration(if (settings.isReducedVisualEffectsEnabled) 0L else 280L)
+				.start()
+		}
+		installCockpitSpaceOverlay(activity, layoutSpec)
+		installCockpitCommandOverlay(activity, layoutSpec)
+	}
+
+	private fun installCockpitCommandOverlay(
+		activity: AppCompatActivity,
+		layoutSpec: SpaceCockpitLayoutSpec,
+	) {
+		cockpitCommandOverlay?.let { overlay ->
+			overlay.disposeComposition()
+			(overlay.parent as? ViewGroup)?.removeView(overlay)
+		}
+		val overlay = ComposeView(activity).apply {
+			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+			setContent {
+				KototoroTheme {
+					ImmersiveCockpitCommandBar(
+						isLandscape = layoutSpec.isLandscape,
+						onHome = {
+							returnToMain(activity, spaceRepository.activeSpace.value, resumeReading = false)
+						},
+						onSpaces = ::showSwitcher,
+						onUnpin = { cockpitRepository.setEnabled(false) },
+					)
+				}
+			}
+		}
+		cockpitCommandOverlay = overlay
+		val metrics = activity.resources.displayMetrics
+		val fraction = layoutSpec.workbenchFraction
+		val params = if (layoutSpec.isLandscape) {
+			FrameLayout.LayoutParams(
+				(metrics.widthPixels * layoutSpec.workspaceScale).toInt(),
+				(metrics.heightPixels * fraction).toInt(),
+				Gravity.START or Gravity.TOP,
+			)
+		} else {
+			FrameLayout.LayoutParams(
+				(metrics.widthPixels * fraction).toInt(),
+				(metrics.heightPixels * layoutSpec.workspaceScale).toInt(),
+				Gravity.END or Gravity.BOTTOM,
+			)
+		}
+		activity.addContentView(overlay, params)
+	}
+
+	private fun installCockpitSpaceOverlay(
+		activity: AppCompatActivity,
+		layoutSpec: SpaceCockpitLayoutSpec,
+	) {
+		dismissCockpitOverlay()
+		val metrics = activity.resources.displayMetrics
+		val overlay = ComposeView(activity).apply {
+			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+			setContent {
+				KototoroTheme {
+					val activeSpaceId by spaceRepository.activeSpace.collectAsState()
+					val switchState by coordinator.state.collectAsState()
+					val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
+					val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
+					val state = SpaceUiState(
+						activeSpaceId = activeSpaceId,
+						workbenchMode = SpaceWorkbenchMode.COCKPIT,
+						switchInProgress = switchState.inProgress,
+						switcherEnabled = true,
+						spaces = catalogRepository.spaces.value,
+					)
+					if (layoutSpec.isLandscape) {
+						SpaceCockpitSideStrip(
+							state = state,
+							resumeItems = resumeState.items,
+							onUnpin = { cockpitRepository.setEnabled(false) },
+							onSelectSpace = ::requestSwitch,
+						)
+					} else {
+						SpaceCockpitTopStrip(
+							state = state,
+							resumeItems = resumeState.items,
+							onUnpin = { cockpitRepository.setEnabled(false) },
+							onSelectSpace = ::requestSwitch,
+						)
+					}
+				}
+			}
+		}
+		cockpitSpaceOverlay = overlay
+		val fraction = layoutSpec.workbenchFraction
+		val params = if (layoutSpec.isLandscape) {
+			FrameLayout.LayoutParams(
+				(metrics.widthPixels * fraction).toInt(),
+				ViewGroup.LayoutParams.MATCH_PARENT,
+				Gravity.END or Gravity.TOP,
+			)
+		} else {
+			FrameLayout.LayoutParams(
+				ViewGroup.LayoutParams.MATCH_PARENT,
+				(metrics.heightPixels * fraction).toInt(),
+				Gravity.TOP,
+			)
+		}
+		activity.addContentView(overlay, params)
+	}
+
+	private fun dismissCockpitOverlay() {
+		cockpitSpaceOverlay?.let { overlay ->
+			overlay.disposeComposition()
+			(overlay.parent as? ViewGroup)?.removeView(overlay)
+		}
+		cockpitSpaceOverlay = null
+		cockpitCommandOverlay?.let { overlay ->
+			overlay.disposeComposition()
+			(overlay.parent as? ViewGroup)?.removeView(overlay)
+		}
+		cockpitCommandOverlay = null
+	}
+
+	private fun updateCockpitOrientation(activity: AppCompatActivity, enabled: Boolean) {
+		if (origin != SpaceSwitchOrigin.VIDEO_PLAYER) return
+		activity.requestedOrientation = if (enabled) {
+			ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+		} else {
+			initialRequestedOrientation
 		}
 	}
 
@@ -232,7 +432,9 @@ class SpaceSwitcherDelegate @Inject constructor(
 							SpaceAction.DismissSwitcher -> dismissSwitcher()
 							SpaceAction.OpenSwitcher,
 							SpaceAction.OpenWorkbench,
-							SpaceAction.DismissWorkbench -> Unit
+							SpaceAction.DismissWorkbench,
+							SpaceAction.PinWorkbench,
+							SpaceAction.UnpinWorkbench -> Unit
 							is SpaceAction.SelectSpace -> requestSwitch(action.spaceId)
 						}
 					},
@@ -255,6 +457,26 @@ class SpaceSwitcherDelegate @Inject constructor(
 		activity.lifecycleScope.launch {
 			val activeSpaceId = spaceRepository.activeSpace.value
 			if (activeSpaceId == target || transitionController.state.value.isVisible) return@launch
+			if (cockpitRepository.isEnabled.value) {
+				dismissSwitcher()
+				when (val result = coordinator.requestSwitch(
+					target = target,
+					origin = origin,
+					availability = availabilityProvider(),
+					progressFlusher = progressFlusher,
+				)) {
+					is SpaceSwitchResult.Success -> {
+						if (!immersiveSessionRegistry.restore(result.targetSpaceId, activity, suppressAnimation = true)) {
+							returnToMain(activity, result.targetSpaceId, resumeReading)
+						}
+					}
+					is SpaceSwitchResult.AlreadyActive -> Unit
+					is SpaceSwitchResult.Failed -> showMessage(R.string.space_switch_failed)
+					SpaceSwitchResult.ConfirmationRequired,
+					SpaceSwitchResult.Unavailable -> showMessage(R.string.space_switch_unavailable)
+				}
+				return@launch
+			}
 			immersiveSessionRegistry.suppressMainTransitionTo(target)
 			try {
 				val animated = !settings.isReducedVisualEffectsEnabled && activity.animatorDurationScale > 0f

@@ -502,9 +502,9 @@ fun GlassTopBarContainer(
 fun GlassBottomBarContainer(
     modifier: Modifier = Modifier,
     style: GlassStyle = GlassDefaults.bottomBarChromeStyle(),
+    shape: Shape = RoundedCornerShape(32.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(32.dp)
     val backdrop = LocalLiquidGlassBackdrop.current
     val exportedBackdrop = rememberLayerBackdrop()
     if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {

@@ -89,6 +89,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -293,6 +294,14 @@ private const val PageThumbnailAspectRatioMax = 1f
 private const val PageThumbnailHeightRatioMin = 1f
 private const val PageThumbnailHeightRatioMax = 1f / PageThumbnailAspectRatioMin
 
+data class DetailsCockpitActions(
+    val enabled: Boolean,
+    val openFavorite: () -> Unit,
+    val openChapters: () -> Unit,
+    val openBookmarks: () -> Unit,
+    val openDownload: () -> Unit,
+)
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DetailsScreen(
@@ -308,6 +317,7 @@ fun DetailsScreen(
     onBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     sharedElementKey: String? = null,
     onActionClick: (DetailsAction) -> Unit = {},
+    onCockpitActionsChanged: (DetailsCockpitActions?) -> Unit = {},
     isTemporaryReadOnly: Boolean = false,
 ) {
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
@@ -876,6 +886,19 @@ fun DetailsScreen(
             }
             else -> onActionClick(action)
         }
+    }
+    val cockpitActions = remember(isWorkActionEnabled) {
+        DetailsCockpitActions(
+            enabled = isWorkActionEnabled,
+            openFavorite = { showFavoriteDialog = true },
+            openChapters = { handleActionClick(DetailsAction.ToggleList) },
+            openBookmarks = { handleActionClick(DetailsAction.ToggleBookmarkView) },
+            openDownload = { handleActionClick(DetailsAction.Download) },
+        )
+    }
+    SideEffect { onCockpitActionsChanged(cockpitActions) }
+    DisposableEffect(Unit) {
+        onDispose { onCockpitActionsChanged(null) }
     }
     val openEntityRelationItem: (EntityRelationItem) -> Unit = { item ->
         val entityType = item.type

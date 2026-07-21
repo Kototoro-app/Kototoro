@@ -4,7 +4,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import androidx.core.view.WindowInsetsCompat
-import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.viewbinding.ViewBinding
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.ui.BaseFragment
@@ -16,7 +16,9 @@ import org.skepsun.kototoro.reader.ui.ReaderViewModel
 
 abstract class BaseReaderFragment<B : ViewBinding> : BaseFragment<B>(), ZoomControl.ZoomControlListener {
 
-	protected val viewModel by activityViewModels<ReaderViewModel>()
+	protected val viewModel by viewModels<ReaderViewModel>(
+		ownerProducer = { parentFragment ?: requireActivity() },
+	)
 
 	protected var readerAdapter: BaseReaderAdapter<*>? = null
 		private set

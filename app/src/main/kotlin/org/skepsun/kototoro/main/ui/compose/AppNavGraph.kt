@@ -256,6 +256,12 @@ fun AppNavGraph(
     onDetailsTransitionRequested: () -> Unit = {},
     onDetailsReturnTransitionRequested: () -> Unit = {},
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
+    onDetailsCockpitActionsChanged: (
+        org.skepsun.kototoro.details.ui.compose.DetailsCockpitActions?
+    ) -> Unit = {},
+    onContentListCockpitActionsChanged: (
+        org.skepsun.kototoro.search.ui.compose.ContentListCockpitActions?
+    ) -> Unit = {},
     isLandscapeNavigation: Boolean = false,
     mainNavState: MainNavState? = null,
     suppressNavigationTransitions: Boolean = false,
@@ -619,6 +625,7 @@ fun AppNavGraph(
                                 navigateToDetailsWithContent(content, sharedElementKey)
                             },
                             viewModel = viewModel,
+                            onCockpitActionsChanged = onContentListCockpitActionsChanged,
                         )
                     }
                     } else {
@@ -723,6 +730,7 @@ fun AppNavGraph(
                         activeSpaceId = null,
                         onSpaceSwitcherClick = {},
                         onBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
+                        onCockpitActionsChanged = onDetailsCockpitActionsChanged,
                         sharedElementKey = sharedKey,
                         onActionClick = { action ->
                             handleDetailsAction(

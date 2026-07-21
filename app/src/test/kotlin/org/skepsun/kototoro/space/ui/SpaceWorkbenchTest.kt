@@ -4,7 +4,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -132,6 +135,63 @@ class SpaceWorkbenchTest {
 		assertEquals(
 			SpaceWorkbenchLayoutSpec(railWidth = 240.dp, coverHeight = 128.dp, showCovers = true),
 			resolveSpaceWorkbenchLayoutSpec(availableWidth = 1000.dp, availableHeight = 800.dp),
+		)
+	}
+
+	@Test
+	fun `cockpit scale preserves useful rails across window shapes`() {
+		val portrait = resolveSpaceCockpitLayoutSpec(360.dp, 800.dp)
+		val landscape = resolveSpaceCockpitLayoutSpec(800.dp, 360.dp)
+		val expanded = resolveSpaceCockpitLayoutSpec(1000.dp, 800.dp)
+
+		assertEquals(0.82f, portrait.workspaceScale)
+		assertFalse(portrait.isLandscape)
+		assertEquals(0.80f, landscape.workspaceScale)
+		assertTrue(landscape.isLandscape)
+		assertEquals(0.88f, expanded.workspaceScale)
+		assertTrue(expanded.isLandscape)
+	}
+
+	@Test
+	fun `cockpit page context gives embedded reader highest priority`() {
+		assertEquals(
+			CockpitPageContext.MANGA_READER,
+			resolveCockpitPageContext(
+				hasEmbeddedMangaReader = true,
+				isDetailsRoute = true,
+				isContentListRoute = false,
+			),
+		)
+		assertEquals(
+			CockpitPageContext.DETAILS,
+			resolveCockpitPageContext(false, isDetailsRoute = true, isContentListRoute = false),
+		)
+		assertEquals(
+			CockpitPageContext.CONTENT_LIST,
+			resolveCockpitPageContext(false, isDetailsRoute = false, isContentListRoute = true),
+		)
+		assertEquals(
+			CockpitPageContext.MAIN,
+			resolveCockpitPageContext(false, isDetailsRoute = false, isContentListRoute = false),
+		)
+	}
+
+	@Test
+	fun `cockpit momentum favors resumable works with unread updates`() {
+		val dormant = resolveCockpitMomentumScore(canResume = false, newChapters = 10)
+		val resumable = resolveCockpitMomentumScore(canResume = true, newChapters = 0)
+		val advancing = resolveCockpitMomentumScore(canResume = true, newChapters = 3)
+
+		assertTrue(resumable > dormant)
+		assertTrue(advancing > resumable)
+		assertEquals(180, resolveCockpitMomentumScore(canResume = true, newChapters = 100))
+	}
+
+	@Test
+	fun `cockpit shelf key distinguishes works in the same space`() {
+		assertNotEquals(
+			cockpitShelfContentKey(BuiltInSpaces.Manga, "source", 1L),
+			cockpitShelfContentKey(BuiltInSpaces.Manga, "source", 2L),
 		)
 	}
 

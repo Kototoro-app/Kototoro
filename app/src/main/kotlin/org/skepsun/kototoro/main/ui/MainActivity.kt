@@ -58,6 +58,7 @@ import org.skepsun.kototoro.main.ui.compose.ComposeAppNavBarDelegator
 import org.skepsun.kototoro.main.ui.compose.KototoroApp
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.reader.ui.EmbeddedReaderCoordinator
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.domain.SearchContentKind
@@ -70,6 +71,7 @@ import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionViewModel
 import org.skepsun.kototoro.space.ui.ImmersiveSpaceSessionRegistry
 import org.skepsun.kototoro.space.ui.SpaceAction
+import org.skepsun.kototoro.space.ui.SpaceWorkbenchMode
 import org.skepsun.kototoro.space.ui.SpaceResumeUiState
 import org.skepsun.kototoro.space.ui.SpaceResumeViewModel
 import org.skepsun.kototoro.space.ui.SpaceUiState
@@ -109,6 +111,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var spaceTransitionCurtainController: SpaceTransitionCurtainController
+
+    @Inject
+    lateinit var embeddedReaderCoordinator: EmbeddedReaderCoordinator
 
     override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
         val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
@@ -313,6 +318,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
+            val embeddedReaderRequest by embeddedReaderCoordinator.request.collectAsStateWithLifecycle()
             KototoroApp(
                 appSettings = settings,
                 navStateFlow = navStateFlow,
@@ -333,6 +339,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 isResumeEnabled = isResumeEnabled,
                 onResumeClick = viewModel::openLastReader,
                 spaceUiState = spaceUiState,
+                embeddedReaderRequest = embeddedReaderRequest,
+                onCloseEmbeddedReader = embeddedReaderCoordinator::close,
+                onCloseEmbeddedReaderAndThen = embeddedReaderCoordinator::close,
+                onInstallEmbeddedReaderCloseHandler = embeddedReaderCoordinator::installCloseHandler,
+                onEmbeddedReaderCloseCompleted = embeddedReaderCoordinator::completeClose,
                 spaceTransitionState = spaceTransitionState,
                 onSpaceTransitionCovered = spaceTransitionCurtainController::reveal,
                 onSpaceCurtainCoverFinished = spaceTransitionCurtainController::markCovered,
@@ -343,9 +354,35 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                             SpaceAction.OpenSwitcher,
                             SpaceAction.DismissSwitcher,
                             SpaceAction.OpenWorkbench,
-                            SpaceAction.DismissWorkbench -> spaceViewModel.onAction(action)
+                            SpaceAction.DismissWorkbench,
+                            SpaceAction.PinWorkbench,
+                            SpaceAction.UnpinWorkbench -> spaceViewModel.onAction(action)
                             is SpaceAction.SelectSpace -> {
-                                selectSpaceAndRestoreImmersiveSession(action.spaceId)
+                                if (
+                                    spaceUiState.workbenchMode == SpaceWorkbenchMode.COCKPIT &&
+                                    embeddedReaderCoordinator.request.value != null
+                                ) {
+                                    embeddedReaderCoordinator.suspendForSpaceSwitch {
+                                        lifecycleScope.launch {
+                                            if (spaceViewModel.selectSpaceAndAwait(action.spaceId)) {
+                                                if (!embeddedReaderCoordinator.restore(action.spaceId)) {
+                                                    immersiveSpaceSessionRegistry.restore(
+                                                        action.spaceId,
+                                                        this@MainActivity,
+                                                        suppressAnimation = true,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    embeddedReaderCoordinator.close {
+                                        selectSpaceAndRestoreImmersiveSession(
+                                            spaceId = action.spaceId,
+                                            showTransition = spaceUiState.workbenchMode != SpaceWorkbenchMode.COCKPIT,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -365,7 +402,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 onSpaceResume = if (spaceEnabled) {
                     { spaceId ->
                         spaceViewModel.onAction(SpaceAction.DismissSwitcher)
-                        spaceViewModel.onAction(SpaceAction.DismissWorkbench)
+                        if (spaceUiState.workbenchMode != SpaceWorkbenchMode.COCKPIT) {
+                            spaceViewModel.onAction(SpaceAction.DismissWorkbench)
+                        }
                         if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
                             selectSpaceAndRestoreImmersiveSession(spaceId)
                         } else {
@@ -579,7 +618,22 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         }
     }
 
-    private fun selectSpaceAndRestoreImmersiveSession(spaceId: SpaceId) {
+    private fun selectSpaceAndRestoreImmersiveSession(
+        spaceId: SpaceId,
+        showTransition: Boolean = true,
+    ) {
+        if (!showTransition) {
+            lifecycleScope.launch {
+                if (spaceViewModel.selectSpaceAndAwait(spaceId)) {
+                    immersiveSpaceSessionRegistry.restore(
+                        spaceId,
+                        this@MainActivity,
+                        suppressAnimation = true,
+                    )
+                }
+            }
+            return
+        }
         if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
             immersiveSpaceSessionRegistry.suppressMainTransitionTo(spaceId)
             lifecycleScope.launch {

@@ -13,6 +13,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
@@ -30,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -86,6 +89,11 @@ fun KototoroBottomNav(
     adjacentAction: (@Composable () -> Unit)? = null,
     showContinueReadingButton: Boolean = false,
     onContinueReadingClick: () -> Unit = {},
+    navigationRailOverride: Boolean? = null,
+    compactNavigationRail: Boolean = false,
+    fillAvailableSpace: Boolean = false,
+    alignHorizontalItemsToStart: Boolean = false,
+    alignVerticalItemsToBottom: Boolean = false,
 ) {
     val navState by state.collectAsState()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
@@ -109,7 +117,7 @@ fun KototoroBottomNav(
             navFloatingHeight = navFloatingHeight,
         )
     }
-    val isFloating = prefs.isFloating
+    val isFloating = prefs.isFloating && !fillAvailableSpace
     val isExpressivePillEnabled = prefs.isExpressivePillEnabled
     val navHeight = prefs.navHeight
     val navFloatingHeight = prefs.navFloatingHeight
@@ -118,9 +126,16 @@ fun KototoroBottomNav(
     val activeItems = navState.items
         .filter { navState.itemVisibility[it.id] != false }
         .limitMainNavigationItems()
-    val showSelectedLabels = navState.labelVisibilityMode != NavigationBarView.LABEL_VISIBILITY_UNLABELED
-    val useNavigationRail = remember(configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
-        FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
+    val showSelectedLabels = !fillAvailableSpace &&
+        navState.labelVisibilityMode != NavigationBarView.LABEL_VISIBILITY_UNLABELED
+    val useNavigationRail = remember(
+        configuration.orientation,
+        configuration.screenWidthDp,
+        tabletUiMode,
+        navigationRailOverride,
+    ) {
+        navigationRailOverride
+            ?: FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
     }
     val systemBarsPadding = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
@@ -134,10 +149,10 @@ fun KototoroBottomNav(
         if (isFloating && !useNavigationRail) 16.dp else 0.dp,
     )
     val railHorizontalPadding by androidx.compose.animation.core.animateDpAsState(
-        if (isFloating && useNavigationRail) 12.dp else 0.dp,
+        if (isFloating && useNavigationRail && !compactNavigationRail) 12.dp else 0.dp,
     )
     val railVerticalPadding by androidx.compose.animation.core.animateDpAsState(
-        if (isFloating && useNavigationRail) 18.dp else 0.dp,
+        if (isFloating && useNavigationRail && !compactNavigationRail) 18.dp else 0.dp,
     )
 
     val navBarModifier = Modifier
@@ -153,7 +168,7 @@ fun KototoroBottomNav(
                     )
             } else {
                 Modifier
-                    .fillMaxWidth()
+                    .then(if (fillAvailableSpace) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
                     .padding(horizontal = if (isFloating) 12.dp else 0.dp, vertical = verticalPadding)
                     .run {
                         if (isFloating) {
@@ -174,7 +189,9 @@ fun KototoroBottomNav(
     )
     val nonFloatingContentHorizontalPadding = 6.dp
     val nonFloatingTopPadding = 4.dp
-    val railWidth = if (isFloating) {
+    val railWidth = if (compactNavigationRail) {
+        64.dp
+    } else if (isFloating) {
         (navFloatingHeight + 4).dp.coerceIn(60.dp, 160.dp)
     } else {
         navHeight.dp.coerceIn(60.dp, 160.dp)
@@ -197,15 +214,18 @@ fun KototoroBottomNav(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 
     if (useNavigationRail) {
+        val cockpitShape = if (fillAvailableSpace) RectangleShape else RoundedCornerShape(24.dp)
         MainNavBottomContainer(
             modifier = navBarModifier.mainNavBackdrop(
-                shape = RoundedCornerShape(24.dp),
-                enabled = isIosStyle,
+                shape = cockpitShape,
+                enabled = isIosStyle && !fillAvailableSpace,
                 backdrop = navBackdrop,
             ),
             style = navContainerStyle,
             useBackdrop = isIosStyle,
             backdrop = navBackdrop,
+            shape = cockpitShape,
+            transparent = fillAvailableSpace,
         ) {
             NavigationRail(
                 containerColor = Color.Transparent,
@@ -223,6 +243,7 @@ fun KototoroBottomNav(
                         .fillMaxHeight()
                         .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = if (alignVerticalItemsToBottom) Arrangement.Bottom else Arrangement.Top,
                 ) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -349,20 +370,34 @@ fun KototoroBottomNav(
                     .weight(1f)
                     .mainNavBackdrop(
                         shape = RoundedCornerShape(0.dp),
-                        enabled = isIosStyle,
+                        enabled = isIosStyle && !fillAvailableSpace,
                         backdrop = navBackdrop,
                     ),
                 style = navContainerStyle,
                 shape = RoundedCornerShape(0.dp),
                 useBackdrop = isIosStyle,
                 backdrop = navBackdrop,
+                transparent = fillAvailableSpace,
             ) {
                 NavigationBar(
                     containerColor = Color.Transparent,
                     tonalElevation = 0.dp,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(currentExplicitHeight)
+                        .then(
+                            if (fillAvailableSpace) {
+                                Modifier.fillMaxHeight().then(
+                                    if (alignHorizontalItemsToStart) {
+                                        Modifier
+                                            .width((activeItems.size.coerceAtLeast(1) * 72).dp)
+                                            .horizontalScroll(rememberScrollState())
+                                    } else {
+                                        Modifier.fillMaxWidth()
+                                    },
+                                )
+                            } else {
+                                Modifier.fillMaxWidth().height(currentExplicitHeight)
+                            },
+                        )
                         .padding(
                             start = nonFloatingContentHorizontalPadding,
                             end = nonFloatingContentHorizontalPadding,
@@ -417,13 +452,17 @@ private fun MainNavBottomContainer(
     style: GlassStyle,
     useBackdrop: Boolean = false,
     backdrop: com.kyant.backdrop.Backdrop? = null,
+    shape: Shape = RoundedCornerShape(24.dp),
+    transparent: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (useBackdrop) {
+    if (transparent) {
+        Box(modifier = modifier, content = content)
+    } else if (useBackdrop) {
         Box(
             modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), RoundedCornerShape(24.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp)),
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), shape)
+                .border(1.dp, Color.White.copy(alpha = if (shape == RectangleShape) 0f else 0.22f), shape),
         ) {
             content()
         }
@@ -431,6 +470,7 @@ private fun MainNavBottomContainer(
         GlassBottomBarContainer(
             modifier = modifier,
             style = style,
+            shape = shape,
             content = content,
         )
     }
@@ -443,9 +483,12 @@ private fun MainNavSurface(
     shape: Shape,
     useBackdrop: Boolean,
     backdrop: com.kyant.backdrop.Backdrop?,
+    transparent: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (useBackdrop) {
+    if (transparent) {
+        Box(modifier = modifier, content = content)
+    } else if (useBackdrop) {
         Box(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), shape)

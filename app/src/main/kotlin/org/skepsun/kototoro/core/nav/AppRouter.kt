@@ -2,6 +2,7 @@ package org.skepsun.kototoro.core.nav
 
 import android.accounts.Account
 import android.app.Activity
+import android.app.ActivityOptions
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.DialogInterface
@@ -185,6 +186,27 @@ class AppRouter private constructor(
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(
             checkNotNull(contextOrNull()),
         ).spaceRepository
+    }
+
+    private val spaceCockpitRepository: org.skepsun.kototoro.space.domain.SpaceCockpitRepository by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(
+            checkNotNull(contextOrNull()),
+        ).spaceCockpitRepository
+    }
+
+    private val embeddedReaderCoordinator: org.skepsun.kototoro.reader.ui.EmbeddedReaderCoordinator by lazy {
+        EntryPointAccessors.fromApplication<AppRouterEntryPoint>(
+            checkNotNull(contextOrNull()),
+        ).embeddedReaderCoordinator
+    }
+
+    private fun immersiveActivityOptions(anchor: View?): Bundle? {
+        val context = contextOrNull() ?: return null
+        return if (spaceCockpitRepository.isEnabled.value) {
+            ActivityOptions.makeCustomAnimation(context, 0, 0).toBundle()
+        } else {
+            anchor?.let(::scaleUpActivityOptionsOf)
+        }
     }
 
     private fun prepareImmersiveIntent(intent: Intent): Intent {
@@ -383,7 +405,7 @@ class AppRouter private constructor(
                         .putExtra(KEY_MANGA, ParcelableContent(manga))
                         .putExtra(KEY_ID, manga.id),
                 ),
-                anchor?.let { scaleUpActivityOptionsOf(it) },
+                immersiveActivityOptions(anchor),
             )
             return
         }
@@ -473,7 +495,7 @@ class AppRouter private constructor(
 			?: manga.publicUrl
 	}
 
-	fun openReader(intent: ReaderIntent, anchor: View? = null) {
+    fun openReader(intent: ReaderIntent, anchor: View? = null) {
 		val activityIntent = intent.intent
 		// Intercept video sources when ReaderIntent carries a Content extra and route accordingly
 		runCatching {
@@ -507,7 +529,7 @@ class AppRouter private constructor(
                     }
                     startActivity(
                         prepareImmersiveIntent(novelIntent),
-                        anchor?.let { scaleUpActivityOptionsOf(it) },
+                        immersiveActivityOptions(anchor),
                     )
                     return
                 }
@@ -572,9 +594,13 @@ class AppRouter private constructor(
         if (settings.isReaderMultiTaskEnabled && activityIntent.data != null) {
             activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
         }
+        if (activity is MainActivity) {
+            embeddedReaderCoordinator.open(activityIntent)
+            return
+        }
         startActivity(
             prepareImmersiveIntent(activityIntent),
-            anchor?.let { view -> scaleUpActivityOptionsOf(view) },
+            immersiveActivityOptions(anchor),
         )
     }
 
@@ -658,7 +684,7 @@ class AppRouter private constructor(
                     .putExtra(KEY_TITLE, title)
                     .putExtra(ReaderIntent.EXTRA_STATE, state),
             ),
-            null,
+            immersiveActivityOptions(anchor),
         )
     }
 
@@ -680,7 +706,7 @@ class AppRouter private constructor(
                     .putExtra(KEY_MANGA, ParcelableContent(manga, withChapters = !manga.chapters.isNullOrEmpty()))
                     .putExtra(ReaderIntent.EXTRA_STATE, state),
             ),
-            null,
+            immersiveActivityOptions(anchor),
         )
     }
 

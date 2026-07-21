@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.displayCutout
@@ -34,8 +35,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
@@ -106,10 +109,27 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.reader.ui.EmbeddedReaderRequest
+import org.skepsun.kototoro.reader.ui.EmbeddedReaderCommands
+import org.skepsun.kototoro.reader.ui.EmbeddedReaderCockpitState
+import org.skepsun.kototoro.reader.ui.compose.EmbeddedReaderHost
+import org.skepsun.kototoro.details.ui.compose.DetailsCockpitActions
+import org.skepsun.kototoro.search.ui.compose.ContentListCockpitActions
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
 import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
 import org.skepsun.kototoro.space.ui.SpaceWorkbench
+import org.skepsun.kototoro.space.ui.SpaceCockpitTopStrip
+import org.skepsun.kototoro.space.ui.SpaceCockpitSideStrip
+import org.skepsun.kototoro.space.ui.SpaceCockpitMaterialLayer
+import org.skepsun.kototoro.space.ui.CockpitCommand
+import org.skepsun.kototoro.space.ui.CockpitCommandRail
+import org.skepsun.kototoro.space.ui.CockpitContentShelf
+import org.skepsun.kototoro.space.ui.CockpitReaderProgressBar
+import org.skepsun.kototoro.space.ui.CockpitPageContext
+import org.skepsun.kototoro.space.ui.resolveCockpitPageContext
+import org.skepsun.kototoro.space.ui.SpaceWorkbenchMode
+import org.skepsun.kototoro.space.ui.resolveSpaceCockpitLayoutSpec
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.space.ui.rememberSpaceWorkbenchGestureState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
@@ -437,6 +457,11 @@ fun KototoroApp(
     isResumeEnabled: Boolean = false,
     onResumeClick: () -> Unit = {},
     spaceUiState: SpaceUiState = SpaceUiState(),
+    embeddedReaderRequest: EmbeddedReaderRequest? = null,
+    onCloseEmbeddedReader: () -> Unit = {},
+    onCloseEmbeddedReaderAndThen: (() -> Unit) -> Unit = { it() },
+    onInstallEmbeddedReaderCloseHandler: ((() -> Unit)?) -> Unit = {},
+    onEmbeddedReaderCloseCompleted: () -> Unit = {},
     spaceTransitionState: SpaceTransitionState = SpaceTransitionState(),
     onSpaceTransitionCovered: suspend (SpaceId) -> Unit = {},
     onSpaceCurtainCoverFinished: (SpaceId) -> Unit = {},
@@ -520,13 +545,15 @@ fun KototoroApp(
     val isBrowseTrackingRecommendationsEnabled = displayPrefs.isBrowseTrackingRecommendationsEnabled
     val isBrowseMoreTrackingRecommendationsEnabled = displayPrefs.isBrowseMoreTrackingRecommendationsEnabled
     val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    val isSpaceCockpit = spaceUiState.workbenchMode == SpaceWorkbenchMode.COCKPIT
     val isLandscapeNavigation = remember(
         context,
         configuration.orientation,
         configuration.screenWidthDp,
         tabletUiMode,
+        isSpaceCockpit,
     ) {
-        FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
+        !isSpaceCockpit && FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
     }
     val isLanguagePresetFilterVisibleSetting = filterVisibilityPrefs.isLanguagePresetFilterVisible
     val isContentTypeFilterVisibleSetting = filterVisibilityPrefs.isContentTypeFilterVisible
@@ -659,6 +686,15 @@ fun KototoroApp(
         mutableStateOf<Pair<SpaceId, androidx.compose.ui.geometry.Rect>?>(null)
     }
     val spaceWorkbenchGestureState = rememberSpaceWorkbenchGestureState()
+    val spaceCockpitLayoutSpec = remember(
+        configuration.screenWidthDp,
+        configuration.screenHeightDp,
+    ) {
+        resolveSpaceCockpitLayoutSpec(
+            availableWidth = configuration.screenWidthDp.dp,
+            availableHeight = configuration.screenHeightDp.dp,
+        )
+    }
     LaunchedEffect(spaceUiState.workbenchVisible) {
         if (!spaceUiState.workbenchVisible) {
             spaceWorkbenchGestureState.reset()
@@ -781,16 +817,23 @@ fun KototoroApp(
         }
     }
     val currentBottomNavNavigationState = rememberUpdatedState(activeNavigationState)
+    val currentEmbeddedReaderRequest by rememberUpdatedState(embeddedReaderRequest)
+    val currentOnCloseEmbeddedReaderAndThen by rememberUpdatedState(onCloseEmbeddedReaderAndThen)
     val bottomNavDispatcher = remember {
         { itemId: Int ->
-            val navigationState = currentBottomNavNavigationState.value
-            val topLevelKey = topLevelKeyForBottomNavItem(itemId)
-            if (navigationState.mainNavState.selectedTopLevel != topLevelKey) {
+            val navigate = {
+                val navigationState = currentBottomNavNavigationState.value
+                val topLevelKey = topLevelKeyForBottomNavItem(itemId)
                 NavControllerMainNavigator(
                     navController = navigationState.navController,
                     mainActivity = null,
                     mainNavState = navigationState.mainNavState,
                 ).openTopLevel(topLevelKey)
+            }
+            if (currentEmbeddedReaderRequest != null) {
+                currentOnCloseEmbeddedReaderAndThen(navigate)
+            } else {
+                navigate()
             }
         }
     }
@@ -859,8 +902,194 @@ fun KototoroApp(
     val isSearchRoute = currentDestination?.hasRoute<SearchRoute>() == true
     val isDetailsRoute = currentDestination?.hasRoute<DetailsRoute>() == true
     val isContentListRoute = currentDestination?.hasRoute<ContentListRoute>() == true
+    var embeddedReaderCommands by remember(embeddedReaderRequest?.id) {
+        mutableStateOf<EmbeddedReaderCommands?>(null)
+    }
+    var embeddedReaderCockpitState by remember(embeddedReaderRequest?.id) {
+        mutableStateOf(EmbeddedReaderCockpitState())
+    }
+    var detailsCockpitActions by remember { mutableStateOf<DetailsCockpitActions?>(null) }
+    var contentListCockpitActions by remember { mutableStateOf<ContentListCockpitActions?>(null) }
+    val cockpitPageContext = resolveCockpitPageContext(
+        hasEmbeddedMangaReader = embeddedReaderRequest != null,
+        isDetailsRoute = isDetailsRoute,
+        isContentListRoute = isContentListRoute,
+    )
+    val cockpitCommands = buildList {
+        if (cockpitPageContext != CockpitPageContext.MAIN && cockpitPageContext != CockpitPageContext.MANGA_READER) {
+            add(
+                CockpitCommand(
+                    id = "back",
+                    iconRes = if (cockpitPageContext == CockpitPageContext.MANGA_READER) {
+                        R.drawable.ic_expand_more
+                    } else {
+                        R.drawable.ic_arrow_forward
+                    },
+                    titleRes = R.string.back,
+                    iconRotationDegrees = if (cockpitPageContext == CockpitPageContext.MANGA_READER) 90f else 180f,
+                    onClick = {
+                        if (embeddedReaderRequest != null) {
+                            onCloseEmbeddedReader()
+                        } else {
+                            navController.popBackStack()
+                        }
+                    },
+                ),
+            )
+        }
+        if (cockpitPageContext == CockpitPageContext.CONTENT_LIST) {
+            contentListCockpitActions?.let { listActions ->
+                add(
+                    CockpitCommand(
+                        id = "search",
+                        iconRes = androidx.appcompat.R.drawable.abc_ic_search_api_material,
+                        titleRes = R.string.search,
+                        onClick = listActions.openSearch,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "filter",
+                        iconRes = R.drawable.ic_filter_menu,
+                        titleRes = R.string.filter,
+                        onClick = listActions.openFilter,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "display",
+                        iconRes = R.drawable.ic_list,
+                        titleRes = R.string.display_options,
+                        onClick = listActions.openDisplayOptions,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "refresh",
+                        iconRes = R.drawable.ic_sync,
+                        titleRes = R.string.update,
+                        onClick = listActions.refresh,
+                    ),
+                )
+            }
+        }
+        if (cockpitPageContext == CockpitPageContext.DETAILS) {
+            detailsCockpitActions?.takeIf(DetailsCockpitActions::enabled)?.let { detailsActions ->
+                add(
+                    CockpitCommand(
+                        id = "favorite",
+                        iconRes = R.drawable.ic_heart_outline,
+                        titleRes = R.string.add_to_favourites,
+                        onClick = detailsActions.openFavorite,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "chapters",
+                        iconRes = R.drawable.ic_list,
+                        titleRes = R.string.chapters,
+                        onClick = detailsActions.openChapters,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "bookmarks",
+                        iconRes = R.drawable.ic_bookmark,
+                        titleRes = R.string.bookmarks,
+                        onClick = detailsActions.openBookmarks,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "download",
+                        iconRes = R.drawable.ic_download,
+                        titleRes = R.string.download,
+                        onClick = detailsActions.openDownload,
+                    ),
+                )
+            }
+        }
+        if (cockpitPageContext == CockpitPageContext.MANGA_READER) {
+            embeddedReaderCommands?.let { readerCommands ->
+                add(
+                    CockpitCommand(
+                        id = "previous_chapter",
+                        iconRes = R.drawable.ic_arrow_forward,
+                        titleRes = R.string.prev_chapter,
+                        iconRotationDegrees = 180f,
+                        onClick = readerCommands.previousChapter,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "chapters",
+                        iconRes = R.drawable.ic_list,
+                        titleRes = R.string.chapters,
+                        onClick = readerCommands.openChapters,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "bookmark",
+                        iconRes = if (embeddedReaderCockpitState.isBookmarked) {
+                            R.drawable.ic_bookmark_added
+                        } else {
+                            R.drawable.ic_bookmark
+                        },
+                        titleRes = R.string.bookmarks,
+                        selected = embeddedReaderCockpitState.isBookmarked,
+                        onClick = readerCommands.toggleBookmark,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "next_chapter",
+                        iconRes = R.drawable.ic_arrow_forward,
+                        titleRes = R.string.next_chapter,
+                        onClick = readerCommands.nextChapter,
+                    ),
+                )
+                add(
+                    CockpitCommand(
+                        id = "more",
+                        iconRes = R.drawable.ic_more_vert,
+                        titleRes = R.string.more_options,
+                        onClick = readerCommands.openMore,
+                    ),
+                )
+            }
+        }
+        if (cockpitPageContext != CockpitPageContext.MAIN) {
+            add(
+                CockpitCommand(
+                    id = "home",
+                    iconRes = R.drawable.ic_home,
+                    titleRes = R.string.home,
+                    onClick = {
+                        val navigateHome = {
+                            navController.popBackStack(navController.graph.findStartDestination().id, false)
+                            navigateToBottomNavItem(R.id.nav_home)
+                        }
+                        if (embeddedReaderRequest != null) {
+                            onCloseEmbeddedReaderAndThen(navigateHome)
+                        } else {
+                            navigateHome()
+                        }
+                    },
+                ),
+            )
+        }
+    }
+    val cockpitResume: (SpaceId) -> Unit = { spaceId ->
+        val resume = { onSpaceResume(spaceId) }
+        if (embeddedReaderRequest != null) onCloseEmbeddedReaderAndThen(resume) else resume()
+    }
+    val cockpitOpenUpdate: (Content) -> Unit = { content ->
+        val open = { onContentSuggestionClick(content) }
+        if (embeddedReaderRequest != null) onCloseEmbeddedReaderAndThen(open) else open()
+    }
     val isImmersiveRoute = isDetailsRoute || isContentListRoute
-    val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
+    val shouldShowChrome = !isSearchRoute && !isImmersiveRoute && embeddedReaderRequest == null
     LaunchedEffect(currentDestinationRoute) {
         if (isDetailsRoute) {
             detailsBottomPanelExpansion = 0f
@@ -1156,7 +1385,7 @@ fun KototoroApp(
     val visibleBottomNavInsetPx = (bottomNavHeightPx - effectiveBottomNavOffset).coerceAtLeast(0f).toInt() + extraPinnedBottomInsetPx
     val contentBottomInsetPx = if (!shouldReserveChromeInsets) {
         0
-    } else if (isLandscapeNavigation) {
+    } else if (isLandscapeNavigation || isSpaceCockpit) {
         navigationBarHeightPx
     } else {
         maxOf(visibleBottomNavInsetPx, navigationBarHeightPx)
@@ -1322,6 +1551,7 @@ fun KototoroApp(
             val mainFloatingAction: @Composable BoxScope.() -> Unit = {
                 if (
                     showMainFab &&
+					!isSpaceCockpit &&
                     fabTargetForAnimation != null &&
                     showFabOnCurrentRoute
                 ) {
@@ -1500,7 +1730,7 @@ fun KototoroApp(
                         onSortOrderSelected = onDisplaySortOrderSelected,
                         displayOptionsExtraContent = displayOptionsExtraContent,
                     )
-                    MainBottomChrome(
+					if (!isSpaceCockpit) MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
                         chromeSharedTransitionScope = chromeSharedTransitionScope,
                         heroTransitionInProgress = heroTransitionInProgress,
@@ -1562,6 +1792,15 @@ fun KototoroApp(
                 },
                 label = "space_workbench_progress",
             )
+            val cockpitProgress by animateFloatAsState(
+                targetValue = if (isSpaceCockpit) 1f else 0f,
+                animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
+                    tween(durationMillis = 280)
+                } else {
+                    snap()
+                },
+                label = "space_cockpit_progress",
+            )
             val workbenchContentShape = remember { RoundedCornerShape(28.dp) }
             Box(modifier = Modifier
                 .fillMaxSize()
@@ -1572,8 +1811,15 @@ fun KototoroApp(
                         MaterialTheme.colorScheme.background
                     }
                 )
-                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                .nestedScroll(nestedScrollConnection)
+                .then(
+                    if (embeddedReaderRequest == null) {
+                        Modifier
+                            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                            .nestedScroll(nestedScrollConnection)
+                    } else {
+                        Modifier
+                    },
+                )
                 .onGloballyPositioned { coordinates ->
                     rootContentBounds = coordinates.boundsInRoot()
                 }
@@ -1618,13 +1864,21 @@ fun KototoroApp(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            val scale = 1f - (0.18f * workbenchProgress)
+							val targetScale = if (isSpaceCockpit) {
+								spaceCockpitLayoutSpec.workspaceScale
+							} else {
+								0.82f
+							}
+							val scale = 1f - ((1f - targetScale) * workbenchProgress)
                             scaleX = scale
                             scaleY = scale
-                            transformOrigin = TransformOrigin(0f, 0.5f)
-                            shape = workbenchContentShape
+                            transformOrigin = TransformOrigin(
+                                pivotFractionX = 0f,
+                                pivotFractionY = 0.5f + (0.5f * cockpitProgress),
+                            )
+                            shape = if (isSpaceCockpit) RectangleShape else workbenchContentShape
                             clip = workbenchProgress > 0.001f
-                            shadowElevation = 20.dp.toPx() * workbenchProgress
+                            shadowElevation = if (isSpaceCockpit) 0f else 20.dp.toPx() * workbenchProgress
                         },
                 ) {
                     SharedTransitionLayout {
@@ -1697,6 +1951,8 @@ fun KototoroApp(
                                                 detailsBottomObstruction = obstruction
                                             }
                                         },
+                                        onDetailsCockpitActionsChanged = { detailsCockpitActions = it },
+                                        onContentListCockpitActionsChanged = { contentListCockpitActions = it },
                                         onExploreSourceSelectionTopBarChanged = { overrideState ->
                                             when (overrideState) {
                                                 is RouteScopedTopBarOverrideState -> {
@@ -1748,7 +2004,19 @@ fun KototoroApp(
                                 }
                             }
                         }
-                        if (isActiveNavigationReady) {
+                        if (embeddedReaderRequest != null) {
+                            EmbeddedReaderHost(
+                                request = embeddedReaderRequest,
+                                onClose = onCloseEmbeddedReader,
+                                onInstallCloseHandler = onInstallEmbeddedReaderCloseHandler,
+                                onCloseCompleted = onEmbeddedReaderCloseCompleted,
+                                onCommandsChanged = { embeddedReaderCommands = it },
+                                onCockpitStateChanged = { embeddedReaderCockpitState = it },
+                                showInlineProgress = !isSpaceCockpit,
+                                showInlineToolbar = !isSpaceCockpit,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else if (isActiveNavigationReady) {
                             key(navigationSpaceId.value) {
                                 renderSpaceNavigation(navigationSpaceId)
                             }
@@ -1756,9 +2024,148 @@ fun KototoroApp(
                     }
                     }
                 }
+                if (isSpaceCockpit) {
+                    SpaceCockpitMaterialLayer(
+                        layoutSpec = spaceCockpitLayoutSpec,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 // Keep the gesture owner outside the transformed page subtree. Moving its
                 // coordinate system while a pointer is down can cancel a long-press drag.
                 mainFloatingAction()
+                if (isSpaceCockpit) {
+					if (spaceCockpitLayoutSpec.isLandscape) {
+						Box(
+							modifier = Modifier
+								.align(Alignment.TopStart)
+								.fillMaxWidth(spaceCockpitLayoutSpec.workspaceScale)
+								.fillMaxHeight(spaceCockpitLayoutSpec.workbenchFraction),
+							contentAlignment = Alignment.CenterStart,
+						) {
+							Column(Modifier.fillMaxSize().statusBarsPadding()) {
+							Row(Modifier.weight(1f).fillMaxWidth()) {
+								if (spaceResumeUiState.items.isNotEmpty() || spaceResumeUiState.updates.isNotEmpty()) {
+									CockpitContentShelf(
+										activeSpaceId = spaceUiState.activeSpaceId,
+										historyItems = spaceResumeUiState.history,
+										updateItems = spaceResumeUiState.updates,
+										recommendationItems = spaceResumeUiState.recommendations,
+										onOpenUpdate = cockpitOpenUpdate,
+										isLandscape = true,
+										modifier = Modifier.weight(0.42f).fillMaxHeight(),
+									)
+								}
+								Box(
+									Modifier.weight(
+										if (spaceResumeUiState.items.isEmpty() && spaceResumeUiState.updates.isEmpty()) 1f else 0.58f,
+									).fillMaxHeight(),
+								) {
+								if (cockpitPageContext == CockpitPageContext.MAIN) KototoroBottomNav(
+									state = navStateFlow,
+									onItemSelected = bottomNavDispatcher,
+									onItemReselected = bottomNavDispatcher,
+									navigationRailOverride = false,
+									fillAvailableSpace = true,
+									alignHorizontalItemsToStart = true,
+								)
+								else CockpitCommandRail(
+									pageContext = cockpitPageContext,
+									commands = cockpitCommands,
+									isLandscape = true,
+								)
+								}
+							}
+							if (cockpitPageContext == CockpitPageContext.MANGA_READER) {
+								embeddedReaderCommands?.let { commands ->
+									CockpitReaderProgressBar(
+										state = embeddedReaderCockpitState,
+										onSeek = commands.seekToPage,
+										onBack = onCloseEmbeddedReader,
+										modifier = Modifier.fillMaxWidth().height(36.dp),
+									)
+								}
+							}
+							}
+						}
+						SpaceCockpitSideStrip(
+							state = spaceUiState,
+							resumeItems = spaceResumeUiState.items,
+							onUnpin = { onSpaceAction(SpaceAction.UnpinWorkbench) },
+							onSelectSpace = { onSpaceAction(SpaceAction.SelectSpace(it)) },
+							modifier = Modifier
+								.align(Alignment.TopEnd)
+								.fillMaxWidth(spaceCockpitLayoutSpec.workbenchFraction)
+								.fillMaxHeight(),
+							materialBacked = true,
+						)
+					} else {
+						Box(
+							modifier = Modifier
+								.align(Alignment.TopStart)
+								.fillMaxWidth()
+								.fillMaxHeight(spaceCockpitLayoutSpec.workbenchFraction),
+						) {
+							val showReaderProgress = cockpitPageContext == CockpitPageContext.MANGA_READER &&
+								embeddedReaderCommands != null
+						SpaceCockpitTopStrip(
+							state = spaceUiState,
+							resumeItems = spaceResumeUiState.items,
+							onUnpin = { onSpaceAction(SpaceAction.UnpinWorkbench) },
+							onSelectSpace = { onSpaceAction(SpaceAction.SelectSpace(it)) },
+							modifier = Modifier.fillMaxSize().padding(bottom = if (showReaderProgress) 36.dp else 0.dp),
+							materialBacked = true,
+						)
+						if (showReaderProgress) {
+							CockpitReaderProgressBar(
+								state = embeddedReaderCockpitState,
+								onSeek = embeddedReaderCommands!!.seekToPage,
+								onBack = onCloseEmbeddedReader,
+								modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(36.dp),
+							)
+						}
+						}
+						Column(
+							modifier = Modifier
+								.align(Alignment.BottomEnd)
+								.fillMaxWidth(spaceCockpitLayoutSpec.workbenchFraction)
+								.fillMaxHeight(spaceCockpitLayoutSpec.workspaceScale),
+						) {
+							if (spaceResumeUiState.items.isNotEmpty() || spaceResumeUiState.updates.isNotEmpty()) {
+								CockpitContentShelf(
+									activeSpaceId = spaceUiState.activeSpaceId,
+									historyItems = spaceResumeUiState.history,
+									updateItems = spaceResumeUiState.updates,
+									recommendationItems = spaceResumeUiState.recommendations,
+									onOpenUpdate = cockpitOpenUpdate,
+									isLandscape = false,
+									modifier = Modifier.weight(0.45f).fillMaxWidth(),
+								)
+							}
+							Box(
+								Modifier.weight(
+									if (spaceResumeUiState.items.isEmpty() && spaceResumeUiState.updates.isEmpty()) 1f else 0.55f,
+								).fillMaxWidth(),
+							) {
+							if (cockpitPageContext == CockpitPageContext.MAIN) KototoroBottomNav(
+								state = navStateFlow,
+								onItemSelected = bottomNavDispatcher,
+								onItemReselected = bottomNavDispatcher,
+								showContinueReadingButton = isResumeEnabled,
+								onContinueReadingClick = onResumeClick,
+								navigationRailOverride = true,
+								compactNavigationRail = true,
+								fillAvailableSpace = true,
+								alignVerticalItemsToBottom = true,
+							)
+							else CockpitCommandRail(
+								pageContext = cockpitPageContext,
+								commands = cockpitCommands,
+								isLandscape = false,
+							)
+							}
+						}
+					}
+                }
                 SpaceWorkbench(
                     state = spaceUiState,
                     resumeItems = spaceResumeUiState.items,
@@ -1768,6 +2175,10 @@ fun KototoroApp(
                     onDismiss = {
                         spaceWorkbenchGestureState.reset()
                         onSpaceAction(SpaceAction.DismissWorkbench)
+                    },
+                    onPin = {
+                        spaceWorkbenchGestureState.reset()
+                        onSpaceAction(SpaceAction.PinWorkbench)
                     },
                     onSelectSpace = {
                         spaceWorkbenchGestureState.reset()

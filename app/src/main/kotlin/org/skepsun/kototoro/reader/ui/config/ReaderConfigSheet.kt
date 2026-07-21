@@ -14,7 +14,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
-import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.transition.TransitionManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.sidesheet.SideSheetDialog
@@ -58,7 +58,9 @@ class ReaderConfigSheet :
     CompoundButton.OnCheckedChangeListener,
     Slider.OnChangeListener {
 
-    private val viewModel by activityViewModels<ReaderViewModel>()
+    private val viewModel by viewModels<ReaderViewModel>(
+        ownerProducer = { parentFragment ?: requireActivity() },
+    )
 
     @Inject
     lateinit var orientationHelper: ScreenOrientationHelper

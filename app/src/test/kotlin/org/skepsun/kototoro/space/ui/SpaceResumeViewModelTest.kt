@@ -100,6 +100,43 @@ class SpaceResumeViewModelTest {
 	}
 
 	@Test
+	fun `state exposes cached tracked updates without changing resume items`() {
+		val updateContent = content(8L, "Updated", ContentType.MANGA)
+		val update = SpaceUpdateItem(
+			spaceId = BuiltInSpaces.Manga,
+			title = updateContent.title,
+			content = updateContent,
+			newChapters = 2,
+		)
+
+		val state = buildSpaceResumeUiState(
+			recent = emptyMap(),
+			isOnline = true,
+			resumeEnabled = true,
+			updates = listOf(update),
+		)
+
+		state.items shouldBe emptyMap()
+		state.updates shouldContainExactly listOf(update)
+	}
+
+	@Test
+	fun `top resume uses latest item while cockpit history keeps recent items`() {
+		val latest = content(11L, "Latest", ContentType.MANGA)
+		val previous = content(10L, "Previous", ContentType.MANGA)
+
+		val state = buildSpaceResumeUiState(
+			recent = mapOf(BuiltInSpaces.Manga to latest),
+			isOnline = true,
+			resumeEnabled = true,
+			history = mapOf(BuiltInSpaces.Manga to listOf(latest, previous)),
+		)
+
+		state.items.getValue(BuiltInSpaces.Manga).content shouldBe latest
+		state.history.getValue(BuiltInSpaces.Manga).map { it.content } shouldContainExactly listOf(latest, previous)
+	}
+
+	@Test
 	fun `resume activates target space before emitting content`() = runTest {
 		val content = content(3L, "Anime", ContentType.MANGA)
 		val state = SpaceResumeUiState(

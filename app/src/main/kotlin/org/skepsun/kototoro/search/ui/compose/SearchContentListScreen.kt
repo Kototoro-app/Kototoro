@@ -72,6 +72,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -332,6 +335,13 @@ private fun SearchInputDialogSurface(
     }
 }
 
+data class ContentListCockpitActions(
+    val openSearch: () -> Unit,
+    val openFilter: () -> Unit,
+    val openDisplayOptions: () -> Unit,
+    val refresh: () -> Unit,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSearchContentListRoute(
@@ -341,6 +351,7 @@ fun AppSearchContentListRoute(
     activeSpaceId: SpaceId? = null,
     onSpaceSwitcherClick: () -> Unit = {},
     sharedTransitionEnabled: Boolean = true,
+    onCockpitActionsChanged: (ContentListCockpitActions?) -> Unit = {},
     viewModel: RemoteListViewModel = hiltViewModel(),
 ) {
     val items by viewModel.content.collectAsStateWithLifecycle(emptyList())
@@ -417,6 +428,7 @@ fun AppSearchContentListRoute(
     var searchQuery by rememberSaveable { mutableStateOf(filterSnapshot.listFilter.query.orEmpty()) }
     var collapseOffsetPx by rememberSaveable { mutableStateOf(0f) }
     var showFilterPanel by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(isWideAdaptiveLayout) }
+    var displayOptionsRequestKey by rememberSaveable { mutableIntStateOf(0) }
     var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
     var previewContent by remember { mutableStateOf<Content?>(null) }
     var showTagsCatalog by remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
@@ -537,6 +549,23 @@ fun AppSearchContentListRoute(
         showFilterPanel = true
     }
 
+    val cockpitActions = remember(viewModel, isWideAdaptiveLayout) {
+        ContentListCockpitActions(
+            openSearch = { searchMode = true },
+            openFilter = {
+                previewContent = null
+                sidePaneMode = SearchSidePaneMode.Filter
+                showFilterPanel = true
+            },
+            openDisplayOptions = { displayOptionsRequestKey += 1 },
+            refresh = viewModel::onRefresh,
+        )
+    }
+    SideEffect { onCockpitActionsChanged(cockpitActions) }
+    DisposableEffect(Unit) {
+        onDispose { onCockpitActionsChanged(null) }
+    }
+
     BackHandler(enabled = isWideSplitLayout && sidePaneMode == SearchSidePaneMode.Preview) {
         restoreFilterPane()
     }
@@ -650,6 +679,7 @@ fun AppSearchContentListRoute(
                 onGridSizeChange = { size ->
                     settings.gridSize = size.coerceIn(50, 150)
                 },
+                displayOptionsRequestKey = displayOptionsRequestKey,
                 onClearActiveQuery = {
                     searchQuery = ""
                     viewModel.filterCoordinator.setQuery(null)
@@ -1175,10 +1205,15 @@ private fun SearchContentTopBar(
     onSettingsClick: () -> Unit,
     onListModeChange: (ListMode) -> Unit,
     onGridSizeChange: (Int) -> Unit,
+    displayOptionsRequestKey: Int,
     onClearActiveQuery: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     onToggleTag: (ContentTag, Boolean) -> Unit,
 ) {
+    var showDisplayOptionsSheet by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(displayOptionsRequestKey) {
+        if (displayOptionsRequestKey > 0) showDisplayOptionsSheet = true
+    }
     val extractedTags = remember(contentItems, selectedTags, availableTags) {
         buildSourcePinnedTags(
             contentItems = contentItems,
@@ -1251,8 +1286,6 @@ private fun SearchContentTopBar(
                     visibleHeight = topActionsVisibleHeight,
                     fullHeight = topActionsHeight,
                 ) {
-                    var showDisplayOptionsSheet by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-
                     SourceListTopActionsRow(
                         sourceTitle = sourceTitle,
                         currentSortLabel = currentSortLabel,

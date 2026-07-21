@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlags
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
+import org.skepsun.kototoro.space.domain.SpaceCockpitRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
@@ -42,7 +43,7 @@ class SpaceViewModelTest {
 	fun `switcher opens and selection activates target space`() = runTest {
 		val repository = FakeSpaceRepository()
 		val flags = FakeFeatureFlagsRepository(enabledFlags())
-		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags)
+		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags, FakeCockpitRepository())
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		viewModel.onAction(SpaceAction.OpenSwitcher)
@@ -64,6 +65,7 @@ class SpaceViewModelTest {
 			repository,
 			TestSpaceCatalogRepository(),
 			FakeFeatureFlagsRepository(enabledFlags()),
+			FakeCockpitRepository(),
 		)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
@@ -87,6 +89,7 @@ class SpaceViewModelTest {
 			repository,
 			TestSpaceCatalogRepository(),
 			FakeFeatureFlagsRepository(enabledFlags()),
+			FakeCockpitRepository(),
 		)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
@@ -100,10 +103,35 @@ class SpaceViewModelTest {
 	}
 
 	@Test
+	fun `pinning workbench enters cockpit and space selection keeps it open`() = runTest {
+		val repository = FakeSpaceRepository()
+		val viewModel = SpaceViewModel(
+			repository,
+			TestSpaceCatalogRepository(),
+			FakeFeatureFlagsRepository(enabledFlags()),
+			FakeCockpitRepository(),
+		)
+		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
+
+		viewModel.onAction(SpaceAction.OpenWorkbench)
+		viewModel.onAction(SpaceAction.PinWorkbench)
+		assertEquals(SpaceWorkbenchMode.COCKPIT, viewModel.uiState.value.workbenchMode)
+
+		viewModel.onAction(SpaceAction.SelectSpace(BuiltInSpaces.Novel))
+		advanceUntilIdle()
+
+		assertEquals(BuiltInSpaces.Novel, viewModel.uiState.value.activeSpaceId)
+		assertEquals(SpaceWorkbenchMode.COCKPIT, viewModel.uiState.value.workbenchMode)
+		viewModel.onAction(SpaceAction.UnpinWorkbench)
+		assertEquals(SpaceWorkbenchMode.HIDDEN, viewModel.uiState.value.workbenchMode)
+		collection.cancel()
+	}
+
+	@Test
 	fun `parent feature gate closes and blocks switcher`() = runTest {
 		val repository = FakeSpaceRepository()
 		val flags = FakeFeatureFlagsRepository(enabledFlags().copy(entitySpaceEnabled = false))
-		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags)
+		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags, FakeCockpitRepository())
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		viewModel.onAction(SpaceAction.OpenSwitcher)
@@ -125,6 +153,7 @@ class SpaceViewModelTest {
 			repository,
 			TestSpaceCatalogRepository(),
 			FakeFeatureFlagsRepository(enabledFlags()),
+			FakeCockpitRepository(),
 		)
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
@@ -142,7 +171,7 @@ class SpaceViewModelTest {
 		val flags = FakeFeatureFlagsRepository(
 			enabledFlags().copy(spacePersistentNavigationEnabled = true),
 		)
-		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags)
+		val viewModel = SpaceViewModel(repository, TestSpaceCatalogRepository(), flags, FakeCockpitRepository())
 		val collection = backgroundScope.launch(dispatcher) { viewModel.uiState.collect {} }
 
 		assertTrue(viewModel.uiState.value.persistentNavigationEnabled)
@@ -175,5 +204,13 @@ class SpaceViewModelTest {
 
 	private class FakeFeatureFlagsRepository(initial: SpaceFeatureFlags) : SpaceFeatureFlagsRepository {
 		override val flags = MutableStateFlow(initial)
+	}
+
+	private class FakeCockpitRepository : SpaceCockpitRepository {
+		override val isEnabled = MutableStateFlow(false)
+
+		override fun setEnabled(enabled: Boolean) {
+			isEnabled.value = enabled
+		}
 	}
 }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
@@ -182,6 +183,7 @@ class ReaderViewModel @Inject constructor(
     val isMenuVisible = MutableStateFlow(false)
 
     val content = MutableStateFlow(ReaderContent(emptyList(), null))
+    val currentReaderState = readingState.asStateFlow()
 
     // 避免切换章节/模式后首次 onCurrentPageChanged 触发边界加载，将其忽略一次
     private val skipBoundaryLoadOnce = AtomicBoolean(false)

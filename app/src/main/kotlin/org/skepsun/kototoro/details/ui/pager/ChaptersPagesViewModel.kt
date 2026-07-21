@@ -495,6 +495,14 @@ abstract class ChaptersPagesViewModel(
 			get() {
 				val viewModel = cached
 				return if (viewModel == null) {
+					val parent = fragment.parentFragment
+					if (parent is org.skepsun.kototoro.reader.ui.EmbeddedReaderFragment) {
+						return ViewModelProvider.create(
+							store = parent.viewModelStore,
+							factory = parent.defaultViewModelProviderFactory,
+							extras = parent.defaultViewModelCreationExtras,
+						)[ReaderViewModel::class.java].also { cached = it }
+					}
 					val activity = fragment.requireActivity()
 					val vmClass = getViewModelClass(activity)
 					ViewModelProvider.create(

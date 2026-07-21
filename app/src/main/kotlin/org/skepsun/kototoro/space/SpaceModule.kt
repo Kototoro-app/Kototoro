@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.space.domain.DefaultSpaceContentPolicy
 import org.skepsun.kototoro.space.data.AppSettingsSpaceLocalDataSource
 import org.skepsun.kototoro.space.data.DefaultSpaceFeatureFlagsRepository
+import org.skepsun.kototoro.space.data.DefaultSpaceCockpitRepository
 import org.skepsun.kototoro.space.data.DefaultSpaceRepository
 import org.skepsun.kototoro.space.data.DefaultSpaceRoutePreferencesRepository
 import org.skepsun.kototoro.space.data.DefaultSpaceSessionRepository
@@ -19,6 +20,7 @@ import org.skepsun.kototoro.space.data.SpaceDiagnostics
 import org.skepsun.kototoro.space.data.SpaceLocalDataSource
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
+import org.skepsun.kototoro.space.domain.SpaceCockpitRepository
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.domain.SpaceRoutePreferencesRepository
 import org.skepsun.kototoro.space.domain.SpaceSessionRepository
@@ -53,6 +55,9 @@ interface SpaceModule {
 
 	@Binds
 	fun bindSpaceFeatureFlagsRepository(impl: DefaultSpaceFeatureFlagsRepository): SpaceFeatureFlagsRepository
+
+	@Binds
+	fun bindSpaceCockpitRepository(impl: DefaultSpaceCockpitRepository): SpaceCockpitRepository
 
 	@Binds
 	fun bindSpaceSessionRepository(impl: DefaultSpaceSessionRepository): SpaceSessionRepository
