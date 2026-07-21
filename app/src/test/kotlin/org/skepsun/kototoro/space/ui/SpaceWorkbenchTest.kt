@@ -65,6 +65,59 @@ class SpaceWorkbenchTest {
 		assertNull(session(SpaceRouteSnapshot.TopLevel("home")).toWorkbenchLocation())
 	}
 
+	@Test
+	fun `drag state magnetizes proxy and settles on selected space`() {
+		val state = SpaceWorkbenchGestureState()
+		state.start(Offset(100f, 100f))
+		state.updateHoveredSpace(BuiltInSpaces.Novel, Offset(200f, 300f))
+		val proxyPosition = requireNotNull(state.proxyPosition)
+
+		assertEquals(128f, proxyPosition.x, 0.001f)
+		assertEquals(156f, proxyPosition.y, 0.001f)
+		state.release(BuiltInSpaces.Manga)
+		assertEquals(SpaceWorkbenchDragPhase.SETTLING, state.phase)
+		assertEquals(Offset(200f, 300f), state.proxyPosition)
+		assertEquals(
+			SpaceWorkbenchDropOutcome.Select(BuiltInSpaces.Novel),
+			state.completeSettling(),
+		)
+		assertEquals(SpaceWorkbenchDragPhase.IDLE, state.phase)
+	}
+
+	@Test
+	fun `release without target keeps workbench open`() {
+		val state = SpaceWorkbenchGestureState()
+		state.start(Offset(100f, 100f))
+		state.move(Offset(300f, 400f))
+
+		state.release(BuiltInSpaces.Manga)
+		assertEquals(SpaceWorkbenchDragPhase.IDLE, state.phase)
+		assertNull(state.proxyPosition)
+		assertNull(state.completeSettling())
+	}
+
+	@Test
+	fun `cancel settles proxy back at drag origin before dismissing`() {
+		val state = SpaceWorkbenchGestureState()
+		state.start(Offset(40f, 60f))
+		state.move(Offset(300f, 400f))
+		state.cancel()
+
+		assertEquals(SpaceWorkbenchDragPhase.SETTLING, state.phase)
+		assertEquals(Offset(40f, 60f), state.proxyPosition)
+		assertEquals(SpaceWorkbenchDropOutcome.Dismiss, state.completeSettling())
+	}
+
+	@Test
+	fun `dropping on active space settles then dismisses`() {
+		val state = SpaceWorkbenchGestureState()
+		state.start(Offset(100f, 100f))
+		state.updateHoveredSpace(BuiltInSpaces.Manga, Offset(200f, 200f))
+
+		state.release(BuiltInSpaces.Manga)
+		assertEquals(SpaceWorkbenchDropOutcome.Dismiss, state.completeSettling())
+	}
+
 	private fun session(resumeRoute: SpaceRouteSnapshot) = SpaceSessionSnapshot(
 		spaceId = BuiltInSpaces.Manga,
 		selectedTopLevel = "home",

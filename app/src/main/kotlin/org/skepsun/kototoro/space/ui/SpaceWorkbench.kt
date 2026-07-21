@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -35,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,15 +53,21 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.space.domain.SpaceContext
@@ -74,27 +85,41 @@ private val WorkbenchCardShape = RoundedCornerShape(20.dp)
  * navigation hosts, readers, or players alive.
  */
 @Composable
-fun SpaceWorkbench(
+internal fun SpaceWorkbench(
 	state: SpaceUiState,
 	resumeItems: Map<SpaceId, SpaceResumeItem>,
 	sessions: Map<SpaceId, SpaceSessionSnapshot> = emptyMap(),
-	dragPosition: Offset? = null,
+	gestureState: SpaceWorkbenchGestureState,
+	settleAnimationDurationMillis: Int = 180,
 	onDismiss: () -> Unit,
 	onSelectSpace: (SpaceId) -> Unit,
-	onHoveredSpaceChanged: (SpaceId?) -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	val dismissDescription = stringResource(R.string.space_workbench_dismiss)
 	val cardBounds = remember { mutableStateMapOf<SpaceId, Rect>() }
-	val hoveredSpaceId = resolveSpaceWorkbenchDropTarget(
-		dragPosition = dragPosition,
+	var overlayBounds by remember { mutableStateOf<Rect?>(null) }
+	val resolvedHoveredSpaceId = resolveSpaceWorkbenchDropTarget(
+		dragPosition = gestureState.dragPosition.takeIf {
+			gestureState.phase == SpaceWorkbenchDragPhase.DRAGGING
+		},
 		orderedSpaceIds = state.spaces.map { it.id },
 		cardBounds = cardBounds,
 	)
+	val displayedHoveredSpaceId = if (gestureState.phase == SpaceWorkbenchDragPhase.SETTLING) {
+		gestureState.hoveredSpaceId
+	} else {
+		resolvedHoveredSpaceId
+	}
+	val resolvedHoveredBounds = resolvedHoveredSpaceId?.let(cardBounds::get)
 	val hapticFeedback = LocalHapticFeedback.current
-	LaunchedEffect(hoveredSpaceId) {
-		onHoveredSpaceChanged(hoveredSpaceId)
-		if (hoveredSpaceId != null) {
+	LaunchedEffect(resolvedHoveredSpaceId, resolvedHoveredBounds) {
+		gestureState.updateHoveredSpace(
+			spaceId = resolvedHoveredSpaceId,
+			center = resolvedHoveredBounds?.center,
+		)
+	}
+	LaunchedEffect(resolvedHoveredSpaceId) {
+		if (resolvedHoveredSpaceId != null) {
 			hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 		}
 	}
@@ -105,7 +130,11 @@ fun SpaceWorkbench(
 		exit = fadeOut(),
 		modifier = modifier,
 	) {
-		Box(modifier = Modifier.fillMaxSize()) {
+		Box(
+			modifier = Modifier
+				.fillMaxSize()
+				.onGloballyPositioned { coordinates -> overlayBounds = coordinates.boundsInRoot() },
+		) {
 			Box(
 				modifier = Modifier
 					.fillMaxSize()
@@ -146,7 +175,7 @@ fun SpaceWorkbench(
 							SpaceWorkbenchCard(
 								context = context,
 								selected = context.id == state.activeSpaceId,
-								hovered = context.id == hoveredSpaceId,
+								hovered = context.id == displayedHoveredSpaceId,
 								resumeItem = resumeItems[context.id],
 								session = sessions[context.id],
 								enabled = !state.switchInProgress,
@@ -172,6 +201,114 @@ fun SpaceWorkbench(
 						)
 					}
 				}
+			}
+			SpaceWorkbenchDragProxy(
+				gestureState = gestureState,
+				activeSpace = state.spaces.firstOrNull { it.id == state.activeSpaceId },
+				overlayBounds = overlayBounds,
+				settleAnimationDurationMillis = settleAnimationDurationMillis,
+				onSettled = { outcome ->
+					when (outcome) {
+						SpaceWorkbenchDropOutcome.Dismiss -> onDismiss()
+						is SpaceWorkbenchDropOutcome.Select -> onSelectSpace(outcome.spaceId)
+					}
+				},
+			)
+		}
+	}
+}
+
+@Composable
+private fun SpaceWorkbenchDragProxy(
+	gestureState: SpaceWorkbenchGestureState,
+	activeSpace: SpaceContext?,
+	overlayBounds: Rect?,
+	settleAnimationDurationMillis: Int,
+	onSettled: (SpaceWorkbenchDropOutcome) -> Unit,
+) {
+	val density = LocalDensity.current
+	val proxySize = 58.dp
+	val proxyRadiusPx = with(density) { proxySize.toPx() / 2f }
+	val animatedX = remember { Animatable(0f) }
+	val animatedY = remember { Animatable(0f) }
+	var proxyReady by remember { mutableStateOf(false) }
+	val proxyPosition = gestureState.proxyPosition
+	val phase = gestureState.phase
+	val proxyScale by animateFloatAsState(
+		targetValue = if (gestureState.hoveredSpaceId != null) 1.12f else 1f,
+		animationSpec = if (settleAnimationDurationMillis > 0) tween(durationMillis = 120) else snap(),
+		label = "space_workbench_drag_proxy_scale",
+	)
+	LaunchedEffect(phase, proxyPosition, overlayBounds) {
+		val position = proxyPosition
+		if (phase == SpaceWorkbenchDragPhase.IDLE || position == null) {
+			proxyReady = false
+			return@LaunchedEffect
+		}
+		val rootOffset = overlayBounds?.topLeft ?: Offset.Zero
+		val localPosition = position - rootOffset
+		when (phase) {
+			SpaceWorkbenchDragPhase.IDLE -> Unit
+			SpaceWorkbenchDragPhase.DRAGGING -> {
+				animatedX.snapTo(localPosition.x)
+				animatedY.snapTo(localPosition.y)
+				proxyReady = true
+			}
+			SpaceWorkbenchDragPhase.SETTLING -> {
+				if (!proxyReady) {
+					animatedX.snapTo(localPosition.x)
+					animatedY.snapTo(localPosition.y)
+					proxyReady = true
+				}
+				if (settleAnimationDurationMillis > 0) {
+					coroutineScope {
+						launch {
+							animatedX.animateTo(
+								targetValue = localPosition.x,
+								animationSpec = tween(settleAnimationDurationMillis),
+							)
+						}
+						launch {
+							animatedY.animateTo(
+								targetValue = localPosition.y,
+								animationSpec = tween(settleAnimationDurationMillis),
+							)
+						}
+					}
+				} else {
+					animatedX.snapTo(localPosition.x)
+					animatedY.snapTo(localPosition.y)
+				}
+				gestureState.completeSettling()?.let(onSettled)
+			}
+		}
+	}
+	if (phase != SpaceWorkbenchDragPhase.IDLE && proxyReady && activeSpace != null) {
+		Surface(
+			modifier = Modifier
+				.offset {
+					IntOffset(
+						x = (animatedX.value - proxyRadiusPx).roundToInt(),
+						y = (animatedY.value - proxyRadiusPx).roundToInt(),
+					)
+				}
+				.size(proxySize)
+				.graphicsLayer {
+					scaleX = proxyScale
+					scaleY = proxyScale
+				}
+				.clearAndSetSemantics { },
+			shape = RoundedCornerShape(20.dp),
+			color = MaterialTheme.colorScheme.primaryContainer,
+			tonalElevation = 10.dp,
+			shadowElevation = 14.dp,
+		) {
+			Box(contentAlignment = Alignment.Center) {
+				SpaceSwitcherIcon(
+					activeSpaceId = activeSpace.id,
+					activeSpace = activeSpace,
+					modifier = Modifier.size(28.dp),
+				)
 			}
 		}
 	}

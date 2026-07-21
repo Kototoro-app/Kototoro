@@ -111,6 +111,7 @@ import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
 import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
 import org.skepsun.kototoro.space.ui.SpaceWorkbench
 import org.skepsun.kototoro.space.ui.SpaceUiState
+import org.skepsun.kototoro.space.ui.rememberSpaceWorkbenchGestureState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -658,12 +659,10 @@ fun KototoroApp(
     var mainSpaceSwitcherFabCandidate by remember {
         mutableStateOf<Pair<SpaceId, androidx.compose.ui.geometry.Rect>?>(null)
     }
-    var spaceWorkbenchDragPosition by remember { mutableStateOf<Offset?>(null) }
-    var hoveredWorkbenchSpaceId by remember { mutableStateOf<SpaceId?>(null) }
+    val spaceWorkbenchGestureState = rememberSpaceWorkbenchGestureState()
     LaunchedEffect(spaceUiState.workbenchVisible) {
         if (!spaceUiState.workbenchVisible) {
-            spaceWorkbenchDragPosition = null
-            hoveredWorkbenchSpaceId = null
+            spaceWorkbenchGestureState.reset()
         }
     }
     val spaceSaveableStateHolder = rememberSaveableStateHolder()
@@ -1331,41 +1330,26 @@ fun KototoroApp(
                         .align(Alignment.TopStart)
                         .offset { animatedSpaceSwitcherFabOffset }
                         .size(spaceSwitcherFabSize)
+                        .graphicsLayer {
+                            alpha = if (spaceWorkbenchGestureState.isActive) 0.28f else 1f
+                        }
                     if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
                         SpaceSwitcherFab(
                             activeSpaceId = spaceUiState.activeSpaceId,
                             activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
                             onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
                             onLongClick = {
-                                spaceWorkbenchDragPosition = null
-                                hoveredWorkbenchSpaceId = null
                                 onSpaceAction(SpaceAction.OpenWorkbench)
                             },
                             onDragStart = { position ->
-                                hoveredWorkbenchSpaceId = null
+                                spaceWorkbenchGestureState.start(position)
                                 onSpaceAction(SpaceAction.OpenWorkbench)
-                                spaceWorkbenchDragPosition = position
                             },
-                            onDragPositionChanged = { position ->
-                                spaceWorkbenchDragPosition = position
-                            },
+                            onDragPositionChanged = spaceWorkbenchGestureState::move,
                             onDragEnd = {
-                                val targetSpaceId = hoveredWorkbenchSpaceId
-                                spaceWorkbenchDragPosition = null
-                                hoveredWorkbenchSpaceId = null
-                                when {
-                                    targetSpaceId == null -> Unit
-                                    targetSpaceId == spaceUiState.activeSpaceId -> {
-                                        onSpaceAction(SpaceAction.DismissWorkbench)
-                                    }
-                                    else -> onSpaceAction(SpaceAction.SelectSpace(targetSpaceId))
-                                }
+                                spaceWorkbenchGestureState.release(spaceUiState.activeSpaceId)
                             },
-                            onDragCancel = {
-                                spaceWorkbenchDragPosition = null
-                                hoveredWorkbenchSpaceId = null
-                                onSpaceAction(SpaceAction.DismissWorkbench)
-                            },
+                            onDragCancel = spaceWorkbenchGestureState::cancel,
                             modifier = fabModifier,
                         )
                     } else {
@@ -1781,18 +1765,16 @@ fun KototoroApp(
                     state = spaceUiState,
                     resumeItems = spaceResumeUiState.items,
                     sessions = spaceNavigationSessionUiState.sessions,
-                    dragPosition = spaceWorkbenchDragPosition,
+                    gestureState = spaceWorkbenchGestureState,
+                    settleAnimationDurationMillis = if (spaceMotionMode == SpaceMotionMode.FULL) 180 else 0,
                     onDismiss = {
-                        spaceWorkbenchDragPosition = null
-                        hoveredWorkbenchSpaceId = null
+                        spaceWorkbenchGestureState.reset()
                         onSpaceAction(SpaceAction.DismissWorkbench)
                     },
                     onSelectSpace = {
-                        spaceWorkbenchDragPosition = null
-                        hoveredWorkbenchSpaceId = null
+                        spaceWorkbenchGestureState.reset()
                         onSpaceAction(SpaceAction.SelectSpace(it))
                     },
-                    onHoveredSpaceChanged = { hoveredWorkbenchSpaceId = it },
                     modifier = Modifier.matchParentSize(),
                 )
                 SpaceSwitcherSheet(
