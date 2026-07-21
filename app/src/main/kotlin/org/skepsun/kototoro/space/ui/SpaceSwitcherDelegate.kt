@@ -156,7 +156,8 @@ class SpaceSwitcherDelegate @Inject constructor(
 		}
 	}
 
-	fun installFab(fab: ExtendedFloatingActionButton) {
+	fun installFab(fab: ExtendedFloatingActionButton?) {
+		if (fab == null) return
 		fabs += fab
 		fab.shrink()
 		fab.setOnClickListener { showSwitcher() }
