@@ -1923,6 +1923,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	fun reconcileAfterAppUpgrade(currentVersion: Int) {
 		val previousVersion = prefs.getSafeInt(KEY_APP_VERSION, 0)
+		preserveLegacySpaceDefaults(previousVersion)
 		if (previousVersion == currentVersion) {
 			return
 		}
@@ -1930,6 +1931,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			migrateLegacyUiPreferences()
 		}
 		prefs.edit { putInt(KEY_APP_VERSION, currentVersion) }
+	}
+
+	private fun preserveLegacySpaceDefaults(previousVersion: Int) {
+		if (previousVersion <= 0 || prefs.contains(KEY_SPACE_ONBOARDING_SEEN)) return
+		prefs.edit {
+			if (!prefs.contains(KEY_ENTITY_SPACE_ENABLED)) {
+				putBoolean(KEY_ENTITY_SPACE_ENABLED, true)
+			}
+			putBoolean(KEY_SPACE_ONBOARDING_SEEN, true)
+		}
 	}
 
 	fun upsertAll(m: Map<String, *>) {
@@ -2603,6 +2614,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED = "entity_space_persistent_navigation_enabled"
 		const val KEY_SPACE_IMMERSIVE_SWITCH_ENABLED = "entity_space_immersive_switch_enabled"
 		const val KEY_SPACE_ROUTE_PREFERENCES_ENABLED = "entity_space_route_preferences_enabled"
+		const val KEY_SPACE_ONBOARDING_SEEN = "entity_space_onboarding_seen"
 	}
 
 	// ==================== Video Intro/Outro Skip ====================
@@ -2659,8 +2671,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_ACTIVE_SPACE, value) }
 
 	var isEntitySpaceEnabled: Boolean
-		get() = prefs.getBoolean(KEY_ENTITY_SPACE_ENABLED, true)
+		get() = prefs.getBoolean(KEY_ENTITY_SPACE_ENABLED, false)
 		set(value) = prefs.edit { putBoolean(KEY_ENTITY_SPACE_ENABLED, value) }
+
+	var hasSeenSpaceOnboarding: Boolean
+		get() = prefs.getBoolean(KEY_SPACE_ONBOARDING_SEEN, false)
+		set(value) = prefs.edit { putBoolean(KEY_SPACE_ONBOARDING_SEEN, value) }
 
 	var isSpaceSwitcherEnabled: Boolean
 		get() = prefs.getBoolean(KEY_SPACE_SWITCHER_ENABLED, true)

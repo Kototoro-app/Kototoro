@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -62,6 +63,7 @@ fun SpacesSettingsRoute(
     viewModel: SpacesSettingsViewModel = hiltViewModel(),
 ) {
     val definitions by viewModel.uiState.collectAsStateWithLifecycle()
+    var showSpaceOnboarding by rememberSaveable { mutableStateOf(false) }
     val state = SpacesSettingsUiState(
         spacesEnabled = settings.observeAsState(AppSettings.KEY_ENTITY_SPACE_ENABLED) { isEntitySpaceEnabled }.value,
         switcherEnabled = settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_ENABLED) { isSpaceSwitcherEnabled }.value,
@@ -78,7 +80,13 @@ fun SpacesSettingsRoute(
     SpacesSettingsScreen(
         state = state,
         definitions = definitions,
-        onSpacesEnabledChange = { settings.isEntitySpaceEnabled = it },
+        onSpacesEnabledChange = { enabled ->
+            if (shouldShowSpaceOnboarding(enabled, settings.hasSeenSpaceOnboarding)) {
+                showSpaceOnboarding = true
+            } else {
+                settings.isEntitySpaceEnabled = enabled
+            }
+        },
         onSwitcherEnabledChange = { settings.isSpaceSwitcherEnabled = it },
         onPersistentNavigationEnabledChange = { settings.isSpacePersistentNavigationEnabled = it },
         onImmersiveSwitchEnabledChange = { settings.isSpaceImmersiveSwitchEnabled = it },
@@ -88,6 +96,60 @@ fun SpacesSettingsRoute(
         onDelete = viewModel::delete,
         onMove = viewModel::move,
         modifier = modifier,
+    )
+    if (showSpaceOnboarding) {
+        SpaceOnboardingDialog(
+            onDismiss = {
+                settings.hasSeenSpaceOnboarding = true
+                showSpaceOnboarding = false
+            },
+            onEnable = {
+                settings.hasSeenSpaceOnboarding = true
+                settings.isEntitySpaceEnabled = true
+                showSpaceOnboarding = false
+            },
+        )
+    }
+}
+
+internal fun shouldShowSpaceOnboarding(
+    requestedEnabled: Boolean,
+    hasSeenOnboarding: Boolean,
+): Boolean = requestedEnabled && !hasSeenOnboarding
+
+@Composable
+private fun SpaceOnboardingDialog(
+    onDismiss: () -> Unit,
+    onEnable: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.space_onboarding_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.space_onboarding_description))
+                Text(
+                    text = stringResource(R.string.space_onboarding_gesture),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.space_onboarding_data_note),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onEnable) {
+                Text(stringResource(R.string.space_onboarding_enable))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.space_onboarding_not_now))
+            }
+        },
     )
 }
 

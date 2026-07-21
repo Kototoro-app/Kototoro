@@ -3082,7 +3082,13 @@ SHA-256 指纹:
     <string name="spaces">Spaces</string>
     <string name="spaces_settings_summary">将漫画、小说和动画分隔为独立的使用环境</string>
     <string name="spaces_enabled">启用 Spaces</string>
-    <string name="spaces_enabled_summary">为不同媒体空间保留各自独立的活动上下文</string>
+    <string name="spaces_enabled_summary">将漫画、小说和动画分成独立的浏览空间</string>
+    <string name="space_onboarding_title">启用内容空间</string>
+    <string name="space_onboarding_description">内容空间会分开漫画、小说和动画，并分别记住最近内容与导航位置。</string>
+    <string name="space_onboarding_gesture">点击 Space 按钮可打开紧凑菜单；长按并拖到另一个 Space 可直接切换。</string>
+    <string name="space_onboarding_data_note">你可以随时关闭内容空间，不会删除收藏、历史记录或已保存的导航数据。</string>
+    <string name="space_onboarding_enable">启用内容空间</string>
+    <string name="space_onboarding_not_now">暂不启用</string>
     <string name="space_switcher_enabled">显示 Space 切换按钮</string>
     <string name="space_switcher_enabled_summary">在应用各处显示 Space 切换按钮</string>
     <string name="space_persistent_navigation_enabled">记住每个 Space 的导航</string>

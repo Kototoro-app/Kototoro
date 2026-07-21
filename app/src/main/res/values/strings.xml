@@ -3198,7 +3198,13 @@
     <string name="spaces">Spaces</string>
     <string name="spaces_settings_summary">Separate manga, novels, and anime into independent contexts</string>
     <string name="spaces_enabled">Enable Spaces</string>
-    <string name="spaces_enabled_summary">Keep each media space isolated with its own active context</string>
+    <string name="spaces_enabled_summary">Separate manga, novels, and anime into independent browsing contexts</string>
+    <string name="space_onboarding_title">Set up Spaces</string>
+    <string name="space_onboarding_description">Spaces separates manga, novels, and anime. Each space remembers its own recent content and navigation position.</string>
+    <string name="space_onboarding_gesture">Tap the Space button for the compact menu, or long-press and drag it directly onto another Space.</string>
+    <string name="space_onboarding_data_note">You can turn Spaces off at any time without deleting your library, history, or saved navigation data.</string>
+    <string name="space_onboarding_enable">Enable Spaces</string>
+    <string name="space_onboarding_not_now">Not now</string>
     <string name="space_switcher_enabled">Show space switcher</string>
     <string name="space_switcher_enabled_summary">Show the space switch button throughout the app</string>
     <string name="space_persistent_navigation_enabled">Remember navigation per space</string>
