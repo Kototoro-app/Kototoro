@@ -1780,6 +1780,7 @@ fun KototoroApp(
                 SpaceWorkbench(
                     state = spaceUiState,
                     resumeItems = spaceResumeUiState.items,
+                    sessions = spaceNavigationSessionUiState.sessions,
                     dragPosition = spaceWorkbenchDragPosition,
                     onDismiss = {
                         spaceWorkbenchDragPosition = null

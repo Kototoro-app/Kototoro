@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -37,13 +38,16 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -51,9 +55,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
+import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 
 private val WorkbenchRailWidth = 132.dp
 private val WorkbenchRailShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
@@ -68,6 +77,7 @@ private val WorkbenchCardShape = RoundedCornerShape(20.dp)
 fun SpaceWorkbench(
 	state: SpaceUiState,
 	resumeItems: Map<SpaceId, SpaceResumeItem>,
+	sessions: Map<SpaceId, SpaceSessionSnapshot> = emptyMap(),
 	dragPosition: Offset? = null,
 	onDismiss: () -> Unit,
 	onSelectSpace: (SpaceId) -> Unit,
@@ -138,6 +148,7 @@ fun SpaceWorkbench(
 								selected = context.id == state.activeSpaceId,
 								hovered = context.id == hoveredSpaceId,
 								resumeItem = resumeItems[context.id],
+								session = sessions[context.id],
 								enabled = !state.switchInProgress,
 								onBoundsChanged = { bounds ->
 									if (cardBounds[context.id] != bounds) {
@@ -183,10 +194,22 @@ private fun SpaceWorkbenchCard(
 	selected: Boolean,
 	hovered: Boolean,
 	resumeItem: SpaceResumeItem?,
+	session: SpaceSessionSnapshot?,
 	enabled: Boolean,
 	onBoundsChanged: (Rect) -> Unit,
 	onClick: () -> Unit,
 ) {
+	val localContext = LocalContext.current
+	val coverUrl = resumeItem?.content?.coverUrl?.takeIf { it.isNotBlank() }
+	val coverRequest = remember(localContext, resumeItem?.content?.id, coverUrl) {
+		resumeItem?.content?.takeIf { coverUrl != null }?.let { content ->
+			ImageRequest.Builder(localContext)
+				.data(coverUrl)
+				.apply { mangaExtra(content) }
+				.build()
+		}
+	}
+	val location = session?.toWorkbenchLocation()
 	val scale by animateFloatAsState(
 		targetValue = if (hovered) 1.045f else 1f,
 		animationSpec = tween(durationMillis = 120),
@@ -218,6 +241,18 @@ private fun SpaceWorkbenchCard(
 			modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
 			verticalArrangement = Arrangement.spacedBy(8.dp),
 		) {
+			if (coverRequest != null) {
+				AsyncImage(
+					model = coverRequest,
+					contentDescription = resumeItem?.title,
+					contentScale = ContentScale.Crop,
+					modifier = Modifier
+						.fillMaxWidth()
+						.height(92.dp)
+						.clip(RoundedCornerShape(12.dp))
+						.background(MaterialTheme.colorScheme.surfaceVariant),
+				)
+			}
 			Row(
 				verticalAlignment = Alignment.CenterVertically,
 				horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -241,6 +276,37 @@ private fun SpaceWorkbenchCard(
 				maxLines = 2,
 				overflow = TextOverflow.Ellipsis,
 			)
+			when (location) {
+				SpaceWorkbenchLocation.Details -> Text(
+					text = stringResource(R.string.space_workbench_location_details),
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.primary,
+					maxLines = 1,
+				)
+				is SpaceWorkbenchLocation.ContentList -> Text(
+					text = stringResource(
+						R.string.space_workbench_location_source,
+						location.sourceName,
+					),
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.primary,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				null -> Unit
+			}
 		}
 	}
+}
+
+internal sealed interface SpaceWorkbenchLocation {
+	data object Details : SpaceWorkbenchLocation
+	data class ContentList(val sourceName: String) : SpaceWorkbenchLocation
+}
+
+internal fun SpaceSessionSnapshot.toWorkbenchLocation(): SpaceWorkbenchLocation? = when (val route = resumeRoute) {
+	is SpaceRouteSnapshot.WorkDetails -> SpaceWorkbenchLocation.Details
+	is SpaceRouteSnapshot.ContentList -> SpaceWorkbenchLocation.ContentList(route.sourceName)
+	is SpaceRouteSnapshot.TopLevel,
+	null -> null
 }

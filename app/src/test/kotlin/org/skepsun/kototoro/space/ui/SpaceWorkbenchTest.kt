@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
+import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 
 class SpaceWorkbenchTest {
 
@@ -48,4 +50,27 @@ class SpaceWorkbenchTest {
 			resolveSpaceWorkbenchDropTarget(Offset(950f, 180f), orderedSpaceIds, overlappingBounds),
 		)
 	}
+
+	@Test
+	fun `session route maps to lightweight workbench location`() {
+		assertEquals(
+			SpaceWorkbenchLocation.Details,
+			session(SpaceRouteSnapshot.WorkDetails(entityId = 7L, requestedProjectionId = null))
+				.toWorkbenchLocation(),
+		)
+		assertEquals(
+			SpaceWorkbenchLocation.ContentList("ExampleSource"),
+			session(SpaceRouteSnapshot.ContentList("ExampleSource")).toWorkbenchLocation(),
+		)
+		assertNull(session(SpaceRouteSnapshot.TopLevel("home")).toWorkbenchLocation())
+	}
+
+	private fun session(resumeRoute: SpaceRouteSnapshot) = SpaceSessionSnapshot(
+		spaceId = BuiltInSpaces.Manga,
+		selectedTopLevel = "home",
+		resumeRoute = resumeRoute,
+		stacks = emptyMap(),
+		lastAccessed = 1L,
+		updatedAt = 1L,
+	)
 }

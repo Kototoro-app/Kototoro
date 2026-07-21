@@ -3110,6 +3110,8 @@ SHA-256 指纹:
     <string name="space_workbench_open">打开空间工作台</string>
     <string name="space_workbench_dismiss">关闭空间工作台</string>
     <string name="space_workbench_empty_preview">暂无最近活动</string>
+    <string name="space_workbench_location_details">上次停留 · 详情</string>
+    <string name="space_workbench_location_source">上次停留 · %1$s</string>
     <string name="space_switcher_content_description">当前：%1$s。切换 Space</string>
     <string name="space_recent_context">最近：%1$s</string>
     <string name="space_continue_content_description">继续 %1$s</string>
