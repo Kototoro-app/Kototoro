@@ -154,7 +154,6 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import coil3.compose.rememberAsyncImagePainter
@@ -1331,7 +1330,7 @@ fun KototoroApp(
                         .offset { animatedSpaceSwitcherFabOffset }
                         .size(spaceSwitcherFabSize)
                         .graphicsLayer {
-                            alpha = if (spaceWorkbenchGestureState.isActive) 0.28f else 1f
+                            alpha = if (spaceWorkbenchGestureState.isActive) 0f else 1f
                         }
                     if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
                         SpaceSwitcherFab(
@@ -1743,11 +1742,7 @@ fun KototoroApp(
                                                 mainShellChrome()
                                             }
                                         },
-                                        routeFab = {
-                                            if (renderedSpaceId == navigationSpaceId) {
-                                                mainFloatingAction()
-                                            }
-                                        },
+                                        routeFab = {},
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
@@ -1761,6 +1756,9 @@ fun KototoroApp(
                     }
                     }
                 }
+                // Keep the gesture owner outside the transformed page subtree. Moving its
+                // coordinate system while a pointer is down can cancel a long-press drag.
+                mainFloatingAction()
                 SpaceWorkbench(
                     state = spaceUiState,
                     resumeItems = spaceResumeUiState.items,

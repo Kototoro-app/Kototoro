@@ -4,9 +4,10 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -53,6 +54,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,6 +109,8 @@ fun SpaceSwitcherFab(
 	val currentOnDragPositionChanged by rememberUpdatedState(onDragPositionChanged)
 	val currentOnDragEnd by rememberUpdatedState(onDragEnd)
 	val currentOnDragCancel by rememberUpdatedState(onDragCancel)
+	val currentOnClick by rememberUpdatedState(onClick)
+	val currentOnLongClick by rememberUpdatedState(onLongClick)
 	var fabCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 	fun positionInRoot(position: Offset): Offset {
 		val coordinates = fabCoordinates
@@ -113,25 +119,37 @@ fun SpaceSwitcherFab(
 	val fabModifier = modifier
 		.onGloballyPositioned { coordinates -> fabCoordinates = coordinates }
 		.pointerInput(Unit) {
-			detectDragGesturesAfterLongPress(
-				onDragStart = { position -> currentOnDragStart(positionInRoot(position)) },
-				onDragEnd = currentOnDragEnd,
-				onDragCancel = currentOnDragCancel,
-				onDrag = { change, _ ->
+			awaitEachGesture {
+				val down = awaitFirstDown(requireUnconsumed = false)
+				val longPress = awaitLongPressOrCancellation(down.id)
+				if (longPress == null) {
+					currentOnClick()
+					return@awaitEachGesture
+				}
+				currentOnDragStart(positionInRoot(longPress.position))
+				val completed = drag(longPress.id) { change ->
 					change.consume()
 					currentOnDragPositionChanged(positionInRoot(change.position))
-				},
-			)
+				}
+				if (completed) {
+					currentOnDragEnd()
+				} else {
+					currentOnDragCancel()
+				}
+			}
 		}
-		.combinedClickable(
-			interactionSource = remember { MutableInteractionSource() },
-			indication = null,
-			role = Role.Button,
-			onClick = onClick,
-			onLongClickLabel = longClickLabel,
-			onLongClick = onLongClick,
-		)
-		.semantics { contentDescription = description }
+		.semantics {
+			contentDescription = description
+			role = Role.Button
+			onClick {
+				currentOnClick()
+				true
+			}
+			onLongClick(label = longClickLabel) {
+				currentOnLongClick()
+				true
+			}
+		}
 	val content: @Composable BoxScope.() -> Unit = {
 		Box(
 			modifier = Modifier
