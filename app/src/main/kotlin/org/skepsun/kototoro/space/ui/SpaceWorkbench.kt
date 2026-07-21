@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -61,9 +62,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -75,9 +78,35 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 
-private val WorkbenchRailWidth = 132.dp
 private val WorkbenchRailShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
 private val WorkbenchCardShape = RoundedCornerShape(20.dp)
+
+internal data class SpaceWorkbenchLayoutSpec(
+	val railWidth: Dp,
+	val coverHeight: Dp,
+	val showCovers: Boolean,
+)
+
+internal fun resolveSpaceWorkbenchLayoutSpec(
+	availableWidth: Dp,
+	availableHeight: Dp,
+): SpaceWorkbenchLayoutSpec {
+	val railWidth = when {
+		availableWidth >= 840.dp -> 240.dp
+		availableWidth >= 600.dp -> 188.dp
+		else -> 132.dp
+	}
+	val coverHeight = when {
+		availableWidth >= 840.dp -> 128.dp
+		availableWidth >= 600.dp -> 108.dp
+		else -> 92.dp
+	}
+	return SpaceWorkbenchLayoutSpec(
+		railWidth = railWidth,
+		coverHeight = coverHeight,
+		showCovers = availableHeight >= 520.dp,
+	)
+}
 
 /**
  * A lightweight, One Step-inspired overview. Only the active Space remains composed; inactive
@@ -130,11 +159,14 @@ internal fun SpaceWorkbench(
 		exit = fadeOut(),
 		modifier = modifier,
 	) {
-		Box(
+		BoxWithConstraints(
 			modifier = Modifier
 				.fillMaxSize()
 				.onGloballyPositioned { coordinates -> overlayBounds = coordinates.boundsInRoot() },
 		) {
+			val layoutSpec = remember(maxWidth, maxHeight) {
+				resolveSpaceWorkbenchLayoutSpec(maxWidth, maxHeight)
+			}
 			Box(
 				modifier = Modifier
 					.fillMaxSize()
@@ -150,7 +182,7 @@ internal fun SpaceWorkbench(
 			Surface(
 				modifier = Modifier
 					.align(Alignment.CenterEnd)
-					.width(WorkbenchRailWidth)
+					.width(layoutSpec.railWidth)
 					.fillMaxHeight()
 					.windowInsetsPadding(WindowInsets.safeDrawing),
 				shape = WorkbenchRailShape,
@@ -178,6 +210,7 @@ internal fun SpaceWorkbench(
 								hovered = context.id == displayedHoveredSpaceId,
 								resumeItem = resumeItems[context.id],
 								session = sessions[context.id],
+								layoutSpec = layoutSpec,
 								enabled = !state.switchInProgress,
 								onBoundsChanged = { bounds ->
 									if (cardBounds[context.id] != bounds) {
@@ -332,6 +365,7 @@ private fun SpaceWorkbenchCard(
 	hovered: Boolean,
 	resumeItem: SpaceResumeItem?,
 	session: SpaceSessionSnapshot?,
+	layoutSpec: SpaceWorkbenchLayoutSpec,
 	enabled: Boolean,
 	onBoundsChanged: (Rect) -> Unit,
 	onClick: () -> Unit,
@@ -343,6 +377,8 @@ private fun SpaceWorkbenchCard(
 			ImageRequest.Builder(localContext)
 				.data(coverUrl)
 				.apply { mangaExtra(content) }
+				.diskCachePolicy(CachePolicy.READ_ONLY)
+				.networkCachePolicy(CachePolicy.DISABLED)
 				.build()
 		}
 	}
@@ -378,16 +414,11 @@ private fun SpaceWorkbenchCard(
 			modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
 			verticalArrangement = Arrangement.spacedBy(8.dp),
 		) {
-			if (coverRequest != null) {
-				AsyncImage(
-					model = coverRequest,
-					contentDescription = resumeItem?.title,
-					contentScale = ContentScale.Crop,
-					modifier = Modifier
-						.fillMaxWidth()
-						.height(92.dp)
-						.clip(RoundedCornerShape(12.dp))
-						.background(MaterialTheme.colorScheme.surfaceVariant),
+			if (layoutSpec.showCovers) {
+				SpaceWorkbenchCoverPreview(
+					context = context,
+					coverRequest = coverRequest,
+					height = layoutSpec.coverHeight,
 				)
 			}
 			Row(
@@ -432,6 +463,39 @@ private fun SpaceWorkbenchCard(
 				)
 				null -> Unit
 			}
+		}
+	}
+}
+
+@Composable
+private fun SpaceWorkbenchCoverPreview(
+	context: SpaceContext,
+	coverRequest: ImageRequest?,
+	height: Dp,
+) {
+	Box(
+		modifier = Modifier
+			.fillMaxWidth()
+			.height(height)
+			.clip(RoundedCornerShape(12.dp))
+			.background(MaterialTheme.colorScheme.surfaceVariant),
+		contentAlignment = Alignment.Center,
+	) {
+		SpaceSwitcherIcon(
+			activeSpaceId = context.id,
+			activeSpace = context,
+			modifier = Modifier
+				.size(32.dp)
+				.graphicsLayer { alpha = 0.42f }
+				.clearAndSetSemantics { },
+		)
+		if (coverRequest != null) {
+			AsyncImage(
+				model = coverRequest,
+				contentDescription = null,
+				contentScale = ContentScale.Crop,
+				modifier = Modifier.matchParentSize(),
+			)
 		}
 	}
 }

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.space.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -116,6 +117,22 @@ class SpaceWorkbenchTest {
 
 		state.release(BuiltInSpaces.Manga)
 		assertEquals(SpaceWorkbenchDropOutcome.Dismiss, state.completeSettling())
+	}
+
+	@Test
+	fun `workbench layout adapts to compact landscape and expanded windows`() {
+		assertEquals(
+			SpaceWorkbenchLayoutSpec(railWidth = 132.dp, coverHeight = 92.dp, showCovers = true),
+			resolveSpaceWorkbenchLayoutSpec(availableWidth = 400.dp, availableHeight = 800.dp),
+		)
+		assertEquals(
+			SpaceWorkbenchLayoutSpec(railWidth = 188.dp, coverHeight = 108.dp, showCovers = false),
+			resolveSpaceWorkbenchLayoutSpec(availableWidth = 700.dp, availableHeight = 400.dp),
+		)
+		assertEquals(
+			SpaceWorkbenchLayoutSpec(railWidth = 240.dp, coverHeight = 128.dp, showCovers = true),
+			resolveSpaceWorkbenchLayoutSpec(availableWidth = 1000.dp, availableHeight = 800.dp),
+		)
 	}
 
 	private fun session(resumeRoute: SpaceRouteSnapshot) = SpaceSessionSnapshot(
