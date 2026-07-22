@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backdrop"
+  short_description: "Kyant Backdrop glass effects for Compose"
+  default_prompt: "Use $backdrop to diagnose or implement Kyant Backdrop effects in Kototoro, including iOS-style glass, tint, blur, vibrancy, lens, and layer backdrops."

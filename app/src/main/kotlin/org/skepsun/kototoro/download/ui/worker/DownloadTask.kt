@@ -8,7 +8,11 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.util.find
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 @Parcelize
 data class ExecutionChapterRef(
@@ -63,7 +67,8 @@ class DownloadTask(
 		isPaused = data.getBoolean(START_PAUSED, false),
 		isSilent = data.getBoolean(IS_SILENT, false),
 		chaptersIds = data.getLongArray(CHAPTERS)?.takeUnless(LongArray::isEmpty),
-		chapterRefs = data.getString(CHAPTER_REFS)?.let(::decodeChapterRefs),
+		chapterRefs = data.getByteArray(CHAPTER_REFS)?.let(::decodeChapterRefs)
+			?: data.getString(CHAPTER_REFS)?.let(::decodeChapterRefsJson),
 		destination = data.getString(DESTINATION)?.let { File(it) },
 		format = data.getString(FORMAT)?.let { DownloadFormat.entries.find(it) },
 		allowMeteredNetwork = data.getBoolean(ALLOW_METERED, true),
@@ -71,19 +76,45 @@ class DownloadTask(
 		kind = data.getString(KIND)?.let { DownloadTaskKind.entries.find(it) } ?: DownloadTaskKind.DOWNLOAD,
 	)
 
-	fun toData(): Data = Data.Builder()
-		.putLong(MANGA_ID, mangaId)
-		.putLong(DISPLAY_MANGA_ID, displayMangaId ?: 0L)
-		.putBoolean(START_PAUSED, isPaused)
-		.putBoolean(IS_SILENT, isSilent)
-		.putLongArray(CHAPTERS, chaptersIds ?: LongArray(0))
-		.putString(CHAPTER_REFS, chapterRefs?.let(::encodeChapterRefs))
-		.putString(DESTINATION, destination?.path)
-		.putString(FORMAT, format?.name)
-		.putBoolean(ALLOW_METERED, allowMeteredNetwork)
-		.putString(PREFERRED_QUALITY, preferredQuality)
-		.putString(KIND, kind.name)
-		.build()
+	fun toData(): Data {
+		val encodedChapterRefs = chapterRefs?.let(::encodeChapterRefs)
+		if (encodedChapterRefs == null) {
+			return createDataBuilder().build()
+		}
+
+		return try {
+			val data = createDataBuilder(encodedChapterRefs).build()
+			if (data.toByteArray().size <= Data.MAX_DATA_BYTES - DATA_SIZE_RESERVE_BYTES) {
+				data
+			} else {
+				createDataBuilder().build()
+			}
+		} catch (e: IllegalStateException) {
+			if (!e.message.orEmpty().contains(DATA_SIZE_ERROR)) {
+				throw e
+			}
+			createDataBuilder().build()
+		}
+	}
+
+	private fun createDataBuilder(encodedChapterRefs: ByteArray? = null): Data.Builder {
+		return Data.Builder()
+			.putLong(MANGA_ID, mangaId)
+			.putLong(DISPLAY_MANGA_ID, displayMangaId ?: 0L)
+			.putBoolean(START_PAUSED, isPaused)
+			.putBoolean(IS_SILENT, isSilent)
+			.putLongArray(CHAPTERS, chaptersIds ?: LongArray(0))
+			.apply {
+				if (encodedChapterRefs != null) {
+					putByteArray(CHAPTER_REFS, encodedChapterRefs)
+				}
+			}
+			.putString(DESTINATION, destination?.path)
+			.putString(FORMAT, format?.name)
+			.putBoolean(ALLOW_METERED, allowMeteredNetwork)
+			.putString(PREFERRED_QUALITY, preferredQuality)
+			.putString(KIND, kind.name)
+	}
 
 	override fun equals(other: Any?): Boolean {
 		if (this === other) return true
@@ -161,7 +192,17 @@ class DownloadTask(
 		const val PREFERRED_QUALITY = "preferred_quality"
 		const val KIND = "kind"
 
-		private fun encodeChapterRefs(refs: List<ExecutionChapterRef>): String {
+		private fun encodeChapterRefs(refs: List<ExecutionChapterRef>): ByteArray {
+			val json = encodeChapterRefsJson(refs)
+			return ByteArrayOutputStream().use { output ->
+				GZIPOutputStream(output).use { gzip ->
+					gzip.write(json.toByteArray(Charsets.UTF_8))
+				}
+				output.toByteArray()
+			}
+		}
+
+		private fun encodeChapterRefsJson(refs: List<ExecutionChapterRef>): String {
 			return JSONArray().apply {
 				refs.forEach { ref ->
 					put(
@@ -178,7 +219,12 @@ class DownloadTask(
 			}.toString()
 		}
 
-		private fun decodeChapterRefs(raw: String): List<ExecutionChapterRef> {
+		private fun decodeChapterRefs(data: ByteArray): List<ExecutionChapterRef> =
+			GZIPInputStream(ByteArrayInputStream(data)).bufferedReader(Charsets.UTF_8).use { reader ->
+				decodeChapterRefsJson(reader.readText())
+			}
+
+		private fun decodeChapterRefsJson(raw: String): List<ExecutionChapterRef> {
 			if (raw.isBlank()) {
 				return emptyList()
 			}
@@ -199,5 +245,8 @@ class DownloadTask(
 				}
 			}
 		}
+
+		private const val DATA_SIZE_ERROR = "Data cannot occupy more than"
+		private const val DATA_SIZE_RESERVE_BYTES = 512
 	}
 }

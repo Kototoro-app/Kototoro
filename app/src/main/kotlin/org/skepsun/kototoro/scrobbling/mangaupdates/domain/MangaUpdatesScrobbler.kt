@@ -39,7 +39,7 @@ class MangaUpdatesScrobbler @Inject constructor(
 		repository.updateRate(
 			rateId = entity.id,
 			mangaId = entity.mangaId,
-			rating = rating, // Assuming rating internally scales to whatever, MangaUpdates supports 0.0-10.0
+			rating = rating,
 			status = statuses[status],
 			comment = comment,
 		)

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.details.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
@@ -19,6 +20,19 @@ class DetailsOriginProjectionTest {
 		)
 
 		assertEquals(4515734976139131316L, origin.initialProjectionLocalMangaIdOrNull())
+	}
+
+	@Test
+	fun `local content origin keeps the projection seed for initial details loading`() {
+		val content = content("MH1234")
+		val origin = DetailsOrigin.LocalMangaContent(
+			org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
+		)
+
+		val intent = origin.initialProjectionIntentOrNull()
+
+		assertSame(content, intent?.manga)
+		assertEquals(content.id, intent?.mangaId)
 	}
 
 	@Test

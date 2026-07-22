@@ -1,13 +1,8 @@
-# Project-scoped Codex defaults for Trellis workflows.
 # Codex merges this layer after the user-level config when the project
 # is marked as a trusted project. To trust this project, add it under
 # `[projects]` in ~/.codex/config.toml, e.g.:
-#
 #   [projects."/abs/path/to/this/repo"]
 #   trust_level = "trusted"
-
-# Keep AGENTS.md as the primary project instruction file.
-project_doc_fallback_filenames = ["AGENTS.md"]
 
 # Codex hooks (`hooks.json` in this directory) only fire when the user
 # has enabled them in their USER-level config: `[features].hooks = true`

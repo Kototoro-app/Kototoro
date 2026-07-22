@@ -81,6 +81,7 @@
     <string name="chapter_d_of_d">%1$d/%2$d 章</string>
     <string name="close">关闭</string>
     <string name="try_again">重试</string>
+    <string name="open_in_reader_browser">在内置浏览器中打开</string>
     <string name="clear_history">清除阅读记录</string>
     <string name="nothing_found">结果为空</string>
     <string name="history_is_empty">暂无历史记录</string>
@@ -3100,4 +3101,21 @@ SHA-256 指纹:
     <string name="content_types">内容类型</string>
     <string name="source_types">内容源类型</string>
     <string name="custom_space_rule_summary">%1$d 种内容类型 · %2$d 种语言 · %3$d 种内容源类型</string>
+    <string name="entity_organize_repair_mixed_work_content_types_title">修复混合内容类型的作品实体</string>
+    <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d 个作品实体包含 %2$d 个来自不同内容类型的本地投影。将投影拆分为独立作品实体以恢复类型隔离。</string>
+    <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合内容类型作品</string>
+    <string name="entity_organize_repair_mixed_work_content_types_feedback">已将 %1$d 个混合内容类型投影拆分为独立作品实体。</string>
+    <string name="space_switcher_title">切换 Space</string>
+    <string name="space_switcher_content_description">当前：%1$s。切换 Space</string>
+    <string name="space_recent_context">最近：%1$s</string>
+    <string name="space_continue_content_description">继续 %1$s</string>
+    <string name="space_switch_failed">无法保存进度。Space 未切换。</string>
+    <string name="space_switch_unavailable">Space 切换暂不可用。</string>
+    <string name="space_manga">漫画 Space</string>
+    <string name="space_novel">小说 Space</string>
+    <string name="space_anime">动画 Space</string>
+    <string name="media_universe_title">媒体宇宙</string>
+    <string name="media_universe_empty">暂无历史记录或收藏</string>
+    <string name="media_universe_history_and_favorites">历史记录与收藏</string>
+    <string name="media_universe_item_summary">%1$s · %2$s</string>
 </resources>

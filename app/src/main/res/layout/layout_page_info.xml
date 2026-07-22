@@ -70,6 +70,16 @@
 			android:text="@string/try_again" />
 
 		<Button
+			android:id="@+id/button_open_in_browser"
+			style="?borderlessButtonStyle"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:drawablePadding="8dp"
+			android:text="@string/open_in_reader_browser"
+			android:visibility="gone"
+			app:drawableStartCompat="@drawable/ic_web" />
+
+		<Button
 			android:id="@+id/button_error_details"
 			style="?borderlessButtonStyle"
 			android:layout_width="wrap_content"

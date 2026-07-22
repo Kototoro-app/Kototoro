@@ -214,6 +214,11 @@ fun Throwable.findCloudFlareException(): CloudFlareException? =
         current.cause?.takeIf { cause -> cause !== current }
     }.filterIsInstance<CloudFlareException>().firstOrNull()
 
+fun Throwable.findInteractiveActionRequiredException(): InteractiveActionRequiredException? =
+    generateSequence(this) { current ->
+        current.cause?.takeIf { cause -> cause !== current }
+    }.filterIsInstance<InteractiveActionRequiredException>().firstOrNull()
+
 private fun getHttpDisplayMessage(statusCode: Int, resources: Resources): String? = when (statusCode) {
     HttpURLConnection.HTTP_NOT_FOUND -> resources.getString(R.string.not_found_404)
     HttpURLConnection.HTTP_FORBIDDEN -> resources.getString(R.string.access_denied_403)

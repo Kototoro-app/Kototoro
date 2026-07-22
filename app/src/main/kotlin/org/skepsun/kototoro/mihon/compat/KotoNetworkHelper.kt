@@ -21,6 +21,7 @@ import okhttp3.zstd.Zstd
 import okio.IOException
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
+import org.skepsun.kototoro.core.network.CloudFlareInterceptor as KototoroCloudFlareInterceptor
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -323,7 +324,8 @@ class KotoNetworkHelper(
     private fun isCompatibleInterceptor(interceptor: okhttp3.Interceptor): Boolean {
         return interceptor !== BrotliInterceptor &&
             interceptor.javaClass.simpleName != "GZipInterceptor" &&
-            interceptor.javaClass.simpleName != "IgnoreGzipInterceptor"
+            interceptor.javaClass.simpleName != "IgnoreGzipInterceptor" &&
+            interceptor !is KototoroCloudFlareInterceptor
     }
 
     private fun isDefaultMihonInterceptor(interceptor: okhttp3.Interceptor): Boolean {

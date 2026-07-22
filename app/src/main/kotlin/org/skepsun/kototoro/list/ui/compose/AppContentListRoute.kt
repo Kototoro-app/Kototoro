@@ -40,6 +40,7 @@ import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
+import org.skepsun.kototoro.core.util.ext.findInteractiveActionRequiredException
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
@@ -437,10 +438,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     }
 
     fun resolveCloudflareAndRetry() {
-        val cfError = items.filterIsInstance<ErrorState>().firstOrNull { it.exception is CloudFlareProtectedException }
-        if (cfError != null && exceptionResolver != null) {
+        val actionableError = items.filterIsInstance<ErrorState>().firstOrNull { item ->
+            item.exception is CloudFlareProtectedException ||
+                item.exception.findInteractiveActionRequiredException() != null
+        }
+        if (actionableError != null && exceptionResolver != null) {
             coroutineScope.launch {
-                if (exceptionResolver.resolve(cfError.exception)) {
+                if (exceptionResolver.resolve(actionableError.exception)) {
                     viewModel.onRetry()
                 }
             }

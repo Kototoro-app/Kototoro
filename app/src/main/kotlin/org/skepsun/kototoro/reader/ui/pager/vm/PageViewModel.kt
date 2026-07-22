@@ -84,7 +84,7 @@ class PageViewModel(
 		}
 	}
 
-	fun retry(page: ContentPage, isFromUser: Boolean) {
+	fun retry(page: ContentPage, isFromUser: Boolean, pageUrlOverride: String? = null) {
 		val prevJob = job
 		job = scope.launch {
 			prevJob?.cancelAndJoin()
@@ -95,7 +95,7 @@ class PageViewModel(
 				}
 			}
 			withContext(Dispatchers.Default) {
-				doLoad(page, force = true)
+				doLoad(page, force = true, pageUrlOverride = pageUrlOverride)
 			}
 		}
 	}
@@ -103,6 +103,20 @@ class PageViewModel(
 	fun showErrorDetails(url: String?) {
 		val e = (state.value as? PageState.Error)?.error ?: return
 		exceptionResolver.showErrorDetails(e, url)
+	}
+
+	fun canOpenInBrowser(): Boolean {
+		return (state.value as? PageState.Error)?.error is ImageDecodeException
+	}
+
+	fun openInBrowser(page: ContentPage, onUrlReady: (String) -> Unit) {
+		scope.launch {
+			val url = runCatching { loader.getPageUrl(page) }
+				.getOrNull()
+				?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+				?: return@launch
+			onUrlReady(url)
+		}
 	}
 
 	fun onRecycle() {
@@ -237,7 +251,7 @@ class PageViewModel(
 	}
 
 	@WorkerThread
-	private suspend fun doLoad(data: ContentPage, force: Boolean) = coroutineScope {
+	private suspend fun doLoad(data: ContentPage, force: Boolean, pageUrlOverride: String? = null) = coroutineScope {
 		state.value = PageState.Loading(null, -1)
 		val previewJob = launch {
 			val preview = loader.loadPreview(data) ?: return@launch
@@ -246,7 +260,7 @@ class PageViewModel(
 			}
 		}
 		try {
-			val task = loader.loadPageAsync(data, force)
+			val task = loader.loadPageAsync(data, force, pageUrlOverride)
 			val progressObserver = observeProgress(this, task.progressAsFlow())
 			val uri = task.await()
 			progressObserver.cancelAndJoin()

@@ -178,7 +178,12 @@ class LNReaderPluginBridge(
 					console.error("PLUGIN EVAL ERROR: " + String(error) + "\nSTACK: " + (error ? error.stack : "null"));
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
+						error: (function() {
+							if (error === null) return 'Plugin rejected with null';
+							if (error === undefined) return 'Plugin rejected with undefined';
+							var message = error && error.message ? String(error.message) : String(error);
+							return message + (error && error.stack ? "\n" + error.stack : "");
+						})()
 					};
 				}
 			})();
@@ -205,7 +210,12 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
+						error: (function() {
+							if (error === null) return 'Plugin rejected with null';
+							if (error === undefined) return 'Plugin rejected with undefined';
+							var message = error && error.message ? String(error.message) : String(error);
+							return message + (error && error.stack ? "\n" + error.stack : "");
+						})()
 					};
 				}
 			})();
@@ -233,7 +243,12 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
+						error: (function() {
+							if (error === null) return 'Plugin rejected with null';
+							if (error === undefined) return 'Plugin rejected with undefined';
+							var message = error && error.message ? String(error.message) : String(error);
+							return message + (error && error.stack ? "\n" + error.stack : "");
+						})()
 					};
 				}
 			})();
@@ -264,7 +279,12 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
+						error: (function() {
+							if (error === null) return 'Plugin rejected with null';
+							if (error === undefined) return 'Plugin rejected with undefined';
+							var message = error && error.message ? String(error.message) : String(error);
+							return message + (error && error.stack ? "\n" + error.stack : "");
+						})()
 					};
 				}
 			})();
@@ -323,7 +343,12 @@ class LNReaderPluginBridge(
 				} catch (error) {
 					globalThis.$resultVar = { 
 						success: false, 
-						error: (error && error.message ? error.message : String(error)) + (error && error.stack ? "\n" + error.stack : "")
+						error: (function() {
+							if (error === null) return 'Plugin rejected with null';
+							if (error === undefined) return 'Plugin rejected with undefined';
+							var message = error && error.message ? String(error.message) : String(error);
+							return message + (error && error.stack ? "\n" + error.stack : "");
+						})()
 					};
 				}
 			})();

@@ -56,8 +56,11 @@ import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.ui.BaseFullscreenActivity
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
 import org.skepsun.kototoro.core.ui.dialog.setCheckbox
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.util.MenuInvalidator
 import org.skepsun.kototoro.core.ui.widgets.ZoomControl
 import org.skepsun.kototoro.core.util.IdlingDetector
@@ -90,6 +93,7 @@ import org.skepsun.kototoro.space.ui.SpaceSwitcherDelegate
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
+import kotlin.math.roundToInt
 
 @AndroidEntryPoint
 class ReaderActivity :
@@ -163,8 +167,10 @@ class ReaderActivity :
             )
         }
         setContentView(ActivityReaderBinding.inflate(layoutInflater))
+        installTabletToolbarChrome()
         readerManager = ReaderManager(supportFragmentManager, viewBinding.container, settings)
         setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
+        installToolbarButtonContainers()
         touchHelper = TapGridDispatcher(viewBinding.root, this)
         scrollTimer = scrollTimerFactory.create(resources, this, this)
         pageSaveHelper = pageSaveHelperFactory.create(this)
@@ -644,23 +650,32 @@ class ReaderActivity :
             return
         }
         val fab = root.findViewById<View>(R.id.immersive_space_switcher_fab) ?: return
-        val bottomObstruction = listOfNotNull(
-            viewBinding.toolbarDocked,
-            viewBinding.zoomControl,
-            viewBinding.buttonTimer,
-            viewBinding.timerControl,
-        ).asSequence()
-            .filter { it.isVisible && it !== fab }
-            .map { root.height - it.top }
-            .maxOrNull()
-            ?.coerceAtLeast(0)
-            ?: 0
-        val gap = resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
-        fab.updateLayoutParams<CoordinatorLayout.LayoutParams> {
-            bottomMargin = bottomObstruction + gap
-        }
-        fab.bringToFront()
-    }
+		fab.post {
+			if (!fab.isAttachedToWindow) return@post
+			val bottomObstruction = listOfNotNull(
+				viewBinding.toolbarDocked,
+				viewBinding.zoomControl,
+				viewBinding.buttonTimer,
+				viewBinding.timerControl,
+			).asSequence()
+				.filter { it.isVisible && it !== fab }
+				.map { root.height - it.top }
+				.maxOrNull()
+				?.coerceAtLeast(0)
+				?: 0
+			val bottomMargin = bottomObstruction +
+				resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
+			val layoutParams = fab.layoutParams as? CoordinatorLayout.LayoutParams ?: return@post
+			if (layoutParams.bottomMargin != bottomMargin) {
+				layoutParams.bottomMargin = bottomMargin
+				fab.layoutParams = layoutParams
+			}
+			val parent = fab.parent as? ViewGroup
+			if (parent != null && parent.getChildAt(parent.childCount - 1) !== fab) {
+				fab.bringToFront()
+			}
+		}
+	}
 
     override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
         gestureInsets = insets.getInsets(WindowInsetsCompat.Type.systemGestures())
@@ -1075,6 +1090,80 @@ class ReaderActivity :
     }
 
     private var isToolbarFloating = false
+
+    private fun installTabletToolbarChrome() {
+        findViewById<androidx.compose.ui.platform.ComposeView>(R.id.reader_toolbar_chrome)?.let { chrome ->
+            chrome.setViewCompositionStrategy(
+                androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
+            )
+            chrome.setContent {
+                KototoroTheme {
+                    ReaderToolbarChrome()
+                }
+            }
+        }
+    }
+
+    private fun installToolbarButtonContainers() {
+        viewBinding.toolbar.post {
+            val density = resources.displayMetrics.density
+            val containerSize = (CompactTopBarPillHeight.value * density).roundToInt()
+            val horizontalPadding = (CompactTopBarHorizontalPadding.value * density).roundToInt()
+            val surfaceColor = com.google.android.material.color.MaterialColors.getColor(
+                viewBinding.toolbar,
+                com.google.android.material.R.attr.colorSurfaceContainerHigh,
+            )
+            val outlineColor = com.google.android.material.color.MaterialColors.getColor(
+                viewBinding.toolbar,
+                com.google.android.material.R.attr.colorOutline,
+            )
+            viewBinding.toolbar.setContentInsetsRelative(horizontalPadding, horizontalPadding)
+
+            var navigationButton: android.widget.ImageButton? = null
+
+            fun applyTo(view: View) {
+                if (view !is android.widget.ImageButton) return
+                val container = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(surfaceColor, 128))
+                    setStroke(
+                        (1 * resources.displayMetrics.density).toInt().coerceAtLeast(1),
+                        androidx.core.graphics.ColorUtils.setAlphaComponent(outlineColor, 84),
+                    )
+                }
+                view.background = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(
+                        androidx.core.graphics.ColorUtils.setAlphaComponent(outlineColor, 72),
+                    ),
+                    android.graphics.drawable.InsetDrawable(
+                        container,
+                        if (view === navigationButton) 0 else (4 * density).roundToInt(),
+                    ),
+                    null,
+                )
+                if (view === navigationButton) {
+                    view.updateLayoutParams<ViewGroup.LayoutParams> {
+                        width = containerSize
+                        height = containerSize
+                    }
+                    view.minimumWidth = containerSize
+                    view.minimumHeight = containerSize
+                }
+            }
+
+            fun visit(group: ViewGroup) {
+                for (index in 0 until group.childCount) {
+                    val child = group.getChildAt(index)
+                    if (navigationButton == null && child is android.widget.ImageButton) {
+                        navigationButton = child
+                    }
+                    applyTo(child)
+                    if (child is ViewGroup) visit(child)
+                }
+            }
+            visit(viewBinding.toolbar)
+        }
+    }
     
     private fun updateToolbarFloatingStyle(isFloating: Boolean) {
         if (isToolbarFloating == isFloating) return

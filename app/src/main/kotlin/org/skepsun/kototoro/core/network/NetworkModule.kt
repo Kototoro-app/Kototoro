@@ -99,6 +99,8 @@ interface NetworkModule {
 				installExtraCertificates(contextProvider.get())
 			}
 			cache(cache)
+			// Send requests normally first; GZipInterceptor only retries compatible GET/HEAD
+			// requests after a 400/415 response.
 			addInterceptor(GZipInterceptor())
 			addInterceptor(CloudFlareInterceptor())
 			addInterceptor(RateLimitInterceptor())
