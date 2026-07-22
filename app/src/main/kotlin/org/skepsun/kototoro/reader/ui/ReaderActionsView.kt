@@ -75,7 +75,7 @@ import org.skepsun.kototoro.reader.ui.ReaderControlDelegate.OnInteractionListene
 import javax.inject.Inject
 
 @Immutable
-private data class ReaderActionsUiState(
+internal data class ReaderActionsUiState(
 	val controls: Set<ReaderControl> = ReaderControl.DEFAULT,
 	val sliderValue: Float = 0f,
 	val sliderMax: Int = 1,
@@ -94,7 +94,7 @@ private data class ReaderActionsUiState(
 	val pageLabel: String = "",
 )
 
-private data class ReaderActionsCallbacks(
+internal data class ReaderActionsCallbacks(
 	val onPreviousChapter: () -> Unit = {},
 	val onNextChapter: () -> Unit = {},
 	val onSavePage: () -> Unit = {},
@@ -330,7 +330,7 @@ class ReaderActionsView @JvmOverloads constructor(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ReaderActionsContent(
+internal fun ReaderActionsContent(
 	state: ReaderActionsUiState,
 	isSliderTracking: Boolean,
 	callbacks: ReaderActionsCallbacks,

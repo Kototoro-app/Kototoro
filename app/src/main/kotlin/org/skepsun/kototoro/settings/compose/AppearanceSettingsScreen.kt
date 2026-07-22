@@ -202,6 +202,7 @@ fun AppearanceSettingsScreen(
     onAppProtectionChange: (Boolean) -> Unit,
     onScreenshotsPolicyChange: (ScreenshotsPolicy) -> Unit,
 ) {
+    val usesExpressiveTypography = state.interfaceStyle != InterfaceStyle.MATERIAL_3
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -268,7 +269,7 @@ fun AppearanceSettingsScreen(
                 SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.pref_app_font_preset),
-                    value = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                    value = if (usesExpressiveTypography) {
                         state.expressiveAppFontPreset
                     } else {
                         state.appFontPreset
@@ -283,7 +284,7 @@ fun AppearanceSettingsScreen(
                     } else {
                         null
                     },
-                    onValueChange = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                    onValueChange = if (usesExpressiveTypography) {
                         onExpressiveAppFontPresetChange
                     } else {
                         onAppFontPresetChange
@@ -685,7 +686,7 @@ fun AppearanceSettingsScreen(
                     styleHint = stringResource(
                         R.string.appearance_style_default_value,
                         stringResource(state.interfaceStyle.titleResId),
-                        if (state.interfaceStyle == InterfaceStyle.IOS) {
+                        if (state.interfaceStyle != InterfaceStyle.MATERIAL_3) {
                             stringResource(R.string.enabled)
                         } else {
                             stringResource(R.string.disabled)

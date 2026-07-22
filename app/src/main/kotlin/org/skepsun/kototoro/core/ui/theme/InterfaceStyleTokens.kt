@@ -54,7 +54,23 @@ val InterfaceStyleTokens.Companion.Ios: InterfaceStyleTokens
 		sliderPressedThumbHeight = 24.dp,
 	)
 
+val InterfaceStyleTokens.Companion.Material3Expressive: InterfaceStyleTokens
+	get() = InterfaceStyleTokens(
+		screenHorizontalPadding = 20.dp,
+		sectionVerticalSpacing = 20.dp,
+		groupCornerRadius = 28.dp,
+		controlCornerRadius = 20.dp,
+		controlHeight = 56.dp,
+		compactControlHeight = 48.dp,
+		topBarButtonSize = 48.dp,
+		sliderTrackHeight = 10.dp,
+		sliderThumbSize = 28.dp,
+		sliderPressedThumbWidth = 32.dp,
+		sliderPressedThumbHeight = 40.dp,
+	)
+
 fun InterfaceStyle.tokens(): InterfaceStyleTokens = when (this) {
 	InterfaceStyle.MATERIAL_3 -> InterfaceStyleTokens.Material3
+	InterfaceStyle.MATERIAL_3_EXPRESSIVE -> InterfaceStyleTokens.Material3Expressive
 	InterfaceStyle.IOS -> InterfaceStyleTokens.Ios
 }

@@ -496,6 +496,8 @@
     <string name="interface_style">界面风格</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">保留 Android 原生的控件、间距和表面层级</string>
+    <string name="interface_style_material3_expressive">md3 expressive</string>
+    <string name="interface_style_material3_expressive_summary">更大的自适应控件、更强调的形状和更鲜明的字体层级</string>
     <string name="interface_style_ios">ios (modern)</string>
     <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、分组 Haze 和柔和菜单</string>
     <string name="appearance_style_override_note">当前 %1$s 风格下实际使用：%2$s</string>

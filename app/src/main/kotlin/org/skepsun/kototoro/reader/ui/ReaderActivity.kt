@@ -47,6 +47,7 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.resolve.DialogErrorObserver
+import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
@@ -81,6 +82,10 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.data.TapGridSettings
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.config.ReaderConfigSheet
+import org.skepsun.kototoro.reader.ui.compose.ComposeReaderController
+import org.skepsun.kototoro.reader.ui.compose.ComposeReaderChromeCallbacks
+import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks
+import org.skepsun.kototoro.reader.ui.compose.DefaultComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.translate.domain.isAutoReaderTranslationLanguage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -105,7 +110,8 @@ class ReaderActivity :
     IdlingDetector.Callback,
     ZoomControl.ZoomControlListener,
     View.OnClickListener,
-    ScrollTimerControlView.OnVisibilityChangeListener {
+    ScrollTimerControlView.OnVisibilityChangeListener,
+    ReaderErrorHost {
 
     @Inject
     lateinit var settings: AppSettings
@@ -125,6 +131,9 @@ class ReaderActivity :
     @Inject
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
+    @Inject
+    lateinit var composeReaderImagePipeline: DefaultComposeReaderImagePipeline
+
     private val idlingDetector = IdlingDetector(TimeUnit.SECONDS.toMillis(10), this)
 
     private val viewModel: ReaderViewModel by viewModels()
@@ -138,12 +147,14 @@ class ReaderActivity :
     private lateinit var controlDelegate: ReaderControlDelegate
     private var gestureInsets: Insets = Insets.NONE
     private lateinit var readerManager: ReaderManager
+    private lateinit var composeReaderController: ComposeReaderController
     private val hideUiRunnable = Runnable { setUiIsVisible(false) }
     private var currentTranslationLayerState: TranslationLayerState = TranslationLayerState.IDLE
     private var lastMangaTranslationProgress: ReaderViewModel.ChapterTranslationProgress? = null
     private var lastMangaTranslationToastAtMs: Long = 0L
     private var translationShortcutVisibleForSession = false
     private var enableTranslationAfterSetup = false
+    private var composeSliderValue = 0
 
     // Tracks whether the foldable device is in an unfolded state (half-opened or flat)
     private var isFoldUnfolded: Boolean = false
@@ -152,6 +163,21 @@ class ReaderActivity :
     private fun resetTranslationSession() {
         settings.isReaderTranslationEnabled = false
         settings.isReaderTranslationShowTranslated = false
+    }
+
+    override fun showReaderErrorDetails(error: Throwable, url: String?) {
+        exceptionResolver.showErrorDetails(error, url)
+    }
+
+    override fun resolveReaderError(error: Throwable, retry: () -> Unit) {
+        lifecycleScope.launch {
+            if (ExceptionResolver.canResolve(error)) exceptionResolver.resolve(error)
+            retry()
+        }
+    }
+
+    override fun getReaderErrorActionStringId(error: Throwable): Int {
+        return exceptionResolver.getResolveStringId(error)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -168,7 +194,59 @@ class ReaderActivity :
         }
         setContentView(ActivityReaderBinding.inflate(layoutInflater))
         installTabletToolbarChrome()
-        readerManager = ReaderManager(supportFragmentManager, viewBinding.container, settings)
+        composeReaderController = ComposeReaderController(
+            context = this,
+            lifecycleOwner = this,
+            viewModel = viewModel,
+            imagePipeline = composeReaderImagePipeline,
+            errorHost = this,
+            chromeCallbacks = ComposeReaderChromeCallbacks(
+                onNavigateBack = { dispatchNavigateUp() },
+                actions = ReaderActionsCallbacks(
+                    onPreviousChapter = { switchChapterBy(-1) },
+                    onNextChapter = { switchChapterBy(1) },
+                    onSavePage = ::onSavePageClick,
+                    onTimer = ::onScrollTimerClick,
+                    onPages = {
+                        if (!onPagesButtonClick()) router.showChapterPagesSheet()
+                    },
+                    onPagesLongClick = ::onPagesButtonLongClick,
+                    onScreenRotation = ::toggleScreenOrientation,
+                    onBookmark = ::onBookmarkClick,
+                    onBookmarkLongClick = {
+                        router.showChapterPagesSheet(ChaptersPagesSheet.TAB_BOOKMARKS)
+                    },
+                    onDownload = ::onDownloadClick,
+                    onTranslate = ::onTranslateClick,
+                    onTranslateLongClick = { onTranslateLongClick() },
+                    onOptions = ::openMenu,
+                    onOptionsLongClick = router::openReaderSettings,
+                    onSliderValueChanged = { composeSliderValue = it.toInt() },
+                    onSliderValueChangeFinished = { switchPageTo(composeSliderValue) },
+                ),
+                autoScroll = ReaderAutoScrollCallbacks(
+                    onClose = { composeReaderController.updateAutoScroll { copy(visible = false) } },
+                    onActiveChanged = { scrollTimer.setActive(it) },
+                    onPausedChanged = { scrollTimer.setManuallyPaused(it) },
+                    onSpeedChanged = { settings.readerAutoscrollSpeed = it },
+                    onFabChanged = { settings.isReaderAutoscrollFabVisible = it },
+                    onPauseOnUiChanged = { settings.isReaderAutoscrollPauseOnUi = it },
+                ),
+            ),
+        )
+        composeReaderController.updateActions {
+            copy(
+                controls = settings.readerControls,
+                pagesMode = settings.defaultDetailsTab == ChaptersPagesSheet.TAB_PAGES,
+                translateRequestedVisible = viewModel.shouldShowTranslationToggle(),
+                translateContextualVisible = translationShortcutVisibleForSession,
+            )
+        }
+        readerManager = ReaderManager(
+            container = viewBinding.container as ViewGroup,
+            settings = settings,
+            composeReader = composeReaderController,
+        )
         setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
         installToolbarButtonContainers()
         touchHelper = TapGridDispatcher(viewBinding.root, this)
@@ -193,10 +271,18 @@ class ReaderActivity :
         viewBinding.buttonTimer?.setOnClickListener(this)
         idlingDetector.bindToLifecycle(this)
         screenOrientationHelper.applySettings()
-        viewModel.isBookmarkAdded.observe(this) { viewBinding.actionsView.isBookmarkAdded = it }
+        viewModel.isBookmarkAdded.observe(this) {
+            viewBinding.actionsView.isBookmarkAdded = it
+            composeReaderController.updateActions { copy(bookmarkAdded = it) }
+        }
         scrollTimer.isActive.observe(this) {
             updateScrollTimerButton()
             viewBinding.actionsView.setTimerActive(it)
+            composeReaderController.updateActions { copy(timerActive = it) }
+            composeReaderController.updateAutoScroll { copy(active = it) }
+        }
+        scrollTimer.isManuallyPaused.observe(this) {
+            composeReaderController.updateAutoScroll { copy(manuallyPaused = it) }
         }
         viewBinding.timerControl.onVisibilityChangeListener = this
         viewBinding.timerControl.attach(scrollTimer, this)
@@ -265,7 +351,10 @@ class ReaderActivity :
         ).flowOn(Dispatchers.Default)
             .observe(this, this::onLoadingStateChanged)
         viewModel.isKeepScreenOnEnabled.observe(this, this::setKeepScreenOn)
-        viewModel.isInfoBarTransparent.observe(this) { viewBinding.infoBar.drawBackground = !it }
+        viewModel.isInfoBarTransparent.observe(this) {
+            viewBinding.infoBar.drawBackground = !it
+            composeReaderController.updateInfoBar { copy(drawBackground = !it) }
+        }
         viewModel.isInfoBarEnabled.observe(this, ::onReaderBarChanged)
         viewModel.isBookmarkAdded.observe(this, MenuInvalidator(this))
         viewModel.onAskNsfwIncognito.observeEvent(this) { askForIncognitoMode() }
@@ -279,9 +368,13 @@ class ReaderActivity :
         }
         viewModel.readerSettingsProducer.observe(this) {
             viewBinding.infoBar.applyColorScheme(isBlackOnWhite = it.background.isLight(this))
+            composeReaderController.updateInfoBar {
+                copy(darkContent = it.background.isLight(this@ReaderActivity))
+            }
         }
         viewModel.isZoomControlsEnabled.observe(this) {
             viewBinding.zoomControl.isVisible = it
+            composeReaderController.setZoomVisible(it)
             updateSpaceSwitcherFabPosition()
         }
         settings.observeAsFlow(AppSettings.KEY_READER_TRANSLATION_ENABLED) {
@@ -291,6 +384,9 @@ class ReaderActivity :
                 translationShortcutVisibleForSession = true
             }
             viewBinding.actionsView.setTranslateButtonContextualVisible(translationShortcutVisibleForSession)
+            composeReaderController.updateActions {
+                copy(translateContextualVisible = translationShortcutVisibleForSession)
+            }
             updateTranslationToggleButton()
             invalidateOptionsMenu()
             viewModel.reload()
@@ -336,6 +432,7 @@ class ReaderActivity :
         }
         viewModel.getTranslationBypassHint(this)?.let { hint ->
             viewBinding.toastView.showTemporary(hint, 2000L)
+            composeReaderController.showMessage(hint, 2000L)
             return
         }
         translationShortcutVisibleForSession = true
@@ -414,12 +511,14 @@ class ReaderActivity :
             lifecycle.postDelayed(TimeUnit.SECONDS.toMillis(1), hideUiRunnable)
         }
         viewBinding.actionsView.setSliderReversed(mode == ReaderMode.REVERSED)
+        composeReaderController.updateActions { copy(sliderReversed = mode == ReaderMode.REVERSED) }
         viewBinding.timerControl.onReaderModeChanged(mode)
     }
 
     private fun onLoadingStateChanged(value: Pair<Boolean, Boolean>) {
         val (isLoading, hasPages) = value
         val showLoadingLayout = isLoading && !hasPages
+        composeReaderController.setLoadingVisible(showLoadingLayout)
         if (viewBinding.layoutLoading.isVisible != showLoadingLayout) {
             val transition = Fade().addTarget(viewBinding.layoutLoading)
             TransitionManager.beginDelayedTransition(viewBinding.root, transition)
@@ -612,6 +711,7 @@ class ReaderActivity :
 
     private fun setUiIsVisible(isUiVisible: Boolean) {
         viewModel.isMenuVisible.value = isUiVisible
+        composeReaderController.setControlsVisible(isUiVisible)
         if (viewBinding.appbarTop.isVisible != isUiVisible) {
             if (isAnimationsEnabled) {
                 val transition = TransitionSet()
@@ -758,7 +858,7 @@ class ReaderActivity :
 
     override fun isReaderResumed(): Boolean {
         val reader = readerManager.currentReader ?: return false
-        return reader.isResumed && supportFragmentManager.fragments.lastOrNull() === reader
+        return reader.isReaderResumed
     }
 
     override fun onBookmarkClick() {
@@ -778,6 +878,9 @@ class ReaderActivity :
             scrollTimer.setActive(!scrollTimer.isActive.value)
         } else {
             viewBinding.timerControl.showOrHide()
+            composeReaderController.updateAutoScroll {
+                copy(visible = !visible, active = scrollTimer.isActive.value, manuallyPaused = scrollTimer.isManuallyPaused.value)
+            }
         }
     }
 
@@ -817,19 +920,47 @@ class ReaderActivity :
 
     private fun onReaderBarChanged(isBarEnabled: Boolean) {
         viewBinding.infoBar.isVisible = isBarEnabled && viewBinding.appbarTop.isGone
+        composeReaderController.updateInfoBar { copy(visible = isBarEnabled) }
     }
 
     private fun onUiStateChanged(pair: Pair<ReaderUiState?, ReaderUiState?>) {
         val (previous: ReaderUiState?, uiState: ReaderUiState?) = pair
         title = uiState?.mangaName ?: getString(R.string.loading_)
         viewBinding.infoBar.update(uiState)
+        composeReaderController.updateInfoBar {
+            copy(
+                text = uiState?.let {
+                    getString(
+                        R.string.reader_info_pattern,
+                        it.chapterNumber,
+                        it.chaptersTotal,
+                        it.currentPage + 1,
+                        it.totalPages,
+                    ) + if (it.percent in 0f..1f) {
+                        "     " + getString(
+                            R.string.percent_string_pattern,
+                            (it.percent * 100).roundToInt(),
+                        )
+                    } else {
+                        ""
+                    }
+                }.orEmpty(),
+                showSystemStatus = settings.isReaderFullscreenEnabled,
+            )
+        }
         if (uiState == null) {
+            composeReaderController.setTitle(title.toString(), "")
+            composeReaderController.updateActions {
+                copy(sliderValue = 0f, sliderMax = 1, sliderEnabled = false)
+            }
             supportActionBar?.subtitle = null
             viewBinding.actionsView.setSliderValue(0, 1)
             viewBinding.actionsView.isSliderEnabled = false
             return
         }
         val chapterTitle = uiState.getChapterTitle(resources)
+        val chromeSubtitle = if (uiState.incognito) getString(R.string.incognito_mode) else chapterTitle
+        composeReaderController.setTitle(title.toString(), chromeSubtitle)
         supportActionBar?.subtitle = when {
             uiState.incognito -> getString(R.string.incognito_mode)
             else -> chapterTitle
@@ -840,6 +971,7 @@ class ReaderActivity :
             chapterTitle.isNotEmpty()
         ) {
             viewBinding.toastView.showTemporary(chapterTitle, TOAST_DURATION)
+            composeReaderController.showMessage(chapterTitle, TOAST_DURATION)
         }
         if (uiState.isSliderAvailable()) {
             viewBinding.actionsView.setSliderValue(
@@ -848,6 +980,16 @@ class ReaderActivity :
             )
         } else {
             viewBinding.actionsView.setSliderValue(0, 1)
+        }
+        composeReaderController.updateActions {
+            copy(
+                sliderValue = if (uiState.isSliderAvailable()) uiState.currentPage.toFloat() else 0f,
+                sliderMax = if (uiState.isSliderAvailable()) uiState.totalPages - 1 else 1,
+                sliderEnabled = uiState.isSliderAvailable(),
+                previousEnabled = uiState.hasPreviousChapter(),
+                nextEnabled = uiState.hasNextChapter(),
+                pageLabel = "${uiState.currentPage + 1}/${uiState.totalPages}",
+            )
         }
         viewBinding.actionsView.isSliderEnabled = uiState.isSliderAvailable()
         viewBinding.actionsView.isNextEnabled = uiState.hasNextChapter()
@@ -887,6 +1029,13 @@ class ReaderActivity :
                 getString(R.string.reader_translation_toggle_show_translated)
         }
         viewBinding.actionsView.setTranslateButtonContentDescription(contentDescription)
+        composeReaderController.updateActions {
+            copy(
+                translateRequestedVisible = shouldShow,
+                translateActive = isShowingTranslated,
+                translateContentDescription = contentDescription,
+            )
+        }
     }
 
     private fun toggleTranslationLayer() {
@@ -898,6 +1047,7 @@ class ReaderActivity :
             }
             viewModel.getTranslationBypassHint(this)?.let { hint ->
                 viewBinding.toastView.showTemporary(hint, 2000L)
+                composeReaderController.showMessage(hint, 2000L)
                 return
             }
             translationShortcutVisibleForSession = true
@@ -907,11 +1057,19 @@ class ReaderActivity :
                 getString(R.string.reader_translation_mode_switched_translated),
                 1500L,
             )
+            composeReaderController.showMessage(
+                getString(R.string.reader_translation_mode_switched_translated),
+                1500L,
+            )
             return
         }
         settings.isReaderTranslationShowTranslated = false
         settings.isReaderTranslationEnabled = false
         viewBinding.toastView.showTemporary(
+            getString(R.string.reader_translation_mode_switched_original),
+            1500L,
+        )
+        composeReaderController.showMessage(
             getString(R.string.reader_translation_mode_switched_original),
             1500L,
         )
@@ -968,6 +1126,7 @@ class ReaderActivity :
             )
         }
         viewBinding.toastView.showTemporary(message, TOAST_DURATION)
+        composeReaderController.showMessage(message, TOAST_DURATION)
     }
 
     private fun showTranslationLanguageQuickActions() {

@@ -2038,13 +2038,21 @@ class LegadoJavaAPI(
         val folder = getFile(path)
         if (!folder.exists() || !folder.isDirectory) return ""
         val contents = buildString {
-            folder.listFiles()?.forEach { file ->
-                if (!file.isFile) return@forEach
-                val charsetName = org.skepsun.kototoro.core.util.EncodingDetect.getEncode(file.readBytes())
-                val charset = runCatching { Charset.forName(charsetName) }.getOrDefault(Charsets.UTF_8)
-                append(String(file.readBytes(), charset))
-                append('\n')
-            }
+            folder.listFiles()
+                ?.asSequence()
+                ?.filter { it.isFile() }
+                ?.sortedBy { it.getName() }
+                ?.forEach { file ->
+                    val bytes = file.readBytes()
+                    val charset = if (bytes.all { it >= 0 }) {
+                        Charsets.UTF_8
+                    } else {
+                        val charsetName = org.skepsun.kototoro.core.util.EncodingDetect.getEncode(bytes)
+                        runCatching { Charset.forName(charsetName) }.getOrDefault(Charsets.UTF_8)
+                    }
+                    append(String(bytes, charset))
+                    append('\n')
+                }
         }
         folder.deleteRecursively()
         return contents.removeSuffix("\n")

@@ -28,7 +28,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
-import org.skepsun.kototoro.databinding.ActivityDetailsBinding
 import org.skepsun.kototoro.details.ui.compose.DetailsAction
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
 import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
@@ -41,7 +40,7 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class DetailsActivity :
-    BaseActivity<ActivityDetailsBinding>(),
+    BaseActivity<DetailsComposeBinding>(),
     BottomSheetOwner {
 
     @Inject
@@ -81,7 +80,7 @@ class DetailsActivity :
 
         pageSaveHelper = pageSaveHelperFactory.create(this)
 
-        setContentView(ActivityDetailsBinding.inflate(layoutInflater))
+        setContentView(DetailsComposeBinding.inflate(this))
 
         onBackPressedDispatcher.addCallback(
             this,
@@ -96,7 +95,7 @@ class DetailsActivity :
         setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
-        viewBinding.composeView.setContent {
+        viewBinding.root.setContent {
             KototoroTheme {
                 val backdropBackground = MaterialTheme.colorScheme.background
                 val backdrop = rememberLayerBackdrop {
@@ -158,7 +157,7 @@ class DetailsActivity :
                         router.openImage(
                             url = url,
                             source = content.source,
-                            anchor = viewBinding.imageViewCover,
+                            anchor = viewBinding.root,
                         )
                     }
                 }

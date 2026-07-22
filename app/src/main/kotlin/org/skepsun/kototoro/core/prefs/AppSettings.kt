@@ -208,7 +208,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, value) }
 
 	var isNavExpressivePillEnabled: Boolean
-		get() = prefs.getBoolean(KEY_NAV_EXPRESSIVE_PILL, interfaceStyle == InterfaceStyle.IOS)
+		get() = prefs.getBoolean(
+			KEY_NAV_EXPRESSIVE_PILL,
+			interfaceStyle == InterfaceStyle.IOS || interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE,
+		)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_EXPRESSIVE_PILL, value) }
 
 	@Deprecated("Use interfaceStyle instead")
@@ -219,12 +222,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var interfaceStyle: InterfaceStyle
 		get() = prefs.getEnumValue(
 			KEY_INTERFACE_STYLE,
-			if (isMaterialExpressiveComponentsEnabled) InterfaceStyle.IOS else InterfaceStyle.MATERIAL_3,
+			if (isMaterialExpressiveComponentsEnabled) {
+				InterfaceStyle.MATERIAL_3_EXPRESSIVE
+			} else {
+				InterfaceStyle.MATERIAL_3
+			},
 		)
 		set(value) {
 			prefs.edit {
 				putEnumValue(KEY_INTERFACE_STYLE, value)
-				putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value == InterfaceStyle.IOS)
+				putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value == InterfaceStyle.MATERIAL_3_EXPRESSIVE)
 				if (value == InterfaceStyle.IOS && !prefs.contains(KEY_COLOR_THEME)) {
 					putEnumValue(KEY_COLOR_THEME, ColorScheme.IOS)
 				} else if (value == InterfaceStyle.MATERIAL_3 &&

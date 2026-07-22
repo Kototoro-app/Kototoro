@@ -227,6 +227,17 @@ class PageLoader @Inject constructor(
 		return loadPageAsync(page, force).await()
 	}
 
+	/** Loads the cached source image without reader translation or super-resolution stages. */
+	suspend fun loadOriginalPage(page: ContentPage, force: Boolean): Uri {
+		return loadOriginalPageImpl(
+			page = page,
+			progress = MutableStateFlow(PROGRESS_UNDEFINED),
+			isPrefetch = false,
+			skipCache = force,
+			pageUrlOverride = null,
+		)
+	}
+
 	@CheckResult
 	suspend fun convertBimap(uri: Uri): Uri = convertLock.withLock {
 		if (uri.isZipUri()) {
@@ -391,8 +402,56 @@ class PageLoader @Inject constructor(
 		skipCache: Boolean,
 		pageUrlOverride: String?,
 	): Uri {
-		// Phase 1: Download + prepare — holds semaphore (fast: network I/O only)
-		val preparedPage = semaphore.withPermit {
+		val sourceUri = loadOriginalPageImpl(page, progress, isPrefetch, skipCache, pageUrlOverride)
+		val preparedPage = enhancementController.preparePage(
+			page = page,
+			sourceUri = sourceUri,
+			convertZipBitmap = ::convertBimap,
+		)
+
+		// Super-resolution runs outside the download semaphore and remains legacy-reader behavior.
+		var displayUri = preparedPage.displayUri
+		if (settings.isReaderSuperResolutionEnabled && !isLowRam() && !context.isPowerSaveMode()) {
+			val engine = settings.readerSuperResolutionEngine
+			val modelId = if (engine == "ANIME4K") {
+				settings.readerSuperResolutionAnime4kMode
+			} else {
+				settings.readerSuperResolutionModel
+			}
+
+			val srUri = srManager.processImage(
+				originalUri = displayUri,
+				modelId = modelId,
+				noiseLevel = settings.readerSuperResolutionNoiseLevel,
+				cacheLimitMb = settings.readerSuperResolutionCacheLimitMb,
+			)
+			if (srUri != null) {
+				displayUri = srUri
+			}
+		}
+
+		if (preparedPage.shouldScheduleTranslation) {
+			Log.d("ReaderTranslate", "PageLoader debug: scheduling translation for page=${page.id} (show=${settings.isReaderTranslationShowTranslated})")
+			enhancementController.scheduleTranslation(
+				page = page,
+				sourceUri = preparedPage.translationSourceUri,
+				scope = loaderScope,
+			) {
+				synchronized(tasks) {
+					tasks.remove(page.taskKey())
+				}
+			}
+		}
+		return displayUri
+	}
+
+	private suspend fun loadOriginalPageImpl(
+		page: ContentPage,
+		progress: MutableStateFlow<Float>,
+		isPrefetch: Boolean,
+		skipCache: Boolean,
+		pageUrlOverride: String?,
+	): Uri = semaphore.withPermit {
 			val pageUrl = pageUrlOverride ?: getPageUrl(page)
 			check(pageUrl.isNotBlank()) { "Cannot obtain full image url for $page" }
 			val sourceUri = if (!skipCache) {
@@ -451,50 +510,8 @@ class PageLoader @Inject constructor(
 					}
 				}
 			}
-			enhancementController.preparePage(
-				page = page,
-				sourceUri = sourceUri,
-				convertZipBitmap = ::convertBimap,
-			)
+			sourceUri
 		}
-		// Semaphore released here — other pages can now download while SR runs
-
-		// Phase 2: Super-resolution — runs OUTSIDE semaphore (can take 5-10s for ESRGAN 4x)
-		var displayUri = preparedPage.displayUri
-		if (settings.isReaderSuperResolutionEnabled && !isLowRam() && !context.isPowerSaveMode()) {
-			val engine = settings.readerSuperResolutionEngine
-			val modelId = if (engine == "ANIME4K") {
-				settings.readerSuperResolutionAnime4kMode
-			} else {
-				settings.readerSuperResolutionModel
-			}
-
-			val srUri = srManager.processImage(
-				originalUri = displayUri,
-				modelId = modelId,
-				noiseLevel = settings.readerSuperResolutionNoiseLevel,
-				cacheLimitMb = settings.readerSuperResolutionCacheLimitMb
-			)
-			if (srUri != null) {
-				displayUri = srUri
-			}
-		}
-
-		// Phase 3: Schedule translation (if enabled)
-		if (preparedPage.shouldScheduleTranslation) {
-			Log.d("ReaderTranslate", "PageLoader debug: scheduling translation for page=${page.id} (show=${settings.isReaderTranslationShowTranslated})")
-			enhancementController.scheduleTranslation(
-				page = page,
-				sourceUri = preparedPage.translationSourceUri,
-				scope = loaderScope,
-			) {
-				synchronized(tasks) {
-					tasks.remove(page.taskKey())
-				}
-			}
-		}
-		return displayUri
-	}
 
 	private fun isLowRam(): Boolean {
 		return context.ramAvailable <= FileSize.MEGABYTES.convert(PREFETCH_MIN_RAM_MB, FileSize.BYTES)

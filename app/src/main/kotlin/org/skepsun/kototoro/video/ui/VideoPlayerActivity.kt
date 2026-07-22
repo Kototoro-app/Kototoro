@@ -31,6 +31,7 @@ import androidx.media3.ui.TimeBar
 import androidx.media3.ui.DefaultTimeBar
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.view.SurfaceView
 import android.app.PictureInPictureParams
 import android.provider.MediaStore
@@ -125,6 +126,16 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerBottomControls
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlState
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerTopControls
 
 @AndroidEntryPoint
 class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>(), ReaderNavigationCallback {
@@ -195,6 +206,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private var pendingExternalSubtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     private var pendingExternalAudio: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     private lateinit var mpvView: CustomMpvView
+    private var composeControlState by mutableStateOf(VideoPlayerControlState())
+    private var composeControlsInstalled = false
+    private var composeTopControls: ComposeView? = null
+    private var composeBottomControls: ComposeView? = null
     private val danmakuController = VideoDanmakuController()
     private var danmakuLoadJob: Job? = null
     private var danmakuKey: String? = null
@@ -235,6 +250,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private var userManualSubtitleSelection: ManualSubtitleSelection? = null
     private val mpvListener = object : MpvPlayer.Listener {
         override fun onDurationChanged(durationMs: Long) {
+            runOnUiThread { syncComposeControlState() }
             if (!hasRestoredProgress && durationMs > 0) {
                 runOnUiThread {
                     tryApplyInitialSeek()
@@ -251,6 +267,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             runOnUiThread {
                 updatePlaybackMenu()
                 updatePlayPauseButton()
+                syncComposeControlState()
                 danmakuController.onPlaybackStateChanged(isPlaying)
             }
         }
@@ -300,6 +317,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 applySuperResolutionFromSettings()
                 danmakuController.start()
                 loadPendingExternalTracks()
+                syncComposeControlState()
             }
         }
 
@@ -539,6 +557,110 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         return findViewById(controllerId)
     }
 
+    private fun installComposeControls() {
+        if (composeControlsInstalled) return
+        val root = viewBinding.root as? FrameLayout ?: return
+        val topControls = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                KototoroTheme {
+                    VideoPlayerTopControls(
+                        state = composeControlState,
+                        onAction = ::onComposePlayerAction,
+                    )
+                }
+            }
+        }
+        val bottomControls = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                KototoroTheme {
+                    VideoPlayerBottomControls(
+                        state = composeControlState,
+                        onAction = ::onComposePlayerAction,
+                    )
+                }
+            }
+        }
+        root.addView(
+            topControls,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP,
+            ),
+        )
+        root.addView(
+            bottomControls,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM,
+            ),
+        )
+        composeTopControls = topControls
+        composeBottomControls = bottomControls
+        composeControlsInstalled = true
+        syncComposeControlState()
+    }
+
+    private fun onComposePlayerAction(action: VideoPlayerAction) {
+        when (action) {
+            VideoPlayerAction.NavigateBack -> finishAfterTransition()
+            VideoPlayerAction.TogglePlayback -> mpvPlayer?.let { player ->
+                if (player.isPlaying) player.pause() else player.play()
+            }
+            is VideoPlayerAction.SeekTo -> mpvPlayer?.seekTo(action.positionMs)
+            is VideoPlayerAction.SeekBy -> mpvPlayer?.let { it.seekTo((it.positionMs + action.offsetMs).coerceIn(0L, it.durationMs)) }
+            VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
+            VideoPlayerAction.NextChapter -> navigateChapter(1)
+            VideoPlayerAction.OpenSubtitleTracks -> showSubtitleTrackDialog()
+            VideoPlayerAction.OpenChapterSelection -> showChapterSelectionPanel(viewBinding.root)
+            VideoPlayerAction.OpenPlaybackSpeed -> showPlaybackSpeedDialog()
+            VideoPlayerAction.ToggleIntroMarker -> toggleIntroMarker()
+            VideoPlayerAction.ToggleOutroMarker -> toggleOutroMarker()
+            VideoPlayerAction.OpenQuality -> showQualityDialog()
+            VideoPlayerAction.OpenSettings -> showVideoSettingsPanel()
+            VideoPlayerAction.OpenMore -> showOverflowMenu()
+            VideoPlayerAction.ToggleFullscreen -> {
+                orientationHelper.isLandscape = !orientationHelper.isLandscape
+            }
+            VideoPlayerAction.ToggleScreenLock -> {
+                if (isScreenLocked) exitScreenLock() else enterScreenLock()
+            }
+        }
+        syncComposeControlState()
+    }
+
+    private fun syncComposeControlState() {
+        if (!composeControlsInstalled) return
+        val chapters = chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
+            currentMangaContent()?.chapters.orEmpty()
+        }
+        val currentId = readerState?.chapterId
+        val currentIndex = chapters.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: 0
+        val (title, subtitle) = extractChapterInfo()
+        val player = mpvPlayer
+        composeControlState = VideoPlayerControlState(
+            title = title,
+            subtitle = subtitle,
+            positionMs = player?.positionMs ?: 0L,
+            durationMs = player?.durationMs ?: 0L,
+            isPlaying = player?.isPlaying == true,
+            controlsVisible = playerUiState == PlayerUiState.ControlsVisible,
+            isScreenLocked = isScreenLocked,
+            canSeek = (player?.durationMs ?: 0L) > 0L,
+            hasPreviousChapter = currentIndex > 0,
+            hasNextChapter = currentIndex >= 0 && currentIndex < chapters.lastIndex,
+            playbackSpeedLabel = "%.2fx".format(appSettings.videoPlaybackSpeed),
+            qualityLabel = availableVideos.takeIf { it.isNotEmpty() }?.let { buildQualityButtonLabel() },
+            showChapterMarkers = isLandscapeOrientation(),
+        )
+        val visible = composeControlState.controlsVisible && !composeControlState.isScreenLocked
+        composeTopControls?.isVisible = visible
+        composeBottomControls?.isVisible = visible
+    }
+
     private fun bindDanmakuOverlay() {
         val danmakuView = findViewById<DanmakuView>(
             org.skepsun.kototoro.R.id.danmaku_view
@@ -590,6 +712,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             return
         }
         bindDanmakuOverlay()
+        installComposeControls()
         danmakuController.setPlaybackPositionProvider(
             positionProvider = { mpvPlayer?.positionMs ?: 0L },
             playingProvider = { mpvPlayer?.isPlaying == true },
@@ -1930,10 +2053,8 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val unlockButton = findViewById<View>(org.skepsun.kototoro.R.id.button_screen_unlock)
         val subtitleOverlay = findViewById<View>(org.skepsun.kototoro.R.id.subtitle_overlay)
 
-        topBar.isVisible = controlsVisible
-        if (!controlsVisible) {
-            secondaryToolbar?.isVisible = false
-        }
+        topBar.isVisible = controlsVisible && !composeControlsInstalled
+        secondaryToolbar?.isVisible = controlsVisible && !composeControlsInstalled
         statusBarScrim?.isVisible = controlsVisible
         topGradient?.isVisible = controlsVisible
         bottomGradient?.isVisible = controlsVisible
@@ -1964,7 +2085,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
 
         allControllers().forEach { ctl ->
-            if (controlsVisible && ctl == controller) {
+            if (!composeControlsInstalled && controlsVisible && ctl == controller) {
                 ctl.visibility = View.VISIBLE
                 ctl.alpha = 1f
                 applyControllerTint(ctl)
@@ -2000,6 +2121,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         } else {
             viewBinding.toolbarProgress.isVisible = false
         }
+        syncComposeControlState()
         updateSpaceSwitcherFabPosition(controller, controlsVisible) {
             spaceSwitcherDelegate.setControlsVisible(playerUiState == PlayerUiState.ControlsVisible)
         }
@@ -2858,6 +2980,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     // 手动驱动底部控制条（DefaultTimeBar 与已播放时长文本）定时刷?
     private fun updateControllerProgress() {
+        syncComposeControlState()
         if (!isUiVisible) return
         // 用户拖动时不要覆?timebar 的临时位置，否则会导致“拖不动/点不准”的体验
         if (isUserScrubbing) return
@@ -2958,6 +3081,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         supportActionBar?.subtitle = subtitle
         viewBinding.toolbar.title = title
         viewBinding.toolbar.subtitle = subtitle
+        syncComposeControlState()
     }
 
     /**
@@ -4534,6 +4658,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 alpha = if (hasNext) 1f else 0.4f
             }
         }
+        syncComposeControlState()
     }
 
     private fun navigateChapter(offset: Int) {

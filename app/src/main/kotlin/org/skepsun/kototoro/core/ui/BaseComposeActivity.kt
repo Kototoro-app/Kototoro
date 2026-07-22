@@ -144,7 +144,7 @@ abstract class BaseComposeActivity :
         if (settings.interfaceStyle == InterfaceStyle.IOS && settings.colorScheme == ColorScheme.IOS) {
             setTheme(R.style.ThemeOverlay_Kototoro_IosPalette)
         }
-        if (settings.interfaceStyle == InterfaceStyle.IOS) {
+        if (settings.interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE) {
             setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)
         }
         when (settings.loadingCircleStyle) {

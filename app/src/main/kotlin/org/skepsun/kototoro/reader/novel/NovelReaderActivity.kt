@@ -12,6 +12,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import androidx.activity.viewModels
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.graphics.Insets
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowInsetsCompat
@@ -57,6 +59,11 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
 import org.skepsun.kototoro.reader.ui.ReaderControlDelegate
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.reader.novel.compose.NovelComposeReaderViewModel
+import org.skepsun.kototoro.reader.novel.compose.NovelComposeImageContext
+import org.skepsun.kototoro.reader.novel.compose.NovelReadingPosition
+import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
 import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
 import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
@@ -74,6 +81,8 @@ class NovelReaderActivity :
     ReaderControlDelegate.OnInteractionListener,
     NovelReaderConfigSheet.Callback,
     NovelChaptersSheet.Callback {
+
+    private val composeReaderViewModel: NovelComposeReaderViewModel by viewModels()
 
     @Inject
     lateinit var mangaRepositoryFactory: ContentRepository.Factory
@@ -390,6 +399,7 @@ class NovelReaderActivity :
         viewBinding.actionsView.setTranslateActive(false)
         setupImageHeaders()
         setupTtsControls()
+        setupComposeReaderHost()
 
         viewBinding.readerView.onPageChangeListener = { page, total ->
             // 显示用页码按双页 spread 计数，实际进度用字符比例
@@ -531,6 +541,40 @@ class NovelReaderActivity :
                 headers.takeIf { it.isNotEmpty() }
             } else {
                 null
+            }
+        }
+    }
+
+    private fun setupComposeReaderHost() {
+        viewBinding.composeNovelReaderView.setViewCompositionStrategy(
+            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
+        )
+        viewBinding.composeNovelReaderView.setContent {
+            KototoroTheme {
+                ComposeNovelReaderRoute(
+                    viewModel = composeReaderViewModel,
+                    imageModel = { it },
+                    onImageClick = { path ->
+                        val image = composeReaderViewModel.uiState.value.imageContext
+                        openInlineImage(
+                            NovelInlineImageRequest(
+                                imagePath = path,
+                                epubFilePath = image.epubFilePath,
+                                chapterPath = image.chapterPath,
+                                headers = image.headers,
+                            ),
+                        )
+                    },
+                    onTap = { x, y, viewport ->
+                        handleContinuousTap(
+                            x = x,
+                            y = y,
+                            width = viewport.width,
+                            height = viewport.height,
+                            source = "compose",
+                        )
+                    },
+                )
             }
         }
     }
@@ -869,6 +913,7 @@ class NovelReaderActivity :
     }
 
     private fun applyTranslationToViews(translation: NovelChapterTranslation) {
+        composeReaderViewModel.publishTranslation(translation)
         val isScrollMode = readerSettings.readingMode == ReadingMode.SCROLL
         if (isScrollMode) {
             continuousAdapter?.updateTranslation(translation.chapterIndex, translation)
@@ -1903,6 +1948,7 @@ class NovelReaderActivity :
                     
                     // Set EPUB info BEFORE setting content
                     viewBinding.readerView.setEpubInfo(epubFileToSet, chapterPathToSet)
+                    publishComposeImageContext(epubFileToSet, chapterPathToSet)
                     android.util.Log.d("NovelReaderActivity", "Set EPUB info: file=${epubFileToSet?.name}, chapterPath=$chapterPathToSet")
                     
                     // Define behavior based on reading mode
@@ -2013,6 +2059,13 @@ class NovelReaderActivity :
             } else {
                 text
             }
+            composeReaderViewModel.publishChapter(
+                chapterIndex = currentChapterIndex,
+                chapterTitle = chapter.title.orEmpty(),
+                content = contentToDisplay,
+                settings = readerSettings,
+                translation = chapterTranslations[currentChapterIndex],
+            )
             
             android.util.Log.d("NovelReaderActivity", "Content length: ${contentToDisplay.length}, first 100 chars: ${contentToDisplay.take(100)}")
             
@@ -2072,6 +2125,7 @@ class NovelReaderActivity :
                         try {
                             // 先设置EPUB信息
                             viewBinding.readerView.setEpubInfo(epubFileToSet, chapterPathToSet)
+                            publishComposeImageContext(epubFileToSet, chapterPathToSet)
                             android.util.Log.d("NovelReaderActivity", "Set EPUB info: file=${epubFileToSet?.name}, chapterPath=$chapterPathToSet")
                             
                             // 设置内容
@@ -2189,6 +2243,7 @@ class NovelReaderActivity :
                     withContext(Dispatchers.Main) {
                         try {
                             viewBinding.readerView.setEpubInfo(null, null)
+                            publishComposeImageContext(null, null)
                             val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
                             if (isScrollMode) {
                                 continuousAdapter?.setInitialChapter(
@@ -3042,11 +3097,26 @@ class NovelReaderActivity :
 
     private fun currentReaderState(): ReaderState? {
         val chapter = chapters.getOrNull(currentChapterIndex) ?: return null
-        val progress = getCurrentProgressRatio()
-        return ReaderState(
+        val position = NovelReadingPosition(
             chapterId = chapter.id,
             page = viewBinding.readerView.getCurrentPage(),
-            scroll = (progress * 10000).toInt(),
+            pageCount = viewBinding.readerView.getTotalPages(),
+            chapterProgress = getCurrentProgressRatio(),
+        )
+        composeReaderViewModel.publishPosition(position)
+        return position.toReaderState()
+    }
+
+    private fun publishComposeImageContext(epubFile: java.io.File?, chapterPath: String?) {
+        val imageHeaders = viewBinding.readerView.imageHeadersProvider
+            ?.invoke(chapters.getOrNull(currentChapterIndex)?.url.orEmpty())
+            .orEmpty()
+        composeReaderViewModel.publishImageContext(
+            NovelComposeImageContext(
+                epubFilePath = epubFile?.absolutePath,
+                chapterPath = chapterPath,
+                headers = imageHeaders,
+            ),
         )
     }
 

@@ -2,89 +2,48 @@ package org.skepsun.kototoro.reader.ui
 
 import android.content.res.Configuration
 import android.util.Log
-import androidx.fragment.app.FragmentContainerView
-import androidx.fragment.app.FragmentManager
-import androidx.fragment.app.commit
+import android.view.ViewGroup
+import androidx.core.view.children
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
-import org.skepsun.kototoro.core.util.ext.findKeyByValue
-import org.skepsun.kototoro.reader.ui.pager.BaseReaderFragment
-import org.skepsun.kototoro.reader.ui.pager.doublepage.DoubleReaderFragment
-import org.skepsun.kototoro.reader.ui.pager.doublereversed.ReversedDoubleReaderFragment
-import org.skepsun.kototoro.reader.ui.pager.reversed.ReversedReaderFragment
-import org.skepsun.kototoro.reader.ui.pager.standard.PagerReaderFragment
-import org.skepsun.kototoro.reader.ui.pager.vertical.VerticalReaderFragment
-import org.skepsun.kototoro.reader.ui.pager.webtoon.WebtoonReaderFragment
-import java.util.EnumMap
+import org.skepsun.kototoro.reader.ui.compose.ComposeReaderController
 
-class ReaderManager(
-	private val fragmentManager: FragmentManager,
-	private val container: FragmentContainerView,
+internal class ReaderManager(
+	private val container: ViewGroup,
 	settings: AppSettings,
+	private val composeReader: ComposeReaderController,
 ) {
 
-	private val modeMap = EnumMap<ReaderMode, Class<out BaseReaderFragment<*>>>(ReaderMode::class.java)
+	private var isDoublePage = isLandscape() && settings.isReaderDoubleOnLandscape
 
 	init {
-		val useDoublePages = isLandscape() && settings.isReaderDoubleOnLandscape
-		invalidateTypesMap(useDoublePages)
+		container.children.toList().forEach(container::removeView)
+		container.addView(
+			composeReader.view,
+			ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+		)
 	}
 
-	val currentReader: BaseReaderFragment<*>?
-		get() = fragmentManager.findFragmentById(container.id) as? BaseReaderFragment<*>
+	val currentReader: ReaderNavigator = composeReader
 
-	val currentMode: ReaderMode?
-		get() {
-			val readerClass = currentReader?.javaClass ?: return null
-			return modeMap.findKeyByValue(readerClass)
-		}
+	var currentMode: ReaderMode? = null
+		private set
 
 	fun replace(newMode: ReaderMode) {
-		val readerClass = requireNotNull(modeMap[newMode])
-		Log.d(
-			LOG_TAG,
-			"replace: newMode=$newMode, readerClass=${readerClass.simpleName}, " +
-				"currentReader=${currentReader?.javaClass?.simpleName}, currentMode=$currentMode",
-		)
-		fragmentManager.commit {
-			setReorderingAllowed(true)
-			replace(container.id, readerClass, null, null)
-		}
+		Log.d(LOG_TAG, "replace: newMode=$newMode, currentMode=$currentMode")
+		currentMode = newMode
+		composeReader.updateConfiguration(newMode, isDoublePage)
 	}
 
 	fun setDoubleReaderMode(isEnabled: Boolean) {
-		val mode = currentMode
-		val prevReader = currentReader?.javaClass
-		invalidateTypesMap(isEnabled)
-		val newReader = modeMap[mode]
-		Log.d(
-			LOG_TAG,
-			"setDoubleReaderMode: isEnabled=$isEnabled, mode=$mode, " +
-				"prevReader=${prevReader?.simpleName}, newReader=${newReader?.simpleName}",
-		)
-		if (mode != null && newReader != prevReader) {
-			replace(mode)
-		}
+		isDoublePage = isEnabled
+		currentMode?.let { composeReader.updateConfiguration(it, isDoublePage) }
 	}
 
-	private fun invalidateTypesMap(useDoublePages: Boolean) {
-		modeMap[ReaderMode.STANDARD] = if (useDoublePages) {
-			DoubleReaderFragment::class.java
-		} else {
-			PagerReaderFragment::class.java
-		}
-		modeMap[ReaderMode.REVERSED] = if (useDoublePages) {
-			ReversedDoubleReaderFragment::class.java
-		} else {
-			ReversedReaderFragment::class.java
-		}
-		modeMap[ReaderMode.WEBTOON] = WebtoonReaderFragment::class.java
-		modeMap[ReaderMode.VERTICAL] = VerticalReaderFragment::class.java
-	}
+	private fun isLandscape() =
+		container.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-	private fun isLandscape() = container.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-	companion object {
-		private const val LOG_TAG = "ReaderDebug"
+	private companion object {
+		const val LOG_TAG = "ReaderDebug"
 	}
 }

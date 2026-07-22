@@ -51,8 +51,9 @@ fun KototoroTheme(
     val interfaceStyle by settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) {
         interfaceStyle
     }
-    val expressiveComponents = interfaceStyle == InterfaceStyle.IOS
+    val expressiveComponents = interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE
     val styleTokens = interfaceStyle.tokens()
+	val stylePolicy = remember(interfaceStyle) { InterfaceStylePolicy.from(interfaceStyle) }
     val appFontPreset by settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) {
         appFontPreset
     }
@@ -91,9 +92,9 @@ fun KototoroTheme(
     val fontFamily = remember(activeFontPreset, googleFontProvider) {
         activeFontPreset.toFontFamily(provider = googleFontProvider)
     }
-    val typography = remember(expressiveComponents, fontFamily) {
+    val typography = remember(interfaceStyle, fontFamily) {
         kototoroTypography(
-            isIosStyle = expressiveComponents,
+            isExpressiveStyle = interfaceStyle != InterfaceStyle.MATERIAL_3,
             defaultFontFamily = fontFamily,
         )
     }
@@ -102,6 +103,7 @@ fun KototoroTheme(
         LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
         LocalInterfaceStyle provides interfaceStyle,
         LocalInterfaceStyleTokens provides styleTokens,
+		LocalInterfaceStylePolicy provides stylePolicy,
         LocalBackgroundStyle provides backgroundStyle,
     ) {
         MaterialTheme(
@@ -126,14 +128,14 @@ private fun AppFontPreset.toFontFamily(provider: GoogleFont.Provider): FontFamil
 }
 
 private fun kototoroTypography(
-    isIosStyle: Boolean,
+    isExpressiveStyle: Boolean,
     defaultFontFamily: FontFamily?,
 ): Typography {
     val base = Typography()
     fun androidx.compose.ui.text.TextStyle.withDefaultFont(): androidx.compose.ui.text.TextStyle {
         return if (defaultFontFamily == null) this else copy(fontFamily = defaultFontFamily)
     }
-    if (!isIosStyle) {
+    if (!isExpressiveStyle) {
         return base.copy(
             displayLarge = base.displayLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
             displayMedium = base.displayMedium.copy(letterSpacing = 0.sp).withDefaultFont(),

@@ -825,6 +825,8 @@
     <string name="interface_style">Interface style</string>
     <string name="interface_style_material3">md3 (legacy)</string>
     <string name="interface_style_material3_summary">Android-native controls, spacing, and surfaces</string>
+    <string name="interface_style_material3_expressive">md3 expressive</string>
+    <string name="interface_style_material3_expressive_summary">Larger adaptive controls, emphasized shapes, and bolder type hierarchy</string>
     <string name="interface_style_ios">ios (modern)</string>
     <string name="interface_style_ios_summary">Rounder controls, quieter surfaces, grouped Haze, and softer menus</string>
     <string name="appearance_style_override_note">Effective in the current %1$s style: %2$s</string>
@@ -2226,6 +2228,9 @@
     <string name="invalid_token">Invalid token: %s</string>
     <string name="show_floating_control_button">Show floating control button</string>
     <string name="reader_autoscroll_pause_on_tap">Stop on screen tap</string>
+    <string name="reader_autoscroll">Auto scroll</string>
+    <string name="reader_autoscroll_fab">Show floating button</string>
+    <string name="reader_autoscroll_pause_on_ui">Pause when controls are visible</string>
     <string name="unavailable">Unavailable</string>
     <string name="manga_restricted_description">This manga is not available to read in this source. Try searching for it in other sources or opening it in a browser for more information</string>
     <string name="no_chapters_in_manga">This manga does not contain any chapters</string>

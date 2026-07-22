@@ -16,7 +16,7 @@ data class ReaderColorFilter(
 	val isEmpty: Boolean
 		get() = !isGrayscale && !isInverted && !isBookBackground && brightness == 0f && contrast == 0f
 
-	fun toColorFilter(): ColorMatrixColorFilter {
+	fun toColorMatrix(): ColorMatrix {
 		val cm = ColorMatrix()
 		if (isGrayscale) {
 			cm.grayscale()
@@ -29,8 +29,10 @@ data class ReaderColorFilter(
 		if (isBookBackground) {
 			cm.addBookEffect()
 		}
-		return ColorMatrixColorFilter(cm)
+		return cm
 	}
+
+	fun toColorFilter(): ColorMatrixColorFilter = ColorMatrixColorFilter(toColorMatrix())
 
 	fun getBackgroundTint(): ColorStateList? = if (isBookBackground) {
 		val color = Color.rgb(255, 255, (255 * BOOK_BLUE_FACTOR).toInt())

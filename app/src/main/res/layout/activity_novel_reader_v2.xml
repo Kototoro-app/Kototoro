@@ -26,6 +26,12 @@
         android:visibility="gone"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/composeNovelReaderView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
 
 
     <!-- 信息栏（复用漫画阅读器） -->

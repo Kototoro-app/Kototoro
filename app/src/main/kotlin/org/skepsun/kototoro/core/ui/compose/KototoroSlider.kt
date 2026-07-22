@@ -30,6 +30,7 @@ import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.lens
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStylePolicy
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
@@ -49,6 +50,7 @@ fun KototoroSlider(
     colors: SliderColors = SliderDefaults.colors(),
 ) {
     val tokens = LocalInterfaceStyleTokens.current
+    val stylePolicy = LocalInterfaceStylePolicy.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val backdrop = LocalLiquidGlassBackdrop.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -67,6 +69,7 @@ fun KototoroSlider(
                 interactionSource = interactionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
+                useExpandedThumb = stylePolicy.useExpandedTouchTargets,
                 backdrop = backdrop,
             )
         },
@@ -96,6 +99,7 @@ fun KototoroRangeSlider(
     colors: SliderColors = SliderDefaults.colors(),
 ) {
     val tokens = LocalInterfaceStyleTokens.current
+    val stylePolicy = LocalInterfaceStylePolicy.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val backdrop = LocalLiquidGlassBackdrop.current
     val startInteractionSource = remember { MutableInteractionSource() }
@@ -116,6 +120,7 @@ fun KototoroRangeSlider(
                 interactionSource = startInteractionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
+                useExpandedThumb = stylePolicy.useExpandedTouchTargets,
                 backdrop = backdrop,
             )
         },
@@ -124,6 +129,7 @@ fun KototoroRangeSlider(
                 interactionSource = endInteractionSource,
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
+                useExpandedThumb = stylePolicy.useExpandedTouchTargets,
                 backdrop = backdrop,
             )
         },
@@ -145,6 +151,7 @@ private fun KototoroSliderThumb(
     interactionSource: MutableInteractionSource,
     color: Color,
     isIosStyle: Boolean,
+    useExpandedThumb: Boolean,
     backdrop: Backdrop?,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -154,7 +161,7 @@ private fun KototoroSliderThumb(
     val width by animateDpAsState(
         targetValue = if (active) {
             tokens.sliderPressedThumbWidth
-        } else if (isIosStyle) {
+        } else if (isIosStyle || useExpandedThumb) {
             tokens.sliderThumbSize
         } else {
             6.dp
