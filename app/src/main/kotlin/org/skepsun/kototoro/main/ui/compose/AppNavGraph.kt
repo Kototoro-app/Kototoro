@@ -2114,6 +2114,9 @@ internal fun FavoritesTopLevelRouteContent(
                     KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
                         showSyncDialog(coroutineScope)
                     },
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.duplicates_finder) {
+                        viewModel.openDuplicatesFinder()
+                    },
                 ),
             ),
         )
