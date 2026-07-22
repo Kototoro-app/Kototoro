@@ -3,25 +3,22 @@ package org.skepsun.kototoro.space.ui
 import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.content.Intent
-import android.content.Context
-import android.content.res.ColorStateList
-import android.graphics.Canvas
-import android.graphics.ColorFilter
-import android.graphics.Paint
-import android.graphics.PixelFormat
-import android.graphics.Typeface
-import android.graphics.drawable.Drawable
-import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
 import androidx.core.view.doOnPreDraw
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -31,19 +28,21 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.transition.Slide
 import androidx.transition.TransitionSet
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
+import com.kyant.backdrop.backdrops.layerBackdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.space.domain.BuiltInSpaces
+import org.skepsun.kototoro.main.ui.compose.LocalRootGlassMenuHost
+import org.skepsun.kototoro.main.ui.compose.RootGlassMenuHost
+import org.skepsun.kototoro.main.ui.compose.RootGlassMenuOverlay
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -78,11 +77,13 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var controlsVisible = false
 	private var hideWithControlsTransition = false
 	private var launchOrigin: android.graphics.PointF? = null
-	private val fabs = LinkedHashSet<ExtendedFloatingActionButton>()
+	private val fabs = LinkedHashSet<View>()
 	private var switcherOverlay: ComposeView? = null
+	private var switcherFabAnchorBounds by mutableStateOf<Rect?>(null)
 	private var transitionOverlay: ComposeView? = null
 	private var sessionSpaceId: SpaceId? = null
 	private var pendingRevealTarget: SpaceId? = null
+	private var fabChromeUpdateToken = 0
 
 	fun bind(
 		activity: AppCompatActivity,
@@ -156,11 +157,22 @@ class SpaceSwitcherDelegate @Inject constructor(
 		}
 	}
 
-	fun installFab(fab: ExtendedFloatingActionButton?) {
+	fun installFab(fab: ComposeView?) {
 		if (fab == null) return
 		fabs += fab
-		fab.shrink()
-		fab.setOnClickListener { showSwitcher() }
+		fab.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+		fab.setContent {
+			KototoroTheme {
+				val activeSpaceId by spaceRepository.activeSpace.collectAsState()
+				val spaces by catalogRepository.spaces.collectAsState()
+				SpaceSwitcherFab(
+					activeSpaceId = activeSpaceId,
+					activeSpace = spaces.firstOrNull { it.id == activeSpaceId },
+					onClick = { showSwitcher() },
+					modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+				)
+			}
+		}
 		refreshMenuItems(
 			spaceRepository.activeSpace.value,
 			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
@@ -202,6 +214,8 @@ class SpaceSwitcherDelegate @Inject constructor(
 		val activity = activity ?: return
 		if (!featureEnabled || availabilityProvider() == SpaceSwitchAvailability.UNAVAILABLE) return
 		if (switcherOverlay != null) return
+		switcherFabAnchorBounds = null
+		val rootMenuHost = RootGlassMenuHost()
 		val overlay = ComposeView(activity).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
 		}
@@ -213,11 +227,22 @@ class SpaceSwitcherDelegate @Inject constructor(
 				ViewGroup.LayoutParams.MATCH_PARENT,
 			),
 		)
-			overlay.setContent {
+		overlay.doOnPreDraw {
+			updateSwitcherFabAnchorBounds(overlay)
+		}
+		overlay.setContent {
 			KototoroTheme {
+				CompositionLocalProvider(LocalRootGlassMenuHost provides rootMenuHost) {
+					RouteLiquidGlassBackdrop(ownerKey = overlay, active = true) { backdrop ->
+						Box(
+							modifier = Modifier
+								.fillMaxSize()
+								.layerBackdrop(backdrop),
+						) {
 				val activeSpaceId by spaceRepository.activeSpace.collectAsState()
 				val switchState by coordinator.state.collectAsState()
 				val transitionState by transitionController.state.collectAsState()
+				val spaces by catalogRepository.spaces.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
 				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
 				SpaceSwitcherSheet(
@@ -226,7 +251,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 						switcherVisible = true,
 						switchInProgress = switchState.inProgress || transitionState.isVisible,
 						switcherEnabled = true,
-						spaces = catalogRepository.spaces.value,
+						spaces = spaces,
 					),
 					onAction = { action ->
 						when (action) {
@@ -244,9 +269,32 @@ class SpaceSwitcherDelegate @Inject constructor(
 							requestSwitch(target, resumeReading = true)
 						}
 					},
+					anchorBounds = switcherFabAnchorBounds,
+					useGlobalRootMenu = true,
 				)
+						}
+						RootGlassMenuOverlay(
+							host = rootMenuHost,
+							modifier = Modifier.fillMaxSize(),
+						)
+					}
+				}
 			}
 		}
+	}
+
+	private fun updateSwitcherFabAnchorBounds(overlay: View) {
+		val fab = fabs.firstOrNull { it.isShown } ?: return
+		val fabLocation = IntArray(2)
+		val overlayLocation = IntArray(2)
+		fab.getLocationOnScreen(fabLocation)
+		overlay.getLocationOnScreen(overlayLocation)
+		switcherFabAnchorBounds = Rect(
+			left = (fabLocation[0] - overlayLocation[0]).toFloat(),
+			top = (fabLocation[1] - overlayLocation[1]).toFloat(),
+			right = (fabLocation[0] - overlayLocation[0] + fab.width).toFloat(),
+			bottom = (fabLocation[1] - overlayLocation[1] + fab.height).toFloat(),
+		)
 	}
 
 	private fun requestSwitch(target: SpaceId, resumeReading: Boolean = false) {
@@ -312,6 +360,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private fun dismissSwitcher() {
 		val overlay = switcherOverlay ?: return
 		switcherOverlay = null
+		switcherFabAnchorBounds = null
 		overlay.disposeComposition()
 		(overlay.parent as? ViewGroup)?.removeView(overlay)
 	}
@@ -386,56 +435,32 @@ class SpaceSwitcherDelegate @Inject constructor(
 
 	private fun refreshMenuItems(activeSpaceId: SpaceId, inProgress: Boolean) {
 		val available = availabilityProvider() != SpaceSwitchAvailability.UNAVAILABLE
-		val context = activity ?: return
+		activity ?: return
 		val shouldShowFab = featureEnabled && available && controlsVisible
-		val activeSpace = catalogRepository.find(activeSpaceId)
+		val updateToken = ++fabChromeUpdateToken
 		fabs.forEach { target ->
-			val isIosStyle = settings.interfaceStyle == org.skepsun.kototoro.core.prefs.InterfaceStyle.IOS
-			target.isEnabled = !inProgress
-			target.icon = activeSpace?.customMonogram()?.let { monogram ->
-				SpaceMonogramDrawable(context, monogram)
-			} ?: ContextCompat.getDrawable(context, activeSpace?.kind?.iconRes() ?: activeSpaceId.iconRes())
-			target.shrink()
-			target.contentDescription = context.getString(
-				R.string.space_switcher_content_description,
-				activeSpace?.title ?: context.getString(activeSpaceId.labelRes()),
-			)
-			applyFabStyle(target, isIosStyle)
-			if (shouldShowFab) {
-				target.bringToFront()
-				target.show()
-				animateFromLaunchOrigin(target)
-			} else if (hideWithControlsTransition) {
-				target.visibility = View.GONE
-			} else {
-				target.hide()
+			target.post {
+				if (updateToken != fabChromeUpdateToken || !target.isAttachedToWindow) return@post
+				if (shouldShowFab) {
+					target.isEnabled = !inProgress
+					if (target.visibility != View.VISIBLE) target.visibility = View.VISIBLE
+					bringViewToFrontIfNeeded(target)
+					animateFromLaunchOrigin(target)
+				} else if (target.visibility != View.GONE) {
+					target.visibility = View.GONE
+				}
 			}
 		}
 	}
 
-	private fun applyFabStyle(fab: ExtendedFloatingActionButton, isIosStyle: Boolean) {
-		if (isIosStyle) {
-			val surfaceColor = MaterialColors.getColor(
-				fab,
-				com.google.android.material.R.attr.colorSurface,
-			)
-			val onSurfaceColor = MaterialColors.getColor(
-				fab,
-				com.google.android.material.R.attr.colorOnSurface,
-			)
-			fab.backgroundTintList = ColorStateList.valueOf(
-				androidx.core.graphics.ColorUtils.setAlphaComponent(surfaceColor, 0xB8),
-			)
-			fab.iconTint = ColorStateList.valueOf(onSurfaceColor)
-			fab.elevation = 0f
-			fab.shapeAppearanceModel = fab.shapeAppearanceModel
-				.toBuilder()
-				.setAllCornerSizes(10_000f)
-				.build()
+	private fun bringViewToFrontIfNeeded(target: View) {
+		val parent = target.parent as? ViewGroup ?: return
+		if (parent.getChildAt(parent.childCount - 1) !== target) {
+			target.bringToFront()
 		}
 	}
 
-	private fun animateFromLaunchOrigin(target: ExtendedFloatingActionButton) {
+	private fun animateFromLaunchOrigin(target: View) {
 		val origin = launchOrigin ?: return
 		if (!target.isLaidOut) {
 			target.doOnLayout { animateFromLaunchOrigin(target) }
@@ -512,60 +537,3 @@ internal fun shouldRestoreImmersiveSpaceOnResume(
 	!switchInProgress &&
 	sessionSpaceId != activeSpaceId &&
 	transitionSuppressionTarget != sessionSpaceId
-
-private fun SpaceId.iconRes(): Int = when (this) {
-	BuiltInSpaces.Novel -> R.drawable.ic_content_novel
-	BuiltInSpaces.Anime -> R.drawable.ic_content_video
-	else -> R.drawable.ic_content_manga
-}
-
-private fun org.skepsun.kototoro.space.domain.SpaceKind.iconRes(): Int = when (this) {
-	org.skepsun.kototoro.space.domain.SpaceKind.NOVEL -> R.drawable.ic_content_novel
-	org.skepsun.kototoro.space.domain.SpaceKind.ANIME -> R.drawable.ic_content_video
-	org.skepsun.kototoro.space.domain.SpaceKind.MANGA -> R.drawable.ic_content_manga
-}
-
-private fun SpaceId.labelRes(): Int = when (this) {
-	BuiltInSpaces.Novel -> R.string.space_novel
-	BuiltInSpaces.Anime -> R.string.space_anime
-	else -> R.string.space_manga
-}
-
-private class SpaceMonogramDrawable(context: Context, private val monogram: String) : Drawable() {
-	private val size = (24f * context.resources.displayMetrics.density).toInt()
-	private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-		textAlign = Paint.Align.CENTER
-		textSize = TypedValue.applyDimension(
-			TypedValue.COMPLEX_UNIT_SP,
-			18f,
-			context.resources.displayMetrics,
-		)
-		typeface = Typeface.DEFAULT_BOLD
-	}
-
-	override fun draw(canvas: Canvas) {
-		val baseline = bounds.exactCenterY() - (paint.ascent() + paint.descent()) / 2f
-		canvas.drawText(monogram, bounds.exactCenterX(), baseline, paint)
-	}
-
-	override fun setAlpha(alpha: Int) {
-		paint.alpha = alpha
-		invalidateSelf()
-	}
-
-	override fun setColorFilter(colorFilter: ColorFilter?) {
-		paint.colorFilter = colorFilter
-		invalidateSelf()
-	}
-
-	override fun setTint(tintColor: Int) {
-		paint.color = tintColor
-		invalidateSelf()
-	}
-
-	@Deprecated("Deprecated in Android")
-	override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-	override fun getIntrinsicWidth(): Int = size
-	override fun getIntrinsicHeight(): Int = size
-}

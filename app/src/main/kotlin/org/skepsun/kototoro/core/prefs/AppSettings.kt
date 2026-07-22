@@ -539,7 +539,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_READER_FULLSCREEN, true)
 
 	var isReaderToolbarFloating: Boolean
-		get() = prefs.getBoolean(KEY_READER_TOOLBAR_FLOATING, false)
+		get() = prefs.getBoolean(KEY_READER_TOOLBAR_FLOATING, true)
 		set(value) = prefs.edit { putBoolean(KEY_READER_TOOLBAR_FLOATING, value) }
 
 	val isReaderOptimizationEnabled: Boolean

@@ -1,17 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+<androidx.compose.ui.platform.ComposeView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/immersive_space_switcher_fab"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
+    android:layout_width="56dp"
+    android:layout_height="56dp"
     android:layout_gravity="bottom|end"
     android:layout_marginEnd="@dimen/space_switcher_fab_margin"
     android:layout_marginBottom="@dimen/space_switcher_fab_control_gap"
-    android:contentDescription="@string/space_switcher_title"
-    android:elevation="8dp"
+    android:background="@android:color/transparent"
     android:visibility="gone"
-    app:backgroundTint="?colorPrimaryContainer"
-    app:icon="@drawable/ic_content_manga"
-    app:iconTint="?colorOnPrimaryContainer"
     app:layout_dodgeInsetEdges="bottom" />

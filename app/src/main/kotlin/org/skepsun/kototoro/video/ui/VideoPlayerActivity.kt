@@ -614,7 +614,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             },
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
         )
-        findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(
+        findViewById<androidx.compose.ui.platform.ComposeView>(
             R.id.immersive_space_switcher_fab,
         )?.let(spaceSwitcherDelegate::installFab)
 
@@ -2025,12 +2025,21 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             return
         }
         val updatePosition = {
-            fab.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
-                bottomMargin = controlBar.height +
-                    resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
-            }
-            fab.bringToFront()
-            onPositioned()
+			fab.post {
+				if (!fab.isAttachedToWindow) return@post
+				val bottomMargin = controlBar.height +
+					resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
+				val layoutParams = fab.layoutParams as? android.widget.FrameLayout.LayoutParams
+				if (layoutParams != null && layoutParams.bottomMargin != bottomMargin) {
+					layoutParams.bottomMargin = bottomMargin
+					fab.layoutParams = layoutParams
+				}
+				val parent = fab.parent as? ViewGroup
+				if (parent != null && parent.getChildAt(parent.childCount - 1) !== fab) {
+					fab.bringToFront()
+				}
+				onPositioned()
+			}
         }
         if (controlBar.isLaidOut && controlBar.height > 0) {
             updatePosition()

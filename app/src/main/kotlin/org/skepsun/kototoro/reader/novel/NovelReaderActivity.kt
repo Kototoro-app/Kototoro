@@ -391,11 +391,6 @@ class NovelReaderActivity :
         setupImageHeaders()
         setupTtsControls()
 
-        // 设置章节列表按钮点击事件
-        viewBinding.actionsView.findViewById<View>(R.id.button_pages_thumbs)?.setOnClickListener {
-            showChaptersSheet()
-        }
-
         viewBinding.readerView.onPageChangeListener = { page, total ->
             // 显示用页码按双页 spread 计数，实际进度用字符比例
             val displayPage = viewBinding.readerView.getDisplayPageIndex()
@@ -719,6 +714,11 @@ class NovelReaderActivity :
 
     override fun openMenu() {
         showConfigSheet()
+    }
+
+    override fun onPagesButtonClick(): Boolean {
+        showChaptersSheet()
+        return true
     }
 
     override fun onTranslateClick() {
