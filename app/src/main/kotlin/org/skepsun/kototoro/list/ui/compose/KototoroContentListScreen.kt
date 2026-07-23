@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +52,7 @@ import kotlin.math.floor
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.widgets.ChipsView
 import org.skepsun.kototoro.core.model.isLocal
@@ -65,6 +68,7 @@ import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
@@ -81,8 +85,8 @@ private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
 private const val GridCardStretchLimit = 1.50f
 private const val GridCardExtraSpaceFillRatio = 0.38f
-private val QuickFilterChipHeight = 36.dp
-private val QuickFilterChipIconSize = 18.dp
+private val QuickFilterChipHeight = 32.dp
+private val QuickFilterChipIconSize = 16.dp
 private val GridCardVisualHorizontalInset = 4.dp
 
 private data class ContentListScreenPrefs(
@@ -643,6 +647,7 @@ fun QuickFilterSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val listState = rememberLazyListState()
     val entryPoint = remember(context.applicationContext) {
         runCatching {
@@ -662,8 +667,8 @@ fun QuickFilterSection(
     }
     LazyRow(
         state = listState,
-        contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
         items(
@@ -675,14 +680,39 @@ fun QuickFilterSection(
             contentType = { "filter_chip" },
         ) { chip ->
             val option = chip.data as? ListFilterOption
-            val contentColor = if (chip.isChecked) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+            val contentColor = when {
+                isIosStyle && chip.isChecked -> MaterialTheme.colorScheme.inverseOnSurface
+                chip.isChecked -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
+            val chipShape = RoundedCornerShape(999.dp)
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 Row(
                     modifier = Modifier
+                        .then(
+                            if (isIosStyle) {
+                                Modifier
+                                    .background(
+                                        color = if (chip.isChecked) {
+                                            MaterialTheme.colorScheme.inverseSurface
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                        shape = chipShape,
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (chip.isChecked) {
+                                            MaterialTheme.colorScheme.inverseSurface
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant
+                                        },
+                                        shape = chipShape,
+                                    )
+                            } else {
+                                Modifier
+                            },
+                        )
                         .then(
                             if (option != null) {
                                 Modifier.clickable { onQuickFilterOptionClick(option) }
@@ -691,8 +721,8 @@ fun QuickFilterSection(
                             },
                         )
                         .height(QuickFilterChipHeight)
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                         chipIcon(chip)?.invoke()

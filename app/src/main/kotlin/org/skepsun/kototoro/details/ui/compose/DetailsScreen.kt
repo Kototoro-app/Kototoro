@@ -151,10 +151,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocalizedTitle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.model.isBroken
@@ -251,7 +248,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-private val DetailsTopBarHeight = CompactTopBarPillHeight
+private val DetailsTopBarHeight = 44.dp
 private const val ReadingRecordSheetLogTag = "ReadingRecordSheet"
 private const val DetailsSheetMinOpacityPercent = 80
 
@@ -275,9 +272,9 @@ private fun rememberDetailsBottomBarGlassPrefs() =
         }
     }
 
-private val DetailsTopPrimaryActionButtonSize = CompactTopBarPillHeight
-private val DetailsTopCompactActionButtonSize = CompactTopBarCompactButtonSize
-private val DetailsTopActionIconSize = CompactTopBarIconSize
+private val DetailsTopPrimaryActionButtonSize = 44.dp
+private val DetailsTopCompactActionButtonSize = 44.dp
+private val DetailsTopActionIconSize = 21.dp
 private val ModernDetailsDockHeight = 86.dp
 private val ModernDetailsDockBottomClearance = 16.dp
 private val DetailsDockContentHorizontalPadding = 8.dp

@@ -113,6 +113,7 @@ fun KototoroBottomNav(
     val isExpressivePillEnabled = prefs.isExpressivePillEnabled
     val navHeight = prefs.navHeight
     val navFloatingHeight = prefs.navFloatingHeight
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
 
     val activeItems = navState.items
@@ -130,7 +131,7 @@ fun KototoroBottomNav(
 
     val targetAlpha = 0.84f
 
-    val verticalPadding by androidx.compose.animation.core.animateDpAsState(
+    val floatingVerticalPadding by androidx.compose.animation.core.animateDpAsState(
         if (isFloating && !useNavigationRail) 16.dp else 0.dp,
     )
     val railHorizontalPadding by androidx.compose.animation.core.animateDpAsState(
@@ -154,7 +155,12 @@ fun KototoroBottomNav(
             } else {
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = if (isFloating) 12.dp else 0.dp, vertical = verticalPadding)
+                    .padding(
+                        start = if (isFloating) 12.dp else 0.dp,
+                        top = floatingVerticalPadding,
+                        end = if (isFloating) 12.dp else 0.dp,
+                        bottom = floatingVerticalPadding,
+                    )
                     .run {
                         if (isFloating) {
                             windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
@@ -166,11 +172,11 @@ fun KototoroBottomNav(
         )
     val floatingNavModifier = Modifier
         .fillMaxWidth()
-        .padding(vertical = verticalPadding)
+        .padding(vertical = floatingVerticalPadding)
         .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
 
     val currentExplicitHeight by androidx.compose.animation.core.animateDpAsState(
-        if (isFloating && !useNavigationRail) (navFloatingHeight + 4).dp else navHeight.dp
+        if (isFloating && !useNavigationRail) (navFloatingHeight + 4).dp else navHeight.dp,
     )
     val nonFloatingContentHorizontalPadding = 6.dp
     val nonFloatingTopPadding = 4.dp
@@ -194,7 +200,6 @@ fun KototoroBottomNav(
         )
     }
     val navBackdrop = LocalLiquidGlassBackdrop.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 
     if (useNavigationRail) {
         MainNavBottomContainer(
@@ -204,8 +209,8 @@ fun KototoroBottomNav(
                 backdrop = navBackdrop,
             ),
             style = navContainerStyle,
+            shape = RoundedCornerShape(24.dp),
             useBackdrop = isIosStyle,
-            backdrop = navBackdrop,
         ) {
             NavigationRail(
                 containerColor = Color.Transparent,
@@ -272,7 +277,11 @@ fun KototoroBottomNav(
                             alwaysShowLabel = showSelectedLabels,
                             colors = NavigationRailItemDefaults.colors(
                                 indicatorColor = Color.Transparent,
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedIconColor = if (isIosStyle) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                },
                                 selectedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -287,7 +296,13 @@ fun KototoroBottomNav(
             modifier = floatingNavModifier,
             contentAlignment = Alignment.Center,
         ) {
-            val layoutSpec = remember(maxWidth, activeItems.size, adjacentAction != null, showSelectedLabels) {
+            val layoutSpec = remember(
+                maxWidth,
+                activeItems.size,
+                adjacentAction != null,
+                showSelectedLabels,
+                isExpressivePillEnabled,
+            ) {
                 resolveBottomNavLayout(
                     availableWidth = maxWidth,
                     itemCount = activeItems.size,
@@ -312,8 +327,8 @@ fun KototoroBottomNav(
                             backdrop = navBackdrop,
                         ),
                     style = navContainerStyle,
+                    shape = RoundedCornerShape(28.dp),
                     useBackdrop = isIosStyle,
-                    backdrop = navBackdrop,
                 ) {
                     FloatingBottomNavRow(
                         items = activeItems,
@@ -397,7 +412,11 @@ fun KototoroBottomNav(
                             alwaysShowLabel = showSelectedLabels,
                             colors = NavigationBarItemDefaults.colors(
                                 indicatorColor = Color.Transparent,
-                                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                selectedIconColor = if (isIosStyle) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                },
                                 selectedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -415,15 +434,19 @@ fun KototoroBottomNav(
 private fun MainNavBottomContainer(
     modifier: Modifier,
     style: GlassStyle,
+    shape: Shape,
     useBackdrop: Boolean = false,
-    backdrop: com.kyant.backdrop.Backdrop? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (useBackdrop) {
         Box(
             modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), RoundedCornerShape(24.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp)),
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.56f),
+                    shape = shape,
+                ),
         ) {
             content()
         }
@@ -448,8 +471,12 @@ private fun MainNavSurface(
     if (useBackdrop) {
         Box(
             modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.28f), shape)
-                .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.56f),
+                    shape = shape,
+                ),
         ) {
             content()
         }
@@ -542,6 +569,11 @@ private fun FloatingBottomNavRow(
     val displayedSelectedItemId = dragPreviewItemId ?: selectedItemId
     val selectedBounds = itemBounds[displayedSelectedItemId]
     val density = LocalDensity.current
+    val selectedContentColor = if (isIosStyle) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
     val targetIndicatorOffset = selectedBounds?.offset?.copy(
         y = selectedBounds.offset.y + with(density) { 4.dp.roundToPx() },
     ) ?: IntOffset.Zero
@@ -574,13 +606,20 @@ private fun FloatingBottomNavRow(
                         width = with(density) { indicatorSize.width.toDp() },
                         height = with(density) { indicatorSize.height.toDp() },
                     )
-                    .background(Color.White.copy(alpha = 0.12f), indicatorShape)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.42f),
+                        indicatorShape,
+                    )
                     .mainNavBackdrop(
                         shape = indicatorShape,
                         enabled = backdrop != null,
                         backdrop = backdrop,
                     )
-                    .border(1.dp, Color.White.copy(alpha = 0.28f), indicatorShape),
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f),
+                        shape = indicatorShape,
+                    ),
             )
         }
         Row(
@@ -594,7 +633,7 @@ private fun FloatingBottomNavRow(
                 targetValue = if (isSelected && !useExpressivePill) (-3).dp else 0.dp,
             )
             val contentColor = if (isSelected) {
-                MaterialTheme.colorScheme.onSecondaryContainer
+                selectedContentColor
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
@@ -697,7 +736,7 @@ private fun FloatingBottomNavRow(
                                                 if (useLiquidGlassPill) {
                                                     Modifier.border(
                                                         1.dp,
-                                                        Color.White.copy(alpha = 0.28f),
+                                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f),
                                                         CircleShape,
                                                     )
                                                 } else {
@@ -815,12 +854,13 @@ private fun AnimatedNavigationIcon(
     clickPulse: Int,
     contentDescription: String,
 ) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val animatedResId = remember(itemId) { navEnterAnimationResId(itemId) }
     val staticResId = remember(itemId, isSelected) { premiumIconResId(itemId, isSelected) }
     val enterAnimationResId = if (isSelected && clickPulse > 0) animatedResId else null
     val tint = lerp(
         MaterialTheme.colorScheme.onSurfaceVariant,
-        MaterialTheme.colorScheme.onSecondaryContainer,
+        if (isIosStyle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer,
         if (isSelected) 1f else 0f,
     )
 

@@ -26,8 +26,8 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 
-private val CompactSourceTagButtonSize = 36.dp
-private val CompactSourceTagIconSize = 18.dp
+private val CompactSourceTagButtonSize = 32.dp
+private val CompactSourceTagIconSize = 16.dp
 
 /**
  * Icon button + dropdown menu for selecting a single [SourceTag].

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -108,6 +109,7 @@ import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
@@ -123,6 +125,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -350,8 +353,15 @@ private fun HomeHighlightsSections(
     modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val sectionShape = RoundedCornerShape(if (expressive) 28.dp else 20.dp)
-    val sectionColor = if (expressive) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val sectionShape = RoundedCornerShape(
+        when {
+            expressive -> 28.dp
+            isIosStyle -> 8.dp
+            else -> 20.dp
+        },
+    )
+    val sectionColor = if (expressive || isIosStyle) {
         MaterialTheme.colorScheme.surfaceContainerLow
     } else {
         MaterialTheme.colorScheme.surface.copy(alpha = 0.64f)
@@ -406,6 +416,7 @@ private fun HomeHighlightsSections(
         if (historyItems.isNotEmpty()) {
             HomeHighlightSectionContainer(
                 expressive = expressive,
+                isIosStyle = isIosStyle,
                 shape = sectionShape,
                 color = sectionColor,
             ) {
@@ -427,6 +438,7 @@ private fun HomeHighlightsSections(
         if (updateItems.isNotEmpty()) {
             HomeHighlightSectionContainer(
                 expressive = expressive,
+                isIosStyle = isIosStyle,
                 shape = sectionShape,
                 color = sectionColor,
             ) {
@@ -448,6 +460,7 @@ private fun HomeHighlightsSections(
         if (recommendationItems.isNotEmpty()) {
             HomeHighlightSectionContainer(
                 expressive = expressive,
+                isIosStyle = isIosStyle,
                 shape = sectionShape,
                 color = sectionColor,
             ) {
@@ -478,11 +491,12 @@ private fun HomeHighlightsSections(
 @Composable
 private fun HomeHighlightSectionContainer(
     expressive: Boolean,
+    isIosStyle: Boolean,
     shape: RoundedCornerShape,
     color: Color,
     content: @Composable () -> Unit,
 ) {
-    if (expressive) {
+    if (expressive || isIosStyle) {
         content()
     } else {
         Surface(
@@ -1422,6 +1436,7 @@ private fun QuickActionsSection(
     actions: List<HomeQuickAction>,
     modifier: Modifier = Modifier,
 ) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Column(
         modifier = modifier
             .fillMaxWidth(),
@@ -1438,12 +1453,17 @@ private fun QuickActionsSection(
             val itemsPerRow = when {
                 maxWidth >= 800.dp -> 4
                 maxWidth >= 620.dp -> 3
+                isIosStyle -> 3
                 maxWidth >= 360.dp -> 4
                 else -> 3
             }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = if (isIosStyle) {
+                    Arrangement.spacedBy(7.dp, Alignment.CenterVertically)
+                } else {
+                    Arrangement.spacedBy(8.dp)
+                },
                 maxItemsInEachRow = itemsPerRow,
             ) {
                 actions.forEach { action ->
@@ -1472,28 +1492,33 @@ private fun QuickAccessButton(
     modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Surface(
-        modifier = modifier,
+        modifier = modifier.then(if (isIosStyle) Modifier.heightIn(min = 72.dp) else Modifier),
         shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
-        color = if (expressive) {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        },
+        color = if (isIosStyle) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = if (expressive) 0.dp else 1.dp,
-        border = if (expressive) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f))
-        } else {
-            null
+        border = when {
+            isIosStyle -> BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+            )
+            expressive -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f))
+            else -> null
         },
     ) {
         if (compact) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (isIosStyle) Modifier.heightIn(min = 72.dp) else Modifier)
                     .clickable(enabled = action.enabled, onClick = action.onClick)
                     .padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = if (isIosStyle) {
+                    Arrangement.spacedBy(7.dp, Alignment.CenterVertically)
+                } else {
+                    Arrangement.spacedBy(8.dp)
+                },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 HomeQuickActionIcon(
@@ -1516,6 +1541,7 @@ private fun QuickAccessButton(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(if (isIosStyle) Modifier.heightIn(min = 72.dp) else Modifier)
                     .clickable(enabled = action.enabled, onClick = action.onClick)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1545,8 +1571,9 @@ private fun HomeQuickActionIcon(
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val tint = if (enabled) {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        if (isIosStyle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     }

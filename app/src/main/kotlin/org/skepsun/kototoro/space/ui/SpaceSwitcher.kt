@@ -86,6 +86,7 @@ fun SpaceSwitcherFab(
 	val fabAccentColor = colorScheme.primaryContainer
 	val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS
+	val fabShape = CircleShape
 	val fabModifier = modifier
 		.clickable(
 			interactionSource = remember { MutableInteractionSource() },
@@ -100,11 +101,11 @@ fun SpaceSwitcherFab(
 				.fillMaxSize()
 				.background(
 					color = if (useBackdrop) {
-						Color.White.copy(alpha = 0.06f)
+						colorScheme.primary.copy(alpha = 0.16f)
 					} else {
 						fabAccentColor.copy(alpha = SPACE_SWITCHER_FAB_MIN_ALPHA)
 					},
-					shape = CircleShape,
+					shape = fabShape,
 				),
 			contentAlignment = Alignment.Center,
 		) {
@@ -115,19 +116,23 @@ fun SpaceSwitcherFab(
 					colorScheme.onPrimaryContainer
 				},
 			) {
-				SpaceGlyph(iconState.presentation, iconState.monogram)
+				SpaceGlyph(
+					presentation = iconState.presentation,
+					monogram = iconState.monogram,
+					modifier = if (useBackdrop) Modifier.size(25.dp) else Modifier,
+				)
 			}
 		}
 	}
     if (useBackdrop) {
         Box(
             modifier = fabModifier
-                .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                .background(Color.White.copy(alpha = 0.08f), fabShape)
                 .then(
                     if (backdrop != null) {
                         Modifier.drawBackdrop(
                             backdrop = backdrop,
-                            shape = { CircleShape },
+                            shape = { fabShape },
                             effects = {
                                 vibrancy()
                                 blur(4.dp.toPx())
@@ -137,7 +142,7 @@ fun SpaceSwitcherFab(
                         Modifier
                     },
                 )
-				.border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
+				.border(1.dp, colorScheme.primary.copy(alpha = 0.24f), fabShape),
 			content = content,
 		)
 	} else {

@@ -811,13 +811,27 @@ private fun DetailsInfoPanelSurface(
     content: @Composable () -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     LiquidGlassSurface(
         modifier = modifier,
-        style = GlassDefaults.subtleStyle().copy(
-            containerAlpha = if (expressive) 0.78f else 0.76f,
-            borderAlpha = if (expressive) 0.24f else 0.20f,
+        style = if (isIosStyle) {
+            GlassDefaults.regularStyle().copy(
+                containerAlpha = 0.88f,
+                borderAlpha = 0.18f,
+            )
+        } else {
+            GlassDefaults.subtleStyle().copy(
+                containerAlpha = if (expressive) 0.78f else 0.76f,
+                borderAlpha = if (expressive) 0.24f else 0.20f,
+            )
+        },
+        shape = RoundedCornerShape(
+            when {
+                expressive -> 28.dp
+                isIosStyle -> 22.dp
+                else -> 24.dp
+            },
         ),
-        shape = RoundedCornerShape(if (expressive) 28.dp else 24.dp),
     ) {
         content()
     }

@@ -43,11 +43,11 @@ val InterfaceStyleTokens.Companion.Ios: InterfaceStyleTokens
 	get() = InterfaceStyleTokens(
 		screenHorizontalPadding = 16.dp,
 		sectionVerticalSpacing = 20.dp,
-		groupCornerRadius = 14.dp,
+		groupCornerRadius = 18.dp,
 		controlCornerRadius = 12.dp,
 		controlHeight = 50.dp,
 		compactControlHeight = 42.dp,
-		topBarButtonSize = 40.dp,
+		topBarButtonSize = 44.dp,
 		sliderTrackHeight = 4.dp,
 		sliderThumbSize = 20.dp,
 		sliderPressedThumbWidth = 24.dp,

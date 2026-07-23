@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -45,6 +46,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.settings.search.SettingsItem
 
 data class SettingsRootSection(
@@ -125,6 +128,7 @@ private fun SettingsSectionCard(
     section: SettingsRootSection,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -137,7 +141,7 @@ private fun SettingsSectionCard(
                 vertical = 4.dp,
             ),
         )
-        if (expressive) {
+        if (expressive || isIosStyle) {
             SettingsGroupSurface {
                 section.items.forEachIndexed { index, item ->
                     SettingsRootRow(item = item)
@@ -173,7 +177,10 @@ private fun SettingsSearchResultsCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            if (LocalMaterialExpressiveComponentsEnabled.current) {
+            if (
+                LocalMaterialExpressiveComponentsEnabled.current ||
+                LocalInterfaceStyle.current == InterfaceStyle.IOS
+            ) {
                 SettingsGroupSurface {
                     results.forEachIndexed { index, item ->
                         SettingsSearchResultRow(
@@ -206,16 +213,19 @@ private fun SettingsSearchResultRow(
     onClick: () -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .then(
-                if (expressive) {
-                    Modifier.padding(
-                        horizontal = AppLayoutTokens.screenHorizontalPadding,
-                        vertical = 10.dp,
-                    )
+                if (expressive || isIosStyle) {
+                    Modifier
+                        .heightIn(min = if (isIosStyle) 62.dp else 0.dp)
+                        .padding(
+                            horizontal = AppLayoutTokens.screenHorizontalPadding,
+                            vertical = 10.dp,
+                        )
                 } else {
                     Modifier.padding(
                         horizontal = AppLayoutTokens.screenHorizontalPadding,
@@ -258,16 +268,19 @@ private fun SettingsRootRow(
     item: SettingsRootItem,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = item.onClick)
             .then(
-                if (expressive) {
-                    Modifier.padding(
-                        horizontal = AppLayoutTokens.screenHorizontalPadding,
-                        vertical = 10.dp,
-                    )
+                if (expressive || isIosStyle) {
+                    Modifier
+                        .heightIn(min = if (isIosStyle) 62.dp else 0.dp)
+                        .padding(
+                            horizontal = AppLayoutTokens.screenHorizontalPadding,
+                            vertical = 10.dp,
+                        )
                 } else {
                     Modifier.padding(
                         horizontal = AppLayoutTokens.screenHorizontalPadding,
@@ -279,12 +292,16 @@ private fun SettingsRootRow(
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(if (isIosStyle) 30.dp else 40.dp)
                 .then(
-                    if (expressive) {
+                    if (expressive || isIosStyle) {
                         Modifier.background(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.64f),
-                            shape = RoundedCornerShape(14.dp),
+                            color = if (isIosStyle) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.64f)
+                            },
+                            shape = RoundedCornerShape(if (isIosStyle) 8.dp else 14.dp),
                         )
                     } else {
                         Modifier
@@ -295,12 +312,14 @@ private fun SettingsRootRow(
             Icon(
                 painter = rememberSafePainter(item.iconRes),
                 contentDescription = null,
-                tint = if (expressive) {
+                tint = if (isIosStyle) {
+                    MaterialTheme.colorScheme.primary
+                } else if (expressive) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 },
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(if (isIosStyle) 18.dp else 22.dp),
             )
         }
         Spacer(modifier = Modifier.width(8.dp))

@@ -57,7 +57,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.parsers.model.ContentType
 
-private val CompactFilterChipSize = 36.dp
+private val CompactFilterChipSize = 32.dp
 
 /** A fixed-center, three-slot swipe filter: Video | Manga | Novel. */
 @Composable

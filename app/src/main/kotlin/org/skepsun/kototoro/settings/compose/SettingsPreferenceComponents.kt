@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings.compose
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
@@ -36,6 +38,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +51,8 @@ import org.skepsun.kototoro.core.ui.glass.ApplyDynamicArtworkBlurDialogStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -68,6 +74,42 @@ data class SettingsChoiceOption<T>(
     val label: String,
 )
 
+private data class SettingsDialogVisuals(
+    val shape: Shape,
+    val containerColor: Color,
+    val tonalElevation: Dp,
+)
+
+@Composable
+private fun settingsDialogVisuals(): SettingsDialogVisuals {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    return SettingsDialogVisuals(
+        shape = if (isIosStyle) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraLarge,
+        containerColor = if (isIosStyle) {
+            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        tonalElevation = if (isIosStyle) 0.dp else 6.dp,
+    )
+}
+
+@Composable
+private fun settingsSwitchColors(): SwitchColors {
+    return if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = MaterialTheme.colorScheme.primary,
+            checkedBorderColor = Color.Transparent,
+            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            uncheckedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+        )
+    } else {
+        SwitchDefaults.colors()
+    }
+}
+
 @Composable
 fun SettingsGroupSurface(
     modifier: Modifier = Modifier,
@@ -83,6 +125,11 @@ fun SettingsGroupSurface(
         } else {
             MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
         },
+        border = if (isIosStyle) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f))
+        } else {
+            null
+        },
     ) {
         Column(content = content)
     }
@@ -95,6 +142,7 @@ fun SettingsPreferenceSection(
     content: @Composable () -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -108,7 +156,7 @@ fun SettingsPreferenceSection(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = if (expressive) 10.dp else 8.dp),
             )
         }
-        if (expressive) {
+        if (expressive || isIosStyle) {
             SettingsGroupSurface {
                 content()
             }
@@ -244,6 +292,7 @@ fun SettingsSplitSwitchPreference(
             checked = checked,
             enabled = enabled,
             onCheckedChange = onCheckedChange,
+            colors = settingsSwitchColors(),
         )
     }
 }
@@ -333,6 +382,7 @@ fun SettingsSwitchPreference(
             checked = checked,
             enabled = enabled,
             onCheckedChange = null,
+            colors = settingsSwitchColors(),
         )
     }
 }
@@ -409,10 +459,14 @@ fun <T> SettingsChoicePreference(
     }
 
     if (isDialogVisible) {
+        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val dialogVisuals = settingsDialogVisuals()
         ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
-            shape = MaterialTheme.shapes.extraLarge,
+            shape = dialogVisuals.shape,
+            containerColor = dialogVisuals.containerColor,
+            tonalElevation = dialogVisuals.tonalElevation,
             title = { Text(text = title) },
             text = {
                 LazyColumn(
@@ -420,12 +474,14 @@ fun <T> SettingsChoicePreference(
                         .fillMaxWidth()
                         .heightIn(max = 320.dp),
                 ) {
-                    items(options, contentType = { "radio_option" }) { option ->
+                    itemsIndexed(options, contentType = { _, _ -> "radio_option" }) { index, option ->
+                        val selected = option.value == currentValue
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
                                 .selectable(
-                                    selected = option.value == currentValue,
+                                    selected = selected,
                                     onClick = {
                                         currentValue = option.value
                                         onValueChange(option.value)
@@ -435,12 +491,27 @@ fun <T> SettingsChoicePreference(
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(
-                                selected = option.value == currentValue,
-                                onClick = null,
+                            if (!isIosStyle) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = null,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(
+                                text = option.label,
+                                modifier = Modifier.weight(1f),
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = option.label)
+                            if (isIosStyle && selected) {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                        if (isIosStyle && index != options.lastIndex) {
+                            SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
                         }
                     }
                 }
@@ -514,10 +585,14 @@ fun <T> SettingsMultiChoicePreference(
     }
 
     if (isDialogVisible) {
+        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val dialogVisuals = settingsDialogVisuals()
         ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
-            shape = MaterialTheme.shapes.extraLarge,
+            shape = dialogVisuals.shape,
+            containerColor = dialogVisuals.containerColor,
+            tonalElevation = dialogVisuals.tonalElevation,
             title = { Text(text = title) },
             text = {
                 LazyColumn(
@@ -525,12 +600,14 @@ fun <T> SettingsMultiChoicePreference(
                         .fillMaxWidth()
                         .heightIn(max = 320.dp),
                 ) {
-                    items(options, contentType = { "checkbox_option" }) { option ->
+                    itemsIndexed(options, contentType = { _, _ -> "checkbox_option" }) { index, option ->
+                        val checked = option.value in pendingValues
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
                                 .toggleable(
-                                    value = option.value in pendingValues,
+                                    value = checked,
                                     onValueChange = { checked ->
                                         pendingValues = if (checked) {
                                             pendingValues + option.value
@@ -542,12 +619,27 @@ fun <T> SettingsMultiChoicePreference(
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Checkbox(
-                                checked = option.value in pendingValues,
-                                onCheckedChange = null,
+                            if (!isIosStyle) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = null,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(
+                                text = option.label,
+                                modifier = Modifier.weight(1f),
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = option.label)
+                            if (isIosStyle && checked) {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                        if (isIosStyle && index != options.lastIndex) {
+                            SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
                         }
                     }
                 }
@@ -745,12 +837,17 @@ fun SettingsDialogTextPreference(
     }
 
     if (isDialogVisible) {
+        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val dialogVisuals = settingsDialogVisuals()
         ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = {
                 isSuggestionsExpanded = false
                 isDialogVisible = false
             },
+            shape = dialogVisuals.shape,
+            containerColor = dialogVisuals.containerColor,
+            tonalElevation = dialogVisuals.tonalElevation,
             title = { Text(text = title) },
             text = {
                 Column {
@@ -786,7 +883,7 @@ fun SettingsDialogTextPreference(
                     DropdownMenu(
                         expanded = isSuggestionsExpanded && suggestions.isNotEmpty(),
                         onDismissRequest = { isSuggestionsExpanded = false },
-                        shape = MaterialTheme.shapes.large,
+                        shape = if (isIosStyle) RoundedCornerShape(14.dp) else MaterialTheme.shapes.large,
                     ) {
                         suggestions.forEach { suggestion ->
                             DropdownMenuItem(
@@ -883,9 +980,13 @@ fun SettingsReorderPreference(
     }
 
     if (isDialogVisible) {
+        val dialogVisuals = settingsDialogVisuals()
         ApplyDynamicArtworkBlurDialogStyle()
         AlertDialog(
             onDismissRequest = { isDialogVisible = false },
+            shape = dialogVisuals.shape,
+            containerColor = dialogVisuals.containerColor,
+            tonalElevation = dialogVisuals.tonalElevation,
             title = { Text(text = title) },
             text = {
                 if (pendingValue.isEmpty()) {
@@ -991,13 +1092,14 @@ fun SettingsGroupDivider(
 @Composable
 private fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val tokens = LocalInterfaceStyleTokens.current
     return fillMaxWidth()
         .alpha(if (enabled) 1f else 0.5f)
         .then(
-            if (expressive) {
+            if (expressive || isIosStyle) {
                 Modifier
-                    .heightIn(min = tokens.controlHeight)
+                    .heightIn(min = if (isIosStyle) 62.dp else tokens.controlHeight)
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             } else {
                 Modifier.padding(horizontal = 20.dp, vertical = 14.dp)

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +40,8 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
 private val SettingsSearchTopBarHeight = 56.dp
 internal val SettingsContentHorizontalPadding = CompactTopBarHorizontalPadding
@@ -73,10 +77,11 @@ fun SettingsSearchTopBarAction(
 	onStartSearch: () -> Unit,
 ) {
 	SettingsTopBarIconButton(onClick = onStartSearch) {
+		val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 		Icon(
 			painter = rememberSafePainter(androidx.appcompat.R.drawable.abc_ic_search_api_material),
 			contentDescription = stringResource(R.string.search),
-			modifier = Modifier.size(CompactTopBarIconSize),
+			modifier = Modifier.size(if (isIosStyle) 23.dp else CompactTopBarIconSize),
 		)
 	}
 }
@@ -89,6 +94,7 @@ fun SettingsSearchTopAppBar(
 	onQueryChange: (String) -> Unit,
 ) {
 	val colorScheme = MaterialTheme.colorScheme
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	SettingsTopBarSurface {
 		Row(
 			modifier = Modifier
@@ -101,7 +107,7 @@ fun SettingsSearchTopAppBar(
 				Icon(
 					imageVector = Icons.AutoMirrored.Filled.ArrowBack,
 					contentDescription = null,
-					modifier = Modifier.size(CompactTopBarIconSize),
+					modifier = Modifier.size(if (isIosStyle) 23.dp else CompactTopBarIconSize),
 				)
 			}
 			TextField(
@@ -109,8 +115,20 @@ fun SettingsSearchTopAppBar(
 				onValueChange = onQueryChange,
 				modifier = Modifier
 					.weight(1f)
-					.height(SettingsSearchTopBarHeight),
+					.height(if (isIosStyle) 44.dp else SettingsSearchTopBarHeight)
+					.then(
+						if (isIosStyle) {
+							Modifier.border(
+								width = 1.dp,
+								color = colorScheme.outlineVariant.copy(alpha = 0.34f),
+								shape = RoundedCornerShape(14.dp),
+							)
+						} else {
+							Modifier
+						},
+					),
 				singleLine = true,
+				shape = if (isIosStyle) RoundedCornerShape(14.dp) else MaterialTheme.shapes.extraSmall,
 				placeholder = {
 					Text(
 						text = stringResource(R.string.search),
@@ -119,9 +137,21 @@ fun SettingsSearchTopAppBar(
 					)
 				},
 				colors = TextFieldDefaults.colors(
-					focusedContainerColor = colorScheme.surfaceContainerHigh.copy(alpha = 0.80f),
-					unfocusedContainerColor = colorScheme.surfaceContainerHigh.copy(alpha = 0.80f),
-					disabledContainerColor = colorScheme.surfaceContainerHigh.copy(alpha = 0.80f),
+					focusedContainerColor = if (isIosStyle) {
+						colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+					} else {
+						colorScheme.surfaceContainerHigh.copy(alpha = 0.80f)
+					},
+					unfocusedContainerColor = if (isIosStyle) {
+						colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+					} else {
+						colorScheme.surfaceContainerHigh.copy(alpha = 0.80f)
+					},
+					disabledContainerColor = if (isIosStyle) {
+						colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+					} else {
+						colorScheme.surfaceContainerHigh.copy(alpha = 0.80f)
+					},
 					focusedIndicatorColor = Color.Transparent,
 					unfocusedIndicatorColor = Color.Transparent,
 				),
@@ -138,11 +168,12 @@ private fun SettingsSeparatedTopAppBar(
 ) {
 	val colorScheme = MaterialTheme.colorScheme
 	val tokens = LocalInterfaceStyleTokens.current
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	SettingsTopBarSurface {
 		Row(
 			modifier = Modifier
 				.fillMaxWidth()
-				.height(tokens.compactControlHeight),
+				.height(tokens.topBarButtonSize.coerceAtLeast(tokens.compactControlHeight)),
 			horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
@@ -151,7 +182,7 @@ private fun SettingsSeparatedTopAppBar(
 					Icon(
 						imageVector = Icons.AutoMirrored.Filled.ArrowBack,
 						contentDescription = null,
-						modifier = Modifier.size(CompactTopBarIconSize),
+						modifier = Modifier.size(if (isIosStyle) 23.dp else CompactTopBarIconSize),
 					)
 				}
 			}

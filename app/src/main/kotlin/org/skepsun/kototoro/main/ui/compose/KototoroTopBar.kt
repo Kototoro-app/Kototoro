@@ -67,8 +67,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -175,6 +177,9 @@ fun KototoroTopBar(
     }
 
     val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues()
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val topBarControlHeight = if (isIosStyle) 44.dp else CompactTopBarPillHeight
+    val topBarIconSize = if (isIosStyle) 21.dp else CompactTopBarIconSize
     val collapsedAlpha by animateFloatAsState(
         targetValue = if (isCollapsedFullyTransparent) 0f else 1f,
         label = "top_bar_alpha",
@@ -198,7 +203,10 @@ fun KototoroTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = CompactTopBarHorizontalPadding)
+                .padding(
+                    horizontal = if (isIosStyle) 18.dp else CompactTopBarHorizontalPadding,
+                    vertical = if (isIosStyle) 15.dp else 0.dp,
+                )
                 .graphicsLayer { alpha = collapsedAlpha },
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
             verticalAlignment = Alignment.CenterVertically,
@@ -211,12 +219,12 @@ fun KototoroTopBar(
                 TopBarControlSurface {
                     IconButton(
                         onClick = onSearchClick,
-                        modifier = Modifier.size(CompactTopBarPillHeight),
+                        modifier = Modifier.size(topBarControlHeight),
                     ) {
                         Icon(
                             Icons.Filled.Search,
                             contentDescription = stringResource(R.string.search),
-                            modifier = Modifier.size(CompactTopBarIconSize),
+                            modifier = Modifier.size(topBarIconSize),
                         )
                     }
                 }
@@ -227,7 +235,16 @@ fun KototoroTopBar(
                 Text(
                     text = topBarTitle,
                     modifier = Modifier.widthIn(max = maxWidth),
-                    style = if (useSmall) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge,
+                    style = when {
+                        isIosStyle && !useSmall -> MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = 32.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.6).sp,
+                        )
+                        useSmall -> MaterialTheme.typography.titleSmall
+                        else -> MaterialTheme.typography.titleLarge
+                    },
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = if (useSmall) 2 else 1,
                     overflow = TextOverflow.Ellipsis,
@@ -255,11 +272,11 @@ fun KototoroTopBar(
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
                 TopBarControlSurface {
-                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides topBarControlHeight) {
                         Row(
                             modifier = Modifier
-                                .widthIn(min = CompactTopBarPillHeight)
-                                .height(CompactTopBarPillHeight)
+                                .widthIn(min = topBarControlHeight)
+                                .height(topBarControlHeight)
                                 .padding(start = 2.dp, end = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -288,12 +305,12 @@ fun KototoroTopBar(
                                 ) {
                                     IconButton(
                                         onClick = { isMoreMenuExpanded = true },
-                                        modifier = Modifier.size(CompactTopBarPillHeight),
+                                        modifier = Modifier.size(topBarControlHeight),
                                     ) {
                                         Icon(
                                             painterResource(R.drawable.ic_more_vert),
                                             contentDescription = stringResource(R.string.more),
-                                            modifier = Modifier.size(CompactTopBarIconSize),
+                                            modifier = Modifier.size(topBarIconSize),
                                         )
                                     }
                                     GlassDropdownMenu(
@@ -542,7 +559,6 @@ internal fun TopBarControlSurface(
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Box(
                 modifier = modifier
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.26f), shape)
                     .drawBackdrop(
                         backdrop = backdrop,
                         exportedBackdrop = exportedBackdrop,
@@ -557,7 +573,12 @@ internal fun TopBarControlSurface(
                             )
                         },
                     )
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.56f),
+                        shape = shape,
+                    ),
                 content = content,
             )
         }
@@ -622,6 +643,7 @@ private fun InlineCompactTopBarTabsRail(
     modifier: Modifier = Modifier,
     onExpandedChange: (Boolean) -> Unit = {},
 ) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val density = LocalDensity.current
     val listState = rememberLazyListState()
     var restoreRequest by remember { mutableIntStateOf(0) }
@@ -670,7 +692,7 @@ private fun InlineCompactTopBarTabsRail(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(CompactTopBarPillHeight)
+                .height(if (isIosStyle) 44.dp else CompactTopBarPillHeight)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically,

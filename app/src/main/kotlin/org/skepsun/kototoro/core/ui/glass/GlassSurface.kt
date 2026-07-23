@@ -413,10 +413,20 @@ fun LiquidGlassSurface(
         )
         return
     }
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val surfaceTint = when (componentRole) {
+        GlassComponentRole.TopBar,
+        GlassComponentRole.BottomBar,
+        -> if (isDarkTheme) {
+            Color.Black.copy(alpha = 0.20f)
+        } else {
+            Color.White.copy(alpha = 0.20f)
+        }
+        else -> MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.18f)
+    }
 
     Box(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.18f), shape)
             .drawBackdrop(
                 backdrop = backdrop!!,
                 exportedBackdrop = exportedBackdrop,
@@ -431,6 +441,7 @@ fun LiquidGlassSurface(
                     )
                 },
             )
+            .background(surfaceTint, shape)
             .border(1.dp, Color.White.copy(alpha = 0.16f), shape),
         content = content,
     )
