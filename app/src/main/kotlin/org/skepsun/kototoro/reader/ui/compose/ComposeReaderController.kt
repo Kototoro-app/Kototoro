@@ -21,6 +21,7 @@ internal class ComposeReaderController(
 	private val imagePipeline: DefaultComposeReaderImagePipeline,
 	private val errorHost: ReaderErrorHost,
 	private val chromeCallbacks: ComposeReaderChromeCallbacks,
+	private val chaptersPanelContent: @Composable () -> Unit = {},
 ) : ReaderNavigator {
 
 	private var currentPosition by mutableIntStateOf(0)
@@ -44,6 +45,7 @@ internal class ComposeReaderController(
 	fun Content() {
 		ComposeReaderActivityScaffold(
 					state = chromeState,
+					chaptersPanelContent = chaptersPanelContent,
 					callbacks = chromeCallbacks.copy(
 						onZoomIn = ::onZoomIn,
 						onZoomOut = ::onZoomOut,
@@ -51,10 +53,12 @@ internal class ComposeReaderController(
 						onMessageAction = ::performMessageAction,
 						options = chromeCallbacks.options.copy(onDismiss = ::hideOptions),
 						onPrimaryDestination = { destination ->
-							if (destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS && chromeState.toolsVisible) {
-								hideTools()
-							} else {
-								chromeCallbacks.onPrimaryDestination(destination)
+							when {
+								destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY &&
+									chromeState.options.visible -> hideOptions()
+								destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS &&
+									chromeState.toolsVisible -> hideTools()
+								else -> chromeCallbacks.onPrimaryDestination(destination)
 							}
 						},
 					),
@@ -150,11 +154,35 @@ internal class ComposeReaderController(
 	}
 
 	fun showOptions(state: ComposeReaderOptionsState) {
-		chromeState = chromeState.copy(options = state.copy(visible = true))
+		chromeState = chromeState.copy(
+			options = state.copy(visible = true),
+			toolsVisible = false,
+			chaptersVisible = false,
+		)
 	}
 
 	fun showTools() {
-		chromeState = chromeState.copy(toolsVisible = true)
+		chromeState = chromeState.copy(
+			options = chromeState.options.copy(visible = false),
+			toolsVisible = true,
+			chaptersVisible = false,
+		)
+	}
+
+	fun toggleChapters() {
+		chromeState = if (chromeState.chaptersVisible) {
+			chromeState.copy(chaptersVisible = false)
+		} else {
+			chromeState.copy(
+				chaptersVisible = true,
+				options = chromeState.options.copy(visible = false),
+				toolsVisible = false,
+			)
+		}
+	}
+
+	fun hideChapters() {
+		chromeState = chromeState.copy(chaptersVisible = false)
 	}
 
 	private fun hideTools() {

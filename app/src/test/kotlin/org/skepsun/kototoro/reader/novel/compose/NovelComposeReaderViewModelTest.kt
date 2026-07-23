@@ -12,9 +12,17 @@ import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 class NovelComposeReaderViewModelTest {
 
 	@Test
-	fun `publishing chapter resets stale image context and keeps current position`() {
+	fun `publishing the same chapter keeps its position and image context`() {
 		val viewModel = NovelComposeReaderViewModel()
 		val position = NovelReadingPosition(7L, 2, 8, 0.25f)
+		viewModel.publishChapter(
+			chapterId = 7L,
+			chapterIndex = 3,
+			chapterTitle = "Chapter 4",
+			content = "Initial",
+			settings = NovelReaderSettings(),
+			translation = null,
+		)
 		viewModel.publishPosition(position)
 		viewModel.publishImageContext(
 			NovelComposeImageContext(
@@ -23,21 +31,35 @@ class NovelComposeReaderViewModelTest {
 			),
 		)
 
-		viewModel.publishChapter(3, "Chapter 4", "Content", NovelReaderSettings(), null)
+		viewModel.publishChapter(
+			chapterId = 7L,
+			chapterIndex = 3,
+			chapterTitle = "Chapter 4",
+			content = "Content",
+			settings = NovelReaderSettings(),
+			translation = null,
+		)
 
 		val state = viewModel.uiState.value
 		assertEquals(3, state.chapterIndex)
 		assertEquals("Chapter 4", state.chapterTitle)
 		assertEquals("Content", state.content)
 		assertEquals(position, state.position)
-		assertEquals(NovelComposeImageContext(), state.imageContext)
+		assertEquals("/books/old.epub", state.imageContext.epubFilePath)
 	}
 
 	@Test
 	fun `translation and image context updates preserve chapter state`() {
 		val viewModel = NovelComposeReaderViewModel()
 		val settings = NovelReaderSettings()
-		viewModel.publishChapter(1, "Chapter 2", "Original", settings, null)
+		viewModel.publishChapter(
+			chapterId = 1L,
+			chapterIndex = 1,
+			chapterTitle = "Chapter 2",
+			content = "Original",
+			settings = settings,
+			translation = null,
+		)
 		val translation = NovelChapterTranslation(
 			chapterIndex = 1,
 			paragraphs = listOf(NovelParagraph(0, NovelParagraphType.TEXT, "Original")),
@@ -72,5 +94,33 @@ class NovelComposeReaderViewModelTest {
 
 		assertEquals(readingPosition, viewModel.uiState.value.position)
 		assertEquals(scrollPosition, viewModel.uiState.value.scrollPosition)
+	}
+
+	@Test
+	fun `paged position updates the unified reader state`() {
+		val viewModel = NovelComposeReaderViewModel()
+		viewModel.publishChapter(
+			chapterId = 42L,
+			chapterIndex = 2,
+			chapterTitle = "Chapter",
+			content = "Content",
+			settings = NovelReaderSettings(),
+			translation = null,
+		)
+
+		viewModel.publishPagedPosition(
+			page = 3,
+			pageCount = 10,
+			charStart = 120,
+			charEnd = 180,
+			text = "Current page",
+		)
+
+		val state = viewModel.uiState.value
+		assertEquals(NovelReadingPosition(42L, 3, 10, 3f / 9f), state.position)
+		assertEquals("Current page", state.currentPageText)
+		assertEquals(120, state.currentPageStart)
+		assertEquals(180, state.currentPageEnd)
+		assertEquals("4 / 10", state.progressLabel)
 	}
 }

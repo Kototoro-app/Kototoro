@@ -118,7 +118,11 @@ internal fun ComposeNovelChaptersSheet(
 											fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
 										)
 									},
-									leadingContent = if (selected) {{ Icon(painterResource(R.drawable.ic_current_chapter), null) }} else null,
+									leadingContent = if (selected) {
+										{ Icon(painterResource(R.drawable.ic_current_chapter), null) }
+									} else {
+										null
+									},
 									colors = ListItemDefaults.colors(
 										containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
 									),
@@ -127,6 +131,92 @@ internal fun ComposeNovelChaptersSheet(
 								HorizontalDivider()
 							}
 						}
+					}
+				}
+			}
+		}
+	}
+}
+
+@Composable
+internal fun ComposeNovelChaptersPanel(
+	chapters: List<ContentChapter>,
+	currentIndex: Int,
+	onChapterSelected: (Int) -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	var reversed by remember { mutableStateOf(false) }
+	var query by remember { mutableStateOf("") }
+	val items = remember(chapters, reversed, query) { buildChapterItems(chapters, reversed, query) }
+	val currentPosition = items.indexOfFirst {
+		it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
+	}.coerceAtLeast(0)
+	val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition)
+	LaunchedEffect(reversed, query) {
+		if (query.isBlank()) listState.scrollToItem(currentPosition)
+	}
+	Column(
+		verticalArrangement = Arrangement.spacedBy(8.dp),
+		modifier = modifier
+			.fillMaxWidth()
+			.padding(horizontal = 12.dp, vertical = 10.dp),
+	) {
+		Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+			Column(modifier = Modifier.weight(1f)) {
+				Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleMedium)
+				Text(
+					stringResource(R.string.novel_chapters_count, chapters.size),
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+				)
+			}
+			IconButton(onClick = { reversed = !reversed }) {
+				Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
+			}
+		}
+		OutlinedTextField(
+			value = query,
+			onValueChange = { query = it },
+			label = { Text(stringResource(R.string.search_chapters)) },
+			singleLine = true,
+			modifier = Modifier.fillMaxWidth(),
+		)
+		LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp)) {
+			items(items, key = NovelChapterListItem::key) { item ->
+				when (item) {
+					is NovelChapterListItem.Header -> Text(
+						item.title,
+						style = MaterialTheme.typography.titleSmall,
+						fontWeight = FontWeight.SemiBold,
+						color = MaterialTheme.colorScheme.primary,
+						modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+					)
+					is NovelChapterListItem.Chapter -> {
+						val selected = item.originalIndex == currentIndex
+						ListItem(
+							headlineContent = {
+								Text(
+									item.chapter.title ?: stringResource(R.string.unnamed_chapter),
+									maxLines = 2,
+									overflow = TextOverflow.Ellipsis,
+									fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+								)
+							},
+							leadingContent = if (selected) {
+								{ Icon(painterResource(R.drawable.ic_current_chapter), null) }
+							} else {
+								null
+							},
+							colors = ListItemDefaults.colors(
+								containerColor = if (selected) {
+									MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+								} else {
+									androidx.compose.ui.graphics.Color.Transparent
+								},
+							),
+							modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
+						)
+						HorizontalDivider()
 					}
 				}
 			}

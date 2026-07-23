@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
-import androidx.activity.enableEdgeToEdge
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -17,7 +16,6 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.app.ActivityCompat
 import androidx.core.view.OnApplyWindowInsetsListener
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentManager
 import androidx.viewbinding.ViewBinding
 import dagger.hilt.android.EntryPointAccessors
@@ -27,10 +25,7 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.prefs.ColorScheme
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.util.ActionModeDelegate
-import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.core.util.ext.isWebViewUnavailable
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 import androidx.appcompat.R as appcompatR
@@ -67,34 +62,11 @@ abstract class BaseActivity<B : ViewBinding> :
 	override fun onCreate(savedInstanceState: Bundle?) {
 		val settings = entryPoint.settings
 		isAmoledTheme = settings.isAmoledTheme
-		setTheme(settings.colorScheme.styleResId)
-		if (isAmoledTheme) {
-			setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
-		}
-		if (settings.interfaceStyle == InterfaceStyle.IOS && settings.colorScheme == ColorScheme.IOS) {
-			setTheme(R.style.ThemeOverlay_Kototoro_IosPalette)
-		}
-		if (settings.interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE) {
-			setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)
-		}
-		when(settings.loadingCircleStyle) {
-			org.skepsun.kototoro.core.prefs.AppSettings.LoadingCircleStyle.THICK_STRAIGHT -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickStraight)
-			org.skepsun.kototoro.core.prefs.AppSettings.LoadingCircleStyle.THICK_WAVY -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickWavy)
-			org.skepsun.kototoro.core.prefs.AppSettings.LoadingCircleStyle.THIN_STRAIGHT -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThinStraight)
-			org.skepsun.kototoro.core.prefs.AppSettings.LoadingCircleStyle.THIN_WAVY -> setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThinWavy)
-		}
-		when(settings.popupRadius) {
-			12 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_12)
-			16 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_16)
-			20 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_20)
-			24 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_24)
-		}
+		applyKototoroActivityTheme(settings)
 		putDataToExtras(intent)
 		exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
 		super.onCreate(savedInstanceState)
-		enableEdgeToEdge()
-		WindowCompat.setDecorFitsSystemWindows(window, false)
-		configureSafeAreaWindow()
+		configureKototoroEdgeToEdge()
 	}
 
 	override fun onPostCreate(savedInstanceState: Bundle?) {

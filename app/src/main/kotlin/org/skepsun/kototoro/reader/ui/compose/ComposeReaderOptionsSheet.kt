@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -43,6 +41,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.ui.config.ImageServerOptions
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelSection
 
 @Immutable
 internal data class ComposeReaderOptionsState(
@@ -87,13 +86,14 @@ internal data class ComposeReaderOptionsCallbacks(
 internal fun ComposeReaderOptionsSheet(
 	state: ComposeReaderOptionsState,
 	callbacks: ComposeReaderOptionsCallbacks,
+	embedded: Boolean = false,
 	modifier: Modifier = Modifier,
 ) {
 	if (!state.visible) return
 	val backgroundLabels = stringArrayResource(R.array.reader_backgrounds)
 	Surface(
-		shape = MaterialTheme.shapes.large,
-		color = MaterialTheme.colorScheme.surfaceContainerHigh,
+		shape = if (embedded) androidx.compose.foundation.shape.RoundedCornerShape(0.dp) else MaterialTheme.shapes.large,
+		color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
 		modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 420.dp),
 	) {
 		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -106,7 +106,7 @@ internal fun ComposeReaderOptionsSheet(
 					.padding(horizontal = 16.dp),
 			) {
 			item {
-				Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
+				ReaderPanelSection(embedded = embedded) {
 					Column {
 						SectionTitle(stringResource(R.string.reader_page_turning_mode))
 					FlowRow(
@@ -133,7 +133,7 @@ internal fun ComposeReaderOptionsSheet(
 				}
 			}
 			item {
-				Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
+				ReaderPanelSection(embedded = embedded) {
 					Column {
 						SectionTitle(stringResource(R.string.double_page_mode))
 				FlowRow(
@@ -182,7 +182,7 @@ internal fun ComposeReaderOptionsSheet(
 				}
 			}
 			item {
-				Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
+				ReaderPanelSection(embedded = embedded) {
 					Column {
 						SectionTitle(stringResource(R.string.miscellaneous))
 					FlowRow(
@@ -212,7 +212,7 @@ internal fun ComposeReaderOptionsSheet(
 			}
 			state.imageServer?.let { imageServer ->
 				item {
-					Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
+					ReaderPanelSection(embedded = embedded) {
 						val automatic = stringResource(R.string.automatic)
 						val labels = imageServer.entries.map { it.label ?: automatic }
 						val selected = imageServer.entries.indexOfFirst { it.value == imageServer.selectedValue }.coerceAtLeast(0)

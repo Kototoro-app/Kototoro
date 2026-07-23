@@ -12,6 +12,10 @@ import org.skepsun.kototoro.reader.novel.tts.TtsState
 import javax.inject.Inject
 
 data class NovelComposeReaderUiState(
+	val chromeEnabled: Boolean = false,
+	val controlsVisible: Boolean = false,
+	val workTitle: String = "",
+	val chapterId: Long = 0L,
 	val chapterIndex: Int = 0,
 	val chapterTitle: String = "",
 	val content: String = "",
@@ -22,6 +26,7 @@ data class NovelComposeReaderUiState(
 	val imageContext: NovelComposeImageContext = NovelComposeImageContext(),
 	val settingsSheetVisible: Boolean = false,
 	val chaptersSheetVisible: Boolean = false,
+	val toolsSheetVisible: Boolean = false,
 	val chapters: List<ContentChapter> = emptyList(),
 	val currentChapterIndex: Int = 0,
 	val loading: Boolean = false,
@@ -29,7 +34,28 @@ data class NovelComposeReaderUiState(
 	val ttsControlsVisible: Boolean = false,
 	val ttsState: TtsState = TtsState.IDLE,
 	val ttsHighlightRange: IntRange? = null,
+	val progressValue: Float = 0f,
+	val progressMax: Float = 0f,
+	val progressLabel: String = "",
+	val currentPageText: String = "",
+	val currentPageStart: Int = 0,
+	val currentPageEnd: Int = 0,
+	val pageRequest: NovelPageRequest? = null,
+	val scrollRequest: NovelScrollRequest? = null,
 	val continuousChapters: List<NovelComposeChapterContent> = emptyList(),
+)
+
+@Immutable
+data class NovelPageRequest(
+	val id: Long,
+	val page: Int,
+)
+
+@Immutable
+data class NovelScrollRequest(
+	val id: Long,
+	val deltaPages: Int = 0,
+	val blockIndex: Int? = null,
 )
 
 @Immutable
@@ -45,7 +71,10 @@ data class NovelComposeChapterContent(
 data class NovelReaderMessage(val id: Long, val text: String, val durationMillis: Long)
 
 val NovelComposeReaderUiState.hasOverlay: Boolean
-	get() = settingsSheetVisible || chaptersSheetVisible || loading || message != null || ttsControlsVisible
+	get() = (!chromeEnabled && (settingsSheetVisible || chaptersSheetVisible || toolsSheetVisible)) ||
+		loading ||
+		message != null ||
+		(!chromeEnabled && ttsControlsVisible)
 
 /** Renderer-neutral continuous-scroll anchor for configuration and process restoration. */
 data class NovelComposeScrollPosition(
@@ -70,8 +99,31 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 	private val _uiState = MutableStateFlow(NovelComposeReaderUiState())
 	val uiState = _uiState.asStateFlow()
 	private var nextMessageId = 0L
+	private var nextPageRequestId = 0L
+	private var nextScrollRequestId = 0L
+
+	fun publishChrome(
+		enabled: Boolean = true,
+		controlsVisible: Boolean = _uiState.value.controlsVisible,
+		workTitle: String = _uiState.value.workTitle,
+	) {
+		_uiState.value = _uiState.value.copy(
+			chromeEnabled = enabled,
+			controlsVisible = controlsVisible,
+			workTitle = workTitle,
+		)
+	}
+
+	fun publishProgress(value: Float, max: Float, label: String) {
+		_uiState.value = _uiState.value.copy(
+			progressValue = value.coerceIn(0f, max.coerceAtLeast(0f)),
+			progressMax = max.coerceAtLeast(0f),
+			progressLabel = label,
+		)
+	}
 
 	fun publishChapter(
+		chapterId: Long,
 		chapterIndex: Int,
 		chapterTitle: String,
 		content: String,
@@ -79,6 +131,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 		translation: NovelChapterTranslation?,
 	) {
 		val previous = _uiState.value
+		val sameChapter = previous.chapterId == chapterId
 		val chapter = NovelComposeChapterContent(
 			chapterIndex = chapterIndex,
 			chapterTitle = chapterTitle,
@@ -87,20 +140,77 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 			scrollPosition = previous.continuousChapters
 				.firstOrNull { it.chapterIndex == chapterIndex }
 				?.scrollPosition,
+			imageContext = previous.continuousChapters
+				.firstOrNull { it.chapterIndex == chapterIndex }
+				?.imageContext
+				?: previous.imageContext.takeIf { sameChapter }
+				?: NovelComposeImageContext(),
 		)
 		_uiState.value = _uiState.value.copy(
+			chapterId = chapterId,
 			chapterIndex = chapterIndex,
 			chapterTitle = chapterTitle,
 			content = content,
 			settings = settings,
 			translation = translation,
+			position = previous.position.takeIf { sameChapter },
+			currentPageText = previous.currentPageText.takeIf { sameChapter }.orEmpty(),
+			currentPageStart = previous.currentPageStart.takeIf { sameChapter } ?: 0,
+			currentPageEnd = previous.currentPageEnd.takeIf { sameChapter } ?: 0,
 			scrollPosition = previous.scrollPosition.takeIf { previous.chapterIndex == chapterIndex },
-			imageContext = NovelComposeImageContext(),
+			imageContext = previous.imageContext.takeIf { sameChapter } ?: NovelComposeImageContext(),
 			continuousChapters = mergeContinuousChapterWindow(
 				existing = previous.continuousChapters,
 				incoming = chapter,
 				continuous = settings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL,
 			),
+		)
+	}
+
+	fun requestPage(page: Int) {
+		_uiState.value = _uiState.value.copy(
+			pageRequest = NovelPageRequest(++nextPageRequestId, page.coerceAtLeast(0)),
+		)
+	}
+
+	fun requestScrollByPage(delta: Int) {
+		if (delta == 0) return
+		_uiState.value = _uiState.value.copy(
+			scrollRequest = NovelScrollRequest(++nextScrollRequestId, deltaPages = delta),
+		)
+	}
+
+	fun requestScrollToBlock(blockIndex: Int) {
+		_uiState.value = _uiState.value.copy(
+			scrollRequest = NovelScrollRequest(
+				id = ++nextScrollRequestId,
+				blockIndex = blockIndex.coerceAtLeast(0),
+			),
+		)
+	}
+
+	fun publishPagedPosition(
+		page: Int,
+		pageCount: Int,
+		charStart: Int,
+		charEnd: Int,
+		text: String,
+	) {
+		val safeCount = pageCount.coerceAtLeast(0)
+		val safePage = page.coerceIn(0, (safeCount - 1).coerceAtLeast(0))
+		_uiState.value = _uiState.value.copy(
+			position = NovelReadingPosition(
+				chapterId = _uiState.value.chapterId,
+				page = safePage,
+				pageCount = safeCount,
+				chapterProgress = if (safeCount > 1) safePage.toFloat() / (safeCount - 1) else 0f,
+			),
+			progressValue = safePage.toFloat(),
+			progressMax = (safeCount - 1).coerceAtLeast(0).toFloat(),
+			progressLabel = "${safePage + 1} / ${safeCount.coerceAtLeast(1)}",
+			currentPageText = text,
+			currentPageStart = charStart.coerceAtLeast(0),
+			currentPageEnd = charEnd.coerceAtLeast(charStart),
 		)
 	}
 
@@ -165,7 +275,12 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 	}
 
 	fun showSettings(settings: NovelReaderSettings) {
-		_uiState.value = _uiState.value.copy(settings = settings, settingsSheetVisible = true)
+		_uiState.value = _uiState.value.copy(
+			settings = settings,
+			settingsSheetVisible = true,
+			chaptersSheetVisible = false,
+			toolsSheetVisible = false,
+		)
 	}
 
 	fun dismissSettings() {
@@ -179,6 +294,8 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 	fun showChapters(chapters: List<ContentChapter>, currentChapterIndex: Int) {
 		_uiState.value = _uiState.value.copy(
 			chaptersSheetVisible = true,
+			settingsSheetVisible = false,
+			toolsSheetVisible = false,
 			chapters = chapters,
 			currentChapterIndex = currentChapterIndex,
 		)
@@ -186,6 +303,30 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 
 	fun dismissChapters() {
 		_uiState.value = _uiState.value.copy(chaptersSheetVisible = false)
+	}
+
+	fun showTools() {
+		_uiState.value = _uiState.value.copy(
+			toolsSheetVisible = true,
+			settingsSheetVisible = false,
+			chaptersSheetVisible = false,
+		)
+	}
+
+	fun dismissTools() {
+		_uiState.value = _uiState.value.copy(
+			toolsSheetVisible = false,
+			ttsControlsVisible = false,
+		)
+	}
+
+	fun dismissControlPanels() {
+		_uiState.value = _uiState.value.copy(
+			settingsSheetVisible = false,
+			chaptersSheetVisible = false,
+			toolsSheetVisible = false,
+			ttsControlsVisible = false,
+		)
 	}
 
 	fun setLoading(loading: Boolean) {
@@ -203,7 +344,10 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 	}
 
 	fun showTtsControls() {
-		_uiState.value = _uiState.value.copy(ttsControlsVisible = true)
+		_uiState.value = _uiState.value.copy(
+			ttsControlsVisible = true,
+			toolsSheetVisible = true,
+		)
 	}
 
 	fun hideTtsControls() {

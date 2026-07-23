@@ -71,6 +71,9 @@ import org.skepsun.kototoro.core.util.ext.performSegmentHapticFeedback
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.zipWithPrevious
 import org.skepsun.kototoro.details.ui.pager.ChaptersPagesSheet
+import org.skepsun.kototoro.details.ui.compose.ChaptersPagesTabsContent
+import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
+import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.data.TapGridSettings
 import org.skepsun.kototoro.reader.domain.TapGridArea
@@ -129,6 +132,8 @@ class ReaderActivity :
     private val idlingDetector = IdlingDetector(TimeUnit.SECONDS.toMillis(10), this)
 
     private val viewModel: ReaderViewModel by viewModels()
+    private val pagesViewModel: PagesViewModel by viewModels()
+    private val bookmarksViewModel: BookmarksViewModel by viewModels()
 
     override val readerMode: ReaderMode?
         get() = composeReaderController.readerMode
@@ -208,6 +213,19 @@ class ReaderActivity :
             viewModel = viewModel,
             imagePipeline = composeReaderImagePipeline,
             errorHost = this,
+            chaptersPanelContent = {
+                ChaptersPagesTabsContent(
+                    viewModel = viewModel,
+                    pagesViewModel = pagesViewModel,
+                    bookmarksViewModel = bookmarksViewModel,
+                    settings = settings,
+                    appRouter = router,
+                    pageSaveHelper = pageSaveHelper,
+                    selectedTabId = settings.defaultDetailsTab,
+                    isSheetFullyExpanded = true,
+                    isChapterListScrollEnabled = true,
+                )
+            },
             chromeCallbacks = ComposeReaderChromeCallbacks(
                 onNavigateBack = { dispatchNavigateUp() },
                 actions = ReaderActionsCallbacks(
@@ -311,6 +329,9 @@ class ReaderActivity :
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS -> composeReaderController.showTools()
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION -> onTranslateClick()
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.PROGRESS -> Unit
+						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.CHAPTERS_PANEL -> {
+							composeReaderController.toggleChapters()
+						}
 					}
 				},
 				onPrimaryDestinationLongPress = { destination ->
@@ -635,6 +656,7 @@ class ReaderActivity :
     }
 
     private fun dismissChapterPagesSheet() {
+        composeReaderController.hideChapters()
         supportFragmentManager.findFragmentByTag(ChaptersPagesSheet::class.java.name)?.let {
             (it as? DialogFragment)?.dismiss()
         }

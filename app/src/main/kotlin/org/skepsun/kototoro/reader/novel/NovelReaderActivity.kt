@@ -1,32 +1,35 @@
 package org.skepsun.kototoro.reader.novel
 
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
-import android.view.Gravity
 import android.view.KeyEvent
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
-import android.view.ViewGroup
+import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.core.graphics.Insets
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isGone
-import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
-import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
-import androidx.transition.Fade
-import androidx.transition.Slide
-import androidx.transition.TransitionManager
-import androidx.transition.TransitionSet
-import com.google.android.material.snackbar.Snackbar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dagger.hilt.android.AndroidEntryPoint
 import android.util.SparseArray
 import kotlinx.coroutines.Dispatchers
@@ -43,16 +46,16 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
-import org.skepsun.kototoro.core.ui.BaseFullscreenActivity
+import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.core.util.ext.isNightMode
 import org.skepsun.kototoro.core.util.ext.performConfirmHapticFeedback
 import org.skepsun.kototoro.core.util.ext.performRejectHapticFeedback
-import org.skepsun.kototoro.databinding.ActivityNovelReaderV2Binding
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 
@@ -64,7 +67,9 @@ import org.skepsun.kototoro.reader.novel.compose.NovelComposeImageContext
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeChapterContent
 import org.skepsun.kototoro.reader.novel.compose.NovelReadingPosition
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
-import org.skepsun.kototoro.reader.novel.compose.hasOverlay
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderBottomChrome
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeCallbacks
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderTopChrome
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
 import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
@@ -74,15 +79,16 @@ import org.skepsun.kototoro.space.domain.awaitCompletion
 import javax.inject.Inject
 
 /**
- * 小说阅读器 Activity - 基于 TextView 的实现
- * 复用漫画阅读器的工具栏设计
+ * 小说阅读器 Activity。正文、阅读控件与 Space FAB 均由单一 Compose 根节点渲染。
  */
 @AndroidEntryPoint
 class NovelReaderActivity : 
-    BaseFullscreenActivity<ActivityNovelReaderV2Binding>(),
+    BaseComposeFullscreenActivity(),
     ReaderControlDelegate.OnInteractionListener {
 
     private val composeReaderViewModel: NovelComposeReaderViewModel by viewModels()
+    private val contentRoot: View
+        get() = window.decorView
 
     @Inject
     lateinit var mangaRepositoryFactory: ContentRepository.Factory
@@ -147,13 +153,8 @@ class NovelReaderActivity :
     private var sessionStartPercent: Float = 0f
     
     // Continuous Scroll mode properties
-    private var continuousTapDownX = 0f
-    private var continuousTapDownY = 0f
-    private var continuousTapDownTime = 0L
-    private var lastContinuousGestureTapTime = 0L
     private var lastContinuousTapHandledTime = 0L
-    private var continuousTouchSequence = 0L
-    private var continuousAdapter: NovelContinuousAdapter? = null
+    private var imageHeadersProvider: ((String) -> Map<String, String>?)? = null
     private var lastContinuousTapSource = ""
     private var isLoadingPrevious = false
     private var isLoadingNext = false
@@ -183,7 +184,7 @@ class NovelReaderActivity :
                     if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
                         // TODO string sync highlighting
                     } else if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE) {
-                        viewBinding.readerView.setHighlightRange(null)
+                        composeReaderViewModel.publishTtsHighlight(null)
                     }
                     
                     // 当当前页朗读完成时，自动翻页并继续朗读
@@ -200,7 +201,6 @@ class NovelReaderActivity :
                 ttsService?.getPlayingTokenIndex()?.collectLatest { index ->
                     val range = index?.let { ttsService?.getToken(it)?.range }
 					composeReaderViewModel.publishTtsHighlight(range)
-                    viewBinding.readerView.setHighlightRange(range)
                 }
             }
         }
@@ -230,7 +230,6 @@ class NovelReaderActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(ActivityNovelReaderV2Binding.inflate(layoutInflater))
 
         readerSettings = NovelReaderSettings.load(this).copy(isTranslationEnabled = false)
         
@@ -321,66 +320,21 @@ class NovelReaderActivity :
         android.util.Log.d("NovelReaderActivity", "Content has chapters: ${manga.chapters != null}, count: ${manga.chapters?.size ?: 0}")
         android.util.Log.d("NovelReaderActivity", "Repository type: ${repository.javaClass.simpleName}")
 
-        setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
         spaceSwitcherDelegate.bind(
             activity = this,
-            snackbarAnchor = viewBinding.root,
+            snackbarAnchor = contentRoot,
             origin = SpaceSwitchOrigin.NOVEL_READER,
             availabilityProvider = { SpaceSwitchAvailability.SAVE_AND_SWITCH },
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
         )
-        spaceSwitcherDelegate.installFab(findViewById(R.id.immersive_space_switcher_fab))
         spaceSwitcherDelegate.setControlsVisible(isUiVisible)
         
         // 设置标题为小说名称
         title = manga.title
         supportActionBar?.title = manga.title
-        viewBinding.toolbar.title = manga.title
-        viewBinding.toolbar.subtitle = getString(R.string.loading_)
-
-        viewBinding.actionsView.listener = this
-        viewBinding.actionsView.setTranslateButtonVisible(true)
-        viewBinding.actionsView.setTranslateActive(false)
         setupImageHeaders()
-        setupComposeReaderHost()
-		lifecycleScope.launch {
-			composeReaderViewModel.uiState
-				.map { it.hasOverlay || it.settings?.readingMode == ReadingMode.SCROLL }
-				.distinctUntilChanged()
-				.collect { viewBinding.composeNovelReaderView.isVisible = it }
-		}
+        setupComposeContent()
 
-        viewBinding.readerView.onPageChangeListener = { page, total ->
-            // 显示用页码按双页 spread 计数，实际进度用字符比例
-            val displayPage = viewBinding.readerView.getDisplayPageIndex()
-            val displayTotal = viewBinding.readerView.getDisplayPageCount()
-            updateProgress(displayPage, displayTotal)
-            updateReadingStatus(displayPage, displayTotal)
-            
-            // Sync TTS on page flip if currently playing
-            if (composeReaderViewModel.uiState.value.ttsControlsVisible && ttsService?.getState()?.value == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
-                startTtsFromCurrentPage()
-            }
-        }
-        
-        // 使用手势区域处理
-        viewBinding.readerView.onTapAreaListener = { area ->
-            handleTapGesture(area)
-        }
-        viewBinding.readerView.onImageClickListener = { image ->
-            openInlineImage(image)
-        }
-        
-        // 章节切换请求处理
-        viewBinding.readerView.onChapterChangeRequestListener = { delta ->
-            switchChapterBy(delta)
-        }
-
-        viewBinding.infoBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            updateNovelContentTopInset()
-        }
-
-        viewBinding.readerView.updateSettings(readerSettings)
         applyReaderPalette()
         
         applyReadingModeToggles()
@@ -401,7 +355,7 @@ class NovelReaderActivity :
     }
 
     private fun setupImageHeaders() {
-        viewBinding.readerView.imageHeadersProvider = { imageUrl ->
+        imageHeadersProvider = { imageUrl ->
             val source = manga.source
             if (source.name == "BILINOVEL") {
                 mapOf(
@@ -456,58 +410,163 @@ class NovelReaderActivity :
         }
     }
 
-    private fun setupComposeReaderHost() {
-        viewBinding.composeNovelReaderView.setViewCompositionStrategy(
-            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
+    private fun setupComposeContent() {
+        val callbacks = NovelReaderChromeCallbacks(
+            onNavigateBack = onBackPressedDispatcher::onBackPressed,
+            onProgressSelected = ::switchPageTo,
+            onPreviousChapter = { switchChapterBy(-1) },
+            onNextChapter = { switchChapterBy(1) },
+            onSettingsChanged = {
+                composeReaderViewModel.publishSettings(it)
+                applyNovelReaderSettings(it)
+            },
+            onChapterSelected = { index ->
+                composeReaderViewModel.dismissChapters()
+                onChapterSelected(index)
+            },
+            onDismissSettings = composeReaderViewModel::dismissSettings,
+            onDismissChapters = composeReaderViewModel::dismissChapters,
+            onDismissTools = composeReaderViewModel::dismissTools,
+            onShowTools = composeReaderViewModel::showTools,
+            onShowSettings = { composeReaderViewModel.showSettings(readerSettings) },
+            onShowChapters = ::showChaptersSheet,
+            onToggleTranslation = ::toggleTranslation,
+            onBookmark = ::onBookmarkClick,
+            onTts = ::onTtsClick,
+            onClearTranslationCache = ::onClearTranslationCacheClick,
+            onTtsPrevious = { ttsService?.seekPrev() },
+            onTtsPlayPause = ::onTtsPlayPauseClicked,
+            onTtsNext = { ttsService?.seekNext() },
+            onTtsVoice = ::showVoiceSelectionDialog,
+            onTtsClose = {
+                onTtsStopClicked()
+                composeReaderViewModel.hideTtsControls()
+            },
         )
-        viewBinding.composeNovelReaderView.setContent {
+        composeReaderViewModel.publishChrome(
+            controlsVisible = isUiVisible,
+            workTitle = manga.title,
+        )
+        setContent {
             KototoroTheme {
-                ComposeNovelReaderRoute(
-                    viewModel = composeReaderViewModel,
-                    imageModel = { it },
-					onSettingsChanged = ::applyNovelReaderSettings,
-					onBookmark = ::onBookmarkClick,
-					onTts = ::onTtsClick,
-					onClearTranslationCache = ::onClearTranslationCacheClick,
-					onChapterSelected = ::onChapterSelected,
-					onTtsPrevious = { ttsService?.seekPrev() },
-					onTtsPlayPause = ::onTtsPlayPauseClicked,
-					onTtsNext = { ttsService?.seekNext() },
-					onTtsVoice = ::showVoiceSelectionDialog,
-					onTtsClose = {
-						onTtsStopClicked()
-						composeReaderViewModel.hideTtsControls()
-					},
-					onRequestPreviousChapter = ::requestPreviousComposeChapter,
-					onRequestNextChapter = ::requestNextComposeChapter,
-					onVisibleChapterChanged = ::onComposeVisibleChapterChanged,
-					onVisibleProgress = ::onComposeVisibleProgress,
-					renderContent = true,
-                    onImageClick = { path ->
-                        val image = composeReaderViewModel.uiState.value.imageContext
-                        openInlineImage(
-                            NovelInlineImageRequest(
-                                imagePath = path,
-                                epubFilePath = image.epubFilePath,
-                                chapterPath = image.chapterPath,
-                                headers = image.headers,
+                val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
+                val readerBackdrop = rememberLayerBackdrop {
+                    drawContent()
+                }
+                CompositionLocalProvider(
+                    LocalLiquidGlassBackdrop provides readerBackdrop,
+                    LocalLiquidGlassLayerBackdrop provides readerBackdrop,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(
+                                WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
                             ),
+                    ) {
+                        ComposeNovelReaderRoute(
+                            viewModel = composeReaderViewModel,
+                            imageModel = { it },
+                            onSettingsChanged = ::applyNovelReaderSettings,
+                            onBookmark = ::onBookmarkClick,
+                            onTts = ::onTtsClick,
+                            onClearTranslationCache = ::onClearTranslationCacheClick,
+                            onChapterSelected = ::onChapterSelected,
+                            onTtsPrevious = { ttsService?.seekPrev() },
+                            onTtsPlayPause = ::onTtsPlayPauseClicked,
+                            onTtsNext = { ttsService?.seekNext() },
+                            onTtsVoice = ::showVoiceSelectionDialog,
+                            onTtsClose = {
+                                onTtsStopClicked()
+                                composeReaderViewModel.hideTtsControls()
+                            },
+                            onRequestPreviousChapter = {
+                                if (readerSettings.readingMode == ReadingMode.PAGED) {
+                                    switchChapterBy(-1)
+                                } else {
+                                    requestPreviousComposeChapter()
+                                }
+                            },
+                            onRequestNextChapter = {
+                                if (readerSettings.readingMode == ReadingMode.PAGED) {
+                                    switchChapterBy(1)
+                                } else {
+                                    requestNextComposeChapter()
+                                }
+                            },
+                            onVisibleChapterChanged = ::onComposeVisibleChapterChanged,
+                            onVisibleProgress = ::onComposeVisibleProgress,
+                            onPagedPositionChanged = { page, pageCount ->
+                                currentPageIndex = page
+                                updateReadingStatus(page, pageCount)
+                            },
+                            renderContent = true,
+                            onImageClick = { path ->
+                                val image = composeReaderViewModel.uiState.value.imageContext
+                                openInlineImage(
+                                    NovelInlineImageRequest(
+                                        imagePath = path,
+                                        epubFilePath = image.epubFilePath,
+                                        chapterPath = image.chapterPath,
+                                        headers = image.headers,
+                                    ),
+                                )
+                            },
+                            onTap = { x, y, viewport ->
+                                val readerState = composeReaderViewModel.uiState.value
+                                val panelVisible =
+                                    readerState.settingsSheetVisible ||
+                                        readerState.chaptersSheetVisible ||
+                                        readerState.toolsSheetVisible ||
+                                        readerState.ttsControlsVisible
+                                if (panelVisible) {
+                                    composeReaderViewModel.dismissControlPanels()
+                                    setUiVisible(false)
+                                } else {
+                                    handleContinuousTap(
+                                        x = x,
+                                        y = y,
+                                        width = viewport.width,
+                                        height = viewport.height,
+                                        source = "compose",
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .layerBackdrop(readerBackdrop),
                         )
-                    },
-                    onTap = { x, y, viewport ->
-                        handleContinuousTap(
-                            x = x,
-                            y = y,
-                            width = viewport.width,
-                            height = viewport.height,
-                            source = "compose",
-                        )
-                    },
-                )
+                        Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                            NovelReaderTopChrome(state, callbacks)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding(),
+                        ) {
+                            NovelReaderBottomChrome(state, callbacks)
+                        }
+                        if (!state.settingsSheetVisible && !state.chaptersSheetVisible) {
+                            spaceSwitcherDelegate.Fab(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .navigationBarsPadding()
+                                    .padding(
+                                        end = dimensionResource(R.dimen.space_switcher_fab_margin),
+                                        bottom = if (state.controlsVisible) {
+                                            176.dp
+                                        } else {
+                                            dimensionResource(R.dimen.space_switcher_fab_control_gap)
+                                        },
+                                    )
+                                    .size(56.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
-
     private fun openInlineImage(image: NovelInlineImageRequest) {
         val router = AppRouter(this)
         val canUseStandardViewer = image.epubFilePath.isNullOrBlank() &&
@@ -535,101 +594,18 @@ class NovelReaderActivity :
         return AppRouter.detailsIntent(this, manga)
     }
 
-    override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-        val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-        val cutoutInsets = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
-        val horizontalSafeInsets = Insets.of(
-            maxOf(systemBars.left, cutoutInsets.left),
-            0,
-            maxOf(systemBars.right, cutoutInsets.right),
-            0,
-        )
-        val fullscreenEnabled = if (::readerSettings.isInitialized) {
-            readerSettings.enableFullscreen
-        } else {
-            true
-        }
-        val isScrollMode = if (::readerSettings.isInitialized) {
-            readerSettings.readingMode == ReadingMode.SCROLL
-        } else {
-            false
-        }
-        val infoBarHeight = visibleInfoBarHeight()
-        val contentTopInset = systemBars.top
-        val contentBottomInset = when {
-            !fullscreenEnabled -> systemBars.bottom
-            isScrollMode -> infoBarHeight
-            else -> 0
-        }
-        
-        viewBinding.toolbar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            topMargin = systemBars.top
-            rightMargin = horizontalSafeInsets.right
-            leftMargin = horizontalSafeInsets.left
-        }
-
-        val navMargin = if (isToolbarFloating) (16 * resources.displayMetrics.density).toInt() else 0
-        val bottomMargin = if (isToolbarFloating) systemBars.bottom + navMargin else 0
-
-
-        viewBinding.toolbarDocked.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            this.bottomMargin = bottomMargin
-            leftMargin = if (isToolbarFloating) horizontalSafeInsets.left + navMargin else 0
-            rightMargin = if (isToolbarFloating) horizontalSafeInsets.right + navMargin else 0
-        }
-
-        viewBinding.actionsView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            this.bottomMargin = if (isToolbarFloating) 0 else systemBars.bottom
-            leftMargin = if (isToolbarFloating) 0 else horizontalSafeInsets.left
-            rightMargin = if (isToolbarFloating) 0 else horizontalSafeInsets.right
-        }
-
-        viewBinding.infoBar.applyTopInset = false
-        viewBinding.infoBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            leftMargin = horizontalSafeInsets.left
-            rightMargin = horizontalSafeInsets.right
-            this.bottomMargin = if (fullscreenEnabled) 0 else systemBars.bottom
-        }
-
-        viewBinding.readerView.updatePadding(
-            top = contentTopInset,
-            left = horizontalSafeInsets.left,
-            right = horizontalSafeInsets.right,
-            bottom = contentBottomInset,
-        )
-        viewBinding.continuousScrollView.updatePadding(
-            top = contentTopInset,
-            left = horizontalSafeInsets.left,
-            right = horizontalSafeInsets.right,
-            bottom = contentBottomInset,
-        )
-
-        val innerInsets = Insets.of(
-            horizontalSafeInsets.left,
-            contentTopInset,
-            horizontalSafeInsets.right,
-            contentBottomInset,
-        )
-
-        return WindowInsetsCompat.Builder(insets)
-            .setInsets(WindowInsetsCompat.Type.systemBars(), innerInsets)
-            .build()
-    }
-
     override fun switchPageBy(delta: Int) {
-        val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-        if (delta > 0) {
-            if (!viewBinding.readerView.nextPage()) {
-                if (!isScrollMode) {
-                    switchChapterBy(1)
-                }
-            }
-        } else {
-            if (!viewBinding.readerView.previousPage()) {
-                if (!isScrollMode) {
-                    switchChapterBy(-1)
-                }
-            }
+        if (readerSettings.readingMode == ReadingMode.SCROLL) {
+            composeReaderViewModel.requestScrollByPage(delta)
+            return
+        }
+        val position = composeReaderViewModel.uiState.value.position
+        val targetPage = (position?.page ?: currentPageIndex) + delta
+        val pageCount = position?.pageCount ?: 0
+        when {
+            targetPage in 0 until pageCount -> composeReaderViewModel.requestPage(targetPage)
+            delta > 0 -> switchChapterBy(1)
+            delta < 0 -> switchChapterBy(-1)
         }
     }
 
@@ -650,7 +626,7 @@ class NovelReaderActivity :
             loadChapter(currentChapterIndex)
         } else {
             // 已经是第一章或最后一章
-            viewBinding.readerView.performRejectHapticFeedback()
+            contentRoot.performRejectHapticFeedback()
             val message = if (delta > 0) {
                 getString(R.string.novel_last_chapter)
             } else {
@@ -702,7 +678,7 @@ class NovelReaderActivity :
         val enabled = !readerSettings.isTranslationEnabled
         readerSettings = readerSettings.copy(isTranslationEnabled = enabled)
         readerSettings.save(this)
-        viewBinding.actionsView.setTranslateActive(enabled)
+        composeReaderViewModel.publishSettings(readerSettings)
         if (enabled) {
             startTranslation()
         } else {
@@ -827,8 +803,6 @@ class NovelReaderActivity :
         translationJob?.cancel()
         translationJob = null
         chapterTranslations.clear()
-        viewBinding.readerView.setTranslation(null)
-        viewBinding.actionsView.setTranslateActive(false)
     }
 
     /**
@@ -846,7 +820,6 @@ class NovelReaderActivity :
         if (isScrollMode) {
         } else {
             if (translation.chapterIndex == currentChapterIndex) {
-                viewBinding.readerView.setTranslation(translation)
             }
         }
     }
@@ -861,7 +834,7 @@ class NovelReaderActivity :
 				.firstOrNull { it.chapterIndex == currentChapterIndex }
 				?.content
         } else {
-            viewBinding.readerView.chapterContent
+            composeReaderViewModel.uiState.value.content
         }
     }
 
@@ -870,8 +843,7 @@ class NovelReaderActivity :
     override fun toggleUiVisibility() {
         android.util.Log.d(
             NOVEL_SCROLL_TAP_LOG_TAG,
-            "toggleUiVisibility current=$isUiVisible target=${!isUiVisible} " +
-                "toolbarVisible=${viewBinding.toolbarDocked.isVisible} appbarVisible=${viewBinding.appbarTop.isVisible}",
+            "toggleUiVisibility current=$isUiVisible target=${!isUiVisible}",
         )
         setUiVisible(!isUiVisible)
     }
@@ -887,7 +859,8 @@ class NovelReaderActivity :
         
         lifecycleScope.launch {
             try {
-                val currentPage = viewBinding.readerView.getCurrentPage()
+                val composeState = composeReaderViewModel.uiState.value
+                val currentPage = composeState.position?.page ?: currentPageIndex
                 val percent = getCurrentProgressRatio()
                 
                 // 检查是否已存在书签
@@ -898,11 +871,11 @@ class NovelReaderActivity :
                 if (existingBookmark != null) {
                     // 删除书签
                     bookmarksRepository.removeBookmark(manga.id, chapter.id, currentPage)
-                    viewBinding.readerView.performConfirmHapticFeedback()
+                    contentRoot.performConfirmHapticFeedback()
                     showReaderMessage(getString(R.string.novel_bookmark_removed), 1500L)
                 } else {
                     // 添加书签 - 保存当前页面的文本预览
-                    val pageText = viewBinding.readerView.getCurrentPageText()
+                    val pageText = composeState.currentPageText.ifBlank { composeState.content }
                     val previewText = pageText.take(200).trim() // 取前200字符作为预览
                     
                     val bookmark = org.skepsun.kototoro.bookmarks.domain.Bookmark(
@@ -916,7 +889,7 @@ class NovelReaderActivity :
                         percent = percent,
                     )
                     bookmarksRepository.addBookmark(bookmark)
-                    viewBinding.readerView.performConfirmHapticFeedback()
+                    contentRoot.performConfirmHapticFeedback()
                     showReaderMessage(getString(R.string.novel_bookmark_added), 1500L)
                 }
             } catch (e: Exception) {
@@ -1033,7 +1006,7 @@ class NovelReaderActivity :
         // Safety: Extract text based on current reading mode
         val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
         val text = if (!isScrollMode) {
-            viewBinding.readerView.getCurrentPageText()
+            composeReaderViewModel.uiState.value.currentPageText
         } else {
             val composeState = composeReaderViewModel.uiState.value
             ttsScrollModeChapterIndex = composeState.chapterIndex
@@ -1046,30 +1019,10 @@ class NovelReaderActivity :
         
         // Paged Mode relative token calibration
         if (!isScrollMode) {
-            val pageStart = viewBinding.readerView.getCurrentPageStartOffset()
+            val pageStart = composeReaderViewModel.uiState.value.currentPageStart
             if (pageStart > 0) {
                 tokens = tokens.map { 
                     it.copy(range = IntRange(it.range.first + pageStart, it.range.last + pageStart))
-                }
-            }
-        }
-        
-        // Calculate offset for scroll mode
-        if (isScrollMode) {
-            val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-            val firstVisible = layoutManager?.findFirstVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
-            if (firstVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                val view = layoutManager?.findViewByPosition(firstVisible)
-                if (view != null && view.height > 0) {
-                    // Offset corresponds to the physical pixel depth inside the full ChapterView.
-                    // By pushing this 30% screen down, we target what the user is actually looking at in the center.
-                    val offset = -view.top.toFloat() + (viewBinding.continuousScrollView.height * 0.3f)
-                    val targetChar = (view as org.skepsun.kototoro.reader.novel.NovelChapterView).getOffsetForVertical(offset)
-                    
-                    val idx = tokens.indexOfFirst { it.range.first >= targetChar }
-                    if (idx != -1) {
-                        startIndex = idx
-                    }
                 }
             }
         }
@@ -1121,8 +1074,10 @@ class NovelReaderActivity :
             }
             
             // 尝试翻到下一页
-            val hasNextPage = viewBinding.readerView.nextPage()
+            val position = composeReaderViewModel.uiState.value.position
+            val hasNextPage = position != null && position.page + 1 < position.pageCount
             if (hasNextPage) {
+                composeReaderViewModel.requestPage(position!!.page + 1)
                 // 翻页后延迟一小段时间等待页面渲染完成，然后开始朗读新页面
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     isHandlingTtsCompletion = false
@@ -1160,21 +1115,10 @@ class NovelReaderActivity :
     override fun toggleScreenOrientation() {}
 
     override fun switchPageTo(index: Int) {
-        val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-        if (isScrollMode) {
-            val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
-            val firstVisible = layoutManager.findFirstVisibleItemPosition()
-            if (firstVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                val view = layoutManager.findViewByPosition(firstVisible) ?: return
-                val scrollHeight = viewBinding.continuousScrollView.height.takeIf { it > 0 } ?: 1
-                val virtualTotal = kotlin.math.max(1, kotlin.math.ceil(view.height.toFloat() / scrollHeight).toInt())
-                
-                val ratio = if (virtualTotal > 1) index.toFloat() / (virtualTotal - 1) else 0f
-                val targetOffset = (view.height * ratio).toInt()
-                layoutManager.scrollToPositionWithOffset(firstVisible, -targetOffset)
-            }
+        if (readerSettings.readingMode == ReadingMode.SCROLL) {
+            composeReaderViewModel.requestScrollToBlock(index)
         } else {
-            viewBinding.readerView.goToPage(index)
+            composeReaderViewModel.requestPage(index)
         }
     }
 
@@ -1453,12 +1397,10 @@ class NovelReaderActivity :
                     android.util.Log.d("NovelReaderActivity", "Detected EPUB internal chapter: ${chapter.url}")
                     
                     // Show progress indicator for large files (Requirement 11.4)
-                    viewBinding.toolbar.subtitle = getString(R.string.novel_loading_epub_chapter)
                     
                     // Load EPUB internal chapter using the dedicated loader
                     val result = epubInternalChapterLoader.loadEpubInternalChapter(chapter)
                     
-                    viewBinding.toolbar.subtitle = chapter.title
                     
                     result.onSuccess { loadResult ->
                         android.util.Log.d("NovelReaderActivity", "Successfully loaded EPUB internal chapter")
@@ -1573,23 +1515,17 @@ class NovelReaderActivity :
                             renderChapter(chapter, plainText)
                             isFirstEmit = false
                         } else {
-                            val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-                            if (isScrollMode) {
 							composeReaderViewModel.publishChapter(
+								chapterId = chapter.id,
 								chapterIndex = index,
 								chapterTitle = chapter.title.orEmpty(),
 								content = plainText,
 								settings = readerSettings,
 								translation = chapterTranslations[index],
 							)
-                            } else {
-                                // Update existing content without resetting page
-                                viewBinding.readerView.setContent(
-                                    content = plainText,
-                                    resetPage = false,
-                                    suppressNotification = true
-                                )
-                            }
+							if (readerSettings.readingMode == ReadingMode.PAGED) {
+								composeReaderViewModel.requestPage(currentPageIndex.coerceAtLeast(0))
+							}
                         }
                     }
                 } catch (e: Exception) {
@@ -1630,7 +1566,6 @@ class NovelReaderActivity :
                 android.util.Log.d("NovelReaderActivity", "Successfully preloaded: ${nextChapter.title}")
                 withContext(Dispatchers.Main) {
                     if (readerSettings.readingMode == ReadingMode.PAGED && currentChapterIndex == nextIndex - 1) {
-                        refreshPagedBoundaryPreviews(currentChapterIndex)
                     }
                 }
             } catch (e: Exception) {
@@ -1639,48 +1574,6 @@ class NovelReaderActivity :
         }
     }
 
-    private fun refreshPagedBoundaryPreviews(centerIndex: Int) {
-        viewBinding.readerView.clearChapterBoundaryPreviews()
-        if (readerSettings.readingMode != ReadingMode.PAGED) {
-            return
-        }
-        loadBoundaryPreview(centerIndex, centerIndex - 1, -1)
-        loadBoundaryPreview(centerIndex, centerIndex + 1, 1)
-    }
-
-    private fun loadBoundaryPreview(centerIndex: Int, previewIndex: Int, chapterDelta: Int) {
-        val previewChapter = chapters.getOrNull(previewIndex) ?: return
-        lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
-            val previewText = runCatching {
-                when {
-                    previewChapter.url.contains("#chapter/") || previewChapter.url.startsWith("epub://") -> {
-                        epubInternalChapterLoader.loadEpubInternalChapter(previewChapter).getOrNull()?.content
-                    }
-
-                    novelContentLoader.isCached(previewChapter) -> {
-                        val previewRepo = mangaRepositoryFactory.create(previewChapter.source)
-                        novelContentLoader.loadChapterContent(previewRepo, previewChapter)
-                    }
-
-                    else -> null
-                }
-            }.getOrNull()?.takeIf { it.isNotBlank() } ?: return@launch
-
-            withContext(Dispatchers.Main) {
-                if (readerSettings.readingMode == ReadingMode.PAGED && currentChapterIndex == centerIndex) {
-                    viewBinding.readerView.setChapterBoundaryPreview(chapterDelta, previewText)
-                }
-            }
-        }
-    }
-
-    /**
-     * 加载EPUB内容
-     * 
-     * 支持两种URL格式：
-     * 1. epub://{manga_id}/chapter/{index} - 新架构（NoveliaWenku, Z-Library等）
-     * 2. file://path#chapter/N - 旧架构（向后兼容）
-     */
     private suspend fun loadEpubContent(chapter: ContentChapter): String? {
         return try {
             android.util.Log.d("NovelReaderActivity", "Loading EPUB content for: ${chapter.title}, URL: ${chapter.url}")
@@ -1758,422 +1651,108 @@ class NovelReaderActivity :
      * @param chapterHref The chapter's path in EPUB (e.g., "OEBPS/Text/content_1.html")
      */
     private fun renderChapterWithEpubInfo(
-        chapter: ContentChapter, 
+        chapter: ContentChapter,
         text: String,
         epubFile: java.io.File? = null,
-        chapterHref: String? = null
+        chapterHref: String? = null,
     ) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                var epubFileToSet: java.io.File? = epubFile
-                var chapterPathToSet: String? = chapterHref
-                
-                // If EPUB file info not provided, try to extract from chapter URL
-                if (epubFileToSet == null) {
-                    if (chapter.url.startsWith("epub://")) {
-                        // New architecture: epub://{manga_id}/chapter/{index}
-                        val regex = Regex("epub://(-?\\d+)/chapter/(\\d+)")
-                        val match = regex.matchEntire(chapter.url)
-                        if (match != null) {
-                            val mangaId = match.groupValues[1].toLong()
-                            val chapterIndex = match.groupValues[2].toInt()
-                            
-                            val allMappings = epubChapterMappingDao.findByContentId(mangaId)
-                            val sortedMappings = allMappings.sortedWith(compareBy({ it.parentChapterId }, { it.chapterIndex }))
-                            val mapping = sortedMappings.getOrNull(chapterIndex)
-                            
-                            if (mapping != null) {
-                                val file = java.io.File(mapping.epubFilePath)
-                                if (file.exists()) {
-                                    epubFileToSet = file
-                                    // Use actual chapter href if available
-                                    if (chapterPathToSet == null) {
-                                        // Try real href from cached EPUB
-                                        val cached = epubContentCache.get(epubFileToSet!!)
-                                        chapterPathToSet = cached?.chapters?.getOrNull(chapterIndex)?.href
-                                            ?: "OEBPS/Text/chapter${mapping.chapterIndex}.xhtml"
-                                    }
-                                    android.util.Log.d("NovelReaderActivity", "Found EPUB file for epub:// URL: ${file.name}")
-                                }
-                            }
-                        }
-                    } else if (chapter.url.contains("#chapter/")) {
-                        // Legacy architecture: file://path#chapter/N or local://path#chapter/N
-                        val regex = Regex("#chapter/(\\d+)")
-                        val match = regex.find(chapter.url)
-                        if (match != null) {
-                            val chapterIndex = match.groupValues[1].toInt()
-                            
-                            // Try to find EPUB file from database mapping
-                            val allMappings = epubChapterMappingDao.findByContentId(manga.id)
-                            val sortedMappings = allMappings.sortedWith(compareBy({ it.parentChapterId }, { it.chapterIndex }))
-                            val mapping = sortedMappings.getOrNull(chapterIndex)
-                            
-                            if (mapping != null) {
-                                val file = java.io.File(mapping.epubFilePath)
-                                if (file.exists()) {
-                                    epubFileToSet = file
-                                    // Use actual chapter href if available
-                                    if (chapterPathToSet == null) {
-                                        val cached = epubContentCache.get(epubFileToSet!!)
-                                        chapterPathToSet = cached?.chapters?.getOrNull(chapterIndex)?.href
-                                            ?: "OEBPS/Text/chapter${mapping.chapterIndex}.xhtml"
-                                    }
-                                    android.util.Log.d("NovelReaderActivity", "Found EPUB file for #chapter/ URL: ${file.name}")
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Render on main thread with EPUB info
-                withContext(Dispatchers.Main) {
-                    viewBinding.toolbar.subtitle = chapter.title ?: getString(R.string.unnamed_chapter)
-                    
-                    val contentToDisplay = if (text.isBlank()) {
-                        android.util.Log.w("NovelReaderActivity", "Chapter content is blank")
-                        "章节内容为空\n\n请检查网络连接或稍后重试"
-                    } else {
-                        text
-                    }
-                    
-                    android.util.Log.d("NovelReaderActivity", "Content length: ${contentToDisplay.length}, first 100 chars: ${contentToDisplay.take(100)}")
-                    
-                    // Set EPUB info BEFORE setting content
-                    viewBinding.readerView.setEpubInfo(epubFileToSet, chapterPathToSet)
-                    publishComposeImageContext(epubFileToSet, chapterPathToSet)
-                    android.util.Log.d("NovelReaderActivity", "Set EPUB info: file=${epubFileToSet?.name}, chapterPath=$chapterPathToSet")
-                    
-                    // Define behavior based on reading mode
-                    val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-                    
-                    if (isScrollMode) {
-						continuousAdapter?.setInitialChapter(
-                            NovelChapterData(
-                                chapterIndex = currentChapterIndex, // This is basically currentChapterIndex
-                                content = contentToDisplay,
-                                epubFile = epubFileToSet,
-                                chapterPath = chapterPathToSet
-                            )
-                        )
-                        
-                        val initialRatio = desiredProgressRatio ?: 0f
-                        if (initialRatio > 0f) {
-                            viewBinding.continuousScrollView.post {
-                                val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-                                val firstView = layoutManager?.findViewByPosition(0)
-                                if (firstView != null) {
-                                    val targetOffset = (firstView.height * initialRatio).toInt()
-                                    layoutManager.scrollToPositionWithOffset(0, -targetOffset)
-                                }
-                            }
-                        } else {
-                            // Trigger a small scroll update if necessary
-                            viewBinding.continuousScrollView.scrollToPosition(0)
-                        }
-                        
-                        android.util.Log.d("NovelReaderActivity", "Content set to continuous adapter")
-                    } else {
-                        // Then set content
-                        val savedPageIndex = currentPageIndex
-                        val needsPageRestore = savedPageIndex != 0
-                        val initialRatio = desiredProgressRatio
-    
-                        viewBinding.readerView.setContent(
-                            content = contentToDisplay,
-                            resetPage = true,
-                            suppressNotification = needsPageRestore,
-                            initialPageIndex = savedPageIndex,
-                            initialProgressRatio = initialRatio
-                        )
-                        refreshPagedBoundaryPreviews(currentChapterIndex)
-                        
-                        android.util.Log.d("NovelReaderActivity", "Content set successfully with initial page: $savedPageIndex")
-                        
-                        if (needsPageRestore) {
-                            viewBinding.readerView.postDelayed({
-                                viewBinding.readerView.resumePageChangeNotification()
-                            }, 100)
-                        }
-                    }
-                    
-                    currentPageIndex = 0
-                    desiredProgressRatio = null
-                    updateNavigationButtons()
-                    
-                    viewBinding.readerView.post {
-                        val currentPage = viewBinding.readerView.getCurrentPage()
-                        val totalPages = viewBinding.readerView.getTotalPages()
-                        if (totalPages > 0) {
-                            updateHistory(currentPage, totalPages)
-                        }
-                    }
-                    
-                    if (settings.isReaderChapterToastEnabled) {
-                        showReaderMessage(
-                            chapter.title ?: getString(R.string.unnamed_chapter),
-                            2000L,
-                        )
-                    }
-                    
-                    if (pendingTtsAutoStart) {
-                        pendingTtsAutoStart = false
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
-                                startTtsFromCurrentPage()
-                            }
-                        }, 500)
-                    }
+        val content = text.ifBlank { getString(R.string.chapter_is_missing) }
+        composeReaderViewModel.publishChapter(
+            chapterId = chapter.id,
+            chapterIndex = currentChapterIndex,
+            chapterTitle = chapter.title.orEmpty(),
+            content = content,
+            settings = readerSettings,
+            translation = chapterTranslations[currentChapterIndex],
+        )
+        if (readerSettings.readingMode == ReadingMode.PAGED) {
+            composeReaderViewModel.requestPage(
+                if (currentPageIndex < 0) Int.MAX_VALUE else currentPageIndex,
+            )
+        }
+        publishComposeImageContext(epubFile, chapterHref)
+        if (epubFile == null && chapterHref == null) {
+            resolveComposeImageContext(chapter)
+        }
+        finishComposeChapterRender(chapter)
+    }
 
-                    // 章节渲染完成后，若翻译已开启则自动启动翻译
-                    if (readerSettings.isTranslationEnabled) {
-                        startTranslation()
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("NovelReaderActivity", "Failed to render EPUB chapter", e)
-                withContext(Dispatchers.Main) {
-                    showError("渲染失败: ${e.message}")
-                }
+    private fun renderChapter(chapter: ContentChapter, text: String) {
+        val content = text.ifBlank { getString(R.string.chapter_is_missing) }
+        composeReaderViewModel.publishChapter(
+            chapterId = chapter.id,
+            chapterIndex = currentChapterIndex,
+            chapterTitle = chapter.title.orEmpty(),
+            content = content,
+            settings = readerSettings,
+            translation = chapterTranslations[currentChapterIndex],
+        )
+        if (readerSettings.readingMode == ReadingMode.PAGED) {
+            composeReaderViewModel.requestPage(currentPageIndex.coerceAtLeast(0))
+        }
+        resolveComposeImageContext(chapter)
+        finishComposeChapterRender(chapter)
+    }
+
+    private fun resolveComposeImageContext(chapter: ContentChapter) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val chapterIndex = when {
+                chapter.url.startsWith("epub://") -> Regex("epub://(-?\\d+)/chapter/(\\d+)")
+                    .matchEntire(chapter.url)
+                    ?.groupValues
+                    ?.getOrNull(2)
+                    ?.toIntOrNull()
+
+                chapter.url.contains("#chapter/") -> Regex("#chapter/(\\d+)")
+                    .find(chapter.url)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+
+                else -> null
+            }
+            val contentId = Regex("epub://(-?\\d+)/chapter/\\d+")
+                .matchEntire(chapter.url)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toLongOrNull()
+                ?: manga.id
+            val mapping = chapterIndex?.let { index ->
+                epubChapterMappingDao.findByContentId(contentId)
+                    .sortedWith(compareBy({ it.parentChapterId }, { it.chapterIndex }))
+                    .getOrNull(index)
+            }
+            val epubFile = mapping
+                ?.epubFilePath
+                ?.let { path -> java.io.File(path) }
+                ?.takeIf { file -> file.exists() }
+            val chapterPath = if (epubFile != null && chapterIndex != null) {
+                epubContentCache.get(epubFile)?.chapters?.getOrNull(chapterIndex)?.href
+            } else {
+                null
+            }
+            withContext(Dispatchers.Main) {
+                publishComposeImageContext(epubFile, chapterPath)
             }
         }
     }
 
-    private fun renderChapter(chapter: ContentChapter, text: String) {
-        try {
-            android.util.Log.d("NovelReaderActivity", "renderChapter called for: ${chapter.title}")
-            
-            viewBinding.toolbar.subtitle = chapter.title ?: getString(R.string.unnamed_chapter)
-            
-            // 确保文本不为空
-            val contentToDisplay = if (text.isBlank()) {
-                android.util.Log.w("NovelReaderActivity", "Chapter content is blank")
-                "章节内容为空\n\n请检查网络连接或稍后重试"
-            } else {
-                text
-            }
-            composeReaderViewModel.publishChapter(
-                chapterIndex = currentChapterIndex,
-                chapterTitle = chapter.title.orEmpty(),
-                content = contentToDisplay,
-                settings = readerSettings,
-                translation = chapterTranslations[currentChapterIndex],
-            )
-            
-            android.util.Log.d("NovelReaderActivity", "Content length: ${contentToDisplay.length}, first 100 chars: ${contentToDisplay.take(100)}")
-            
-            // 设置EPUB文件信息（用于提取图片）- 必须在setContent之前完成
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    var epubFileToSet: java.io.File? = null
-                    var chapterPathToSet: String? = null
-                    
-                    if (chapter.url.startsWith("epub://")) {
-                        // 新架构：从数据库查找EPUB文件
-                        val regex = Regex("epub://(-?\\d+)/chapter/(\\d+)")
-                        val match = regex.matchEntire(chapter.url)
-                        if (match != null) {
-                            val mangaId = match.groupValues[1].toLong()
-                            val chapterIndex = match.groupValues[2].toInt()
-                            
-                            val allMappings = epubChapterMappingDao.findByContentId(mangaId)
-                            val sortedMappings = allMappings.sortedWith(compareBy({ it.parentChapterId }, { it.chapterIndex }))
-                            val mapping = sortedMappings.getOrNull(chapterIndex)
-                            
-                            if (mapping != null) {
-                                val epubFile = java.io.File(mapping.epubFilePath)
-                                if (epubFile.exists()) {
-                                    epubFileToSet = epubFile
-                                    // 从EPUB中获取实际的章节路径
-                                    // 需要读取EPUB的spine来获取章节的href
-                                    try {
-                                        val epubReader = org.skepsun.kototoro.local.epub.EpubReaderImpl(epubContentCache)
-                                        val epubContent = epubReader.readEpub(epubFile)
-                                        
-                                        // 获取章节的实际路径（从EPUB的spine中）
-                                        // 这里我们使用一个简化的方法：假设章节路径格式为 OEBPS/Text/chapterN.xhtml
-                                        // 实际应该从epublib的Book对象中获取
-                                        chapterPathToSet = "OEBPS/Text/chapter${mapping.chapterIndex}.xhtml"
-                                        
-                                        android.util.Log.d("NovelReaderActivity", "Prepared EPUB info: file=${epubFile.name}, chapterPath=$chapterPathToSet")
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("NovelReaderActivity", "Failed to read EPUB for chapter path", e)
-                                        // 使用fallback路径
-                                        chapterPathToSet = null
-                                        android.util.Log.d("NovelReaderActivity", "Will use null chapterPath (fallback)")
-                                    }
-                                } else {
-                                    android.util.Log.w("NovelReaderActivity", "EPUB file not found: ${epubFile.absolutePath}")
-                                }
-                            } else {
-                                android.util.Log.w("NovelReaderActivity", "No mapping found for chapter index: $chapterIndex")
-                            }
-                        }
-                    }
-
-                    // 本地小说 CBZ/ZIP 不再走 EPUB 通道，避免误判
-
-                    // 在主线程上设置EPUB信息并渲染内容
-                    withContext(Dispatchers.Main) {
-                        try {
-                            // 先设置EPUB信息
-                            viewBinding.readerView.setEpubInfo(epubFileToSet, chapterPathToSet)
-                            publishComposeImageContext(epubFileToSet, chapterPathToSet)
-                            android.util.Log.d("NovelReaderActivity", "Set EPUB info: file=${epubFileToSet?.name}, chapterPath=$chapterPathToSet")
-                            
-                            // 设置内容
-                            android.util.Log.d("NovelReaderActivity", "Setting content to active view")
-                            
-                            val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-                            if (isScrollMode) {
-								continuousAdapter?.setInitialChapter(
-                                    NovelChapterData(
-                                        chapterIndex = currentChapterIndex, 
-                                        content = contentToDisplay,
-                                        epubFile = epubFileToSet,
-                                        chapterPath = chapterPathToSet
-                                    )
-                                )
-                                
-                                val initialRatio = desiredProgressRatio ?: 0f
-                                if (initialRatio > 0f) {
-                                    viewBinding.continuousScrollView.post {
-                                        val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-                                        val firstView = layoutManager?.findViewByPosition(0)
-                                        if (firstView != null) {
-                                            val applyScroll = { staticView: android.view.View ->
-                                                val chapterView = staticView as? org.skepsun.kototoro.reader.novel.NovelChapterView
-                                                if (chapterView != null) {
-                                                    val targetChar = (chapterView.processedText.length * initialRatio).toInt()
-                                                    val targetOffset = chapterView.getLineTopForOffset(targetChar).toInt()
-                                                    layoutManager.scrollToPositionWithOffset(0, -targetOffset)
-                                                }
-                                            }
-                                            
-                                            if (firstView.height > 0) {
-                                                applyScroll(firstView)
-                                            }
-                                            firstView.addOnLayoutChangeListener(object : android.view.View.OnLayoutChangeListener {
-                                                override fun onLayoutChange(
-                                                    v: android.view.View?, left: Int, top: Int, right: Int, bottom: Int,
-                                                    oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int
-                                                ) {
-                                                    v?.removeOnLayoutChangeListener(this)
-                                                    if (v != null && v.height > 0) {
-                                                        applyScroll(v)
-                                                    }
-                                                }
-                                            })
-                                        }
-                                    }
-                                } else {
-                                    viewBinding.continuousScrollView.scrollToPosition(0)
-                                }
-                            } else {
-                                val savedPageIndex = currentPageIndex
-                                val needsPageRestore = savedPageIndex != 0
-                                
-                                // 直接在 setContent 时设置目标页码，避免中间状态
-                                viewBinding.readerView.setContent(
-                                    content = contentToDisplay,
-                                    resetPage = true,
-                                    suppressNotification = needsPageRestore,
-                                    initialPageIndex = savedPageIndex  // 直接传入目标页码（包括 -1）
-                                )
-                                refreshPagedBoundaryPreviews(currentChapterIndex)
-                                
-                                android.util.Log.d("NovelReaderActivity", "Content set successfully with initial page: $savedPageIndex")
-                                
-                                // 如果需要恢复页码，等待分页完成后恢复通知
-                                if (needsPageRestore) {
-                                    viewBinding.readerView.postDelayed({
-                                        // 恢复通知并立即通知一次
-                                        viewBinding.readerView.resumePageChangeNotification()
-                                    }, 100)
-                                }
-                            }
-                            
-                            currentPageIndex = 0 // 重置
-                            updateNavigationButtons()
-                            
-                            // 立即保存一次历史记录，确保小说出现在历史列表中
-                            viewBinding.readerView.post {
-                                val currentPage = viewBinding.readerView.getCurrentPage()
-                                val totalPages = viewBinding.readerView.getTotalPages()
-                                if (totalPages > 0) {
-                                    updateHistory(currentPage, totalPages)
-                                }
-                            }
-                            
-                            if (settings.isReaderChapterToastEnabled) {
-                                showReaderMessage(
-                                    chapter.title ?: getString(R.string.unnamed_chapter),
-                                    2000L,
-                                )
-                            }
-                            
-                            if (pendingTtsAutoStart) {
-                                pendingTtsAutoStart = false
-                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
-                                        startTtsFromCurrentPage()
-                                    }
-                                }, 500)
-                            }
-
-                            // 章节渲染完成后，若翻译已开启则自动启动翻译
-                            if (readerSettings.isTranslationEnabled) {
-                                startTranslation()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("NovelReaderActivity", "Failed to set content", e)
-                            showError("显示内容失败: ${e.message}")
-                        }
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("NovelReaderActivity", "Failed to prepare EPUB info", e)
-                    // 即使失败也要尝试显示内容
-                    withContext(Dispatchers.Main) {
-                        try {
-                            viewBinding.readerView.setEpubInfo(null, null)
-                            publishComposeImageContext(null, null)
-                            val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-                            if (isScrollMode) {
-								continuousAdapter?.setInitialChapter(
-                                    NovelChapterData(currentChapterIndex, contentToDisplay, null, null)
-                                )
-                                val initialRatio = desiredProgressRatio ?: 0f
-                                if (initialRatio > 0f) {
-                                    viewBinding.continuousScrollView.post {
-                                        val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-                                        val firstView = layoutManager?.findViewByPosition(0)
-                                        if (firstView != null) {
-                                            val targetOffset = (firstView.height * initialRatio).toInt()
-                                            layoutManager.scrollToPositionWithOffset(0, -targetOffset)
-                                        }
-                                    }
-                                } else {
-                                    viewBinding.continuousScrollView.scrollToPosition(0)
-                                }
-                            } else {
-                                viewBinding.readerView.setContent(
-                                    content = contentToDisplay,
-                                    resetPage = true,
-                                    suppressNotification = false,
-                                    initialPageIndex = 0
-                                )
-                                refreshPagedBoundaryPreviews(currentChapterIndex)
-                            }
-                        } catch (e2: Exception) {
-                            android.util.Log.e("NovelReaderActivity", "Failed to set content in fallback", e2)
-                            showError("显示内容失败: ${e2.message}")
-                        }
-                    }
+    private fun finishComposeChapterRender(chapter: ContentChapter) {
+        desiredProgressRatio = null
+        updateNavigationButtons()
+        if (settings.isReaderChapterToastEnabled) {
+            showReaderMessage(chapter.title ?: getString(R.string.unnamed_chapter), 2000L)
+        }
+        if (pendingTtsAutoStart) {
+            pendingTtsAutoStart = false
+            contentRoot.postDelayed({
+                if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
+                    startTtsFromCurrentPage()
                 }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("NovelReaderActivity", "Failed to render chapter", e)
-            showError("渲染失败: ${e.message}")
+            }, 500L)
+        }
+        if (readerSettings.isTranslationEnabled) {
+            startTranslation()
         }
     }
 
@@ -2450,95 +2029,37 @@ class NovelReaderActivity :
         val sliderValue = if (total > 1) {
             (ratio * (total - 1)).toInt().coerceIn(0, total - 1)
         } else 0
-        viewBinding.actionsView.setSliderValue(sliderValue, total - 1)
-        viewBinding.actionsView.isSliderEnabled = total > 1
         // 页码显示使用当前分页（单页或双页 spread）
-        viewBinding.actionsView.setPageLabel(page + 1, total)
+        composeReaderViewModel.publishProgress(
+            value = sliderValue.toFloat(),
+            max = (total - 1).coerceAtLeast(0).toFloat(),
+            label = "${page + 1} / ${total.coerceAtLeast(1)}",
+        )
     }
 
     private fun updateNavigationButtons() {
-        viewBinding.actionsView.isPrevEnabled = currentChapterIndex > 0
-        viewBinding.actionsView.isNextEnabled = currentChapterIndex < chapters.lastIndex
+        composeReaderViewModel.publishChrome(workTitle = manga.title)
     }
 
     private fun setUiVisible(visible: Boolean) {
-        android.util.Log.d(
-            NOVEL_SCROLL_TAP_LOG_TAG,
-            "setUiVisible request=$visible field=$isUiVisible appbar=${viewBinding.appbarTop.isVisible} " +
-                "toolbar=${viewBinding.toolbarDocked.isVisible} actions=${viewBinding.actionsView.isVisible} " +
-                "tts=${composeReaderViewModel.uiState.value.ttsControlsVisible} animations=$isAnimationsEnabled",
+        if (isUiVisible == visible) return
+        isUiVisible = visible
+        composeReaderViewModel.publishChrome(
+            controlsVisible = visible,
+            workTitle = manga.title,
         )
-        if (viewBinding.appbarTop.isVisible != visible) {
-            val isTtsBarActive = composeReaderViewModel.uiState.value.ttsControlsVisible
-            
-            if (isAnimationsEnabled) {
-                val transition = TransitionSet()
-                    .setOrdering(TransitionSet.ORDERING_TOGETHER)
-                    .addTransition(Slide(Gravity.TOP).addTarget(viewBinding.appbarTop))
-                    .addTransition(Fade().addTarget(viewBinding.infoBar))
-                // 只有在 TTS 未激活时，底部工具栏才参与滑动动画
-                if (!isTtsBarActive) {
-                    transition.addTransition(Slide(Gravity.BOTTOM).addTarget(viewBinding.toolbarDocked))
-                } else {
-                    transition.addTransition(Fade().addTarget(viewBinding.actionsView))
-                }
-                if (!visible) {
-                    spaceSwitcherDelegate.addControlsHideTransition(transition)
-                }
-                TransitionManager.beginDelayedTransition(viewBinding.root, transition)
-            }
-            
-            isUiVisible = visible
-            viewBinding.appbarTop.isVisible = visible
-            
-            if (isTtsBarActive) {
-                // TTS 控制条激活时，底部工具栏保持可见，但隐藏/显示操作按钮
-                viewBinding.toolbarDocked.isVisible = true
-                viewBinding.actionsView.isVisible = visible
-            } else {
-                viewBinding.toolbarDocked.isVisible = visible
-                viewBinding.actionsView.isVisible = visible
-            }
-            
-            // 只有在工具栏隐藏、全屏模式且开启了阅读状态显示时，才显示 infoBar
-            viewBinding.infoBar.isGone = visible || !readerSettings.showReadingStatus
-            viewBinding.infoBar.isTimeVisible = readerSettings.enableFullscreen
-            
-            // 根据全屏设置和 UI 可见性控制系统 UI
-            // 如果不是全屏模式，总是显示状态栏
-            // 如果是全屏模式，只在 UI 可见时显示状态栏
-            val shouldShowSystemUi = !readerSettings.enableFullscreen || visible
-            systemUiController.setSystemUiVisible(shouldShowSystemUi)
-            
-            // 更新系统栏颜色
-            updateSystemBarsColors()
-            
-            viewBinding.root.requestApplyInsets()
-            android.util.Log.d(
-                NOVEL_SCROLL_TAP_LOG_TAG,
-                "setUiVisible applied=$visible field=$isUiVisible appbar=${viewBinding.appbarTop.isVisible} " +
-                    "toolbar=${viewBinding.toolbarDocked.isVisible} actions=${viewBinding.actionsView.isVisible} " +
-                    "infoGone=${viewBinding.infoBar.isGone} systemUi=$shouldShowSystemUi",
-            )
-        } else {
-            android.util.Log.d(
-                NOVEL_SCROLL_TAP_LOG_TAG,
-                "setUiVisible ignored request=$visible because appbar already ${viewBinding.appbarTop.isVisible}; " +
-                    "field=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
-            )
-        }
+        systemUiController.setSystemUiVisible(!readerSettings.enableFullscreen || visible)
+        updateSystemBarsColors()
         spaceSwitcherDelegate.setControlsVisible(
             visible = visible,
             hideWithControlsTransition = !visible && isAnimationsEnabled,
         )
     }
-
     private fun showLoading(loading: Boolean) {
 		composeReaderViewModel.setLoading(loading)
     }
 
     private fun showError(message: String) {
-        viewBinding.readerView.cancelPendingChapterTransition()
 		showReaderMessage(message, 3000L)
     }
 
@@ -2580,16 +2101,16 @@ class NovelReaderActivity :
     }
 
     private fun updateDualPageMode() {
-        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val isTablet = FoldableUtils.shouldUseTabletLayout(this, settings)
-        val shouldEnableDualPage = readerSettings.enableDualPage && (isLandscape || isTablet)
-        viewBinding.readerView.setDualPageMode(shouldEnableDualPage)
+        composeReaderViewModel.publishSettings(readerSettings)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(KEY_CHAPTER_INDEX, currentChapterIndex)
-        outState.putInt(KEY_PAGE_INDEX, viewBinding.readerView.getCurrentPage())
+        outState.putInt(
+            KEY_PAGE_INDEX,
+            composeReaderViewModel.uiState.value.position?.page ?: currentPageIndex,
+        )
         outState.putBoolean(KEY_UI_VISIBLE, isUiVisible)
     }
 
@@ -2597,25 +2118,26 @@ class NovelReaderActivity :
         super.onConfigurationChanged(newConfig)
         applyReaderPalette()
         // 保存当前进度（按字符比例），用于横竖屏/单双页切换后的恢复
-        val ratio = viewBinding.readerView.getProgressRatio()
-        val currentStart = viewBinding.readerView.getCurrentCharOffset()
-        val currentEnd = viewBinding.readerView.getCurrentPageEndOffset()
-        val wasDual = viewBinding.readerView.isDualPage()
+        val position = composeReaderViewModel.uiState.value.position
+        val ratio = position?.normalizedChapterProgress ?: 0f
+        val currentStart = composeReaderViewModel.uiState.value.currentPageStart
+        val currentEnd = composeReaderViewModel.uiState.value.currentPageEnd
+        val wasDual = readerSettings.enableDualPage
 
         updateDualPageMode()
 
-        val nowDual = viewBinding.readerView.isDualPage()
+        val nowDual = readerSettings.enableDualPage
         // 若从单页->双页，保证旧页首字符出现；双页->单页，保证旧页尾字符出现
         if (wasDual != nowDual) {
             if (!wasDual && nowDual) {
-                viewBinding.readerView.setPendingOffset(currentStart, biasToEnd = false)
+                composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
             } else if (wasDual && !nowDual) {
-                viewBinding.readerView.setPendingOffset((currentEnd - 1).coerceAtLeast(0), biasToEnd = true)
+                composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
             } else {
-                viewBinding.readerView.setPendingProgressRatio(ratio)
+                composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
             }
         } else {
-            viewBinding.readerView.setPendingProgressRatio(ratio)
+            composeReaderViewModel.requestPage(position?.page ?: currentPageIndex)
         }
         android.util.Log.d("NovelReaderActivity", "Configuration changed, saved ratio: $ratio, start=$currentStart, end=$currentEnd, wasDual=$wasDual, nowDual=$nowDual")
     }
@@ -2625,8 +2147,6 @@ class NovelReaderActivity :
         private const val KEY_PAGE_INDEX = "page_index"
         private const val KEY_UI_VISIBLE = "ui_visible"
         private const val TRANSLATION_PROGRESS_TOAST_DURATION = 1800L
-        private const val DOUBLE_TAP_FALLBACK_SUPPRESS_MS = 120L
-        private const val TAP_FALLBACK_EXTRA_TIMEOUT_MS = 120L
         private const val CONTINUOUS_TAP_DEBOUNCE_MS = 420L
         private const val NOVEL_SCROLL_TAP_LOG_TAG = "NovelScrollTap"
     }
@@ -2660,14 +2180,12 @@ class NovelReaderActivity :
         val visible = !readerSettings.enableFullscreen
         spaceSwitcherDelegate.setControlsVisible(visible)
         isUiVisible = visible
-        viewBinding.appbarTop.isVisible = visible
-        viewBinding.toolbarDocked.isVisible = visible
-        viewBinding.actionsView.isVisible = visible
-        viewBinding.infoBar.isGone = visible || !readerSettings.showReadingStatus
-        viewBinding.infoBar.isTimeVisible = readerSettings.enableFullscreen
+        composeReaderViewModel.publishChrome(
+            controlsVisible = visible,
+            workTitle = manga.title,
+        )
         systemUiController.setSystemUiVisible(!readerSettings.enableFullscreen || visible)
         updateSystemBarsColors()
-        viewBinding.root.requestApplyInsets()
     }
 
     private fun onChapterSelected(index: Int) {
@@ -2699,7 +2217,7 @@ class NovelReaderActivity :
         val action = tapGridSettings.getTapAction(area, false)
         android.util.Log.d(
             NOVEL_SCROLL_TAP_LOG_TAG,
-            "handleTapGesture area=$area action=$action ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
+            "handleTapGesture area=$area action=$action ui=$isUiVisible",
         )
         
         when (action) {
@@ -2737,7 +2255,7 @@ class NovelReaderActivity :
                 NOVEL_SCROLL_TAP_LOG_TAG,
                 "continuousTap ignored debounce source=$source lastSource=$lastContinuousTapSource " +
                     "event=$eventTime last=$lastContinuousTapHandledTime delta=$sinceLast threshold=$CONTINUOUS_TAP_DEBOUNCE_MS " +
-                    "ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
+                    "ui=$isUiVisible",
             )
             return
         }
@@ -2767,106 +2285,11 @@ class NovelReaderActivity :
         android.util.Log.d(
             NOVEL_SCROLL_TAP_LOG_TAG,
             "continuousTap accepted source=$source event=$eventTime x=$x y=$y width=$width height=$height " +
-                "nx=$normalizedX ny=$normalizedY area=$area ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
+                "nx=$normalizedX ny=$normalizedY area=$area ui=$isUiVisible",
         )
         handleTapGesture(area)
     }
 
-    private fun handleContinuousRawTap(
-        rawX: Float,
-        rawY: Float,
-        eventTime: Long,
-        source: String,
-    ) {
-        val location = IntArray(2)
-        viewBinding.continuousScrollView.getLocationOnScreen(location)
-        val x = rawX - location[0]
-        val y = rawY - location[1]
-        android.util.Log.d(
-            NOVEL_SCROLL_TAP_LOG_TAG,
-            "continuousRawTap source=$source event=$eventTime rawX=$rawX rawY=$rawY " +
-                "rvLeft=${location[0]} rvTop=${location[1]} viewportX=$x viewportY=$y " +
-                "rvWidth=${viewBinding.continuousScrollView.width} rvHeight=${viewBinding.continuousScrollView.height}",
-        )
-        handleContinuousTap(
-            x = x,
-            y = y,
-            width = viewBinding.continuousScrollView.width,
-            height = viewBinding.continuousScrollView.height,
-            eventTime = eventTime,
-            source = source,
-        )
-    }
-
-    private fun handleContinuousTapFallback(event: MotionEvent) {
-        if (readerSettings.readingMode != ReadingMode.SCROLL) {
-            return
-        }
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                continuousTouchSequence += 1
-                val scrollState = viewBinding.continuousScrollView.scrollState
-                val canScrollUp = viewBinding.continuousScrollView.canScrollVertically(-1)
-                val canScrollDown = viewBinding.continuousScrollView.canScrollVertically(1)
-                viewBinding.continuousScrollView.stopScroll()
-                android.util.Log.d(
-                    NOVEL_SCROLL_TAP_LOG_TAG,
-                    "fallback DOWN seq=$continuousTouchSequence event=${event.eventTime} x=${event.x} y=${event.y} " +
-                        "scrollStateBefore=$scrollState canUp=$canScrollUp canDown=$canScrollDown " +
-                        "ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
-                )
-                continuousTapDownX = event.x
-                continuousTapDownY = event.y
-                continuousTapDownTime = event.eventTime
-            }
-            MotionEvent.ACTION_UP -> {
-                val gestureDelta = event.eventTime - lastContinuousGestureTapTime
-                if (event.eventTime - lastContinuousGestureTapTime < DOUBLE_TAP_FALLBACK_SUPPRESS_MS) {
-                    android.util.Log.d(
-                        NOVEL_SCROLL_TAP_LOG_TAG,
-                        "fallback UP suppressed by gesture seq=$continuousTouchSequence event=${event.eventTime} " +
-                            "gestureLast=$lastContinuousGestureTapTime delta=$gestureDelta threshold=$DOUBLE_TAP_FALLBACK_SUPPRESS_MS " +
-                            "ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
-                    )
-                    return
-                }
-                val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-                val dx = kotlin.math.abs(event.x - continuousTapDownX)
-                val dy = kotlin.math.abs(event.y - continuousTapDownY)
-                val duration = event.eventTime - continuousTapDownTime
-                val tapTimeout = ViewConfiguration.getTapTimeout() + TAP_FALLBACK_EXTRA_TIMEOUT_MS
-                val isTap = duration <= tapTimeout && dx <= touchSlop && dy <= touchSlop
-                android.util.Log.d(
-                    NOVEL_SCROLL_TAP_LOG_TAG,
-                    "fallback UP seq=$continuousTouchSequence event=${event.eventTime} x=${event.x} y=${event.y} " +
-                        "duration=$duration timeout=$tapTimeout dx=$dx dy=$dy slop=$touchSlop isTap=$isTap " +
-                        "ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
-                )
-                if (isTap) {
-                    handleContinuousTap(
-                        x = event.x,
-                        y = event.y,
-                        width = viewBinding.continuousScrollView.width,
-                        height = viewBinding.continuousScrollView.height,
-                        eventTime = event.eventTime,
-                        source = "fallback",
-                    )
-                }
-            }
-            MotionEvent.ACTION_CANCEL -> {
-                android.util.Log.d(
-                    NOVEL_SCROLL_TAP_LOG_TAG,
-                    "fallback CANCEL seq=$continuousTouchSequence event=${event.eventTime} " +
-                        "ui=$isUiVisible toolbar=${viewBinding.toolbarDocked.isVisible}",
-                )
-                continuousTapDownTime = 0L
-            }
-        }
-    }
-
-    /**
-     * 更新阅读状态信息栏
-     */
     private fun updateReadingStatus(page: Int, total: Int) {
         val chapter = chapters.getOrNull(currentChapterIndex) ?: return
         val uiState = org.skepsun.kototoro.reader.ui.pager.ReaderUiState(
@@ -2879,12 +2302,9 @@ class NovelReaderActivity :
             percent = getCurrentProgressRatio(),
             incognito = false // TODO: 获取无痕模式状态
         )
-        viewBinding.infoBar.update(uiState)
         
         // 更新历史记录使用实际页数（单页计数）
-        val actualPage = viewBinding.readerView.getCurrentPage()
-        val actualTotal = viewBinding.readerView.getTotalPages()
-        updateHistory(actualPage, actualTotal)
+        updateHistory(page, total)
     }
 
     /**
@@ -2978,26 +2398,28 @@ class NovelReaderActivity :
 
     private suspend fun flushForSpaceSwitch() {
         ttsService?.stopTts()
-        val page = viewBinding.readerView.getCurrentPage()
-        val total = viewBinding.readerView.getTotalPages()
+        val position = composeReaderViewModel.uiState.value.position
+        val page = position?.page ?: currentPageIndex
+        val total = position?.pageCount ?: 0
         updateHistory(page, total, propagateFailure = true)?.awaitCompletion()
         finishReadingSession(allowShort = true, continueFromEnd = false)?.awaitCompletion()
     }
 
     private fun currentReaderState(): ReaderState? {
         val chapter = chapters.getOrNull(currentChapterIndex) ?: return null
-        val position = NovelReadingPosition(
-            chapterId = chapter.id,
-            page = viewBinding.readerView.getCurrentPage(),
-            pageCount = viewBinding.readerView.getTotalPages(),
-            chapterProgress = getCurrentProgressRatio(),
-        )
-        composeReaderViewModel.publishPosition(position)
+        val position = composeReaderViewModel.uiState.value.position
+            ?.takeIf { it.chapterId == chapter.id }
+            ?: NovelReadingPosition(
+                chapterId = chapter.id,
+                page = currentPageIndex.coerceAtLeast(0),
+                pageCount = 0,
+                chapterProgress = getCurrentProgressRatio(),
+            )
         return position.toReaderState()
     }
 
     private fun publishComposeImageContext(epubFile: java.io.File?, chapterPath: String?) {
-        val imageHeaders = viewBinding.readerView.imageHeadersProvider
+        val imageHeaders = imageHeadersProvider
             ?.invoke(chapters.getOrNull(currentChapterIndex)?.url.orEmpty())
             .orEmpty()
         composeReaderViewModel.publishImageContext(
@@ -3097,51 +2519,28 @@ class NovelReaderActivity :
      * 基于字符偏移（翻页模式）或滚动偏移（滚动模式）的进度（0f-1f）
      */
     private fun getCurrentProgressRatio(): Float {
-        val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-        if (isScrollMode) {
-            val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return 0f
-            if (
-                layoutManager.findLastVisibleItemPosition() >= layoutManager.itemCount - 1 &&
-                !viewBinding.continuousScrollView.canScrollVertically(1)
-            ) {
-                return 1f
+        val state = composeReaderViewModel.uiState.value
+        if (readerSettings.readingMode == ReadingMode.SCROLL) {
+            return if (state.progressMax > 0f) {
+                (state.progressValue / state.progressMax).coerceIn(0f, 1f)
+            } else {
+                0f
             }
-            val firstVisible = layoutManager.findFirstVisibleItemPosition()
-            if (firstVisible == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return 0f
-            val firstView = layoutManager.findViewByPosition(firstVisible) as? org.skepsun.kototoro.reader.novel.NovelChapterView ?: return 0f
-            val textLen = firstView.processedText.length
-            if (textLen <= 0) return 0f
-            val topOffset = -firstView.top.toFloat()
-            val charPos = firstView.getOffsetForVertical(topOffset)
-            return (charPos.toFloat() / textLen).coerceIn(0f, 1f)
         }
-
-        val currentPage = viewBinding.readerView.getCurrentPage()
-        val totalPages = viewBinding.readerView.getTotalPages()
-        if (totalPages > 0 && currentPage >= totalPages - 1) {
-            return 1f
-        }
-        val totalChars = viewBinding.readerView.getChapterLength()
-        if (totalChars <= 0) return 0f
-        val offset = viewBinding.readerView.getCurrentCharOffset().coerceIn(0, totalChars)
-        return (offset.toFloat() / totalChars).coerceIn(0f, 1f)
+        return state.position?.normalizedChapterProgress ?: 0f
     }
 
     /**
      * 更新阅读状态可见性
      */
     private fun updateReadingStatusVisibility() {
-        viewBinding.infoBar.isGone = isUiVisible || !readerSettings.showReadingStatus
         // 更新阅读状态背景可见性
-        viewBinding.infoBar.drawBackground = readerSettings.readingMode == ReadingMode.SCROLL ||
-            !readerSettings.isReadingStatusTransparent
         applyInfoBarColorScheme()
         updateNovelContentTopInset()
 
         // 刷新一次阅读状态
-        val displayPage = viewBinding.readerView.getDisplayPageIndex()
-        val displayTotal = viewBinding.readerView.getDisplayPageCount()
-        updateReadingStatus(displayPage, displayTotal)
+        val position = composeReaderViewModel.uiState.value.position
+        updateReadingStatus(position?.page ?: 0, position?.pageCount ?: 0)
     }
 
     /**
@@ -3178,9 +2577,6 @@ class NovelReaderActivity :
         
         // 更新系统栏颜色
         updateSystemBarsColors()
-        
-        // 重新应用 insets
-        viewBinding.root.requestApplyInsets()
     }
 
 	private fun applyNovelReaderSettings(settings: NovelReaderSettings) {
@@ -3192,7 +2588,6 @@ class NovelReaderActivity :
 
             runOnUiThread {
                 try {
-                    viewBinding.readerView.updateSettings(settings)
                     applyReaderPalette()
                     applyReadingModeToggles()
 
@@ -3216,13 +2611,8 @@ class NovelReaderActivity :
     }
     
     private fun applyReadingModeToggles() {
-        val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-        viewBinding.readerView.isVisible = !isScrollMode
-        // Compose owns the visible continuous reader. The legacy RecyclerView remains detached
-        // from rendering while its fallback implementation is incrementally removed.
-        viewBinding.continuousScrollView.isVisible = false
         
-        if (isScrollMode && composeReaderViewModel.uiState.value.content.isBlank()) {
+        if (composeReaderViewModel.uiState.value.content.isBlank()) {
             // Need to reload content into the new view if it was empty
             loadChapter(currentChapterIndex)
         }
@@ -3326,18 +2716,27 @@ class NovelReaderActivity :
 		if (index !in chapters.indices || index == currentChapterIndex) return
 		currentChapterIndex = index
 		updateNavigationButtons()
-		viewBinding.toolbar.subtitle = chapters[index].title ?: getString(R.string.unnamed_chapter)
 		updateHistory(0, 1)
 	}
 
 	private fun onComposeVisibleProgress(chapterIndex: Int, blockIndex: Int, blockCount: Int) {
 		if (chapterIndex !in chapters.indices || blockCount <= 0) return
 		val chapterProgress = ((blockIndex + 0.5f) / blockCount).coerceIn(0f, 1f)
+		composeReaderViewModel.publishPosition(
+			NovelReadingPosition(
+				chapterId = chapters[chapterIndex].id,
+				page = blockIndex,
+				pageCount = blockCount,
+				chapterProgress = chapterProgress,
+			),
+		)
 		val ratio = ((chapterIndex + chapterProgress) / chapters.size.toFloat()).coerceIn(0f, 1f)
 		val sliderMax = (chapters.size * 100).coerceAtLeast(1)
-		viewBinding.actionsView.setSliderValue((ratio * sliderMax).toInt(), sliderMax)
-		viewBinding.actionsView.isSliderEnabled = chapters.size > 1 || blockCount > 1
-		viewBinding.actionsView.setPageLabel(blockIndex + 1, blockCount)
+		composeReaderViewModel.publishProgress(
+			value = blockIndex.toFloat(),
+			max = (blockCount - 1).coerceAtLeast(0).toFloat(),
+			label = "${blockIndex + 1} / ${blockCount.coerceAtLeast(1)}",
+		)
 		updateReadingStatus(blockIndex, blockCount)
 	}
 
@@ -3346,43 +2745,6 @@ class NovelReaderActivity :
     private fun updateToolbarFloatingStyle(isFloating: Boolean) {
         if (isToolbarFloating == isFloating) return
         isToolbarFloating = isFloating
-        val toolbar = viewBinding.toolbarDocked
-        val radius = if (isFloating) 24 * resources.displayMetrics.density else 0f
-        
-        if (toolbar is com.google.android.material.card.MaterialCardView) {
-            toolbar.radius = radius
-        } else {
-            val bg = toolbar.background
-            if (bg is com.google.android.material.shape.MaterialShapeDrawable) {
-                bg.shapeAppearanceModel = bg.shapeAppearanceModel.toBuilder().setAllCornerSizes(radius).build()
-            }
-            toolbar.clipToOutline = isFloating
-        }
-
-        val appbarTop = viewBinding.appbarTop
-        val hazeOpacityPercent = settings.hazeOpacityPercent
-        val isGlassEffectEnabled = settings.isGlassEffectEnabled
-        val handleBgColor = { targetView: View ->
-            if (targetView.background is com.google.android.material.shape.MaterialShapeDrawable) {
-                val bg = targetView.background as com.google.android.material.shape.MaterialShapeDrawable
-                val baseColor = (readerPalette ?: buildReaderPalette()).chromeBackgroundColor
-                if (isFloating && isGlassEffectEnabled) {
-                    val alphaVal = ((hazeOpacityPercent / 100f) * 255).toInt().coerceIn(30, 255)
-                    bg.fillColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(baseColor, alphaVal))
-                } else {
-                    val alphaVal = if (isFloating) {
-                        if ((readerPalette ?: buildReaderPalette()).isDark) 238 else 248
-                    } else {
-                        255
-                    }
-                    bg.fillColor = ColorStateList.valueOf(ColorUtils.setAlphaComponent(baseColor, alphaVal))
-                }
-            }
-        }
-        handleBgColor(toolbar)
-        handleBgColor(appbarTop)
-        
-        viewBinding.root.requestApplyInsets()
     }
 
     private fun buildReaderPalette(): NovelReaderPalette {
@@ -3396,52 +2758,22 @@ class NovelReaderActivity :
         val palette = buildReaderPalette()
         readerPalette = palette
 
-        viewBinding.root.setBackgroundColor(palette.backgroundColor)
-        viewBinding.readerView.updatePalette(palette)
-        viewBinding.continuousScrollView.setBackgroundColor(palette.backgroundColor)
+        contentRoot.setBackgroundColor(palette.backgroundColor)
 
-        val toolbarTitleColor = ColorUtils.setAlphaComponent(palette.chromeTextColor, 215)
-        val toolbarSubtitleColor = ColorUtils.setAlphaComponent(palette.chromeTextColor, 132)
-        val toolbarIconColor = ColorUtils.setAlphaComponent(palette.chromeTextColor, 172)
-        viewBinding.toolbar.setTitleTextColor(toolbarTitleColor)
-        viewBinding.toolbar.setSubtitleTextColor(toolbarSubtitleColor)
-        viewBinding.toolbar.navigationIcon?.setTint(toolbarIconColor)
-        viewBinding.toolbar.overflowIcon?.setTint(toolbarIconColor)
-
-        val toolbarBackground = ColorStateList.valueOf(
-            ColorUtils.setAlphaComponent(palette.chromeBackgroundColor, if (palette.isDark) 222 else 236)
-        )
-        viewBinding.appbarTop.backgroundTintList = toolbarBackground
-        viewBinding.toolbarDocked.backgroundTintList = toolbarBackground
-
-        applyInfoBarColorScheme()
         updateToolbarFloatingStyle(isToolbarFloating)
         updateSystemBarsColors()
     }
 
     private fun applyInfoBarColorScheme() {
-        val palette = readerPalette ?: buildReaderPalette()
-        if (readerSettings.readingMode == ReadingMode.SCROLL) {
-            viewBinding.infoBar.applyColorScheme(
-                textColor = palette.chromeTextColor,
-                backgroundColor = palette.chromeBackgroundColor,
-            )
-        } else {
-            viewBinding.infoBar.applyColorScheme(isBlackOnWhite = !palette.isDark)
-        }
+        // Reading status is rendered by the Compose chrome.
     }
 
     private fun visibleInfoBarHeight(): Int {
-        return if (viewBinding.infoBar.isVisible && readerSettings.showReadingStatus) {
-            viewBinding.infoBar.height
-        } else {
-            0
-        }
+        return 0
     }
 
     private fun updateNovelContentTopInset() {
         val infoBarHeight = visibleInfoBarHeight()
-        viewBinding.readerView.setFooterHeight(infoBarHeight)
     }
 
 }

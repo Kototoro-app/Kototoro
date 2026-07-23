@@ -6,10 +6,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
@@ -30,6 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -38,6 +41,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,8 +68,17 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.ui.ReaderActionsCallbacks
 import org.skepsun.kototoro.reader.ui.ReaderActionsContent
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
@@ -74,6 +87,7 @@ import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlItem
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPrimaryControlBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
 import kotlin.math.roundToInt
 
 @Immutable
@@ -89,6 +103,7 @@ internal data class ComposeReaderChromeState(
 	val actions: ReaderActionsUiState = ReaderActionsUiState(),
 	val options: ComposeReaderOptionsState = ComposeReaderOptionsState(),
 	val toolsVisible: Boolean = false,
+	val chaptersVisible: Boolean = false,
 )
 
 @Immutable
@@ -150,13 +165,23 @@ internal fun ComposeReaderActivityScaffold(
 	state: ComposeReaderChromeState,
 	callbacks: ComposeReaderChromeCallbacks,
 	modifier: Modifier = Modifier,
+	chaptersPanelContent: @Composable () -> Unit = {},
 	content: @Composable () -> Unit,
 ) {
 	var progressExpanded by remember { mutableStateOf(true) }
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+	val readerBackdrop = rememberLayerBackdrop {
+		drawContent()
+	}
+	CompositionLocalProvider(
+		LocalLiquidGlassBackdrop provides readerBackdrop,
+		LocalLiquidGlassLayerBackdrop provides readerBackdrop,
+	) {
 	Box(modifier = modifier.fillMaxSize()) {
 		Box(
 			modifier = Modifier
 				.fillMaxSize()
+				.layerBackdrop(readerBackdrop)
 				.readerTapGrid(
 					enabled = true,
 					onInteraction = callbacks.onReaderInteraction,
@@ -178,8 +203,13 @@ internal fun ComposeReaderActivityScaffold(
 
 		AnimatedVisibility(
 			visible = state.infoBar.visible && !state.controlsVisible,
-			enter = fadeIn(),
-			exit = fadeOut(),
+			enter = fadeIn(
+				animationSpec = tween(
+					durationMillis = 140,
+					delayMillis = 160,
+				),
+			),
+			exit = fadeOut(animationSpec = tween(durationMillis = 80)),
 			modifier = Modifier.align(Alignment.TopCenter),
 		) {
 			ReaderComposeInfoBar(state.infoBar)
@@ -191,21 +221,78 @@ internal fun ComposeReaderActivityScaffold(
 			exit = slideOutVertically { it } + fadeOut(),
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
+			ReaderBottomControlDock(
+				isIosStyle = isIosStyle,
 				modifier = Modifier
 					.navigationBarsPadding()
 					.padding(horizontal = 12.dp, vertical = 4.dp),
 			) {
-				if (state.actions.sliderEnabled && progressExpanded) {
-					Surface(
-						shape = MaterialTheme.shapes.large,
-						color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-						modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
+				if (isIosStyle && state.chaptersVisible) {
+					Box(
+						modifier = Modifier
+							.fillMaxWidth()
+							.height(420.dp),
 					) {
-						ReaderProgressControl(state.actions, callbacks.actions)
+						chaptersPanelContent()
 					}
-					Spacer(modifier = Modifier.height(6.dp))
+					HorizontalDivider(
+						modifier = Modifier.padding(horizontal = 12.dp),
+						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+					)
+				}
+				if (isIosStyle && state.options.visible) {
+					ComposeReaderOptionsSheet(
+						state = state.options,
+						callbacks = callbacks.options,
+						embedded = true,
+						modifier = Modifier.fillMaxWidth(),
+					)
+					HorizontalDivider(
+						modifier = Modifier.padding(horizontal = 12.dp),
+						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+					)
+				}
+				if (isIosStyle && state.toolsVisible) {
+					ComposeReaderToolsSheet(
+						visible = true,
+						translateActive = state.actions.translateActive,
+						callbacks = callbacks.options,
+						onDismiss = {
+							callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
+						},
+						embedded = true,
+						modifier = Modifier.fillMaxWidth(),
+					)
+					HorizontalDivider(
+						modifier = Modifier.padding(horizontal = 12.dp),
+						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+					)
+				}
+				if (state.actions.sliderEnabled && progressExpanded) {
+					if (isIosStyle) {
+						ReaderProgressControl(
+							state = state.actions,
+							callbacks = callbacks.actions,
+							isIosStyle = true,
+						)
+						HorizontalDivider(
+							modifier = Modifier.padding(horizontal = 12.dp),
+							color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+						)
+					} else {
+						Surface(
+							shape = MaterialTheme.shapes.large,
+							color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
+							modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
+						) {
+							ReaderProgressControl(
+								state = state.actions,
+								callbacks = callbacks.actions,
+								isIosStyle = false,
+							)
+						}
+						Spacer(modifier = Modifier.height(6.dp))
+					}
 				}
 				ReaderPrimaryControlBar(
 						items = buildList {
@@ -213,19 +300,35 @@ internal fun ComposeReaderActivityScaffold(
 								add(ReaderControlItem(ReaderControlDestination.PROGRESS, stringResource(R.string.progress), R.drawable.ic_progress_marker, active = progressExpanded))
 							}
 							addAll(listOf(
-							ReaderControlItem(ReaderControlDestination.NAVIGATION, stringResource(R.string.chapters), R.drawable.ic_grid),
+							ReaderControlItem(
+								ReaderControlDestination.NAVIGATION,
+								stringResource(R.string.chapters),
+								R.drawable.ic_grid,
+								active = state.chaptersVisible,
+							),
 							ReaderControlItem(ReaderControlDestination.DISPLAY, stringResource(R.string.appearance), R.drawable.ic_appearance, active = state.options.visible),
-							ReaderControlItem(ReaderControlDestination.TRANSLATION, stringResource(R.string.reader_translation_action), R.drawable.ic_translate, active = state.actions.translateActive),
+							ReaderControlItem(
+								ReaderControlDestination.TRANSLATION,
+								stringResource(R.string.reader_translation_action),
+								R.drawable.ic_translate,
+								active = if (isIosStyle) state.toolsVisible else state.actions.translateActive,
+							),
 							))
 						},
 						onDestinationSelected = { destination ->
 							if (destination == ReaderControlDestination.PROGRESS) {
 								progressExpanded = !progressExpanded
+							} else if (isIosStyle && destination == ReaderControlDestination.NAVIGATION) {
+								callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
+							} else if (isIosStyle && destination == ReaderControlDestination.TRANSLATION) {
+								callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
 							} else {
 								callbacks.onPrimaryDestination(destination)
 							}
 						},
 						onDestinationLongPressed = callbacks.onPrimaryDestinationLongPress,
+						transparentContainer = isIosStyle,
+						showLabels = isIosStyle,
 						modifier = Modifier.widthIn(max = 352.dp),
 					)
 			}
@@ -285,115 +388,84 @@ internal fun ComposeReaderActivityScaffold(
 			ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
 		}
 
-		ComposeReaderOptionsSheet(
-			state.options,
-			callbacks.options,
-			modifier = Modifier
-				.align(Alignment.BottomCenter)
-				.navigationBarsPadding()
-				.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
-		)
-		ComposeReaderToolsSheet(
-			visible = state.toolsVisible,
-			translateActive = state.actions.translateActive,
-			callbacks = callbacks.options,
-			onDismiss = { callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS) },
-			modifier = Modifier
-				.align(Alignment.BottomCenter)
-				.navigationBarsPadding()
-				.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
+		if (!isIosStyle) {
+			ComposeReaderOptionsSheet(
+				state.options,
+				callbacks.options,
+				modifier = Modifier
+					.align(Alignment.BottomCenter)
+					.navigationBarsPadding()
+					.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
+			)
+			ComposeReaderToolsSheet(
+				visible = state.toolsVisible,
+				translateActive = state.actions.translateActive,
+				callbacks = callbacks.options,
+				onDismiss = { callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS) },
+				modifier = Modifier
+					.align(Alignment.BottomCenter)
+					.navigationBarsPadding()
+					.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
+			)
+		}
+	}
+	}
+}
+
+@Composable
+private fun ReaderBottomControlDock(
+	isIosStyle: Boolean,
+	modifier: Modifier = Modifier,
+	content: @Composable () -> Unit,
+) {
+	if (isIosStyle) {
+		GlassSurface(
+			modifier = modifier
+				.fillMaxWidth()
+				.widthIn(max = 360.dp)
+				.animateContentSize(alignment = Alignment.BottomCenter),
+			shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+			style = GlassDefaults.bottomBarChromeStyle().copy(
+				containerAlpha = 0.86f,
+				borderAlpha = 0.18f,
+			),
+			componentRole = GlassComponentRole.BottomBar,
+		) {
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = 6.dp, vertical = 4.dp),
+				content = { content() },
+			)
+		}
+	} else {
+		Column(
+			horizontalAlignment = Alignment.CenterHorizontally,
+			modifier = modifier,
+			content = { content() },
 		)
 	}
 }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun ReaderProgressControl(state: ReaderActionsUiState, callbacks: ReaderActionsCallbacks) {
-	var dragValue by remember { mutableStateOf<Float?>(null) }
-	var trackPosition by remember { mutableStateOf(IntOffset.Zero) }
-	var trackWidthPx by remember { mutableStateOf(0) }
-	val value = (dragValue ?: state.sliderValue).coerceIn(0f, state.sliderMax.toFloat())
-	if (dragValue != null) {
-		val fraction = value / state.sliderMax.coerceAtLeast(1)
-		Popup(
-			alignment = Alignment.TopStart,
-			offset = IntOffset(
-				trackPosition.x + (trackWidthPx * fraction).roundToInt() - 32,
-				trackPosition.y - 52,
-			),
-			properties = PopupProperties(focusable = false),
-		) {
-			Surface(
-				shape = MaterialTheme.shapes.small,
-				color = MaterialTheme.colorScheme.inverseSurface,
-				contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-			) {
-				Text(
-					text = "${value.toInt() + 1}/${state.sliderMax + 1}",
-					style = MaterialTheme.typography.labelMedium,
-					modifier = Modifier.padding(8.dp),
-				)
-			}
-		}
-	}
-	BoxWithConstraints(
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(horizontal = 12.dp, vertical = 2.dp),
-	) {
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				IconButton(
-					onClick = callbacks.onPreviousChapter,
-					enabled = state.previousEnabled,
-					modifier = Modifier.size(48.dp),
-				) {
-					Icon(painterResource(R.drawable.ic_prev), stringResource(R.string.prev_chapter))
-				}
-				Column(
-					modifier = Modifier
-						.weight(1f)
-						.onGloballyPositioned { coordinates ->
-							val position = coordinates.positionInWindow()
-							trackPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
-							trackWidthPx = coordinates.size.width
-						},
-				) {
-				Slider(
-					value = value,
-					onValueChange = {
-						dragValue = it
-						callbacks.onSliderValueChanged(it)
-					},
-					onValueChangeFinished = {
-						dragValue = null
-						callbacks.onSliderValueChangeFinished()
-					},
-					valueRange = 0f..state.sliderMax.coerceAtLeast(1).toFloat(),
-					thumb = {
-						Box(
-							modifier = Modifier
-								.size(18.dp)
-								.background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape),
-						)
-					},
-					track = { sliderState ->
-						SliderDefaults.Track(
-							sliderState = sliderState,
-							modifier = Modifier.height(10.dp),
-							thumbTrackGapSize = 0.dp,
-						)
-					},
-				)
-				}
-				IconButton(
-					onClick = callbacks.onNextChapter,
-					enabled = state.nextEnabled,
-					modifier = Modifier.size(48.dp),
-				) {
-					Icon(painterResource(R.drawable.ic_next), stringResource(R.string.next_chapter))
-				}
-			}
-	}
+private fun ReaderProgressControl(
+	state: ReaderActionsUiState,
+	callbacks: ReaderActionsCallbacks,
+	isIosStyle: Boolean,
+) {
+	ReaderProgressBar(
+		value = state.sliderValue,
+		max = state.sliderMax.toFloat(),
+		onValueChange = callbacks.onSliderValueChanged,
+		onValueChangeFinished = callbacks.onSliderValueChangeFinished,
+		onPreviousChapter = callbacks.onPreviousChapter,
+		onNextChapter = callbacks.onNextChapter,
+		previousEnabled = state.previousEnabled,
+		nextEnabled = state.nextEnabled,
+		isIosStyle = isIosStyle,
+	)
 }
 
 @Composable
@@ -445,7 +517,8 @@ private fun ReaderComposeInfoBar(state: ReaderInfoBarState) {
 	) {
 		Row(
 			verticalAlignment = Alignment.CenterVertically,
-			modifier = Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
+			modifier = Modifier
+				.padding(horizontal = 8.dp, vertical = 6.dp),
 		) {
 			Text(text = state.text, style = textStyle, maxLines = 1, modifier = Modifier.weight(1f))
 			if (state.showSystemStatus) {
@@ -524,13 +597,14 @@ private fun ReaderMessageHost(
 @Composable
 private fun ReaderComposeTopBar(state: ComposeReaderChromeState, onNavigateBack: () -> Unit) {
 	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	Box(modifier = Modifier.fillMaxWidth()) {
 		ReaderToolbarChrome()
 		Row(
 			verticalAlignment = Alignment.CenterVertically,
 			modifier = Modifier
 				.statusBarsPadding()
-				.padding(horizontal = 4.dp, vertical = 4.dp),
+				.padding(horizontal = if (isIosStyle) 18.dp else 4.dp, vertical = 4.dp),
 		) {
 			IconButton(onClick = onNavigateBack) {
 				Icon(
@@ -540,9 +614,33 @@ private fun ReaderComposeTopBar(state: ComposeReaderChromeState, onNavigateBack:
 				)
 			}
 			Column(modifier = Modifier.weight(1f)) {
-				Text(text = state.title, color = contentColor, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+				Text(
+					text = state.title,
+					color = contentColor,
+					style = if (isIosStyle) {
+						MaterialTheme.typography.titleMedium.copy(
+							fontSize = 15.sp,
+							lineHeight = 20.sp,
+						)
+					} else {
+						MaterialTheme.typography.titleMedium
+					},
+					maxLines = 1,
+				)
 				if (state.subtitle.isNotEmpty()) {
-					Text(text = state.subtitle, color = contentColor.copy(alpha = 0.78f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+					Text(
+						text = state.subtitle,
+						color = contentColor.copy(alpha = 0.78f),
+						style = if (isIosStyle) {
+							MaterialTheme.typography.bodySmall.copy(
+								fontSize = 11.sp,
+								lineHeight = 14.sp,
+							)
+						} else {
+							MaterialTheme.typography.bodySmall
+						},
+						maxLines = 1,
+					)
 				}
 			}
 		}
