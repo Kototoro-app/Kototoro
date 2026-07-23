@@ -48,7 +48,18 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.resolve.DialogErrorObserver
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
+import kotlinx.coroutines.runBlocking
+import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.unwrap
+import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
+import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.ContentIntent
+import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.parser.ContentDataRepository
+import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -125,6 +136,9 @@ class ReaderActivity :
     @Inject
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
+    @Inject
+    lateinit var contentDataRepository: ContentDataRepository
+
     private val idlingDetector = IdlingDetector(TimeUnit.SECONDS.toMillis(10), this)
 
     private val viewModel: ReaderViewModel by viewModels()
@@ -154,8 +168,48 @@ class ReaderActivity :
         settings.isReaderTranslationShowTranslated = false
     }
 
+    private fun checkAndRedirectMedia(intent: Intent): Boolean {
+        val parcelable = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)
+        var manga: Content? = parcelable?.manga
+        if (manga == null) {
+            val contentIntent = ContentIntent(intent)
+            val mangaId = contentIntent.mangaId
+            if (mangaId != ContentIntent.ID_NONE) {
+                manga = runBlocking(Dispatchers.IO) {
+                    contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
+                        ?: contentDataRepository.findContentById(mangaId, withChapters = false)
+                }
+            }
+        }
+        if (manga != null) {
+            val source = manga.source.unwrap()
+            val contentType = if (manga.looksLikeLocalVideoContent()) {
+                ContentType.VIDEO
+            } else {
+                source.getContentType()
+            }
+            if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL ||
+                contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
+            ) {
+                val state = intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
+                AppRouter(this).openReader(
+                    ReaderIntent.Builder(this)
+                        .manga(manga)
+                        .state(state)
+                        .build(),
+                )
+                finish()
+                return true
+            }
+        }
+        return false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (checkAndRedirectMedia(intent)) {
+            return
+        }
         if (savedInstanceState == null) {
             resetTranslationSession()
         } else {
@@ -254,6 +308,16 @@ class ReaderActivity :
             } else {
                 errorSnackbar.emit(error)
             }
+        }
+        viewModel.onRedirectToReader.observeEvent(this) { manga ->
+            val state = intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
+            AppRouter(this).openReader(
+                ReaderIntent.Builder(this)
+                    .manga(manga)
+                    .state(state)
+                    .build(),
+            )
+            finish()
         }
         viewModel.readerMode.observe(this, Lifecycle.State.STARTED, this::onInitReader)
         viewModel.onPageSaved.observeEvent(this, PagesSavedObserver(viewBinding.container))

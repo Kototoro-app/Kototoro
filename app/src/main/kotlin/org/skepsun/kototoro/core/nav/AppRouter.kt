@@ -478,7 +478,16 @@ class AppRouter private constructor(
 		// Intercept video sources when ReaderIntent carries a Content extra and route accordingly
 		runCatching {
 			val parcelable = activityIntent.getParcelableExtraCompat<ParcelableContent>(KEY_MANGA)
-			val manga = parcelable?.manga
+			val manga = parcelable?.manga ?: run {
+				val contentIntent = ContentIntent(activityIntent)
+				val mangaId = contentIntent.mangaId
+				if (mangaId != ContentIntent.ID_NONE) {
+					kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+						contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
+							?: contentDataRepository.findContentById(mangaId, withChapters = false)
+					}
+				} else null
+			}
 			if (manga != null) {
                 // 瀵硅棰戝唴瀹瑰拰EPUB鍐呭锛氫紶?ReaderState锛屼紭鍏堜娇鐢ㄥ巻鍙茶褰曚腑鐨勭姸?
                 val source = manga.source.unwrap()
