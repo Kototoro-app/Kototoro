@@ -94,6 +94,14 @@
     <string name="standard">Standard</string>
     <string name="webtoon">Webtoon</string>
     <string name="read_mode">Read mode</string>
+    <string name="ai">AI</string>
+    <string name="reader_translation_long_press_hint">Long press Translation to open AI options</string>
+    <string name="reader_translation_status_compact">Translating %1$d/%2$d</string>
+    <string name="reader_page_turning_mode">Page turning mode</string>
+    <string name="double_page_mode">Two-page mode</string>
+    <string name="double_page_landscape">Two pages in landscape</string>
+    <string name="double_page_foldable">Two pages on foldables</string>
+    <string name="miscellaneous">Miscellaneous</string>
     <string name="grid_size">Grid size</string>
     <string name="grid_aspect_ratio">Grid ratio</string>
     <string name="fit_page_thumbnails">Fit page thumbnails</string>
@@ -123,7 +131,7 @@
     <string name="domain">Domain</string>
     <string name="app_update_available">A new version of the app is available</string>
     <string name="app_update_mirror_summary">Used for this update download and saved as the global GitHub mirror.</string>
-    <string name="open_in_browser">Open in web browser</string>
+    <string name="open_in_browser">Browser</string>
     <string name="open_metadata_in_browser">Open metadata page in browser</string>
     <string name="open_local_source_in_browser">Open local source page in browser</string>
     <string name="open_reading_page_in_browser">Open reading page in browser</string>
@@ -2497,7 +2505,7 @@
     <string name="source_group_native">Native Sources</string>
     <string name="source_group_legado">Legado Sources</string>
     <string name="source_group_tvbox">TVBox Sources</string>
-	<string name="split_double_pages">Auto-split double pages</string>
+	<string name="split_double_pages">Split double pages</string>
     <string name="source_group_javascript">JavaScript Sources</string>
     <string name="source_group_external">External Sources</string>
     <string name="source_group_mihon">Mihon Extensions</string>

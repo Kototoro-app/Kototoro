@@ -956,6 +956,10 @@ class ReaderViewModel @Inject constructor(
                 val currentPageId = getCurrentPage()?.id
                 if (currentPageId == event.pageId) {
                     translationLayerState.value = event.state
+					if (event.state == TranslationLayerState.READY) {
+						markPageForReload(event.pageId)
+						rebuildPages()
+					}
                 }
             }
         }

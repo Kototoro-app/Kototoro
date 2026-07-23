@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
@@ -220,46 +222,279 @@ fun ComposeNovelChapter(
 	}
 }
 
+private data class NovelComposeWindowBlock(
+	val chapter: NovelComposeChapterContent,
+	val block: NovelComposeBlock,
+)
+
+@Composable
+private fun ComposeNovelChapterWindow(
+	chapters: List<NovelComposeChapterContent>,
+	settings: NovelReaderSettings,
+	imageModel: (String) -> Any?,
+	onImageClick: ((String) -> Unit)?,
+	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)?,
+	listState: LazyListState,
+	modifier: Modifier,
+	onVisibleChapterChanged: (Int) -> Unit,
+	onRequestPreviousChapter: () -> Unit,
+	onRequestNextChapter: () -> Unit,
+	onVisibleProgress: (chapterIndex: Int, blockIndex: Int, blockCount: Int) -> Unit,
+	ttsHighlightRange: IntRange?,
+) {
+	val blocks = androidx.compose.runtime.remember(chapters) {
+		chapters.flatMap { chapter ->
+			buildNovelComposeDocument(chapter.content, chapter.translation).map { block ->
+				NovelComposeWindowBlock(chapter, block)
+			}
+		}
+	}
+	val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
+	val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
+	var viewport = androidx.compose.runtime.remember { IntSize.Zero }
+	val tapModifier = if (onTap == null) Modifier else Modifier
+		.onSizeChanged { viewport = it }
+		.pointerInput(onTap) {
+			detectTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
+		}
+	LazyColumn(
+		state = listState,
+		modifier = modifier.fillMaxSize().then(tapModifier),
+		contentPadding = PaddingValues(
+			horizontal = settings.marginHorizontal.dp,
+			vertical = settings.marginVertical.dp,
+		),
+		verticalArrangement = Arrangement.spacedBy(settings.paragraphSpacing.dp),
+	) {
+		items(
+			count = blocks.size,
+			key = { index ->
+				val item = blocks[index]
+				val blockKey = when (val block = item.block) {
+					is NovelComposeBlock.Image -> block.key
+					is NovelComposeBlock.Text -> block.key
+				}
+				"${item.chapter.chapterIndex}:$blockKey"
+			},
+		) { index ->
+			val item = blocks[index]
+			when (val block = item.block) {
+				is NovelComposeBlock.Image -> NovelComposeImage(
+					path = block.path,
+					imageModel = imageModel,
+					imageContext = item.chapter.imageContext,
+					onClick = onImageClick,
+				)
+
+				is NovelComposeBlock.Text -> {
+					val style = MaterialTheme.typography.bodyLarge.copy(
+						fontSize = settings.fontSizeSp.sp,
+						lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
+						textDirection = direction,
+					)
+					if (block.translation == null) {
+						if (block.inlineImages.isEmpty()) Text(
+							text = highlightedNovelText(
+								text = block.original,
+								sourceRange = block.sourceRange,
+								highlightRange = ttsHighlightRange,
+								highlightColor = MaterialTheme.colorScheme.secondaryContainer,
+							),
+							style = style,
+							textAlign = alignment,
+						) else NovelTextWithImageBlocks(
+							text = block.original,
+							inlineImages = block.inlineImages,
+							imageModel = imageModel,
+							imageContext = item.chapter.imageContext,
+							onImageClick = onImageClick,
+							style = style,
+							textAlign = alignment,
+						)
+					} else if (block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY) {
+						Text(text = block.translation, style = style, textAlign = alignment)
+					} else {
+						NovelTextWithImageBlocks(
+							text = block.original,
+							inlineImages = block.inlineImages,
+							imageModel = imageModel,
+							imageContext = item.chapter.imageContext,
+							onImageClick = onImageClick,
+							style = style.copy(fontSize = (settings.fontSizeSp * 0.86f).sp),
+							textAlign = alignment,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+						)
+						Text(
+							text = block.translation,
+							style = style,
+							textAlign = alignment,
+							modifier = Modifier.padding(top = 4.dp),
+						)
+					}
+				}
+			}
+		}
+	}
+	LaunchedEffect(listState, blocks) {
+		snapshotFlow {
+			val info = listState.layoutInfo
+			Triple(
+				info.visibleItemsInfo.firstOrNull()?.index ?: -1,
+				info.visibleItemsInfo.lastOrNull()?.index ?: -1,
+				info.totalItemsCount,
+			)
+		}.distinctUntilChanged().collect { (first, last, total) ->
+			if (first in blocks.indices) {
+				onVisibleChapterChanged(blocks[first].chapter.chapterIndex)
+				onVisibleProgress(blocks[first].chapter.chapterIndex, first, total)
+			}
+			if (first in 0..2) onRequestPreviousChapter()
+			if (total > 0 && last >= total - 3) onRequestNextChapter()
+		}
+	}
+}
+
 /** Compose route bound to the Activity-retained novel state. */
 @Composable
 fun ComposeNovelReaderRoute(
 	viewModel: NovelComposeReaderViewModel,
 	imageModel: (String) -> Any?,
+	onSettingsChanged: (NovelReaderSettings) -> Unit = {},
+	onBookmark: () -> Unit = {},
+	onTts: () -> Unit = {},
+	onClearTranslationCache: () -> Unit = {},
+	onChapterSelected: (Int) -> Unit = {},
+	onModalDismissed: () -> Unit = {},
+	onTtsPrevious: () -> Unit = {},
+	onTtsPlayPause: () -> Unit = {},
+	onTtsNext: () -> Unit = {},
+	onTtsVoice: () -> Unit = {},
+	onTtsClose: () -> Unit = {},
+	onRequestPreviousChapter: () -> Unit = {},
+	onRequestNextChapter: () -> Unit = {},
+	onVisibleChapterChanged: (Int) -> Unit = {},
+	onVisibleProgress: (chapterIndex: Int, blockIndex: Int, blockCount: Int) -> Unit = { _, _, _ -> },
+	renderContent: Boolean = true,
 	onImageClick: ((String) -> Unit)? = null,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)? = null,
 	modifier: Modifier = Modifier,
 ) {
 	val state by viewModel.uiState.collectAsStateWithLifecycle()
-	val settings = state.settings ?: return
-	if (state.content.isNotBlank()) {
+	val settings = state.settings
+	if (renderContent && settings != null && state.content.isNotBlank()) {
 		val blocks = androidx.compose.runtime.remember(state.content, state.translation) {
 			buildNovelComposeDocument(state.content, state.translation)
 		}
-		val listState = rememberLazyListState(
-			initialFirstVisibleItemIndex = state.scrollPosition
-				?.firstVisibleBlock
-				?.coerceIn(0, blocks.lastIndex.coerceAtLeast(0))
-				?: 0,
-			initialFirstVisibleItemScrollOffset = state.scrollPosition?.firstVisibleBlockOffsetPx ?: 0,
-		)
-		LaunchedEffect(listState, state.content) {
-			snapshotFlow {
-				NovelComposeScrollPosition(
-					firstVisibleBlock = listState.firstVisibleItemIndex,
-					firstVisibleBlockOffsetPx = listState.firstVisibleItemScrollOffset,
+		key(if (settings.readingMode == ReadingMode.SCROLL) "continuous" else state.chapterIndex) {
+			val listState = rememberLazyListState(
+				initialFirstVisibleItemIndex = state.scrollPosition
+					?.firstVisibleBlock
+					?.coerceIn(0, blocks.lastIndex.coerceAtLeast(0))
+					?: 0,
+				initialFirstVisibleItemScrollOffset = state.scrollPosition?.firstVisibleBlockOffsetPx ?: 0,
+			)
+			LaunchedEffect(listState, state.chapterIndex) {
+				snapshotFlow {
+					NovelComposeScrollPosition(
+						firstVisibleBlock = listState.firstVisibleItemIndex,
+						firstVisibleBlockOffsetPx = listState.firstVisibleItemScrollOffset,
+					)
+				}.distinctUntilChanged().collect(viewModel::publishScrollPosition)
+			}
+			if (settings.readingMode == ReadingMode.SCROLL && state.continuousChapters.isNotEmpty()) {
+				ComposeNovelChapterWindow(
+					chapters = state.continuousChapters,
+					settings = settings,
+					imageModel = imageModel,
+					onImageClick = onImageClick,
+					onTap = onTap,
+					listState = listState,
+					modifier = modifier,
+					onVisibleChapterChanged = {
+						viewModel.focusContinuousChapter(it)
+						onVisibleChapterChanged(it)
+					},
+					onRequestPreviousChapter = onRequestPreviousChapter,
+					onRequestNextChapter = onRequestNextChapter,
+					onVisibleProgress = onVisibleProgress,
+					ttsHighlightRange = state.ttsHighlightRange,
 				)
-			}.distinctUntilChanged().collect(viewModel::publishScrollPosition)
+			} else {
+				ComposeNovelChapter(
+					content = state.content,
+					settings = settings,
+					translation = state.translation,
+					imageModel = imageModel,
+					imageContext = state.imageContext,
+					onImageClick = onImageClick,
+					onTap = onTap,
+					listState = listState,
+					modifier = modifier,
+				)
+			}
 		}
-		ComposeNovelChapter(
-			content = state.content,
+	}
+	NovelReaderOverlay(
+		loading = state.loading,
+		message = state.message,
+		onMessageExpired = viewModel::dismissMessage,
+		ttsVisible = state.ttsControlsVisible,
+		ttsState = state.ttsState,
+		onTtsPrevious = onTtsPrevious,
+		onTtsPlayPause = onTtsPlayPause,
+		onTtsNext = onTtsNext,
+		onTtsVoice = onTtsVoice,
+		onTtsClose = onTtsClose,
+	)
+	if (state.settingsSheetVisible && settings != null) {
+		ComposeNovelReaderOptionsSheet(
 			settings = settings,
-			translation = state.translation,
-			imageModel = imageModel,
-			imageContext = state.imageContext,
-			onImageClick = onImageClick,
-			onTap = onTap,
-			listState = listState,
-			modifier = modifier,
+			onDismiss = {
+				viewModel.dismissSettings()
+				onModalDismissed()
+			},
+			onSettingsChanged = {
+				viewModel.publishSettings(it)
+				onSettingsChanged(it)
+			},
+			onBookmark = onBookmark,
+			onTts = onTts,
+			onClearTranslationCache = onClearTranslationCache,
+		)
+	}
+	if (state.chaptersSheetVisible) {
+		ComposeNovelChaptersSheet(
+			chapters = state.chapters,
+			currentIndex = state.currentChapterIndex,
+			onDismiss = {
+				viewModel.dismissChapters()
+				onModalDismissed()
+			},
+			onChapterSelected = {
+				viewModel.dismissChapters()
+				onModalDismissed()
+				onChapterSelected(it)
+			},
+		)
+	}
+}
+
+private fun highlightedNovelText(
+	text: String,
+	sourceRange: IntRange?,
+	highlightRange: IntRange?,
+	highlightColor: androidx.compose.ui.graphics.Color,
+): androidx.compose.ui.text.AnnotatedString {
+	if (sourceRange == null || highlightRange == null) return androidx.compose.ui.text.AnnotatedString(text)
+	val start = maxOf(sourceRange.first, highlightRange.first)
+	val end = minOf(sourceRange.last, highlightRange.last)
+	if (start > end) return androidx.compose.ui.text.AnnotatedString(text)
+	return buildAnnotatedString {
+		append(text)
+		addStyle(
+			SpanStyle(background = highlightColor),
+			start = start - sourceRange.first,
+			end = end - sourceRange.first + 1,
 		)
 	}
 }

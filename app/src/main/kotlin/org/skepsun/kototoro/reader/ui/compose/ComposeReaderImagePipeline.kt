@@ -6,7 +6,8 @@ import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.util.ext.isFileUri
@@ -27,6 +28,10 @@ interface ComposeReaderImagePipeline {
 
 sealed interface ComposeReaderImageState {
 	data object LoadingOriginal : ComposeReaderImageState
+
+	data class Downloading(
+		val progress: Float?,
+	) : ComposeReaderImageState
 
 	data class PreviewReady(
 		val previewUrl: String,
@@ -76,32 +81,22 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 
 	val imageLoader get() = pageLoader.imageLoader
 
-	override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = flow {
-		emit(ComposeReaderImageState.LoadingOriginal)
+	override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = channelFlow {
+		send(ComposeReaderImageState.LoadingOriginal)
 		resolveReaderPreviewUrl(page.preview, page.source.name)
-			?.let { emit(ComposeReaderImageState.PreviewReady(it)) }
-		val original = pageLoader.loadOriginalPage(page.toContentPage(), force)
-		val isAnimated = original.isFileUri() && BitmapDecoderCompat.isAnimated(original.toFile())
-		emit(ComposeReaderImageState.OriginalReady(original, isAnimated))
-		if (isAnimated) return@flow
-		if (!settings.isReaderSuperResolutionEnabled) return@flow
-
-		emit(ComposeReaderImageState.Enhancing(original, progress = null))
-		val enhanced = enhancer.enhance(
-			ComposeImageEnhancementRequest(
-				pageKey = page.readerKey,
-				original = original,
-				engine = settings.readerSuperResolutionEngine,
-				model = if (settings.readerSuperResolutionEngine == "ANIME4K") {
-					settings.readerSuperResolutionAnime4kMode
-				} else {
-					settings.readerSuperResolutionModel
-				},
-				noiseLevel = settings.readerSuperResolutionNoiseLevel,
-			),
-		)
-		if (enhanced != null) {
-			emit(ComposeReaderImageState.EnhancedReady(original, enhanced))
+			?.let { send(ComposeReaderImageState.PreviewReady(it)) }
+		val task = pageLoader.loadPageAsync(page.toContentPage(), force)
+		val progressJob = launch {
+			task.progressAsFlow().collect { progress ->
+				send(ComposeReaderImageState.Downloading(progress.takeIf { it in 0f..1f }))
+			}
+		}
+		try {
+			val display = task.await()
+			val isAnimated = display.isFileUri() && BitmapDecoderCompat.isAnimated(display.toFile())
+			send(ComposeReaderImageState.OriginalReady(display, isAnimated))
+		} finally {
+			progressJob.cancel()
 		}
 	}.catch { error ->
 		if (error is CancellationException) throw error

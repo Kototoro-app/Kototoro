@@ -135,6 +135,14 @@
     <string name="standard">默认</string>
     <string name="webtoon">条漫</string>
     <string name="read_mode">阅读模式</string>
+    <string name="ai">AI</string>
+    <string name="reader_translation_long_press_hint">长按翻译按钮打开 AI 面板</string>
+    <string name="reader_translation_status_compact">翻译%1$d/%2$d</string>
+    <string name="reader_page_turning_mode">翻页模式</string>
+    <string name="double_page_mode">双页模式</string>
+    <string name="double_page_landscape">横屏时双页</string>
+    <string name="double_page_foldable">折叠屏双页</string>
+    <string name="miscellaneous">杂项</string>
     <string name="grid_size">网格大小</string>
     <string name="grid_aspect_ratio">网格比例</string>
     <string name="fit_page_thumbnails">完整显示缩略图</string>
@@ -153,7 +161,7 @@
     <string name="domain">内容源域名</string>
     <string name="app_update_available">发现新版本</string>
     <string name="app_update_mirror_summary">用于本次更新下载，并同步保存为全局 GitHub 镜像。</string>
-    <string name="open_in_browser">在浏览器中打开</string>
+    <string name="open_in_browser">浏览器</string>
     <string name="open_metadata_in_browser">在浏览器中打开元数据页面</string>
     <string name="open_local_source_in_browser">在浏览器中打开本地来源页面</string>
     <string name="open_reading_page_in_browser">在浏览器中打开阅读页面</string>
@@ -2149,7 +2157,7 @@
     <string name="error_loading_file">加载文件出错：%s</string>
     <string name="import_error">导入错误：%s</string>
     <string name="test">测试</string>
-    <string name="split_double_pages">自动分割双页</string>
+    <string name="split_double_pages">分割双页</string>
     <string name="error_invalid_json_format">JSON 格式错误，位置 %1$d：%2$s</string>
     <string name="error_missing_required_field">缺少必需字段 \'%s\'</string>
     <string name="error_invalid_rule_syntax">规则语法错误：%1$s（规则：\'%2$s\'）</string>

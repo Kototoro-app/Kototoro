@@ -121,7 +121,6 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.reader.ui.colorfilter.ColorFilterConfigActivity
-import org.skepsun.kototoro.reader.ui.config.ReaderConfigSheet
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.ui.config.ScrobblerConfigActivity
 import org.skepsun.kototoro.scrobbling.common.ui.selector.ScrobblingSelectorSheet
@@ -1169,12 +1168,6 @@ class AppRouter private constructor(
         ContentStatsSheet().withArgs(1) {
             putParcelable(KEY_MANGA, ParcelableContent(manga))
             putLong(KEY_ID, manga.id)
-        }.showDistinct()
-    }
-
-    fun showReaderConfigSheet(mode: ReaderMode) {
-        ReaderConfigSheet().withArgs(1) {
-            putInt(KEY_READER_MODE, mode.id)
         }.showDistinct()
     }
 

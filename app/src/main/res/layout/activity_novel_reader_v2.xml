@@ -79,78 +79,6 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- TTS 悬浮控制条 (内嵌于下边栏顶部) -->
-            <LinearLayout
-                android:id="@+id/tts_control_bar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:paddingVertical="8dp"
-                android:paddingHorizontal="16dp"
-                android:visibility="gone">
-                
-                <ImageButton
-                    android:id="@+id/btn_tts_prev"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:src="@drawable/ic_prev"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="上一段" />
-                    
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1" />
-                    
-                <ImageButton
-                    android:id="@+id/btn_tts_play_pause"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:src="@drawable/ic_play"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="播放/暂停" />
-                    
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1" />
-                    
-                <ImageButton
-                    android:id="@+id/btn_tts_next"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:src="@drawable/ic_next"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="下一段" />
-                    
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1" />
-                    
-                <ImageButton
-                    android:id="@+id/btn_tts_voice"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:src="@drawable/ic_voice_input"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="切换音色" />
-                    
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1" />
-                    
-                <ImageButton
-                    android:id="@+id/btn_tts_close"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:src="@drawable/ic_tts_close"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="停止朗读" />
-            </LinearLayout>
-
             <org.skepsun.kototoro.reader.ui.ReaderActionsView
                 android:id="@+id/actionsView"
                 android:layout_width="match_parent"
@@ -161,55 +89,6 @@
 
     </com.google.android.material.dockedtoolbar.DockedToolbarLayout>
 
-    <!-- Toast 提示（复用漫画阅读器） -->
-    <org.skepsun.kototoro.reader.ui.ReaderToastView
-        android:id="@+id/toastView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="20dp"
-        android:background="@drawable/bg_reader_indicator"
-        android:drawablePadding="6dp"
-        android:elevation="1000dp"
-        android:singleLine="true"
-        android:textAppearance="?attr/textAppearanceBodySmall"
-        android:theme="@style/ThemeOverlay.Material3.Dark"
-        android:visibility="gone"
-        app:layout_dodgeInsetEdges="bottom"
-        tools:text="@string/loading_"
-        tools:visibility="visible" />
-
     <include layout="@layout/view_immersive_space_switcher_fab" />
-
-    <!-- 加载指示器 -->
-    <LinearLayout
-        android:id="@+id/layout_loading"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:background="@drawable/bg_card"
-        android:backgroundTint="?colorSurfaceContainer"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:outlineProvider="background"
-        android:padding="@dimen/screen_padding"
-        android:visibility="gone"
-        tools:visibility="visible">
-
-        <com.google.android.material.progressindicator.CircularProgressIndicator
-            android:id="@+id/progressBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:indeterminate="true" />
-
-        <TextView
-            android:id="@+id/textView_loading"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="@string/loading_"
-            android:textAppearance="?attr/textAppearanceTitleMedium" />
-
-    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

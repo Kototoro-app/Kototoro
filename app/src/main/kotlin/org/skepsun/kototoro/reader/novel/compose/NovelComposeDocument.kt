@@ -16,6 +16,7 @@ sealed interface NovelComposeBlock {
 		val translation: String?,
 		val displayMode: NovelTranslationDisplayMode,
 		val inlineImages: Map<String, String>,
+		val sourceRange: IntRange?,
 	) : NovelComposeBlock
 
 	data class Image(
@@ -35,7 +36,13 @@ fun buildNovelComposeDocument(
 		.orEmpty()
 	val displayMode = translation?.displayMode ?: NovelTranslationDisplayMode.TRANSLATION_ONLY
 
+	var searchOffset = 0
 	return NovelParagraphSplitter.split(parsed.text).flatMap { paragraph ->
+		val sourceStart = parsed.text.indexOf(paragraph.originalText, searchOffset)
+		val sourceRange = sourceStart.takeIf { it >= 0 }?.let { start ->
+			searchOffset = start + paragraph.originalText.length
+			start until searchOffset
+		}
 		val imageIndex = IMAGE_PLACEHOLDER.matchEntire(paragraph.originalText)
 			?.groupValues
 			?.getOrNull(1)
@@ -55,6 +62,7 @@ fun buildNovelComposeDocument(
 						val token = "[INLINE_IMAGE_$index]"
 						if (paragraph.originalText.contains(token)) token to path else null
 					}.toMap(),
+					sourceRange = sourceRange,
 				),
 			)
 		}

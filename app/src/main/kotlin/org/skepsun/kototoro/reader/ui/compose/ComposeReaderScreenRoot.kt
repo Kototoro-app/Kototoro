@@ -45,6 +45,8 @@ fun ComposeReaderScreenRoot(
 	val isWebtoonZoomEnabled by viewModel.isWebtoonZooEnabled.collectAsStateWithLifecycle(initialValue = false)
 	val defaultWebtoonZoomOut by viewModel.defaultWebtoonZoomOut.collectAsStateWithLifecycle(initialValue = 0f)
 	val isWebtoonGapsEnabled by viewModel.isWebtoonGapsEnabled.collectAsStateWithLifecycle(initialValue = false)
+	val isWebtoonPullGestureEnabled by viewModel.isWebtoonPullGestureEnabled.collectAsStateWithLifecycle(initialValue = false)
+	val readerUiState by viewModel.uiState.collectAsStateWithLifecycle()
 	val pageAnimation by viewModel.pageAnimation.collectAsStateWithLifecycle()
 	val readerSettings by viewModel.readerSettingsProducer.collectAsStateWithLifecycle()
 	val isAnimationEnabled = LocalContext.current.isAnimationsEnabled && pageAnimation != ReaderAnimation.NONE
@@ -130,6 +132,10 @@ fun ComposeReaderScreenRoot(
 			isZoomEnabled = isWebtoonZoomEnabled,
 			defaultScale = 1f - defaultWebtoonZoomOut,
 			isGapsEnabled = isWebtoonGapsEnabled,
+			isPullGestureEnabled = isWebtoonPullGestureEnabled,
+			canGoPreviousChapter = readerUiState?.hasPreviousChapter() != false,
+			canGoNextChapter = readerUiState?.hasNextChapter() != false,
+			onPullChapter = viewModel::switchChapterBy,
 			onShowErrorDetails = onShowErrorDetails,
 			onRetryError = onRetryError,
 			resolveErrorStringId = resolveErrorStringId,

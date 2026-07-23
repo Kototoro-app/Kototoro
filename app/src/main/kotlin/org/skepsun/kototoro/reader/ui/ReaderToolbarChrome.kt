@@ -2,6 +2,8 @@ package org.skepsun.kototoro.reader.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -46,10 +48,11 @@ fun ReaderToolbarChrome(
 		LocalLiquidGlassBackdrop provides backdrop,
 		LocalLiquidGlassLayerBackdrop provides backdrop,
 	) {
-		Box(modifier = modifier.fillMaxSize()) {
+		Box(modifier = modifier.fillMaxWidth().height(96.dp)) {
 			Box(
 				modifier = Modifier
-					.fillMaxSize()
+					.fillMaxWidth()
+					.height(96.dp)
 					.layerBackdrop(backdrop)
 					.hazeSource(hazeState)
 					.drawWithCache {
@@ -62,13 +65,13 @@ fun ReaderToolbarChrome(
 								1f to Color.Transparent,
 							),
 							startY = 0f,
-							endY = 140.dp.toPx(),
+					endY = 96.dp.toPx(),
 						)
 						onDrawBehind { drawRect(brush) }
 					},
 			)
 			GlassSurface(
-				modifier = Modifier.fillMaxSize(),
+				modifier = Modifier.fillMaxWidth().height(96.dp),
 				shape = androidx.compose.ui.graphics.RectangleShape,
 				style = GlassDefaults.topBarChromeStyle(),
 				visualTreatment = GlassVisualTreatment.TopBarPrototype,

@@ -280,7 +280,7 @@
     <string name="group_by">分组方式</string>
     <string name="group_by_origin">按来源分组</string>
     <string name="group_by_type">按类型分组</string>
-    <string name="split_double_pages">自动分割双页</string>
+    <string name="split_double_pages">分割双页</string>
     <string name="novel_reading_mode">阅读模式</string>
     <string name="novel_mode_paged">翻页</string>
     <string name="novel_mode_scroll">滚动</string>
@@ -1400,7 +1400,7 @@
     <string name="only_using_wifi">仅连接 Wi-Fi 时</string>
     <string name="open_daily_schedule">打开每日放送</string>
     <string name="open_external_player">用外部播放器打开</string>
-    <string name="open_in_browser">在浏览器中打开</string>
+    <string name="open_in_browser">浏览器</string>
     <string name="open_local_source_in_browser">在浏览器中打开本地来源页面</string>
     <string name="open_metadata_in_browser">在浏览器中打开元数据页面</string>
     <string name="open_playback_page_in_browser">在浏览器中打开播放页面</string>
@@ -1568,6 +1568,14 @@
     <string name="read">阅读</string>
     <string name="read_later">稍后阅读</string>
     <string name="read_mode">阅读模式</string>
+    <string name="ai">AI</string>
+    <string name="reader_translation_long_press_hint">长按翻译按钮打开 AI 面板</string>
+    <string name="reader_translation_status_compact">翻译%1$d/%2$d</string>
+    <string name="reader_page_turning_mode">翻页模式</string>
+    <string name="double_page_mode">双页模式</string>
+    <string name="double_page_landscape">横屏时双页</string>
+    <string name="double_page_foldable">折叠屏双页</string>
+    <string name="miscellaneous">杂项</string>
     <string name="read_more">了解详情</string>
     <string name="read_on_s">在 %s 查看</string>
     <string name="reader">阅读器</string>

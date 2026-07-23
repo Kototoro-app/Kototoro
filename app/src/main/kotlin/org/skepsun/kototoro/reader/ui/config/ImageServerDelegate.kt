@@ -1,19 +1,23 @@
 package org.skepsun.kototoro.reader.ui.config
 
-import android.content.Context
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.parsers.config.ConfigKey
 import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.parsers.util.mapToArray
 import org.skepsun.kototoro.parsers.util.suspendlazy.getOrNull
 import org.skepsun.kototoro.parsers.util.suspendlazy.suspendLazy
-import kotlin.coroutines.resume
+
+data class ImageServerOptions(
+	val selectedValue: String?,
+	val entries: List<ImageServerEntry>,
+)
+
+data class ImageServerEntry(
+	val value: String?,
+	val label: String?,
+)
 
 class ImageServerDelegate(
 	private val mangaRepositoryFactory: ContentRepository.Factory,
@@ -24,63 +28,27 @@ class ImageServerDelegate(
 		mangaRepositoryFactory.create(checkNotNull(mangaSource)) as ParserContentRepository
 	}
 
-	suspend fun isAvailable() = withContext(Dispatchers.Default) {
-		repositoryLazy.getOrNull()?.let { repository ->
-			repository.getConfigKeys().any { it is ConfigKey.PreferredImageServer }
-		} == true
-	}
-
-	suspend fun getValue(): String? = withContext(Dispatchers.Default) {
-		repositoryLazy.getOrNull()?.let { repository ->
-			val key = repository.getConfigKeys().firstNotNullOfOrNull { it as? ConfigKey.PreferredImageServer }
-			if (key != null) {
-				key.presetValues[repository.getConfig()[key]]
-			} else {
-				null
-			}
-		}
-	}
-
-	suspend fun showDialog(context: Context): Boolean {
-		val repository = withContext(Dispatchers.Default) {
-			repositoryLazy.getOrNull()
-		} ?: return false
+	suspend fun loadOptions(): ImageServerOptions? = withContext(Dispatchers.Default) {
+		val repository = repositoryLazy.getOrNull() ?: return@withContext null
 		val key = repository.getConfigKeys().firstNotNullOfOrNull {
 			it as? ConfigKey.PreferredImageServer
-		} ?: return false
-		val entries = key.presetValues.values.mapToArray {
-			it ?: context.getString(R.string.automatic)
-		}
-		val entryValues = key.presetValues.keys.toTypedArray()
+		} ?: return@withContext null
 		val config = repository.getConfig()
-		val initialValue = config[key]
-		var currentValue = initialValue
-		val changed = suspendCancellableCoroutine { cont ->
-			val dialog = MaterialAlertDialogBuilder(context)
-				.setTitle(R.string.image_server)
-				.setCancelable(true)
-				.setSingleChoiceItems(entries, entryValues.indexOf(initialValue)) { _, i ->
-					currentValue = entryValues[i]
-				}.setNegativeButton(android.R.string.cancel) { dialog, _ ->
-					dialog.cancel()
-				}.setPositiveButton(android.R.string.ok) { _, _ ->
-					if (currentValue != initialValue) {
-						config[key] = currentValue
-						cont.resume(true)
-					} else {
-						cont.resume(false)
-					}
-				}.setOnCancelListener {
-					cont.resume(false)
-				}.create()
-			dialog.show()
-			cont.invokeOnCancellation {
-				dialog.cancel()
-			}
-		}
-		if (changed) {
+		ImageServerOptions(
+			selectedValue = config[key],
+			entries = key.presetValues.map { (value, label) -> ImageServerEntry(value, label) },
+		)
+	}
+
+	suspend fun select(value: String?): Boolean = withContext(Dispatchers.Default) {
+		val repository = repositoryLazy.getOrNull() ?: return@withContext false
+		val key = repository.getConfigKeys().firstNotNullOfOrNull {
+			it as? ConfigKey.PreferredImageServer
+		} ?: return@withContext false
+		val config = repository.getConfig()
+		if (config[key] == value) return@withContext false
+		config[key] = value
 			repository.invalidateCache()
-		}
-		return changed
+		true
 	}
 }

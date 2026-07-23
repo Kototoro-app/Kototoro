@@ -6,9 +6,10 @@ import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnimationUtils
-import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,6 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.view.doOnLayout
@@ -68,13 +71,16 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private val settings: AppSettings,
 	private val transitionController: SpaceTransitionCurtainController,
 ) {
-	private var activity: AppCompatActivity? = null
+	private var activity: FragmentActivity? = null
 	private var snackbarAnchor: View? = null
 	private var origin = SpaceSwitchOrigin.READER
 	private var availabilityProvider: () -> SpaceSwitchAvailability = { SpaceSwitchAvailability.UNAVAILABLE }
 	private var progressFlusher = SpaceProgressFlusher {}
 	private var featureEnabled = false
 	private var controlsVisible = false
+	private var composeFabVisible by mutableStateOf(false)
+	private var composeFabEnabled by mutableStateOf(true)
+	private var composeFabAnchorBounds: Rect? = null
 	private var hideWithControlsTransition = false
 	private var launchOrigin: android.graphics.PointF? = null
 	private val fabs = LinkedHashSet<View>()
@@ -86,7 +92,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var fabChromeUpdateToken = 0
 
 	fun bind(
-		activity: AppCompatActivity,
+		activity: FragmentActivity,
 		snackbarAnchor: View,
 		origin: SpaceSwitchOrigin,
 		availabilityProvider: () -> SpaceSwitchAvailability,
@@ -179,6 +185,21 @@ class SpaceSwitcherDelegate @Inject constructor(
 		)
 	}
 
+	@Composable
+	fun Fab(modifier: Modifier = Modifier) {
+		if (!composeFabVisible) return
+		val activeSpaceId by spaceRepository.activeSpace.collectAsState()
+		val spaces by catalogRepository.spaces.collectAsState()
+		SpaceSwitcherFab(
+			activeSpaceId = activeSpaceId,
+			activeSpace = spaces.firstOrNull { it.id == activeSpaceId },
+			onClick = { if (composeFabEnabled) showSwitcher() },
+			modifier = modifier.onGloballyPositioned { coordinates ->
+				composeFabAnchorBounds = coordinates.boundsInWindow()
+			},
+		)
+	}
+
 	fun setControlsVisible(
 		visible: Boolean,
 		hideWithControlsTransition: Boolean = false,
@@ -214,7 +235,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 		val activity = activity ?: return
 		if (!featureEnabled || availabilityProvider() == SpaceSwitchAvailability.UNAVAILABLE) return
 		if (switcherOverlay != null) return
-		switcherFabAnchorBounds = null
+		switcherFabAnchorBounds = composeFabAnchorBounds
 		val rootMenuHost = RootGlassMenuHost()
 		val overlay = ComposeView(activity).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -437,6 +458,8 @@ class SpaceSwitcherDelegate @Inject constructor(
 		val available = availabilityProvider() != SpaceSwitchAvailability.UNAVAILABLE
 		activity ?: return
 		val shouldShowFab = featureEnabled && available && controlsVisible
+		composeFabVisible = shouldShowFab
+		composeFabEnabled = !inProgress
 		val updateToken = ++fabChromeUpdateToken
 		fabs.forEach { target ->
 			target.post {
@@ -487,7 +510,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 	}
 
 	private fun returnToMain(
-		activity: AppCompatActivity,
+		activity: FragmentActivity,
 		targetSpaceId: SpaceId,
 		resumeReading: Boolean,
 	) {

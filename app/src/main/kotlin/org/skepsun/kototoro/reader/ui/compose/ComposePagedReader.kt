@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -65,6 +66,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -228,6 +230,10 @@ fun ComposeWebtoonReader(
 	isZoomEnabled: Boolean = false,
 	defaultScale: Float = 1f,
 	isGapsEnabled: Boolean = false,
+	isPullGestureEnabled: Boolean = false,
+	canGoPreviousChapter: Boolean = true,
+	canGoNextChapter: Boolean = true,
+	onPullChapter: (Int) -> Unit = {},
 	onShowErrorDetails: (Throwable, String?) -> Unit = { _, _ -> },
 	onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
 	resolveErrorStringId: (Throwable) -> Int = { 0 },
@@ -249,6 +255,7 @@ fun ComposeWebtoonReader(
 	var pendingAnchor by remember { mutableStateOf<WebtoonListAnchor?>(null) }
 	var viewportWidthPx by remember { mutableIntStateOf(0) }
 	var viewportHeightPx by remember { mutableIntStateOf(0) }
+	var pullState by remember { mutableStateOf(WebtoonPullState()) }
 	fun measurementFor(position: Int): WebtoonViewportMeasurement {
 		val size = pages.getOrNull(position)?.let { page -> imageSizes[page.readerKey] }
 		return measureWebtoonViewport(viewportHeightPx, viewportWidthPx, size?.width, size?.height)
@@ -381,11 +388,64 @@ fun ComposeWebtoonReader(
 				}
 			},
 	) {
-		val nestedScrollConnection = remember(listState, pages, viewportWidthPx, viewportHeightPx) {
+		val pullThresholdPx = viewportHeightPx * WEBTOON_PULL_THRESHOLD
+		val nestedScrollConnection = remember(
+			listState,
+			pages,
+			viewportWidthPx,
+			viewportHeightPx,
+			isPullGestureEnabled,
+			canGoPreviousChapter,
+			canGoNextChapter,
+		) {
 			object : NestedScrollConnection {
-				override fun onPreScroll(available: Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): Offset {
+				override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+					if (source == NestedScrollSource.UserInput && isPullGestureEnabled) {
+						val retracted = pullState.retract(available.y)
+						if (retracted != pullState) {
+							val consumed = when {
+								pullState.topDistancePx > retracted.topDistancePx ->
+									-(pullState.topDistancePx - retracted.topDistancePx)
+								else -> pullState.bottomDistancePx - retracted.bottomDistancePx
+							}
+							pullState = retracted
+							return Offset(0f, consumed)
+						}
+					}
 					val consumed = consumeVisibleInternalScroll((-available.y).toInt())
 					return Offset(x = 0f, y = -consumed.toFloat())
+				}
+
+				override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+					if (source != NestedScrollSource.UserInput || !isPullGestureEnabled || available.y == 0f) {
+						return Offset.Zero
+					}
+					pullState = pullState.pullAtBoundary(
+						availableY = available.y,
+						canScrollBackward = listState.canScrollBackward,
+						canScrollForward = listState.canScrollForward,
+						maxDistancePx = viewportHeightPx.toFloat(),
+					)
+					return Offset(x = 0f, y = available.y)
+				}
+
+				override suspend fun onPreFling(available: Velocity): Velocity {
+					releasePull()
+					return Velocity.Zero
+				}
+
+				override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+					releasePull()
+					return Velocity.Zero
+				}
+
+				private fun releasePull() {
+					when (pullState.release(pullThresholdPx)) {
+						WebtoonPullDirection.PREVIOUS -> if (canGoPreviousChapter) onPullChapter(-1)
+						WebtoonPullDirection.NEXT -> if (canGoNextChapter) onPullChapter(1)
+						null -> Unit
+					}
+					pullState = WebtoonPullState()
 				}
 			}
 		}
@@ -451,7 +511,30 @@ fun ComposeWebtoonReader(
 			)
 		}
 		}
+		WebtoonPullFeedback(
+			progress = if (pullThresholdPx > 0f) pullState.topDistancePx / pullThresholdPx else 0f,
+			text = stringResource(if (canGoPreviousChapter) R.string.pull_to_prev_chapter else R.string.pull_top_no_prev),
+			modifier = Modifier.align(Alignment.TopCenter),
+		)
+		WebtoonPullFeedback(
+			progress = if (pullThresholdPx > 0f) pullState.bottomDistancePx / pullThresholdPx else 0f,
+			text = stringResource(if (canGoNextChapter) R.string.pull_to_next_chapter else R.string.pull_bottom_no_next),
+			modifier = Modifier.align(Alignment.BottomCenter),
+		)
 	}
+}
+
+@Composable
+private fun WebtoonPullFeedback(progress: Float, text: String, modifier: Modifier = Modifier) {
+	if (progress <= 0f) return
+	Text(
+		text = text,
+		color = MaterialTheme.colorScheme.onSurface,
+		modifier = modifier
+			.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+			.padding(horizontal = 16.dp, vertical = 8.dp)
+			.graphicsLayer { alpha = progress.coerceIn(0.25f, 1f) },
+	)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -689,7 +772,8 @@ fun ComposeReaderPage(
 		contentAlignment = Alignment.Center,
 	) {
 		when (val value = state) {
-			ComposeReaderImageState.LoadingOriginal -> CircularProgressIndicator()
+			ComposeReaderImageState.LoadingOriginal -> ReaderPageLoading(progress = null)
+			is ComposeReaderImageState.Downloading -> ReaderPageLoading(progress = value.progress)
 			is ComposeReaderImageState.PreviewReady -> ReaderPreviewImage(
 				page = page,
 				previewUrl = value.previewUrl,
@@ -792,7 +876,8 @@ private fun ComposeWebtoonPage(
 		contentAlignment = Alignment.Center,
 	) {
 		when (val value = state) {
-			ComposeReaderImageState.LoadingOriginal -> CircularProgressIndicator()
+			ComposeReaderImageState.LoadingOriginal -> ReaderPageLoading(progress = null)
+			is ComposeReaderImageState.Downloading -> ReaderPageLoading(progress = value.progress)
 			is ComposeReaderImageState.PreviewReady -> ReaderPreviewImage(
 				page = page,
 				previewUrl = value.previewUrl,
@@ -876,6 +961,19 @@ private fun ReaderPageError(
 			TextButton(onClick = onShowDetails) {
 				Text(stringResource(R.string.error_details))
 			}
+		}
+	}
+}
+
+@Composable
+private fun ReaderPageLoading(progress: Float?) {
+	Column(horizontalAlignment = Alignment.CenterHorizontally) {
+		if (progress == null) {
+			CircularProgressIndicator()
+			Text(stringResource(R.string.loading_), modifier = Modifier.padding(top = 8.dp))
+		} else {
+			CircularProgressIndicator(progress = { progress })
+			Text("${(progress * 100).toInt()}%", modifier = Modifier.padding(top = 8.dp))
 		}
 	}
 }
@@ -1101,4 +1199,5 @@ private fun AnimatedDrawableLifecycle(animatable: Animatable?, isPageVisible: Bo
 }
 
 private const val ZOOM_ANIMATION_DURATION_MS = 220
+private const val WEBTOON_PULL_THRESHOLD = 0.3f
 private const val AUTO_BACKGROUND_SAMPLE_SIZE = 64

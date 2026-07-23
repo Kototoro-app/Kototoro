@@ -11,23 +11,32 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
@@ -39,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -46,12 +56,25 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.reader.ui.ReaderActionsCallbacks
 import org.skepsun.kototoro.reader.ui.ReaderActionsContent
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
+import org.skepsun.kototoro.reader.ui.ReaderToolbarChrome
+import org.skepsun.kototoro.reader.domain.TapGridArea
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlItem
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderPrimaryControlBar
+import kotlin.math.roundToInt
 
 @Immutable
 internal data class ComposeReaderChromeState(
@@ -64,6 +87,8 @@ internal data class ComposeReaderChromeState(
 	val message: ReaderMessage? = null,
 	val autoScroll: ReaderAutoScrollUiState = ReaderAutoScrollUiState(),
 	val actions: ReaderActionsUiState = ReaderActionsUiState(),
+	val options: ComposeReaderOptionsState = ComposeReaderOptionsState(),
+	val toolsVisible: Boolean = false,
 )
 
 @Immutable
@@ -76,7 +101,12 @@ internal data class ReaderInfoBarState(
 )
 
 @Immutable
-internal data class ReaderMessage(val id: Long, val text: String, val durationMillis: Long?)
+internal data class ReaderMessage(
+	val id: Long,
+	val text: String,
+	val durationMillis: Long?,
+	val actionLabel: String? = null,
+)
 
 @Immutable
 internal data class ReaderAutoScrollUiState(
@@ -104,8 +134,15 @@ internal data class ComposeReaderChromeCallbacks(
 	val onZoomIn: () -> Unit = {},
 	val onZoomOut: () -> Unit = {},
 	val onMessageExpired: (Long) -> Unit = {},
+	val onMessageAction: () -> Unit = {},
 	val autoScroll: ReaderAutoScrollCallbacks = ReaderAutoScrollCallbacks(),
 	val actions: ReaderActionsCallbacks = ReaderActionsCallbacks(),
+	val onReaderInteraction: () -> Unit = {},
+	val onGridTap: (TapGridArea) -> Unit = {},
+	val onGridLongTap: (TapGridArea, Offset, IntSize) -> Unit = { _, _, _ -> },
+	val options: ComposeReaderOptionsCallbacks = ComposeReaderOptionsCallbacks(),
+	val onPrimaryDestination: (ReaderControlDestination) -> Unit = {},
+	val onPrimaryDestinationLongPress: (ReaderControlDestination) -> Unit = {},
 )
 
 @Composable
@@ -115,8 +152,20 @@ internal fun ComposeReaderActivityScaffold(
 	modifier: Modifier = Modifier,
 	content: @Composable () -> Unit,
 ) {
+	var progressExpanded by remember { mutableStateOf(true) }
 	Box(modifier = modifier.fillMaxSize()) {
-		content()
+		Box(
+			modifier = Modifier
+				.fillMaxSize()
+				.readerTapGrid(
+					enabled = true,
+					onInteraction = callbacks.onReaderInteraction,
+					onTap = callbacks.onGridTap,
+					onLongTap = callbacks.onGridLongTap,
+				),
+		) {
+			content()
+		}
 
 		AnimatedVisibility(
 			visible = state.controlsVisible,
@@ -142,17 +191,43 @@ internal fun ComposeReaderActivityScaffold(
 			exit = slideOutVertically { it } + fadeOut(),
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
-			Surface(
-				color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-				modifier = Modifier.fillMaxWidth(),
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				modifier = Modifier
+					.navigationBarsPadding()
+					.padding(horizontal = 12.dp, vertical = 4.dp),
 			) {
-				Box(modifier = Modifier.navigationBarsPadding()) {
-					ReaderActionsContent(
-						state = state.actions,
-						isSliderTracking = false,
-						callbacks = callbacks.actions,
-					)
+				if (state.actions.sliderEnabled && progressExpanded) {
+					Surface(
+						shape = MaterialTheme.shapes.large,
+						color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
+						modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
+					) {
+						ReaderProgressControl(state.actions, callbacks.actions)
+					}
+					Spacer(modifier = Modifier.height(6.dp))
 				}
+				ReaderPrimaryControlBar(
+						items = buildList {
+							if (state.actions.sliderEnabled) {
+								add(ReaderControlItem(ReaderControlDestination.PROGRESS, stringResource(R.string.progress), R.drawable.ic_progress_marker, active = progressExpanded))
+							}
+							addAll(listOf(
+							ReaderControlItem(ReaderControlDestination.NAVIGATION, stringResource(R.string.chapters), R.drawable.ic_grid),
+							ReaderControlItem(ReaderControlDestination.DISPLAY, stringResource(R.string.appearance), R.drawable.ic_appearance, active = state.options.visible),
+							ReaderControlItem(ReaderControlDestination.TRANSLATION, stringResource(R.string.reader_translation_action), R.drawable.ic_translate, active = state.actions.translateActive),
+							))
+						},
+						onDestinationSelected = { destination ->
+							if (destination == ReaderControlDestination.PROGRESS) {
+								progressExpanded = !progressExpanded
+							} else {
+								callbacks.onPrimaryDestination(destination)
+							}
+						},
+						onDestinationLongPressed = callbacks.onPrimaryDestinationLongPress,
+						modifier = Modifier.widthIn(max = 352.dp),
+					)
 			}
 		}
 
@@ -194,6 +269,7 @@ internal fun ComposeReaderActivityScaffold(
 		ReaderMessageHost(
 			message = state.message,
 			onExpired = callbacks.onMessageExpired,
+			onAction = callbacks.onMessageAction,
 			modifier = Modifier
 				.align(Alignment.BottomCenter)
 				.navigationBarsPadding()
@@ -208,6 +284,115 @@ internal fun ComposeReaderActivityScaffold(
 		) {
 			ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
 		}
+
+		ComposeReaderOptionsSheet(
+			state.options,
+			callbacks.options,
+			modifier = Modifier
+				.align(Alignment.BottomCenter)
+				.navigationBarsPadding()
+				.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
+		)
+		ComposeReaderToolsSheet(
+			visible = state.toolsVisible,
+			translateActive = state.actions.translateActive,
+			callbacks = callbacks.options,
+			onDismiss = { callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS) },
+			modifier = Modifier
+				.align(Alignment.BottomCenter)
+				.navigationBarsPadding()
+				.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
+		)
+	}
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ReaderProgressControl(state: ReaderActionsUiState, callbacks: ReaderActionsCallbacks) {
+	var dragValue by remember { mutableStateOf<Float?>(null) }
+	var trackPosition by remember { mutableStateOf(IntOffset.Zero) }
+	var trackWidthPx by remember { mutableStateOf(0) }
+	val value = (dragValue ?: state.sliderValue).coerceIn(0f, state.sliderMax.toFloat())
+	if (dragValue != null) {
+		val fraction = value / state.sliderMax.coerceAtLeast(1)
+		Popup(
+			alignment = Alignment.TopStart,
+			offset = IntOffset(
+				trackPosition.x + (trackWidthPx * fraction).roundToInt() - 32,
+				trackPosition.y - 52,
+			),
+			properties = PopupProperties(focusable = false),
+		) {
+			Surface(
+				shape = MaterialTheme.shapes.small,
+				color = MaterialTheme.colorScheme.inverseSurface,
+				contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+			) {
+				Text(
+					text = "${value.toInt() + 1}/${state.sliderMax + 1}",
+					style = MaterialTheme.typography.labelMedium,
+					modifier = Modifier.padding(8.dp),
+				)
+			}
+		}
+	}
+	BoxWithConstraints(
+		modifier = Modifier
+			.fillMaxWidth()
+			.padding(horizontal = 12.dp, vertical = 2.dp),
+	) {
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				IconButton(
+					onClick = callbacks.onPreviousChapter,
+					enabled = state.previousEnabled,
+					modifier = Modifier.size(48.dp),
+				) {
+					Icon(painterResource(R.drawable.ic_prev), stringResource(R.string.prev_chapter))
+				}
+				Column(
+					modifier = Modifier
+						.weight(1f)
+						.onGloballyPositioned { coordinates ->
+							val position = coordinates.positionInWindow()
+							trackPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
+							trackWidthPx = coordinates.size.width
+						},
+				) {
+				Slider(
+					value = value,
+					onValueChange = {
+						dragValue = it
+						callbacks.onSliderValueChanged(it)
+					},
+					onValueChangeFinished = {
+						dragValue = null
+						callbacks.onSliderValueChangeFinished()
+					},
+					valueRange = 0f..state.sliderMax.coerceAtLeast(1).toFloat(),
+					thumb = {
+						Box(
+							modifier = Modifier
+								.size(18.dp)
+								.background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape),
+						)
+					},
+					track = { sliderState ->
+						SliderDefaults.Track(
+							sliderState = sliderState,
+							modifier = Modifier.height(10.dp),
+							thumbTrackGapSize = 0.dp,
+						)
+					},
+				)
+				}
+				IconButton(
+					onClick = callbacks.onNextChapter,
+					enabled = state.nextEnabled,
+					modifier = Modifier.size(48.dp),
+				) {
+					Icon(painterResource(R.drawable.ic_next), stringResource(R.string.next_chapter))
+				}
+			}
 	}
 }
 
@@ -309,7 +494,12 @@ private fun rememberReaderSystemStatus(): ReaderSystemStatus {
 }
 
 @Composable
-private fun ReaderMessageHost(message: ReaderMessage?, onExpired: (Long) -> Unit, modifier: Modifier = Modifier) {
+private fun ReaderMessageHost(
+	message: ReaderMessage?,
+	onExpired: (Long) -> Unit,
+	onAction: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
 	LaunchedEffect(message?.id) {
 		val current = message ?: return@LaunchedEffect
 		delay(current.durationMillis ?: return@LaunchedEffect)
@@ -317,17 +507,25 @@ private fun ReaderMessageHost(message: ReaderMessage?, onExpired: (Long) -> Unit
 	}
 	AnimatedVisibility(visible = message != null, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
 		Surface(shape = MaterialTheme.shapes.small, color = Color.Black.copy(alpha = 0.78f), contentColor = Color.White) {
-			Text(text = message?.text.orEmpty(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(10.dp))
+			Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
+				Text(
+					text = message?.text.orEmpty(),
+					style = MaterialTheme.typography.bodySmall,
+					modifier = Modifier.padding(vertical = 10.dp),
+				)
+				message?.actionLabel?.let { label ->
+					TextButton(onClick = onAction) { Text(label) }
+				}
+			}
 		}
 	}
 }
 
 @Composable
 private fun ReaderComposeTopBar(state: ComposeReaderChromeState, onNavigateBack: () -> Unit) {
-	Surface(
-		color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-		modifier = Modifier.fillMaxWidth(),
-	) {
+	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+	Box(modifier = Modifier.fillMaxWidth()) {
+		ReaderToolbarChrome()
 		Row(
 			verticalAlignment = Alignment.CenterVertically,
 			modifier = Modifier
@@ -338,12 +536,13 @@ private fun ReaderComposeTopBar(state: ComposeReaderChromeState, onNavigateBack:
 				Icon(
 					painter = painterResource(androidx.appcompat.R.drawable.abc_ic_ab_back_material),
 					contentDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
+					tint = contentColor,
 				)
 			}
 			Column(modifier = Modifier.weight(1f)) {
-				Text(text = state.title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+				Text(text = state.title, color = contentColor, style = MaterialTheme.typography.titleMedium, maxLines = 1)
 				if (state.subtitle.isNotEmpty()) {
-					Text(text = state.subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+					Text(text = state.subtitle, color = contentColor.copy(alpha = 0.78f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
 				}
 			}
 		}

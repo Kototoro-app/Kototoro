@@ -53,7 +53,7 @@
                 android:paddingTop="0dp"
                 android:paddingBottom="0dp">
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/button_read"
                     style="?materialSplitButtonLeadingFilledStyle"
                     android:layout_width="wrap_content"
@@ -61,7 +61,7 @@
                     android:minWidth="@dimen/read_button_min_width"
                     android:text="@string/read" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/button_read_menu"
                     style="?materialSplitButtonIconFilledStyle"
                     android:layout_width="wrap_content"

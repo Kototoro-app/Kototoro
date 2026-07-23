@@ -1,16 +1,13 @@
 package org.skepsun.kototoro.reader.ui.compose
 
-import android.content.Context
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import org.skepsun.kototoro.core.prefs.ReaderMode
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.ui.ReaderErrorHost
 import org.skepsun.kototoro.reader.ui.ReaderNavigator
 import org.skepsun.kototoro.reader.ui.ReaderState
@@ -19,15 +16,12 @@ import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
 internal class ComposeReaderController(
-	context: Context,
 	private val lifecycleOwner: LifecycleOwner,
 	private val viewModel: ReaderViewModel,
 	private val imagePipeline: DefaultComposeReaderImagePipeline,
 	private val errorHost: ReaderErrorHost,
 	private val chromeCallbacks: ComposeReaderChromeCallbacks,
 ) : ReaderNavigator {
-
-	val view = ComposeView(context)
 
 	private var currentPosition by mutableIntStateOf(0)
 	private var currentInternalScroll by mutableIntStateOf(0)
@@ -36,24 +30,33 @@ internal class ComposeReaderController(
 	private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
 	private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
 	private var webtoonZoomCommand: ComposeWebtoonZoomCommand? by mutableStateOf(null)
-	private var readerMode by mutableStateOf(ReaderMode.STANDARD)
+	var readerMode by mutableStateOf(ReaderMode.STANDARD)
+		private set
 	private var isDoublePage by mutableStateOf(false)
 	private var chromeState by mutableStateOf(ComposeReaderChromeState(controlsVisible = false))
 	private var isChromeEnabled = false
 	private var areControlsVisible = true
 	private var nextCommandId = 0L
 	private var nextMessageId = 0L
+	private var messageAction: (() -> Unit)? = null
 
-	init {
-		view.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-		view.setContent {
-			KototoroTheme {
-				ComposeReaderActivityScaffold(
+	@Composable
+	fun Content() {
+		ComposeReaderActivityScaffold(
 					state = chromeState,
 					callbacks = chromeCallbacks.copy(
 						onZoomIn = ::onZoomIn,
 						onZoomOut = ::onZoomOut,
 						onMessageExpired = ::hideMessage,
+						onMessageAction = ::performMessageAction,
+						options = chromeCallbacks.options.copy(onDismiss = ::hideOptions),
+						onPrimaryDestination = { destination ->
+							if (destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS && chromeState.toolsVisible) {
+								hideTools()
+							} else {
+								chromeCallbacks.onPrimaryDestination(destination)
+							}
+						},
 					),
 				) {
 					ComposeReaderScreenRoot(
@@ -76,13 +79,15 @@ internal class ComposeReaderController(
 						},
 					)
 				}
-			}
 		}
-	}
 
 	fun updateConfiguration(mode: ReaderMode, doublePage: Boolean) {
 		readerMode = mode
 		isDoublePage = doublePage && mode != ReaderMode.WEBTOON && mode != ReaderMode.VERTICAL
+	}
+
+	fun setDoublePageEnabled(enabled: Boolean) {
+		isDoublePage = enabled && readerMode != ReaderMode.WEBTOON && readerMode != ReaderMode.VERTICAL
 	}
 
 	fun setChromeEnabled(enabled: Boolean) {
@@ -111,12 +116,29 @@ internal class ComposeReaderController(
 		chromeState = chromeState.copy(infoBar = chromeState.infoBar.transform())
 	}
 
-	fun showMessage(text: CharSequence, durationMillis: Long? = null) {
-		chromeState = chromeState.copy(message = ReaderMessage(++nextMessageId, text.toString(), durationMillis))
+	fun showMessage(
+		text: CharSequence,
+		durationMillis: Long? = null,
+		actionLabel: String? = null,
+		onAction: (() -> Unit)? = null,
+	) {
+		messageAction = onAction
+		chromeState = chromeState.copy(
+			message = ReaderMessage(++nextMessageId, text.toString(), durationMillis, actionLabel),
+		)
 	}
 
 	fun hideMessage(id: Long? = null) {
-		if (id == null || chromeState.message?.id == id) chromeState = chromeState.copy(message = null)
+		if (id == null || chromeState.message?.id == id) {
+			messageAction = null
+			chromeState = chromeState.copy(message = null)
+		}
+	}
+
+	private fun performMessageAction() {
+		val action = messageAction
+		hideMessage()
+		action?.invoke()
 	}
 
 	fun updateAutoScroll(transform: ReaderAutoScrollUiState.() -> ReaderAutoScrollUiState) {
@@ -125,6 +147,26 @@ internal class ComposeReaderController(
 
 	fun updateActions(transform: ReaderActionsUiState.() -> ReaderActionsUiState) {
 		chromeState = chromeState.copy(actions = chromeState.actions.transform())
+	}
+
+	fun showOptions(state: ComposeReaderOptionsState) {
+		chromeState = chromeState.copy(options = state.copy(visible = true))
+	}
+
+	fun showTools() {
+		chromeState = chromeState.copy(toolsVisible = true)
+	}
+
+	private fun hideTools() {
+		chromeState = chromeState.copy(toolsVisible = false)
+	}
+
+	fun updateOptions(transform: ComposeReaderOptionsState.() -> ComposeReaderOptionsState) {
+		chromeState = chromeState.copy(options = chromeState.options.transform())
+	}
+
+	private fun hideOptions() {
+		chromeState = chromeState.copy(options = chromeState.options.copy(visible = false))
 	}
 
 	override val isReaderResumed: Boolean

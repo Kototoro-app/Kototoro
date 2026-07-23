@@ -61,8 +61,10 @@ import org.skepsun.kototoro.reader.ui.ReaderControlDelegate
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeReaderViewModel
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeImageContext
+import org.skepsun.kototoro.reader.novel.compose.NovelComposeChapterContent
 import org.skepsun.kototoro.reader.novel.compose.NovelReadingPosition
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
+import org.skepsun.kototoro.reader.novel.compose.hasOverlay
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
 import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
@@ -78,9 +80,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class NovelReaderActivity : 
     BaseFullscreenActivity<ActivityNovelReaderV2Binding>(),
-    ReaderControlDelegate.OnInteractionListener,
-    NovelReaderConfigSheet.Callback,
-    NovelChaptersSheet.Callback {
+    ReaderControlDelegate.OnInteractionListener {
 
     private val composeReaderViewModel: NovelComposeReaderViewModel by viewModels()
 
@@ -147,13 +147,13 @@ class NovelReaderActivity :
     private var sessionStartPercent: Float = 0f
     
     // Continuous Scroll mode properties
-    private var continuousAdapter: NovelContinuousAdapter? = null
     private var continuousTapDownX = 0f
     private var continuousTapDownY = 0f
     private var continuousTapDownTime = 0L
     private var lastContinuousGestureTapTime = 0L
     private var lastContinuousTapHandledTime = 0L
     private var continuousTouchSequence = 0L
+    private var continuousAdapter: NovelContinuousAdapter? = null
     private var lastContinuousTapSource = ""
     private var isLoadingPrevious = false
     private var isLoadingNext = false
@@ -178,27 +178,12 @@ class NovelReaderActivity :
             
             lifecycleScope.launch {
                 ttsService?.getState()?.collect { state ->
-                    // Update TTS bar playback icon based on state
-                    val playPauseIcon = if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
-                        R.drawable.ic_pause
-                    } else {
-                        R.drawable.ic_play
-                    }
-                    viewBinding.btnTtsPlayPause.setImageResource(playPauseIcon)
+					composeReaderViewModel.publishTtsState(state)
                     
                     if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
                         // TODO string sync highlighting
                     } else if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE) {
                         viewBinding.readerView.setHighlightRange(null)
-                        val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-                        val firstVisible = layoutManager?.findFirstVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
-                        val lastVisible = layoutManager?.findLastVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
-                        if (firstVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION && lastVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                            for (i in firstVisible..lastVisible) {
-                                val view = layoutManager?.findViewByPosition(i) as? org.skepsun.kototoro.reader.novel.NovelChapterView
-                                view?.setHighlightRange(null)
-                            }
-                        }
                     }
                     
                     // 当当前页朗读完成时，自动翻页并继续朗读
@@ -214,49 +199,8 @@ class NovelReaderActivity :
             lifecycleScope.launch {
                 ttsService?.getPlayingTokenIndex()?.collectLatest { index ->
                     val range = index?.let { ttsService?.getToken(it)?.range }
+					composeReaderViewModel.publishTtsHighlight(range)
                     viewBinding.readerView.setHighlightRange(range)
-                    
-                    val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-                    if (isScrollMode && range != null) {
-                        val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-                        val firstVisible = layoutManager?.findFirstVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
-                        val lastVisible = layoutManager?.findLastVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
-                        
-                        var viewForScroll: View? = null
-                        var textForScroll: String? = null
-                        
-                        if (firstVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION && lastVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                            for (i in firstVisible..lastVisible) {
-                                val item = continuousAdapter?.getItems()?.getOrNull(i)
-                                val view = layoutManager?.findViewByPosition(i) as? org.skepsun.kototoro.reader.novel.NovelChapterView
-                                
-                                if (item?.chapterIndex == ttsScrollModeChapterIndex) {
-                                    view?.setHighlightRange(range)
-                                    viewForScroll = view
-                                    textForScroll = item.content
-                                } else {
-                                    view?.setHighlightRange(null)
-                                }
-                            }
-                        }
-                        
-                        if (viewForScroll != null && textForScroll != null && textForScroll.isNotEmpty()) {
-                            // Target Token Y layout bounds extraction mapping flawlessly eliminating ratio approximation drifts.
-                            val targetOffset = (viewForScroll as org.skepsun.kototoro.reader.novel.NovelChapterView).getLineTopForOffset(range.first).toInt()
-                            val currentOffset = -viewForScroll.top
-                            
-                            val screenHeight = viewBinding.continuousScrollView.height
-                            val preferredZoneTop = currentOffset + (screenHeight * 0.1f)
-                            val preferredZoneBottom = currentOffset + (screenHeight * 0.85f)
-                            
-                            // Auto-scroll smoothly if current spoken text goes out of the preferred reading zone
-                            if (targetOffset > preferredZoneBottom || targetOffset < preferredZoneTop) {
-                                val newDesiredTopOffset = targetOffset - (screenHeight * 0.15f).toInt()
-                                val diff = newDesiredTopOffset - currentOffset
-                                viewBinding.continuousScrollView.smoothScrollBy(0, diff)
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -398,8 +342,13 @@ class NovelReaderActivity :
         viewBinding.actionsView.setTranslateButtonVisible(true)
         viewBinding.actionsView.setTranslateActive(false)
         setupImageHeaders()
-        setupTtsControls()
         setupComposeReaderHost()
+		lifecycleScope.launch {
+			composeReaderViewModel.uiState
+				.map { it.hasOverlay || it.settings?.readingMode == ReadingMode.SCROLL }
+				.distinctUntilChanged()
+				.collect { viewBinding.composeNovelReaderView.isVisible = it }
+		}
 
         viewBinding.readerView.onPageChangeListener = { page, total ->
             // 显示用页码按双页 spread 计数，实际进度用字符比例
@@ -409,7 +358,7 @@ class NovelReaderActivity :
             updateReadingStatus(displayPage, displayTotal)
             
             // Sync TTS on page flip if currently playing
-            if (viewBinding.ttsControlBar.isVisible && ttsService?.getState()?.value == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
+            if (composeReaderViewModel.uiState.value.ttsControlsVisible && ttsService?.getState()?.value == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
                 startTtsFromCurrentPage()
             }
         }
@@ -433,44 +382,6 @@ class NovelReaderActivity :
 
         viewBinding.readerView.updateSettings(readerSettings)
         applyReaderPalette()
-        
-        // Initialize Continuous Scroll Adapter
-        continuousAdapter = NovelContinuousAdapter(
-            settings = readerSettings,
-            onImageClick = { image -> openInlineImage(image) },
-            onTap = { rawX, rawY, eventTime -> handleContinuousRawTap(rawX, rawY, eventTime, "chapterView") },
-        )
-        viewBinding.continuousScrollView.adapter = continuousAdapter
-        continuousAdapter?.updatePalette(readerPalette ?: buildReaderPalette())
-        viewBinding.continuousScrollView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                handleContinuousScroll()
-            }
-        })
-        
-        val scrollGestureDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
-                if (readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL) {
-                    lastContinuousGestureTapTime = e.eventTime
-                    handleContinuousTap(
-                        x = e.x,
-                        y = e.y,
-                        width = viewBinding.continuousScrollView.width,
-                        height = viewBinding.continuousScrollView.height,
-                        eventTime = e.eventTime,
-                    )
-                    return true
-                }
-                return false
-            }
-        })
-        
-        viewBinding.continuousScrollView.setOnTouchListener { _, event ->
-            scrollGestureDetector.onTouchEvent(event)
-            handleContinuousTapFallback(event)
-            false
-        }
         
         applyReadingModeToggles()
         
@@ -554,6 +465,24 @@ class NovelReaderActivity :
                 ComposeNovelReaderRoute(
                     viewModel = composeReaderViewModel,
                     imageModel = { it },
+					onSettingsChanged = ::applyNovelReaderSettings,
+					onBookmark = ::onBookmarkClick,
+					onTts = ::onTtsClick,
+					onClearTranslationCache = ::onClearTranslationCacheClick,
+					onChapterSelected = ::onChapterSelected,
+					onTtsPrevious = { ttsService?.seekPrev() },
+					onTtsPlayPause = ::onTtsPlayPauseClicked,
+					onTtsNext = { ttsService?.seekNext() },
+					onTtsVoice = ::showVoiceSelectionDialog,
+					onTtsClose = {
+						onTtsStopClicked()
+						composeReaderViewModel.hideTtsControls()
+					},
+					onRequestPreviousChapter = ::requestPreviousComposeChapter,
+					onRequestNextChapter = ::requestNextComposeChapter,
+					onVisibleChapterChanged = ::onComposeVisibleChapterChanged,
+					onVisibleProgress = ::onComposeVisibleProgress,
+					renderContent = true,
                     onImageClick = { path ->
                         val image = composeReaderViewModel.uiState.value.imageContext
                         openInlineImage(
@@ -727,7 +656,7 @@ class NovelReaderActivity :
             } else {
                 getString(R.string.novel_first_chapter)
             }
-            viewBinding.toastView.showTemporary(message, 1500L)
+            showReaderMessage(message, 1500L)
         }
     }
 
@@ -786,7 +715,7 @@ class NovelReaderActivity :
         val content = getCurrentChapterContent()
         android.util.Log.d("NovelReaderActivity", "startTranslation: content length=${content?.length ?: 0}")
         if (content.isNullOrBlank()) {
-            viewBinding.toastView.showTemporary("暂无章节内容可翻译", 2000L)
+            showReaderMessage("暂无章节内容可翻译", 2000L)
             return
         }
 
@@ -797,7 +726,7 @@ class NovelReaderActivity :
         val hasApi = settings.readerTranslationApiEndpoint.isNotBlank()
         android.util.Log.d("NovelReaderActivity", "Translation config: mode=$mode, onnxModelId='$onnxModelId', hasOnnx=$hasOnnx, hasApi=$hasApi")
         if (!hasOnnx && !hasApi && mode.name != "LOCAL_ONLY") {
-            viewBinding.toastView.showTemporary(
+            showReaderMessage(
                 "请先在「设置 → AI翻译」中配置翻译引擎（API 或 ONNX 本地模型）",
                 3000L,
             )
@@ -833,7 +762,7 @@ class NovelReaderActivity :
                     val translatedCount = translation.translations.size
                     if (translation.isComplete) {
                         if (translatedCount == 0) {
-                            viewBinding.toastView.showTemporary(
+                            showReaderMessage(
                                 "未获得译文，请检查「设置 → AI翻译」中的引擎配置",
                                 3000L,
                             )
@@ -859,7 +788,7 @@ class NovelReaderActivity :
                 throw e  // 重新抛出 CancellationException 以正确传播取消信号
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Translation failed", e)
-                viewBinding.toastView.showTemporary("翻译失败: ${e.message}", 2000L)
+                showReaderMessage("翻译失败: ${e.message}", 2000L)
             }
         }
     }
@@ -891,7 +820,7 @@ class NovelReaderActivity :
                 totalCount,
             )
         }
-        viewBinding.toastView.showTemporary(message, TRANSLATION_PROGRESS_TOAST_DURATION)
+        showReaderMessage(message, TRANSLATION_PROGRESS_TOAST_DURATION)
     }
 
     private fun clearTranslation() {
@@ -899,7 +828,6 @@ class NovelReaderActivity :
         translationJob = null
         chapterTranslations.clear()
         viewBinding.readerView.setTranslation(null)
-        continuousAdapter?.clearTranslations()
         viewBinding.actionsView.setTranslateActive(false)
     }
 
@@ -916,7 +844,6 @@ class NovelReaderActivity :
         composeReaderViewModel.publishTranslation(translation)
         val isScrollMode = readerSettings.readingMode == ReadingMode.SCROLL
         if (isScrollMode) {
-            continuousAdapter?.updateTranslation(translation.chapterIndex, translation)
         } else {
             if (translation.chapterIndex == currentChapterIndex) {
                 viewBinding.readerView.setTranslation(translation)
@@ -930,9 +857,9 @@ class NovelReaderActivity :
     private fun getCurrentChapterContent(): String? {
         val isScrollMode = readerSettings.readingMode == ReadingMode.SCROLL
         return if (isScrollMode) {
-            continuousAdapter?.getItems()
-                ?.firstOrNull { it.chapterIndex == currentChapterIndex }
-                ?.content
+			composeReaderViewModel.uiState.value.continuousChapters
+				.firstOrNull { it.chapterIndex == currentChapterIndex }
+				?.content
         } else {
             viewBinding.readerView.chapterContent
         }
@@ -954,7 +881,7 @@ class NovelReaderActivity :
     override fun onBookmarkClick() {
         val chapter = chapters.getOrNull(currentChapterIndex)
         if (chapter == null) {
-            viewBinding.toastView.showTemporary(getString(R.string.novel_cannot_add_bookmark), 1500L)
+            showReaderMessage(getString(R.string.novel_cannot_add_bookmark), 1500L)
             return
         }
         
@@ -972,7 +899,7 @@ class NovelReaderActivity :
                     // 删除书签
                     bookmarksRepository.removeBookmark(manga.id, chapter.id, currentPage)
                     viewBinding.readerView.performConfirmHapticFeedback()
-                    viewBinding.toastView.showTemporary(getString(R.string.novel_bookmark_removed), 1500L)
+                    showReaderMessage(getString(R.string.novel_bookmark_removed), 1500L)
                 } else {
                     // 添加书签 - 保存当前页面的文本预览
                     val pageText = viewBinding.readerView.getCurrentPageText()
@@ -990,35 +917,12 @@ class NovelReaderActivity :
                     )
                     bookmarksRepository.addBookmark(bookmark)
                     viewBinding.readerView.performConfirmHapticFeedback()
-                    viewBinding.toastView.showTemporary(getString(R.string.novel_bookmark_added), 1500L)
+                    showReaderMessage(getString(R.string.novel_bookmark_added), 1500L)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Failed to toggle bookmark", e)
-                viewBinding.toastView.showTemporary(getString(R.string.novel_bookmark_failed, e.message ?: ""), 2000L)
+                showReaderMessage(getString(R.string.novel_bookmark_failed, e.message ?: ""), 2000L)
             }
-        }
-    }
-
-    private fun setupTtsControls() {
-        viewBinding.btnTtsClose.setOnClickListener {
-            onTtsStopClicked()
-            viewBinding.ttsControlBar.visibility = View.GONE
-            // 如果 UI 已隐藏，关闭 TTS 后也隐藏底部工具栏
-            if (!isUiVisible) {
-                viewBinding.toolbarDocked.isVisible = false
-            }
-        }
-        viewBinding.btnTtsPlayPause.setOnClickListener {
-            onTtsPlayPauseClicked()
-        }
-        viewBinding.btnTtsPrev.setOnClickListener {
-            ttsService?.seekPrev()
-        }
-        viewBinding.btnTtsNext.setOnClickListener {
-            ttsService?.seekNext()
-        }
-        viewBinding.btnTtsVoice.setOnClickListener {
-            showVoiceSelectionDialog()
         }
     }
 
@@ -1068,7 +972,7 @@ class NovelReaderActivity :
                                         .setOnDismissListener { localTts?.shutdown() }
                                         .show()
                             } else {
-                                viewBinding.toastView.showTemporary("未检测到可用的系统音色", 2000L)
+                                showReaderMessage("未检测到可用的系统音色", 2000L)
                                 localTts?.shutdown()
                             }
                         }
@@ -1103,28 +1007,22 @@ class NovelReaderActivity :
                     }
                     .show()
             } else {
-                viewBinding.toastView.showTemporary("尚未导入任何网络音源配置，请前往设置导入", 2500L)
+                showReaderMessage("尚未导入任何网络音源配置，请前往设置导入", 2500L)
             }
         }
     }
 
-    override fun onTtsClick() {
-        viewBinding.ttsControlBar.visibility = View.VISIBLE
-        // 确保底部工具栏可见，以显示 TTS 控制条
-        viewBinding.toolbarDocked.isVisible = true
-        // 如果 UI 已隐藏，只显示 TTS 控制条，隐藏其他操作按钮
-        if (!isUiVisible) {
-            viewBinding.actionsView.isVisible = false
-        }
+    private fun onTtsClick() {
+		composeReaderViewModel.showTtsControls()
         val state = ttsService?.getState()?.value
         if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE) {
             onTtsPlayPauseClicked()
         }
     }
 
-    override fun onClearTranslationCacheClick() {
+    private fun onClearTranslationCacheClick() {
         translationProcessor.clearCache()
-        viewBinding.toastView.showTemporary("翻译缓存已清除", 1500L)
+        showReaderMessage("翻译缓存已清除", 1500L)
     }
 
     private fun startTtsFromCurrentPage() {
@@ -1137,17 +1035,9 @@ class NovelReaderActivity :
         val text = if (!isScrollMode) {
             viewBinding.readerView.getCurrentPageText()
         } else {
-            val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-            val firstVisible = layoutManager?.findFirstVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
-            if (firstVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                val item = continuousAdapter?.getItems()?.getOrNull(firstVisible)
-                ttsScrollModeChapterIndex = item?.chapterIndex ?: -1
-                
-                val view = layoutManager?.findViewByPosition(firstVisible) as? org.skepsun.kototoro.reader.novel.NovelChapterView
-                val processed = view?.processedText ?: ""
-                
-                if (processed.isNotEmpty()) processed else item?.content ?: ""
-            } else ""
+            val composeState = composeReaderViewModel.uiState.value
+            ttsScrollModeChapterIndex = composeState.chapterIndex
+            composeState.content
         }
         
         if (text.isBlank()) return
@@ -1192,7 +1082,7 @@ class NovelReaderActivity :
             // On Android 12+, ForegroundServiceStartNotAllowedException can be thrown.
             // Also catches SecurityException and IllegalStateException.
             android.util.Log.e("NovelReaderActivity", "Failed to start TTS foreground service", e)
-            viewBinding.toastView.showTemporary("TTS启动失败: ${e.message}", 2000L)
+            showReaderMessage("TTS启动失败: ${e.message}", 2000L)
         }
     }
 
@@ -1236,7 +1126,7 @@ class NovelReaderActivity :
                 // 翻页后延迟一小段时间等待页面渲染完成，然后开始朗读新页面
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                     isHandlingTtsCompletion = false
-                    if (viewBinding.ttsControlBar.visibility == android.view.View.VISIBLE) {
+                    if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
                         startTtsFromCurrentPage()
                     }
                 }, 300)
@@ -1585,7 +1475,7 @@ class NovelReaderActivity :
                             error.message?.contains("Failed to parse") == true -> getString(R.string.novel_epub_parse_failed)
                             else -> getString(R.string.novel_epub_load_failed, error.message ?: "")
                         }
-                        viewBinding.toastView.showTemporary(errorMessage, 3000L)
+                        showReaderMessage(errorMessage, 3000L)
                     }
                     
                     return@launch
@@ -1685,10 +1575,13 @@ class NovelReaderActivity :
                         } else {
                             val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
                             if (isScrollMode) {
-                                // Incremental text in stream mode -> We should probably replace the first loaded chapter
-                                continuousAdapter?.setInitialChapter(
-                                    NovelChapterData(index, plainText, null, null)
-                                )
+							composeReaderViewModel.publishChapter(
+								chapterIndex = index,
+								chapterTitle = chapter.title.orEmpty(),
+								content = plainText,
+								settings = readerSettings,
+								translation = chapterTranslations[index],
+							)
                             } else {
                                 // Update existing content without resetting page
                                 viewBinding.readerView.setContent(
@@ -1955,7 +1848,7 @@ class NovelReaderActivity :
                     val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
                     
                     if (isScrollMode) {
-                        continuousAdapter?.setInitialChapter(
+						continuousAdapter?.setInitialChapter(
                             NovelChapterData(
                                 chapterIndex = currentChapterIndex, // This is basically currentChapterIndex
                                 content = contentToDisplay,
@@ -2017,7 +1910,7 @@ class NovelReaderActivity :
                     }
                     
                     if (settings.isReaderChapterToastEnabled) {
-                        viewBinding.toastView.showTemporary(
+                        showReaderMessage(
                             chapter.title ?: getString(R.string.unnamed_chapter),
                             2000L,
                         )
@@ -2026,7 +1919,7 @@ class NovelReaderActivity :
                     if (pendingTtsAutoStart) {
                         pendingTtsAutoStart = false
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (viewBinding.ttsControlBar.visibility == android.view.View.VISIBLE) {
+                            if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
                                 startTtsFromCurrentPage()
                             }
                         }, 500)
@@ -2133,7 +2026,7 @@ class NovelReaderActivity :
                             
                             val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
                             if (isScrollMode) {
-                                continuousAdapter?.setInitialChapter(
+								continuousAdapter?.setInitialChapter(
                                     NovelChapterData(
                                         chapterIndex = currentChapterIndex, 
                                         content = contentToDisplay,
@@ -2213,7 +2106,7 @@ class NovelReaderActivity :
                             }
                             
                             if (settings.isReaderChapterToastEnabled) {
-                                viewBinding.toastView.showTemporary(
+                                showReaderMessage(
                                     chapter.title ?: getString(R.string.unnamed_chapter),
                                     2000L,
                                 )
@@ -2222,7 +2115,7 @@ class NovelReaderActivity :
                             if (pendingTtsAutoStart) {
                                 pendingTtsAutoStart = false
                                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                    if (viewBinding.ttsControlBar.visibility == android.view.View.VISIBLE) {
+                                    if (composeReaderViewModel.uiState.value.ttsControlsVisible) {
                                         startTtsFromCurrentPage()
                                     }
                                 }, 500)
@@ -2246,7 +2139,7 @@ class NovelReaderActivity :
                             publishComposeImageContext(null, null)
                             val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
                             if (isScrollMode) {
-                                continuousAdapter?.setInitialChapter(
+								continuousAdapter?.setInitialChapter(
                                     NovelChapterData(currentChapterIndex, contentToDisplay, null, null)
                                 )
                                 val initialRatio = desiredProgressRatio ?: 0f
@@ -2573,10 +2466,10 @@ class NovelReaderActivity :
             NOVEL_SCROLL_TAP_LOG_TAG,
             "setUiVisible request=$visible field=$isUiVisible appbar=${viewBinding.appbarTop.isVisible} " +
                 "toolbar=${viewBinding.toolbarDocked.isVisible} actions=${viewBinding.actionsView.isVisible} " +
-                "tts=${viewBinding.ttsControlBar.visibility == View.VISIBLE} animations=$isAnimationsEnabled",
+                "tts=${composeReaderViewModel.uiState.value.ttsControlsVisible} animations=$isAnimationsEnabled",
         )
         if (viewBinding.appbarTop.isVisible != visible) {
-            val isTtsBarActive = viewBinding.ttsControlBar.visibility == View.VISIBLE
+            val isTtsBarActive = composeReaderViewModel.uiState.value.ttsControlsVisible
             
             if (isAnimationsEnabled) {
                 val transition = TransitionSet()
@@ -2641,18 +2534,17 @@ class NovelReaderActivity :
     }
 
     private fun showLoading(loading: Boolean) {
-        viewBinding.layoutLoading.isVisible = loading
-        if (loading) {
-            viewBinding.toastView.show(R.string.loading_)
-        } else {
-            viewBinding.toastView.hide()
-        }
+		composeReaderViewModel.setLoading(loading)
     }
 
     private fun showError(message: String) {
         viewBinding.readerView.cancelPendingChapterTransition()
-        viewBinding.toastView.showTemporary(message, 3000L)
+		showReaderMessage(message, 3000L)
     }
+
+	private fun showReaderMessage(message: String, durationMillis: Long) {
+		composeReaderViewModel.showMessage(message, durationMillis)
+	}
 
     private fun decodeChapterHtml(url: String): String {
         if (url.startsWith("data:", ignoreCase = true)) {
@@ -2745,7 +2637,7 @@ class NovelReaderActivity :
     private fun showChaptersSheet() {
         android.util.Log.d("NovelReaderActivity", "showChaptersSheet: chapters.size=${chapters.size}, currentChapterIndex=$currentChapterIndex")
         if (chapters.isEmpty()) {
-            viewBinding.toastView.showTemporary("暂无章节", 1500L)
+            showReaderMessage("暂无章节", 1500L)
             return
         }
 
@@ -2754,16 +2646,14 @@ class NovelReaderActivity :
             android.util.Log.d("NovelReaderActivity", "  Chapter[$index]: title='${chapter.title}', url='${chapter.url.takeLast(15)}'")
         }
 
-        val sheet = NovelChaptersSheet.newInstance(chapters, currentChapterIndex)
-        sheet.show(supportFragmentManager, "novel_chapters")
+		composeReaderViewModel.showChapters(chapters, currentChapterIndex)
     }
 
     /**
      * 显示设置面板
      */
     private fun showConfigSheet() {
-        val sheet = NovelReaderConfigSheet.newInstance()
-        sheet.show(supportFragmentManager, "novel_config")
+		composeReaderViewModel.showSettings(readerSettings)
     }
 
     private fun applyInitialUiVisibility() {
@@ -2780,8 +2670,7 @@ class NovelReaderActivity :
         viewBinding.root.requestApplyInsets()
     }
 
-    // NovelChaptersSheet.Callback 实现
-    override fun onChapterSelected(index: Int) {
+    private fun onChapterSelected(index: Int) {
         android.util.Log.d("NovelReaderActivity", "onChapterSelected: index=$index, currentChapterIndex=$currentChapterIndex, chapters.size=${chapters.size}")
         if (index != currentChapterIndex && index in chapters.indices) {
             val previousState = currentReaderState()
@@ -3294,8 +3183,8 @@ class NovelReaderActivity :
         viewBinding.root.requestApplyInsets()
     }
 
-    // NovelReaderConfigSheet.Callback 实现
-    override fun onSettingsChanged(settings: NovelReaderSettings) {
+	private fun applyNovelReaderSettings(settings: NovelReaderSettings) {
+		settings.save(this)
         try {
             android.util.Log.d("NovelReaderActivity", "Settings changed: fontSize=${settings.fontSizeSp}")
             val previousDisplayMode = readerSettings.translationDisplayMode
@@ -3304,7 +3193,6 @@ class NovelReaderActivity :
             runOnUiThread {
                 try {
                     viewBinding.readerView.updateSettings(settings)
-                    continuousAdapter?.updateSettings(settings)
                     applyReaderPalette()
                     applyReadingModeToggles()
 
@@ -3330,57 +3218,13 @@ class NovelReaderActivity :
     private fun applyReadingModeToggles() {
         val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
         viewBinding.readerView.isVisible = !isScrollMode
-        viewBinding.continuousScrollView.isVisible = isScrollMode
+        // Compose owns the visible continuous reader. The legacy RecyclerView remains detached
+        // from rendering while its fallback implementation is incrementally removed.
+        viewBinding.continuousScrollView.isVisible = false
         
-        if (isScrollMode && continuousAdapter?.itemCount == 0) {
+        if (isScrollMode && composeReaderViewModel.uiState.value.content.isBlank()) {
             // Need to reload content into the new view if it was empty
             loadChapter(currentChapterIndex)
-        }
-    }
-    
-    private fun handleContinuousScroll() {
-        val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
-        if (!isScrollMode) return
-        
-        val layoutManager = viewBinding.continuousScrollView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
-        val firstVisible = layoutManager.findFirstVisibleItemPosition()
-        val lastVisible = layoutManager.findLastVisibleItemPosition()
-        val totalItems = layoutManager.itemCount
-        
-        if (firstVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-            val item = continuousAdapter?.getItems()?.getOrNull(firstVisible)
-            if (item != null && item.chapterIndex != currentChapterIndex) {
-                currentChapterIndex = item.chapterIndex
-                updateNavigationButtons()
-                // Update history implicitly via scrolling
-                updateHistory(0, 1) 
-            }
-            
-            val view = layoutManager.findViewByPosition(firstVisible)
-            if (view != null) {
-                val scrollHeight = viewBinding.continuousScrollView.height.takeIf { it > 0 } ?: 1
-                val virtualTotal = kotlin.math.max(1, kotlin.math.ceil(view.height.toFloat() / scrollHeight).toInt())
-                val virtualPage = (getCurrentProgressRatio() * virtualTotal).toInt().coerceIn(0, virtualTotal - 1)
-                
-                updateProgress(virtualPage, virtualTotal)
-                updateReadingStatus(virtualPage, virtualTotal)
-            }
-        }
-        
-        // Preload Previous
-        if (firstVisible <= 0 && !isLoadingPrevious) {
-            val firstItem = continuousAdapter?.getItems()?.firstOrNull()
-            if (firstItem != null && firstItem.chapterIndex > 0) {
-                preloadContinuousBoundary(firstItem.chapterIndex - 1, isPrevious = true)
-            }
-        }
-        
-        // Preload Next
-        if (lastVisible >= totalItems - 1 && !isLoadingNext) {
-            val lastItem = continuousAdapter?.getItems()?.lastOrNull()
-            if (lastItem != null && lastItem.chapterIndex < chapters.lastIndex) {
-                preloadContinuousBoundary(lastItem.chapterIndex + 1, isPrevious = false)
-            }
         }
     }
     
@@ -3402,11 +3246,7 @@ class NovelReaderActivity :
                                 epubFile = loadResult.epubFile,
                                 chapterPath = loadResult.chapterHref
                             )
-                            if (isPrevious) {
-                                continuousAdapter?.prependChapter(data)
-                            } else {
-                                continuousAdapter?.appendChapter(data)
-                            }
+							publishComposeBoundary(data)
                             if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                         }
                     }.onFailure {
@@ -3421,7 +3261,7 @@ class NovelReaderActivity :
                     val content = novelContentLoader.loadChapterContent(chapterRepo, chapter)
                     withContext(Dispatchers.Main) {
                         val data = NovelChapterData(index, content, null, null)
-                        if (isPrevious) continuousAdapter?.prependChapter(data) else continuousAdapter?.appendChapter(data)
+						publishComposeBoundary(data)
                         if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                     }
                     return@launch
@@ -3441,11 +3281,7 @@ class NovelReaderActivity :
                 
                 withContext(Dispatchers.Main) {
                     val data = NovelChapterData(index, fullText, null, null)
-                    if (isPrevious) {
-                        continuousAdapter?.prependChapter(data)
-                    } else {
-                        continuousAdapter?.appendChapter(data)
-                    }
+					publishComposeBoundary(data)
                     if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                 }
             } catch (e: Exception) {
@@ -3455,6 +3291,55 @@ class NovelReaderActivity :
             }
         }
     }
+
+	private fun publishComposeBoundary(data: NovelChapterData) {
+		val chapter = chapters.getOrNull(data.chapterIndex) ?: return
+		composeReaderViewModel.publishAdjacentChapter(
+			NovelComposeChapterContent(
+				chapterIndex = data.chapterIndex,
+				chapterTitle = chapter.title.orEmpty(),
+				content = data.content,
+				translation = chapterTranslations[data.chapterIndex],
+				imageContext = NovelComposeImageContext(
+					epubFilePath = data.epubFile?.absolutePath,
+					chapterPath = data.chapterPath,
+				),
+			),
+		)
+	}
+
+	private fun requestPreviousComposeChapter() {
+		if (isLoadingPrevious) return
+		val firstIndex = composeReaderViewModel.uiState.value.continuousChapters
+			.firstOrNull()?.chapterIndex ?: currentChapterIndex
+		if (firstIndex > 0) preloadContinuousBoundary(firstIndex - 1, isPrevious = true)
+	}
+
+	private fun requestNextComposeChapter() {
+		if (isLoadingNext) return
+		val lastIndex = composeReaderViewModel.uiState.value.continuousChapters
+			.lastOrNull()?.chapterIndex ?: currentChapterIndex
+		if (lastIndex < chapters.lastIndex) preloadContinuousBoundary(lastIndex + 1, isPrevious = false)
+	}
+
+	private fun onComposeVisibleChapterChanged(index: Int) {
+		if (index !in chapters.indices || index == currentChapterIndex) return
+		currentChapterIndex = index
+		updateNavigationButtons()
+		viewBinding.toolbar.subtitle = chapters[index].title ?: getString(R.string.unnamed_chapter)
+		updateHistory(0, 1)
+	}
+
+	private fun onComposeVisibleProgress(chapterIndex: Int, blockIndex: Int, blockCount: Int) {
+		if (chapterIndex !in chapters.indices || blockCount <= 0) return
+		val chapterProgress = ((blockIndex + 0.5f) / blockCount).coerceIn(0f, 1f)
+		val ratio = ((chapterIndex + chapterProgress) / chapters.size.toFloat()).coerceIn(0f, 1f)
+		val sliderMax = (chapters.size * 100).coerceAtLeast(1)
+		viewBinding.actionsView.setSliderValue((ratio * sliderMax).toInt(), sliderMax)
+		viewBinding.actionsView.isSliderEnabled = chapters.size > 1 || blockCount > 1
+		viewBinding.actionsView.setPageLabel(blockIndex + 1, blockCount)
+		updateReadingStatus(blockIndex, blockCount)
+	}
 
     private var isToolbarFloating = false
     
@@ -3514,7 +3399,6 @@ class NovelReaderActivity :
         viewBinding.root.setBackgroundColor(palette.backgroundColor)
         viewBinding.readerView.updatePalette(palette)
         viewBinding.continuousScrollView.setBackgroundColor(palette.backgroundColor)
-        continuousAdapter?.updatePalette(palette)
 
         val toolbarTitleColor = ColorUtils.setAlphaComponent(palette.chromeTextColor, 215)
         val toolbarSubtitleColor = ColorUtils.setAlphaComponent(palette.chromeTextColor, 132)
@@ -3529,21 +3413,6 @@ class NovelReaderActivity :
         )
         viewBinding.appbarTop.backgroundTintList = toolbarBackground
         viewBinding.toolbarDocked.backgroundTintList = toolbarBackground
-        viewBinding.layoutLoading.backgroundTintList = toolbarBackground
-
-        viewBinding.textViewLoading.setTextColor(palette.chromeTextColor)
-        viewBinding.progressBar.setIndicatorColor(palette.chromeTextColor)
-
-        val ttsButtons = listOf(
-            viewBinding.btnTtsPrev,
-            viewBinding.btnTtsPlayPause,
-            viewBinding.btnTtsNext,
-            viewBinding.btnTtsVoice,
-            viewBinding.btnTtsClose,
-        )
-        ttsButtons.forEach { button ->
-            button.imageTintList = ColorStateList.valueOf(toolbarIconColor)
-        }
 
         applyInfoBarColorScheme()
         updateToolbarFloatingStyle(isToolbarFloating)
