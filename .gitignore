@@ -56,6 +56,11 @@ reasonix.toml
 .pi-weave
 /models/
 
+# Codex developer-local configuration
+/.agents/
+/.codex/agents/
+/.codex/config.toml
+
 # Trellis developer-local state
 /.trellis/
 /.trellis/workspace/
