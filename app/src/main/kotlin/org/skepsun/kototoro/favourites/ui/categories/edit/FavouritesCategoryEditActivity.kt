@@ -1,72 +1,64 @@
 package org.skepsun.kototoro.favourites.ui.categories.edit
 
-import android.content.Context
 import android.os.Bundle
-import android.text.Editable
-import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.Filter
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.util.DefaultTextWatcher
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getSerializableCompat
-import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.setChecked
-import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.databinding.ActivityCategoryEditBinding
+import org.skepsun.kototoro.favourites.ui.categories.edit.compose.FavouritesCategoryEditScreen
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
 @AndroidEntryPoint
 class FavouritesCategoryEditActivity :
-	BaseActivity<ActivityCategoryEditBinding>(),
-	AdapterView.OnItemClickListener,
-	View.OnClickListener,
-	DefaultTextWatcher {
+	BaseComposeActivity() {
 
 	private val viewModel by viewModels<FavouritesCategoryEditViewModel>()
 	private var selectedSortOrder: ListSortOrder? = null
-	private val sortOrders = ListSortOrder.FAVORITES.sortedByOrdinal()
+	private var title by mutableStateOf("")
+	private var isTrackerEnabled by mutableStateOf(false)
+	private var isVisibleOnShelf by mutableStateOf(true)
+	private var errorMessage by mutableStateOf<String?>(null)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityCategoryEditBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		initSortSpinner()
-		viewBinding.buttonDone.setOnClickListener(this)
-		viewBinding.editName.addTextChangedListener(this)
-		afterTextChanged(viewBinding.editName.text)
-
 		viewModel.onSaved.observeEvent(this) { finishAfterTransition() }
-		viewModel.category.observe(this, ::onCategoryChanged)
-		viewModel.isLoading.observe(this, ::onLoadingStateChanged)
-		viewModel.onError.observeEvent(this, ::onError)
-		viewModel.isTrackerEnabled.observe(this) {
-			viewBinding.switchTracker.isVisible = it
+		viewModel.onError.observeEvent(this) {
+			errorMessage = it.getDisplayMessage(resources)
 		}
-	}
-
-	override fun onApplyWindowInsets(
-		v: View,
-		insets: WindowInsetsCompat
-	): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		viewBinding.root.setPadding(
-			barsInsets.left,
-			barsInsets.top,
-			barsInsets.right,
-			barsInsets.bottom,
-		)
-		return insets.consumeAllSystemBarsInsets()
+		setComposeContent {
+			val category = viewModel.category.collectAsStateWithLifecycle().value
+			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
+			val trackerAvailable = viewModel.isTrackerEnabled.collectAsStateWithLifecycle().value
+			FavouritesCategoryEditScreen(
+				isEditing = category != null,
+				title = title,
+				sortOrder = selectedSortOrder ?: category?.order ?: ListSortOrder.NEWEST,
+				isTrackerAvailable = trackerAvailable,
+				isTrackerEnabled = isTrackerEnabled,
+				isVisibleOnShelf = isVisibleOnShelf,
+				isLoading = isLoading,
+				errorMessage = errorMessage,
+				onTitleChanged = {
+					title = it.take(120)
+					errorMessage = null
+				},
+				onSortOrderChanged = { selectedSortOrder = it },
+				onTrackerChanged = { isTrackerEnabled = it },
+				onShelfChanged = { isVisibleOnShelf = it },
+				onSave = {
+					errorMessage = null
+					viewModel.save(title.trim(), selectedSortOrder ?: category?.order ?: ListSortOrder.NEWEST, isTrackerEnabled, isVisibleOnShelf)
+				},
+				onBack = ::finish,
+			)
+		}
 	}
 
 	override fun onSaveInstanceState(outState: Bundle) {
@@ -78,81 +70,6 @@ class FavouritesCategoryEditActivity :
 		super.onRestoreInstanceState(savedInstanceState)
 		savedInstanceState.getSerializableCompat<ListSortOrder>(KEY_SORT_ORDER)?.let {
 			selectedSortOrder = it
-		}
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_done -> viewModel.save(
-				title = viewBinding.editName.text?.toString()?.trim().orEmpty(),
-				sortOrder = getSelectedSortOrder(),
-				isTrackerEnabled = viewBinding.switchTracker.isChecked,
-				isVisibleOnShelf = viewBinding.switchShelf.isChecked,
-			)
-		}
-	}
-
-	override fun afterTextChanged(s: Editable?) {
-		viewBinding.buttonDone.isEnabled = !s.isNullOrBlank() && !viewModel.isLoading.value
-	}
-
-	override fun onItemClick(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-		selectedSortOrder = sortOrders.getOrNull(position)
-	}
-
-	private fun onCategoryChanged(category: FavouriteCategory?) {
-		setTitle(if (category == null) R.string.create_category else R.string.edit_category)
-		if (selectedSortOrder != null) {
-			return
-		}
-		viewBinding.editName.setText(category?.title)
-		selectedSortOrder = category?.order
-		val sortText = getString((category?.order ?: ListSortOrder.NEWEST).titleResId)
-		viewBinding.editSort.setText(sortText, false)
-		viewBinding.switchTracker.setChecked(category?.isTrackingEnabled != false, false)
-		viewBinding.switchShelf.setChecked(category?.isVisibleInLibrary != false, false)
-	}
-
-	private fun onError(e: Throwable) {
-		viewBinding.textViewError.text = e.getDisplayMessage(resources)
-		viewBinding.textViewError.isVisible = true
-	}
-
-	private fun onLoadingStateChanged(isLoading: Boolean) {
-		viewBinding.buttonDone.isEnabled = !isLoading && !viewBinding.editName.text.isNullOrBlank()
-		viewBinding.editSort.isEnabled = !isLoading
-		viewBinding.editName.isEnabled = !isLoading
-		viewBinding.switchTracker.isEnabled = !isLoading
-		viewBinding.switchShelf.isEnabled = !isLoading
-		if (isLoading) {
-			viewBinding.textViewError.isVisible = false
-		}
-	}
-
-	private fun initSortSpinner() {
-		val entries = sortOrders.map { getString(it.titleResId) }
-		val adapter = SortAdapter(this, entries)
-		viewBinding.editSort.setAdapter(adapter)
-		viewBinding.editSort.onItemClickListener = this
-	}
-
-	private fun getSelectedSortOrder(): ListSortOrder {
-		selectedSortOrder?.let { return it }
-		val entries = sortOrders.map { getString(it.titleResId) }
-		val index = entries.indexOf(viewBinding.editSort.text.toString())
-		return sortOrders.getOrNull(index) ?: ListSortOrder.NEWEST
-	}
-
-	private class SortAdapter(
-		context: Context,
-		entries: List<String>,
-	) : ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, entries) {
-
-		override fun getFilter(): Filter = EmptyFilter
-
-		private object EmptyFilter : Filter() {
-			override fun performFiltering(constraint: CharSequence?) = FilterResults()
-			override fun publishResults(constraint: CharSequence?, results: FilterResults?) = Unit
 		}
 	}
 
