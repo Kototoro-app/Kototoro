@@ -184,9 +184,6 @@
 			</intent-filter>
 		</activity>
 		<activity
-			android:name="org.skepsun.kototoro.history.ui.HistoryActivity"
-			android:label="@string/history" />
-		<activity
 			android:name="org.skepsun.kototoro.tracker.ui.updates.UpdatesActivity"
 			android:label="@string/updates" />
 		<activity
@@ -380,9 +377,6 @@
 		<activity
 			android:name="org.skepsun.kototoro.stats.ui.StatsActivity"
 			android:label="@string/reading_stats" />
-		<activity
-			android:name="org.skepsun.kototoro.alternatives.ui.AlternativesActivity"
-			android:label="@string/alternatives" />
 		<activity
 			android:name="org.skepsun.kototoro.settings.about.AppUpdateActivity"
 			android:label="@string/app_update_available" />

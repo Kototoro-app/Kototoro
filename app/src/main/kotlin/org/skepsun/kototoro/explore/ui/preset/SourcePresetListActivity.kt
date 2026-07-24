@@ -1,102 +1,44 @@
 package org.skepsun.kototoro.explore.ui.preset
 
 import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup.MarginLayoutParams
+import android.widget.Toast
+import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
-import androidx.core.view.updatePadding
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.snackbar.Snackbar
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
-import org.skepsun.kototoro.core.util.ext.end
-import org.skepsun.kototoro.core.util.ext.observe
-import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.databinding.ActivityPresetListBinding
-import org.skepsun.kototoro.explore.data.SourcePreset
-import org.skepsun.kototoro.list.ui.adapter.TypedListSpacingDecoration
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
 @AndroidEntryPoint
-class SourcePresetListActivity :
-	BaseActivity<ActivityPresetListBinding>(),
-	View.OnClickListener,
-	SourcePresetListener {
+class SourcePresetListActivity : BaseComposeActivity() {
+    private val viewModel by viewModels<SourcePresetListViewModel>()
 
-	private val viewModel by viewModels<SourcePresetListViewModel>()
-	private lateinit var adapter: SourcePresetAdapter
-
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		setContentView(ActivityPresetListBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-
-		adapter = SourcePresetAdapter(this, viewModel::countSourcesForPreset)
-		adapter.activePresetId = viewModel.activePresetId
-		viewBinding.recyclerView.adapter = adapter
-		viewBinding.recyclerView.setHasFixedSize(true)
-		viewBinding.recyclerView.addItemDecoration(TypedListSpacingDecoration(this, false))
-		viewBinding.fabAdd.setOnClickListener(this)
-
-		viewModel.presets.observe(this) { presets ->
-			adapter.submitList(presets)
-		}
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(viewBinding.recyclerView, null))
-		viewModel.onPresetDeleted.observeEvent(this) {
-			adapter.activePresetId = viewModel.activePresetId
-			Snackbar.make(viewBinding.recyclerView, R.string.preset_deleted, Snackbar.LENGTH_SHORT).show()
-		}
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		viewBinding.recyclerView.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-			bottom = barsInsets.bottom,
-		)
-		viewBinding.appbar.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-			top = barsInsets.top,
-		)
-		viewBinding.fabAdd.updateLayoutParams<MarginLayoutParams> {
-			marginEnd = topMargin + barsInsets.end(v)
-			bottomMargin = topMargin + barsInsets.bottom
-		}
-		return insets.consumeAllSystemBarsInsets()
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.fab_add -> startActivity(SourcePresetEditActivity.newIntent(this))
-		}
-	}
-
-	override fun onPresetClick(preset: SourcePreset) {
-		val newId = if (preset.id == viewModel.activePresetId) 0L else preset.id
-		viewModel.setActivePreset(newId)
-		adapter.activePresetId = newId
-		val message = if (newId != 0L) R.string.preset_activated else R.string.preset_deactivated
-		Snackbar.make(viewBinding.recyclerView, message, Snackbar.LENGTH_SHORT).show()
-	}
-
-	override fun onEditPreset(preset: SourcePreset) {
-		startActivity(SourcePresetEditActivity.newIntent(this, preset.id))
-	}
-
-	override fun onDeletePreset(preset: SourcePreset) {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(preset.title)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.remove) { _, _ ->
-				viewModel.deletePreset(preset.id)
-			}
-			.show()
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setComposeContent {
+            val presets by viewModel.presets.collectAsStateWithLifecycle()
+            SourcePresetListScreen(
+                presets = presets,
+                activePresetId = viewModel.activePresetId,
+                sourceCount = viewModel::countSourcesForPreset,
+                onBack = ::finish,
+                onAdd = { startActivity(SourcePresetEditActivity.newIntent(this)) },
+                onSelect = { preset ->
+                    viewModel.setActivePreset(if (preset.id == viewModel.activePresetId) 0L else preset.id)
+                },
+                onEdit = { preset -> startActivity(SourcePresetEditActivity.newIntent(this, preset.id)) },
+                onDelete = { preset -> viewModel.deletePreset(preset.id) },
+            )
+            LaunchedEffect(Unit) {
+                viewModel.onPresetDeleted.collectLatest {
+                    Toast.makeText(this@SourcePresetListActivity, R.string.preset_deleted, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 }

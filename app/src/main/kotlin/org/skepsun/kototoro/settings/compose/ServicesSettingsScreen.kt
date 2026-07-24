@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -51,8 +51,9 @@ fun ServicesSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberLazyListState()
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
