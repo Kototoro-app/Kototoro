@@ -7,8 +7,6 @@ import android.view.WindowManager
 import android.view.Menu
 import android.view.MenuItem
 import androidx.activity.result.contract.ActivityResultContract
-import androidx.core.view.isInvisible
-import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
@@ -69,16 +67,16 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 	override fun onCreate2(savedInstanceState: Bundle?, source: ContentSource, repository: ParserContentRepository?) {
 		if (isHidden) {
 			supportActionBar?.hide()
-			viewBinding.appbar.isVisible = false
-			viewBinding.progressBar.isVisible = false
-			viewBinding.root.alpha = 0.01f
+			setBrowserToolbarVisible(false)
+			setBrowserProgressVisible(false)
+			setBrowserContentAlpha(0.01f)
 			window.addFlags(
 				WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
 					WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
 			)
 			hiddenTimeoutJob = lifecycleScope.launch {
 				delay(HIDDEN_TIMEOUT_MS)
-				viewBinding.webView.stopLoading()
+				browserWebView.stopLoading()
 				finishAfterTransition()
 			}
 		} else {
@@ -100,10 +98,10 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			} else {
 				CloudFlareClient(cookieJar, this@CloudFlareActivity, adBlock, url)
 			}
-			viewBinding.webView.webViewClient = cfClient
+			browserWebView.webViewClient = cfClient
 			if (savedInstanceState == null) {
 				onTitleChanged(getString(R.string.loading_), url)
-				viewBinding.webView.loadUrl(url)
+				browserWebView.loadUrl(url)
 			}
 		}
 	}
@@ -118,7 +116,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 
 	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
 		android.R.id.home -> {
-			viewBinding.webView.stopLoading()
+			browserWebView.stopLoading()
 			finishAfterTransition()
 			true
 		}
@@ -150,7 +148,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 
 	override fun onPageLoaded() {
 		if (!isHidden) {
-			viewBinding.progressBar.isInvisible = true
+			setBrowserProgressVisible(false)
 		}
 	}
 
@@ -189,10 +187,10 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 	}
 
 	private fun showSnackbar(message: CharSequence) {
-		if (isFinishing || isDestroyed || !viewBinding.root.isAttachedToWindow) {
+		if (isFinishing || isDestroyed || !browserWebView.isAttachedToWindow) {
 			return
 		}
-		Snackbar.make(viewBinding.root, message, Snackbar.LENGTH_LONG).show()
+		Snackbar.make(browserWebView, message, Snackbar.LENGTH_LONG).show()
 	}
 
 	private suspend fun verifyClearance(url: String): Boolean = runCatchingCancellable {
@@ -233,13 +231,13 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 
 	private fun restartCheck() {
 		lifecycleScope.launch {
-			viewBinding.webView.stopLoading()
+			browserWebView.stopLoading()
 			yield()
 			cfClient.reset()
 			val targetUrl = intent?.dataString?.toHttpUrlOrNull()
 			if (targetUrl != null) {
 				clearCfCookies(targetUrl)
-				viewBinding.webView.loadUrl(targetUrl.toString())
+			browserWebView.loadUrl(targetUrl.toString())
 			}
 		}
 	}

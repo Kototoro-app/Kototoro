@@ -2,6 +2,7 @@ package org.skepsun.kototoro.favourites.ui.categories.edit
 
 import android.os.Bundle
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -36,6 +37,27 @@ class FavouritesCategoryEditActivity :
 			val category = viewModel.category.collectAsStateWithLifecycle().value
 			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
 			val trackerAvailable = viewModel.isTrackerEnabled.collectAsStateWithLifecycle().value
+			LaunchedEffect(category) {
+				if (category != null && title.isEmpty()) {
+					title = category.title
+					selectedSortOrder = category.order
+					isTrackerEnabled = category.isTrackingEnabled
+					isVisibleOnShelf = category.isVisibleInLibrary
+				}
+			}
+			LaunchedEffect(category) {
+				if (selectedSortOrder == null) {
+					title = category?.title.orEmpty()
+					selectedSortOrder = category?.order
+					isTrackerEnabled = category?.isTrackingEnabled != false
+					isVisibleOnShelf = category?.isVisibleInLibrary != false
+				}
+			}
+			LaunchedEffect(isLoading) {
+				if (isLoading) {
+					errorMessage = null
+				}
+			}
 			FavouritesCategoryEditScreen(
 				isEditing = category != null,
 				title = title,

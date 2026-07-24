@@ -13,6 +13,7 @@ collections = "1.5.0"
 #noinspection NewerVersionAvailable,GradleDependency - 2.5.3 cause crashes
 conscrypt = "2.5.2"
 composeBom = "2026.05.01"
+glance = "1.1.1"
 constraintlayout = "2.2.1"
 cryptography = "0.6.0"
 navigation = "2.8.0"
@@ -97,6 +98,7 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }

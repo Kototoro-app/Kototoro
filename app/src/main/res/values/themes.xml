@@ -70,7 +70,6 @@
 		<item name="actionButtonStyle">@style/Widget.Kototoro.ActionButton.Compact</item>
 
 		<!-- Custom views -->
-		<item name="fastScrollerStyle">@style/Widget.Kototoro.FastScroller</item>
 		<item name="listItemTextViewStyle">@style/Widget.Kototoro.ListItemTextView</item>
 		<item name="dotIndicatorStyle">@style/Widget.Kototoro.DotIndicator</item>
 		<item name="badgeViewStyle">@style/Widget.Kototoro.BadgeView</item>

@@ -1,99 +1,70 @@
 package org.skepsun.kototoro.scrobbling.common.ui.config
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
-import org.skepsun.kototoro.core.nav.router
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.list.OnListItemClickListener
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
-import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
-import org.skepsun.kototoro.core.util.ext.observe
-import org.skepsun.kototoro.core.util.ext.observeEvent
+import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.router
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
+import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
+import org.skepsun.kototoro.core.util.ext.isSerializable
+import org.skepsun.kototoro.core.util.ext.observeEvent
+import org.skepsun.kototoro.parsers.exception.ParseException
 import org.skepsun.kototoro.search.domain.SearchContentKind
-import org.skepsun.kototoro.core.util.ext.showOrHide
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.databinding.ActivityScrobblerConfigBinding
-import org.skepsun.kototoro.list.ui.adapter.TypedListSpacingDecoration
-import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
-import org.skepsun.kototoro.scrobbling.common.ui.config.adapter.ScrobblingContentAdapter
-import androidx.appcompat.R as appcompatR
 
 @AndroidEntryPoint
-class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
-	OnListItemClickListener<ScrobblingInfo>, View.OnClickListener {
+class ScrobblerConfigActivity : BaseComposeActivity() {
 
 	private val viewModel: ScrobblerConfigViewModel by viewModels()
 	private var pendingBindInfo: ScrobblingInfo? = null
 	private var pendingBindHandled = false
 
-	private val pickContentLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
-		android.util.Log.d("ScrobblerConfig", "pickContentLauncher: resultCode=${result.resultCode}, hasData=${result.data != null}")
-		if (result.resultCode == android.app.Activity.RESULT_OK) {
-			val manga = result.data?.getParcelableExtraCompat<org.skepsun.kototoro.core.model.parcelable.ParcelableContent>(AppRouter.KEY_MANGA)?.manga
-			val scrobblingInfo = pendingBindInfo
-			android.util.Log.d("ScrobblerConfig", "pickContentLauncher: manga=${manga?.title}, scrobblingInfo=${scrobblingInfo?.title}")
-			if (manga != null && scrobblingInfo != null) {
-				pendingBindInfo = null
-				viewModel.bindContent(scrobblingInfo, manga)
-			} else {
-				android.util.Log.w("ScrobblerConfig", "pickContentLauncher: manga or scrobblingInfo is null!")
-			}
+	private val pickContentLauncher = registerForActivityResult(
+		androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+	) { result ->
+		if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+		val manga = result.data
+			?.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)
+			?.manga
+		val scrobblingInfo = pendingBindInfo
+		if (manga != null && scrobblingInfo != null) {
+			pendingBindInfo = null
+			viewModel.bindContent(scrobblingInfo, manga)
 		}
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityScrobblerConfigBinding.inflate(layoutInflater))
-		setTitle(viewModel.titleResId)
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-
-		val listAdapter = ScrobblingContentAdapter(this, viewModel::onContentBound)
-		with(viewBinding.recyclerView) {
-			adapter = listAdapter
-			setHasFixedSize(true)
-			val decoration = TypedListSpacingDecoration(context, false)
-			addItemDecoration(decoration)
+		observeViewModelEvents()
+		setComposeContent {
+			val user = viewModel.user.collectAsStateWithLifecycle().value
+			val items = viewModel.content.collectAsStateWithLifecycle().value
+			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
+			ScrobblerConfigScreen(
+				title = getString(viewModel.titleResId),
+				user = user,
+				items = items,
+				isLoading = isLoading,
+				onNavigateUp = ::finishAfterTransition,
+				onAvatarClick = ::showUserDialog,
+				onRefresh = viewModel::syncLibrary,
+				onItemClick = ::onItemClick,
+				onContentBound = viewModel::onContentBound,
+			)
 		}
-		viewBinding.imageViewAvatar.setOnClickListener(this)
-
-		viewBinding.swipeRefreshLayout.setOnRefreshListener {
-			viewModel.syncLibrary()
-		}
-
-		viewModel.content.observe(this, listAdapter)
-		viewModel.user.observe(this, this::onUserChanged)
-		viewModel.isLoading.observe(this, this::onLoadingStateChanged)
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(viewBinding.recyclerView, null))
-		viewModel.onLoggedOut.observeEvent(this) {
-			finishAfterTransition()
-		}
-		viewModel.onSyncResult.observeEvent(this) { count ->
-			viewBinding.swipeRefreshLayout.isRefreshing = false
-			if (count >= 0) {
-				Snackbar.make(viewBinding.recyclerView, getString(R.string.sync_complete, count), Snackbar.LENGTH_SHORT).show()
-			} else {
-				Snackbar.make(viewBinding.recyclerView, R.string.sync_not_supported, Snackbar.LENGTH_SHORT).show()
-			}
-		}
-		viewModel.onBindResult.observeEvent(this) { title ->
-			Snackbar.make(viewBinding.recyclerView, getString(R.string.bind_manga_success, title), Snackbar.LENGTH_SHORT).show()
-		}
-
 		processIntent(intent)
 	}
 
@@ -104,24 +75,44 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 		processIntent(intent)
 	}
 
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		val basePadding = v.resources.getDimensionPixelOffset(R.dimen.list_spacing_normal)
-		viewBinding.appbar.updatePadding(
-			top = barsInsets.top,
-			left = barsInsets.left,
-			right = barsInsets.right,
-		)
-		viewBinding.recyclerView.setPadding(
-			barsInsets.left + basePadding,
-			barsInsets.top + basePadding,
-			barsInsets.right + basePadding,
-			barsInsets.bottom + basePadding,
-		)
-		return insets.consumeAllSystemBarsInsets()
+	private fun observeViewModelEvents() {
+		viewModel.onError.observeEvent(this) { error ->
+			lifecycleScope.launch {
+				val actionResId = when {
+					ExceptionResolver.canResolve(error) -> exceptionResolver.getResolveStringId(error)
+					error is ParseException && error.isSerializable() -> R.string.details
+					else -> 0
+				}
+				val result = snackbarHostState.showSnackbar(
+					message = error.getDisplayMessage(resources),
+					actionLabel = actionResId.takeIf { it != 0 }?.let(::getString),
+				)
+				if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+					if (ExceptionResolver.canResolve(error)) {
+						exceptionResolver.resolve(error, tryAutoResolve = false)
+					} else {
+						exceptionResolver.showErrorDetails(error)
+					}
+				}
+			}
+		}
+		viewModel.onLoggedOut.observeEvent(this) { finishAfterTransition() }
+		viewModel.onSyncResult.observeEvent(this) { count ->
+			lifecycleScope.launch {
+				snackbarHostState.showSnackbar(
+					if (count >= 0) getString(R.string.sync_complete, count)
+					else getString(R.string.sync_not_supported),
+				)
+			}
+		}
+		viewModel.onBindResult.observeEvent(this) { title ->
+			lifecycleScope.launch {
+				snackbarHostState.showSnackbar(getString(R.string.bind_manga_success, title))
+			}
+		}
 	}
 
-	override fun onItemClick(item: ScrobblingInfo, view: View) {
+	private fun onItemClick(item: ScrobblingInfo) {
 		lifecycleScope.launch {
 			val hasLocal = withContext(Dispatchers.Default) {
 				viewModel.hasLocalContent(item.mangaId)
@@ -129,27 +120,21 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 			if (hasLocal) {
 				router.openDetails(item.mangaId)
 			} else {
-				// Open the tracking site discovery detail page
-				router.openTrackingSiteDetails(
-					service = item.scrobbler,
-					remoteId = item.targetId,
-					url = item.externalUrl,
-				)
+				router.openTrackingSiteDetails(item.scrobbler, item.targetId, item.externalUrl)
 			}
 		}
 	}
 
 	private fun showSearchContentKindDialog(item: ScrobblingInfo) {
+		val choices = arrayOf(
+			getString(R.string.all),
+			getString(R.string.manga),
+			getString(R.string.novel),
+			getString(R.string.video),
+		)
 		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.search_content_kind) 
-			.setItems(
-				arrayOf(
-					getString(R.string.all),
-					getString(R.string.manga),
-					getString(R.string.novel),
-					getString(R.string.video)
-				)
-			) { _, which ->
+			.setTitle(R.string.search_content_kind)
+			.setItems(choices) { _, which ->
 				pendingBindInfo = item
 				val contentKinds = when (which) {
 					1 -> setOf(SearchContentKind.MANGA)
@@ -157,30 +142,17 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 					3 -> setOf(SearchContentKind.VIDEO)
 					else -> null
 				}
-				val intent = AppRouter.searchIntent(
-					context = this,
-					query = item.title,
-					contentKinds = contentKinds,
-					pickMode = true
+				pickContentLauncher.launch(
+					AppRouter.searchIntent(this, item.title, contentKinds = contentKinds, pickMode = true),
 				)
-				pickContentLauncher.launch(intent)
-			}.show()
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.imageView_avatar -> showUserDialog()
-		}
+			}
+			.show()
 	}
 
 	private fun processIntent(intent: Intent) {
 		extractPendingBindInfo(intent)
 		if (intent.action == Intent.ACTION_VIEW) {
-			val uri = intent.data ?: return
-			val code = uri.getQueryParameter("code")
-			if (!code.isNullOrEmpty()) {
-				viewModel.onAuthCodeReceived(code)
-			}
+			intent.data?.getQueryParameter("code")?.takeIf(String::isNotEmpty)?.let(viewModel::onAuthCodeReceived)
 		}
 		val info = pendingBindInfo
 		if (info != null && !pendingBindHandled) {
@@ -192,13 +164,9 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 	private fun extractPendingBindInfo(intent: Intent) {
 		val remoteId = intent.getLongExtra(AppRouter.KEY_REMOTE_ID, 0L)
 		val title = intent.getStringExtra(AppRouter.KEY_TITLE)
-		if (remoteId == 0L || title.isNullOrBlank()) {
-			return
-		}
+		if (remoteId == 0L || title.isNullOrBlank()) return
 		pendingBindInfo = ScrobblingInfo(
 			scrobbler = viewModel.getScrobblerService(),
-			entityId = null,
-			preferredLocalMangaId = null,
 			mangaId = 0L,
 			targetId = remoteId,
 			status = null,
@@ -212,34 +180,13 @@ class ScrobblerConfigActivity : BaseActivity<ActivityScrobblerConfigBinding>(),
 		)
 	}
 
-	private fun onUserChanged(user: ScrobblerUser?) {
-		if (user == null) {
-			viewBinding.imageViewAvatar.disposeImage()
-			viewBinding.imageViewAvatar.setImageResource(appcompatR.drawable.abc_ic_menu_overflow_material)
-			return
-		}
-		if (!user.avatar.isNullOrEmpty()) {
-			viewBinding.imageViewAvatar.setImageAsync(user.avatar)
-		} else {
-			viewBinding.imageViewAvatar.setImageResource(user.service.iconResId)
-		}
-	}
-
-	private fun onLoadingStateChanged(isLoading: Boolean) {
-		viewBinding.progressBar.showOrHide(isLoading)
-		if (!isLoading) {
-			viewBinding.swipeRefreshLayout.isRefreshing = false
-		}
-	}
-
 	private fun showUserDialog() {
 		MaterialAlertDialogBuilder(this)
-			.setTitle(title)
+			.setTitle(viewModel.titleResId)
 			.setMessage(getString(R.string.logged_in_as, viewModel.user.value?.nickname))
 			.setNegativeButton(R.string.close, null)
-			.setPositiveButton(R.string.logout) { _, _ ->
-				viewModel.logout()
-			}.show()
+			.setPositiveButton(R.string.logout) { _, _ -> viewModel.logout() }
+			.show()
 	}
 
 	companion object {

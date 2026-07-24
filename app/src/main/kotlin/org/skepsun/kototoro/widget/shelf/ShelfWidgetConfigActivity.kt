@@ -3,42 +3,25 @@ package org.skepsun.kototoro.widget.shelf
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.prefs.AppWidgetConfig
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.list.OnListItemClickListener
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
-import org.skepsun.kototoro.core.util.ext.observe
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.databinding.ActivityAppwidgetShelfBinding
-import org.skepsun.kototoro.widget.shelf.adapter.CategorySelectAdapter
-import org.skepsun.kototoro.widget.shelf.model.CategoryItem
 
 @AndroidEntryPoint
-class ShelfWidgetConfigActivity :
-	BaseActivity<ActivityAppwidgetShelfBinding>(),
-	OnListItemClickListener<CategoryItem>,
-	View.OnClickListener {
+class ShelfWidgetConfigActivity : BaseComposeActivity() {
 
 	private val viewModel by viewModels<ShelfConfigViewModel>()
 
-	private lateinit var adapter: CategorySelectAdapter
 	private lateinit var config: AppWidgetConfig
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityAppwidgetShelfBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		adapter = CategorySelectAdapter(this)
-		viewBinding.recyclerView.adapter = adapter
-		viewBinding.buttonDone.setOnClickListener(this)
 		val appWidgetId = intent?.getIntExtra(
 			AppWidgetManager.EXTRA_APPWIDGET_ID,
 			AppWidgetManager.INVALID_APPWIDGET_ID,
@@ -47,53 +30,38 @@ class ShelfWidgetConfigActivity :
 			finishAfterTransition()
 			return
 		}
+
 		config = AppWidgetConfig(this, ShelfWidgetProvider::class.java, appWidgetId)
 		viewModel.checkedId = config.categoryId
-		viewBinding.switchBackground.isChecked = config.hasBackground
+		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, null))
 
-		viewModel.content.observe(this, adapter)
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(viewBinding.recyclerView, null))
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		viewBinding.recyclerView.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-			bottom = barsInsets.bottom,
-		)
-		viewBinding.appbar.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-			top = barsInsets.top,
-		)
-		return insets.consumeAllSystemBarsInsets()
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_done -> {
-				config.categoryId = viewModel.checkedId
-				config.hasBackground = viewBinding.switchBackground.isChecked
-				updateWidget()
-				setResult(
-					RESULT_OK,
-					Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, config.widgetId),
-				)
-				finish()
-			}
+		setComposeContent {
+			val categories = viewModel.content.collectAsStateWithLifecycle().value
+			val hasBackground = rememberSaveable { mutableStateOf(config.hasBackground) }
+			ShelfWidgetConfigScreen(
+				categories = categories,
+				hasBackground = hasBackground.value,
+				onBackgroundChanged = { hasBackground.value = it },
+				onCategorySelected = { viewModel.checkedId = it },
+				onNavigateUp = ::finishAfterTransition,
+				onDone = {
+					config.categoryId = viewModel.checkedId
+					config.hasBackground = hasBackground.value
+					updateWidget()
+					setResult(
+						RESULT_OK,
+						Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, config.widgetId),
+					)
+					finish()
+				},
+			)
 		}
-	}
-
-	override fun onItemClick(item: CategoryItem, view: View) {
-		viewModel.checkedId = item.id
 	}
 
 	private fun updateWidget() {
 		val intent = Intent(this, ShelfWidgetProvider::class.java)
 		intent.action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-		val ids = intArrayOf(config.widgetId)
-		intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+		intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(config.widgetId))
 		sendBroadcast(intent)
 	}
 }

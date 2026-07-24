@@ -55,7 +55,7 @@ class BrowserActivity : BaseBrowserActivity() {
         browserWaitToken = intent?.getStringExtra(AppRouter.KEY_BROWSER_WAIT_TOKEN)
         initialHtml = intent?.getStringExtra(AppRouter.KEY_BROWSER_HTML)
         refetchAfterSuccess = intent?.getBooleanExtra(AppRouter.KEY_BROWSER_REFETCH_AFTER_SUCCESS, true) ?: true
-		viewBinding.webView.webViewClient = BrowserClient(this, adBlock)
+		browserWebView.webViewClient = BrowserClient(this, adBlock)
 		initialSuccessCookieValue = getSuccessCookieValue()
 		logCookieState("open", initialSuccessCookieValue)
 		logBrowserState("open", intent?.dataString)
@@ -64,7 +64,7 @@ class BrowserActivity : BaseBrowserActivity() {
 				proxyProvider.applyWebViewConfig()
 			} catch (e: Exception) {
 				e.printStackTraceDebug()
-				Snackbar.make(viewBinding.webView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+				Snackbar.make(browserWebView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
 			}
 			if (savedInstanceState == null) {
 				val url = intent?.dataString
@@ -77,12 +77,12 @@ class BrowserActivity : BaseBrowserActivity() {
 					)
 					val html = initialHtml
 					if (!html.isNullOrBlank()) {
-						viewBinding.webView.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
+						browserWebView.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
 					} else {
 						if (sourceRequestHeaders.isEmpty()) {
-							viewBinding.webView.loadUrl(url)
+							browserWebView.loadUrl(url)
 						} else {
-							viewBinding.webView.loadUrl(url, sourceRequestHeaders)
+							browserWebView.loadUrl(url, sourceRequestHeaders)
 						}
 					}
 				}
@@ -147,14 +147,14 @@ class BrowserActivity : BaseBrowserActivity() {
 
 	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
 		android.R.id.home -> {
-			viewBinding.webView.stopLoading()
+			browserWebView.stopLoading()
 			finishAfterTransition()
 			true
 		}
 
 		R.id.action_browser -> {
-			if (!router.openExternalBrowser(viewBinding.webView.url.orEmpty(), item.title)) {
-				Snackbar.make(viewBinding.webView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+			if (!router.openExternalBrowser(browserWebView.url.orEmpty(), item.title)) {
+				Snackbar.make(browserWebView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
 			}
 			true
 		}
@@ -225,7 +225,7 @@ class BrowserActivity : BaseBrowserActivity() {
 		)
 	}
 
-	private fun logBrowserState(stage: String, url: String? = viewBinding.webView.url) {
+	private fun logBrowserState(stage: String, url: String? = browserWebView.url) {
 		val parsedUrl = url?.let { runCatching { Uri.parse(it) }.getOrNull() }
 		val rawCookies = url?.let { runCatching { CookieManager.getInstance().getCookie(it).orEmpty() }.getOrDefault("") }
 		val cookieNames = rawCookies
@@ -243,8 +243,8 @@ class BrowserActivity : BaseBrowserActivity() {
 			TAG,
 			"browser_state stage=$stage host=${parsedUrl?.host ?: "<none>"} " +
 				"path=${parsedUrl?.path ?: "<none>"} queryNames=$queryNames " +
-				"cookieNames=[$cookieNames] ua=${viewBinding.webView.settings.userAgentString} " +
-				"title=${viewBinding.webView.title.orEmpty().take(80)}",
+				"cookieNames=[$cookieNames] ua=${browserWebView.settings.userAgentString} " +
+				"title=${browserWebView.title.orEmpty().take(80)}",
 		)
 	}
 
@@ -297,13 +297,13 @@ class BrowserActivity : BaseBrowserActivity() {
 
     private suspend fun completeBrowserWait() {
         val token = browserWaitToken ?: return
-        val url = viewBinding.webView.url.orEmpty().ifBlank { intent?.dataString.orEmpty() }
+        val url = browserWebView.url.orEmpty().ifBlank { intent?.dataString.orEmpty() }
         val html = when {
             refetchAfterSuccess -> {
                 runCatching { refetchHtml(url) }
-                    .getOrElse { runCatching { captureHtml(viewBinding.webView) }.getOrDefault("") }
+                    .getOrElse { runCatching { captureHtml(browserWebView) }.getOrDefault("") }
             }
-            else -> runCatching { captureHtml(viewBinding.webView) }.getOrDefault("")
+            else -> runCatching { captureHtml(browserWebView) }.getOrDefault("")
         }
         BrowserVerificationBridge.complete(
             token,

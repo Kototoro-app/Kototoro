@@ -470,14 +470,6 @@
 			android:foregroundServiceType="dataSync"
 			android:label="@string/importing_manga" />
 		<service
-			android:name="org.skepsun.kototoro.widget.shelf.ShelfWidgetService"
-			android:label="@string/manga_shelf"
-			android:permission="android.permission.BIND_REMOTEVIEWS" />
-		<service
-			android:name="org.skepsun.kototoro.widget.recent.RecentWidgetService"
-			android:label="@string/recent_manga"
-			android:permission="android.permission.BIND_REMOTEVIEWS" />
-		<service
 			android:name="org.skepsun.kototoro.sync.ui.SyncAuthenticatorService"
 			android:exported="true"
 			tools:ignore="ExportedService">

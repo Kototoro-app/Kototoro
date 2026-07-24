@@ -7,6 +7,8 @@ import android.view.View
 import androidx.activity.viewModels
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ErrorResult

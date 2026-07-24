@@ -21,7 +21,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
-import androidx.fragment.app.FragmentActivity
+import androidx.appcompat.app.AppCompatActivity
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -36,7 +36,7 @@ import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
 abstract class BaseComposeActivity :
-    FragmentActivity(),
+    AppCompatActivity(),
     ScreenshotPolicyHelper.ContentContainer {
 
     data class ComposeModal(

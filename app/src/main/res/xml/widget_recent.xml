@@ -4,7 +4,7 @@
 	xmlns:tools="http://schemas.android.com/tools"
 	android:configure="org.skepsun.kototoro.widget.recent.RecentWidgetConfigActivity"
 	android:description="@string/appwidget_recent_description"
-	android:initialLayout="@layout/widget_recent"
+	android:initialLayout="@layout/glance_default_loading_layout"
 	android:minWidth="120dp"
 	android:minHeight="40dp"
 	android:minResizeWidth="120dp"

@@ -1,11 +1,7 @@
 package org.skepsun.kototoro.main.ui.welcome
 
 import android.net.Uri
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import androidx.activity.result.ActivityResultCallback
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -19,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -47,7 +44,10 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -64,31 +64,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowInsetsCompat
-import androidx.fragment.app.viewModels
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.android.material.snackbar.Snackbar
-import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
-import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
-import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.tryLaunch
-import org.skepsun.kototoro.databinding.SheetWelcomeBinding
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.parsers.model.ContentType
 import kotlinx.coroutines.launch
@@ -102,58 +95,48 @@ private const val REPO_KOTOTORO =
 private const val REPO_REDO =
 	"https://raw.githubusercontent.com/skepsun/k-parsers-r/repo/index.min.json"
 
-@AndroidEntryPoint
-class WelcomeSheet : BaseAdaptiveSheet<SheetWelcomeBinding>(), ActivityResultCallback<Uri?> {
-
-	private val viewModel by viewModels<WelcomeViewModel>()
-
-	private val backupSelectCall = registerForActivityResult(
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+internal fun WelcomeRoute(
+	onDismissRequest: () -> Unit,
+	onRestoreBackup: (Uri) -> Unit,
+	onOpenDocumentUnsupported: () -> Unit = {},
+	viewModel: WelcomeViewModel = hiltViewModel(),
+) {
+	val context = LocalContext.current
+	val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+	val backupSelectLauncher = rememberLauncherForActivityResult(
 		ActivityResultContracts.OpenDocument(),
-		this,
-	)
-
-	override fun onCreateViewBinding(inflater: LayoutInflater, container: ViewGroup?): SheetWelcomeBinding {
-		return SheetWelcomeBinding.inflate(inflater, container, false)
+	) { uri ->
+		uri?.let(onRestoreBackup)
+	}
+	val mirrorEntries = remember(context) {
+		context.resources.getStringArray(R.array.pref_github_mirror_entries).toList()
 	}
 
-	override fun onViewBindingCreated(binding: SheetWelcomeBinding, savedInstanceState: Bundle?) {
-		super.onViewBindingCreated(binding, savedInstanceState)
-		disableFitToContents()
-		binding.root.post { setExpanded(isExpanded = true, isLocked = true) }
-		binding.composeView.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-		binding.composeView.setContent {
-			KototoroTheme {
-				WelcomeRoute(
-					viewModel = viewModel,
-					mirrorEntries = resources.getStringArray(R.array.pref_github_mirror_entries).toList(),
-					onRestoreBackup = ::openBackupDocument,
-					onDone = { dismiss() },
-				)
-			}
+	ModalBottomSheet(
+		onDismissRequest = onDismissRequest,
+		sheetState = sheetState,
+		modifier = Modifier.fillMaxHeight(),
+	) {
+		KototoroTheme {
+			WelcomeContent(
+				viewModel = viewModel,
+				mirrorEntries = mirrorEntries,
+				onRestoreBackup = {
+					if (!backupSelectLauncher.tryLaunch(arrayOf("*/*"))) {
+						onOpenDocumentUnsupported()
+					}
+				},
+				onDone = onDismissRequest,
+			)
 		}
 	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		return insets
-	}
-
-	override fun onActivityResult(result: Uri?) {
-		if (result != null) {
-			router.showBackupRestoreDialog(result)
-		}
-	}
-
-	private fun openBackupDocument() {
-		if (!backupSelectCall.tryLaunch(arrayOf("*/*"))) {
-			view?.let { Snackbar.make(it, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show() }
-		}
-	}
-
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WelcomeRoute(
+private fun WelcomeContent(
 	viewModel: WelcomeViewModel,
 	mirrorEntries: List<String>,
 	onRestoreBackup: () -> Unit,

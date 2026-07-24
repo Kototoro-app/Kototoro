@@ -1,11 +1,24 @@
 package org.skepsun.kototoro.browser
 
 import android.os.Bundle
-import android.view.View
 import android.view.ViewGroup
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
+import android.webkit.WebView
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -14,16 +27,14 @@ import org.skepsun.kototoro.core.network.proxy.ProxyProvider
 import org.skepsun.kototoro.core.network.webview.adblock.AdBlock
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
-import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.configureForParser
-import org.skepsun.kototoro.core.util.ext.consumeAll
-import org.skepsun.kototoro.databinding.ActivityBrowserBinding
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.util.nullIfEmpty
 import javax.inject.Inject
 
 @AndroidEntryPoint
-abstract class BaseBrowserActivity : BaseActivity<ActivityBrowserBinding>(), BrowserCallback {
+abstract class BaseBrowserActivity : BaseComposeActivity(), BrowserCallback {
 
 	@Inject
 	lateinit var proxyProvider: ProxyProvider
@@ -35,23 +46,89 @@ abstract class BaseBrowserActivity : BaseActivity<ActivityBrowserBinding>(), Bro
 	lateinit var adBlock: AdBlock
 
 	private lateinit var onBackPressedCallback: WebViewBackPressedCallback
+	protected lateinit var browserWebView: WebView
+
+	private var isBrowserLoading by mutableStateOf(false)
+	private var shouldShowBrowserToolbar by mutableStateOf(true)
+	private var webViewContentAlpha by mutableFloatStateOf(1f)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		if (!setContentViewWebViewSafe { ActivityBrowserBinding.inflate(layoutInflater) }) {
-			return
+		try {
+			browserWebView = WebView(this)
+		} catch (e: Exception) {
+			if (e is android.util.AndroidException || e.cause is android.util.AndroidException) {
+				android.widget.Toast.makeText(this, org.skepsun.kototoro.R.string.web_view_unavailable, android.widget.Toast.LENGTH_LONG).show()
+				finishAfterTransition()
+				return
+			}
+			throw e
 		}
-		viewBinding.webView.webChromeClient = ProgressChromeClient(viewBinding.progressBar)
-		onBackPressedCallback = WebViewBackPressedCallback(viewBinding.webView)
+		setComposeContent {
+			Column(
+				modifier = Modifier
+					.fillMaxSize()
+					.windowInsetsPadding(WindowInsets.statusBars),
+			) {
+				if (shouldShowBrowserToolbar) {
+					AndroidView(
+						factory = { browserToolbar },
+						modifier = Modifier
+							.fillMaxWidth()
+							.height(64.dp),
+					)
+				}
+				Box(modifier = Modifier.fillMaxSize()) {
+					AndroidView(
+						factory = { browserWebView },
+						modifier = Modifier.fillMaxSize(),
+					)
+					if (isBrowserLoading) {
+						LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+					}
+				}
+			}
+		}
+		setSupportActionBar(browserToolbar)
+		browserWebView.alpha = webViewContentAlpha
+		browserWebView.webViewClient = android.webkit.WebViewClient()
+		browserWebView.webChromeClient = android.webkit.WebChromeClient()
+		onBackPressedCallback = WebViewBackPressedCallback(browserWebView)
 		onBackPressedDispatcher.addCallback(onBackPressedCallback)
 
 		val mangaSource = ContentSource(intent?.getStringExtra(AppRouter.KEY_SOURCE))
 		val repository = mangaRepositoryFactory.create(mangaSource) as? ParserContentRepository
 		val userAgent = intent?.getStringExtra(AppRouter.KEY_USER_AGENT)?.nullIfEmpty()
 			?: repository?.getRequestHeaders()?.get(CommonHeaders.USER_AGENT)
-		viewBinding.webView.configureForParser(userAgent)
+		browserWebView.configureForParser(userAgent)
 
 		onCreate2(savedInstanceState, mangaSource, repository)
+	}
+
+	private val browserToolbar by lazy { com.google.android.material.appbar.MaterialToolbar(this) }
+
+	protected fun setBrowserToolbarVisible(visible: Boolean) {
+		shouldShowBrowserToolbar = visible
+	}
+
+	protected fun setBrowserContentAlpha(alpha: Float) {
+		webViewContentAlpha = alpha
+		if (::browserWebView.isInitialized) {
+			browserWebView.alpha = alpha
+		}
+	}
+
+	protected fun setBrowserProgressVisible(visible: Boolean) {
+		isBrowserLoading = visible
+	}
+
+	protected fun setDisplayHomeAsUp(isEnabled: Boolean, showUpAsClose: Boolean) {
+		supportActionBar?.run {
+			setDisplayHomeAsUpEnabled(isEnabled)
+			if (showUpAsClose) {
+				setHomeAsUpIndicator(androidx.appcompat.R.drawable.abc_ic_clear_material)
+			}
+		}
 	}
 
 	protected abstract fun onCreate2(
@@ -60,39 +137,24 @@ abstract class BaseBrowserActivity : BaseActivity<ActivityBrowserBinding>(), Bro
 		repository: ParserContentRepository?
 	)
 
-	override fun onApplyWindowInsets(
-		v: View,
-		insets: WindowInsetsCompat
-	): WindowInsetsCompat {
-		val type = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
-		val barsInsets = insets.getInsets(type)
-		viewBinding.webView.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-			bottom = barsInsets.bottom,
-		)
-		viewBinding.appbar.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-			top = barsInsets.top,
-		)
-		return insets.consumeAll(type)
-	}
-
 	override fun onPause() {
-		viewBinding.webView.onPause()
+		if (::browserWebView.isInitialized) {
+			browserWebView.onPause()
+		}
 		super.onPause()
 	}
 
 	override fun onResume() {
 		super.onResume()
-		viewBinding.webView.onResume()
+		if (::browserWebView.isInitialized) {
+			browserWebView.onResume()
+		}
 	}
 
 	override fun onDestroy() {
 		super.onDestroy()
-		if (hasViewBinding()) {
-			with(viewBinding.webView) {
+		if (::browserWebView.isInitialized) {
+			with(browserWebView) {
 				stopLoading()
 				loadUrl("about:blank")
 				onPause()
@@ -105,7 +167,7 @@ abstract class BaseBrowserActivity : BaseActivity<ActivityBrowserBinding>(), Bro
 	}
 
 	override fun onLoadingStateChanged(isLoading: Boolean) {
-		viewBinding.progressBar.isVisible = isLoading
+		isBrowserLoading = isLoading
 	}
 
 	override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) {

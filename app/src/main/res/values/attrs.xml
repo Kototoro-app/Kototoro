@@ -3,12 +3,7 @@
 
 	<attr name="expandCollapseIndicator" format="reference" />
 
-	<attr name="sliderPreferenceStyle" />
-	<attr name="multiAutoCompleteTextViewPreferenceStyle" />
-	<attr name="autoCompleteTextViewPreferenceStyle" />
-	<attr name="themeChooserPreferenceStyle" />
 	<attr name="listItemTextViewStyle" />
-	<attr name="fastScrollerStyle" />
 	<attr name="tipViewStyle" />
 	<attr name="progressButtonStyle" />
 	<attr name="dotIndicatorStyle" />
@@ -31,21 +26,8 @@
 		<attr name="trimImage" format="boolean" />
 	</declare-styleable>
 
-	<declare-styleable name="CoverStackView">
-		<attr name="coverSize" format="dimension" />
-		<attr name="hideEmptyViews" format="boolean" />
-	</declare-styleable>
-
 	<declare-styleable name="FaviconView">
 		<attr name="iconStyle" format="reference" />
-	</declare-styleable>
-
-	<declare-styleable name="SliderPreference">
-		<attr name="android:valueFrom" />
-		<attr name="android:valueTo" />
-		<attr name="android:stepSize" />
-		<attr name="tickVisible" />
-		<attr name="useSimpleSummaryProvider" />
 	</declare-styleable>
 
 	<declare-styleable name="ListItemTextView">
@@ -58,25 +40,6 @@
 		<attr name="android:insetBottom" />
 		<attr name="android:insetLeft" />
 		<attr name="android:insetRight" />
-	</declare-styleable>
-
-	<declare-styleable name="TwoLinesItemView">
-		<attr name="shapeAppearance" />
-		<attr name="shapeAppearanceOverlay" />
-		<attr name="backgroundFillColor" />
-		<attr name="android:textColor" />
-		<attr name="android:drawablePadding" />
-		<attr name="android:insetTop" />
-		<attr name="android:insetBottom" />
-		<attr name="android:insetLeft" />
-		<attr name="android:insetRight" />
-		<attr name="title" />
-		<attr name="subtitle" />
-		<attr name="icon" />
-		<attr name="titleTextAppearance" />
-		<attr name="subtitleTextAppearance" />
-		<attr name="android:checked" />
-		<attr name="android:button" />
 	</declare-styleable>
 
 	<declare-styleable name="ProgressDrawable">
@@ -96,31 +59,10 @@
 		<attr name="progressStyle" format="reference" />
 	</declare-styleable>
 
-	<declare-styleable name="FastScrollRecyclerView">
-		<attr name="hideScrollbar" format="boolean" />
-		<attr name="showBubble" format="boolean" />
-		<attr name="showBubbleAlways" format="boolean" />
-		<attr name="showTrack" format="boolean" />
-		<attr name="bubbleColor" format="color" />
-		<attr name="bubbleTextColor" format="color" />
-		<attr name="thumbColor" format="color" />
-		<attr name="trackColor" format="color" />
-		<attr name="bubbleTextSize" format="dimension" />
-		<attr name="scrollerOffset" format="dimension" />
-		<attr name="bubbleSize" format="enum">
-			<enum name="normal" value="0" />
-			<enum name="small" value="1" />
-		</attr>
-	</declare-styleable>
-
 	<declare-styleable name="BottomSheetHeaderBar">
 		<attr name="title" />
 		<attr name="menu" />
 		<attr name="fitStatusBar" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="AdaptiveSheetHeaderBar">
-		<attr name="title" />
 	</declare-styleable>
 
 	<declare-styleable name="ShapeView">
@@ -131,24 +73,6 @@
 		<attr name="cornerSizeTopRight" />
 		<attr name="cornerSizeBottomLeft" />
 		<attr name="cornerSizeBottomRight" />
-	</declare-styleable>
-
-	<declare-styleable name="AutoCompleteTextViewPreference">
-		<attr name="android:entries" />
-	</declare-styleable>
-
-	<declare-styleable name="TipView">
-		<attr name="icon" />
-		<attr name="title" />
-		<attr name="android:text" />
-		<attr name="primaryButtonText" format="string" />
-		<attr name="secondaryButtonText" format="string" />
-		<attr name="shapeAppearance" />
-		<attr name="shapeAppearanceOverlay" />
-		<attr name="cardBackgroundColor" />
-		<attr name="strokeWidth" />
-		<attr name="strokeColor" />
-		<attr name="elevation" />
 	</declare-styleable>
 
 	<declare-styleable name="FaviconFallbackDrawable">
@@ -200,11 +124,6 @@
 	<declare-styleable name="IconsView">
 		<attr name="iconSize" />
 		<attr name="iconSpacing" format="dimension" />
-	</declare-styleable>
-
-	<declare-styleable name="FilterFieldLayout">
-		<attr name="title" />
-		<attr name="showMoreButton" format="boolean" />
 	</declare-styleable>
 
 	<declare-styleable name="BadgeView">

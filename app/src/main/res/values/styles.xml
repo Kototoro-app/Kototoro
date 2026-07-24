@@ -169,15 +169,6 @@
 		<item name="android:clipToPadding">false</item>
 	</style>
 
-	<style name="Widget.Kototoro.FastScroller" parent="">
-		<item name="thumbColor">?colorTertiary</item>
-		<item name="bubbleColor">?colorTertiary</item>
-		<item name="bubbleTextColor">?colorOnTertiary</item>
-		<item name="trackColor">?colorOutline</item>
-		<item name="bubbleSize">small</item>
-		<item name="scrollerOffset">@dimen/grid_spacing_outer</item>
-	</style>
-
 	<style name="Widget.Kototoro.DotIndicator" parent="" />
 
 	<style name="Widget.Kototoro.BadgeView" parent="">
@@ -208,19 +199,6 @@
 		<item name="android:drawablePadding">?android:listPreferredItemPaddingStart</item>
 		<item name="android:paddingStart">?android:listPreferredItemPaddingStart</item>
 		<item name="android:paddingEnd">?android:listPreferredItemPaddingEnd</item>
-	</style>
-
-	<style name="Widget.Kototoro.TwoLinesItemView" parent="">
-		<item name="backgroundFillColor">@color/list_item_background_color</item>
-		<item name="shapeAppearance">?attr/shapeAppearanceCornerLarge</item>
-		<item name="android:insetRight">6dp</item>
-		<item name="android:insetLeft">6dp</item>
-		<item name="android:insetTop">2dp</item>
-		<item name="android:insetBottom">2dp</item>
-		<item name="android:orientation">horizontal</item>
-		<item name="android:textColor">@color/list_item_text_color</item>
-		<item name="titleTextAppearance">?attr/textAppearanceTitleSmall</item>
-		<item name="subtitleTextAppearance">?attr/textAppearanceBodySmall</item>
 	</style>
 
 	<style name="Widget.Kototoro.ExploreButton" parent="Widget.Material3.Button.ElevatedButton.Icon">
@@ -345,25 +323,8 @@
 		<item name="singleLineTitle">false</item>
 	</style>
 
-	<style name="Preference.Slider" parent="Preference.SeekBarPreference.Material">
-		<item name="android:layout">@layout/preference_slider</item>
-	</style>
-
-	<style name="Preference.MultiAutoCompleteTextView" parent="Preference.DialogPreference.EditTextPreference.Material">
-		<item name="android:dialogLayout">@layout/preference_dialog_multiautocompletetextview</item>
-	</style>
-
-	<style name="Preference.AutoCompleteTextView" parent="Preference.DialogPreference.EditTextPreference.Material">
-		<item name="android:dialogLayout">@layout/preference_dialog_autocompletetextview</item>
-	</style>
-
 	<style name="Preference.SwitchPreferenceCompat.M3" parent="Preference.SwitchPreferenceCompat.Material">
 		<item name="android:widgetLayout">@layout/preference_widget_material_switch</item>
-	</style>
-
-	<style name="Preference.ThemeChooser" parent="Preference.Material">
-		<item name="android:layout">@layout/preference_theme</item>
-		<item name="android:selectable">false</item>
 	</style>
 
 	<!-- Drawable -->

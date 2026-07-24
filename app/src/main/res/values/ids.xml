@@ -6,7 +6,6 @@
 	<item name="action_quality" type="id" />
 	<item name="action_bookmark" type="id" />
 	<item name="action_space_switcher" type="id" />
-	<item name="fast_scroller" type="id" />
 	<item name="group_branches" type="id" />
 	<item name="layout_tip" type="id" />
 	<item name="group_period" type="id" />

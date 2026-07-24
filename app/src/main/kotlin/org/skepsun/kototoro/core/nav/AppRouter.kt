@@ -70,10 +70,9 @@ import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
-import org.skepsun.kototoro.core.util.ext.withArgs
 import org.skepsun.kototoro.details.ui.DetailsActivity
 import org.skepsun.kototoro.details.ui.related.RelatedContentActivity
-import org.skepsun.kototoro.details.ui.scrobbling.ScrobblingInfoSheet
+import org.skepsun.kototoro.details.ui.scrobbling.ScrobblingInfoSheetRoute
 import org.skepsun.kototoro.download.ui.compose.DownloadDialog
 import org.skepsun.kototoro.download.ui.list.DownloadsActivity
 import org.skepsun.kototoro.favourites.ui.FavouritesActivity
@@ -92,7 +91,7 @@ import org.skepsun.kototoro.list.ui.config.ListConfigSection
 import org.skepsun.kototoro.local.ui.compose.ImportDialog
 import org.skepsun.kototoro.local.ui.info.compose.LocalInfoDialogRoute
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.main.ui.welcome.WelcomeSheet
+import org.skepsun.kototoro.main.ui.welcome.WelcomeRoute
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentPage
@@ -114,7 +113,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.reader.ui.colorfilter.ColorFilterConfigActivity
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.ui.config.ScrobblerConfigActivity
-import org.skepsun.kototoro.scrobbling.common.ui.selector.ScrobblingSelectorSheet
+import org.skepsun.kototoro.scrobbling.common.ui.selector.ScrobblingSelectorSheetRoute
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.ui.ContentListActivity
@@ -129,7 +128,7 @@ import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 import org.skepsun.kototoro.settings.storage.ContentDirectorySelectRoute
 import org.skepsun.kototoro.settings.storage.ContentDirectorySelectViewModel
 import org.skepsun.kototoro.settings.storage.directories.ContentDirectoriesActivity
-import org.skepsun.kototoro.settings.tracker.categories.TrackerCategoriesConfigSheet
+import org.skepsun.kototoro.settings.tracker.categories.TrackerCategoriesConfigRoute
 import org.skepsun.kototoro.stats.ui.StatsActivity
 import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsRoute
 
@@ -1039,7 +1038,7 @@ class AppRouter private constructor(
     }
 
     fun showBackupRestoreDialog(fileUri: Uri) {
-        val composeActivity = activity as? BaseComposeActivity ?: return
+        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
             RestoreDialogRoute(
                 uri = fileUri,
@@ -1145,26 +1144,54 @@ class AppRouter private constructor(
     }
 
     fun showWelcomeSheet() {
-        WelcomeSheet().showDistinct()
+        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
+        composeActivity.showComposeModal(key = WELCOME_MODAL_KEY) {
+            WelcomeRoute(
+                onDismissRequest = { composeActivity.dismissComposeModal(WELCOME_MODAL_KEY) },
+                onRestoreBackup = { uri ->
+                    composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
+                    showBackupRestoreDialog(uri)
+                },
+                onOpenDocumentUnsupported = {
+                    composeActivity.lifecycleScope.launch {
+                        composeActivity.snackbarHostState.showSnackbar(
+                            composeActivity.getString(R.string.operation_not_supported),
+                        )
+                    }
+                },
+            )
+        }
     }
 
     fun showScrobblingSelectorSheet(manga: Content, scrobblerService: ScrobblerService?) {
-        ScrobblingSelectorSheet().withArgs(2) {
-            putParcelable(KEY_MANGA, ParcelableContent(manga))
-            if (scrobblerService != null) {
-                putInt(KEY_ID, scrobblerService.id)
-            }
-        }.show()
+        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        composeActivity.showComposeModal {
+            ScrobblingSelectorSheetRoute(
+                manga = manga,
+                scrobblerServiceId = scrobblerService?.id ?: -1,
+                onDismissRequest = composeActivity::dismissComposeModal,
+            )
+        }
     }
 
     fun showScrobblingInfoSheet(scrobblerService: ScrobblerService) {
-        ScrobblingInfoSheet().withArgs(1) {
-            putInt(KEY_ID, scrobblerService.id)
-        }.showDistinct()
+        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        composeActivity.showComposeModal {
+            ScrobblingInfoSheetRoute(
+                scrobblerServiceId = scrobblerService.id,
+                onDismissRequest = composeActivity::dismissComposeModal,
+            )
+        }
     }
 
     fun showTrackerCategoriesConfigSheet() {
-        TrackerCategoriesConfigSheet().showDistinct()
+        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        composeActivity.showComposeModal {
+            TrackerCategoriesConfigRoute(
+                onDismissRequest = composeActivity::dismissComposeModal,
+            )
+        }
     }
 
     fun askForDownloadOverMeteredNetwork(onConfirmed: (allow: Boolean) -> Unit) {
@@ -1215,16 +1242,9 @@ class AppRouter private constructor(
     }
 
     fun closeWelcomeSheet(): Boolean {
-        val tag = fragmentTag<WelcomeSheet>()
-        val sheet = fragment?.findFragmentByTagRecursive(tag)
-            ?: activity?.supportFragmentManager?.findFragmentByTag(tag)
-            ?: return false
-        return if (sheet is WelcomeSheet) {
-            sheet.dismissAllowingStateLoss()
-            true
-        } else {
-            false
-        }
+        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return false
+        composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
+        return true
     }
 
     private fun getContentType(source: ContentSource): ContentType {
@@ -1329,6 +1349,7 @@ class AppRouter private constructor(
     }
 
     companion object {
+        private const val WELCOME_MODAL_KEY = "welcome-sheet-modal"
         private const val FILTER_SHEET_MODAL_KEY = "filter-sheet-modal"
 
         fun from(view: View): AppRouter? = runCatching {

@@ -9,44 +9,30 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup.MarginLayoutParams
-import android.widget.ArrayAdapter
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
-import androidx.core.text.buildSpannedString
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
-import androidx.core.view.updatePadding
-import com.google.android.material.snackbar.Snackbar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
-import io.noties.markwon.Markwon
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.github.AppVersion
-import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.util.FileSize
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.core.util.ext.setTextAndVisible
-import org.skepsun.kototoro.core.util.ext.showOrHide
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.core.util.ext.textAndVisible
-import org.skepsun.kototoro.databinding.ActivityAppUpdateBinding
+import org.skepsun.kototoro.core.nav.router
 
 @AndroidEntryPoint
-class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClickListener {
+class AppUpdateActivity : BaseComposeActivity() {
 
 	private val viewModel: AppUpdateViewModel by viewModels()
 	private lateinit var downloadReceiver: UpdateDownloadReceiver
+	private var operationErrorMessage by mutableStateOf<String?>(null)
 
 	private val permissionRequest = registerForActivityResult(
 		ActivityResultContracts.RequestPermission(),
@@ -60,12 +46,7 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityAppUpdateBinding.inflate(layoutInflater))
 		downloadReceiver = UpdateDownloadReceiver(viewModel)
-		viewModel.nextVersion.observe(this, ::onNextVersionChanged)
-		viewBinding.buttonCancel.setOnClickListener(this)
-		viewBinding.buttonUpdate.setOnClickListener(this)
-		setupMirrorSelector()
 
 		ContextCompat.registerReceiver(
 			this,
@@ -73,18 +54,39 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 			IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
 			ContextCompat.RECEIVER_EXPORTED,
 		)
-		combine(viewModel.isLoading, viewModel.downloadProgress, ::Pair)
-			.observe(this, ::onProgressChanged)
-		viewModel.downloadState.observe(this, ::onDownloadStateChanged)
-		viewModel.selectedMirror.observe(this, ::onSelectedMirrorChanged)
-		viewModel.updateMessage.observe(this, ::onUpdateMessageChanged)
-		viewModel.onError.observeEvent(this, ::onError)
+
+		viewModel.onError.observeEvent(this) {
+			operationErrorMessage = it.getDisplayMessage(resources)
+		}
 		viewModel.onDownloadDone.observeEvent(this) { intent ->
 			try {
 				startActivity(intent)
 			} catch (e: ActivityNotFoundException) {
 				e.printStackTraceDebug()
 			}
+		}
+
+		setComposeContent {
+			val nextVersion = viewModel.nextVersion.collectAsStateWithLifecycle().value
+			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
+			val downloadProgress = viewModel.downloadProgress.collectAsStateWithLifecycle().value
+			val downloadState = viewModel.downloadState.collectAsStateWithLifecycle().value
+			val selectedMirror = viewModel.selectedMirror.collectAsStateWithLifecycle().value
+			val updateMessage = viewModel.updateMessage.collectAsStateWithLifecycle().value
+
+			AppUpdateScreen(
+				version = nextVersion,
+				isLoading = isLoading,
+				downloadProgress = downloadProgress,
+				downloadState = downloadState,
+				updateMessage = updateMessage,
+				operationErrorMessage = operationErrorMessage,
+				mirrorOptions = rememberMirrorOptions(),
+				selectedMirror = selectedMirror,
+				onMirrorSelected = viewModel::setMirror,
+				onCancel = ::finishAfterTransition,
+				onUpdate = ::doUpdate,
+			)
 		}
 	}
 
@@ -93,57 +95,24 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 		super.onDestroy()
 	}
 
-	override fun onApplyWindowInsets(
-		v: View,
-		insets: WindowInsetsCompat
-	): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		viewBinding.root.updatePadding(top = barsInsets.top)
-		viewBinding.dockedToolbarChild.updateLayoutParams<MarginLayoutParams> {
-			leftMargin = barsInsets.left
-			rightMargin = barsInsets.right
-			bottomMargin = barsInsets.bottom
+	private fun rememberMirrorOptions(): List<AppUpdateMirrorOption> {
+		val labels = resources.getStringArray(R.array.pref_github_mirror_entries)
+		val values = resources.getStringArray(R.array.pref_github_mirror_values)
+		return values.mapIndexedNotNull { index, value ->
+			AppUpdateMirrorOption(
+				mirror = AppSettings.GitHubMirror.fromValue(value),
+				label = labels.getOrNull(index).orEmpty(),
+			)
 		}
-		viewBinding.scrollView.updatePadding(
-			left = barsInsets.left,
-			right = barsInsets.right,
-		)
-		return insets.consumeAllSystemBarsInsets()
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_cancel -> finishAfterTransition()
-			R.id.button_update -> doUpdate()
-		}
-	}
-
-	private suspend fun onNextVersionChanged(version: AppVersion?) {
-		viewBinding.buttonUpdate.isEnabled = version != null && !viewModel.isLoading.value
-		if (version == null) {
-			viewBinding.textViewContent.setText(R.string.loading_)
-			return
-		}
-		val markwon = Markwon.create(this)
-		val message = withContext(Dispatchers.Default) {
-			buildSpannedString {
-				append(getString(R.string.new_version_s, version.name))
-				appendLine()
-				append(getString(R.string.size_s, FileSize.BYTES.format(this@AppUpdateActivity, version.patchSize ?: version.apkSize)))
-				appendLine()
-				appendLine()
-				append(markwon.toMarkdown(version.description))
-			}
-		}
-		markwon.setParsedMarkdown(viewBinding.textViewContent, message)
 	}
 
 	private fun doUpdate() {
+		operationErrorMessage = null
 		viewModel.installIntent.value?.let { intent ->
 			try {
 				startActivity(intent)
 			} catch (e: Exception) {
-				onError(e)
+				operationErrorMessage = e.getDisplayMessage(resources)
 			}
 			return
 		}
@@ -157,61 +126,10 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 	private fun openInBrowser() {
 		val url = viewModel.getReleasePageUrl() ?: return
 		if (!router.openExternalBrowser(url, getString(R.string.open_in_browser))) {
-			Snackbar.make(viewBinding.scrollView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+			lifecycleScope.launch {
+				snackbarHostState.showSnackbar(getString(R.string.operation_not_supported))
+			}
 		}
-	}
-
-	private fun setupMirrorSelector() {
-		val labels = resources.getStringArray(R.array.pref_github_mirror_entries).toList()
-		val values = resources.getStringArray(R.array.pref_github_mirror_values)
-			.map { AppSettings.GitHubMirror.fromValue(it) }
-		viewBinding.autoCompleteMirror.setAdapter(
-			ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels),
-		)
-		viewBinding.autoCompleteMirror.setOnItemClickListener { _, _, position, _ ->
-			values.getOrNull(position)?.let(viewModel::setMirror)
-		}
-		onSelectedMirrorChanged(viewModel.selectedMirror.value)
-	}
-
-	private fun onSelectedMirrorChanged(mirror: AppSettings.GitHubMirror) {
-		val values = resources.getStringArray(R.array.pref_github_mirror_values)
-		val labels = resources.getStringArray(R.array.pref_github_mirror_entries)
-		val index = values.indexOf(mirror.value).takeIf { it >= 0 } ?: 0
-		viewBinding.autoCompleteMirror.setText(labels.getOrElse(index) { labels.firstOrNull().orEmpty() }, false)
-	}
-
-	private fun onProgressChanged(value: Pair<Boolean, Float>) {
-		val (isLoading, downloadProgress) = value
-		val indicator = viewBinding.progressBar
-		indicator.showOrHide(isLoading)
-		indicator.isIndeterminate = downloadProgress <= 0f
-		if (downloadProgress > 0f) {
-			indicator.setProgressCompat((indicator.max * downloadProgress).toInt(), true)
-		}
-		viewBinding.buttonUpdate.isEnabled = !isLoading && viewModel.nextVersion.value != null
-	}
-
-	private fun onDownloadStateChanged(state: Int) {
-		val message = when (state) {
-			DownloadManager.STATUS_FAILED -> R.string.error_occurred
-			DownloadManager.STATUS_PAUSED -> R.string.downloads_paused
-			else -> 0
-		}
-		viewBinding.textViewError.setTextAndVisible(message)
-	}
-
-	private fun onUpdateMessageChanged(msg: String?) {
-		if (msg != null) {
-			viewBinding.textViewError.textAndVisible = msg
-		} else {
-			// Restore previous download state visibility
-			onDownloadStateChanged(viewModel.downloadState.value)
-		}
-	}
-
-	private fun onError(e: Throwable) {
-		viewBinding.textViewError.textAndVisible = e.getDisplayMessage(resources)
 	}
 
 	private class UpdateDownloadReceiver(
@@ -219,10 +137,8 @@ class AppUpdateActivity : BaseActivity<ActivityAppUpdateBinding>(), View.OnClick
 	) : BroadcastReceiver() {
 
 		override fun onReceive(context: Context, intent: Intent) {
-			when (intent.action) {
-				DownloadManager.ACTION_DOWNLOAD_COMPLETE -> {
-					viewModel.onDownloadComplete(intent)
-				}
+			if (intent.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
+				viewModel.onDownloadComplete(intent)
 			}
 		}
 	}

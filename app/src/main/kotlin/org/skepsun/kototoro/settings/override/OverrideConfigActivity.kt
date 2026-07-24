@@ -3,63 +3,80 @@ package org.skepsun.kototoro.settings.override
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.View
 import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
-import com.google.android.material.snackbar.Snackbar
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.model.ContentOverride
-import org.skepsun.kototoro.core.util.ext.consumeAll
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.tryLaunch
-import org.skepsun.kototoro.databinding.ActivityOverrideEditBinding
-import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import org.skepsun.kototoro.picker.ui.PageImagePickContract
-import com.google.android.material.R as materialR
 
 @AndroidEntryPoint
-class OverrideConfigActivity : BaseActivity<ActivityOverrideEditBinding>(), View.OnClickListener,
+class OverrideConfigActivity : BaseComposeActivity(),
 	ActivityResultCallback<Uri?> {
 
 	private val viewModel: OverrideConfigViewModel by viewModels()
+	private val errorMessage = MutableStateFlow<String?>(null)
 
 	private val pickCoverFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument(), this)
 	private val pickPageLauncher = registerForActivityResult(PageImagePickContract(), this)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityOverrideEditBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		viewBinding.buttonDone.setOnClickListener(this)
-		viewBinding.buttonPickFile.setOnClickListener(this)
-		viewBinding.buttonPickPage.setOnClickListener(this)
-		viewBinding.buttonResetCover.setOnClickListener(this)
-		viewBinding.layoutName.setEndIconOnClickListener(this)
-		viewModel.data.filterNotNull().observe(this, ::onDataChanged)
 		viewModel.onSaved.observeEvent(this) { onDataSaved() }
-		viewModel.isLoading.observe(this, ::onLoadingStateChanged)
-		viewModel.onError.observeEvent(this, ::onError)
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val typeMask = WindowInsetsCompat.Type.systemBars()
-		val barsInsets = insets.getInsets(typeMask)
-		viewBinding.root.setPadding(
-			barsInsets.left,
-			barsInsets.top,
-			barsInsets.right,
-			barsInsets.bottom,
-		)
-		return insets.consumeAll(typeMask)
+		viewModel.onError.observeEvent(this) { errorMessage.value = it.getDisplayMessage(resources) }
+		setComposeContent {
+			val data = viewModel.data.collectAsStateWithLifecycle().value
+			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
+			val error = errorMessage.collectAsStateWithLifecycle().value
+			val manga = data?.first
+			val override = data?.second
+			val coverUrl = override?.coverUrl.ifNullOrEmpty { manga?.coverUrl }
+			val coverRequest = remember(manga?.id, coverUrl) {
+				manga?.let {
+					ImageRequest.Builder(this@OverrideConfigActivity)
+						.data(coverUrl)
+						.mangaExtra(it)
+						.crossfade(true)
+						.build()
+				}
+			}
+			OverrideConfigScreen(
+				mangaTitle = manga?.title.orEmpty(),
+				coverRequest = coverRequest,
+				initialName = override?.title.orEmpty(),
+				canResetCover = override?.coverUrl?.isNotEmpty() == true,
+				isDataReady = data != null,
+				isLoading = isLoading,
+				errorMessage = error,
+				onSave = {
+					errorMessage.value = null
+					viewModel.save(it)
+				},
+				onPickFile = {
+					if (!pickCoverFileLauncher.tryLaunch(arrayOf("image/*"))) {
+						lifecycleScope.launch {
+							snackbarHostState.showSnackbar(getString(R.string.operation_not_supported))
+						}
+					}
+				},
+				onPickPage = { manga?.let { pickPageLauncher.launch(it) } },
+				onResetCover = { viewModel.updateCover(null) },
+				onNavigateUp = ::finish,
+			)
+		}
 	}
 
 	override fun onActivityResult(result: Uri?) {
@@ -68,56 +85,6 @@ class OverrideConfigActivity : BaseActivity<ActivityOverrideEditBinding>(), View
 				contentResolver.takePersistableUriPermission(result, Intent.FLAG_GRANT_READ_URI_PERMISSION)
 			}
 			viewModel.updateCover(result.toString())
-		}
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_done -> viewModel.save(
-				title = viewBinding.editName.text?.toString()?.trim(),
-			)
-
-			materialR.id.text_input_end_icon -> viewBinding.editName.text?.clear()
-
-			R.id.button_reset_cover -> viewModel.updateCover(null)
-			R.id.button_pick_file -> {
-				if (!pickCoverFileLauncher.tryLaunch(arrayOf("image/*"))) {
-					Snackbar.make(
-						viewBinding.imageViewCover,
-						R.string.operation_not_supported,
-						Snackbar.LENGTH_SHORT,
-					).show()
-				}
-			}
-
-			R.id.button_pick_page -> {
-				val manga = viewModel.data.value?.first
-				pickPageLauncher.launch(manga)
-			}
-		}
-	}
-
-	private fun onDataChanged(data: Pair<Content, ContentOverride>) {
-		val (manga, override) = data
-		viewBinding.imageViewCover.setImageAsync(override.coverUrl.ifNullOrEmpty { manga.coverUrl }, manga)
-		viewBinding.layoutName.placeholderText = manga.title
-		if (viewBinding.editName.tag == null) {
-			viewBinding.editName.setText(override.title)
-			viewBinding.editName.tag = override.title
-		}
-		viewBinding.buttonResetCover.isEnabled = !override.coverUrl.isNullOrEmpty()
-	}
-
-	private fun onError(e: Throwable) {
-		viewBinding.textViewError.text = e.getDisplayMessage(resources)
-		viewBinding.textViewError.isVisible = true
-	}
-
-	private fun onLoadingStateChanged(isLoading: Boolean) {
-		viewBinding.buttonDone.isEnabled = !isLoading
-		viewBinding.editName.isEnabled = !isLoading
-		if (isLoading) {
-			viewBinding.textViewError.isVisible = false
 		}
 	}
 

@@ -2,114 +2,59 @@ package org.skepsun.kototoro.settings.protect
 
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.text.Editable
-import android.view.KeyEvent
-import android.view.View
 import android.view.WindowManager
-import android.view.inputmethod.EditorInfo
-import android.widget.CompoundButton
-import android.widget.TextView
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isGone
-import androidx.core.view.isVisible
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.util.DefaultTextWatcher
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
-import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.databinding.ActivitySetupProtectBinding
-
-private const val MIN_PASSWORD_LENGTH = 4
 
 @AndroidEntryPoint
-class ProtectSetupActivity :
-	BaseActivity<ActivitySetupProtectBinding>(),
-	DefaultTextWatcher,
-	View.OnClickListener,
-	TextView.OnEditorActionListener,
-	CompoundButton.OnCheckedChangeListener {
+class ProtectSetupActivity : BaseComposeActivity() {
 
 	private val viewModel by viewModels<ProtectSetupViewModel>()
+	private var password by mutableStateOf("")
+	private var passwordError by mutableStateOf<String?>(null)
+	private var biometricEnabled by mutableStateOf(false)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-		setContentView(ActivitySetupProtectBinding.inflate(layoutInflater))
-		viewBinding.editPassword.addTextChangedListener(this)
-		viewBinding.editPassword.setOnEditorActionListener(this)
-		viewBinding.buttonNext.setOnClickListener(this)
-		viewBinding.buttonCancel.setOnClickListener(this)
+		biometricEnabled = viewModel.isBiometricEnabled
 
-		viewBinding.switchBiometric.isChecked = viewModel.isBiometricEnabled
-		viewBinding.switchBiometric.setOnCheckedChangeListener(this)
-
-		viewModel.isSecondStep.observe(this, this::onStepChanged)
 		viewModel.onPasswordSet.observeEvent(this) {
 			finishAfterTransition()
 		}
 		viewModel.onPasswordMismatch.observeEvent(this) {
-			viewBinding.editPassword.error = getString(R.string.passwords_mismatch)
+			passwordError = getString(R.string.passwords_mismatch)
 		}
 		viewModel.onClearText.observeEvent(this) {
-			viewBinding.editPassword.text?.clear()
+			password = ""
+			passwordError = null
 		}
-	}
 
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		val basePadding = resources.getDimensionPixelOffset(R.dimen.screen_padding)
-		viewBinding.root.setPadding(
-			barsInsets.left + basePadding,
-			barsInsets.top + basePadding,
-			barsInsets.right + basePadding,
-			barsInsets.bottom + basePadding,
-		)
-		return insets.consumeAllSystemBarsInsets()
-	}
-
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_cancel -> finish()
-			R.id.button_next -> viewModel.onNextClick(
-				password = viewBinding.editPassword.text?.toString() ?: return,
+		setComposeContent {
+			ProtectSetupScreen(
+				password = password,
+				passwordError = passwordError,
+				isSecondStep = viewModel.isSecondStep.collectAsStateWithLifecycle().value,
+				isBiometricAvailable = isBiometricAvailable(),
+				isBiometricEnabled = biometricEnabled,
+				onPasswordChange = {
+					password = it.take(24)
+					passwordError = null
+				},
+				onNext = viewModel::onNextClick,
+				onBiometricEnabledChange = {
+					biometricEnabled = it
+					viewModel.setBiometricEnabled(it)
+				},
+				onCancel = ::finish,
 			)
-		}
-	}
-
-	override fun onCheckedChanged(buttonView: CompoundButton, isChecked: Boolean) {
-		viewModel.setBiometricEnabled(isChecked)
-	}
-
-	override fun onEditorAction(v: TextView?, actionId: Int, event: KeyEvent?): Boolean {
-		return if (actionId == EditorInfo.IME_ACTION_DONE && viewBinding.buttonNext.isEnabled) {
-			viewBinding.buttonNext.performClick()
-			true
-		} else {
-			false
-		}
-	}
-
-	override fun afterTextChanged(s: Editable?) {
-		viewBinding.editPassword.error = null
-		val isEnoughLength = (s?.length ?: 0) >= MIN_PASSWORD_LENGTH
-		viewBinding.buttonNext.isEnabled = isEnoughLength
-		viewBinding.layoutPassword.isHelperTextEnabled =
-			!isEnoughLength || viewModel.isSecondStep.value == true
-	}
-
-	private fun onStepChanged(isSecondStep: Boolean) {
-		viewBinding.buttonCancel.isGone = isSecondStep
-		viewBinding.switchBiometric.isVisible = isSecondStep && isBiometricAvailable()
-		if (isSecondStep) {
-			viewBinding.layoutPassword.helperText = getString(R.string.repeat_password)
-			viewBinding.buttonNext.setText(R.string.confirm)
-		} else {
-			viewBinding.layoutPassword.helperText = getString(R.string.password_length_hint)
-			viewBinding.buttonNext.setText(R.string.next)
 		}
 	}
 

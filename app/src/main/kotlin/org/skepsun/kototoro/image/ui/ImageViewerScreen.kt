@@ -154,7 +154,7 @@ private fun ImageActionButton(
         modifier = modifier
             .size(48.dp)
             .shadow(
-                elevation = dimensionResource(R.dimen.m3_sys_elevation_level1),
+                elevation = 1.dp,
                 shape = CircleShape,
             )
             .background(MaterialTheme.colorScheme.surface, CircleShape)

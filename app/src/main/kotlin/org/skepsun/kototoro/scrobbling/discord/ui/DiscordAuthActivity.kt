@@ -23,17 +23,17 @@ class DiscordAuthActivity : BaseBrowserActivity(), DiscordTokenWebClient.Callbac
 		repository: ParserContentRepository?
 	) {
 		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		viewBinding.webView.settings.userAgentString = USER_AGENT
-		viewBinding.webView.webViewClient = DiscordTokenWebClient(this)
+		browserWebView.settings.userAgentString = USER_AGENT
+		browserWebView.webViewClient = DiscordTokenWebClient(this)
 		if (savedInstanceState == null) {
 			resetDiscordWebSession()
-			viewBinding.webView.loadUrl(BASE_URL)
+			browserWebView.loadUrl(BASE_URL)
 		}
 	}
 
 	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
 		android.R.id.home -> {
-			viewBinding.webView.stopLoading()
+			browserWebView.stopLoading()
 			finishAfterTransition()
 			true
 		}
@@ -48,10 +48,10 @@ class DiscordAuthActivity : BaseBrowserActivity(), DiscordTokenWebClient.Callbac
 	}
 
 	private fun resetDiscordWebSession() {
-		viewBinding.webView.stopLoading()
-		viewBinding.webView.clearHistory()
-		viewBinding.webView.clearCache(true)
-		viewBinding.webView.evaluateJavascript(
+		browserWebView.stopLoading()
+		browserWebView.clearHistory()
+		browserWebView.clearCache(true)
+		browserWebView.evaluateJavascript(
 			"""
 			(function() {
 				try { window.localStorage.removeItem('token'); } catch (e) {}

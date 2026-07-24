@@ -1,156 +1,82 @@
 package org.skepsun.kototoro.scrobbling.common.ui.selector
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.widget.SearchView
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
-import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.AsyncListDiffer
-import androidx.recyclerview.widget.RecyclerView.NO_ID
-import com.google.android.material.tabs.TabLayout
-import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import dagger.hilt.android.EntryPointAccessors
+import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.launch
-import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
-import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.ui.list.OnListItemClickListener
-import org.skepsun.kototoro.core.ui.list.PaginationScrollListener
-import org.skepsun.kototoro.core.ui.sheet.BaseAdaptiveSheet
-import org.skepsun.kototoro.core.ui.util.CollapseActionViewCallback
-import org.skepsun.kototoro.core.util.RecyclerViewScrollCallback
-import org.skepsun.kototoro.core.util.ext.consume
-import org.skepsun.kototoro.core.util.ext.firstVisibleItemPosition
+import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.observe
-import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.setContentDescriptionAndTooltip
-import org.skepsun.kototoro.core.util.ext.setProgressIcon
-import org.skepsun.kototoro.core.util.ext.setTabsEnabled
-import org.skepsun.kototoro.core.util.ext.viewLifecycleScope
-import org.skepsun.kototoro.databinding.SheetScrobblingSelectorBinding
-import org.skepsun.kototoro.list.ui.adapter.ListStateHolderListener
-import org.skepsun.kototoro.list.ui.adapter.TypedListSpacingDecoration
-import org.skepsun.kototoro.list.ui.model.ListModel
-import org.skepsun.kototoro.list.ui.model.LoadingFooter
-import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerContent
-import org.skepsun.kototoro.scrobbling.common.ui.selector.adapter.ScrobblerContentSelectionDecoration
-import org.skepsun.kototoro.scrobbling.common.ui.selector.adapter.ScrobblerSelectorAdapter
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.scrobbling.common.ui.selector.compose.ScrobblingSelectorDialog
 
-@AndroidEntryPoint
-class ScrobblingSelectorSheet :
-	BaseAdaptiveSheet<SheetScrobblingSelectorBinding>(),
-	OnListItemClickListener<ScrobblerContent>,
-	PaginationScrollListener.Callback,
-	View.OnClickListener,
-	MenuItem.OnActionExpandListener,
-	SearchView.OnQueryTextListener,
-	TabLayout.OnTabSelectedListener,
-	ListStateHolderListener,
-	AsyncListDiffer.ListListener<ListModel> {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ScrobblingSelectorSheetRoute(
+	manga: Content,
+	scrobblerServiceId: Int = -1,
+	onDismissRequest: () -> Unit,
+	viewModel: ScrobblingSelectorViewModel = hiltViewModel(),
+) {
+	val context = LocalContext.current
+	val activity = context.findActivity() as? FragmentActivity
+	val exceptionResolver = remember(activity) {
+		activity?.let {
+			EntryPointAccessors.fromApplication<BaseActivityEntryPoint>(
+				it.applicationContext,
+			).exceptionResolverFactory.create(it)
+		}
+	}
+	val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+	val coroutineScope = rememberCoroutineScope()
 
-	private var collapsibleActionViewCallback: CollapseActionViewCallback? = null
-	private var paginationScrollListener: PaginationScrollListener? = null
-	private val viewModel by viewModels<ScrobblingSelectorViewModel>()
-
-	override fun onCreateViewBinding(inflater: LayoutInflater, container: ViewGroup?): SheetScrobblingSelectorBinding {
-		return SheetScrobblingSelectorBinding.inflate(inflater, container, false)
+	LaunchedEffect(manga, scrobblerServiceId) {
+		viewModel.initialize(manga)
+		val selectedIndex = viewModel.availableScrobblers.indexOfFirst {
+			it.scrobblerService.id == scrobblerServiceId
+		}
+		if (selectedIndex >= 0) {
+			viewModel.setScrobblerIndex(selectedIndex)
+		}
 	}
 
-	override fun onViewBindingCreated(binding: SheetScrobblingSelectorBinding, savedInstanceState: Bundle?) {
-		super.onViewBindingCreated(binding, savedInstanceState)
-		disableFitToContents()
-		val listAdapter = ScrobblerSelectorAdapter(this, this)
-		listAdapter.addListListener(this)
-		val decoration = ScrobblerContentSelectionDecoration(binding.root.context)
-		with(binding.recyclerView) {
-			adapter = listAdapter
-			addItemDecoration(decoration)
-			addItemDecoration(TypedListSpacingDecoration(context, false))
-			addOnScrollListener(
-				PaginationScrollListener(4, this@ScrobblingSelectorSheet).also {
-					paginationScrollListener = it
-				},
-			)
-		}
-		binding.buttonDone.setOnClickListener(this)
-		initOptionsMenu()
-		initTabs()
-
-		viewModel.content.observe(viewLifecycleOwner, listAdapter)
-		viewModel.selectedItemId.observe(viewLifecycleOwner) {
-			decoration.checkedItemId = it
-			binding.recyclerView.invalidateItemDecorations()
-		}
-		viewModel.onError.observeEvent(viewLifecycleOwner, ::onError)
-		viewModel.onClose.observeEvent(viewLifecycleOwner) {
-			dismiss()
-		}
-		viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-			binding.buttonDone.isEnabled = !isLoading
-			if (isLoading) {
-				binding.buttonDone.setProgressIcon()
-			} else {
-				updateDoneButton(viewModel.selectedScrobblerIndex.value)
+	LaunchedEffect(viewModel) {
+		viewModel.onError.collect { event ->
+			event?.consume { error ->
+				Toast.makeText(
+					context,
+					error.getDisplayMessage(context.resources),
+					Toast.LENGTH_LONG,
+				).show()
+				if (viewModel.isEmpty) {
+					onDismissRequest()
+				}
 			}
-			binding.tabs.setTabsEnabled(!isLoading)
-		}
-		viewModel.selectedScrobblerIndex.observe(viewLifecycleOwner) { index ->
-			val tab = binding.tabs.getTabAt(index)
-			if (tab != null && !tab.isSelected) {
-				tab.select()
-			}
-			updateAuthHint(index)
 		}
 	}
 
-	override fun onDestroyView() {
-		super.onDestroyView()
-		collapsibleActionViewCallback = null
-		paginationScrollListener = null
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val typeMask = WindowInsetsCompat.Type.systemBars()
-		val basePadding = v.resources.getDimensionPixelOffset(R.dimen.list_spacing_normal)
-		viewBinding?.recyclerView?.updatePadding(
-			bottom = basePadding + insets.getInsets(typeMask).bottom,
-		)
-		return insets.consume(v, typeMask, bottom = true)
-	}
-
-	override fun onCurrentListChanged(previousList: MutableList<ListModel>, currentList: MutableList<ListModel>) {
-		if (previousList.singleOrNull() is LoadingFooter) {
-			val rv = viewBinding?.recyclerView ?: return
-			val selectedId = viewModel.selectedItemId.value
-			val target = if (selectedId == NO_ID) {
-				0
-			} else {
-				currentList.indexOfFirst { it is ScrobblerContent && it.id == selectedId }.coerceAtLeast(0)
-			}
-			rv.post(RecyclerViewScrollCallback(rv, target, if (target == 0) 0 else rv.height / 3))
-			paginationScrollListener?.postInvalidate(rv)
+	LaunchedEffect(viewModel) {
+		viewModel.onClose.collect { event ->
+			event?.consume { onDismissRequest() }
 		}
 	}
 
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_done -> viewModel.onDoneClick()
-		}
-	}
-
-	override fun onItemClick(item: ScrobblerContent, view: View) {
-		viewModel.selectItem(item.id)
-	}
-
-	override fun onRetryClick(error: Throwable) {
-		if (ExceptionResolver.canResolve(error)) {
-			viewLifecycleScope.launch {
+	fun retry(error: Throwable) {
+		if (ExceptionResolver.canResolve(error) && exceptionResolver != null) {
+			coroutineScope.launch {
 				if (exceptionResolver.resolve(error)) {
 					viewModel.retry()
 				}
@@ -160,131 +86,17 @@ class ScrobblingSelectorSheet :
 		}
 	}
 
-	override fun onEmptyActionClick() {
-		openSearch()
-	}
-
-	override fun onScrolledToEnd() {
-		viewModel.loadNextPage()
-	}
-
-	override fun onMenuItemActionExpand(item: MenuItem): Boolean {
-		setExpanded(isExpanded = true, isLocked = true)
-		collapsibleActionViewCallback?.onMenuItemActionExpand(item)
-		return true
-	}
-
-	override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
-		val searchView = (item.actionView as? SearchView) ?: return false
-		searchView.setQuery("", false)
-		searchView.post { setExpanded(isExpanded = false, isLocked = false) }
-		collapsibleActionViewCallback?.onMenuItemActionCollapse(item)
-		return true
-	}
-
-	override fun onQueryTextSubmit(query: String?): Boolean {
-		if (query == null || query.length < 3) {
-			return false
-		}
-		viewModel.search(query)
-		requireViewBinding().toolbar.menu.findItem(R.id.action_search)?.collapseActionView()
-		return true
-	}
-
-	override fun onQueryTextChange(newText: String?): Boolean = false
-
-	override fun onTabSelected(tab: TabLayout.Tab) {
-		viewModel.setScrobblerIndex(tab.position)
-	}
-
-	override fun onTabUnselected(tab: TabLayout.Tab?) = Unit
-
-	override fun onTabReselected(tab: TabLayout.Tab?) {
-		if (!isExpanded) {
-			setExpanded(isExpanded = true, isLocked = behavior?.isDraggable == false)
-		}
-		requireViewBinding().recyclerView.firstVisibleItemPosition = 0
-	}
-
-	private fun openSearch() {
-		val menuItem = requireViewBinding().toolbar.menu.findItem(R.id.action_search) ?: return
-		menuItem.expandActionView()
-	}
-
-	private fun onError(e: Throwable) {
-		Toast.makeText(requireContext(), e.getDisplayMessage(resources), Toast.LENGTH_LONG).show()
-		if (viewModel.isEmpty) {
-			dismissAllowingStateLoss()
-		}
-	}
-
-	private fun initOptionsMenu() {
-		requireViewBinding().toolbar.inflateMenu(R.menu.opt_shiki_selector)
-		val searchMenuItem = requireViewBinding().toolbar.menu.findItem(R.id.action_search)
-		searchMenuItem.setOnActionExpandListener(this)
-		val searchView = searchMenuItem.actionView as SearchView
-		searchView.setOnQueryTextListener(this)
-		searchView.setIconifiedByDefault(false)
-		searchView.queryHint = searchMenuItem.title
-		collapsibleActionViewCallback = CollapseActionViewCallback(searchMenuItem).also {
-			onBackPressedDispatcher.addCallback(it)
-		}
-	}
-
-	private fun initTabs() {
-		val entries = viewModel.availableScrobblers
-		val tabs = requireViewBinding().tabs
-		val selectedId = arguments?.getInt(AppRouter.KEY_ID, -1) ?: -1
-		tabs.removeAllTabs()
-		tabs.clearOnTabSelectedListeners()
-		tabs.addOnTabSelectedListener(this)
-		for ((index, entry) in entries.withIndex()) {
-			val tab = tabs.newTab()
-			tab.tag = entry.scrobblerService
-			tab.setIcon(entry.scrobblerService.iconResId)
-			val title = getString(entry.scrobblerService.titleResId)
-			tab.text = if (viewModel.isScrobblerAuthorized(index)) {
-				title
-			} else {
-				getString(
-					R.string.scrobbler_search_requires_login_label,
-					title,
-					getString(R.string.filter_need_login),
-				)
-			}
-			tabs.addTab(tab)
-			if (entry.scrobblerService.id == selectedId) {
-				tab.select()
-			}
-		}
-		updateAuthHint(viewModel.selectedScrobblerIndex.value)
-	}
-
-	private fun updateAuthHint(index: Int) {
-		val binding = viewBinding ?: return
-		val service = viewModel.availableScrobblers.getOrNull(index)?.scrobblerService ?: return
-		val requiresLogin = !viewModel.isScrobblerAuthorized(index)
-		updateDoneButton(index)
-		binding.textViewAuthHint.isVisible = requiresLogin
-		if (requiresLogin) {
-			binding.textViewAuthHint.text = getString(
-				R.string.scrobbler_search_auth_hint,
-				getString(service.titleResId),
+	KototoroTheme {
+		ModalBottomSheet(
+			onDismissRequest = onDismissRequest,
+			sheetState = sheetState,
+			modifier = Modifier.fillMaxHeight(0.9f),
+		) {
+			ScrobblingSelectorDialog(
+				viewModel = viewModel,
+				onDismissRequest = onDismissRequest,
+				onRetry = ::retry,
 			)
-		}
-	}
-
-	private fun updateDoneButton(index: Int) {
-		val binding = viewBinding ?: return
-		if (viewModel.isLoading.value == true) {
-			return
-		}
-		if (viewModel.isScrobblerAuthorized(index)) {
-			binding.buttonDone.setIconResource(R.drawable.ic_check)
-			binding.buttonDone.setContentDescriptionAndTooltip(R.string.done)
-		} else {
-			binding.buttonDone.setIconResource(R.drawable.ic_lock)
-			binding.buttonDone.setContentDescriptionAndTooltip(R.string.sign_in)
 		}
 	}
 }

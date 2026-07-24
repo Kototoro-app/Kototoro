@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -15,15 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.core.view.WindowInsetsCompat
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.core.nav.router
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.databinding.ActivityUnifiedSourcesBinding
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
 @AndroidEntryPoint
-class UnifiedSourcesActivity : BaseActivity<ActivityUnifiedSourcesBinding>() {
+class UnifiedSourcesActivity : BaseComposeActivity() {
 
 	private val viewModel by viewModels<UnifiedSourcesViewModel>()
 	private var pendingFileImportKind: UnifiedSourceKind? = null
@@ -52,17 +48,14 @@ class UnifiedSourcesActivity : BaseActivity<ActivityUnifiedSourcesBinding>() {
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityUnifiedSourcesBinding.inflate(layoutInflater))
 		val initialKind = intent.resolveInitialRepositoryKind()
 		val initialUrl = intent.resolveInitialRepositoryUrl()
-		viewBinding.composeView.setContent {
-			KototoroTheme {
-				UnifiedSourcesContent(
-					initialAddRepositoryKind = initialKind,
-					initialAddRepositoryUrl = initialUrl,
-					modifier = Modifier.fillMaxSize(),
-				)
-			}
+		setComposeContent {
+			UnifiedSourcesContent(
+				initialAddRepositoryKind = initialKind,
+				initialAddRepositoryUrl = initialUrl,
+				modifier = Modifier.fillMaxSize(),
+			)
 		}
 	}
 
@@ -96,10 +89,6 @@ class UnifiedSourcesActivity : BaseActivity<ActivityUnifiedSourcesBinding>() {
 			},
 			modifier = modifier,
 		)
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		return insets
 	}
 
 	private fun openRepositoryFilePicker(kind: UnifiedSourceKind) {

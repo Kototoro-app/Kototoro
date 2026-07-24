@@ -47,12 +47,12 @@ class SourceAuthActivity : BaseBrowserActivity(), BrowserCallback {
 		}
 		authProvider = authCandidate
 		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		viewBinding.webView.webViewClient = BrowserClient(this, adBlock)
+		browserWebView.webViewClient = BrowserClient(this, adBlock)
 		lifecycleScope.launch {
 			try {
 				proxyProvider.applyWebViewConfig()
 			} catch (e: Exception) {
-				Snackbar.make(viewBinding.webView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+				Snackbar.make(browserWebView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
 			}
 			if (savedInstanceState == null) {
 				val url = authProvider.authUrl
@@ -60,14 +60,14 @@ class SourceAuthActivity : BaseBrowserActivity(), BrowserCallback {
 					source.getTitle(this@SourceAuthActivity),
 					getString(R.string.loading_),
 				)
-				viewBinding.webView.loadUrl(url)
+				browserWebView.loadUrl(url)
 			}
 		}
 	}
 
 	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
 		android.R.id.home -> {
-			viewBinding.webView.stopLoading()
+			browserWebView.stopLoading()
 			setResult(RESULT_CANCELED)
 			finishAfterTransition()
 			true

@@ -1,167 +1,26 @@
 package org.skepsun.kototoro.settings.reader
 
-import android.content.DialogInterface
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
-import android.widget.TextView
 import androidx.activity.viewModels
-import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.drawable.toDrawable
-import androidx.core.text.bold
-import androidx.core.text.buildSpannedString
-import androidx.core.view.WindowInsetsCompat
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
-import org.skepsun.kototoro.core.util.ext.findKeyByValue
-import org.skepsun.kototoro.core.util.ext.getThemeDrawable
-import org.skepsun.kototoro.core.util.ext.observe
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.databinding.ActivityReaderTapActionsBinding
-import org.skepsun.kototoro.reader.domain.TapGridArea
-import org.skepsun.kototoro.reader.ui.tapgrid.TapAction
-import java.util.EnumMap
-import androidx.appcompat.R as appcompatR
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
 @AndroidEntryPoint
-class ReaderTapGridConfigActivity : BaseActivity<ActivityReaderTapActionsBinding>(), View.OnClickListener,
-	View.OnLongClickListener {
+class ReaderTapGridConfigActivity : BaseComposeActivity() {
 
 	private val viewModel: ReaderTapGridConfigViewModel by viewModels()
 
-	private val controls = EnumMap<TapGridArea, TextView>(TapGridArea::class.java)
-
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityReaderTapActionsBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-		controls[TapGridArea.TOP_LEFT] = viewBinding.textViewTopLeft
-		controls[TapGridArea.TOP_CENTER] = viewBinding.textViewTopCenter
-		controls[TapGridArea.TOP_RIGHT] = viewBinding.textViewTopRight
-		controls[TapGridArea.CENTER_LEFT] = viewBinding.textViewCenterLeft
-		controls[TapGridArea.CENTER] = viewBinding.textViewCenter
-		controls[TapGridArea.CENTER_RIGHT] = viewBinding.textViewCenterRight
-		controls[TapGridArea.BOTTOM_LEFT] = viewBinding.textViewBottomLeft
-		controls[TapGridArea.BOTTOM_CENTER] = viewBinding.textViewBottomCenter
-		controls[TapGridArea.BOTTOM_RIGHT] = viewBinding.textViewBottomRight
-
-		controls.forEach { (_, view) ->
-			view.setOnClickListener(this)
-			view.setOnLongClickListener(this)
-		}
-
-		viewModel.content.observe(this, ::onContentChanged)
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		viewBinding.root.setPadding(
-			barsInsets.left,
-			barsInsets.top,
-			barsInsets.right,
-			barsInsets.bottom,
-		)
-		return insets.consumeAllSystemBarsInsets()
-	}
-
-	override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-		menuInflater.inflate(R.menu.opt_tap_grid_config, menu)
-		return super.onCreateOptionsMenu(menu)
-	}
-
-	override fun onOptionsItemSelected(item: MenuItem): Boolean {
-		return when (item.itemId) {
-			R.id.action_reset -> {
-				confirmReset()
-				true
-			}
-
-			R.id.action_disable_all -> {
-				viewModel.disableAll()
-				true
-			}
-
-			else -> super.onOptionsItemSelected(item)
-		}
-	}
-
-	override fun onClick(v: View) {
-		val area = controls.findKeyByValue(v) ?: return
-		showActionSelector(area, isLongTap = false)
-	}
-
-	override fun onLongClick(v: View?): Boolean {
-		val area = controls.findKeyByValue(v) ?: return false
-		showActionSelector(area, isLongTap = true)
-		return true
-	}
-
-	private fun onContentChanged(content: Map<TapGridArea, ReaderTapGridConfigViewModel.TapActions>) {
-		controls.forEach { (area, view) ->
-			val actions = content[area]
-			view.text = buildSpannedString {
-				appendLine(getString(R.string.tap_action))
-				bold {
-					appendLine(actions?.tapAction.getText())
-				}
-				appendLine()
-				appendLine(getString(R.string.long_tap_action))
-				bold {
-					appendLine(actions?.longTapAction.getText())
-				}
-			}
-			view.background = createBackground(actions?.tapAction)
-		}
-	}
-
-	// lint bug
-	private fun TapAction?.getText(): String = if (this != null) {
-		getString(nameStringResId)
-	} else {
-		getString(R.string.none)
-	}
-
-	private fun showActionSelector(area: TapGridArea, isLongTap: Boolean) {
-		val selectedItem = viewModel.content.value[area]?.run {
-			if (isLongTap) longTapAction else tapAction
-		}?.ordinal ?: -1
-		val listener = DialogInterface.OnClickListener { dialog, which ->
-			viewModel.setTapAction(area, isLongTap, TapAction.entries.getOrNull(which - 1))
-			dialog.dismiss()
-		}
-		val names = arrayOfNulls<String>(TapAction.entries.size + 1)
-		names[0] = getString(R.string.none)
-		TapAction.entries.forEachIndexed { index, action -> names[index + 1] = getString(action.nameStringResId) }
-		MaterialAlertDialogBuilder(this)
-			.setSingleChoiceItems(names, selectedItem + 1, listener)
-			.setTitle(if (isLongTap) R.string.long_tap_action else R.string.tap_action)
-			.setIcon(R.drawable.ic_tap)
-			.setNegativeButton(android.R.string.cancel, null)
-			.show()
-	}
-
-	private fun confirmReset() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.reader_actions)
-			.setMessage(R.string.config_reset_confirm)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.reset) { _, _ ->
-				viewModel.reset()
-			}.show()
-	}
-
-	private fun createBackground(action: TapAction?): Drawable? {
-		val ripple = getThemeDrawable(appcompatR.attr.selectableItemBackground)
-		return if (action == null) {
-			ripple
-		} else {
-			LayerDrawable(arrayOf(ripple, ColorUtils.setAlphaComponent(action.color, 40).toDrawable()))
+		setComposeContent {
+			ReaderTapGridConfigScreen(
+				content = viewModel.content.collectAsStateWithLifecycle().value,
+				onNavigateUp = ::finishAfterTransition,
+				onSetTapAction = viewModel::setTapAction,
+				onReset = viewModel::reset,
+				onDisableAll = viewModel::disableAll,
+			)
 		}
 	}
 }
