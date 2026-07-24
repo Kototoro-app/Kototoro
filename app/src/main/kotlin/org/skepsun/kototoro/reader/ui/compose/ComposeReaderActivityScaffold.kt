@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
@@ -72,6 +73,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -160,12 +162,14 @@ internal data class ComposeReaderChromeCallbacks(
 	val onPrimaryDestinationLongPress: (ReaderControlDestination) -> Unit = {},
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeReaderActivityScaffold(
 	state: ComposeReaderChromeState,
 	callbacks: ComposeReaderChromeCallbacks,
 	modifier: Modifier = Modifier,
-	chaptersPanelContent: @Composable () -> Unit = {},
+	chaptersPanelContent: @Composable (Int) -> Unit = {},
+	translationTaskPanelContent: @Composable () -> Unit = {},
 	content: @Composable () -> Unit,
 ) {
 	var progressExpanded by remember { mutableStateOf(true) }
@@ -233,7 +237,7 @@ internal fun ComposeReaderActivityScaffold(
 							.fillMaxWidth()
 							.height(420.dp),
 					) {
-						chaptersPanelContent()
+						chaptersPanelContent(DETAILS_TAB_CHAPTERS)
 					}
 					HorizontalDivider(
 						modifier = Modifier.padding(horizontal = 12.dp),
@@ -389,6 +393,15 @@ internal fun ComposeReaderActivityScaffold(
 		}
 
 		if (!isIosStyle) {
+			if (state.chaptersVisible) {
+				ModalBottomSheet(
+					onDismissRequest = {
+						callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
+					},
+				) {
+					chaptersPanelContent(DETAILS_TAB_CHAPTERS)
+				}
+			}
 			ComposeReaderOptionsSheet(
 				state.options,
 				callbacks.options,
@@ -408,6 +421,7 @@ internal fun ComposeReaderActivityScaffold(
 					.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
 			)
 		}
+		translationTaskPanelContent()
 	}
 	}
 }

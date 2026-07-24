@@ -23,50 +23,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.core.widget.TextViewCompat
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import io.noties.markwon.Markwon
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.settings.SettingsActivity
-
-@AndroidEntryPoint
-class ChangelogFragment : Fragment() {
-
-	private val viewModel by viewModels<ChangelogViewModel>()
-
-	override fun onCreateView(
-		inflater: LayoutInflater,
-		container: ViewGroup?,
-		savedInstanceState: Bundle?,
-	): View {
-		return ComposeView(requireContext()).apply {
-			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-			setContent {
-				KototoroTheme {
-					ChangelogRoute(
-						viewModel = viewModel,
-						modifier = Modifier.fillMaxSize(),
-					)
-				}
-			}
-		}
-	}
-
-	override fun onResume() {
-		super.onResume()
-		(activity as? SettingsActivity)?.setSectionTitle(getString(R.string.changelog))
-	}
-}
 
 @Composable
 fun ChangelogRoute(

@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.details.ui
 
-import com.google.android.material.snackbar.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.UnsupportedSourceException
@@ -19,7 +19,7 @@ class DetailsErrorObserver(
 	private val viewModel: DetailsViewModel,
 	resolver: ExceptionResolver?,
 ) : ErrorObserver(
-	activity.viewBinding.root, null, resolver,
+	activity.contentRoot, null, resolver,
 	{ isResolved ->
 		if (isResolved) {
 			viewModel.reload()
@@ -39,33 +39,37 @@ class DetailsErrorObserver(
 				}
 			}
 		}
-		val snackbar = Snackbar.make(host, value.getDisplayMessage(host.context.resources), Snackbar.LENGTH_SHORT)
-		
-		if (value is NotFoundException || value is UnsupportedSourceException) {
-			snackbar.duration = Snackbar.LENGTH_INDEFINITE
+		val duration = if (value is NotFoundException || value is UnsupportedSourceException) {
+			SnackbarDuration.Indefinite
+		} else {
+			SnackbarDuration.Short
 		}
+		var actionLabel: String? = null
+		var action: (() -> Unit)? = null
 		when {
 			canResolve(value) -> {
-				snackbar.setAction(getResolveStringId(value)) {
-					resolve(value)
-				}
+				actionLabel = host.context.getString(getResolveStringId(value))
+				action = { resolve(value) }
 			}
 
 			value is ParseException -> {
 				val router = router()
 				if (router != null && value.isSerializable()) {
-					snackbar.setAction(R.string.details) {
-						router.showErrorDialog(value)
-					}
+					actionLabel = host.context.getString(R.string.details)
+					action = { router.showErrorDialog(value) }
 				}
 			}
 
 			value.isNetworkError() -> {
-				snackbar.setAction(R.string.try_again) {
-					viewModel.reload()
-				}
+				actionLabel = host.context.getString(R.string.try_again)
+				action = viewModel::reload
 			}
 		}
-		snackbar.show()
+		activity.showDetailsMessage(
+			message = value.getDisplayMessage(host.context.resources),
+			duration = duration,
+			actionLabel = actionLabel,
+			onAction = action,
+		)
 	}
 }

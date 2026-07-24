@@ -13,6 +13,7 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigator
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
+import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
 internal class ComposeReaderController(
@@ -21,7 +22,7 @@ internal class ComposeReaderController(
 	private val imagePipeline: DefaultComposeReaderImagePipeline,
 	private val errorHost: ReaderErrorHost,
 	private val chromeCallbacks: ComposeReaderChromeCallbacks,
-	private val chaptersPanelContent: @Composable () -> Unit = {},
+	private val chaptersPanelContent: @Composable (Int) -> Unit = {},
 ) : ReaderNavigator {
 
 	private var currentPosition by mutableIntStateOf(0)
@@ -35,6 +36,9 @@ internal class ComposeReaderController(
 		private set
 	private var isDoublePage by mutableStateOf(false)
 	private var chromeState by mutableStateOf(ComposeReaderChromeState(controlsVisible = false))
+	private var translationTaskPanelVisible by mutableStateOf(false)
+	private var chaptersTabId by mutableIntStateOf(DETAILS_TAB_CHAPTERS)
+	private var selectionDialog by mutableStateOf<ReaderSelectionDialogState?>(null)
 	private var isChromeEnabled = false
 	private var areControlsVisible = true
 	private var nextCommandId = 0L
@@ -45,7 +49,12 @@ internal class ComposeReaderController(
 	fun Content() {
 		ComposeReaderActivityScaffold(
 					state = chromeState,
-					chaptersPanelContent = chaptersPanelContent,
+					chaptersPanelContent = { chaptersPanelContent(chaptersTabId) },
+					translationTaskPanelContent = {
+						if (translationTaskPanelVisible) {
+							ComposeTranslationTaskPanel(viewModel = viewModel, onDismiss = ::hideTranslationTaskPanel)
+						}
+					},
 					callbacks = chromeCallbacks.copy(
 						onZoomIn = ::onZoomIn,
 						onZoomOut = ::onZoomOut,
@@ -83,6 +92,9 @@ internal class ComposeReaderController(
 						},
 					)
 				}
+		selectionDialog?.let { state ->
+			ComposeReaderSelectionDialog(state = state, onDismiss = ::hideSelectionDialog)
+		}
 		}
 
 	fun updateConfiguration(mode: ReaderMode, doublePage: Boolean) {
@@ -169,10 +181,41 @@ internal class ComposeReaderController(
 		)
 	}
 
-	fun toggleChapters() {
+	fun showTranslationTaskPanel() {
+		translationTaskPanelVisible = true
+		hideTools()
+	}
+
+	fun showSelectionDialog(
+		title: String,
+		entries: List<String>,
+		selectedIndex: Int? = null,
+		onSelected: (Int) -> Unit,
+	) {
+		selectionDialog = ReaderSelectionDialogState(
+			title = title,
+			entries = entries,
+			selectedIndex = selectedIndex,
+			onSelected = { index ->
+				hideSelectionDialog()
+				onSelected(index)
+			},
+		)
+	}
+
+	private fun hideSelectionDialog() {
+		selectionDialog = null
+	}
+
+	private fun hideTranslationTaskPanel() {
+		translationTaskPanelVisible = false
+	}
+
+	fun toggleChapters(defaultTab: Int = DETAILS_TAB_CHAPTERS) {
 		chromeState = if (chromeState.chaptersVisible) {
 			chromeState.copy(chaptersVisible = false)
 		} else {
+			chaptersTabId = defaultTab
 			chromeState.copy(
 				chaptersVisible = true,
 				options = chromeState.options.copy(visible = false),

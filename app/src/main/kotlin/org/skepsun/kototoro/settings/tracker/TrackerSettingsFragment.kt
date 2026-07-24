@@ -14,14 +14,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.net.toUri
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -40,131 +36,6 @@ import org.skepsun.kototoro.settings.compose.TrackerSettingsScreen
 import org.skepsun.kototoro.settings.compose.TrackerSettingsUiState
 import org.skepsun.kototoro.tracker.ui.debug.TrackerDebugActivity
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper
-
-@AndroidEntryPoint
-class TrackerSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    @Inject
-    lateinit var notificationHelper: TrackerNotificationHelper
-
-    private val viewModel by viewModels<TrackerSettingsViewModel>()
-    private val dozeTick = MutableStateFlow(0)
-    private val notificationTick = MutableStateFlow(0)
-
-    private val ignoreDozeLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) {
-        dozeTick.update { tick -> tick + 1 }
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                TrackerSettingsRoute(
-                    settings = settings,
-                    notificationHelper = notificationHelper,
-                    viewModel = viewModel,
-                    dozeRefreshKey = dozeTick.collectAsStateWithLifecycle().value,
-                    notificationRefreshKey = notificationTick.collectAsStateWithLifecycle().value,
-                    onTrackCategoriesClick = { router.showTrackerCategoriesConfigSheet() },
-                    onOpenNotificationsSettings = ::openNotificationsSettings,
-                    onOpenTrackerDebug = {
-                        startActivity(Intent(requireContext(), TrackerDebugActivity::class.java))
-                    },
-                    onRequestIgnoreDoze = ::startIgnoreDozeActivity,
-                    onOpenTrackerWarning = ::openTrackerWarning,
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.check_for_new_chapters))
-        dozeTick.update { it + 1 }
-        notificationTick.update { it + 1 }
-    }
-
-    private fun openNotificationsSettings(onUnsupported: () -> Unit) {
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
-                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
-                if (!startActivitySafe(intent)) {
-                    onUnsupported()
-                }
-            }
-
-            !notificationHelper.getAreNotificationsEnabled() -> {
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    .setData(Uri.fromParts("package", requireContext().packageName, null))
-                if (!startActivitySafe(intent)) {
-                    onUnsupported()
-                }
-            }
-
-            else -> {
-                (activity as? SettingsActivity)?.openDestination(SettingsDestination.NotificationSettings, null, false)
-            }
-        }
-    }
-
-    private fun openTrackerWarning(onUnsupported: () -> Unit) {
-        val intent = Intent(Intent.ACTION_VIEW, "https://dontkillmyapp.com/".toUri())
-        if (!startActivitySafe(intent)) {
-            onUnsupported()
-        }
-    }
-
-    private fun startIgnoreDozeActivity(): Boolean {
-        val context = context ?: return false
-        val packageName = context.packageName
-        val powerManager = context.powerManager ?: return false
-        if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
-            return false
-        }
-        return try {
-            val intent = Intent(
-                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                "package:$packageName".toUri(),
-            )
-            ignoreDozeLauncher.launch(intent)
-            true
-        } catch (_: ActivityNotFoundException) {
-            false
-        }
-    }
-
-    private fun isDozeIgnoreAvailable(refreshKey: Int): Boolean {
-        refreshKey
-        val context = context ?: return false
-        val powerManager = context.powerManager ?: return false
-        return !powerManager.isIgnoringBatteryOptimizations(context.packageName)
-    }
-
-    private fun startActivitySafe(intent: Intent): Boolean {
-        return try {
-            startActivity(intent)
-            true
-        } catch (_: ActivityNotFoundException) {
-            false
-        }
-    }
-}
 
 @Composable
 fun TrackerSettingsRoute(

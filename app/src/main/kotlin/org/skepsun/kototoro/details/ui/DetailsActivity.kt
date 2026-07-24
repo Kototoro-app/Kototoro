@@ -5,11 +5,12 @@ import android.app.assist.AssistContent
 import android.content.Context
 import android.os.Bundle
 import android.view.View
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -22,7 +23,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -40,7 +41,7 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class DetailsActivity :
-    BaseActivity<DetailsComposeBinding>(),
+    BaseComposeActivity(),
     BottomSheetOwner {
 
     @Inject
@@ -57,6 +58,8 @@ class DetailsActivity :
     private val bookmarksViewModel: BookmarksViewModel by viewModels()
 
     private lateinit var pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper
+    internal val contentRoot: View
+        get() = window.decorView
 
     private val overrideEditLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -68,19 +71,10 @@ class DetailsActivity :
     override val bottomSheet: View?
         get() = null
 
-    override fun onApplyWindowInsets(
-        v: View,
-        insets: androidx.core.view.WindowInsetsCompat,
-    ): androidx.core.view.WindowInsetsCompat {
-        return insets
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         pageSaveHelper = pageSaveHelperFactory.create(this)
-
-        setContentView(DetailsComposeBinding.inflate(this))
 
         onBackPressedDispatcher.addCallback(
             this,
@@ -92,40 +86,31 @@ class DetailsActivity :
             },
         )
 
-        setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-        supportActionBar?.setDisplayShowTitleEnabled(false)
-
-        viewBinding.root.setContent {
-            KototoroTheme {
-                val backdropBackground = MaterialTheme.colorScheme.background
-                val backdrop = rememberLayerBackdrop {
-                    drawRect(backdropBackground)
-                    drawContent()
-                }
-                CompositionLocalProvider(
-                    LocalLiquidGlassBackdrop provides backdrop,
-                    LocalLiquidGlassLayerBackdrop provides backdrop,
-                ) {
-                    DetailsScreen(
-                        viewModel = viewModel,
-                        pagesViewModel = pagesViewModel,
-                        bookmarksViewModel = bookmarksViewModel,
-                        settings = settings,
-                        appRouter = router,
-                        pageSaveHelper = pageSaveHelper,
-                        onBackClick = { onBackPressedDispatcher.onBackPressed() },
-                        onActionClick = ::handleActionClick,
-                        isTemporaryReadOnly = intent.getBooleanExtra(AppRouter.KEY_TEMPORARY_DETAILS, false),
-                    )
-                }
+        setComposeContent {
+            val backdropBackground = MaterialTheme.colorScheme.background
+            val backdrop = rememberLayerBackdrop {
+                drawRect(backdropBackground)
+                drawContent()
+            }
+            CompositionLocalProvider(
+                LocalLiquidGlassBackdrop provides backdrop,
+                LocalLiquidGlassLayerBackdrop provides backdrop,
+            ) {
+                DetailsScreen(
+                    viewModel = viewModel,
+                    pagesViewModel = pagesViewModel,
+                    bookmarksViewModel = bookmarksViewModel,
+                    settings = settings,
+                    appRouter = router,
+                    pageSaveHelper = pageSaveHelper,
+                    onBackClick = { onBackPressedDispatcher.onBackPressed() },
+                    onActionClick = ::handleActionClick,
+                    isTemporaryReadOnly = intent.getBooleanExtra(AppRouter.KEY_TEMPORARY_DETAILS, false),
+                )
             }
         }
 
         viewModel.onContentRemoved.observeEvent(this, ::onContentRemoved)
-    }
-
-    override fun dispatchNavigateUp() {
-        super.dispatchNavigateUp()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -145,7 +130,7 @@ class DetailsActivity :
             viewModel = viewModel,
             router = router,
             isIncognitoMode = isIncognitoMode,
-            snackbarHost = viewBinding.root,
+            snackbarHost = contentRoot,
         )
     }
 
@@ -157,7 +142,7 @@ class DetailsActivity :
                         router.openImage(
                             url = url,
                             source = content.source,
-                            anchor = viewBinding.root,
+                            anchor = contentRoot,
                         )
                     }
                 }
@@ -184,11 +169,9 @@ class DetailsActivity :
             DetailsAction.Translate -> {
                 val hasCache = viewModel.hasTranslationCache.value
                 viewModel.translateTitleAndDescription(forceRefresh = hasCache)
-                com.google.android.material.snackbar.Snackbar.make(
-                    viewBinding.root,
+                showDetailsMessage(
                     if (hasCache) R.string.reader_translation_retranslate_started else R.string.translating,
-                    com.google.android.material.snackbar.Snackbar.LENGTH_SHORT,
-                ).show()
+                )
             }
 
             DetailsAction.ToggleTranslation -> viewModel.toggleTranslationDisplay()
@@ -231,11 +214,7 @@ class DetailsActivity :
                 viewModel.getContentOrNull()?.let { manga ->
                     lifecycleScope.launch {
                         if (!appShortcutManager.requestPinShortcut(manga)) {
-                            com.google.android.material.snackbar.Snackbar.make(
-                                viewBinding.root,
-                                R.string.operation_not_supported,
-                                com.google.android.material.snackbar.Snackbar.LENGTH_SHORT,
-                            ).show()
+                            showDetailsMessage(R.string.operation_not_supported)
                         }
                     }
                 }
@@ -244,11 +223,25 @@ class DetailsActivity :
     }
 
     private fun onContentRemoved(manga: Content) {
-        Toast.makeText(
-            this,
-            getString(R.string._s_deleted_from_local_storage, manga.title),
-            Toast.LENGTH_SHORT,
-        ).show()
-        finishAfterTransition()
+        lifecycleScope.launch {
+            snackbarHostState.showSnackbar(getString(R.string._s_deleted_from_local_storage, manga.title))
+            finishAfterTransition()
+        }
+    }
+
+    private fun showDetailsMessage(messageRes: Int, duration: SnackbarDuration = SnackbarDuration.Short) {
+        showDetailsMessage(getString(messageRes), duration)
+    }
+
+    internal fun showDetailsMessage(
+        message: String,
+        duration: SnackbarDuration = SnackbarDuration.Short,
+        actionLabel: String? = null,
+        onAction: (() -> Unit)? = null,
+    ) {
+        lifecycleScope.launch {
+            val result = snackbarHostState.showSnackbar(message, actionLabel, duration = duration)
+            if (result == SnackbarResult.ActionPerformed) onAction?.invoke()
+        }
     }
 }

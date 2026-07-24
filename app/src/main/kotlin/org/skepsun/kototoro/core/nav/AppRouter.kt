@@ -31,10 +31,8 @@ import kotlinx.coroutines.withContext
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.alternatives.ui.AlternativesSheet
 import org.skepsun.kototoro.alternatives.ui.compose.AlternativesSheetRoute
-import org.skepsun.kototoro.backups.ui.backup.BackupDialogFragment
-import org.skepsun.kototoro.backups.ui.restore.RestoreDialogFragment
+import org.skepsun.kototoro.backups.ui.restore.RestoreDialogRoute
 import org.skepsun.kototoro.browser.BrowserActivity
 import org.skepsun.kototoro.browser.cloudflare.CloudFlareActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
@@ -61,10 +59,11 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.dialog.BigButtonsAlertDialog
-import org.skepsun.kototoro.core.ui.dialog.ErrorDetailsDialog
+import org.skepsun.kototoro.core.ui.dialog.ErrorDetailsActivity
 import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
 import org.skepsun.kototoro.core.util.ext.connectivityManager
 import org.skepsun.kototoro.core.util.ext.findActivity
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getThemeDrawable
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -73,32 +72,24 @@ import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.withArgs
 import org.skepsun.kototoro.details.ui.DetailsActivity
-import org.skepsun.kototoro.details.ui.pager.ChaptersPagesSheet
 import org.skepsun.kototoro.details.ui.related.RelatedContentActivity
 import org.skepsun.kototoro.details.ui.scrobbling.ScrobblingInfoSheet
 import org.skepsun.kototoro.download.ui.compose.DownloadDialog
-import org.skepsun.kototoro.download.ui.dialog.DownloadDialogFragment
 import org.skepsun.kototoro.download.ui.list.DownloadsActivity
 import org.skepsun.kototoro.favourites.ui.FavouritesActivity
 import org.skepsun.kototoro.favourites.ui.categories.FavouriteCategoriesActivity
 import org.skepsun.kototoro.favourites.ui.categories.edit.FavouritesCategoryEditActivity
-import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDialog
 import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCategoryDialogRoute
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.filter.ui.sheet.FilterSheetRoute
-import org.skepsun.kototoro.filter.ui.sheet.FilterSheetFragment
 import org.skepsun.kototoro.filter.ui.tags.TagsCatalogRoute
-import org.skepsun.kototoro.filter.ui.tags.TagsCatalogSheet
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.preset.SourcePresetListActivity
 import org.skepsun.kototoro.history.ui.HistoryActivity
 import org.skepsun.kototoro.image.ui.ImageActivity
-import org.skepsun.kototoro.list.ui.config.ListConfigBottomSheet
 import org.skepsun.kototoro.list.ui.config.ListConfigRoute
 import org.skepsun.kototoro.list.ui.config.ListConfigSection
-import org.skepsun.kototoro.local.ui.ImportDialogFragment
 import org.skepsun.kototoro.local.ui.compose.ImportDialog
-import org.skepsun.kototoro.local.ui.info.LocalInfoDialog
 import org.skepsun.kototoro.local.ui.info.compose.LocalInfoDialogRoute
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.welcome.WelcomeSheet
@@ -135,11 +126,11 @@ import org.skepsun.kototoro.settings.reader.ReaderTapGridConfigActivity
 import org.skepsun.kototoro.settings.sources.auth.SourceAuthActivity
 import org.skepsun.kototoro.settings.sources.catalog.SourcesCatalogActivity
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
-import org.skepsun.kototoro.settings.storage.ContentDirectorySelectDialog
+import org.skepsun.kototoro.settings.storage.ContentDirectorySelectRoute
+import org.skepsun.kototoro.settings.storage.ContentDirectorySelectViewModel
 import org.skepsun.kototoro.settings.storage.directories.ContentDirectoriesActivity
 import org.skepsun.kototoro.settings.tracker.categories.TrackerCategoriesConfigSheet
 import org.skepsun.kototoro.stats.ui.StatsActivity
-import org.skepsun.kototoro.stats.ui.sheet.ContentStatsSheet
 import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsRoute
 
 import java.io.File
@@ -595,10 +586,6 @@ class AppRouter private constructor(
             }
             return
         }
-        AlternativesSheet().withArgs(1) {
-            putParcelable(KEY_MANGA, ParcelableContent(manga))
-            putLong(KEY_ID, manga.id)
-        }.showDistinct()
     }
 
     fun openRelated(manga: Content) {
@@ -922,18 +909,6 @@ class AppRouter private constructor(
             }
             return
         }
-        val fm = getFragmentManager() ?: return
-        if (snackbarHost != null) {
-            getLifecycleOwner()?.let { lifecycleOwner ->
-                DownloadDialogFragment.registerCallback(fm, lifecycleOwner, snackbarHost)
-            }
-        } else {
-            DownloadDialogFragment.unregisterCallback(fm)
-        }
-        DownloadDialogFragment().withArgs(1) {
-            putParcelableArray(KEY_MANGA, manga.mapToArray { ParcelableContent(it, withDescription = false) })
-            putLongArray(KEY_ID, manga.map { it.id }.toLongArray())
-        }.showDistinct()
     }
 
     fun showLocalInfoDialog(manga: Content) {
@@ -947,14 +922,21 @@ class AppRouter private constructor(
             }
             return
         }
-        LocalInfoDialog().withArgs(1) {
-            putParcelable(KEY_MANGA, ParcelableContent(manga))
-            putLong(KEY_ID, manga.id)
-        }.showDistinct()
     }
 
-    fun showDirectorySelectDialog(contentType: String = ContentDirectorySelectDialog.CONTENT_TYPE_MANGA) {
-        ContentDirectorySelectDialog.newInstance(contentType).showDistinct()
+    fun showDirectorySelectDialog(contentType: String = ContentDirectorySelectViewModel.CONTENT_TYPE_MANGA) {
+        val composeActivity = activity as? BaseComposeActivity ?: return
+        composeActivity.showComposeModal {
+            ContentDirectorySelectRoute(
+                contentType = contentType,
+                onDismiss = composeActivity::dismissComposeModal,
+                onError = { error ->
+                    composeActivity.lifecycleScope.launch {
+                        composeActivity.snackbarHostState.showSnackbar(error.getDisplayMessage(composeActivity.resources))
+                    }
+                },
+            )
+        }
     }
 
     fun showFavoriteDialog(manga: Content) = showFavoriteDialog(setOf(manga))
@@ -975,13 +957,6 @@ class AppRouter private constructor(
             }
             return
         }
-        FavoriteDialog().withArgs(1) {
-            putParcelableArrayList(
-                KEY_MANGA_LIST,
-                manga.mapTo(ArrayList(manga.size)) { ParcelableContent(it, withDescription = false) },
-            )
-            putLongArray(KEY_ID, manga.map { it.id }.toLongArray())
-        }.showDistinct()
     }
 
     fun showTagDialog(tag: ContentTag) {
@@ -1056,22 +1031,32 @@ class AppRouter private constructor(
     }
 
     fun showErrorDialog(error: Throwable, url: String? = null) {
-        ErrorDetailsDialog().withArgs(2) {
-            putSerializable(KEY_ERROR, error)
-            putString(KEY_URL, url)
-        }.show()
+        startActivitySafe(
+            Intent(contextOrNull(), ErrorDetailsActivity::class.java)
+                .putExtra(KEY_ERROR, error as java.io.Serializable)
+                .putExtra(KEY_URL, url),
+        )
     }
 
     fun showBackupRestoreDialog(fileUri: Uri) {
-        RestoreDialogFragment().withArgs(1) {
-            putString(KEY_FILE, fileUri.toString())
-        }.show()
-    }
-
-    fun createBackup(destination: Uri) {
-        BackupDialogFragment().withArgs(1) {
-            putParcelable(KEY_DATA, destination)
-        }.showDistinct()
+        val composeActivity = activity as? BaseComposeActivity ?: return
+        composeActivity.showComposeModal {
+            RestoreDialogRoute(
+                uri = fileUri,
+                onRestoreStarted = {
+                    closeWelcomeSheet()
+                    composeActivity.dismissComposeModal()
+                },
+                onUnsupported = {
+                    composeActivity.lifecycleScope.launch {
+                        composeActivity.snackbarHostState.showSnackbar(
+                            composeActivity.getString(R.string.operation_not_supported),
+                        )
+                    }
+                },
+                onDismiss = composeActivity::dismissComposeModal,
+            )
+        }
     }
 
     fun showImportDialog() {
@@ -1084,7 +1069,6 @@ class AppRouter private constructor(
             }
             return
         }
-        ImportDialogFragment().showDistinct()
     }
 
     fun showFilterSheet(): Boolean {
@@ -1107,7 +1091,7 @@ class AppRouter private constructor(
             }
             return true
         }
-        return FilterSheetFragment().showDistinct()
+        return false
     }
 
     fun showTagsCatalogSheet(excludeMode: Boolean, groupTitle: String? = null) {
@@ -1128,10 +1112,6 @@ class AppRouter private constructor(
             }
             return
         }
-        TagsCatalogSheet().withArgs(2) {
-            putBoolean(KEY_EXCLUDE, excludeMode)
-            putString(KEY_GROUP_TITLE, groupTitle)
-        }.showDistinct()
     }
 
     fun showListConfigSheet(section: ListConfigSection) {
@@ -1145,9 +1125,6 @@ class AppRouter private constructor(
             }
             return
         }
-        ListConfigBottomSheet().withArgs(1) {
-            putParcelable(KEY_LIST_SECTION, section)
-        }.showDistinct()
     }
 
     fun showStatisticSheet(manga: Content) {
@@ -1165,24 +1142,10 @@ class AppRouter private constructor(
             }
             return
         }
-        ContentStatsSheet().withArgs(1) {
-            putParcelable(KEY_MANGA, ParcelableContent(manga))
-            putLong(KEY_ID, manga.id)
-        }.showDistinct()
     }
 
     fun showWelcomeSheet() {
         WelcomeSheet().showDistinct()
-    }
-
-    fun showChapterPagesSheet() {
-        ChaptersPagesSheet().showDistinct()
-    }
-
-    fun showChapterPagesSheet(defaultTab: Int) {
-        ChaptersPagesSheet().withArgs(1) {
-            putInt(KEY_TAB, defaultTab)
-        }.showDistinct()
     }
 
     fun showScrobblingSelectorSheet(manga: Content, scrobblerService: ScrobblerService?) {
@@ -1249,11 +1212,6 @@ class AppRouter private constructor(
         fragment != null -> FilterCoordinator.find(fragment) != null
         activity != null -> activity is FilterCoordinator.Owner
         else -> false
-    }
-
-    fun isChapterPagesSheetShown(): Boolean {
-        val sheet = getFragmentManager()?.findFragmentByTag(fragmentTag<ChaptersPagesSheet>()) as? ChaptersPagesSheet
-        return sheet?.dialog?.isShowing == true
     }
 
     fun closeWelcomeSheet(): Boolean {

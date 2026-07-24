@@ -4,42 +4,18 @@ import android.os.Bundle
 import android.view.View
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.content.res.ColorStateList
 import android.content.ContentValues
 import android.os.Build
-import android.view.Gravity
-import androidx.core.view.isVisible
-import androidx.core.view.doOnLayout
-import androidx.core.view.doOnNextLayout
-import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.os.Handler
 import android.os.Looper
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.PopupWindow
-import android.widget.ScrollView
-import android.widget.TextView
-import androidx.media3.ui.PlayerControlView
-import androidx.media3.ui.TimeBar
-import androidx.media3.ui.DefaultTimeBar
-import com.google.android.material.progressindicator.LinearProgressIndicator
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.view.SurfaceView
 import android.app.PictureInPictureParams
 import android.provider.MediaStore
 import android.util.Rational
 import android.view.PixelCopy
 import android.util.Log
-import androidx.core.content.ContextCompat
-import org.skepsun.kototoro.core.util.ext.consumeAll
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -47,16 +23,17 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.aniyomi.AniyomiAnimeRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxPlayback
-import org.skepsun.kototoro.core.ui.BaseFullscreenActivity
-import org.skepsun.kototoro.databinding.ActivityVideoPlayerBinding
+import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -67,15 +44,11 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource as ParsersContentSource
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import javax.inject.Inject
-import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.reader.ui.ScreenOrientationHelper
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
-import androidx.core.view.updateLayoutParams
-import com.google.android.material.color.MaterialColors
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.graphics.ColorUtils
 import android.net.Uri
 import java.net.URLDecoder
 import android.media.AudioManager
@@ -85,7 +58,6 @@ import java.io.File
 import java.net.URI
 import kotlin.math.abs
 import okhttp3.Headers
-import org.skepsun.kototoro.core.util.ext.menuView
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.history.domain.HistoryUpdateUseCase
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
@@ -115,6 +87,9 @@ import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.danmaku.VideoDanmakuController
 import org.skepsun.kototoro.video.danmaku.DanmakuSettings
 import org.skepsun.kototoro.video.danmaku.DanmakuSourceManager
+import org.skepsun.kototoro.video.dlna.DlnaController
+import org.skepsun.kototoro.video.dlna.DlnaDevice
+import org.skepsun.kototoro.video.dlna.SsdpDiscovery
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
 import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
 import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
@@ -122,23 +97,54 @@ import org.skepsun.kototoro.space.ui.SpaceSwitcherDelegate
 import org.skepsun.kototoro.space.domain.awaitCompletion
 import com.bytedance.danmaku.render.engine.DanmakuView
 import eu.kanade.tachiyomi.animesource.model.Video
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.roundToInt
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerAction
-import org.skepsun.kototoro.video.ui.compose.VideoPlayerBottomControls
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControlState
-import org.skepsun.kototoro.video.ui.compose.VideoPlayerTopControls
+import org.skepsun.kototoro.video.ui.compose.VideoGestureOverlayState
+import org.skepsun.kototoro.video.ui.compose.VideoGestureOverlays
+import org.skepsun.kototoro.video.ui.compose.VideoSubtitleOverlay
+import org.skepsun.kototoro.video.ui.compose.VideoSubtitleOverlayState
+import org.skepsun.kototoro.video.ui.compose.VideoScreenLockOverlay
+import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedback
+import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedbackState
+import org.skepsun.kototoro.video.ui.compose.VideoActionDialog
+import org.skepsun.kototoro.video.ui.compose.VideoActionDialogItem
+import org.skepsun.kototoro.video.ui.compose.VideoActionDialogState
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerControls
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerInfoDialog
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerNativeInitErrorDialog
+import org.skepsun.kototoro.video.ui.compose.VideoSelectionDialog
+import org.skepsun.kototoro.video.ui.compose.VideoSelectionDialogState
+import org.skepsun.kototoro.video.ui.compose.VideoShaderOption
+import org.skepsun.kototoro.video.ui.compose.VideoSuperResolutionDialog
+import org.skepsun.kototoro.video.ui.compose.VideoSuperResolutionDialogState
+import org.skepsun.kototoro.video.ui.compose.DlnaDeviceDialog
+import org.skepsun.kototoro.video.ui.compose.DlnaDeviceDialogState
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerRenderLayer
 
 @AndroidEntryPoint
-class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>(), ReaderNavigationCallback {
+class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCallback {
     companion object {
         private const val ENABLE_M3U8_PROXY_CACHE = true
     }
@@ -197,7 +203,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private var initialTouchX: Float = 0f
     private var initialScrubPositionStart: Long = 0L
     private var lastScrubPosition: Long = 0L
-    private var originalToolbarHeightPx: Int = 0
     private var availableVideos: List<Video> = emptyList()
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
@@ -206,16 +211,34 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private var pendingExternalSubtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     private var pendingExternalAudio: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     private lateinit var mpvView: CustomMpvView
+    private val mpvReady = CompletableDeferred<Boolean>()
+    private var playerGestureInstaller: ((CustomMpvView) -> Unit)? = null
+    private var playerGesturesInstalled = false
     private var composeControlState by mutableStateOf(VideoPlayerControlState())
-    private var composeControlsInstalled = false
-    private var composeTopControls: ComposeView? = null
-    private var composeBottomControls: ComposeView? = null
+    private var videoInfoDialogText by mutableStateOf<String?>(null)
+    private var selectionDialogState by mutableStateOf<VideoSelectionDialogState?>(null)
+    private var nativeInitErrorVisible by mutableStateOf(false)
+    private var superResolutionDialogVisible by mutableStateOf(false)
+    private var superResolutionDialogVersion by mutableStateOf(0)
+    private var dlnaDialogState by mutableStateOf<DlnaDeviceDialogState?>(null)
+    private var gestureOverlayState by mutableStateOf(VideoGestureOverlayState())
+    private var subtitleOverlayState by mutableStateOf(VideoSubtitleOverlayState())
+    private var unlockButtonVisible by mutableStateOf(false)
+    private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
+    private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
+    private val snackbarHostState = SnackbarHostState()
+    private val playerRoot: View
+        get() = findViewById(android.R.id.content)
     private val danmakuController = VideoDanmakuController()
     private var danmakuLoadJob: Job? = null
     private var danmakuKey: String? = null
 
     @Inject
     lateinit var danmakuSourceManager: DanmakuSourceManager
+
+    @Inject
+    @ContentHttpClient
+    lateinit var contentHttpClient: OkHttpClient
 
     @Inject
     lateinit var videoDownloadIndex: org.skepsun.kototoro.video.data.VideoDownloadIndex
@@ -241,8 +264,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private var hasRestoredProgress: Boolean = false
     // 标志：用户是否正在拖动底部进度条（避免定时刷新抢占用户交互）
     private var isUserScrubbing: Boolean = false
-    // 防止重复绑定 TimeBar listener（wireControllerButtons 会被多次调用?
-    private val timeBarBoundControllerIds = mutableSetOf<Int>()
     private var currentMediaUrl: String? = null
     private var lastSubtitleTextFromPoll: String? = null
     private var subtitlePollCounter = 0
@@ -255,10 +276,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 runOnUiThread {
                     tryApplyInitialSeek()
                     hasRestoredProgress = true
-                    viewBinding.root.removeCallbacks(progressSaveRunnable)
-                    viewBinding.root.postDelayed(progressSaveRunnable, progressSaveIntervalMs)
+                    playerRoot.removeCallbacks(progressSaveRunnable)
+                    playerRoot.postDelayed(progressSaveRunnable, progressSaveIntervalMs)
                     // Try to skip intro after initial seek is applied
-                    viewBinding.root.postDelayed({ trySkipIntro() }, 500)
+                    playerRoot.postDelayed({ trySkipIntro() }, 500)
                 }
             }
         }
@@ -266,7 +287,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             runOnUiThread {
                 updatePlaybackMenu()
-                updatePlayPauseButton()
                 syncComposeControlState()
                 danmakuController.onPlaybackStateChanged(isPlaying)
             }
@@ -279,11 +299,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                     suspiciousAdRetryCount++
                     android.util.Log.i("VideoPlayerActivity", "Suspiciously short playback (${dur} ms) ended. Assuming ad and refetching.")
                     runOnUiThread {
-                        com.google.android.material.snackbar.Snackbar.make(
-                            viewBinding.root, 
-                            "Auto-skipping ad and loading video...", 
-                            com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
-                        ).show()
+                        showPlayerMessage("Auto-skipping ad and loading video...")
                         val manga = currentMangaContent()
                         val state = currentReaderStateOrIntent()
                         val chapters = manga?.chapters ?: emptyList()
@@ -349,7 +365,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             if (outroStartMs > 0 && !hasTriggeredOutro && positionMs >= outroStartMs) {
                 hasTriggeredOutro = true
                 runOnUiThread {
-                    Snackbar.make(viewBinding.root, R.string.video_skipping_outro, Snackbar.LENGTH_SHORT).show()
+                    showPlayerMessage(R.string.video_skipping_outro)
                     val dur = mpvPlayer?.durationMs ?: return@runOnUiThread
                     
                     if (appSettings.videoAutoNextEnabled) {
@@ -374,18 +390,16 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private val progressUpdateIntervalMs = 1000
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
-            updateToolbarProgress()
-            viewBinding.root.postDelayed(this, progressUpdateIntervalMs.toLong())
+            syncComposeControlState()
+            playerRoot.postDelayed(this, progressUpdateIntervalMs.toLong())
         }
     }
-    // 底部控制条（PlayerControlView）进度与已播放时长的定时更新
-    private val controllerProgressIntervalMs = 1000
     private var lastSubtitleText: String? = null
     private val controllerProgressRunnable = object : Runnable {
         override fun run() {
-            updateControllerProgress()
+            syncComposeControlState()
             pollSubtitleText()
-            viewBinding.root.postDelayed(this, controllerProgressIntervalMs.toLong())
+            playerRoot.postDelayed(this, progressUpdateIntervalMs.toLong())
         }
     }
     // 定期保存播放进度（每5秒）
@@ -393,7 +407,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 	private val progressSaveRunnable = object : Runnable {
 		override fun run() {
 			savePlaybackProgress()
-			viewBinding.root.postDelayed(this, progressSaveIntervalMs)
+			playerRoot.postDelayed(this, progressSaveIntervalMs)
 		}
 	}
     private val playbackStartupTimeoutRunnable = Runnable {
@@ -419,9 +433,13 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 longSeekAccumulatedMs += abs(longSeekStepMs.toLong())
                 val sec = (longSeekAccumulatedMs / 1000).toInt()
                 if (longSeekDirection < 0) {
-                    overlaySeekLeft.text = getString(R.string.video_rewind_time, sec.toString())
+                    gestureOverlayState = gestureOverlayState.copy(
+                        left = getString(R.string.video_rewind_time, sec.toString()),
+                    )
                 } else {
-                    overlaySeekRight.text = getString(R.string.video_fast_forward_time, sec.toString())
+                    gestureOverlayState = gestureOverlayState.copy(
+                        right = getString(R.string.video_fast_forward_time, sec.toString()),
+                    )
                 }
                 longSeekHandler.postDelayed(this, longSeekIntervalMs.toLong())
             }
@@ -448,28 +466,22 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     // 手势提示浮层：左/?
-    private lateinit var overlaySeekLeft: TextView
-    private lateinit var overlaySeekRight: TextView
-    private lateinit var overlayPlayPause: TextView
     private val overlayHandler = Handler(Looper.getMainLooper())
-    private val hideLeftRunnable = Runnable { overlaySeekLeft.visibility = View.GONE }
-    private val hideRightRunnable = Runnable { overlaySeekRight.visibility = View.GONE }
-    private val hideCenterRunnable = Runnable { overlayPlayPause.visibility = View.GONE }
+    private val hideLeftRunnable = Runnable { gestureOverlayState = gestureOverlayState.copy(left = null) }
+    private val hideRightRunnable = Runnable { gestureOverlayState = gestureOverlayState.copy(right = null) }
+    private val hideCenterRunnable = Runnable { gestureOverlayState = gestureOverlayState.copy(center = null) }
     private fun showOverlayLeft(text: String, durationMs: Long? = 1200) {
-        overlaySeekLeft.text = text
-        overlaySeekLeft.visibility = View.VISIBLE
+        gestureOverlayState = gestureOverlayState.copy(left = text)
         overlayHandler.removeCallbacks(hideLeftRunnable)
         durationMs?.let { overlayHandler.postDelayed(hideLeftRunnable, it) }
     }
     private fun showOverlayRight(text: String, durationMs: Long? = 1200) {
-        overlaySeekRight.text = text
-        overlaySeekRight.visibility = View.VISIBLE
+        gestureOverlayState = gestureOverlayState.copy(right = text)
         overlayHandler.removeCallbacks(hideRightRunnable)
         durationMs?.let { overlayHandler.postDelayed(hideRightRunnable, it) }
     }
     private fun showPlayPauseOverlay(text: String, durationMs: Long = 800) {
-        overlayPlayPause.text = text
-        overlayPlayPause.visibility = View.VISIBLE
+        gestureOverlayState = gestureOverlayState.copy(center = text)
         overlayHandler.removeCallbacks(hideCenterRunnable)
         overlayHandler.postDelayed(hideCenterRunnable, durationMs)
     }
@@ -477,13 +489,13 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         overlayHandler.removeCallbacks(hideLeftRunnable)
         overlayHandler.removeCallbacks(hideRightRunnable)
         if (direction < 0) {
-            overlaySeekRight.visibility = View.GONE
-            overlaySeekLeft.text = getString(R.string.video_rewind_time, "0")
-            overlaySeekLeft.visibility = View.VISIBLE
+            gestureOverlayState = VideoGestureOverlayState(
+                left = getString(R.string.video_rewind_time, "0"),
+            )
         } else if (direction > 0) {
-            overlaySeekLeft.visibility = View.GONE
-            overlaySeekRight.text = getString(R.string.video_fast_forward_time, "0")
-            overlaySeekRight.visibility = View.VISIBLE
+            gestureOverlayState = VideoGestureOverlayState(
+                right = getString(R.string.video_fast_forward_time, "0"),
+            )
         }
     }
     // 垂直手势：亮?音量调整
@@ -543,65 +555,131 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     private fun isLandscapeOrientation(): Boolean =
         resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    private fun allControllers(): List<PlayerControlView> = listOfNotNull(
-        findViewById(org.skepsun.kototoro.R.id.controller_land),
-        findViewById(org.skepsun.kototoro.R.id.controller_portrait),
-    )
-
-    private fun currentController(): PlayerControlView? {
-        val controllerId = if (isLandscapeOrientation()) {
-            org.skepsun.kototoro.R.id.controller_land
-        } else {
-            org.skepsun.kototoro.R.id.controller_portrait
+    private fun installComposeContent() {
+        setContent {
+            KototoroTheme {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                    VideoPlayerRenderLayer(
+                        onMpvViewCreated = ::onMpvViewCreated,
+                        onDanmakuViewCreated = danmakuController::attach,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    VideoPlayerControls(
+                        state = composeControlState,
+                        onAction = ::onComposePlayerAction,
+                    )
+                    VideoGestureOverlays(state = gestureOverlayState)
+                    VideoSubtitleOverlay(state = subtitleOverlayState)
+                    VideoScreenLockOverlay(
+                        locked = isScreenLocked,
+                        unlockButtonVisible = unlockButtonVisible,
+                        onLockedAreaClick = ::showLockedUi,
+                        onUnlockClick = ::exitScreenLock,
+                    )
+                    seekFeedbackState?.let { VideoSeekFeedback(it) }
+                    actionDialogState?.let { state ->
+                        VideoActionDialog(
+                            state = state,
+                            onDismissRequest = { actionDialogState = null },
+                            onItemSelected = { item ->
+                                actionDialogState = null
+                                item.onClick()
+                            },
+                        )
+                    }
+                    videoInfoDialogText?.let { details ->
+                        VideoPlayerInfoDialog(
+                            details = details,
+                            onDismissRequest = { videoInfoDialogText = null },
+                        )
+                    }
+                    selectionDialogState?.let { dialogState ->
+                        VideoSelectionDialog(
+                            state = dialogState,
+                            onDismissRequest = { selectionDialogState = null },
+                            onSelect = { index ->
+                                selectionDialogState = null
+                                dialogState.onSelect(index)
+                            },
+                        )
+                    }
+                    if (nativeInitErrorVisible) {
+                        VideoPlayerNativeInitErrorDialog(onDismissRequest = ::finishAfterTransition)
+                    }
+                    if (superResolutionDialogVisible) {
+                        @Suppress("UNUSED_EXPRESSION")
+                        superResolutionDialogVersion
+                        VideoSuperResolutionDialog(
+                            state = buildSuperResolutionDialogState(),
+                            onDismissRequest = { superResolutionDialogVisible = false },
+                            onModeSelected = ::selectSuperResolutionMode,
+                            onShaderSelected = ::selectSuperResolutionShader,
+                            onCustomShaderToggled = ::toggleCustomSuperResolutionShader,
+                        )
+                    }
+                    dlnaDialogState?.let { state ->
+                        DlnaDeviceDialog(
+                            state = state,
+                            onDismissRequest = { dlnaDialogState = null },
+                            onDeviceSelected = ::castToDlnaDevice,
+                        )
+                    }
+                    spaceSwitcherDelegate.Fab(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                    )
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                    )
+                    spaceSwitcherDelegate.Overlays()
+                }
+            }
         }
-        return findViewById(controllerId)
     }
 
-    private fun installComposeControls() {
-        if (composeControlsInstalled) return
-        val root = viewBinding.root as? FrameLayout ?: return
-        val topControls = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                KototoroTheme {
-                    VideoPlayerTopControls(
-                        state = composeControlState,
-                        onAction = ::onComposePlayerAction,
-                    )
-                }
-            }
+    private fun showPlayerMessage(
+        message: String,
+        duration: SnackbarDuration = SnackbarDuration.Short,
+        actionLabel: String? = null,
+        onAction: (() -> Unit)? = null,
+    ) {
+        lifecycleScope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = actionLabel,
+                duration = duration,
+            )
+            if (result == SnackbarResult.ActionPerformed) onAction?.invoke()
         }
-        val bottomControls = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                KototoroTheme {
-                    VideoPlayerBottomControls(
-                        state = composeControlState,
-                        onAction = ::onComposePlayerAction,
-                    )
-                }
-            }
-        }
-        root.addView(
-            topControls,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP,
-            ),
-        )
-        root.addView(
-            bottomControls,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM,
-            ),
-        )
-        composeTopControls = topControls
-        composeBottomControls = bottomControls
-        composeControlsInstalled = true
-        syncComposeControlState()
+    }
+
+    private fun showPlayerMessage(
+        messageRes: Int,
+        duration: SnackbarDuration = SnackbarDuration.Short,
+        actionLabel: String? = null,
+        onAction: (() -> Unit)? = null,
+    ) = showPlayerMessage(getString(messageRes), duration, actionLabel, onAction)
+
+    private fun onMpvViewCreated(view: CustomMpvView) {
+        if (::mpvView.isInitialized) return
+        mpvView = view
+        view.background = null
+        val initialized = initializeMpvRuntime()
+        mpvReady.complete(initialized)
+        if (initialized) installPlayerGesturesIfReady()
+    }
+
+    private fun installPlayerGesturesIfReady() {
+        if (playerGesturesInstalled || !::mpvView.isInitialized) return
+        val installer = playerGestureInstaller ?: return
+        playerGesturesInstalled = true
+        installer(mpvView)
     }
 
     private fun onComposePlayerAction(action: VideoPlayerAction) {
@@ -615,7 +693,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
             VideoPlayerAction.OpenSubtitleTracks -> showSubtitleTrackDialog()
-            VideoPlayerAction.OpenChapterSelection -> showChapterSelectionPanel(viewBinding.root)
+            VideoPlayerAction.OpenChapterSelection -> showChapterSelectionPanel()
             VideoPlayerAction.OpenPlaybackSpeed -> showPlaybackSpeedDialog()
             VideoPlayerAction.ToggleIntroMarker -> toggleIntroMarker()
             VideoPlayerAction.ToggleOutroMarker -> toggleOutroMarker()
@@ -633,7 +711,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun syncComposeControlState() {
-        if (!composeControlsInstalled) return
         val chapters = chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
             currentMangaContent()?.chapters.orEmpty()
         }
@@ -656,16 +733,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             qualityLabel = availableVideos.takeIf { it.isNotEmpty() }?.let { buildQualityButtonLabel() },
             showChapterMarkers = isLandscapeOrientation(),
         )
-        val visible = composeControlState.controlsVisible && !composeControlState.isScreenLocked
-        composeTopControls?.isVisible = visible
-        composeBottomControls?.isVisible = visible
-    }
-
-    private fun bindDanmakuOverlay() {
-        val danmakuView = findViewById<DanmakuView>(
-            org.skepsun.kototoro.R.id.danmaku_view
-        ) ?: return
-        danmakuController.attach(danmakuView)
     }
 
     private fun initializeMpvRuntime(): Boolean {
@@ -678,16 +745,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             applySubtitleOverlayStyle()
         }.onFailure { error ->
             Log.e("VideoPlayerActivity", "Failed to initialize mpv runtime", error)
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.error_occurred)
-                .setMessage(R.string.video_player_native_init_failed)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    finish()
-                }
-                .setOnDismissListener {
-                    if (!isFinishing) finish()
-                }
-                .show()
+            nativeInitErrorVisible = true
         }.isSuccess
     }
 
@@ -695,32 +753,14 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         super.onCreate(savedInstanceState)
         devicePerformanceInfo = DevicePerformanceClassifier.classify(this)
         effectivePlaybackConfig = VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
-        setContentView(ActivityVideoPlayerBinding.inflate(layoutInflater))
-        // 将布局中的 MaterialToolbar 设为 SupportActionBar，以便正确显示标?副标题与导航按钮
-        setSupportActionBar(viewBinding.toolbar)
-        supportActionBar?.setDisplayShowTitleEnabled(true)
-        setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-        // 确保标题靠左显示，避免被右侧动作按钮挤占
-        viewBinding.toolbar.setTitleCentered(false)
-        viewBinding.toolbarProgress.bringToFront()
-        // Ensure the entire toolbar container is on top
-        viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_container)?.bringToFront()
+        installComposeContent()
         applySubtitleOverlayStyle()
         applyPlaybackBackground()
-        mpvView = findViewById(org.skepsun.kototoro.R.id.player_view)
-        if (!initializeMpvRuntime()) {
-            return
-        }
-        bindDanmakuOverlay()
-        installComposeControls()
         danmakuController.setPlaybackPositionProvider(
             positionProvider = { mpvPlayer?.positionMs ?: 0L },
             playingProvider = { mpvPlayer?.isPlaying == true },
         )
         applyDanmakuSettings()
-
-        // 记录初始工具栏高度，用于按方向动态调整高?
-        originalToolbarHeightPx = viewBinding.toolbar.layoutParams.height
 
         // 读取传入 ReaderState（可能来自阅读器路由，用于历史保存与初始定位）
         readerState = intent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
@@ -730,64 +770,15 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
         spaceSwitcherDelegate.bind(
             activity = this,
-            snackbarAnchor = viewBinding.root,
+            snackbarAnchor = playerRoot,
             origin = SpaceSwitchOrigin.VIDEO_PLAYER,
             availabilityProvider = {
                 if (isScreenLocked) SpaceSwitchAvailability.UNAVAILABLE else SpaceSwitchAvailability.SAVE_AND_SWITCH
             },
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
         )
-        findViewById<androidx.compose.ui.platform.ComposeView>(
-            R.id.immersive_space_switcher_fab,
-        )?.let(spaceSwitcherDelegate::installFab)
-
-        // 设置菜单点击监听并复用给两个 Toolbar
-        val onMenuItemClick = androidx.appcompat.widget.Toolbar.OnMenuItemClickListener { item ->
-            when (item.itemId) {
-                org.skepsun.kototoro.R.id.action_subtitle_track -> {
-                    showSubtitleTrackDialog()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_external_player -> {
-                    openInExternalPlayer()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_cast -> {
-                    showDlnaDeviceSheet()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_quality -> {
-                    showQualityDialog()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_pip -> {
-                    enterPictureInPicture()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_info -> {
-                    openVideoDetails()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_settings -> {
-                    showVideoSettingsPanel()
-                    true
-                }
-                org.skepsun.kototoro.R.id.action_more -> {
-                    showOverflowMenu()
-                    true
-                }
-                else -> false
-            }
-        }
-        viewBinding.toolbar.setOnMenuItemClickListener(onMenuItemClick)
-        val secondaryToolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(org.skepsun.kototoro.R.id.toolbar_secondary)
-        secondaryToolbar?.setOnMenuItemClickListener(onMenuItemClick)
-
-        rebuildToolbarMenuForOrientation()
-        adjustToolbarForOrientation()
-        rearrangeBottomToolbarForOrientation()
-
         lifecycleScope.launch {
+            if (!mpvReady.await()) return@launch
             mangaContent = resolveLaunchContent()
 
             // 使用新的统一方法设置标题和副标题
@@ -803,9 +794,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 launch {
                     while (true) {
                         kotlinx.coroutines.delay((60_000..120_000).random().toLong()) // Every 1-2 minutes
-                        viewBinding.root.rotation = 180f
+                        playerRoot.rotation = 180f
                         kotlinx.coroutines.delay(2000)
-                        viewBinding.root.rotation = 0f
+                        playerRoot.rotation = 0f
                     }
                 }
             }
@@ -825,20 +816,14 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
         // 首次进入默认显示 UI（标题与底栏控件），之后按超时自动隐?
         setUiIsVisible(true)
-        updateStatusBarByToolbar()
 		applyControlsAlpha()
-
-        // 绑定手势提示浮层视图
-        overlaySeekLeft = findViewById(org.skepsun.kototoro.R.id.overlay_seek_left)
-        overlaySeekRight = findViewById(org.skepsun.kototoro.R.id.overlay_seek_right)
-        overlayPlayPause = findViewById(org.skepsun.kototoro.R.id.overlay_play_pause)
 
         // 初始化音量与亮度上下?
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         initCurrentBrightness()
 
         // Hook player view gestures: 双击播放/暂停；单击显隐UI；长按左右持续快?快退
-        findViewById<View>(org.skepsun.kototoro.R.id.player_view)?.let { pv ->
+        playerGestureInstaller = { pv ->
             pv.isClickable = true
 
             // State variables for gestures
@@ -1020,23 +1005,15 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 handled || true
             }
         }
+        installPlayerGesturesIfReady()
 
         // 兜底点击区域：当控制器隐藏时，任何空白处点击也可唤回 UI
-        viewBinding.root.isClickable = true
-        viewBinding.root.setOnClickListener { setUiIsVisible(true) }
-
         // 同步系统导航栏颜色为底栏背景色，实现与小白条区域的视觉合?
         runCatching {
             val navColor = android.graphics.Color.TRANSPARENT
             @Suppress("DEPRECATION")
             window.navigationBarColor = navColor
         }
-
-        // Wire controller buttons: pages and settings
-        wireControllerButtons()
-
-        // Initialize screen lock overlay and unlock button
-        initLockOverlay()
 
         // Load intro/outro skip settings for the current manga
         loadIntroOutroSettings()
@@ -1067,128 +1044,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         overridePendingTransition(0, 0)
     }
     
-    private fun wireControllerButtons() {
-        val currentContent = currentMangaContent()
-        allControllers().forEach { ctl ->
-            ctl.bringToFront()
-
-            // 进度条可拖拽/点击快进快退：显式监听用?scrub，避免定时刷新覆盖拖动状?
-            if (timeBarBoundControllerIds.add(ctl.id)) {
-                ctl.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.let { timeBar ->
-                    timeBar.isClickable = true
-                    timeBar.isFocusable = true
-                    timeBar.isFocusableInTouchMode = true
-                    // 避免父级的点?手势拦截 TimeBar 的拖动事?
-                    timeBar.setOnTouchListener { v, ev ->
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
-                        false
-                    }
-                    val controlView = ctl
-                    timeBar.addListener(object : TimeBar.OnScrubListener {
-                        override fun onScrubStart(timeBar: TimeBar, position: Long) {
-                            isUserScrubbing = true
-                        }
-
-                        override fun onScrubMove(timeBar: TimeBar, position: Long) {
-                            // 拖动时同步显示当前拖动位置，提升反馈一致?
-                            val showHours = (mpvPlayer?.durationMs ?: 0L) >= 3600_000L
-                            controlView.findViewById<TextView>(androidx.media3.ui.R.id.exo_position)?.text =
-                                formatTimeMs(position, forceHours = showHours)
-                        }
-
-                        override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
-                            isUserScrubbing = false
-                            if (!canceled) {
-                                val p = mpvPlayer
-                                if (p != null && p.durationMs > 0) {
-                                    p.seekTo(position)
-                                }
-                            }
-                        }
-                    })
-                }
-            }
-
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_pages_thumbs)?.let { btn ->
-                btn.isVisible = currentContent != null
-                btn.setOnClickListener {
-                    showChapterSelectionPanel(btn)
-                }
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_quality)?.setOnClickListener {
-                showQualityDialog()
-            }
-            ctl.findViewById<View>(androidx.media3.ui.R.id.exo_rew)?.apply {
-                isVisible = appSettings.videoDoubleTapSeekEnabled
-                setOnClickListener {
-                    mpvPlayer?.let { p ->
-                        val pos = (p.positionMs - appSettings.videoSeekBackwardMs).coerceAtLeast(0)
-                        p.seekTo(pos)
-                    }
-                }
-            }
-            ctl.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause)?.setOnClickListener {
-                mpvPlayer?.let { p ->
-                    if (p.isPlaying) p.pause() else p.play()
-                    updatePlaybackMenu()
-                }
-            }
-            ctl.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause)?.apply {
-                isEnabled = true
-                isClickable = true
-                alpha = 1f
-            }
-            ctl.findViewById<View>(androidx.media3.ui.R.id.exo_ffwd)?.apply {
-                isVisible = appSettings.videoDoubleTapSeekEnabled
-                setOnClickListener {
-                    mpvPlayer?.let { p ->
-                        val pos = (p.positionMs + appSettings.videoSeekForwardMs).coerceAtMost(p.durationMs.coerceAtLeast(0))
-                        p.seekTo(pos)
-                    }
-                }
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_prev_chapter)?.setOnClickListener {
-                navigateChapter(-1)
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_next_chapter)?.setOnClickListener {
-                navigateChapter(1)
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_mark_intro)?.setOnClickListener {
-                toggleIntroMarker()
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_mark_outro)?.setOnClickListener {
-                toggleOutroMarker()
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_playback_speed)?.setOnClickListener {
-                showPlaybackSpeedDialog()
-            }
-
-            // Screen lock button
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_screen_lock)?.setOnClickListener {
-                enterScreenLock()
-            }
-        }
-        updateChapterNavButtons()
-        updateScreenLockButtonState()
-    }
-
     private fun updateQualityButtonVisibility() {
-        allControllers().forEach { ctl ->
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_quality)?.isVisible = availableVideos.isNotEmpty()
-        }
-        updateQualityButtonLabel()
+        syncComposeControlState()
     }
 
     private fun updateQualityButtonLabel() {
-        val label = buildQualityButtonLabel()
-        allControllers().forEach { ctl ->
-            ctl.findViewById<com.google.android.material.button.MaterialButton>(
-                org.skepsun.kototoro.R.id.button_quality,
-            )?.apply {
-                text = label
-                contentDescription = getString(org.skepsun.kototoro.R.string.video_quality) + ": " + label
-            }
-        }
+        syncComposeControlState()
     }
 
     private fun buildQualityButtonLabel(): String {
@@ -1351,11 +1212,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             }
             if (lowerUrl.startsWith("magnet:") || lowerUrl.startsWith("thunder:") || lowerUrl.startsWith("ed2k:")) {
                 android.util.Log.w("VideoPlayer", "Unsupported direct playback scheme: $url")
-                Snackbar.make(
-                    viewBinding.root,
-                    org.skepsun.kototoro.R.string.error_occurred,
-                    Snackbar.LENGTH_LONG,
-                ).show()
+                showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                 return
             }
             startMpvPlayback(normalizedUrl, source, mergedHeaders, startMs = startMs)
@@ -1464,39 +1321,23 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                             android.util.Log.d("VideoPlayer", "Playing chapter: ${currentChapter.title}")
                         } else {
                             android.util.Log.e("VideoPlayer", "Failed to resolve stream URL for current chapter")
-                            Snackbar.make(
-                                viewBinding.root,
-                                org.skepsun.kototoro.R.string.error_occurred,
-                                Snackbar.LENGTH_LONG
-                            ).show()
+                            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                         }
                     } else {
                         android.util.Log.e("VideoPlayer", "Current chapter not found")
-                        Snackbar.make(
-                            viewBinding.root,
-                            org.skepsun.kototoro.R.string.error_occurred,
-                            Snackbar.LENGTH_LONG
-                        ).show()
+                        showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("VideoPlayer", "Failed to load video", e)
                     if (resolvePlaybackException(e, normalizedUrl, source, headers, startMs)) {
                         return@launch
                     }
-                    Snackbar.make(
-                        viewBinding.root,
-                        org.skepsun.kototoro.R.string.error_occurred,
-                        Snackbar.LENGTH_LONG
-                    ).show()
+                    showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                 }
             }
         } else {
             android.util.Log.e("VideoPlayer", "Cannot resolve non-direct URL without manga info")
-            Snackbar.make(
-                viewBinding.root,
-                org.skepsun.kototoro.R.string.error_occurred,
-                Snackbar.LENGTH_LONG
-            ).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
         }
     }
 
@@ -1635,7 +1476,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         
         applyPlaybackOptions()
         applyAspectRatio()
-        applyGradientAlpha()
         val defaultSpeed = appSettings.videoDefaultSpeed
         appSettings.videoPlaybackSpeed = defaultSpeed
         mpvPlayer?.setRate(defaultSpeed.toDouble())
@@ -1975,7 +1815,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        wireControllerButtons()
         applyPlayerUiState(playerUiState)
         applyControlsAlpha()
         applySubtitleOverlayStyle()
@@ -1988,47 +1827,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun applyControlsAlpha() {
-        val alpha = appSettings.videoControlsAlpha.coerceIn(0f, 1f)
-        val colored = android.graphics.Color.argb((alpha * 255f).toInt(), 0, 0, 0)
-        val useGradient = appSettings.videoGradientAlpha.coerceIn(0f, 1f) > 0f
-
-        // 仅调整背景透明度，避免工具栏文本被整体 alpha 变淡
-        viewBinding.toolbar.alpha = 1f
-        val bgColor = if (useGradient) android.graphics.Color.TRANSPARENT else colored
-        viewBinding.toolbar.setBackgroundColor(bgColor)
-        viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_secondary)?.setBackgroundColor(bgColor)
-        val titleColor = MaterialColors.getColor(viewBinding.toolbar, com.google.android.material.R.attr.colorOnSurface)
-        val subtitleColor = MaterialColors.getColor(viewBinding.toolbar, com.google.android.material.R.attr.colorOnSurfaceVariant)
-        viewBinding.toolbar.setTitleTextColor(titleColor)
-        viewBinding.toolbar.setSubtitleTextColor(subtitleColor)
-
-        allControllers().forEach { ctl ->
-            ctl.alpha = 1f
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_docked)
-                ?.setBackgroundColor(if (useGradient) android.graphics.Color.TRANSPARENT else colored)
-        }
-        viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.status_bar_scrim)?.apply {
-            this.alpha = 1f
-            setBackgroundColor(if (useGradient) android.graphics.Color.TRANSPARENT else colored)
-        }
         @Suppress("DEPRECATION")
-        window.statusBarColor = if (useGradient) android.graphics.Color.TRANSPARENT else colored
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
         @Suppress("DEPRECATION")
-        window.navigationBarColor = if (useGradient) android.graphics.Color.TRANSPARENT else colored
-        val isLight = ColorUtils.calculateLuminance(colored) > 0.5
-        WindowInsetsControllerCompat(window, viewBinding.root).setAppearanceLightStatusBars(isLight)
-        applyGradientAlpha()
-    }
-
-    private fun applyGradientAlpha() {
-        val alpha = appSettings.videoGradientAlpha.coerceIn(0f, 1f)
-        val topGradient = viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.top_gradient)
-        val bottomGradient = viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.bottom_gradient)
-        topGradient?.alpha = alpha
-        bottomGradient?.alpha = alpha
-        val visible = alpha > 0f && isUiVisible
-        topGradient?.isVisible = visible
-        bottomGradient?.isVisible = visible
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        WindowInsetsControllerCompat(window, playerRoot).setAppearanceLightStatusBars(false)
     }
 
     private fun setUiIsVisible(visible: Boolean) {
@@ -2040,144 +1843,30 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         isUiVisible = state == PlayerUiState.ControlsVisible
 
         val controlsVisible = state == PlayerUiState.ControlsVisible
-        val topBar = viewBinding.toolbar
-        val secondaryToolbar =
-            viewBinding.root.findViewById<com.google.android.material.appbar.MaterialToolbar>(
-                org.skepsun.kototoro.R.id.toolbar_secondary,
-            )
-        val statusBarScrim = viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.status_bar_scrim)
-        val topGradient = viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.top_gradient)
-        val bottomGradient = viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.bottom_gradient)
-        val controller = currentController()
-        val lockOverlay = findViewById<View>(org.skepsun.kototoro.R.id.lock_overlay)
-        val unlockButton = findViewById<View>(org.skepsun.kototoro.R.id.button_screen_unlock)
-        val subtitleOverlay = findViewById<View>(org.skepsun.kototoro.R.id.subtitle_overlay)
-
-        topBar.isVisible = controlsVisible && !composeControlsInstalled
-        secondaryToolbar?.isVisible = controlsVisible && !composeControlsInstalled
-        statusBarScrim?.isVisible = controlsVisible
-        topGradient?.isVisible = controlsVisible
-        bottomGradient?.isVisible = controlsVisible
-
-        if (controlsVisible) {
-            topGradient?.bringToFront()
-            bottomGradient?.bringToFront()
-            statusBarScrim?.bringToFront()
-            viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_container)?.bringToFront()
-            controller?.bringToFront()
-            findViewById<View>(org.skepsun.kototoro.R.id.seek_feedback_layout)?.bringToFront()
-            findViewById<View>(org.skepsun.kototoro.R.id.overlay_seek_left)?.bringToFront()
-            findViewById<View>(org.skepsun.kototoro.R.id.overlay_seek_right)?.bringToFront()
-            findViewById<View>(org.skepsun.kototoro.R.id.overlay_play_pause)?.bringToFront()
-        }
-
         systemUiController.setSystemUiVisible(false)
-        updateStatusBarByToolbar()
 
-        if (controlsVisible) {
-            rebuildToolbarMenuForOrientation()
-            adjustToolbarForOrientation()
-            rearrangeBottomToolbarForOrientation()
-            updatePlayPauseButton()
-        } else {
-            viewBinding.toolbar.menu.clear()
-            secondaryToolbar?.menu?.clear()
-        }
+        if (state != PlayerUiState.Locked) unlockButtonVisible = false
 
-        allControllers().forEach { ctl ->
-            if (!composeControlsInstalled && controlsVisible && ctl == controller) {
-                ctl.visibility = View.VISIBLE
-                ctl.alpha = 1f
-                applyControllerTint(ctl)
-            } else {
-                ctl.visibility = View.GONE
-            }
-        }
-
-        if (state == PlayerUiState.Locked) {
-            lockOverlay?.isVisible = true
-            lockOverlay?.bringToFront()
-            subtitleOverlay?.bringToFront()
-        } else {
-            lockOverlay?.isVisible = false
-            unlockButton?.isVisible = false
-            unlockButton?.alpha = 1f
-        }
-
-        viewBinding.root.requestApplyInsets()
-        viewBinding.root.removeCallbacks(hideUiRunnable)
-        viewBinding.root.removeCallbacks(progressUpdateRunnable)
-        viewBinding.root.removeCallbacks(hideLockUiRunnable)
-        viewBinding.root.removeCallbacks(controllerProgressRunnable)
+        playerRoot.removeCallbacks(hideUiRunnable)
+        playerRoot.removeCallbacks(progressUpdateRunnable)
+        playerRoot.removeCallbacks(hideLockUiRunnable)
+        playerRoot.removeCallbacks(controllerProgressRunnable)
 
         if (controlsVisible) {
             if (!isHorizontalScrubbing && !isUserScrubbing && verticalAdjustMode == 0) {
-                viewBinding.root.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
+                playerRoot.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
             }
-            updateToolbarProgress()
-            viewBinding.root.postDelayed(progressUpdateRunnable, progressUpdateIntervalMs.toLong())
-            updateControllerProgress()
-            viewBinding.root.postDelayed(controllerProgressRunnable, controllerProgressIntervalMs.toLong())
-        } else {
-            viewBinding.toolbarProgress.isVisible = false
+            playerRoot.postDelayed(progressUpdateRunnable, progressUpdateIntervalMs.toLong())
+            playerRoot.postDelayed(controllerProgressRunnable, progressUpdateIntervalMs.toLong())
         }
         syncComposeControlState()
-        updateSpaceSwitcherFabPosition(controller, controlsVisible) {
-            spaceSwitcherDelegate.setControlsVisible(playerUiState == PlayerUiState.ControlsVisible)
-        }
-    }
-
-    private fun updateSpaceSwitcherFabPosition(
-        controller: PlayerControlView?,
-        controlsVisible: Boolean,
-        onPositioned: () -> Unit,
-    ) {
-        if (!controlsVisible || controller == null) {
-            onPositioned()
-            return
-        }
-        val fab = findViewById<View>(R.id.immersive_space_switcher_fab)
-        if (fab == null) {
-            onPositioned()
-            return
-        }
-        val controlBar = controller.findViewById<View>(R.id.toolbar_docked)
-        if (controlBar == null) {
-            onPositioned()
-            return
-        }
-        val updatePosition = {
-			fab.post {
-				if (!fab.isAttachedToWindow) return@post
-				val bottomMargin = controlBar.height +
-					resources.getDimensionPixelSize(R.dimen.space_switcher_fab_control_gap)
-				val layoutParams = fab.layoutParams as? android.widget.FrameLayout.LayoutParams
-				if (layoutParams != null && layoutParams.bottomMargin != bottomMargin) {
-					layoutParams.bottomMargin = bottomMargin
-					fab.layoutParams = layoutParams
-				}
-				val parent = fab.parent as? ViewGroup
-				if (parent != null && parent.getChildAt(parent.childCount - 1) !== fab) {
-					fab.bringToFront()
-				}
-				onPositioned()
-			}
-        }
-        if (controlBar.isLaidOut && controlBar.height > 0) {
-            updatePosition()
-        } else {
-            controlBar.doOnLayout { updatePosition() }
-        }
+        spaceSwitcherDelegate.setControlsVisible(playerUiState == PlayerUiState.ControlsVisible)
     }
 
     // ==================== Screen Lock ====================
 
     private val lockAutoHideDelayMs = 3000L
-    private val hideLockUiRunnable = Runnable {
-        findViewById<View>(org.skepsun.kototoro.R.id.button_screen_unlock)?.let {
-            it.animate().alpha(0f).setDuration(200).withEndAction { it.isVisible = false }.start()
-        }
-    }
+    private val hideLockUiRunnable = Runnable { unlockButtonVisible = false }
 
     private fun enterScreenLock() {
         isScreenLocked = true
@@ -2190,39 +1879,15 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         isScreenLocked = false
         spaceSwitcherDelegate.invalidateAvailability()
         updateScreenLockButtonState()
-        viewBinding.root.removeCallbacks(hideLockUiRunnable)
-        findViewById<View>(org.skepsun.kototoro.R.id.lock_overlay)?.isVisible = false
-        val unlockBtn = findViewById<View>(org.skepsun.kototoro.R.id.button_screen_unlock)
-        unlockBtn?.isVisible = false
-        unlockBtn?.alpha = 1f
+        playerRoot.removeCallbacks(hideLockUiRunnable)
+        unlockButtonVisible = false
         applyPlayerUiState(PlayerUiState.ControlsVisible)
     }
 
     private fun showLockedUi() {
-        viewBinding.root.removeCallbacks(hideLockUiRunnable)
-        // Show unlock button with fade-in
-        val unlockBtn = findViewById<View>(org.skepsun.kototoro.R.id.button_screen_unlock)
-        unlockBtn?.alpha = 0f
-        unlockBtn?.isVisible = true
-        unlockBtn?.animate()?.alpha(1f)?.setDuration(200)?.start()
-        unlockBtn?.bringToFront()
-        val lockOverlay = findViewById<View>(org.skepsun.kototoro.R.id.lock_overlay)
-        lockOverlay?.bringToFront()
-        unlockBtn?.bringToFront()
-        viewBinding.root.postDelayed(hideLockUiRunnable, lockAutoHideDelayMs)
-    }
-
-    private fun initLockOverlay() {
-        val lockOverlay = findViewById<View>(org.skepsun.kototoro.R.id.lock_overlay)
-        val unlockBtn = findViewById<android.widget.ImageButton>(org.skepsun.kototoro.R.id.button_screen_unlock)
-        lockOverlay?.setOnClickListener {
-            if (isScreenLocked) {
-                showLockedUi()
-            }
-        }
-        unlockBtn?.setOnClickListener {
-            exitScreenLock()
-        }
+        playerRoot.removeCallbacks(hideLockUiRunnable)
+        unlockButtonVisible = true
+        playerRoot.postDelayed(hideLockUiRunnable, lockAutoHideDelayMs)
     }
 
     // ==================== Intro/Outro Skip ====================
@@ -2245,50 +1910,20 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             if (pos < introEndMs) {
                 hasSkippedIntro = true
                 mpvPlayer?.seekTo(introEndMs)
-                Snackbar.make(viewBinding.root, R.string.video_skipping_intro, Snackbar.LENGTH_SHORT).show()
+                showPlayerMessage(R.string.video_skipping_intro)
             }
         }
     }
 
     private fun updateIntroOutroButtonState() {
-        allControllers().forEach { ctl ->
-            val introButton = ctl.findViewById<com.google.android.material.button.MaterialButton>(
-                org.skepsun.kototoro.R.id.button_mark_intro,
-            )
-            val outroButton = ctl.findViewById<com.google.android.material.button.MaterialButton>(
-                org.skepsun.kototoro.R.id.button_mark_outro,
-            )
-            introButton?.isVisible = isLandscapeOrientation()
-            outroButton?.isVisible = isLandscapeOrientation()
-            introButton?.text = if (introEndMs > 0) formatTimeMs(introEndMs) else getString(R.string.video_mark_intro)
-            outroButton?.text = if (outroStartMs > 0) formatTimeMs(outroStartMs) else getString(R.string.video_mark_outro)
-        }
+        syncComposeControlState()
     }
 
     private fun updateScreenLockButtonState() {
-        allControllers().forEach { ctl ->
-            val lockButton = ctl.findViewById<com.google.android.material.button.MaterialButton>(
-                org.skepsun.kototoro.R.id.button_screen_lock,
-            ) ?: return@forEach
-            lockButton.setIconResource(
-                if (isScreenLocked) org.skepsun.kototoro.R.drawable.ic_lock_open
-                else org.skepsun.kototoro.R.drawable.ic_lock,
-            )
-            lockButton.contentDescription = getString(
-                if (isScreenLocked) org.skepsun.kototoro.R.string.video_screen_unlock
-                else org.skepsun.kototoro.R.string.video_screen_lock,
-            )
-        }
+        syncComposeControlState()
     }
 
     private fun showOverflowMenu() {
-        val toolbar = if (isLandscapeOrientation()) {
-            viewBinding.toolbar
-        } else {
-            findViewById<com.google.android.material.appbar.MaterialToolbar>(org.skepsun.kototoro.R.id.toolbar_secondary)
-                ?: viewBinding.toolbar
-        }
-        val anchor = toolbar.menuView?.findViewById<View>(org.skepsun.kototoro.R.id.action_more) ?: toolbar
         val showMarkerActions = !isLandscapeOrientation()
         val actions = buildList {
             if (showMarkerActions) {
@@ -2329,84 +1964,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 ),
             )
         }
-        showPlayerOverflowPopup(anchor, actions)
-    }
-
-    private fun showPlayerOverflowPopup(anchor: View, actions: List<PlayerOverflowAction>) {
-        if (actions.isEmpty()) return
-
-        lateinit var popup: PopupWindow
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ContextCompat.getDrawable(
-                this@VideoPlayerActivity,
-                org.skepsun.kototoro.R.drawable.bg_video_player_popup_menu,
-            )
-            actions.forEach { action ->
-                addView(createPlayerOverflowRow(action) { popup.dismiss() })
-            }
-        }
-        popup = PopupWindow(
-            content,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true,
-        ).apply {
-            isOutsideTouchable = true
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                elevation = dp(10).toFloat()
-            }
-        }
-
-        content.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        actionDialogState = VideoActionDialogState(
+            title = getString(R.string.options),
+            items = actions.map { action ->
+                VideoActionDialogItem(action.title, iconRes = action.iconRes, onClick = action.onClick)
+            },
         )
-        val xOffset = anchor.width - content.measuredWidth
-        popup.showAsDropDown(anchor, xOffset, dp(8), Gravity.NO_GRAVITY)
-    }
-
-    private fun createPlayerOverflowRow(
-        action: PlayerOverflowAction,
-        dismissPopup: () -> Unit,
-    ): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumWidth = dp(220)
-            minimumHeight = dp(48)
-            setPadding(dp(14), 0, dp(16), 0)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                dismissPopup()
-                action.onClick()
-            }
-            addView(
-                ImageView(context).apply {
-                    setImageResource(action.iconRes)
-                    setColorFilter(Color.WHITE)
-                },
-                LinearLayout.LayoutParams(dp(22), dp(22)).apply {
-                    marginEnd = dp(14)
-                },
-            )
-            addView(
-                TextView(context).apply {
-                    text = action.title
-                    setTextColor(Color.WHITE)
-                    textSize = 15f
-                    maxLines = 1
-                    includeFontPadding = false
-                },
-                LinearLayout.LayoutParams(
-                    0,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    1f,
-                ),
-            )
-        }
     }
 
     private fun buildPlayerSettingsActions(): List<PlayerSettingsAction> {
@@ -2528,261 +2091,23 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         )
     }
 
-    private fun showPlayerSettingsPopup(anchor: View, actions: List<PlayerSettingsAction>) {
-        if (actions.isEmpty()) return
-
-        lateinit var popup: PopupWindow
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ContextCompat.getDrawable(
-                this@VideoPlayerActivity,
-                org.skepsun.kototoro.R.drawable.bg_video_player_popup_menu,
-            )
-            addView(createPlayerPanelHeader(getString(R.string.options)))
-            actions.forEach { action ->
-                addView(createPlayerSettingsRow(action) { popup.dismiss() })
-            }
-        }
-        val content = ScrollView(this).apply {
-            isFillViewport = false
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(panel)
-        }
-        popup = PopupWindow(
-            content,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true,
-        ).apply {
-            isOutsideTouchable = true
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                elevation = dp(12).toFloat()
-            }
-        }
-
-        val maxHeight = (resources.displayMetrics.heightPixels * 0.72f).roundToInt()
-        content.measure(
-            View.MeasureSpec.makeMeasureSpec(dp(360), View.MeasureSpec.AT_MOST),
-            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST),
-        )
-        popup.height = content.measuredHeight.coerceAtMost(maxHeight)
-        val xOffset = anchor.width - content.measuredWidth
-        popup.showAsDropDown(anchor, xOffset, dp(8), Gravity.NO_GRAVITY)
-    }
-
-    private fun createPlayerPanelHeader(title: String): View {
-        return TextView(this).apply {
-            text = title
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-            setPadding(dp(16), dp(14), dp(16), dp(10))
-        }
-    }
-
-    private fun createPlayerSettingsRow(
-        action: PlayerSettingsAction,
-        dismissPopup: () -> Unit,
-    ): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumWidth = dp(336)
-            minimumHeight = dp(54)
-            setPadding(dp(14), dp(6), dp(14), dp(6))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                dismissPopup()
-                action.onClick()
-            }
-            addView(
-                ImageView(context).apply {
-                    setImageResource(action.iconRes)
-                    setColorFilter(Color.WHITE)
-                },
-                LinearLayout.LayoutParams(dp(22), dp(22)).apply {
-                    marginEnd = dp(14)
-                },
-            )
-            addView(
-                LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(
-                        TextView(context).apply {
-                            text = action.title
-                            setTextColor(Color.WHITE)
-                            textSize = 15f
-                            maxLines = 1
-                            includeFontPadding = false
-                        },
-                    )
-                    action.subtitle?.takeIf { it.isNotBlank() }?.let { subtitle ->
-                        addView(
-                            TextView(context).apply {
-                                text = subtitle
-                                setTextColor(0xB3FFFFFF.toInt())
-                                textSize = 12f
-                                maxLines = 1
-                                includeFontPadding = false
-                            },
-                            LinearLayout.LayoutParams(
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ).apply {
-                                topMargin = dp(4)
-                            },
-                        )
-                    }
-                },
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
-            )
-            action.isChecked?.let { checked ->
-                addView(
-                    ImageView(context).apply {
-                        setImageResource(org.skepsun.kototoro.R.drawable.ic_check)
-                        setColorFilter(if (checked) Color.WHITE else 0x40FFFFFF)
-                        alpha = if (checked) 1f else 0.35f
-                    },
-                    LinearLayout.LayoutParams(dp(20), dp(20)).apply {
-                        marginStart = dp(12)
-                    },
-                )
-            }
-        }
-    }
-
-    private fun showChapterSelectionPanel(anchor: View) {
+    private fun showChapterSelectionPanel() {
         val chapters = playerChapterList()
         if (chapters.isEmpty()) return
 
-        lateinit var popup: PopupWindow
         val currentId = readerState?.chapterId
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ContextCompat.getDrawable(
-                this@VideoPlayerActivity,
-                org.skepsun.kototoro.R.drawable.bg_video_player_popup_menu,
-            )
-            addView(createPlayerPanelHeader(getString(R.string.chapters)))
-            chapters.forEachIndexed { index, chapter ->
-                addView(
-                    createPlayerChapterRow(
-                        index = index,
-                        chapter = chapter,
-                        isCurrent = chapter.id == currentId,
-                    ) {
-                        popup.dismiss()
-                        onChapterSelected(chapter)
-                    },
+        actionDialogState = VideoActionDialogState(
+            title = getString(R.string.chapters),
+            items = chapters.mapIndexed { index, chapter ->
+                VideoActionDialogItem(
+                    title = chapter.title?.takeIf { it.isNotBlank() } ?: chapter.url,
+                    subtitle = chapter.branch,
+                    leadingText = (index + 1).toString(),
+                    checked = chapter.id == currentId,
+                    onClick = { onChapterSelected(chapter) },
                 )
-            }
-        }
-        val content = ScrollView(this).apply {
-            isFillViewport = false
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(panel)
-        }
-        popup = PopupWindow(
-            content,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            true,
-        ).apply {
-            isOutsideTouchable = true
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                elevation = dp(12).toFloat()
-            }
-        }
-
-        val maxHeight = (resources.displayMetrics.heightPixels * 0.62f).roundToInt()
-        content.measure(
-            View.MeasureSpec.makeMeasureSpec(dp(360), View.MeasureSpec.AT_MOST),
-            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST),
+            },
         )
-        popup.height = content.measuredHeight.coerceAtMost(maxHeight)
-        val xOffset = ((anchor.width - content.measuredWidth) / 2).coerceAtMost(0)
-        popup.showAsDropDown(anchor, xOffset, -anchor.height - popup.height - dp(8), Gravity.NO_GRAVITY)
-    }
-
-    private fun createPlayerChapterRow(
-        index: Int,
-        chapter: ContentChapter,
-        isCurrent: Boolean,
-        onClick: () -> Unit,
-    ): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumWidth = dp(336)
-            minimumHeight = dp(54)
-            setPadding(dp(14), dp(6), dp(14), dp(6))
-            isClickable = true
-            isFocusable = true
-            alpha = if (isCurrent) 1f else 0.9f
-            setOnClickListener { onClick() }
-            addView(
-                TextView(context).apply {
-                    text = (index + 1).toString()
-                    setTextColor(0xB3FFFFFF.toInt())
-                    textSize = 12f
-                    gravity = Gravity.CENTER
-                    includeFontPadding = false
-                },
-                LinearLayout.LayoutParams(dp(28), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    marginEnd = dp(12)
-                },
-            )
-            addView(
-                LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(
-                        TextView(context).apply {
-                            text = chapter.title?.takeIf { it.isNotBlank() }
-                                ?: chapter.url
-                            setTextColor(Color.WHITE)
-                            textSize = 15f
-                            maxLines = 1
-                            includeFontPadding = false
-                        },
-                    )
-                    chapter.branch?.takeIf { it.isNotBlank() }?.let { branch ->
-                        addView(
-                            TextView(context).apply {
-                                text = branch
-                                setTextColor(0x99FFFFFF.toInt())
-                                textSize = 12f
-                                maxLines = 1
-                                includeFontPadding = false
-                            },
-                            LinearLayout.LayoutParams(
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ).apply {
-                                topMargin = dp(4)
-                            },
-                        )
-                    }
-                },
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
-            )
-            if (isCurrent) {
-                addView(
-                    ImageView(context).apply {
-                        setImageResource(org.skepsun.kototoro.R.drawable.ic_check)
-                        setColorFilter(Color.WHITE)
-                    },
-                    LinearLayout.LayoutParams(dp(20), dp(20)).apply {
-                        marginStart = dp(12)
-                    },
-                )
-            }
-        }
     }
 
     private fun playerChapterList(): List<ContentChapter> {
@@ -2790,8 +2115,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             currentMangaContent()?.chapters.orEmpty()
         }
     }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
     private fun buildIntroMenuTitle(): String {
         return if (introEndMs > 0) {
@@ -2811,11 +2134,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun downloadCurrentChapter() {
         val manga = mangaContent ?: run {
-            Snackbar.make(viewBinding.root, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.operation_not_supported)
             return
         }
         val chapterId = readerState?.chapterId ?: run {
-            Snackbar.make(viewBinding.root, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.operation_not_supported)
             return
         }
         val task = DownloadTask(
@@ -2830,7 +2153,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         )
         lifecycleScope.launch {
             downloadScheduler.schedule(setOf(manga to task))
-            Snackbar.make(viewBinding.root, R.string.download_started, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.download_started)
         }
     }
 
@@ -2839,16 +2162,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         if (introEndMs > 0) {
             introEndMs = 0L
             appSettings.clearIntroEndMs(currentMangaId)
-            Snackbar.make(viewBinding.root, R.string.video_skip_intro_cleared, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.video_skip_intro_cleared)
         } else {
             val pos = mpvPlayer?.positionMs ?: return
             introEndMs = pos
             appSettings.setIntroEndMs(currentMangaId, pos)
-            Snackbar.make(
-                viewBinding.root,
-                getString(R.string.video_skip_intro_set, formatTimeMs(pos)),
-                Snackbar.LENGTH_SHORT,
-            ).show()
+            showPlayerMessage(getString(R.string.video_skip_intro_set, formatTimeMs(pos)))
         }
         updateIntroOutroButtonState()
     }
@@ -2858,113 +2177,18 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         if (outroStartMs > 0) {
             outroStartMs = 0L
             appSettings.clearOutroStartMs(currentMangaId)
-            Snackbar.make(viewBinding.root, R.string.video_skip_outro_cleared, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.video_skip_outro_cleared)
         } else {
             val pos = mpvPlayer?.positionMs ?: return
             outroStartMs = pos
             appSettings.setOutroStartMs(currentMangaId, pos)
-            Snackbar.make(
-                viewBinding.root,
-                getString(R.string.video_skip_outro_set, formatTimeMs(pos)),
-                Snackbar.LENGTH_SHORT,
-            ).show()
+            showPlayerMessage(getString(R.string.video_skip_outro_set, formatTimeMs(pos)))
         }
         updateIntroOutroButtonState()
-    }
-
-    private fun rebuildToolbarMenuForOrientation() {
-        viewBinding.toolbar.menu.clear()
-        val secondaryToolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(org.skepsun.kototoro.R.id.toolbar_secondary)
-        secondaryToolbar?.menu?.clear()
-
-        // 横屏时：inflate ?toolbar；竖屏时：inflate ?secondaryToolbar
-        val targetToolbar = if (isLandscapeOrientation()) viewBinding.toolbar else secondaryToolbar
-
-        if (targetToolbar != null) {
-            targetToolbar.inflateMenu(org.skepsun.kototoro.R.menu.menu_video_player)
-            // Force subtitle button to always show as icon (not in overflow)
-            targetToolbar.menu.findItem(org.skepsun.kototoro.R.id.action_subtitle_track)?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
-    }
-
-    // 按方向调整工具栏高度：横屏恢复初始高度；竖屏需要显示辅助工具栏
-    private fun adjustToolbarForOrientation() {
-        val secondaryToolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(org.skepsun.kototoro.R.id.toolbar_secondary)
-
-        if (isLandscapeOrientation()) {
-            if (originalToolbarHeightPx > 0) {
-                viewBinding.toolbar.layoutParams.height = originalToolbarHeightPx
-            }
-            secondaryToolbar?.isVisible = false
-        } else {
-            viewBinding.toolbar.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-            secondaryToolbar?.isVisible = true
-        }
-        viewBinding.toolbar.minimumHeight = 0
-        viewBinding.toolbar.requestLayout()
-        secondaryToolbar?.requestLayout()
-    }
-
-    private fun rearrangeBottomToolbarForOrientation() {
-        updateIntroOutroButtonState()
-        updatePlaybackSpeedButton()
     }
 
     private fun updatePlaybackMenu() {
-        updatePlayPauseButton()
-    }
-
-    private fun updatePlayPauseButton() {
-        val isPlaying = mpvPlayer?.isPlaying == true
-        allControllers().forEach { ctl ->
-            val btn = ctl.findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_play_pause) ?: return@forEach
-            btn.isEnabled = true
-            btn.isClickable = true
-            btn.alpha = 1f
-            btn.setImageResource(
-                if (isPlaying) org.skepsun.kototoro.R.drawable.ic_pause
-                else org.skepsun.kototoro.R.drawable.ic_play,
-            )
-            btn.contentDescription = getString(
-                if (isPlaying) org.skepsun.kototoro.R.string.pause
-                else org.skepsun.kototoro.R.string.play,
-            )
-        }
-    }
-
-    private fun applyControllerTint(ctl: PlayerControlView) {
-        val white = Color.WHITE
-        val whiteList = ColorStateList.valueOf(white)
-        ctl.findViewById<TextView>(androidx.media3.ui.R.id.exo_position)?.setTextColor(white)
-        ctl.findViewById<TextView>(androidx.media3.ui.R.id.exo_duration)?.setTextColor(white)
-        ctl.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.let { timeBar ->
-            timeBar.setPlayedColor(white)
-            timeBar.setBufferedColor(0x99FFFFFF.toInt())
-            timeBar.setUnplayedColor(0x55FFFFFF.toInt())
-            timeBar.setScrubberColor(white)
-        }
-        ctl.findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_play_pause)
-            ?.setColorFilter(white)
-        val iconButtons = listOf(
-            org.skepsun.kototoro.R.id.button_prev_chapter,
-            org.skepsun.kototoro.R.id.button_next_chapter,
-            org.skepsun.kototoro.R.id.button_pages_thumbs,
-            org.skepsun.kototoro.R.id.button_quality,
-            org.skepsun.kototoro.R.id.button_screen_lock,
-        )
-        iconButtons.forEach { id ->
-            val view = ctl.findViewById<View>(id)
-            when (view) {
-                is android.widget.ImageButton -> view.setColorFilter(white)
-                is com.google.android.material.button.MaterialButton -> view.iconTint = whiteList
-            }
-        }
-    }
-
-    private fun updateToolbarProgress() {
-        val indicator = viewBinding.toolbarProgress
-        // 顶部进度条不再显?
-        indicator.isVisible = false
+        syncComposeControlState()
     }
 
     // 简单时间格式化（mm:ss ?hh:mm:ss?
@@ -2978,64 +2202,8 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         else String.format("%02d:%02d", minutes, seconds)
     }
 
-    // 手动驱动底部控制条（DefaultTimeBar 与已播放时长文本）定时刷?
-    private fun updateControllerProgress() {
-        syncComposeControlState()
-        if (!isUiVisible) return
-        // 用户拖动时不要覆?timebar 的临时位置，否则会导致“拖不动/点不准”的体验
-        if (isUserScrubbing) return
-        val ctl = currentController() ?: return
-        if (ctl.visibility != View.VISIBLE) return
-
-        val p = mpvPlayer ?: return
-        val duration = p.durationMs
-        val position = p.positionMs
-        val buffered = position
-
-        // 判断是否需要显示小时位（总时长超?1 小时?
-        val showHours = duration >= 3600_000L
-
-        // 更新文本：当前播放位?+ 总时?
-        runCatching {
-            val posTv = ctl.findViewById<TextView>(androidx.media3.ui.R.id.exo_position)
-            val durTv = ctl.findViewById<TextView>(androidx.media3.ui.R.id.exo_duration)
-            posTv?.text = formatTimeMs(position, forceHours = showHours)
-            if (duration > 0) {
-                durTv?.text = formatTimeMs(duration)
-            }
-        }
-
-        // 更新时间条进?
-        runCatching {
-            val timeBar = ctl.findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
-            val seekable = duration > 0
-            timeBar?.isEnabled = seekable
-            timeBar?.isClickable = seekable
-            if (duration > 0) {
-                timeBar?.setDuration(duration)
-                timeBar?.setBufferedPosition(buffered)
-                timeBar?.setPosition(position)
-            }
-        }
-        updatePlayPauseButton()
-    }
-
-    private fun updateStatusBarByToolbar() {
-        val color = android.graphics.Color.TRANSPARENT
-        val isLight = ColorUtils.calculateLuminance(color) > 0.5
-        WindowInsetsControllerCompat(window, viewBinding.root).setAppearanceLightStatusBars(isLight)
-        viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.status_bar_scrim)?.setBackgroundColor(color)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = color
-        @Suppress("DEPRECATION")
-        window.navigationBarColor = color
-    }
-
     private fun applyPlaybackBackground() {
-        val drawable = appSettings.videoBackground.resolve(this)
-        viewBinding.root.background = drawable
-        // SurfaceView 使用独立 Surface 渲染视频，保持背景透明避免遮挡画面
-        viewBinding.playerView.background = null
+        playerRoot.setBackgroundColor(android.graphics.Color.BLACK)
     }
 
     private fun deriveEpisodeTitle(url: String): String {
@@ -3076,11 +2244,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun updateTitleAndSubtitle() {
-        val (title, subtitle) = extractChapterInfo()
-        supportActionBar?.title = title
-        supportActionBar?.subtitle = subtitle
-        viewBinding.toolbar.title = title
-        viewBinding.toolbar.subtitle = subtitle
         syncComposeControlState()
     }
 
@@ -3150,58 +2313,19 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
      * Update the subtitle overlay TextView with the given text.
      * Can be called from any thread ?dispatches to UI thread.
      */
-    private var subtitleOverlayView: android.widget.TextView? = null
-
     fun applySubtitleOverlayStyle() {
-        val overlay = subtitleOverlayView ?: findViewById<android.widget.TextView>(org.skepsun.kototoro.R.id.subtitle_overlay)
-        if (overlay == null) return
-        subtitleOverlayView = overlay
-
         val settings = appSettings
-        overlay.textSize = settings.videoSubtitleFontSize
-        overlay.setTextColor(settings.videoSubtitleTextColor)
-
-        // Background color
-        overlay.setBackgroundColor(settings.videoSubtitleBgColor)
-
-        // Shadow/Outline properties
-        if (settings.videoSubtitleBorderSize > 0) {
-            overlay.setShadowLayer(settings.videoSubtitleBorderSize, 0f, 0f, settings.videoSubtitleBorderColor)
-        } else {
-            overlay.setShadowLayer(0f, 0f, 0f, android.graphics.Color.TRANSPARENT)
-        }
-
-        // Bold / Italic
-        val style = if (settings.videoSubtitleBold && settings.videoSubtitleItalic) {
-            android.graphics.Typeface.BOLD_ITALIC
-        } else if (settings.videoSubtitleBold) {
-            android.graphics.Typeface.BOLD
-        } else if (settings.videoSubtitleItalic) {
-            android.graphics.Typeface.ITALIC
-        } else {
-            android.graphics.Typeface.NORMAL
-        }
-        overlay.setTypeface(null, style)
-
-        // Alignment (Gravity)
-        val alignX = settings.videoSubtitleAlignX
-        overlay.gravity = when (alignX) {
-            0 -> android.view.Gravity.START or android.view.Gravity.CENTER_VERTICAL
-            2 -> android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
-            else -> android.view.Gravity.CENTER_HORIZONTAL or android.view.Gravity.CENTER_VERTICAL
-        }
-
-        // Bottom Margin / Position
-        val lp = overlay.layoutParams as? android.widget.FrameLayout.LayoutParams
-        lp?.let {
-            it.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
-            val posDb = settings.videoSubtitlePosition
-            val density = resources.displayMetrics.density
-            val marginH = (32 * density).toInt()
-            val marginV = (posDb * density).toInt()
-            it.setMargins(marginH, 0, marginH, marginV)
-            overlay.layoutParams = it
-        }
+        subtitleOverlayState = subtitleOverlayState.copy(
+            fontSizeSp = settings.videoSubtitleFontSize,
+            bold = settings.videoSubtitleBold,
+            italic = settings.videoSubtitleItalic,
+            textColor = settings.videoSubtitleTextColor,
+            borderColor = settings.videoSubtitleBorderColor,
+            borderSize = settings.videoSubtitleBorderSize,
+            backgroundColor = settings.videoSubtitleBgColor,
+            alignX = settings.videoSubtitleAlignX,
+            bottomPositionDp = settings.videoSubtitlePosition,
+        )
 
         mpvPlayer?.applySubtitleStyle(
             fontSizeSp = settings.videoSubtitleFontSize,
@@ -3218,19 +2342,8 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun updateSubtitleOverlay(text: String?) {
         runOnUiThread {
-            val overlay = subtitleOverlayView ?: findViewById<android.widget.TextView>(org.skepsun.kototoro.R.id.subtitle_overlay)
-            if (overlay == null) return@runOnUiThread
-            subtitleOverlayView = overlay
-
-            if (text.isNullOrBlank()) {
-                overlay.visibility = android.view.View.GONE
-                overlay.text = ""
-            } else {
-                applySubtitleOverlayStyle()
-                overlay.text = text
-                overlay.visibility = android.view.View.VISIBLE
-                overlay.bringToFront()
-            }
+            applySubtitleOverlayStyle()
+            subtitleOverlayState = subtitleOverlayState.copy(text = text?.takeIf(String::isNotBlank))
         }
     }
 
@@ -3366,12 +2479,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun schedulePlaybackStartupTimeout() {
-        viewBinding.root.removeCallbacks(playbackStartupTimeoutRunnable)
-        viewBinding.root.postDelayed(playbackStartupTimeoutRunnable, startupTimeoutMs)
+        playerRoot.removeCallbacks(playbackStartupTimeoutRunnable)
+        playerRoot.postDelayed(playbackStartupTimeoutRunnable, startupTimeoutMs)
     }
 
     private fun cancelPlaybackStartupTimeout() {
-        viewBinding.root.removeCallbacks(playbackStartupTimeoutRunnable)
+        playerRoot.removeCallbacks(playbackStartupTimeoutRunnable)
     }
 
     private fun handlePlaybackStartupTimeout() {
@@ -3389,11 +2502,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             PlaybackFallbackReason.RENDERER_DOWNGRADED -> R.string.video_fallback_renderer_downgraded
             PlaybackFallbackReason.CONSERVATIVE_MODE -> R.string.video_fallback_conservative_mode
         }
-        Snackbar.make(viewBinding.root, messageRes, Snackbar.LENGTH_LONG)
-            .setAction(R.string.settings) {
-                showVideoSettingsPanel()
-            }
-            .show()
+        showPlayerMessage(
+            messageRes = messageRes,
+            duration = SnackbarDuration.Long,
+            actionLabel = getString(R.string.settings),
+            onAction = ::showVideoSettingsPanel,
+        )
     }
 
     private fun showPlaybackErrorHintOnce(category: PlaybackFailureCategory) {
@@ -3403,22 +2517,27 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             PlaybackFailureCategory.COMPATIBILITY -> R.string.error_occurred
             PlaybackFailureCategory.UNKNOWN -> R.string.error_occurred
         }
-        Snackbar.make(viewBinding.root, messageRes, Snackbar.LENGTH_LONG)
-            .setAction(R.string.settings) {
-                showVideoSettingsPanel()
-            }
-            .show()
+        showPlayerMessage(
+            messageRes = messageRes,
+            duration = SnackbarDuration.Long,
+            actionLabel = getString(R.string.settings),
+            onAction = ::showVideoSettingsPanel,
+        )
     }
 
     private fun showVideoSettingsPanel() {
-        val toolbar = if (isLandscapeOrientation()) {
-            viewBinding.toolbar
-        } else {
-            findViewById<com.google.android.material.appbar.MaterialToolbar>(org.skepsun.kototoro.R.id.toolbar_secondary)
-                ?: viewBinding.toolbar
-        }
-        val anchor = toolbar.menuView?.findViewById<View>(org.skepsun.kototoro.R.id.action_settings) ?: toolbar
-        showPlayerSettingsPopup(anchor, buildPlayerSettingsActions())
+        actionDialogState = VideoActionDialogState(
+            title = getString(R.string.options),
+            items = buildPlayerSettingsActions().map { action ->
+                VideoActionDialogItem(
+                    title = action.title,
+                    subtitle = action.subtitle,
+                    iconRes = action.iconRes,
+                    checked = action.isChecked,
+                    onClick = action.onClick,
+                )
+            },
+        )
     }
 
     private fun resolveSubMode(
@@ -3463,11 +2582,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val player = mpvPlayer ?: return
         val tracks = player.getSubtitleTracks()
         if (tracks.isEmpty()) {
-            Snackbar.make(
-                viewBinding.root,
-                org.skepsun.kototoro.R.string.video_no_subtitle_tracks,
-                Snackbar.LENGTH_SHORT
-            ).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.video_no_subtitle_tracks)
             return
         }
         val labels = arrayOf(getString(org.skepsun.kototoro.R.string.video_subtitle_off)) +
@@ -3475,88 +2590,50 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val selectedTrack = tracks.indexOfFirst { it.isSelected }
         val checked = if (selectedTrack >= 0) selectedTrack + 1 else 0
 
-        MaterialAlertDialogBuilder(this)
-            .setTitle(org.skepsun.kototoro.R.string.video_subtitle_track)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                if (which == 0) {
-                    player.setSubtitleTrack(null)
-                    userManualSubtitleSelection = ManualSubtitleSelection.Off
-                } else {
-                    val track = tracks[which - 1]
-                    player.setSubtitleTrack(track.id)
-                    userManualSubtitleSelection = ManualSubtitleSelection.Track(
-                        language = track.language,
-                        title = track.title,
-                    )
-                }
-                dialog.dismiss()
+        showSelectionDialog(R.string.video_subtitle_track, labels.asList(), checked) { which ->
+            if (which == 0) {
+                player.setSubtitleTrack(null)
+                userManualSubtitleSelection = ManualSubtitleSelection.Off
+            } else {
+                val track = tracks[which - 1]
+                player.setSubtitleTrack(track.id)
+                userManualSubtitleSelection = ManualSubtitleSelection.Track(
+                    language = track.language,
+                    title = track.title,
+                )
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
     }
 
     private fun showAudioTrackDialog() {
         val player = mpvPlayer ?: return
         val tracks = player.getAudioTracks()
         if (tracks.isEmpty()) {
-            Snackbar.make(
-                viewBinding.root,
-                org.skepsun.kototoro.R.string.video_no_audio_tracks,
-                Snackbar.LENGTH_SHORT,
-            ).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.video_no_audio_tracks)
             return
         }
         val labels = tracks.map { it.displayName() }.toTypedArray()
         val checked = tracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
-        MaterialAlertDialogBuilder(this)
-            .setTitle(org.skepsun.kototoro.R.string.video_audio_track)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                player.setAudioTrack(tracks[which].id)
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        showSelectionDialog(R.string.video_audio_track, labels.asList(), checked) { which ->
+            player.setAudioTrack(tracks[which].id)
+        }
     }
 
 
     fun showQualityDialog() {
         if (availableVideos.isEmpty()) {
-            Snackbar.make(
-                viewBinding.root,
-                org.skepsun.kototoro.R.string.operation_not_supported,
-                Snackbar.LENGTH_SHORT
-            ).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.operation_not_supported)
             return
         }
         val titles = availableVideos.mapIndexed { index, video ->
             video.qualityDisplayLabel(index)
         }.toTypedArray()
         val selected = currentVideoIndex.coerceIn(0, titles.lastIndex)
-        MaterialAlertDialogBuilder(this)
-            .setTitle(org.skepsun.kototoro.R.string.video_quality)
-            .setSingleChoiceItems(titles, selected) { dialog, which ->
-                if (which == currentVideoIndex) {
-                    dialog.dismiss()
-                    return@setSingleChoiceItems
-                }
-                val video = availableVideos[which]
-                val resumeMs = mpvPlayer?.positionMs ?: 0L
-                currentVideoIndex = which
-                updateQualityButtonLabel()
-                pendingExternalSubtitles = video.subtitleTracks
-                pendingExternalAudio = video.audioTracks
-                val repo = currentVideoSource?.let { src -> mangaRepositoryFactory.create(src) }
-                val mergedHeaders = mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
-                startMpvPlayback(
-                    video.videoUrl,
-                    currentVideoSource,
-                    mergedHeaders,
-                    resumeMs,
-                )
-                dialog.dismiss()
+        showSelectionDialog(R.string.video_quality, titles.asList(), selected) { which ->
+            if (which != currentVideoIndex) {
+                switchVideoQuality(which)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
     }
 
     private fun showAspectRatioDialog() {
@@ -3569,14 +2646,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         )
         val labels = options.map(::getString).toTypedArray()
         val checked = appSettings.videoAspectRatio.coerceIn(0, options.lastIndex)
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.video_aspect_ratio)
-            .setSingleChoiceItems(labels, checked) { _, which ->
-                appSettings.videoAspectRatio = which
-                applyAspectRatio()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        showSelectionDialog(R.string.video_aspect_ratio, labels.asList(), checked) { which ->
+            appSettings.videoAspectRatio = which
+            applyAspectRatio()
+        }
     }
 
     private fun showPlaybackSpeedDialog() {
@@ -3585,17 +2658,12 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val current = appSettings.videoPlaybackSpeed
         val checked = options.indexOfFirst { kotlin.math.abs(it - current) < 0.01f }
             .takeIf { it >= 0 } ?: 2
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.video_playback_speed)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                val speed = options[which]
-                appSettings.videoPlaybackSpeed = speed
-                applyPlaybackSpeed(speed)
-                updatePlaybackSpeedButton()
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        showSelectionDialog(R.string.video_playback_speed, labels.asList(), checked) { which ->
+            val speed = options[which]
+            appSettings.videoPlaybackSpeed = speed
+            applyPlaybackSpeed(speed)
+            updatePlaybackSpeedButton()
+        }
     }
 
     private fun showDefaultPlaybackSpeedDialog() {
@@ -3604,14 +2672,9 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val current = appSettings.videoDefaultSpeed
         val checked = options.indexOfFirst { kotlin.math.abs(it - current) < 0.01f }
             .takeIf { it >= 0 } ?: 2
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.video_default_speed)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                appSettings.videoDefaultSpeed = options[which]
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        showSelectionDialog(R.string.video_default_speed, labels.asList(), checked) { which ->
+            appSettings.videoDefaultSpeed = options[which]
+        }
     }
 
     private fun showSeekIntervalDialog(
@@ -3623,23 +2686,122 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         val labels = options.map { "${it}s" }.toTypedArray()
         val checked = options.indexOfFirst { it * 1000 == currentMs }
             .takeIf { it >= 0 } ?: 1
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                onSelect(options[which] * 1000)
-                dialog.dismiss()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        showSelectionDialog(titleRes, labels.asList(), checked) { which ->
+            onSelect(options[which] * 1000)
+        }
+    }
+
+    private fun showSelectionDialog(
+        titleRes: Int,
+        options: List<String>,
+        selectedIndex: Int,
+        onSelect: (Int) -> Unit,
+    ) {
+        selectionDialogState = VideoSelectionDialogState(
+            title = getString(titleRes),
+            options = options,
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+        )
+    }
+
+    private fun switchVideoQuality(which: Int) {
+        val video = availableVideos[which]
+        val resumeMs = mpvPlayer?.positionMs ?: 0L
+        currentVideoIndex = which
+        updateQualityButtonLabel()
+        pendingExternalSubtitles = video.subtitleTracks
+        pendingExternalAudio = video.audioTracks
+        val repo = currentVideoSource?.let { src -> mangaRepositoryFactory.create(src) }
+        val mergedHeaders = mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
+        startMpvPlayback(video.videoUrl, currentVideoSource, mergedHeaders, resumeMs)
     }
 
     private fun showVideoSuperResolutionSheet() {
-        val tag = "VideoSuperResolutionSheet"
-        val fm = supportFragmentManager
-        if (fm.findFragmentByTag(tag) == null) {
-            VideoSuperResolutionSheet().show(fm, tag)
-        }
+        superResolutionDialogVisible = true
     }
+
+    private fun buildSuperResolutionDialogState(): VideoSuperResolutionDialogState {
+        val mode = appSettings.videoSuperResolutionMode
+        val shader = when (mode) {
+            VideoSuperResolutionMode.OFF -> appSettings.videoSuperResolutionShader
+            VideoSuperResolutionMode.QUALITY -> appSettings.videoSuperResolutionQualityShader
+            VideoSuperResolutionMode.BALANCED -> appSettings.videoSuperResolutionBalancedShader
+            VideoSuperResolutionMode.PERFORMANCE -> appSettings.videoSuperResolutionPerformanceShader
+            VideoSuperResolutionMode.ADVANCED -> appSettings.videoSuperResolutionShader
+        }
+        val selectedCustomShaders = appSettings.videoSuperResolutionCustomShaders
+            .split(',')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        val shaderDir = MpvShaderManager.ensureShadersCopied(this)
+        val customShaders = shaderDir.listFiles { _, name -> name.endsWith(".glsl", ignoreCase = true) }
+            .orEmpty()
+            .map { file ->
+                val descriptionName = "video_super_resolution_shader_desc_${file.nameWithoutExtension.lowercase()}"
+                val descriptionRes = resources.getIdentifier(descriptionName, "string", packageName)
+                VideoShaderOption(
+                    fileName = file.name,
+                    description = descriptionRes.takeIf { it != 0 }?.let(::getString),
+                    selected = file.name in selectedCustomShaders,
+                )
+            }
+            .sortedBy(VideoShaderOption::fileName)
+        return VideoSuperResolutionDialogState(
+            selectedMode = mode,
+            selectedShader = shader,
+            shaderLabels = VideoSuperResolutionShader.entries.associateWith(::superResolutionShaderLabel),
+            customShaders = customShaders,
+        )
+    }
+
+    private fun selectSuperResolutionMode(mode: VideoSuperResolutionMode) {
+        appSettings.videoSuperResolutionMode = mode
+        if (mode == VideoSuperResolutionMode.ADVANCED) {
+            appSettings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
+        }
+        applySuperResolutionFromSettings()
+        superResolutionDialogVersion++
+    }
+
+    private fun selectSuperResolutionShader(shader: VideoSuperResolutionShader) {
+        when (appSettings.videoSuperResolutionMode) {
+            VideoSuperResolutionMode.OFF -> appSettings.videoSuperResolutionShader = shader
+            VideoSuperResolutionMode.QUALITY -> appSettings.videoSuperResolutionQualityShader = shader
+            VideoSuperResolutionMode.BALANCED -> appSettings.videoSuperResolutionBalancedShader = shader
+            VideoSuperResolutionMode.PERFORMANCE -> appSettings.videoSuperResolutionPerformanceShader = shader
+            VideoSuperResolutionMode.ADVANCED -> appSettings.videoSuperResolutionShader = shader
+        }
+        applySuperResolutionFromSettings()
+        superResolutionDialogVersion++
+    }
+
+    private fun toggleCustomSuperResolutionShader(fileName: String, selected: Boolean) {
+        val shaders = appSettings.videoSuperResolutionCustomShaders
+            .split(',')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toMutableSet()
+        if (selected) shaders += fileName else shaders -= fileName
+        appSettings.videoSuperResolutionCustomShaders = shaders.joinToString(",")
+        appSettings.videoSuperResolutionMode = VideoSuperResolutionMode.ADVANCED
+        appSettings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
+        applySuperResolutionFromSettings()
+        superResolutionDialogVersion++
+    }
+
+    private fun superResolutionShaderLabel(shader: VideoSuperResolutionShader): String = getString(
+        when (shader) {
+            VideoSuperResolutionShader.MODE_A -> R.string.video_super_resolution_mode_a
+            VideoSuperResolutionShader.MODE_B -> R.string.video_super_resolution_mode_b
+            VideoSuperResolutionShader.MODE_C -> R.string.video_super_resolution_mode_c
+            VideoSuperResolutionShader.MODE_AA -> R.string.video_super_resolution_mode_aa
+            VideoSuperResolutionShader.MODE_BB -> R.string.video_super_resolution_mode_bb
+            VideoSuperResolutionShader.MODE_CA -> R.string.video_super_resolution_mode_ca
+            VideoSuperResolutionShader.CUSTOM -> R.string.video_super_resolution_mode_custom
+        },
+    )
 
     private fun currentQualityLabel(): String? {
         if (availableVideos.isEmpty()) return null
@@ -3670,20 +2832,14 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun updatePlaybackSpeedButton() {
-        val speed = appSettings.videoPlaybackSpeed
-        val label = "%.2fx".format(speed)
-        allControllers().forEach { ctl ->
-            ctl.findViewById<com.google.android.material.button.MaterialButton>(
-                org.skepsun.kototoro.R.id.button_playback_speed,
-            )?.text = label
-        }
+        syncComposeControlState()
     }
 
     override fun onStop() {
-        viewBinding.root.removeCallbacks(hideUiRunnable)
-        viewBinding.root.removeCallbacks(progressUpdateRunnable)
-        viewBinding.root.removeCallbacks(controllerProgressRunnable)
-        viewBinding.root.removeCallbacks(progressSaveRunnable)
+        playerRoot.removeCallbacks(hideUiRunnable)
+        playerRoot.removeCallbacks(progressUpdateRunnable)
+        playerRoot.removeCallbacks(controllerProgressRunnable)
+        playerRoot.removeCallbacks(progressSaveRunnable)
         stopLongSeek()
         super.onStop()
         // 保存当前播放进度（本地与历史?
@@ -3697,10 +2853,10 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     override fun onDestroy() {
         cancelPlaybackStartupTimeout()
-        viewBinding.root.removeCallbacks(hideUiRunnable)
-        viewBinding.root.removeCallbacks(progressUpdateRunnable)
-        viewBinding.root.removeCallbacks(controllerProgressRunnable)
-        viewBinding.root.removeCallbacks(progressSaveRunnable)
+        playerRoot.removeCallbacks(hideUiRunnable)
+        playerRoot.removeCallbacks(progressUpdateRunnable)
+        playerRoot.removeCallbacks(controllerProgressRunnable)
+        playerRoot.removeCallbacks(progressSaveRunnable)
         stopLongSeek()
         // 兜底保存进度（本地与历史?
         savePlaybackProgress()
@@ -3759,7 +2915,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     fun reloadPlayback() {
         val url = currentMediaUrl
         if (url.isNullOrBlank()) {
-            Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.error_occurred, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             return
         }
         val resumeMs = mpvPlayer?.positionMs ?: 0L
@@ -3767,16 +2923,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun openVideoDetails() {
-        val dialogView = layoutInflater.inflate(org.skepsun.kototoro.R.layout.dialog_video_player_info, null)
-        dialogView.findViewById<android.widget.TextView>(org.skepsun.kototoro.R.id.text_video_info).text = buildVideoDetailsText()
-        val dialog = MaterialAlertDialogBuilder(this, org.skepsun.kototoro.R.style.ThemeOverlay_Kototoro_VideoInfoDialog)
-            .setView(dialogView)
-            .create()
-        dialogView.findViewById<android.widget.ImageButton>(org.skepsun.kototoro.R.id.button_close).setOnClickListener {
-            dialog.dismiss()
-        }
-        dialog.show()
-        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        videoInfoDialogText = buildVideoDetailsText()
     }
 
     private fun buildVideoDetailsText(): String {
@@ -3873,7 +3020,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val pm = packageManager
         if (!pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-            Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.operation_not_supported)
             return
         }
         setUiIsVisible(false)
@@ -3896,18 +3043,14 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
             setUiIsVisible(false)
-            viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.top_gradient)?.isVisible = false
-            viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.bottom_gradient)?.isVisible = false
-        } else {
-            applyGradientAlpha()
         }
     }
 
     fun takeScreenshot() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val surfaceView = findViewById<SurfaceView>(org.skepsun.kototoro.R.id.player_view) ?: return
+        val surfaceView = mpvView
         if (surfaceView.width <= 0 || surfaceView.height <= 0) {
-            Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.error_occurred, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             return
         }
         val bitmap = Bitmap.createBitmap(surfaceView.width, surfaceView.height, Bitmap.Config.ARGB_8888)
@@ -3918,7 +3061,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 if (result == PixelCopy.SUCCESS) {
                     saveBitmapToGallery(bitmap)
                 } else {
-                    Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.error_occurred, Snackbar.LENGTH_SHORT).show()
+                    showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
                 }
             },
             Handler(Looper.getMainLooper()),
@@ -3937,13 +3080,13 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         }
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
         if (uri == null) {
-            Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.error_occurred, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             return
         }
         resolver.openOutputStream(uri)?.use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
-        Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.saved, Snackbar.LENGTH_SHORT).show()
+        showPlayerMessage(org.skepsun.kototoro.R.string.saved)
     }
 
     private fun maybeLoadDanmaku() {
@@ -4064,7 +3207,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
 
     private fun sendLocalDanmaku(message: String) {
         if (!appSettings.videoDanmakuEnabled) {
-            Snackbar.make(viewBinding.root, org.skepsun.kototoro.R.string.video_danmaku_enabled, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(org.skepsun.kototoro.R.string.video_danmaku_enabled)
             return
         }
         val timeMs = mpvPlayer?.positionMs ?: return
@@ -4427,66 +3570,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
         return (perChapter * index + perChapter * episodePercent).coerceIn(0f, 1f)
     }
 
-    override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-        val type = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
-        val bars = insets.getInsets(type)
-        val taskbarInsets = insets.getInsets(WindowInsetsCompat.Type.tappableElement())
-        val mandatoryGestureInsets = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures())
-        val cutoutInsets = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
-        val bottomSafeInset = maxOf(
-            bars.bottom,
-            taskbarInsets.bottom,
-            mandatoryGestureInsets.bottom,
-            cutoutInsets.bottom,
-        )
-        findViewById<View>(R.id.immersive_space_switcher_fab)
-            ?.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
-                marginEnd = bars.right +
-                    resources.getDimensionPixelSize(R.dimen.space_switcher_fab_margin)
-            }
-        // 顶部工具栏容器：使用外边距对齐系统栏高度，避免整体内容（如次级工具栏）侵入状态栏
-        viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_container)?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            leftMargin = bars.left
-            rightMargin = bars.right
-            topMargin = bars.top
-        }
-        viewBinding.toolbar.updatePadding(
-            left = 0,
-            right = 0,
-            top = 0,
-        )
-        // 更新状态栏遮罩高度与左右边距以匹配系统?
-        viewBinding.root.findViewById<View>(org.skepsun.kototoro.R.id.status_bar_scrim)?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-            height = bars.top
-            leftMargin = bars.left
-            rightMargin = bars.right
-        }
-        // ?DockedToolbar 与系统导航栏视觉合并：使用内边距吸收导航栏高度，避免底部留白
-        allControllers().forEach { ctl ->
-            val dockedToolbar = ctl.findViewById<View>(org.skepsun.kototoro.R.id.toolbar_docked)
-            dockedToolbar?.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                leftMargin = bars.left
-                rightMargin = bars.right
-                bottomMargin = 0
-            }
-            dockedToolbar?.updatePadding(bottom = bottomSafeInset)
-        }
-        viewBinding.root.doOnNextLayout {
-            updateSpaceSwitcherFabPosition(
-                controller = currentController(),
-                controlsVisible = playerUiState == PlayerUiState.ControlsVisible,
-                onPositioned = {},
-            )
-        }
-        // PlayerView 内容保持与左右系统栏对齐，底部不再额外内边距，避免与 DockedToolbar 重叠留白
-        findViewById<View>(org.skepsun.kototoro.R.id.player_view).updatePadding(
-            left = bars.left,
-            right = bars.right,
-            bottom = 0,
-        )
-        return insets.consumeAll(type)
-    }
-
     // ReaderNavigationCallback implementation
     override fun onPageSelected(page: ReaderPage): Boolean {
         // Video player doesn't support page-level navigation
@@ -4494,7 +3577,7 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     override fun onChapterSelected(chapter: ContentChapter): Boolean {
-        // Handle chapter selection from ChaptersPagesSheet
+        // Handle chapter selection from the shared chapters/pages Compose content.
         val manga = currentMangaContent()
             ?: return false
         
@@ -4605,19 +3688,11 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
                 
                 if (!resolved) {
                     android.util.Log.w("VideoPlayer", "Failed to resolve stream URL for chapter ${chapter.id}")
-                    Snackbar.make(
-                        viewBinding.root,
-                        org.skepsun.kototoro.R.string.error_occurred,
-                        Snackbar.LENGTH_SHORT
-                    ).show()
+                    showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("VideoPlayer", "Error loading chapter", e)
-                Snackbar.make(
-                    viewBinding.root,
-                    org.skepsun.kototoro.R.string.error_occurred,
-                    Snackbar.LENGTH_SHORT
-                ).show()
+                showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             }
         }
         
@@ -4625,39 +3700,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun updateChapterNavButtons() {
-        // 从 ViewModel 读取实时章节列表，而不是 intent 启动时的快照
-        val chapters = chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
-            currentMangaContent()?.chapters.orEmpty()
-        }
-        if (chapters.isEmpty()) {
-            allControllers().forEach { ctl ->
-                ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_prev_chapter)?.apply {
-                    isEnabled = false
-                    alpha = 0.4f
-                }
-                ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_next_chapter)?.apply {
-                    isEnabled = false
-                    alpha = 0.4f
-                }
-            }
-            return
-        }
-
-        val currentId = readerState?.chapterId ?: chapters.first().id
-        val currentIndex = chapters.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: 0
-        val hasPrev = currentIndex > 0
-        val hasNext = currentIndex < chapters.lastIndex
-
-        allControllers().forEach { ctl ->
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_prev_chapter)?.apply {
-                isEnabled = hasPrev
-                alpha = if (hasPrev) 1f else 0.4f
-            }
-            ctl.findViewById<View>(org.skepsun.kototoro.R.id.button_next_chapter)?.apply {
-                isEnabled = hasNext
-                alpha = if (hasNext) 1f else 0.4f
-            }
-        }
         syncComposeControlState()
     }
 
@@ -4706,10 +3748,6 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
     }
 
     private fun showSeekFeedback(posMs: Long, durationMs: Long, seekOffsetMs: Long) {
-        val layout = viewBinding.seekFeedbackLayout ?: return
-        val textTv = viewBinding.seekFeedbackText ?: return
-        val progressInd = viewBinding.seekFeedbackProgress ?: return
-
         val showHours = durationMs >= 3600_000L
         val timeStr = formatTimeMs(posMs, showHours) + " / " + formatTimeMs(durationMs, showHours)
         
@@ -4722,62 +3760,69 @@ class VideoPlayerActivity : BaseFullscreenActivity<ActivityVideoPlayerBinding>()
             ""
         }
         
-        textTv.text = if (deltaStr.isNotEmpty()) "$deltaStr\n$timeStr" else timeStr
-        textTv.gravity = android.view.Gravity.CENTER
-
-        progressInd.max = 1000
-        progressInd.progress = if (durationMs > 0) ((posMs * 1000) / durationMs).toInt() else 0
-
-        layout.alpha = 1f
-        layout.visibility = android.view.View.VISIBLE
-
-        // Explicitly update the bottom TimeBar during gesture.
-        // We use viewBinding since PlayerControlView is not strictly tied to an ExoPlayer here.
-        val progressView = currentController()
-            ?.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress) as? androidx.media3.ui.TimeBar
-        if (progressView != null && durationMs > 0) {
-            progressView.setDuration(durationMs)
-            progressView.setPosition(posMs)
-        }
-        val posView = currentController()?.findViewById<android.widget.TextView>(androidx.media3.ui.R.id.exo_position)
-        if (posView != null) {
-            posView.text = formatTimeMs(posMs, showHours)
-        }
+        seekFeedbackState = VideoSeekFeedbackState(
+            text = if (deltaStr.isNotEmpty()) "$deltaStr\n$timeStr" else timeStr,
+            progress = if (durationMs > 0) posMs.toFloat() / durationMs.toFloat() else 0f,
+        )
     }
 
     private fun hideSeekFeedback() {
-        viewBinding.seekFeedbackLayout?.isVisible = false
+        seekFeedbackState = null
     }
 
     private fun openInExternalPlayer() {
         val url = currentMediaUrl
         if (url.isNullOrBlank()) {
-            Snackbar.make(viewBinding.root, R.string.no_video_loaded, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.no_video_loaded)
             return
         }
         val headers = currentMediaHeaders.orEmpty()
         val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, headers, currentVideoSource)
-        val title = viewBinding.toolbar.title?.toString()
-        ExternalPlayerHelper.openInExternalPlayer(this, proxyUrl, title)
+        val title = composeControlState.title
+        if (!ExternalPlayerHelper.openInExternalPlayer(this, proxyUrl, title)) {
+            showPlayerMessage(R.string.no_external_player)
+        }
     }
 
     private fun showDlnaDeviceSheet() {
         val url = currentMediaUrl
         if (url.isNullOrBlank()) {
-            Snackbar.make(viewBinding.root, R.string.no_video_loaded, Snackbar.LENGTH_SHORT).show()
+            showPlayerMessage(R.string.no_video_loaded)
             return
         }
+        dlnaDialogState = DlnaDeviceDialogState.Loading
+        lifecycleScope.launch {
+            val devices = SsdpDiscovery.discover(this@VideoPlayerActivity, contentHttpClient)
+            if (dlnaDialogState != null) {
+                dlnaDialogState = DlnaDeviceDialogState.Devices(devices)
+            }
+        }
+    }
+
+    private fun castToDlnaDevice(device: DlnaDevice) {
+        val url = currentMediaUrl ?: return
         val headers = currentMediaHeaders.orEmpty()
         val positionMs = mpvPlayer?.positionMs ?: 0L
-        val tag = "DlnaDeviceSheet"
-        val fm = supportFragmentManager
-        if (fm.findFragmentByTag(tag) == null) {
-            val sheet = DlnaDeviceSheet.newInstance(url, headers, positionMs)
-            sheet.onCastStarted = {
-                // Pause local playback when casting starts
-                runOnUiThread { mpvPlayer?.pause() }
+        dlnaDialogState = DlnaDeviceDialogState.Casting(device)
+        lifecycleScope.launch {
+            val lanUrl = videoLocalCacheProxy.getLanProxyUrl(url, headers)
+            if (lanUrl == null) {
+                showPlayerMessage(R.string.cast_no_wifi)
+                dlnaDialogState = null
+                return@launch
             }
-            sheet.show(fm, tag)
+            val setOk = DlnaController.setAVTransportURI(contentHttpClient, device, lanUrl)
+            if (setOk) {
+                DlnaController.play(contentHttpClient, device)
+                if (positionMs > 5000L) {
+                    DlnaController.seek(contentHttpClient, device, positionMs)
+                }
+                showPlayerMessage(getString(R.string.casting_to, device.name))
+                mpvPlayer?.pause()
+            } else {
+                showPlayerMessage(R.string.cast_failed)
+            }
+            dlnaDialogState = null
         }
     }
 }

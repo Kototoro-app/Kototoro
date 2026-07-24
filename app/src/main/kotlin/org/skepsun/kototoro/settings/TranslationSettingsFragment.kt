@@ -6,10 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.fragment.app.Fragment
-import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.settings.compose.TranslationSettingsScreen
@@ -20,48 +16,6 @@ import org.skepsun.kototoro.core.prefs.ReaderOcrMode
 import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import javax.inject.Inject
-
-@AndroidEntryPoint
-class TranslationSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var onnxModelManager: OnnxModelManager
-
-    private val settings: AppSettings by lazy { AppSettings(requireContext()) }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                TranslationSettingsRoute(
-                    settings = settings,
-                    onnxModelManager = onnxModelManager,
-                    onOpenOcrModels = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.OcrModelsSettings, null, false)
-                    },
-                    onOpenApiSettings = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.TranslationApiSettings, null, false)
-                    },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.translation_settings))
-    }
-}
 
 @Composable
 fun TranslationSettingsRoute(

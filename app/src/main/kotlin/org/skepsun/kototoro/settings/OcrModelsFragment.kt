@@ -14,11 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.translate.data.OnnxModelCategory
@@ -49,42 +45,6 @@ internal val READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS = linkedSetOf(
 )
 
 @Keep
-@AndroidEntryPoint
-class OcrModelsFragment : Fragment() {
-
-    @Inject
-    lateinit var onnxModelManager: OnnxModelManager
-
-	private val settings: AppSettings by lazy { AppSettings(requireContext()) }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                OcrModelsRoute(
-                    onnxModelManager = onnxModelManager,
-					settings = settings,
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.reader_translation_ocr_models_title))
-    }
-}
-
 @Composable
 fun OcrModelsRoute(
     onnxModelManager: OnnxModelManager,

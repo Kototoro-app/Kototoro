@@ -7,11 +7,7 @@ import android.view.ViewGroup
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.fragment.app.Fragment
-import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.router
@@ -20,54 +16,6 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.settings.compose.ServicesSettingsScreen
 import org.skepsun.kototoro.settings.compose.ServicesSettingsUiState
-
-@AndroidEntryPoint
-class ServicesSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                ServicesSettingsRoute(
-                    settings = settings,
-                    onSuggestionsClick = {
-                        (activity as? SettingsActivity)?.openDestination(
-                            SettingsDestination.SuggestionsSettings,
-                            null,
-                            false,
-                        )
-                    },
-                    onStatsClick = { router.openStatistic() },
-                    onDiscordSettingsClick = {
-                        (activity as? SettingsActivity)?.openDestination(
-                            SettingsDestination.DiscordSettings,
-                            null,
-                            false,
-                        )
-                    },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.services))
-    }
-}
 
 @Composable
 fun ServicesSettingsRoute(

@@ -472,9 +472,6 @@
     <string name="black_dark_theme">纯黑深色模式</string>
     <string name="black_dark_theme_summary">在AMOLED屏幕上更省电</string>
     <string name="blocked_by_server_message">你的访问已被服务器拦截，请尝试使用不同的网络连接访问（如VPN代理等）</string>
-    <string name="blur_mode_enhanced">强化</string>
-    <string name="blur_mode_immersive">平衡（推荐）</string>
-    <string name="blur_mode_standard">轻度</string>
     <string name="book_effect">护眼模式（蓝光过滤）</string>
     <string name="bookmark_add">添加书签</string>
     <string name="bookmark_added">书签已添加</string>

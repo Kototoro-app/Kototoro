@@ -9,19 +9,35 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
+import org.skepsun.kototoro.video.player.MpvShaderManager
 
 @Composable
 fun AIVideoEnhancementSettingsScreen(
     settings: AppSettings,
-    onAdvancedSettingsClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val shaderFiles = remember(context) {
+        MpvShaderManager.ensureShadersCopied(context)
+            .listFiles { _, name -> name.endsWith(".glsl", ignoreCase = true) }
+            .orEmpty()
+            .map { it.name }
+            .sorted()
+    }
+    var customShaders by remember(settings) {
+        mutableStateOf(settings.videoSuperResolutionCustomShaders.toShaderSet())
+    }
     val modeEntries = VideoSuperResolutionMode.entries.map {
         SettingsChoiceOption(it.name, it.name)
     }
@@ -83,12 +99,34 @@ fun AIVideoEnhancementSettingsScreen(
                     },
                 )
                 SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.video_super_resolution_advanced_settings),
-                    summary = stringResource(R.string.video_super_resolution_advanced_shader),
-                    onClick = onAdvancedSettingsClick,
-                )
+                shaderFiles.forEach { fileName ->
+                    SettingsSwitchPreference(
+                        title = fileName,
+                        summary = shaderDescription(fileName),
+                        checked = fileName in customShaders,
+                        onCheckedChange = { checked ->
+                            customShaders = customShaders.toMutableSet().apply {
+                                if (checked) add(fileName) else remove(fileName)
+                            }
+                            settings.videoSuperResolutionCustomShaders = customShaders.joinToString(",")
+                            settings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
+                        },
+                    )
+                }
             }
         }
     }
+}
+
+private fun String.toShaderSet(): Set<String> = split(',')
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+    .toSet()
+
+@Composable
+private fun shaderDescription(fileName: String): String? {
+    val resources = LocalContext.current.resources
+    val resourceName = "video_super_resolution_shader_desc_${fileName.substringBeforeLast('.').lowercase()}"
+    val resourceId = resources.getIdentifier(resourceName, "string", LocalContext.current.packageName)
+    return resourceId.takeIf { it != 0 }?.let(resources::getString)
 }

@@ -4,7 +4,10 @@ import android.content.Context
 import android.util.AttributeSet
 import `is`.xyz.mpv.BaseMPVView
 
-class CustomMpvView(context: Context, attrs: AttributeSet) : BaseMPVView(context, attrs) {
+class CustomMpvView @JvmOverloads constructor(
+	context: Context,
+	attrs: AttributeSet? = null,
+) : BaseMPVView(context, attrs) {
 
 	override fun initOptions() {
 		setVo("gpu")

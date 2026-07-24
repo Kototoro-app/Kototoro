@@ -192,7 +192,7 @@ fun DetailsCoverFrame(
                         Icon(
                             painter = rememberSafePainter(R.drawable.ic_placeholder),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(32.dp),
                         )
                     }
@@ -521,7 +521,7 @@ fun MetadataItem(
             Icon(
                 painter = rememberSafePainter(it),
                 contentDescription = label,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
                 modifier = Modifier.size(15.dp),
             )
         }
@@ -537,7 +537,7 @@ fun MetadataItem(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
                 modifier = Modifier.size(16.dp),
             )
         }

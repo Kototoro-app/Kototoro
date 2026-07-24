@@ -63,7 +63,6 @@ import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.joinToStringWithLimit
 import org.skepsun.kototoro.download.ui.dialog.ChapterSelectOptions
 import org.skepsun.kototoro.download.ui.dialog.DownloadDialogViewModel
-import org.skepsun.kototoro.main.ui.owners.BottomNavOwner
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.format
@@ -739,9 +738,6 @@ private fun showDownloadResultSnackbar(
         if (isStarted) R.string.download_started else R.string.download_added,
         Snackbar.LENGTH_LONG,
     ).apply {
-        (snackbarHostView.context.findActivity() as? BottomNavOwner)?.let { owner ->
-            anchorView = owner.bottomNav
-        }
         if (onOpenDownloads != null) {
             setAction(R.string.downloads) { onOpenDownloads() }
         }

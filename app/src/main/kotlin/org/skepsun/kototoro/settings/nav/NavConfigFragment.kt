@@ -6,45 +6,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.settings.SettingsActivity
 import org.skepsun.kototoro.settings.compose.NavConfigScreen
-
-@AndroidEntryPoint
-class NavConfigFragment : Fragment() {
-
-	private val viewModel by viewModels<NavConfigViewModel>()
-
-	override fun onCreateView(
-		inflater: LayoutInflater,
-		container: ViewGroup?,
-		savedInstanceState: Bundle?,
-	): View {
-		return ComposeView(requireContext()).apply {
-			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-			setContent {
-				KototoroTheme {
-					NavConfigRoute(
-						viewModel = viewModel,
-						modifier = Modifier,
-					)
-				}
-			}
-		}
-	}
-
-	override fun onResume() {
-		super.onResume()
-		(activity as? SettingsActivity)?.setSectionTitle(getString(R.string.main_screen_sections))
-	}
-}
 
 @Composable
 fun NavConfigRoute(

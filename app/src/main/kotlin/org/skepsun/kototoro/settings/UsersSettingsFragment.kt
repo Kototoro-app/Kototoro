@@ -12,12 +12,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,58 +37,6 @@ import org.skepsun.kototoro.settings.compose.UsersSettingsScreen
 import org.skepsun.kototoro.settings.compose.UsersSettingsUiState
 import org.skepsun.kototoro.settings.users.TrackingUserAccountSummaryProvider
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
-
-@AndroidEntryPoint
-class UsersSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    @Inject
-    lateinit var scrobblerAuthHelper: ScrobblerAuthHelper
-
-    @Inject
-    lateinit var trackingUserAccountSummaryProvider: TrackingUserAccountSummaryProvider
-
-    @Inject
-    lateinit var trackingDiscoveryService: TrackingSiteDiscoveryService
-
-    private val resumeTick = MutableStateFlow(0)
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                UsersSettingsRoute(
-                    settings = settings,
-                    scrobblerAuthHelper = scrobblerAuthHelper,
-                    trackingUserAccountSummaryProvider = trackingUserAccountSummaryProvider,
-                    trackingDiscoveryService = trackingDiscoveryService,
-                    refreshKey = resumeTick.collectAsStateWithLifecycle().value,
-                    onOpenScrobblerSettings = { service ->
-                        requireActivity().router.openScrobblerSettings(service)
-                    },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.tracking_accounts))
-        resumeTick.update { it + 1 }
-    }
-}
 
 @Composable
 fun UsersSettingsRoute(

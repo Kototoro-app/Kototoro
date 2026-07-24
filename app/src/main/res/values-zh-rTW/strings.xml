@@ -855,9 +855,6 @@
     <string name="badges_in_lists">顯示漫畫標記</string>
     <string name="bangumi">Bangumi</string>
     <string name="bind_manga_success">已成功關聯到「%s」</string>
-    <string name="blur_mode_enhanced">強化</string>
-    <string name="blur_mode_immersive">平衡（推薦）</string>
-    <string name="blur_mode_standard">輕度</string>
     <string name="book_effect">護眼模式（藍光過濾）</string>
     <string name="bookmark_position">書籤位置</string>
     <string name="bookmark_preview_unavailable">無法加載書籤預覽</string>

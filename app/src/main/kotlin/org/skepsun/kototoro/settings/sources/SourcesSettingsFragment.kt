@@ -9,13 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.router
@@ -29,44 +25,6 @@ import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SourcesSettingsScreen
 import org.skepsun.kototoro.settings.compose.SourcesSettingsUiState
 import javax.inject.Inject
-
-@AndroidEntryPoint
-class SourcesSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    private val viewModel by viewModels<SourcesSettingsViewModel>()
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                SourcesSettingsRoute(
-                    settings = settings,
-                    viewModel = viewModel,
-                    onSetupWizardClick = { router.showWelcomeSheet() },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.remote_sources))
-        viewModel.refreshLinksEnabled()
-    }
-}
 
 @Composable
 fun SourcesSettingsRoute(

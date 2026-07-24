@@ -4,13 +4,12 @@ import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.content.Intent
 import android.view.View
-import android.view.ViewGroup
-import android.view.animation.AnimationUtils
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,23 +19,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.core.view.doOnLayout
-import androidx.core.view.doOnPreDraw
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.transition.Slide
-import androidx.transition.TransitionSet
-import com.google.android.material.snackbar.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import com.kyant.backdrop.backdrops.layerBackdrop
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
@@ -56,7 +51,6 @@ import org.skepsun.kototoro.space.domain.SpaceSwitchCoordinator
 import org.skepsun.kototoro.space.domain.SpaceSwitchOrigin
 import org.skepsun.kototoro.space.domain.SpaceSwitchResult
 import javax.inject.Inject
-import kotlin.coroutines.resume
 
 internal const val EXTRA_IMMERSIVE_SESSION_SPACE_ID =
 	"org.skepsun.kototoro.extra.IMMERSIVE_SESSION_SPACE_ID"
@@ -81,15 +75,12 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var composeFabVisible by mutableStateOf(false)
 	private var composeFabEnabled by mutableStateOf(true)
 	private var composeFabAnchorBounds: Rect? = null
-	private var hideWithControlsTransition = false
-	private var launchOrigin: android.graphics.PointF? = null
-	private val fabs = LinkedHashSet<View>()
-	private var switcherOverlay: ComposeView? = null
+	private var switcherVisible by mutableStateOf(false)
 	private var switcherFabAnchorBounds by mutableStateOf<Rect?>(null)
-	private var transitionOverlay: ComposeView? = null
 	private var sessionSpaceId: SpaceId? = null
 	private var pendingRevealTarget: SpaceId? = null
-	private var fabChromeUpdateToken = 0
+	private var transitionDrawn = CompletableDeferred<Unit>()
+	private val snackbarHostState = SnackbarHostState()
 
 	fun bind(
 		activity: FragmentActivity,
@@ -103,7 +94,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 		this.origin = origin
 		this.availabilityProvider = availabilityProvider
 		this.progressFlusher = progressFlusher
-		launchOrigin = ImmersiveSpaceSwitcherTransition.consumeOrigin(activity.intent)
+		ImmersiveSpaceSwitcherTransition.consumeOrigin(activity.intent)
 		val sessionSpaceId = immersiveSessionSpaceId(
 			rawSpaceId = activity.intent.getStringExtra(EXTRA_IMMERSIVE_SESSION_SPACE_ID),
 			fallback = spaceRepository.activeSpace.value,
@@ -129,9 +120,8 @@ class SpaceSwitcherDelegate @Inject constructor(
 					}
 				}
 
-				override fun onDestroy(owner: LifecycleOwner) {
+					override fun onDestroy(owner: LifecycleOwner) {
 					dismissSwitcher()
-					dismissTransitionOverlay()
 				}
 			},
 		)
@@ -156,33 +146,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 				}
 			}
 		}
-		activity.lifecycleScope.launch {
-			activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
-				transitionController.state.collect(::updateTransitionOverlay)
-			}
-		}
-	}
-
-	fun installFab(fab: ComposeView?) {
-		if (fab == null) return
-		fabs += fab
-		fab.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-		fab.setContent {
-			KototoroTheme {
-				val activeSpaceId by spaceRepository.activeSpace.collectAsState()
-				val spaces by catalogRepository.spaces.collectAsState()
-				SpaceSwitcherFab(
-					activeSpaceId = activeSpaceId,
-					activeSpace = spaces.firstOrNull { it.id == activeSpaceId },
-					onClick = { showSwitcher() },
-					modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-				)
-			}
-		}
-		refreshMenuItems(
-			spaceRepository.activeSpace.value,
-			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
-		)
 	}
 
 	@Composable
@@ -200,28 +163,16 @@ class SpaceSwitcherDelegate @Inject constructor(
 		)
 	}
 
+	@Suppress("UNUSED_PARAMETER")
 	fun setControlsVisible(
 		visible: Boolean,
 		hideWithControlsTransition: Boolean = false,
 	) {
 		controlsVisible = visible
-		this.hideWithControlsTransition = !visible && hideWithControlsTransition
 		refreshMenuItems(
 			spaceRepository.activeSpace.value,
 			coordinator.state.value.inProgress || transitionController.state.value.isVisible,
 		)
-	}
-
-	fun addControlsHideTransition(transition: TransitionSet) {
-		fabs.forEach { target ->
-			transition.addTransition(
-				Slide(android.view.Gravity.BOTTOM)
-					.addTarget(target)
-					.setDuration(
-						target.resources.getInteger(android.R.integer.config_shortAnimTime).toLong(),
-					),
-			)
-		}
 	}
 
 	fun invalidateAvailability() {
@@ -232,38 +183,33 @@ class SpaceSwitcherDelegate @Inject constructor(
 	}
 
 	private fun showSwitcher() {
-		val activity = activity ?: return
+		activity ?: return
 		if (!featureEnabled || availabilityProvider() == SpaceSwitchAvailability.UNAVAILABLE) return
-		if (switcherOverlay != null) return
+		if (switcherVisible) return
 		switcherFabAnchorBounds = composeFabAnchorBounds
-		val rootMenuHost = RootGlassMenuHost()
-		val overlay = ComposeView(activity).apply {
-			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+		switcherVisible = true
+	}
+
+	@Composable
+	fun Overlays(modifier: Modifier = Modifier) {
+		val transitionState by transitionController.state.collectAsState()
+		val spaces by catalogRepository.spaces.collectAsState()
+		val activeSpaceId by spaceRepository.activeSpace.collectAsState()
+		LaunchedEffect(transitionState.isVisible) {
+			if (!transitionState.isVisible) pendingRevealTarget = null
 		}
-		switcherOverlay = overlay
-		activity.addContentView(
-			overlay,
-			ViewGroup.LayoutParams(
-				ViewGroup.LayoutParams.MATCH_PARENT,
-				ViewGroup.LayoutParams.MATCH_PARENT,
-			),
-		)
-		overlay.doOnPreDraw {
-			updateSwitcherFabAnchorBounds(overlay)
-		}
-		overlay.setContent {
-			KototoroTheme {
+		Box(modifier = modifier.fillMaxSize()) {
+			if (switcherVisible) {
+				val activity = activity ?: return@Box
+				val rootMenuHost = remember { RootGlassMenuHost() }
 				CompositionLocalProvider(LocalRootGlassMenuHost provides rootMenuHost) {
-					RouteLiquidGlassBackdrop(ownerKey = overlay, active = true) { backdrop ->
+					RouteLiquidGlassBackdrop(ownerKey = this@SpaceSwitcherDelegate, active = true) { backdrop ->
 						Box(
 							modifier = Modifier
 								.fillMaxSize()
 								.layerBackdrop(backdrop),
 						) {
-				val activeSpaceId by spaceRepository.activeSpace.collectAsState()
 				val switchState by coordinator.state.collectAsState()
-				val transitionState by transitionController.state.collectAsState()
-				val spaces by catalogRepository.spaces.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
 				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
 				SpaceSwitcherSheet(
@@ -301,21 +247,34 @@ class SpaceSwitcherDelegate @Inject constructor(
 					}
 				}
 			}
+			if (transitionState.isVisible) {
+				SpaceTransitionCurtain(
+					state = transitionState,
+					spaces = spaces,
+					isTargetHost = transitionState.targetSpaceId == sessionSpaceId,
+					allowReveal = isSpaceCurtainRevealHost(
+						targetSpaceId = transitionState.targetSpaceId,
+						hostSpaceId = sessionSpaceId,
+						activeSpaceId = activeSpaceId,
+					),
+					onCoverFinished = transitionController::markCovered,
+					onRevealFinished = transitionController::markRevealFinished,
+				)
+				LaunchedEffect(transitionState) {
+					androidx.compose.runtime.withFrameNanos { }
+					if (!transitionDrawn.isCompleted) transitionDrawn.complete(Unit)
+					val target = transitionState.targetSpaceId
+					if (transitionState.phase == SpaceTransitionPhase.COVERED &&
+						target != null && target == sessionSpaceId && target == spaceRepository.activeSpace.value &&
+						pendingRevealTarget != target
+					) {
+						pendingRevealTarget = target
+						transitionController.reveal(target)
+					}
+				}
+			}
+			SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
 		}
-	}
-
-	private fun updateSwitcherFabAnchorBounds(overlay: View) {
-		val fab = fabs.firstOrNull { it.isShown } ?: return
-		val fabLocation = IntArray(2)
-		val overlayLocation = IntArray(2)
-		fab.getLocationOnScreen(fabLocation)
-		overlay.getLocationOnScreen(overlayLocation)
-		switcherFabAnchorBounds = Rect(
-			left = (fabLocation[0] - overlayLocation[0]).toFloat(),
-			top = (fabLocation[1] - overlayLocation[1]).toFloat(),
-			right = (fabLocation[0] - overlayLocation[0] + fab.width).toFloat(),
-			bottom = (fabLocation[1] - overlayLocation[1] + fab.height).toFloat(),
-		)
 	}
 
 	private fun requestSwitch(target: SpaceId, resumeReading: Boolean = false) {
@@ -326,6 +285,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 			immersiveSessionRegistry.suppressMainTransitionTo(target)
 			try {
 				val animated = !settings.isReducedVisualEffectsEnabled && activity.animatorDurationScale > 0f
+				transitionDrawn = CompletableDeferred()
 				val covered = transitionController.cover(
 					from = activeSpaceId,
 					target = target,
@@ -336,7 +296,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 					immersiveSessionRegistry.completeMainTransitionSuppression(target)
 					return@launch
 				}
-				updateTransitionOverlay(transitionController.state.value)
 				awaitTransitionCurtainDraw()
 				dismissSwitcher()
 				when (val result = coordinator.requestSwitch(
@@ -379,134 +338,29 @@ class SpaceSwitcherDelegate @Inject constructor(
 	}
 
 	private fun dismissSwitcher() {
-		val overlay = switcherOverlay ?: return
-		switcherOverlay = null
+		if (!switcherVisible) return
+		switcherVisible = false
 		switcherFabAnchorBounds = null
-		overlay.disposeComposition()
-		(overlay.parent as? ViewGroup)?.removeView(overlay)
-	}
-
-	private fun updateTransitionOverlay(state: SpaceTransitionState) {
-		if (!state.isVisible) {
-			dismissTransitionOverlay()
-			return
-		}
-		val activity = activity ?: return
-		val overlay = transitionOverlay ?: ComposeView(activity).apply {
-			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-			activity.addContentView(
-				this,
-				ViewGroup.LayoutParams(
-					ViewGroup.LayoutParams.MATCH_PARENT,
-					ViewGroup.LayoutParams.MATCH_PARENT,
-				),
-			)
-			setContent {
-				KototoroTheme {
-					val transitionState by transitionController.state.collectAsState()
-					val spaces by catalogRepository.spaces.collectAsState()
-					val activeSpaceId by spaceRepository.activeSpace.collectAsState()
-					SpaceTransitionCurtain(
-						state = transitionState,
-						spaces = spaces,
-						isTargetHost = transitionState.targetSpaceId == sessionSpaceId,
-						allowReveal = isSpaceCurtainRevealHost(
-							targetSpaceId = transitionState.targetSpaceId,
-							hostSpaceId = sessionSpaceId,
-							activeSpaceId = activeSpaceId,
-						),
-						onCoverFinished = transitionController::markCovered,
-						onRevealFinished = transitionController::markRevealFinished,
-					)
-				}
-			}
-		}.also { transitionOverlay = it }
-		overlay.bringToFront()
-		val target = state.targetSpaceId
-		if (
-			state.phase == SpaceTransitionPhase.COVERED &&
-			target != null &&
-			target == sessionSpaceId &&
-			target == spaceRepository.activeSpace.value &&
-			pendingRevealTarget != target
-		) {
-			pendingRevealTarget = target
-			overlay.doOnPreDraw {
-				activity.lifecycleScope.launch { transitionController.reveal(target) }
-			}
-		}
-	}
-
-	private fun dismissTransitionOverlay() {
-		pendingRevealTarget = null
-		val overlay = transitionOverlay ?: return
-		transitionOverlay = null
-		overlay.disposeComposition()
-		(overlay.parent as? ViewGroup)?.removeView(overlay)
 	}
 
 	private suspend fun awaitTransitionCurtainDraw() {
-		val overlay = transitionOverlay ?: return
-		suspendCancellableCoroutine { continuation ->
-			overlay.doOnPreDraw {
-				if (continuation.isActive) continuation.resume(Unit)
-			}
-		}
+		transitionDrawn.await()
 	}
 
+	@Suppress("UNUSED_PARAMETER")
 	private fun refreshMenuItems(activeSpaceId: SpaceId, inProgress: Boolean) {
 		val available = availabilityProvider() != SpaceSwitchAvailability.UNAVAILABLE
 		activity ?: return
 		val shouldShowFab = featureEnabled && available && controlsVisible
 		composeFabVisible = shouldShowFab
 		composeFabEnabled = !inProgress
-		val updateToken = ++fabChromeUpdateToken
-		fabs.forEach { target ->
-			target.post {
-				if (updateToken != fabChromeUpdateToken || !target.isAttachedToWindow) return@post
-				if (shouldShowFab) {
-					target.isEnabled = !inProgress
-					if (target.visibility != View.VISIBLE) target.visibility = View.VISIBLE
-					bringViewToFrontIfNeeded(target)
-					animateFromLaunchOrigin(target)
-				} else if (target.visibility != View.GONE) {
-					target.visibility = View.GONE
-				}
-			}
-		}
-	}
-
-	private fun bringViewToFrontIfNeeded(target: View) {
-		val parent = target.parent as? ViewGroup ?: return
-		if (parent.getChildAt(parent.childCount - 1) !== target) {
-			target.bringToFront()
-		}
-	}
-
-	private fun animateFromLaunchOrigin(target: View) {
-		val origin = launchOrigin ?: return
-		if (!target.isLaidOut) {
-			target.doOnLayout { animateFromLaunchOrigin(target) }
-			return
-		}
-		launchOrigin = null
-		val location = IntArray(2)
-		target.getLocationOnScreen(location)
-		val targetCenterX = location[0] + target.width / 2f
-		val targetCenterY = location[1] + target.height / 2f
-		target.animate().cancel()
-		target.translationX = origin.x - targetCenterX
-		target.translationY = origin.y - targetCenterY
-		target.animate()
-			.translationX(0f)
-			.translationY(0f)
-			.setDuration(target.resources.getInteger(android.R.integer.config_mediumAnimTime).toLong())
-			.setInterpolator(AnimationUtils.loadInterpolator(target.context, android.R.interpolator.fast_out_slow_in))
-			.start()
 	}
 
 	private fun showMessage(messageRes: Int) {
-		snackbarAnchor?.let { Snackbar.make(it, messageRes, Snackbar.LENGTH_LONG).show() }
+		val activity = activity ?: return
+		activity.lifecycleScope.launch {
+			snackbarHostState.showSnackbar(activity.getString(messageRes), duration = SnackbarDuration.Long)
+		}
 	}
 
 	private fun returnToMain(

@@ -940,9 +940,6 @@
     <string name="basic_info">基本情報</string>
     <string name="batch_no_selection">まずソースを選択してください</string>
     <string name="bind_manga_success">「%s」に正常にバインドされました</string>
-    <string name="blur_mode_enhanced">強い</string>
-    <string name="blur_mode_immersive">バランス（推奨）</string>
-    <string name="blur_mode_standard">控えめ</string>
     <string name="bookmark_position">ブックマーク位置</string>
     <string name="bookmark_preview_unavailable">ブックマークプレビューを読み込めません</string>
     <string name="breadcrumbs_separator"><![CDATA[" > "]]></string>

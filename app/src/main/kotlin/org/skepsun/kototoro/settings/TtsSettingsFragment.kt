@@ -17,14 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.edit
-import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,52 +46,6 @@ import org.skepsun.kototoro.settings.compose.TtsSettingsUiState
 import kotlinx.coroutines.SupervisorJob
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-
-@AndroidEntryPoint
-class TtsSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var appSettings: AppSettings
-
-    private var coordinator: TtsSettingsCoordinator? = null
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val coordinator = TtsSettingsCoordinator(requireActivity(), appSettings)
-        this.coordinator = coordinator
-        coordinator.start()
-
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                TtsSettingsRoute(
-                    settings = appSettings,
-                    coordinator = coordinator,
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.tts_settings_title))
-    }
-
-    override fun onDestroyView() {
-        coordinator?.stop()
-        coordinator = null
-        super.onDestroyView()
-    }
-}
 
 @Composable
 fun TtsSettingsRoute(

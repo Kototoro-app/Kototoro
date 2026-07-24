@@ -534,7 +534,7 @@ fun DetailsHeader(
                     Text(
                         text = alternateTitlesText,
                         style = MaterialTheme.typography.labelMedium.copy(lineHeight = 16.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -675,7 +675,7 @@ fun DetailsHeader(
                             Text(
                                 text = progressLabel,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                             )
                         }
@@ -953,7 +953,7 @@ private fun SourceSummaryIcon(
             Icon(
                 painter = painterResource(R.drawable.ic_manga_source),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(14.dp),
             )
         }
@@ -1004,7 +1004,7 @@ private fun TrackingSuggestionCard(
                             match.title,
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1217,7 +1217,7 @@ private fun CompactRatingChip(
                 tint = if (score > 0) {
                     MaterialTheme.colorScheme.primary
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    MaterialTheme.colorScheme.onSurface
                 }.copy(alpha = if (enabled) contentAlpha else 0.45f),
                 modifier = Modifier.size(15.dp),
             )
@@ -1227,7 +1227,7 @@ private fun CompactRatingChip(
                 color = if (enabled) {
                     MaterialTheme.colorScheme.onSurface
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    MaterialTheme.colorScheme.onSurface
                 }.copy(alpha = contentAlpha),
                 maxLines = 1,
             )
@@ -1282,7 +1282,7 @@ private fun DetailsSourceSelectorButton(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -1331,7 +1331,7 @@ private fun DetailsSourceSelectorButton(
                             Icon(
                                 painter = painterResource(R.drawable.ic_manga_source),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.size(14.dp),
                             )
                         }
@@ -1343,7 +1343,7 @@ private fun DetailsSourceSelectorButton(
                         color = if (isPrimaryEnabled) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            MaterialTheme.colorScheme.onSurface
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1367,7 +1367,7 @@ private fun DetailsSourceSelectorButton(
                         tint = if (isMenuEnabled) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                         },
                         modifier = Modifier.size(16.dp),
                     )
@@ -1548,7 +1548,7 @@ private fun SourceOptionCard(
                         Icon(
                             painter = painterResource(R.drawable.ic_extension),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(28.dp),
                         )
                     }
@@ -1583,7 +1583,7 @@ private fun SourceOptionCard(
             Text(
                 text = displayModel.subtitle,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -1615,7 +1615,7 @@ private fun SourceOptionCard(
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            iconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            iconContentColor = MaterialTheme.colorScheme.onSurface,
                         ),
                     )
                     GlassDropdownMenu(
@@ -1740,7 +1740,7 @@ fun MetadataSourceSheet(
                     Text(
                         text = stringResource(R.string.details_entity_metadata_sheet_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
 	                if (currentOptions.isNotEmpty()) {
 	                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1812,7 +1812,7 @@ fun MetadataSourceSheet(
 	                        Text(
 	                            text = stringResource(R.string.details_metadata_source_login_hint),
 	                            style = MaterialTheme.typography.bodySmall,
-	                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+	                            color = MaterialTheme.colorScheme.onSurface,
 	                        )
 	                    }
 	            }
@@ -1830,7 +1830,7 @@ fun MetadataSourceSheet(
                             Text(
                                 text = stringResource(R.string.nothing_found),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -2011,7 +2011,7 @@ fun ReadingSourceSheet(
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
 	                if (currentOptions.isNotEmpty()) {
 	                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2147,7 +2147,7 @@ fun ReadingSourceSheet(
                                     Text(
                                         text = stringResource(R.string.search),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
                             } else {
@@ -2158,7 +2158,7 @@ fun ReadingSourceSheet(
                                         stringResource(R.string.nothing_found)
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                         }
@@ -2195,12 +2195,12 @@ fun ReadingSourceSheet(
                                         Text(
                                             text = stringResource(R.string.details_source_search_no_results_group),
                                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                         )
                                         Icon(
                                             imageVector = Icons.Filled.KeyboardArrowDown,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = MaterialTheme.colorScheme.onSurface,
                                             modifier = Modifier.graphicsLayer {
                                                 rotationZ = if (showEmptySources) 180f else 0f
                                             },
@@ -2237,12 +2237,12 @@ fun ReadingSourceSheet(
                                         Text(
                                             text = stringResource(R.string.unavailable),
                                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                         )
                                         Icon(
                                             imageVector = Icons.Filled.KeyboardArrowDown,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = MaterialTheme.colorScheme.onSurface,
                                             modifier = Modifier.graphicsLayer {
                                                 rotationZ = if (showUnavailableSources) 180f else 0f
                                             },
@@ -2391,7 +2391,7 @@ private fun SourceSearchField(
                         Icon(
                             imageVector = Icons.Filled.Search,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(18.dp),
                         )
                         Box(
@@ -2402,7 +2402,7 @@ private fun SourceSearchField(
                                 Text(
                                     text = stringResource(R.string.search),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                             innerTextField()
@@ -2540,7 +2540,7 @@ private fun MetadataSearchSection(
             Text(
                 text = if (isAuthorized) section.items.size.toString() else stringResource(R.string.sign_in),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
         section.errorMessage?.let { errorMessage ->
@@ -2577,7 +2577,7 @@ private fun MetadataSearchSection(
                     Text(
                         text = stringResource(R.string.search),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -2585,7 +2585,7 @@ private fun MetadataSearchSection(
                 Text(
                     text = stringResource(R.string.nothing_found),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -2655,7 +2655,7 @@ private fun ReadingSearchSection(
                         Text(
                             text = stringResource(R.string.search),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -2663,7 +2663,7 @@ private fun ReadingSearchSection(
                     Text(
                         text = stringResource(R.string.nothing_found),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -2699,7 +2699,7 @@ private fun SourceOptionSheetRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             if (isSelected) {
@@ -2753,7 +2753,7 @@ private fun TrackingSearchResultRow(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -2841,7 +2841,7 @@ private fun TrackingSearchResultCard(
                 Text(
                     text = altTitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -2859,7 +2859,7 @@ private fun TrackingSearchResultCard(
                 Text(
                     text = infoParts.joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -2911,7 +2911,7 @@ private fun SourceCoverImage(
             Icon(
                 painter = rememberSafePainter(R.drawable.ic_placeholder),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(24.dp),
             )
         } else {
@@ -2978,7 +2978,7 @@ private fun ReadingSearchResultRow(
                 Text(
                     text = rememberResolvedSourceTitle(item.source),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -3068,7 +3068,7 @@ private fun ReadingSearchResultCard(
                 Text(
                     text = pluralStringResource(R.plurals.chapters, chaptersCount, chaptersCount),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -3200,7 +3200,7 @@ private fun EntityChapterSourceCard(
                 Text(
                     text = supportingText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

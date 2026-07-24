@@ -11,9 +11,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.fragment.app.Fragment
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -23,60 +20,6 @@ import org.skepsun.kototoro.settings.compose.NotificationSettingsUiState
 import org.skepsun.kototoro.settings.utils.RingtonePickContract
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper
 import javax.inject.Inject
-import dagger.hilt.android.AndroidEntryPoint
-
-@AndroidEntryPoint
-class NotificationSettingsLegacyFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    @Inject
-    lateinit var notificationHelper: TrackerNotificationHelper
-
-    private val ringtonePickContract = registerForActivityResult(
-        RingtonePickContract(R.string.notification_sound),
-    ) { uri ->
-        settings.notificationSound = uri ?: return@registerForActivityResult
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                NotificationSettingsRoute(
-                    settings = settings,
-                    onNotificationSoundClick = {
-                        ringtonePickContract.launch(settings.notificationSound)
-                    },
-                    onNotificationVibrateClick = {
-                        notificationHelper.updateChannels()
-                        startActivity(
-                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                                .putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().packageName)
-                                .putExtra(Settings.EXTRA_CHANNEL_ID, TrackerNotificationHelper.CHANNEL_ID),
-                        )
-                    },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.notifications))
-    }
-}
 
 @Composable
 fun NotificationSettingsRoute(

@@ -68,12 +68,12 @@ fun DetailsBindingCard(
                     painter = rememberSafePainter(badgeIconRes),
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = badge,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -96,7 +96,7 @@ fun DetailsBindingCard(
                         Icon(
                             painter = rememberSafePainter(badgeIconRes),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(24.dp),
                         )
                     } else {
@@ -121,7 +121,7 @@ fun DetailsBindingCard(
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -129,7 +129,7 @@ fun DetailsBindingCard(
                         Text(
                             text = supportingText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )

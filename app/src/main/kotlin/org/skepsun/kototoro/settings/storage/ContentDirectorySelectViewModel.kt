@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.settings.storage
 
 import android.net.Uri
-import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,26 +17,25 @@ import javax.inject.Inject
 class ContentDirectorySelectViewModel @Inject constructor(
 	private val storageManager: LocalStorageManager,
 	private val settings: AppSettings,
-	private val savedStateHandle: SavedStateHandle,
 ) : BaseViewModel() {
 
-	private val contentType: String
-		get() = savedStateHandle.get<String>(ContentDirectorySelectDialog.ARG_CONTENT_TYPE)
-			?: ContentDirectorySelectDialog.CONTENT_TYPE_MANGA
+	private var contentType: String? = null
 
 	val items = MutableStateFlow(emptyList<DirectoryModel>())
 	val onDismissDialog = MutableEventFlow<Unit>()
 	val onPickDirectory = MutableEventFlow<Unit>()
 
-	init {
+	fun initialize(contentType: String) {
+		if (this.contentType != null) return
+		this.contentType = contentType
 		refresh()
 	}
 
 	fun onItemClick(item: DirectoryModel) {
 		if (item.file != null) {
 			when (contentType) {
-				ContentDirectorySelectDialog.CONTENT_TYPE_NOVEL -> settings.novelStorageDir = item.file
-				ContentDirectorySelectDialog.CONTENT_TYPE_VIDEO -> settings.videoStorageDir = item.file
+				CONTENT_TYPE_NOVEL -> settings.novelStorageDir = item.file
+				CONTENT_TYPE_VIDEO -> settings.videoStorageDir = item.file
 				else -> settings.mangaStorageDir = item.file
 			}
 			onDismissDialog.call(Unit)
@@ -54,8 +52,8 @@ class ContentDirectorySelectViewModel @Inject constructor(
 				throw AccessDeniedException(dir)
 			}
 			when (contentType) {
-				ContentDirectorySelectDialog.CONTENT_TYPE_NOVEL -> settings.novelStorageDir = dir
-				ContentDirectorySelectDialog.CONTENT_TYPE_VIDEO -> settings.videoStorageDir = dir
+				CONTENT_TYPE_NOVEL -> settings.novelStorageDir = dir
+				CONTENT_TYPE_VIDEO -> settings.videoStorageDir = dir
 				else -> {
 					if (dir !in storageManager.getApplicationStorageDirs()) {
 						settings.mangaStorageDir = dir
@@ -70,13 +68,13 @@ class ContentDirectorySelectViewModel @Inject constructor(
 	fun refresh() {
 		launchJob(Dispatchers.Default) {
 			val defaultValue = when (contentType) {
-				ContentDirectorySelectDialog.CONTENT_TYPE_NOVEL -> storageManager.getDefaultNovelWriteableDir()
-				ContentDirectorySelectDialog.CONTENT_TYPE_VIDEO -> storageManager.getDefaultVideoWriteableDir()
+				CONTENT_TYPE_NOVEL -> storageManager.getDefaultNovelWriteableDir()
+				CONTENT_TYPE_VIDEO -> storageManager.getDefaultVideoWriteableDir()
 				else -> storageManager.getDefaultWriteableDir()
 			}
 			val available = when (contentType) {
-				ContentDirectorySelectDialog.CONTENT_TYPE_NOVEL -> storageManager.getNovelWriteableDirs()
-				ContentDirectorySelectDialog.CONTENT_TYPE_VIDEO -> storageManager.getVideoWriteableDirs()
+				CONTENT_TYPE_NOVEL -> storageManager.getNovelWriteableDirs()
+				CONTENT_TYPE_VIDEO -> storageManager.getVideoWriteableDirs()
 				else -> storageManager.getWriteableDirs()
 			}
 			items.value = buildList(available.size + 1) {
@@ -100,5 +98,11 @@ class ContentDirectorySelectViewModel @Inject constructor(
 				)
 			}
 		}
+	}
+
+	companion object {
+		const val CONTENT_TYPE_MANGA = "manga"
+		const val CONTENT_TYPE_NOVEL = "novel"
+		const val CONTENT_TYPE_VIDEO = "video"
 	}
 }

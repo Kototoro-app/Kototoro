@@ -21,6 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.dimensionResource
@@ -70,6 +75,8 @@ import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderBottomChrome
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeCallbacks
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderTopChrome
+import org.skepsun.kototoro.reader.novel.compose.NovelTtsVoiceDialog
+import org.skepsun.kototoro.reader.novel.compose.NovelTtsVoiceDialogState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
 import org.skepsun.kototoro.space.domain.SpaceSwitchAvailability
@@ -87,6 +94,7 @@ class NovelReaderActivity :
     ReaderControlDelegate.OnInteractionListener {
 
     private val composeReaderViewModel: NovelComposeReaderViewModel by viewModels()
+    private val snackbarHostState = SnackbarHostState()
     private val contentRoot: View
         get() = window.decorView
 
@@ -170,6 +178,7 @@ class NovelReaderActivity :
     private var isTtsBound = false
     private var ttsScrollModeChapterIndex: Int = -1
     private var readerPalette: NovelReaderPalette? = null
+    private var ttsVoiceDialogState by mutableStateOf<NovelTtsVoiceDialogState?>(null)
 
     private val ttsConnection = object : android.content.ServiceConnection {
         override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
@@ -562,6 +571,15 @@ class NovelReaderActivity :
                                     .size(56.dp),
                             )
                         }
+                        ttsVoiceDialogState?.let { NovelTtsVoiceDialog(it) }
+                        SnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(16.dp),
+                        )
+                        spaceSwitcherDelegate.Overlays()
                     }
                 }
             }
@@ -912,38 +930,42 @@ class NovelReaderActivity :
                     runOnUiThread {
                         if (voices.isNotEmpty()) {
                             val sortedVoices = voices.sortedBy { it.locale.displayName }
-                            val entries = sortedVoices.map { "${it.locale.displayName} (${it.name})" }.toTypedArray()
-                            val values = sortedVoices.map { it.name }.toTypedArray()
+                            val entries = sortedVoices.map { "${it.locale.displayName} (${it.name})" }
+                            val values = sortedVoices.map { it.name }
                             
-                            val currentVoice = prefs.getString("tts_system_voice", "default")
+                            val currentVoice = prefs.getString("tts_system_voice", "default") ?: "default"
                             val checkedItem = values.indexOf(currentVoice).takeIf { it >= 0 } ?: 0
                             
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(this@NovelReaderActivity)
-                                .setTitle("选择系统音色")
-                                .setSingleChoiceItems(entries, checkedItem) { dialog, which ->
+                            ttsVoiceDialogState = NovelTtsVoiceDialogState(
+                                title = getString(R.string.tts_system_voice),
+                                entries = entries,
+                                selectedIndex = checkedItem,
+                                onSelected = { which ->
                                     prefs.edit().putString("tts_system_voice", values[which]).apply()
-                                    dialog.dismiss()
+                                    dismissTtsVoiceDialog()
                                     ttsService?.reloadEngine()
-                                }
-                                .setOnDismissListener { localTts?.shutdown() }
-                                .show()
+                                },
+                                onDismiss = ::dismissTtsVoiceDialog,
+                            ).withCleanup { localTts?.shutdown() }
                         } else {
                             val locales = try { localTts?.availableLanguages?.toList()?.sortedBy { it.displayName } } catch (e:Exception) { null } ?: emptyList()
                             if (locales.isNotEmpty()) {
-                                    val entries = locales.map { it.displayName }.toTypedArray()
-                                    val values = locales.map { it.toLanguageTag() }.toTypedArray()
-                                    val currentVoice = prefs.getString("tts_system_voice", "default")
+                                    val entries = locales.map { it.displayName }
+                                    val values = locales.map { it.toLanguageTag() }
+                                    val currentVoice = prefs.getString("tts_system_voice", "default") ?: "default"
                                     val checkedItem = values.indexOf(currentVoice).takeIf { it >= 0 } ?: 0
                                     
-                                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this@NovelReaderActivity)
-                                        .setTitle("选择系统语言（OEM）")
-                                        .setSingleChoiceItems(entries, checkedItem) { dialog, which ->
+                                    ttsVoiceDialogState = NovelTtsVoiceDialogState(
+                                        title = getString(R.string.tts_system_voice),
+                                        entries = entries,
+                                        selectedIndex = checkedItem,
+                                        onSelected = { which ->
                                             prefs.edit().putString("tts_system_voice", values[which]).apply()
-                                            dialog.dismiss()
+                                            dismissTtsVoiceDialog()
                                             ttsService?.reloadEngine()
-                                        }
-                                        .setOnDismissListener { localTts?.shutdown() }
-                                        .show()
+                                        },
+                                        onDismiss = ::dismissTtsVoiceDialog,
+                                    ).withCleanup { localTts?.shutdown() }
                             } else {
                                 showReaderMessage("未检测到可用的系统音色", 2000L)
                                 localTts?.shutdown()
@@ -962,27 +984,46 @@ class NovelReaderActivity :
             } catch (e: Exception) { emptyList() }
             
             if (configs.isNotEmpty()) {
-                val names = configs.map { it.name }.toTypedArray()
-                val values = configs.map { it.url }.toTypedArray()
+                val names = configs.map { it.name }
+                val values = configs.map { it.url }
                 
-                val currentVoice = prefs.getString("tts_legado_voice", "")
+                val currentVoice = prefs.getString("tts_legado_voice", "").orEmpty()
                 val checkedItem = values.indexOf(currentVoice).takeIf { it >= 0 } ?: 0
                 
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                    .setTitle("选择网络音色")
-                    .setSingleChoiceItems(names, checkedItem) { dialog, which ->
+                ttsVoiceDialogState = NovelTtsVoiceDialogState(
+                    title = getString(R.string.tts_legado_voice),
+                    entries = names,
+                    selectedIndex = checkedItem,
+                    onSelected = { which ->
                         prefs.edit().putString("tts_legado_voice", values[which]).apply()
-                        dialog.dismiss()
+                        dismissTtsVoiceDialog()
                         ttsService?.reloadEngine()
-                    }
-                    .setNeutralButton("管理配置") { _, _ ->
+                    },
+                    onDismiss = ::dismissTtsVoiceDialog,
+                    onManage = {
+                        dismissTtsVoiceDialog()
                         startActivity(android.content.Intent(this@NovelReaderActivity, org.skepsun.kototoro.settings.SettingsActivity::class.java))
-                    }
-                    .show()
+                    },
+                )
             } else {
                 showReaderMessage("尚未导入任何网络音源配置，请前往设置导入", 2500L)
             }
         }
+    }
+
+    private fun NovelTtsVoiceDialogState.withCleanup(cleanup: () -> Unit): NovelTtsVoiceDialogState = copy(
+        onDismiss = {
+            cleanup()
+            onDismiss()
+        },
+        onSelected = { index ->
+            cleanup()
+            onSelected(index)
+        },
+    )
+
+    private fun dismissTtsVoiceDialog() {
+        ttsVoiceDialogState = null
     }
 
     private fun onTtsClick() {
@@ -1250,22 +1291,14 @@ class NovelReaderActivity :
                 currentChapterIndex = chapters.size - 1
                 currentPageIndex = 0
 
-                android.widget.Toast.makeText(
-                    this@NovelReaderActivity,
-                    getString(R.string.novel_loading_online_chapter),
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+                showReaderMessage(R.string.novel_loading_online_chapter)
             } else {
                 android.util.Log.w("NovelReaderActivity", "Chapter not found in online source either, falling back to first chapter")
                 currentChapterIndex = 0
                 currentPageIndex = 0
 
                 if (state != null && state.chapterId != 0L) {
-                    android.widget.Toast.makeText(
-                        this@NovelReaderActivity,
-                        getString(R.string.novel_chapter_not_downloaded),
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
+                    showReaderMessage(R.string.novel_chapter_not_downloaded, SnackbarDuration.Long)
                 }
             }
         } else if (!restored) {
@@ -1275,6 +1308,15 @@ class NovelReaderActivity :
         
         // Clear Intent state to avoid reusing it
         intent.removeExtra(org.skepsun.kototoro.core.nav.ReaderIntent.EXTRA_STATE)
+    }
+
+    private fun showReaderMessage(
+        messageRes: Int,
+        duration: SnackbarDuration = SnackbarDuration.Short,
+    ) {
+        lifecycleScope.launch {
+            snackbarHostState.showSnackbar(getString(messageRes), duration = duration)
+        }
     }
 
     private fun loadChapters() {

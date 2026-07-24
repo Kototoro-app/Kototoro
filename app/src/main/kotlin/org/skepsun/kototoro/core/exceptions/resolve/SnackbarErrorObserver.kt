@@ -8,7 +8,6 @@ import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.isSerializable
-import org.skepsun.kototoro.main.ui.owners.BottomNavOwner
 import org.skepsun.kototoro.main.ui.owners.BottomSheetOwner
 import org.skepsun.kototoro.parsers.exception.ParseException
 
@@ -33,7 +32,6 @@ class SnackbarErrorObserver(
 			return
 		}
 		when (activity) {
-			is BottomNavOwner -> snackbar.anchorView = activity.bottomNav
 			is BottomSheetOwner -> snackbar.anchorView = activity.bottomSheet
 		}
 		if (canResolve(value)) {

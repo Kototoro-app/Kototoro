@@ -1,179 +1,278 @@
 package org.skepsun.kototoro.reader.ui.colorfilter
 
-import android.content.res.Resources
 import android.os.Bundle
-import android.view.View
-import android.widget.CompoundButton
-import android.widget.ImageView
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
-import coil3.ImageLoader
-import coil3.asDrawable
-import coil3.request.ErrorResult
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.slider.LabelFormatter
-import com.google.android.material.slider.Slider
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.util.ext.consumeAllSystemBarsInsets
-import org.skepsun.kototoro.core.util.ext.observe
-import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.setChecked
-import org.skepsun.kototoro.core.util.ext.setValueRounded
-import org.skepsun.kototoro.core.util.ext.systemBarsInsets
-import org.skepsun.kototoro.core.util.progress.ImageRequestIndicatorListener
-import org.skepsun.kototoro.databinding.ActivityColorFilterBinding
-import org.skepsun.kototoro.parsers.model.ContentPage
-import org.skepsun.kototoro.parsers.util.format
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
-import javax.inject.Inject
+import org.skepsun.kototoro.reader.ui.compose.toComposeColorFilter
 
 @AndroidEntryPoint
-class ColorFilterConfigActivity :
-	BaseActivity<ActivityColorFilterBinding>(),
-	Slider.OnChangeListener,
-	View.OnClickListener, CompoundButton.OnCheckedChangeListener {
+class ColorFilterConfigActivity : BaseComposeActivity() {
 
-	@Inject
-	lateinit var coil: ImageLoader
+    private val viewModel: ColorFilterConfigViewModel by viewModels()
+    private var saveDialogVisible by mutableStateOf(false)
+    private var discardDialogVisible by mutableStateOf(false)
 
-	private val viewModel: ColorFilterConfigViewModel by viewModels()
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            KototoroTheme {
+                val colorFilter by viewModel.colorFilter.collectAsStateWithLifecycle()
+                val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+                BackHandler { handleNavigateBack() }
+                LaunchedEffect(Unit) {
+                    viewModel.onDismiss.collect { finishAfterTransition() }
+                }
+                ColorFilterScreen(
+                    colorFilter = colorFilter,
+                    isLoading = isLoading,
+                    onClose = ::handleNavigateBack,
+                    onDone = { saveDialogVisible = true },
+                    onReset = viewModel::reset,
+                )
+                if (saveDialogVisible) SaveTargetDialog()
+                if (discardDialogVisible) UnsavedChangesDialog()
+            }
+        }
+    }
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		setContentView(ActivityColorFilterBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		viewBinding.sliderBrightness.addOnChangeListener(this)
-		viewBinding.sliderContrast.addOnChangeListener(this)
-		val formatter = PercentLabelFormatter(resources)
-		viewBinding.sliderContrast.setLabelFormatter(formatter)
-		viewBinding.sliderBrightness.setLabelFormatter(formatter)
-		viewBinding.switchInvert.setOnCheckedChangeListener(this)
-		viewBinding.switchGrayscale.setOnCheckedChangeListener(this)
-		viewBinding.switchBook.setOnCheckedChangeListener(this)
-		viewBinding.buttonDone.setOnClickListener(this)
-		viewBinding.buttonReset.setOnClickListener(this)
+    private fun handleNavigateBack() {
+        if (viewModel.isChanged) {
+            discardDialogVisible = true
+        } else {
+            finishAfterTransition()
+        }
+    }
 
-		onBackPressedDispatcher.addCallback(ColorFilterConfigBackPressedDispatcher(this, viewModel))
+    @Composable
+    private fun ColorFilterScreen(
+        colorFilter: ReaderColorFilter?,
+        isLoading: Boolean,
+        onClose: () -> Unit,
+        onDone: () -> Unit,
+        onReset: () -> Unit,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            ) {
+                TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
+                Text(stringResource(R.string.color_correction), style = MaterialTheme.typography.titleLarge)
+                Button(onClick = onDone, enabled = !isLoading) { Text(stringResource(R.string.done)) }
+            }
+            HorizontalDivider()
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            ) {
+                PreviewComparison(colorFilter = colorFilter, isLoading = isLoading)
+                ToggleRow(
+                    label = stringResource(R.string.invert_colors),
+                    checked = colorFilter?.isInverted == true,
+                    enabled = !isLoading,
+                    onCheckedChange = viewModel::setInversion,
+                )
+                ToggleRow(
+                    label = stringResource(R.string.grayscale),
+                    checked = colorFilter?.isGrayscale == true,
+                    enabled = !isLoading,
+                    onCheckedChange = viewModel::setGrayscale,
+                )
+                FilterSlider(
+                    label = stringResource(R.string.brightness),
+                    value = colorFilter?.brightness ?: 0f,
+                    enabled = !isLoading,
+                    onValueChange = viewModel::setBrightness,
+                )
+                FilterSlider(
+                    label = stringResource(R.string.contrast),
+                    value = colorFilter?.contrast ?: 0f,
+                    enabled = !isLoading,
+                    onValueChange = viewModel::setContrast,
+                )
+                ToggleRow(
+                    label = stringResource(R.string.book_effect),
+                    checked = colorFilter?.isBookBackground == true,
+                    enabled = !isLoading,
+                    onCheckedChange = viewModel::setBookEffect,
+                )
+                OutlinedButton(onClick = onReset, enabled = !isLoading, modifier = Modifier.align(Alignment.End)) {
+                    Text(stringResource(R.string.reset))
+                }
+            }
+        }
+    }
 
-		viewModel.colorFilter.observe(this, this::onColorFilterChanged)
-		viewModel.isLoading.observe(this, this::onLoadingChanged)
-		viewModel.onDismiss.observeEvent(this) {
-			finishAfterTransition()
-		}
-		loadPreview(viewModel.preview)
-	}
+    @Composable
+    private fun PreviewComparison(colorFilter: ReaderColorFilter?, isLoading: Boolean) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            PreviewImage(colorFilter = null, modifier = Modifier.weight(1f))
+            PreviewImage(colorFilter = colorFilter, modifier = Modifier.weight(1f))
+        }
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+    }
 
-	override fun onApplyWindowInsets(
-		v: View,
-		insets: WindowInsetsCompat
-	): WindowInsetsCompat {
-		val barsInsets = insets.systemBarsInsets
-		viewBinding.root.setPadding(
-			barsInsets.left,
-			barsInsets.top,
-			barsInsets.right,
-			barsInsets.bottom,
-		)
-		return insets.consumeAllSystemBarsInsets()
-	}
+    @Composable
+    private fun PreviewImage(colorFilter: ReaderColorFilter?, modifier: Modifier = Modifier) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            modifier = modifier.heightIn(min = 150.dp, max = 280.dp),
+        ) {
+            AsyncImage(
+                model = viewModel.preview,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                colorFilter = colorFilter.toComposeColorFilter(),
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+            )
+        }
+    }
 
-	override fun onValueChange(slider: Slider, value: Float, fromUser: Boolean) {
-		if (fromUser) {
-			when (slider.id) {
-				R.id.slider_brightness -> viewModel.setBrightness(value)
-				R.id.slider_contrast -> viewModel.setContrast(value)
-			}
-		}
-	}
+    @Composable
+    private fun ToggleRow(
+        label: String,
+        checked: Boolean,
+        enabled: Boolean,
+        onCheckedChange: (Boolean) -> Unit,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        }
+    }
 
-	override fun onCheckedChanged(buttonView: CompoundButton, isChecked: Boolean) {
-		when (buttonView.id) {
-			R.id.switch_invert -> viewModel.setInversion(isChecked)
-			R.id.switch_grayscale -> viewModel.setGrayscale(isChecked)
-			R.id.switch_book -> viewModel.setBookEffect(isChecked)
-		}
-	}
+    @Composable
+    private fun FilterSlider(
+        label: String,
+        value: Float,
+        enabled: Boolean,
+        onValueChange: (Float) -> Unit,
+    ) {
+        Column {
+            Text("$label: ${((value + 1f) * 100).toInt()}%", style = MaterialTheme.typography.titleMedium)
+            Slider(
+                value = value.coerceIn(-1f, 1f),
+                onValueChange = onValueChange,
+                valueRange = -1f..1f,
+                enabled = enabled,
+            )
+        }
+    }
 
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_done -> showSaveConfirmation()
-			R.id.button_reset -> viewModel.reset()
-		}
-	}
+    @Composable
+    private fun SaveTargetDialog() {
+        AlertDialog(
+            onDismissRequest = { saveDialogVisible = false },
+            title = { Text(stringResource(R.string.apply)) },
+            text = { Text(stringResource(R.string.color_correction_apply_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    saveDialogVisible = false
+                    viewModel.save()
+                }) { Text(stringResource(R.string.this_manga)) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        saveDialogVisible = false
+                        viewModel.saveGlobally()
+                    }) { Text(stringResource(R.string.globally)) }
+                    TextButton(onClick = { saveDialogVisible = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            },
+        )
+    }
 
-	fun showSaveConfirmation() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.apply)
-			.setMessage(R.string.color_correction_apply_text)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.this_manga) { _, _ ->
-				viewModel.save()
-			}.setNeutralButton(R.string.globally) { _, _ ->
-				viewModel.saveGlobally()
-			}.show()
-	}
-
-	private fun onColorFilterChanged(readerColorFilter: ReaderColorFilter?) {
-		viewBinding.sliderBrightness.setValueRounded(readerColorFilter?.brightness ?: 0f)
-		viewBinding.sliderContrast.setValueRounded(readerColorFilter?.contrast ?: 0f)
-		viewBinding.switchInvert.setChecked(readerColorFilter?.isInverted == true, false)
-		viewBinding.switchGrayscale.setChecked(readerColorFilter?.isGrayscale == true, false)
-		viewBinding.switchBook.setChecked(readerColorFilter?.isBookBackground == true, false)
-		viewBinding.imageViewAfter.colorFilter = readerColorFilter?.toColorFilter()
-	}
-
-	private fun loadPreview(page: ContentPage) = with(viewBinding.imageViewBefore) {
-		addImageRequestListener(
-			ImageRequestIndicatorListener(
-				listOf(
-					viewBinding.progressBefore,
-					viewBinding.progressAfter,
-				),
-			),
-		)
-		addImageRequestListener(ShadowImageListener(viewBinding.imageViewAfter))
-		setImageAsync(page)
-	}
-
-	private fun onLoadingChanged(isLoading: Boolean) {
-		viewBinding.sliderContrast.isEnabled = !isLoading
-		viewBinding.sliderBrightness.isEnabled = !isLoading
-		viewBinding.switchInvert.isEnabled = !isLoading
-		viewBinding.switchGrayscale.isEnabled = !isLoading
-		viewBinding.buttonDone.isEnabled = !isLoading
-	}
-
-	private class PercentLabelFormatter(resources: Resources) : LabelFormatter {
-
-		private val pattern = resources.getString(R.string.percent_string_pattern)
-
-		override fun getFormattedValue(value: Float): String {
-			val percent = ((value + 1f) * 100).format(0)
-			return pattern.format(percent)
-		}
-	}
-
-	private class ShadowImageListener(
-		private val imageView: ImageView
-	) : ImageRequest.Listener {
-
-		override fun onError(request: ImageRequest, result: ErrorResult) {
-			super.onError(request, result)
-			imageView.setImageDrawable(result.image?.asDrawable(imageView.resources))
-		}
-
-		override fun onStart(request: ImageRequest) {
-			super.onStart(request)
-			imageView.setImageDrawable(request.placeholder()?.asDrawable(imageView.resources))
-		}
-
-		override fun onSuccess(request: ImageRequest, result: SuccessResult) {
-			super.onSuccess(request, result)
-			imageView.setImageDrawable(result.image.asDrawable(imageView.resources))
-		}
-	}
+    @Composable
+    private fun UnsavedChangesDialog() {
+        AlertDialog(
+            onDismissRequest = { discardDialogVisible = false },
+            title = { Text(stringResource(R.string.color_correction)) },
+            text = { Text(stringResource(R.string.text_unsaved_changes_prompt)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    discardDialogVisible = false
+                    saveDialogVisible = true
+                }) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        discardDialogVisible = false
+                        finishAfterTransition()
+                    }) { Text(stringResource(R.string.discard)) }
+                    TextButton(onClick = { discardDialogVisible = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                }
+            },
+        )
+    }
 }

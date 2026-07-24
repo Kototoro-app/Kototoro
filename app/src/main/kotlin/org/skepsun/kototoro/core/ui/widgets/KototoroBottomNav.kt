@@ -68,6 +68,16 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 
+data class BadgeInfo(val number: Int = 0, val isVisible: Boolean = false)
+
+data class BottomNavState(
+    val items: List<NavItem> = emptyList(),
+    val selectedItemId: Int = 0,
+    val labelVisibilityMode: Int = NavigationBarView.LABEL_VISIBILITY_AUTO,
+    val badges: Map<Int, BadgeInfo> = emptyMap(),
+    val itemVisibility: Map<Int, Boolean> = emptyMap(),
+)
+
 @Immutable
 private data class BottomNavPrefs(
     val isFloating: Boolean,

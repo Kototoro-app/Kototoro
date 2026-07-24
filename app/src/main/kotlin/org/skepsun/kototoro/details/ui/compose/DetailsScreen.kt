@@ -2069,7 +2069,7 @@ private fun TrackingRelationItemSheet(
                                 Icon(
                                     painter = rememberSafePainter(R.drawable.ic_placeholder),
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(32.dp),
                                 )
                             }
@@ -2115,7 +2115,7 @@ private fun TrackingRelationItemSheet(
                         Text(
                             text = supportingText,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                 }
@@ -2199,7 +2199,7 @@ private fun TrackingRelationMetaBlock(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = value,
@@ -2267,7 +2267,7 @@ private fun TrackingReviewsSheet(
                         Text(
                             text = stringResource(R.string.details_no_reviews),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
                         )
                     }
@@ -2322,7 +2322,7 @@ private fun TrackingReviewsSheet(
                                     Text(
                                         text = metaLine,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                     )
                                 }
                             }
@@ -2402,7 +2402,7 @@ private fun TrackingCommentsSheet(
                         Text(
                             text = stringResource(R.string.details_no_comments),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
                         )
                     }
@@ -2456,7 +2456,7 @@ private fun TrackingCommentsSheet(
                                         Text(
                                             text = metaLine,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                         )
                                     }
                                 }
@@ -2502,7 +2502,7 @@ private fun TrackingCommentsSheet(
                                                 Text(
                                                     text = reply.content,
                                                     style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    color = MaterialTheme.colorScheme.onSurface,
                                                 )
                                             }
                                         }
@@ -3467,7 +3467,7 @@ private fun DetailsPaneDragHandle(
             .width(28.dp)
             .height(4.dp)
             .background(
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f),
                 shape = RoundedCornerShape(999.dp),
             ),
     )
@@ -3643,7 +3643,7 @@ private fun LabeledGridSlider(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         KototoroSlider(
             value = value,
@@ -3797,7 +3797,7 @@ private fun MenuSelectionIndicator(
     val strokeColor = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.48f)
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.48f)
     }
     Box(
         modifier = Modifier
@@ -3837,7 +3837,7 @@ internal fun DetailsDockActionButton(
     val contentColor by animateColorAsState(
         targetValue = when {
             modernStyle && isSelected -> MaterialTheme.colorScheme.primary
-            modernStyle -> MaterialTheme.colorScheme.onSurfaceVariant
+            modernStyle -> MaterialTheme.colorScheme.onSurface
             isSelected -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.onSurface
         },
@@ -4494,7 +4494,7 @@ private fun ReadingRecordSummaryCard(
             Text(
                 text = "${stringResource(R.string.recent_reading)}: ${lastReadAt?.let(::formatDateTime) ?: "-"}",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -4524,7 +4524,7 @@ private fun SummaryMetric(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
         Text(value, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -4595,7 +4595,7 @@ private fun RecordEmptyLine(text: String) {
             .fillMaxWidth()
             .padding(vertical = 10.dp),
         style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Center,
     )
 }
@@ -4640,7 +4640,7 @@ private fun TimelineSessionRow(
             Text(
                 text = formatDuration(session.endAt - session.startAt),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
         Text(
@@ -4699,7 +4699,7 @@ private fun TimelineJumpRow(
             Text(
                 text = stringResource(R.string.restore_jump_point),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -4721,12 +4721,12 @@ private fun RecordCompactRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
         }
         Text(
             text = trailing,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.End,
             maxLines = 2,
             modifier = Modifier.width(92.dp),
@@ -5258,7 +5258,7 @@ private fun DetailsSupplementMetadataCard(
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.width(96.dp),
                     )
                     Text(
@@ -5344,13 +5344,13 @@ fun EntityRelationCard(
                     Icon(
                         painter = rememberSafePainter(typeIconRes),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(14.dp),
                     )
                     Text(
                         text = typeLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -5358,7 +5358,7 @@ fun EntityRelationCard(
                     Icon(
                         painter = rememberSafePainter(R.drawable.ic_arrow_forward),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(14.dp),
                     )
                 }
@@ -5373,13 +5373,13 @@ fun EntityRelationCard(
                     Icon(
                         painter = rememberSafePainter(R.drawable.ic_open_external),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(14.dp),
                     )
                     Text(
                         text = stringResource(R.string.open_website),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -5387,7 +5387,7 @@ fun EntityRelationCard(
                     Icon(
                         painter = rememberSafePainter(R.drawable.ic_arrow_forward),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(14.dp),
                     )
                 }
@@ -5414,7 +5414,7 @@ fun EntityRelationCard(
                         Icon(
                             painter = rememberSafePainter(typeIconRes ?: R.drawable.ic_placeholder),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(30.dp),
                         )
                     }
@@ -5534,7 +5534,7 @@ private fun DetailsRelationItemCard(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -5543,7 +5543,7 @@ private fun DetailsRelationItemCard(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )

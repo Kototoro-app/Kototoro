@@ -57,7 +57,7 @@ class JsonSourcesViewModel @Inject constructor(
 	private val appSettings: AppSettings,
 ) : BaseViewModel() {
 
-	val sourceTypeFilter: JsonSourceType? = savedStateHandle.get<String>(JsonSourcesFragment.ARG_SOURCE_TYPE)
+	val sourceTypeFilter: JsonSourceType? = savedStateHandle.get<String>(ARG_SOURCE_TYPE)
 		?.let { runCatching { JsonSourceType.valueOf(it) }.getOrNull() }
 	
 	/**
@@ -555,6 +555,8 @@ class JsonSourcesViewModel @Inject constructor(
 		}
 	}
 }
+
+private const val ARG_SOURCE_TYPE = "json_source_type"
 
 /**
  * Result of testing a JSON source.

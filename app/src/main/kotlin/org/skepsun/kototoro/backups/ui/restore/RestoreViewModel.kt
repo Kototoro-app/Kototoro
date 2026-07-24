@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.backups.ui.restore
 
 import android.content.Context
-import androidx.lifecycle.SavedStateHandle
+import android.net.Uri
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -12,10 +12,8 @@ import kotlinx.serialization.json.decodeFromStream
 import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
-import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
@@ -27,7 +25,6 @@ import javax.inject.Inject
 
 @HiltViewModel
 class RestoreViewModel @Inject constructor(
-	savedStateHandle: SavedStateHandle,
 	@ApplicationContext context: Context,
 ) : BaseViewModel() {
 
@@ -36,25 +33,28 @@ class RestoreViewModel @Inject constructor(
 		ignoreUnknownKeys = true
 	}
 
-	val uri = savedStateHandle.get<String>(AppRouter.KEY_FILE)?.toUriOrNull()
+	var uri: Uri? = null
+		private set
 	private val contentResolver = context.contentResolver
 	private val cacheDir = context.cacheDir
 
 	val availableEntries = MutableStateFlow<List<BackupSectionModel>>(emptyList())
 	val backupDate = MutableStateFlow<Date?>(null)
 
-	init {
+	fun initialize(uri: Uri) {
+		if (this.uri != null) return
+		this.uri = uri
 		launchLoadingJob(Dispatchers.Default) {
 			loadBackupInfo()
 		}
 	}
 
 	private suspend fun loadBackupInfo() {
+		val sourceUri = uri ?: throw FileNotFoundException()
 		val sections = runInterruptible(Dispatchers.IO) {
-			if (uri == null) throw FileNotFoundException()
 			val tempFile = File.createTempFile("manual_backup_restore_inspect", ".bk.zip", cacheDir)
 			try {
-				contentResolver.openInputStream(uri)?.use { input ->
+				contentResolver.openInputStream(sourceUri)?.use { input ->
 					tempFile.outputStream().use { output -> input.copyTo(output) }
 				} ?: throw FileNotFoundException()
 				BackupPayloadGuard.requireRestorableWorkSnapshot(
@@ -64,7 +64,7 @@ class RestoreViewModel @Inject constructor(
 			} finally {
 				if (tempFile.exists()) tempFile.delete()
 			}
-			ZipInputStream(contentResolver.openInputStream(uri)).use { stream ->
+			ZipInputStream(contentResolver.openInputStream(sourceUri)).use { stream ->
 				val result = EnumSet.noneOf(BackupSection::class.java)
 				var entry = stream.nextEntry
 				while (entry != null) {

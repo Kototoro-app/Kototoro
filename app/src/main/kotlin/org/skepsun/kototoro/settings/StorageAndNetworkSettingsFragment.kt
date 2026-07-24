@@ -17,15 +17,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import java.net.Proxy
 import javax.inject.Inject
 import kotlinx.coroutines.launch
@@ -53,59 +49,6 @@ import org.skepsun.kototoro.settings.compose.StorageAndNetworkSettingsScreen
 import org.skepsun.kototoro.settings.userdata.storage.DataCleanupSettingsViewModel
 import org.skepsun.kototoro.settings.userdata.storage.StorageUsage
 import org.skepsun.kototoro.settings.userdata.storage.StorageUsageCategory
-
-@AndroidEntryPoint
-class StorageAndNetworkSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    private val viewModel by viewModels<StorageAndNetworkSettingsViewModel>()
-    private val dataCleanupViewModel by viewModels<DataCleanupSettingsViewModel>()
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                StorageAndNetworkSettingsRoute(
-                    settings = settings,
-                    viewModel = viewModel,
-                    dataCleanupViewModel = dataCleanupViewModel,
-                    onOpenCacheLimits = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.CacheLimitsSettings, null, false)
-                    },
-                    onOpenDataRemoval = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.DataCleanupSettings, null, false)
-                    },
-                    onOpenProxySettings = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.ProxySettings, null, false)
-                    },
-                    onConfirmClearSearchHistory = dataCleanupViewModel::clearSearchHistory,
-                    onConfirmClearCookies = dataCleanupViewModel::clearCookies,
-                    onConfirmCleanupChapters = dataCleanupViewModel::cleanupChapters,
-                    onConfirmClearLocalManga = dataCleanupViewModel::clearLocalMangaContent,
-                    onConfirmClearLocalNovels = dataCleanupViewModel::clearLocalNovelContent,
-                    onConfirmClearLocalVideos = dataCleanupViewModel::clearLocalVideoContent,
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.storage_and_network))
-    }
-}
 
 @Composable
 fun StorageAndNetworkSettingsRoute(

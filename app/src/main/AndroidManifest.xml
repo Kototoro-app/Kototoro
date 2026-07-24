@@ -205,6 +205,10 @@
 			android:name="org.skepsun.kototoro.details.ui.related.RelatedContentActivity"
 			android:label="@string/related_manga" />
 		<activity
+			android:name="org.skepsun.kototoro.core.ui.dialog.ErrorDetailsActivity"
+			android:excludeFromRecents="true"
+			android:label="@string/error_details" />
+		<activity
 			android:name="org.skepsun.kototoro.discover.ui.TrackingDiscoverActivity"
 			android:label="@string/discover" />
 		<activity

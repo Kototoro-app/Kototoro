@@ -8,13 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ComposeView
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import com.google.android.material.snackbar.Snackbar
-import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -29,125 +25,6 @@ import org.skepsun.kototoro.settings.SettingsActivity
 import org.skepsun.kototoro.settings.SettingsDestination
 import org.skepsun.kototoro.settings.compose.DataCleanupSettingsScreen
 import javax.inject.Inject
-
-@AndroidEntryPoint
-class DataCleanupSettingsFragment : Fragment() {
-
-    private val viewModel by viewModels<DataCleanupSettingsViewModel>()
-
-    @Inject
-    lateinit var appSettings: AppSettings
-
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent {
-                KototoroTheme {
-                    DataCleanupSettingsRoute(
-                        settings = appSettings,
-                        viewModel = viewModel,
-                        onClearLocalManga = ::clearLocalManga,
-                        onClearLocalNovels = ::clearLocalNovels,
-                        onClearLocalVideos = ::clearLocalVideos,
-                        onClearSearchHistory = ::clearSearchHistory,
-                        onClearCookies = ::clearCookies,
-                        onDeleteReadChapters = ::cleanupChapters,
-                        onOpenEntityOrganize = ::openEntityOrganize,
-                    )
-                }
-            }
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.data_removal))
-        
-        viewModel.onError.observeEvent(viewLifecycleOwner, SnackbarErrorObserver(view, this))
-        viewModel.onActionDone.observeEvent(viewLifecycleOwner, ReversibleActionObserver(view))
-        viewModel.onChaptersCleanedUp.observeEvent(viewLifecycleOwner, ::onChaptersCleanedUp)
-    }
-
-    private fun onChaptersCleanedUp(result: Pair<Int, Long>) {
-        val c = context ?: return
-        val text = if (result.first == 0 && result.second == 0L) {
-            c.getString(R.string.no_chapters_deleted)
-        } else {
-            c.getString(
-                R.string.chapters_deleted_pattern,
-                c.resources.getQuantityStringSafe(R.plurals.chapters, result.first, result.first),
-                FileSize.BYTES.format(c, result.second),
-            )
-        }
-        view?.let { Snackbar.make(it, text, Snackbar.LENGTH_SHORT).show() }
-    }
-
-    private fun clearSearchHistory() {
-        buildAlertDialog(context ?: return) {
-            setTitle(R.string.clear_search_history)
-            setMessage(R.string.text_clear_search_history_prompt)
-            setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(R.string.clear) { _, _ ->
-                viewModel.clearSearchHistory()
-            }
-        }.show()
-    }
-
-    private fun clearCookies() {
-        buildAlertDialog(context ?: return) {
-            setTitle(R.string.clear_cookies)
-            setMessage(R.string.text_clear_cookies_prompt)
-            setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(R.string.clear) { _, _ ->
-                viewModel.clearCookies()
-            }
-        }.show()
-    }
-
-    private fun cleanupChapters() {
-        buildAlertDialog(context ?: return) {
-            setTitle(R.string.delete_read_chapters)
-            setMessage(R.string.delete_read_chapters_prompt)
-            setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(R.string.delete) { _, _ ->
-                viewModel.cleanupChapters()
-            }
-        }.show()
-    }
-
-    private fun clearLocalManga() {
-        buildAlertDialog(context ?: return) {
-            setTitle(R.string.clear_local_manga_storage)
-            setMessage(R.string.clear_local_manga_storage_prompt)
-            setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(R.string.clear) { _, _ ->
-                viewModel.clearLocalMangaContent()
-            }
-        }.show()
-    }
-
-    private fun clearLocalNovels() {
-        buildAlertDialog(context ?: return) {
-            setTitle(R.string.clear_local_novel_storage)
-            setMessage(R.string.clear_local_novel_storage_prompt)
-            setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(R.string.clear) { _, _ ->
-                viewModel.clearLocalNovelContent()
-            }
-        }.show()
-    }
-
-    private fun clearLocalVideos() {
-        buildAlertDialog(context ?: return) {
-            setTitle(R.string.clear_local_video_storage)
-            setMessage(R.string.clear_local_video_storage_prompt)
-            setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(R.string.clear) { _, _ ->
-                viewModel.clearLocalVideoContent()
-            }
-        }.show()
-    }
-}
 
 @Composable
 fun DataCleanupSettingsRoute(
@@ -328,8 +205,4 @@ fun DataCleanupSettingsRoute(
         onOpenEntityOrganize = onOpenEntityOrganize,
         modifier = modifier,
     )
-}
-
-private fun DataCleanupSettingsFragment.openEntityOrganize() {
-    (activity as? SettingsActivity)?.openDestination(SettingsDestination.EntityOrganizeSettings, null, false)
 }

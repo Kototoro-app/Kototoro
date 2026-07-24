@@ -3,31 +3,24 @@ package org.skepsun.kototoro.search.ui.multi
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import androidx.activity.viewModels
-import androidx.core.view.WindowInsetsCompat
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ShareHelper
-import org.skepsun.kototoro.databinding.ActivitySearchComposeBinding
 import org.skepsun.kototoro.search.ui.compose.SearchResultsRoute
 
 @AndroidEntryPoint
-class SearchActivity : BaseActivity<ActivitySearchComposeBinding>() {
+class SearchActivity : BaseComposeActivity() {
 
 	private val viewModel by viewModels<SearchViewModel>()
 	private val isPickMode by lazy { intent.getBooleanExtra(AppRouter.KEY_PICK_MODE, false) }
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivitySearchComposeBinding.inflate(layoutInflater))
-
-		viewBinding.composeView.setContent {
-			KototoroTheme {
+		setComposeContent {
 				SearchResultsRoute(
 					viewModel = viewModel,
 					onBackClick = ::finishAfterTransition,
@@ -69,18 +62,13 @@ class SearchActivity : BaseActivity<ActivitySearchComposeBinding>() {
 						ShareHelper(this).shareContentLinks(items)
 					},
 					onSaveSelection = { items ->
-						router.showDownloadDialog(items, viewBinding.composeView)
+						router.showDownloadDialog(items)
 					},
 					onFavouriteSelection = { items ->
 						router.showFavoriteDialog(items)
 					},
 					isPickMode = isPickMode,
 				)
-			}
 		}
-	}
-
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		return insets
 	}
 }

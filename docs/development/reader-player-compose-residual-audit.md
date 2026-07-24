@@ -19,7 +19,7 @@
 
 | 功能 | 当前状态 | 主要残留 |
 | --- | --- | --- |
-| 小说阅读器 | 主体基本完成 Compose 化 | View Dialog、疑似无引用 XML |
+| 小说阅读器 | 界面承载已完成纯 Compose 化 | 窗口级 `decorView` 适配 |
 | 漫画阅读器 | 阅读主体为 Compose，工具面板仍混合 | Fragment Sheet、ViewBinding、XML、辅助 View Activity |
 | 视频播放器 | 仍是 View 主体的混合架构 | ViewBinding Activity、XML 控制层、`ComposeView` 岛、Fragment Sheet |
 
@@ -35,50 +35,74 @@ View 残留。
 
 ### 现役 Fragment 与 XML
 
-共享章节、页面和书签面板仍是 `BaseAdaptiveSheet<SheetChaptersPagesBinding>`：
+共享章节、页面和书签内容已由 `ChaptersPagesTabsContent` 直接服务详情页和漫画 Reader Compose
+根。Reader 的普通入口、书签长按入口以及 iOS/非 iOS 控制样式均不再打开 Fragment。
+
+旧 `BaseAdaptiveSheet<SheetChaptersPagesBinding>`、菜单适配器、AppRouter 兼容方法、Reader
+Fragment 关闭兜底和 XML/`ComposeView` 宿主均已删除：
 
 - `app/src/main/kotlin/org/skepsun/kototoro/details/ui/pager/ChaptersPagesSheet.kt`
 - `app/src/main/res/layout/sheet_chapters_pages.xml`
 
-该 XML 内部包含 `ComposeView`，形成 Fragment → XML → Compose 的过渡结构。该面板同时
-服务详情页和阅读器，迁移时必须保留两处入口、三态展开行为、当前章节定位及返回手势。
+详情页和 Reader 现在都以 Compose 直接拥有章节、页面和书签内容，不再保留
+Fragment → XML → `ComposeView` 过渡结构。
 
-翻译任务面板仍是完整的 ViewBinding Fragment：
+翻译任务面板运行时入口已切换到状态提升的 Compose `ModalBottomSheet`：
+
+- `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/compose/ComposeTranslationTaskPanel.kt`
+
+新面板直接观察 `ReaderViewModel.translationTaskPanelVersion`，保留任务筛选、状态汇总、失败页
+重试、逐页结构化日志、复制和单页重试。无 UI 的 `TranslationTaskBenchmarkFormatter` 负责解析
+跨页耗时 p50/p95、缓存命中率、OCR 管线/回退/引擎/失败码分布，以及逐页语言、OCR、耗时、
+失败原因和时间线。二次引用核验后，以下无运行时调用方的旧文件已经删除：
 
 - `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/TranslationTaskPanelSheet.kt`
 - `app/src/main/res/layout/sheet_translation_task_panel.xml`
 - `app/src/main/res/layout/item_translation_task_panel.xml`
 
-它仍依赖 `View.OnClickListener`、RecyclerView/Adapter 和 `MaterialAlertDialogBuilder`。
+漫画翻译任务面板运行时路径不再依赖 `View.OnClickListener`、RecyclerView/Adapter、
+ViewBinding、Fragment 或 `MaterialAlertDialogBuilder`。旧报告额外输出的设备/模型配置、翻译
+样例对和 ROI 结论文案未进入新面板；核心任务操作与可观测性能指标已经迁移。
 
-`ReaderActivity` 内仍有 `MaterialAlertDialogBuilder` 调用。它们属于 View Dialog 过渡层，
-后续应由状态提升的 Compose Dialog 替代。
+`ReaderActivity` 的翻译快捷操作与语言选择已迁为 Controller 持有状态的 Compose
+`AlertDialog`。漫画 Reader 核心路径不再包含 View Dialog。
 
 ### 辅助功能的 View Activity
 
 以下页面不是核心阅读画布，但仍属于漫画阅读器功能链：
 
-- `PageCropActivity` 使用 `setContentView(R.layout.activity_page_crop)`：
+- `PageCropActivity` 已使用 Compose 根布局，标题栏、比例选择、保存/取消、Insets 和状态均由
+  Compose 管理；uCrop 官方仅提供 View API，因此唯一的 `UCropView` 通过 `AndroidView` 作为
+  受控第三方互操作边界：
   `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/PageCropActivity.kt`
-- 页面裁剪布局：
+- 原页面裁剪布局已删除：
   `app/src/main/res/layout/activity_page_crop.xml`
-- `ColorFilterConfigActivity` 使用 `ActivityColorFilterBinding`：
+- `ColorFilterConfigActivity` 已改为 Compose 根，预览、滤镜开关、参数滑块、保存目标选择和
+  未保存更改确认均由 Compose 管理：
   `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/colorfilter/ColorFilterConfigActivity.kt`
-- 颜色滤镜布局：
-  `app/src/main/res/layout/activity_color_filter.xml`
-  和 `app/src/main/res/layout-w600dp-land/activity_color_filter.xml`
+- 原返回分派器及手机/横向大屏两套 ViewBinding XML 已删除；颜色滤镜配置路径不再保留
+  ViewBinding、View Dialog 或 XML 过渡实现。
 
-### 疑似无引用遗留
+### 已清理遗留
 
-静态引用扫描未发现以下旧组件被活动界面实例化：
+二次引用核验后已删除以下无消费者旧组件：
 
 - `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/ReaderActionsView.kt`
   - 自定义 View 内部创建 `ComposeView`
 - `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/ScrollTimerControlView.kt`
   - 自定义 View 内部 inflate `ViewScrollTimerBinding`
+- `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/ReaderInfoBarView.kt`
+  - 信息栏的进度、时间、电量、背景与对比描边均已有 Compose 实现
+- `app/src/main/kotlin/org/skepsun/kototoro/reader/ui/ReaderToastView.kt`
+  - 无运行时消费者，Reader 提示状态已由 Compose 根管理
 - `app/src/main/res/layout/layout_reader_actions.xml`
 
-这些项目适合作为清理候选，但删除前应再次检查反射、布局类名引用和变体资源。
+同时删除了 `attrs.xml` 中仅供旧 `ReaderInfoBarView` 使用的 styleable。删除前已检查生产源码、
+资源引用、布局类名和变体资源，没有发现运行时消费者。
+
+详情页旧 `ReadButtonDelegate` 已无构造调用方，其 `MaterialSplitButton`、`PopupMenu` 和 View
+监听实现已删除。仍由 Compose 详情页调用的阅读器启动逻辑已迁入 `DetailsReaderLauncher.kt`，
+启动状态匹配与跳转行为保持不变。
 
 ## 小说阅读器
 
@@ -89,82 +113,96 @@ View 残留。
 Adapter 或 `setContentView` 残留。
 
 Activity 对 `window.decorView` 的访问仅用于窗口级交互和锚点，不代表 View UI 树重新承载
-了小说阅读器。
+了小说阅读器。但按“功能代码零 View 引用”的严格目标，它仍需由 Compose 触觉反馈、Compose
+消息宿主和窗口级 API 替代，不能视为最终清零。
 
-### 现役 View Dialog
+### Compose Dialog
 
-`NovelReaderActivity` 仍有三组 `MaterialAlertDialogBuilder` 调用，主要用于 TTS 音色等
-选择流程：
+TTS 系统音色、OEM 语言回退和 Legado 网络音源选择已统一为状态提升的 Material3 Compose
+`AlertDialog`：
 
 - `app/src/main/kotlin/org/skepsun/kototoro/reader/novel/NovelReaderActivity.kt`
+- `app/src/main/kotlin/org/skepsun/kototoro/reader/novel/compose/NovelTtsVoiceDialog.kt`
 
-这些弹窗使小说阅读器尚未达到严格意义上的纯 Compose。迁移时应将弹窗可见性、选项和
-结果提升为 Compose 状态，并由 Compose `AlertDialog` 或自适应 Compose Sheet 展示。
+`NovelReaderActivity` 的运行时 UI 路径已不再引用 `MaterialAlertDialogBuilder`、`ComposeView`、
+ViewBinding、Fragment、`setContentView` 或 `findViewById`。系统 TTS 的原生服务对象仅负责
+查询音色，并在 Compose 对话框选择或关闭时释放，不参与 UI 承载。
 
-### 疑似无引用 XML
+### 已清理 XML
 
-当前源码和资源引用扫描没有找到以下文件的消费者：
+二次引用核验后已删除以下无消费者文件：
 
 - `app/src/main/res/layout/activity_novel_reader.xml`
 - `app/src/main/res/layout/sheet_novel_settings.xml`
 - `app/src/main/res/layout/item_bookmark_novel.xml`
 
-它们是小说阅读器迁移后的优先清理候选。
+小说阅读器不再保留旧 Activity、设置 Sheet 或书签 item XML。
 
 ## 视频播放器
 
 ### Activity 根结构
 
-`VideoPlayerActivity` 仍继承 `BaseFullscreenActivity<ActivityVideoPlayerBinding>`，并通过
-`setContentView(ActivityVideoPlayerBinding.inflate(layoutInflater))` 创建界面：
+`VideoPlayerActivity` 已切换为 `BaseComposeFullscreenActivity`，Activity 级 `setContent` 直接
+承载播放器根界面。以下过渡结构已删除：
 
-- `app/src/main/kotlin/org/skepsun/kototoro/video/ui/VideoPlayerActivity.kt`
 - `app/src/main/res/layout/activity_video_player.xml`
 - `app/src/main/res/layout-port/activity_video_player.xml`
-
-当前根界面仍大量使用 `findViewById`、`MaterialToolbar`、`ImageButton`、`MaterialButton`、
-`TextView`、Media3 `DefaultTimeBar` 和其他传统 View。
+- `ActivityVideoPlayerBinding`
+- `MaterialToolbar` 与 Media3 `PlayerControlView`
 
 ### ComposeView 过渡岛
 
-`VideoPlayerActivity` 至少存在三处 `ComposeView` 承载点：
+播放器运行路径中的 `ComposeView` 已清零。控制 chrome、Dialog、手势反馈、字幕覆盖、锁屏覆盖、
+seek 反馈及空间切换 FAB 共享 Activity 的同一 Compose 状态树。
 
-1. 运行时创建的顶部控制区。
-2. 运行时创建的底部控制区。
-3. 从现有 XML View 树中通过 `findViewById<ComposeView>` 获取的 Compose 内容。
+字幕覆盖、锁屏触摸拦截/解锁按钮以及拖拽 seek 时间与进度反馈也已迁入同一 Compose 状态树，
+对应的 XML `TextView`、`View`、`ImageButton`、`LinearProgressIndicator` 和反向更新传统
+`DefaultTimeBar` 的代码均已删除。
 
-这说明播放器当前是 View 容器托管局部 Compose，而不是 Compose 根界面托管必要的
-Android View。
+MPV 初始化通过一次性就绪信号与 Compose `AndroidView` 创建时序协调，媒体加载会等待 Surface
+初始化完成，避免 `lateinit` 未初始化和首次 Composition 时序竞争。
 
 ### 现役 XML 控制层
 
-播放器仍保留以下主要布局：
+旧横竖屏控制布局已删除：
 
-- `app/src/main/res/layout/video_controller.xml`
 - `app/src/main/res/layout/video_player_docked_toolbar.xml`
 - `app/src/main/res/layout/video_player_docked_toolbar_portrait.xml`
-- `app/src/main/res/layout/dialog_video_player_info.xml`
 
-视频信息弹窗由 `VideoPlayerActivity` 直接 inflate
-`dialog_video_player_info.xml`，同时播放器内仍有多处 `MaterialAlertDialogBuilder`。
+视频信息弹窗已由 Compose `AlertDialog` 承载，可选择的等宽诊断文本继续复用原有数据生成逻辑：
+
+- `app/src/main/kotlin/org/skepsun/kototoro/video/ui/compose/VideoPlayerInfoDialog.kt`
+
+旧 `dialog_video_player_info.xml` 已删除。Activity 级字幕、音轨、清晰度、画面比例、播放速度、
+默认速度和跳转间隔选择已统一为 Compose 单选对话框；MPV 初始化失败提示也已改为 Compose
+`AlertDialog`。`VideoPlayerActivity` 自身不再使用 `MaterialAlertDialogBuilder`。
+
+`MpvConfigManager` 已收敛为纯文件读写组件，不再创建 `TextInputEditText`、`ScrollView` 或
+`MaterialAlertDialogBuilder`。mpv.conf 的指南、多行等宽编辑、保存、重置和反馈由 Compose
+播放设置页直接管理。
 
 ### 现役 Fragment Sheet
 
 以下面板均继承 `BaseAdaptiveSheet` 并使用 ViewBinding/XML：
 
-- `VideoSettingsSheet` / `sheet_video_settings.xml`
-- `VideoSubtitleSettingsSheet` / `sheet_video_subtitle_settings.xml`
-- `VideoDanmakuSettingsSheet` / `sheet_video_danmaku_settings.xml`
-- `VideoSuperResolutionSheet` / `sheet_video_super_resolution.xml`
-- `VideoSuperResolutionAdvancedSheet` /
-  `sheet_video_super_resolution_advanced.xml`
+旧 `VideoSettingsSheet` / `sheet_video_settings.xml` 已确认无运行时入口后删除。播放器现役设置
+入口由 `buildPlayerSettingsActions()` 提供，重复的字幕、音轨、速度、比例等选择已由 Compose
+单选对话框承载。
 
-对应 Kotlin 文件位于：
+旧 `VideoSubtitleSettingsSheet` 与 `VideoDanmakuSettingsSheet` 及对应 XML 同样没有运行时入口，
+已删除。现役字幕轨道选择和弹幕开关保留在播放器设置动作中；高级样式选项后续直接进入
+Compose 设置面板。
 
-`app/src/main/kotlin/org/skepsun/kototoro/video/ui/`
+播放器超分辨率模式、预设子模式和自定义 GLSL 开关已由
+`VideoSuperResolutionDialog.kt` 统一承载；旧 `VideoSuperResolutionSheet` 及主 XML 已删除。
+全局 AI 视频增强 Compose 设置页也已直接承载自定义 GLSL 开关，旧高级 Sheet 与 XML 已删除。
 
-DLNA 设备面板仍直接继承 `BottomSheetDialogFragment`，通过 `inflate` 和 `findViewById`
-创建 RecyclerView 界面：
+DLNA 设备发现与投屏命令已由 Activity 协程管理，加载、空状态、设备列表和投屏中状态由
+Compose 对话框承载：
+
+- `app/src/main/kotlin/org/skepsun/kototoro/video/ui/compose/DlnaDeviceDialog.kt`
+
+旧 `BottomSheetDialogFragment`、RecyclerView Adapter 和 XML 已删除：
 
 - `app/src/main/kotlin/org/skepsun/kototoro/video/ui/DlnaDeviceSheet.kt`
 - `app/src/main/res/layout/sheet_dlna_devices.xml`
@@ -180,23 +218,29 @@ MPV `SurfaceView`、弹幕 `DanmakuView` 及类似播放器渲染组件不应为
 
 因此，底层渲染 View 属于受控互操作，不应与 `ComposeView` 过渡岛混为一谈。
 
-### 疑似无引用资源
+最终形态的渲染互操作边界已集中到
+`app/src/main/kotlin/org/skepsun/kototoro/video/ui/compose/VideoPlayerRenderLayer.kt`：它只通过
+`AndroidView` 承载 `CustomMpvView` 与 `DanmakuView`，不包含工具栏、控制器、弹窗或其他传统
+View UI。Activity 已接入该根；Surface 手势、`PixelCopy` 截图和第三方渲染 View 属于明确的平台
+互操作边界，不是 `ComposeView` 过渡态。
 
-静态引用扫描没有发现以下旧工具栏布局的调用方：
+### 已删除无引用资源
+
+资源别名、构建变体、生成绑定和运行时资源名查找均未发现消费者后，已删除旧工具栏布局：
 
 - `app/src/main/res/layout/video_player_docked_toolbar_old.xml`
-
-删除前仍需检查资源别名、构建变体和运行时资源名查找。
+- `app/src/main/res/layout/video_controller.xml`
+- `app/src/main/res/layout/video_player_docked_toolbar.xml`
+- `app/src/main/res/layout/video_player_docked_toolbar_portrait.xml`
+- `app/src/main/res/layout/item_video_demo.xml`
 
 ## 推荐迁移顺序
 
-1. 删除经过二次引用核验的小说阅读器 XML 和旧漫画阅读器 View/布局。
-2. 将小说阅读器剩余 View Dialog 迁移为 Compose Dialog。
-3. 将漫画阅读器翻译任务面板迁移为状态提升的 Compose 面板。
-4. 将共享章节面板改为纯 Compose，同时保留详情页和阅读器入口。
-5. 把视频播放器根控制层迁移到 Compose，以 `AndroidView` 保留必要渲染面。
-6. 迁移视频设置、字幕、弹幕、超分辨率和 DLNA Fragment Sheet。
-7. 删除播放器 `ComposeView` 岛、ViewBinding 根布局及确认无引用的旧 XML。
+1. 如仍需完整翻译导出报告，将设备/模型配置和样例对加入 formatter。
+2. 播放器传统 Snackbar/Toast 反馈已收敛为 Compose `SnackbarHost`；空间切换 Delegate 的
+   选择层、玻璃菜单宿主与切换幕布也已嵌入漫画、小说、视频各自的 Compose 根树，不再动态
+   创建 `ComposeView` 或调用 `addContentView`。
+3. 无引用的 `item_video_demo.xml` 已删除；继续以运行时交互验收替代过渡层清理。
 
 ## 删除与验收门槛
 

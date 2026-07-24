@@ -2,112 +2,136 @@ package org.skepsun.kototoro.picker.ui
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import androidx.activity.viewModels
-import androidx.coordinatorlayout.widget.CoordinatorLayout
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isGone
-import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
-import androidx.fragment.app.commit
-import com.google.android.material.appbar.AppBarLayout
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.exceptions.resolve.DialogErrorObserver
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.ui.BaseActivity
-import org.skepsun.kototoro.core.util.ext.consume
-import org.skepsun.kototoro.core.util.ext.observe
+import org.skepsun.kototoro.core.nav.router
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.databinding.ActivityPickerBinding
-import org.skepsun.kototoro.main.ui.owners.SnackbarOwner
-import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.picker.ui.manga.ContentPickerFragment
-import org.skepsun.kototoro.picker.ui.page.PagePickerFragment
+import org.skepsun.kototoro.details.ui.pager.pages.compose.PagesScreen
+import org.skepsun.kototoro.details.ui.pager.pages.compose.pagePreviewGridColumns
+import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
+import org.skepsun.kototoro.picker.ui.manga.ContentPickerViewModel
+import org.skepsun.kototoro.picker.ui.page.PagePickerViewModel
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import java.io.File
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class PageImagePickActivity : BaseActivity<ActivityPickerBinding>(),
-	SnackbarOwner {
+class PageImagePickActivity : BaseComposeActivity() {
+    @Inject lateinit var pageSaveHelperFactory: PageSaveHelper.Factory
 
-	@Inject
-	lateinit var pageSaveHelperFactory: PageSaveHelper.Factory
+    private val saveViewModel by viewModels<PageImagePickViewModel>()
+    private val contentViewModel by viewModels<ContentPickerViewModel>()
+    private val pageViewModel by viewModels<PagePickerViewModel>()
+    private lateinit var pageSaveHelper: PageSaveHelper
 
-	
-	override val snackbarHost: CoordinatorLayout
-		get() = viewBinding.root
+    @OptIn(ExperimentalMaterial3Api::class)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        pageSaveHelper = pageSaveHelperFactory.create(this)
+        saveViewModel.onFileReady.observeEvent(this, ::finishWithResult)
+        saveViewModel.onError.observeEvent(this) { error ->
+            lifecycleScope.launch { snackbarHostState.showSnackbar(error.getDisplayMessage(resources)) }
+        }
+        val pagePhase = intent.hasExtra(AppRouter.KEY_MANGA) || intent.hasExtra(AppRouter.KEY_ID)
+        setComposeContent {
+            val saving by saveViewModel.isLoading.collectAsStateWithLifecycle()
+            val pageDetails = if (pagePhase) {
+                pageViewModel.manga.collectAsStateWithLifecycle().value
+            } else {
+                null
+            }
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(pageDetails?.toContent()?.title ?: getString(R.string.pick_manga_page))
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = ::finishAfterTransition) {
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
+                            }
+                        },
+                    )
+                },
+            ) { padding ->
+                Box(Modifier.fillMaxSize().padding(padding)) {
+                    if (pagePhase) {
+                        val thumbnails by pageViewModel.thumbnails.collectAsStateWithLifecycle()
+                        val loading by pageViewModel.isLoading.collectAsStateWithLifecycle()
+                        val noChapters by pageViewModel.isNoChapters.collectAsStateWithLifecycle(false)
+                        val gridScale by pageViewModel.gridScale.collectAsStateWithLifecycle()
+                        PagesScreen(
+                            items = thumbnails,
+                            gridColumns = pagePreviewGridColumns(gridScale),
+                            selectedItemIds = remember { emptySet() },
+                            emptyMessageResId = if (noChapters) R.string.no_chapters else null,
+                            isLoading = loading,
+                            onLoadNext = pageViewModel::loadNextChapter,
+                            onVisiblePlaceholder = pageViewModel::loadTowardsChapter,
+                            onItemClick = { item ->
+                                pageViewModel.manga.value?.toContent()?.let { onPagePicked(it, item.page) }
+                            },
+                            onItemLongClick = {},
+                            onSelectionActionClick = {},
+                            onClearSelection = {},
+                        )
+                    } else {
+                        AppContentListRoute(
+                            viewModel = contentViewModel,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+                            appRouter = router,
+                            registerFilterCallback = false,
+                            pullRefreshEnabled = false,
+                            onNavigateToDetails = { _, content, _ -> openPagePhase(content.id) },
+                        )
+                    }
+                    if (saving) CircularProgressIndicator(Modifier.align(Alignment.Center))
+                }
+            }
+        }
+    }
 
-	private lateinit var pageSaveHelper: PageSaveHelper
-	private val viewModel by viewModels<PageImagePickViewModel>()
+    private fun openPagePhase(contentId: Long) {
+        intent.putExtra(AppRouter.KEY_ID, contentId)
+        recreate()
+    }
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		setContentView(ActivityPickerBinding.inflate(layoutInflater))
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
-		pageSaveHelper = pageSaveHelperFactory.create(this)
-		viewModel.onError.observeEvent(this, DialogErrorObserver(viewBinding.container, null))
-		viewModel.onFileReady.observeEvent(this, ::finishWithResult)
-		viewModel.isLoading.observe(this, ::onLoadingStateChanged)
-		val fm = supportFragmentManager
-		if (fm.findFragmentById(R.id.container) == null) {
-			fm.commit {
-				setReorderingAllowed(true)
-				if (intent?.hasExtra(AppRouter.KEY_MANGA) == true) {
-					replace(R.id.container, PagePickerFragment::class.java, intent.extras)
-				} else {
-					replace(R.id.container, ContentPickerFragment::class.java, null)
-				}
-			}
-		}
-	}
+    private fun onPagePicked(content: org.skepsun.kototoro.parsers.model.Content, page: ReaderPage) {
+        saveViewModel.savePageToTempFile(
+            pageSaveHelper,
+            PageSaveHelper.Task(content, page.chapterId, page.index + 1, page.toContentPage()),
+        )
+    }
 
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val typeMask = WindowInsetsCompat.Type.systemBars()
-		val bars = insets.getInsets(typeMask)
-		viewBinding.appbar.updatePadding(
-			left = bars.left,
-			right = bars.right,
-			top = bars.top,
-		)
-		return insets.consume(v, typeMask, top = true)
-	}
-
-	fun onContentPicked(manga: Content) {
-		val args = Bundle(1)
-		args.putLong(AppRouter.KEY_ID, manga.id)
-		supportFragmentManager.commit {
-			setReorderingAllowed(true)
-			replace(R.id.container, PagePickerFragment::class.java, args)
-			addToBackStack(null)
-		}
-	}
-
-	fun onPagePicked(manga: Content, page: ReaderPage) {
-		val task = PageSaveHelper.Task(
-			manga = manga,
-			chapterId = page.chapterId,
-			pageNumber = page.index + 1,
-			page = page.toContentPage(),
-		)
-		viewModel.savePageToTempFile(pageSaveHelper, task)
-	}
-
-	private fun onLoadingStateChanged(isLoading: Boolean) {
-		viewBinding.container.isGone = isLoading
-		viewBinding.progressBar.isVisible = isLoading
-	}
-
-	private fun finishWithResult(file: File) {
-		val uri = FileProvider.getUriForFile(applicationContext, "${BuildConfig.APPLICATION_ID}.files", file)
-		val result = Intent()
-		result.setData(uri)
-		result.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-		setResult(RESULT_OK, result)
-		finish()
-	}
+    private fun finishWithResult(file: File) {
+        val uri = FileProvider.getUriForFile(this, "${BuildConfig.APPLICATION_ID}.files", file)
+        setResult(RESULT_OK, Intent().setData(uri).setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        finish()
+    }
 }

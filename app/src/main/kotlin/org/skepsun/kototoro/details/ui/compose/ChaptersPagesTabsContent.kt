@@ -519,9 +519,9 @@ private fun ChapterSourceTabsRow(
 					FilterChipDefaults.filterChipColors(
 						containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
 						selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-						labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+						labelColor = MaterialTheme.colorScheme.onSurface,
 						selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-						iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+						iconColor = MaterialTheme.colorScheme.onSurface,
 						selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
 					)
 				} else {
@@ -571,7 +571,7 @@ private fun MetadataChapterDialog(
 					Text(
 						text = stringResource(R.string.details_metadata_source_label, stringResource(service.titleResId)),
 						style = MaterialTheme.typography.bodyMedium,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						color = MaterialTheme.colorScheme.onSurface,
 					)
 				}
 				chapter.numberString()?.let { number ->
@@ -584,13 +584,13 @@ private fun MetadataChapterDialog(
 				Text(
 					text = stringResource(R.string.details_metadata_chapter_hint),
 					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					color = MaterialTheme.colorScheme.onSurface,
 				)
 				if (chapter.url.isNotBlank()) {
 					Text(
 						text = chapter.url,
 						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						color = MaterialTheme.colorScheme.onSurface,
 					)
 				}
 			}

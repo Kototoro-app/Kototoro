@@ -10,13 +10,9 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.os.LocaleListCompat
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -56,57 +52,6 @@ import org.skepsun.kototoro.settings.compose.AppearanceSettingsScreen
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsUiState
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.protect.ProtectSetupActivity
-
-@AndroidEntryPoint
-class AppearanceSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    @Inject
-    lateinit var activityRecreationHandle: ActivityRecreationHandle
-
-    @Inject
-    lateinit var appShortcutManager: AppShortcutManager
-
-    @Inject
-    lateinit var sourcePresetsRepository: SourcePresetsRepository
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                AppearanceSettingsRoute(
-                    settings = settings,
-                    activityRecreationHandle = activityRecreationHandle,
-                    appShortcutManager = appShortcutManager,
-                    sourcePresetsRepository = sourcePresetsRepository,
-                    onOpenNavConfig = {
-                        (activity as? SettingsActivity)?.openDestination(SettingsDestination.NavConfigSettings, null, false)
-                    },
-                    onOpenProtectSetup = {
-                        startActivity(Intent(requireContext(), ProtectSetupActivity::class.java))
-                    },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.appearance))
-    }
-}
 
 @Composable
 fun AppearanceSettingsRoute(

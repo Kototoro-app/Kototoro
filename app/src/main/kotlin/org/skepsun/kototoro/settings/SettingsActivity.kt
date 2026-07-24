@@ -22,27 +22,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
-import androidx.core.view.updatePaddingRelative
 import androidx.documentfile.provider.DocumentFile
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentFactory
-import androidx.fragment.app.FragmentTransaction
-import androidx.fragment.app.commit
-import androidx.fragment.app.commitNow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import androidx.coordinatorlayout.widget.CoordinatorLayout
-import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
@@ -73,7 +60,7 @@ import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -128,9 +115,7 @@ import org.skepsun.kototoro.settings.search.SettingsSearchViewModel
 import org.skepsun.kototoro.settings.support.TranslationApiSettingsSupport
 import org.skepsun.kototoro.reader.translate.domain.TranslationApiProviderCatalog
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
-import org.skepsun.kototoro.settings.sources.SourceComposeSettingsFragment
 import org.skepsun.kototoro.settings.sources.SourceSettingsRoute
-import org.skepsun.kototoro.settings.sources.SourceSettingsFragment
 import org.skepsun.kototoro.settings.sources.SourcesSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsViewModel
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
@@ -148,7 +133,6 @@ import org.skepsun.kototoro.tracker.ui.debug.TrackerDebugActivity
 import org.skepsun.kototoro.tracker.work.TrackerNotificationHelper
 import org.skepsun.kototoro.tracking.animeoffline.data.AnimeOfflineRepository
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryService
-import org.skepsun.kototoro.video.ui.VideoSuperResolutionAdvancedSheet
 import org.skepsun.kototoro.scrobbling.discord.ui.DiscordAuthActivity
 import org.skepsun.kototoro.core.parser.EmptyContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
@@ -162,8 +146,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 @AndroidEntryPoint
 class SettingsActivity :
-	BaseActivity<SettingsActivityLayoutBinding>(),
-	PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
+	BaseComposeActivity() {
 
 	private val initialEntityOrganizeSelection: Set<Long> by lazy(LazyThreadSafetyMode.NONE) {
 		parseEntityOrganizeSelection(intent?.getStringExtra(EXTRA_ENTITY_ORGANIZE_SELECTION).orEmpty())
@@ -241,8 +224,6 @@ class SettingsActivity :
 	private var isFoldUnfolded = false
 	private var composeDestination: SettingsDestination? by mutableStateOf(null)
 	private val composeNavigationStack = ArrayDeque<SettingsDestination>()
-	private var shouldRestoreFragmentOnComposeExit = false
-	private var composeDestinationToRestore: SettingsDestination? = null
 	private var ttsSettingsCoordinator: TtsSettingsCoordinator? = null
 	private var isDataCleanupObserversBound = false
 	private var translationApiFetchModelsJob: Job? = null
@@ -263,6 +244,8 @@ class SettingsActivity :
 	private var unifiedSourcesSearchActive by mutableStateOf(false)
 	private var unifiedSourcesActivePanel by mutableStateOf<UnifiedToolbarFilterPanel?>(null)
 	private var isLegacyTopBarVisible = false
+	private val contentRoot: View
+		get() = window.decorView
 
 	private val composeBackCallback = object : OnBackPressedCallback(false) {
 		override fun handleOnBackPressed() {
@@ -380,61 +363,33 @@ class SettingsActivity :
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(SettingsActivityLayoutBinding.inflate(layoutInflater))
 		setLegacyTopBarVisible(false)
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = false)
 		addMenuProvider(
 			SettingsSearchMenuProvider(viewModel) {
 				isLegacyTopBarVisible
 			},
 		)
 		onBackPressedDispatcher.addCallback(this, composeBackCallback)
-		val fm = supportFragmentManager
-		val currentFragment = fm.findFragmentById(R.id.container)
 		val restoredDestination = savedInstanceState?.toComposeDestination()
-		val initialComposeDestination = if (currentFragment == null) {
-			restoredDestination ?: resolveDefaultComposeDestination(intent)
-		} else {
-			restoredDestination
-		}
+		val initialComposeDestination = restoredDestination ?: resolveDefaultComposeDestination(intent)
 		composeDestination = initialComposeDestination
-		composeDestinationToRestore = savedInstanceState
-			?.getBoolean(STATE_PENDING_RESTORE_ROOT)
-			?.takeIf { it }
-			?.let { SettingsDestination.Root }
-		viewBinding.containerCompose.setViewCompositionStrategy(
-			ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
-		)
-		viewBinding.containerCompose.setContent {
+		setComposeContent {
 			val lastReadContent by historyRepository.observeLast().collectAsStateWithLifecycle(initialValue = null)
-			KototoroTheme {
-				DynamicArtworkBackdrop(content = lastReadContent) {
-					SettingsAdaptiveShell(
-						isTwoPane = isMasterDetails,
-						destination = composeDestination,
-						destinationKey = ::composeDestinationStateKey,
-						modifier = Modifier.fillMaxSize(),
-						rootContent = { modifier -> RenderSettingsRootContent(modifier) },
-						destinationContent = { destination -> RenderComposeDestination(destination) },
-					)
-				}
-			}
-		}
-		masterContainerComposeView()?.setViewCompositionStrategy(
-			ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
-		)
-		supportFragmentManager.addOnBackStackChangedListener {
-			restoreComposeDestinationIfNeeded()
-		}
-		if (currentFragment == null) {
-			if (initialComposeDestination != null) {
-				openComposeDestination(
-					initialComposeDestination,
-					shouldRestoreFragment = savedInstanceState?.getBoolean(STATE_COMPOSE_RESTORE_FRAGMENT) == true,
+			DynamicArtworkBackdrop(content = lastReadContent) {
+				SettingsAdaptiveShell(
+					isTwoPane = isMasterDetails,
+					destination = composeDestination,
+					destinationKey = ::composeDestinationStateKey,
+					modifier = Modifier.fillMaxSize(),
+					rootContent = { modifier -> RenderSettingsRootContent(modifier) },
+					destinationContent = { destination -> RenderComposeDestination(destination) },
 				)
-			} else {
-				openDefaultDestination()
 			}
+		}
+		if (initialComposeDestination != null) {
+			openComposeDestination(initialComposeDestination, shouldRestoreFragment = false)
+		} else {
+			openDefaultDestination()
 		}
 		viewModel.onNavigateToPreference.observeEvent(this, ::navigateToPreference)
 		aboutSettingsViewModel.onUpdateAvailable.observeEvent(this, ::onAboutUpdateAvailable)
@@ -473,40 +428,6 @@ class SettingsActivity :
 		super.onDestroy()
 	}
 
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val bars = insets.getInsets(
-			WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
-		)
-		val isTablet = isMasterDetails
-		viewBinding.appbar.updatePaddingRelative(
-			start = bars.start(v),
-			top = bars.top,
-			end = if (isTablet) 0 else bars.end(v),
-		)
-		return insets
-	}
-
-	override fun onPreferenceStartFragment(
-		caller: PreferenceFragmentCompat,
-		pref: Preference,
-	): Boolean {
-		val fragmentName = pref.fragment ?: return false
-		openFragment(
-			fragmentClass = FragmentFactory.loadFragmentClass(classLoader, fragmentName),
-			args = pref.peekExtras(),
-			isFromRoot = false,
-		)
-		return true
-	}
-
-	override fun onSupportNavigateUp(): Boolean {
-		if (composeDestination != null) {
-			handleComposeNavigateUp()
-			return true
-		}
-		return super.onSupportNavigateUp()
-	}
-
 	override fun finish() {
 		super.finish()
 		applyCloseRouteTransitionIfNeeded()
@@ -522,137 +443,104 @@ class SettingsActivity :
 			when (val destination = composeDestination) {
 				SettingsDestination.Root -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_ROOT)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.AppearanceSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.UsersSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_USERS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.SpacesSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SPACES_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.AISettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.OcrModelsSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_OCR_MODELS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.AiImageEnhancementSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_IMAGE_ENHANCEMENT_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.AiVideoEnhancementSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_AI_VIDEO_ENHANCEMENT_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.TtsSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TTS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.PlaybackSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_PLAYBACK_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.ReaderSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_READER_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.SourcesSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SOURCES_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.SuggestionsSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.SyncSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SYNC_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.BackupsSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_BACKUPS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.EntityOrganizeSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_ENTITY_ORGANIZE_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.TranslationSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.TranslationApiSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.TranslationE2EApiSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.StorageAndNetworkSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_STORAGE_AND_NETWORK_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.CacheLimitsSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_CACHE_LIMITS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.DataCleanupSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_DATA_CLEANUP_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.DownloadsSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_DOWNLOADS_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.TrackerSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRACKER_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.NotificationSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_NOTIFICATION_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.ServicesSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SERVICES_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.DiscordSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_DISCORD_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.ProxySettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_PROXY_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.NavConfigSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_NAV_CONFIG_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.ChangelogSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_CHANGELOG_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				SettingsDestination.AboutSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_ABOUT_SETTINGS)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				is SettingsDestination.SourceSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_SOURCE_SETTINGS)
 					outState.putString(STATE_SOURCE_SETTINGS_SOURCE, destination.sourceName)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 				}
 				is SettingsDestination.UnifiedSources -> {
 					val unifiedDestination = composeDestination as? SettingsDestination.UnifiedSources ?: return
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_UNIFIED_SOURCES)
-					outState.putBoolean(STATE_COMPOSE_RESTORE_FRAGMENT, shouldRestoreFragmentOnComposeExit)
 					outState.putString(
 						STATE_UNIFIED_SOURCES_KIND,
 						unifiedDestination.initialRepositoryKind?.name,
@@ -664,10 +552,6 @@ class SettingsActivity :
 				}
 				null -> Unit
 			}
-		outState.putBoolean(
-			STATE_PENDING_RESTORE_ROOT,
-			composeDestinationToRestore == SettingsDestination.Root,
-		)
 	}
 
 	fun setSectionTitle(title: CharSequence?) {
@@ -679,19 +563,8 @@ class SettingsActivity :
 	}
 
 	private fun setLegacyTopBarVisible(isVisible: Boolean) {
-		val showLegacyTopBar = isVisible
-		isLegacyTopBarVisible = showLegacyTopBar
-		viewBinding.legacyTopBarHost.isVisible = showLegacyTopBar
-		updateSinglePaneScrollBehavior(showLegacyTopBar)
+		isLegacyTopBarVisible = false
 		invalidateOptionsMenu()
-		viewBinding.root.requestLayout()
-	}
-
-	private fun showLegacyFragmentContainer() {
-		viewBinding.containerCompose.isVisible = false
-		findViewById<View>(R.id.container)?.isVisible = true
-		findViewById<View>(R.id.container_search)?.isVisible = false
-		setLegacyTopBarVisible(true)
 	}
 
 	private fun renderComposeContent(
@@ -714,52 +587,6 @@ class SettingsActivity :
 			actions = actions,
 			content = content,
 		)
-	}
-
-	fun openFragment(fragmentClass: Class<out Fragment>, args: Bundle?, isFromRoot: Boolean) {
-		composeDestinationToRestore = composeDestination.takeIf { it == SettingsDestination.Root }
-		composeNavigationStack.clear()
-		val shouldPopHiddenFragment = composeDestination != null &&
-			shouldRestoreFragmentOnComposeExit &&
-			supportFragmentManager.backStackEntryCount > 0
-		closeComposeDestination(restorePreviousFragment = false)
-		if (shouldPopHiddenFragment) {
-			supportFragmentManager.popBackStackImmediate()
-		}
-		showLegacyFragmentContainer()
-		viewModel.discardSearch()
-		val hasFragment = supportFragmentManager.findFragmentById(R.id.container) != null
-		supportFragmentManager.commit {
-			setReorderingAllowed(true)
-			replace(R.id.container, fragmentClass, args)
-			setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
-			if (!isMasterDetails || (hasFragment && !isFromRoot)) {
-				addToBackStack(null)
-			}
-		}
-	}
-
-	fun replaceCurrentFragmentWithDestination(destination: SettingsDestination) {
-		if (supportFragmentManager.isStateSaved) {
-			return
-		}
-		composeNavigationStack.clear()
-		val currentFragment = supportFragmentManager.findFragmentById(R.id.container)
-		closeComposeDestination(restorePreviousFragment = false)
-		if (currentFragment != null) {
-			supportFragmentManager.commitNow {
-				setReorderingAllowed(true)
-				remove(currentFragment)
-			}
-		}
-		viewModel.discardSearch()
-		composeDestinationToRestore = null
-		composeDestination = destination
-		shouldRestoreFragmentOnComposeExit = false
-		viewBinding.containerCompose.isVisible = true
-		prepareComposeDestination(destination)
-		renderComposeContent(showLegacyTopBar = false, destination = destination)
-		composeBackCallback.isEnabled = true
 	}
 
 	fun openDestination(destination: SettingsDestination, args: Bundle?, isFromRoot: Boolean) {
@@ -802,7 +629,7 @@ class SettingsActivity :
 			is SettingsDestination.SourceSettings,
 			is SettingsDestination.UnifiedSources -> openComposeDestination(
 				destination,
-				shouldRestoreFragment = shouldRestoreFragmentForNextDestination(isFromRoot),
+				shouldRestoreFragment = false,
 			)
 		}
 	}
@@ -812,28 +639,7 @@ class SettingsActivity :
 			openComposeDestination(destination, shouldRestoreFragment = false)
 			return
 		}
-		val fragment = when (intent?.action) {
-			AppRouter.ACTION_SOURCES -> null
-			AppRouter.ACTION_SOURCE -> resolveSingleSourceSettingsFragment(
-				ContentSource(intent.getStringExtra(AppRouter.KEY_SOURCE)),
-			)
-			Intent.ACTION_VIEW -> {
-				when (intent.data?.host) {
-					HOST_ABOUT -> null
-					else -> null
-				}
-			}
-			else -> null
-		}
-		if (fragment == null) {
-			openComposeDestination(SettingsDestination.Root, shouldRestoreFragment = false)
-			return
-		}
-		showLegacyFragmentContainer()
-		supportFragmentManager.commit {
-			setReorderingAllowed(true)
-			replace(R.id.container, fragment)
-		}
+		openComposeDestination(SettingsDestination.Root, shouldRestoreFragment = false)
 	}
 
 	private fun resolveDefaultComposeDestination(intent: Intent?): SettingsDestination? {
@@ -864,33 +670,11 @@ class SettingsActivity :
 		}
 	}
 
-	private fun resolveSingleSourceSettingsFragment(source: ContentSource): Fragment {
-		val repository = mangaRepositoryFactory.create(source)
-		return when (repository) {
-			is ParserContentRepository,
-			is KotatsuParserRepository,
-			is EmptyContentRepository,
-			is JsContentRepository,
-			is LegadoRepository,
-			is TVBoxRepository,
-			is org.skepsun.kototoro.mihon.MihonMangaRepository,
-			is org.skepsun.kototoro.aniyomi.AniyomiAnimeRepository,
-			-> SourceComposeSettingsFragment.newInstance(source)
-
-			else -> SourceSettingsFragment.newInstance(source)
-		}
-	}
-
 	private fun navigateToPreference(item: SettingsItem) {
 		val args = buildBundle(1) {
 			putString(ARG_PREF_KEY, item.key)
 		}
 		openDestination(item.destination, args, true)
-	}
-
-	private fun shouldRestoreFragmentForNextDestination(isFromRoot: Boolean): Boolean {
-		val hasFragment = supportFragmentManager.findFragmentById(R.id.container) != null
-		return !isMasterDetails || (hasFragment && !isFromRoot)
 	}
 
 	private fun shouldKeepComposeHistory(): Boolean = true
@@ -905,15 +689,9 @@ class SettingsActivity :
 			updateUnifiedSourcesSearchActive(false)
 			unifiedSourcesActivePanel = null
 		}
-		if (supportFragmentManager.isStateSaved) {
-			return
-		}
 		if (isMasterDetails && destination == SettingsDestination.Root) {
 			composeNavigationStack.clear()
 			composeDestination = SettingsDestination.Root
-			viewBinding.containerCompose.isVisible = true
-			findViewById<View>(R.id.container)?.isVisible = false
-			findViewById<View>(R.id.container_search)?.isVisible = false
 			setLegacyTopBarVisible(false)
 			return
 		}
@@ -928,26 +706,7 @@ class SettingsActivity :
 		} else if (!shouldKeepComposeHistory()) {
 			composeNavigationStack.clear()
 		}
-		val currentFragment = supportFragmentManager.findFragmentById(R.id.container)
-		if (currentComposeDestination == null && currentFragment != null && !currentFragment.isHidden) {
-			supportFragmentManager.commit {
-				setReorderingAllowed(true)
-				hide(currentFragment)
-				if (shouldRestoreFragment) {
-					addToBackStack(COMPOSE_HIDE_BACKSTACK_NAME)
-				}
-			}
-		}
 		composeDestination = destination
-		shouldRestoreFragmentOnComposeExit = shouldRestoreFragment
-		viewBinding.containerCompose.isVisible = true
-		if (isMasterDetails) {
-			findViewById<View>(R.id.container)?.isVisible = false
-			findViewById<View>(R.id.container_search)?.isVisible = false
-		} else {
-			findViewById<View>(R.id.container)?.isVisible = false
-			findViewById<View>(R.id.container_search)?.isVisible = false
-		}
 		prepareComposeDestination(destination)
 		renderComposeContent(showLegacyTopBar = false, destination = destination)
 		composeBackCallback.isEnabled = true
@@ -1145,7 +904,6 @@ class SettingsActivity :
 			) {
 				AIVideoEnhancementSettingsRoute(
 					settings = kototoroAppSettings,
-					onAdvancedSettingsClick = ::showVideoSuperResolutionAdvancedSheet,
 				)
 			}
 			SettingsDestination.TtsSettings -> RenderComposeSection(title = getString(R.string.tts_settings_title)) {
@@ -1158,9 +916,6 @@ class SettingsActivity :
 			SettingsDestination.PlaybackSettings -> RenderComposeSection(title = getString(R.string.playback_settings)) {
 				PlaybackSettingsRoute(
 					settings = kototoroAppSettings,
-					onMpvConfClick = {
-						org.skepsun.kototoro.video.player.MpvConfigManager.showMpvConfigDialog(this, viewBinding.containerCompose)
-					},
 					onAiSettingsClick = {
 						openDestination(SettingsDestination.AISettings, null, false)
 					},
@@ -1324,12 +1079,12 @@ class SettingsActivity :
 					onOpenMangaStorage = { router.showDirectorySelectDialog() },
 					onOpenNovelStorage = {
 						router.showDirectorySelectDialog(
-							org.skepsun.kototoro.settings.storage.ContentDirectorySelectDialog.CONTENT_TYPE_NOVEL,
+							org.skepsun.kototoro.settings.storage.ContentDirectorySelectViewModel.CONTENT_TYPE_NOVEL,
 						)
 					},
 					onOpenVideoStorage = {
 						router.showDirectorySelectDialog(
-							org.skepsun.kototoro.settings.storage.ContentDirectorySelectDialog.CONTENT_TYPE_VIDEO,
+							org.skepsun.kototoro.settings.storage.ContentDirectorySelectViewModel.CONTENT_TYPE_VIDEO,
 						)
 					},
 					onAllowMeteredNetworkChange = { option ->
@@ -1550,8 +1305,8 @@ class SettingsActivity :
 	private fun bindDataCleanupObservers() {
 		if (isDataCleanupObserversBound) return
 		isDataCleanupObserversBound = true
-		dataCleanupSettingsViewModel.onError.observeEvent(this, SnackbarErrorObserver(viewBinding.root, null))
-		dataCleanupSettingsViewModel.onActionDone.observeEvent(this, ReversibleActionObserver(viewBinding.root))
+		dataCleanupSettingsViewModel.onError.observeEvent(this, SnackbarErrorObserver(contentRoot, null))
+		dataCleanupSettingsViewModel.onActionDone.observeEvent(this, ReversibleActionObserver(contentRoot))
 		dataCleanupSettingsViewModel.onChaptersCleanedUp.observeEvent(this, ::onDataCleanupChaptersCleanedUp)
 		dataCleanupSettingsViewModel.onStorageChanged.observeEvent(this) {
 			storageAndNetworkSettingsViewModel.refreshStorageUsage()
@@ -1569,7 +1324,7 @@ class SettingsActivity :
 				FileSize.BYTES.format(this, result.second),
 			)
 		}
-		Snackbar.make(viewBinding.root, text, Snackbar.LENGTH_SHORT).show()
+		Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
 	}
 
 	private fun confirmClearSearchHistory() {
@@ -1621,7 +1376,7 @@ class SettingsActivity :
 				FileSize.BYTES.format(this, result.bytesFreed),
 			)
 		}
-		Snackbar.make(viewBinding.root, text, Snackbar.LENGTH_SHORT).show()
+		Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
 	}
 
 	private fun confirmClearLocalManga() {
@@ -1773,8 +1528,7 @@ class SettingsActivity :
 			)
 			return
 		}
-		val shouldRestore = shouldRestoreFragmentOnComposeExit && supportFragmentManager.backStackEntryCount > 0
-		if (isMasterDetails && !shouldRestore) {
+		if (isMasterDetails) {
 			onLeavingComposeDestination(currentDestination)
 			openComposeDestination(
 				destination = SettingsDestination.Root,
@@ -1783,12 +1537,7 @@ class SettingsActivity :
 			)
 			return
 		}
-		closeComposeDestination(restorePreviousFragment = false)
-		if (shouldRestore) {
-			supportFragmentManager.popBackStack()
-		} else if (!isMasterDetails) {
-			finishFromComposeDestination(currentDestination)
-		}
+		finishFromComposeDestination(currentDestination)
 	}
 
 	private fun onLeavingComposeDestination(destination: SettingsDestination) {
@@ -1801,71 +1550,7 @@ class SettingsActivity :
 	private fun finishFromComposeDestination(destination: SettingsDestination) {
 		onLeavingComposeDestination(destination)
 		composeBackCallback.isEnabled = false
-		shouldRestoreFragmentOnComposeExit = false
-		dispatchNavigateUp()
-	}
-
-	private fun closeComposeDestination(restorePreviousFragment: Boolean) {
-		val destination = composeDestination ?: return
-		onLeavingComposeDestination(destination)
-		viewBinding.containerCompose.isVisible = false
-		if (isMasterDetails) {
-			findViewById<View>(R.id.container)?.isVisible = true
-			findViewById<View>(R.id.container_search)?.isVisible = false
-		} else {
-			findViewById<View>(R.id.container)?.isVisible = true
-			findViewById<View>(R.id.container_search)?.isVisible = false
-		}
-		composeDestination = null
-		shouldRestoreFragmentOnComposeExit = false
-		composeBackCallback.isEnabled = false
-		invalidateOptionsMenu()
-		if (restorePreviousFragment && supportFragmentManager.backStackEntryCount > 0) {
-			supportFragmentManager.popBackStack()
-		}
-	}
-
-	private fun restoreComposeDestinationIfNeeded() {
-		if (composeDestination != null || supportFragmentManager.isStateSaved) {
-			return
-		}
-		if (supportFragmentManager.backStackEntryCount != 0) {
-			return
-		}
-		if (supportFragmentManager.findFragmentById(R.id.container) != null) {
-			return
-		}
-		val destination = composeDestinationToRestore ?: return
-		composeDestinationToRestore = null
-		openComposeDestination(destination, shouldRestoreFragment = false)
-	}
-
-	private fun updateSinglePaneScrollBehavior(useLegacyTopBar: Boolean) {
-		if (isMasterDetails) {
-			return
-		}
-		fun update(view: View?, shouldUseBehavior: Boolean) {
-			val targetView = view ?: return
-			val params = targetView.layoutParams as? CoordinatorLayout.LayoutParams ?: return
-			val currentBehavior = params.behavior
-			val behaviorChanged = when {
-				shouldUseBehavior && currentBehavior !is AppBarLayout.ScrollingViewBehavior -> true
-				!shouldUseBehavior && currentBehavior != null -> true
-				else -> false
-			}
-			if (!behaviorChanged) {
-				return
-			}
-			params.behavior = if (shouldUseBehavior) {
-				AppBarLayout.ScrollingViewBehavior()
-			} else {
-				null
-			}
-			targetView.layoutParams = params
-		}
-		update(viewBinding.containerCompose, shouldUseBehavior = false)
-		update(findViewById(R.id.container), shouldUseBehavior = useLegacyTopBar)
-		update(findViewById(R.id.container_search), shouldUseBehavior = useLegacyTopBar)
+		finishAfterTransition()
 	}
 
 	private fun openUnifiedSourcesRepositoryFilePicker(kind: UnifiedSourceKind) {
@@ -1923,10 +1608,6 @@ class SettingsActivity :
 		return null
 	}
 
-	private fun masterContainerComposeView(): ComposeView? {
-		return findViewById(R.id.container_master) as? ComposeView
-	}
-
 	private fun refreshSuggestionsTags() {
 		suggestionsExcludeTagsFlow.value =
 			kototoroAppSettings.prefs.getString(AppSettings.KEY_SUGGESTIONS_EXCLUDE_TAGS, "") ?: ""
@@ -1953,13 +1634,6 @@ class SettingsActivity :
 				).show()
 			}
 		}
-	}
-
-	private fun showVideoSuperResolutionAdvancedSheet() {
-		VideoSuperResolutionAdvancedSheet().show(
-			supportFragmentManager,
-			"VideoSuperResolutionAdvancedSheet",
-		)
 	}
 
 	private fun openDiscordSignIn() {
@@ -2122,10 +1796,7 @@ class SettingsActivity :
 		const val ARG_PREF_KEY = "pref_key"
 		private const val EXTRA_UNIFIED_SOURCES_KIND = "extra_unified_sources_kind"
 		private const val EXTRA_UNIFIED_SOURCES_URL = "extra_unified_sources_url"
-		private const val COMPOSE_HIDE_BACKSTACK_NAME = "settings_compose_hide"
 		private const val STATE_COMPOSE_DESTINATION = "compose_destination"
-		private const val STATE_COMPOSE_RESTORE_FRAGMENT = "compose_restore_fragment"
-		private const val STATE_PENDING_RESTORE_ROOT = "pending_restore_root"
 		private const val STATE_SOURCE_SETTINGS_SOURCE = "source_settings_source"
 		private const val STATE_UNIFIED_SOURCES_KIND = "unified_sources_kind"
 		private const val STATE_UNIFIED_SOURCES_URL = "unified_sources_url"
@@ -2268,7 +1939,6 @@ class SettingsActivity :
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
 		// 仅在折叠屏展开且窗口满足双栏宽度时重建，避免分屏窄窗口反复重建
-		viewBinding.root.requestLayout()
-		setLegacyTopBarVisible(composeDestination == null)
+		setLegacyTopBarVisible(false)
     }
 }

@@ -25,12 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -70,15 +68,15 @@ import org.skepsun.kototoro.core.util.ext.performConfirmHapticFeedback
 import org.skepsun.kototoro.core.util.ext.performSegmentHapticFeedback
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.zipWithPrevious
-import org.skepsun.kototoro.details.ui.pager.ChaptersPagesSheet
 import org.skepsun.kototoro.details.ui.compose.ChaptersPagesTabsContent
+import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
+import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
 import org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel
 import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.data.TapGridSettings
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.config.ImageServerDelegate
-import org.skepsun.kototoro.reader.ui.TranslationTaskPanelSheet
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderController
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderChromeCallbacks
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderOptionsCallbacks
@@ -213,7 +211,7 @@ class ReaderActivity :
             viewModel = viewModel,
             imagePipeline = composeReaderImagePipeline,
             errorHost = this,
-            chaptersPanelContent = {
+            chaptersPanelContent = { selectedTabId ->
                 ChaptersPagesTabsContent(
                     viewModel = viewModel,
                     pagesViewModel = pagesViewModel,
@@ -221,7 +219,7 @@ class ReaderActivity :
                     settings = settings,
                     appRouter = router,
                     pageSaveHelper = pageSaveHelper,
-                    selectedTabId = settings.defaultDetailsTab,
+                    selectedTabId = selectedTabId,
                     isSheetFullyExpanded = true,
                     isChapterListScrollEnabled = true,
                 )
@@ -234,13 +232,13 @@ class ReaderActivity :
                     onSavePage = ::onSavePageClick,
                     onTimer = ::onScrollTimerClick,
                     onPages = {
-                        if (!onPagesButtonClick()) router.showChapterPagesSheet()
+                        if (!onPagesButtonClick()) composeReaderController.toggleChapters()
                     },
                     onPagesLongClick = ::onPagesButtonLongClick,
                     onScreenRotation = ::toggleScreenOrientation,
                     onBookmark = ::onBookmarkClick,
                     onBookmarkLongClick = {
-                        router.showChapterPagesSheet(ChaptersPagesSheet.TAB_BOOKMARKS)
+                        composeReaderController.toggleChapters(DETAILS_TAB_BOOKMARKS)
                     },
                     onDownload = ::onDownloadClick,
                     onTranslate = ::onTranslateClick,
@@ -315,7 +313,7 @@ class ReaderActivity :
 					onRetranslatePage = viewModel::retranslateCurrent,
 					onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
 					onRetranslateChapter = viewModel::retranslateCurrentChapter,
-					onTranslationLog = { TranslationTaskPanelSheet.show(supportFragmentManager) },
+					onTranslationLog = { composeReaderController.showTranslationTaskPanel() },
 				),
 				onReaderInteraction = { scrollTimer.onUserInteraction() },
 				onGridTap = ::onGridTouch,
@@ -323,7 +321,7 @@ class ReaderActivity :
 				onPrimaryDestination = { destination ->
 					when (destination) {
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.NAVIGATION -> {
-							if (!onPagesButtonClick()) router.showChapterPagesSheet()
+							if (!onPagesButtonClick()) composeReaderController.toggleChapters()
 						}
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY -> openMenu()
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS -> composeReaderController.showTools()
@@ -344,7 +342,7 @@ class ReaderActivity :
         composeReaderController.updateActions {
             copy(
                 controls = settings.readerControls,
-                pagesMode = settings.defaultDetailsTab == ChaptersPagesSheet.TAB_PAGES,
+                pagesMode = settings.defaultDetailsTab == DETAILS_TAB_PAGES,
                 translateRequestedVisible = viewModel.shouldShowTranslationToggle(),
                 translateContextualVisible = translationShortcutVisibleForSession,
             )
@@ -383,6 +381,7 @@ class ReaderActivity :
 						onResolve = { resolveLoadingError(error) },
 					)
 				}
+				spaceSwitcherDelegate.Overlays()
 			}
 		}
         idlingDetector.bindToLifecycle(this)
@@ -657,9 +656,6 @@ class ReaderActivity :
 
     private fun dismissChapterPagesSheet() {
         composeReaderController.hideChapters()
-        supportFragmentManager.findFragmentByTag(ChaptersPagesSheet::class.java.name)?.let {
-            (it as? DialogFragment)?.dismiss()
-        }
     }
 
     fun onReaderModeChanged(mode: ReaderMode) {
@@ -1014,9 +1010,10 @@ class ReaderActivity :
             getString(R.string.reader_translation_quick_change_target),
             getString(R.string.reader_translation_quick_swap_languages),
         )
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.reader_translation_quick_actions)
-            .setItems(actions) { _, which ->
+        composeReaderController.showSelectionDialog(
+            title = getString(R.string.reader_translation_quick_actions),
+            entries = actions.toList(),
+        ) { which ->
                 when (which) {
                     0 -> showTranslationLanguagePicker(
                         titleRes = R.string.reader_translation_source_lang,
@@ -1047,8 +1044,6 @@ class ReaderActivity :
                     2 -> swapTranslationLanguages()
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
     }
 
     override fun onDestroy() {
@@ -1068,14 +1063,13 @@ class ReaderActivity :
         val labels = resources.getStringArray(entriesRes)
         val values = resources.getStringArray(valuesRes)
         val selectedIndex = values.indexOf(currentValue).takeIf { it >= 0 } ?: 0
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
+        composeReaderController.showSelectionDialog(
+            title = getString(titleRes),
+            entries = labels.toList(),
+            selectedIndex = selectedIndex,
+        ) { which ->
                 onSelected(values[which])
-                dialog.dismiss()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
     }
 
     private fun swapTranslationLanguages() {

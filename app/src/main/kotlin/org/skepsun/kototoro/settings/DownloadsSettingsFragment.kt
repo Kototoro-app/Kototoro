@@ -21,16 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -56,111 +52,6 @@ import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.settings.compose.DownloadsSettingsScreen
 import org.skepsun.kototoro.settings.compose.DownloadsSettingsUiState
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
-import org.skepsun.kototoro.settings.storage.ContentDirectorySelectDialog
-
-@AndroidEntryPoint
-class DownloadsSettingsFragment : Fragment() {
-
-    @Inject
-    lateinit var settings: AppSettings
-
-    @Inject
-    lateinit var storageManager: LocalStorageManager
-
-    @Inject
-    lateinit var downloadsScheduler: DownloadWorker.Scheduler
-
-    private val storageTick = MutableStateFlow(0)
-    private val dozeTick = MutableStateFlow(0)
-
-    private val pickFileTreeLauncher = OpenDocumentTreeHelper(this) {
-        if (it != null) {
-            onDirectoryPicked(it)
-        }
-    }
-
-    private val ignoreDozeLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) {
-        dozeTick.update { tick -> tick + 1 }
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?,
-    ): View {
-        return ComposeView(requireContext()).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        }
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        (view as ComposeView).setContent {
-            KototoroTheme {
-                DownloadsSettingsRoute(
-                    settings = settings,
-                    storageManager = storageManager,
-                    storageRefreshKey = storageTick.collectAsStateWithLifecycle().value,
-                    dozeRefreshKey = dozeTick.collectAsStateWithLifecycle().value,
-                    onOpenMangaDirectories = { router.openDirectoriesSettings() },
-                    onOpenMangaStorage = { router.showDirectorySelectDialog() },
-                    onOpenNovelStorage = {
-                        router.showDirectorySelectDialog(ContentDirectorySelectDialog.CONTENT_TYPE_NOVEL)
-                    },
-                    onOpenVideoStorage = {
-                        router.showDirectorySelectDialog(ContentDirectorySelectDialog.CONTENT_TYPE_VIDEO)
-                    },
-                    onAllowMeteredNetworkChange = { option ->
-                        settings.allowDownloadOnMeteredNetwork = option
-                        updateDownloadsConstraints()
-                    },
-                    onRequestIgnoreDoze = ::startIgnoreDozeActivity,
-                    onPickPagesDirectory = { initialUri ->
-                        pickFileTreeLauncher.tryLaunch(initialUri)
-                    },
-                )
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        (activity as? SettingsActivity)?.setSectionTitle(getString(R.string.downloads))
-        storageTick.update { it + 1 }
-        dozeTick.update { it + 1 }
-    }
-
-    private fun onDirectoryPicked(uri: Uri) {
-        storageManager.takePermissions(uri)
-        val doc = DocumentFile.fromTreeUri(requireContext(), uri)?.takeIf { it.canWrite() }
-        settings.setPagesSaveDir(doc?.uri)
-        storageTick.update { it + 1 }
-    }
-
-    private fun updateDownloadsConstraints() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.Default) {
-                    val option = when (settings.allowDownloadOnMeteredNetwork) {
-                        TriStateOption.ENABLED -> true
-                        TriStateOption.ASK -> return@withContext
-                        TriStateOption.DISABLED -> false
-                    }
-                    downloadsScheduler.updateConstraints(option)
-                }
-            } catch (e: Exception) {
-                e.printStackTraceDebug()
-            }
-        }
-    }
-
-    private fun startIgnoreDozeActivity(): Boolean {
-        val context = context ?: return false
-        return startIgnoreDozeActivity(context, ignoreDozeLauncher)
-    }
-}
 
 @Composable
 fun DownloadsSettingsRoute(

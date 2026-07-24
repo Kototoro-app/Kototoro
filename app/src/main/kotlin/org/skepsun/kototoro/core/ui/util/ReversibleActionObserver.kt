@@ -5,7 +5,6 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.findActivity
-import org.skepsun.kototoro.main.ui.owners.BottomNavOwner
 import org.skepsun.kototoro.main.ui.owners.BottomSheetOwner
 
 class ReversibleActionObserver(
@@ -17,7 +16,6 @@ class ReversibleActionObserver(
 		val length = if (handle == null) Snackbar.LENGTH_SHORT else Snackbar.LENGTH_LONG
 		val snackbar = Snackbar.make(snackbarHost, value.stringResId, length)
 		when (val activity = snackbarHost.context.findActivity()) {
-			is BottomNavOwner -> snackbar.anchorView = activity.bottomNav
 			is BottomSheetOwner -> snackbar.anchorView = activity.bottomSheet
 		}
 		if (handle != null) {

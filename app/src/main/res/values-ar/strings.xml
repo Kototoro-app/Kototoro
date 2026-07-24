@@ -927,9 +927,6 @@
     <string name="basic_info">معلومات أساسية</string>
     <string name="batch_no_selection">يرجى اختيار مصدر أولاً</string>
     <string name="bind_manga_success">تم الربط بـ \\"%s\\" بنجاح</string>
-    <string name="blur_mode_enhanced">قوي</string>
-    <string name="blur_mode_immersive">متوازن (موصى به)</string>
-    <string name="blur_mode_standard">خفيف</string>
     <string name="book_effect">خلفية مصفرة (فلتر أزرق)</string>
     <string name="bookmark_position">موضع الإشارة المرجعية</string>
     <string name="bookmark_preview_unavailable">تعذر تحميل معاينة الإشارة المرجعية</string>

@@ -37,14 +37,12 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentLinkResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
-import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.util.FoldableUtils
-import org.skepsun.kototoro.core.util.ext.consume
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.databinding.ActivityMainBinding
 import org.skepsun.kototoro.details.service.ContentPrefetchService
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
@@ -85,7 +83,7 @@ import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : BaseActivity<ActivityMainBinding>() {
+class MainActivity : BaseComposeActivity() {
 
     companion object {
         const val EXTRA_RESUME_SPACE_ID = "main_activity.resume_space_id"
@@ -109,12 +107,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     @Inject
     lateinit var spaceTransitionCurtainController: SpaceTransitionCurtainController
-
-    override fun onApplyWindowInsets(v: android.view.View, insets: androidx.core.view.WindowInsetsCompat): androidx.core.view.WindowInsetsCompat {
-        val typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() or
-            androidx.core.view.WindowInsetsCompat.Type.displayCutout()
-        return insets.consume(v, typeMask, start = false)
-    }
 
     @Inject
     lateinit var settings: AppSettings
@@ -277,11 +269,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             }
         }
 
-        if (!setContentViewWebViewSafe { ActivityMainBinding.inflate(layoutInflater) }) {
-            return
-        }
-
-        viewBinding.composeRoot.setContent {
+        setComposeContent {
             val suggestions by searchSuggestionViewModel.suggestion.collectAsState(initial = emptyList())
             val appUpdate by viewModel.appUpdate.collectAsState(initial = null)
             val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
@@ -913,7 +901,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private fun setNavbarPinned(isPinned: Boolean) = Unit
 
     private fun onSourceTagFilterClick(anchorView: View?): Boolean {
-        val anchor = anchorView ?: viewBinding.composeRoot
+        val anchor = anchorView ?: window.decorView
         return currentFilterCallback?.onFilterIconClicked(anchor) == true
     }
 

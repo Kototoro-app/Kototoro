@@ -107,8 +107,11 @@ use reader Fragments as UI/navigation adapters.
   APIs to Compose. The Compose sheet renders the available servers and preserves the
   existing parser configuration and cache-invalidation behavior.
 - The legacy manga `ReaderConfigSheet`, its XML layout, ViewBinding, and router entry
-  have been removed. Translation task logs and the shared chapters/pages surface are
-  the remaining Fragment-based tools reachable from the manga reader.
+  have been removed. Translation task logs now open a Compose-owned sheet; the old
+  Fragment, RecyclerView adapter, ViewBinding, and XML implementation have been
+  removed. Chapters, pages, and bookmarks now use the shared Compose tabs content in
+  both details and reader; the old Fragment/XML/`ComposeView` host and compatibility
+  router APIs have been removed.
 - The novel reader settings route is now a state-hoisted Material3 Compose sheet in
   the existing novel Compose root. It uses adaptive sections for reading mode, theme,
   typography, margins, status controls, translation display, and reader actions; the

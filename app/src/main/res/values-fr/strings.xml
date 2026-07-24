@@ -981,9 +981,6 @@
     <string name="basic_info">Infos de base</string>
     <string name="batch_no_selection">Veuillez d\'abord sélectionner une source</string>
     <string name="bind_manga_success">Lié à \\"%s\\" avec succès</string>
-    <string name="blur_mode_enhanced">Fort</string>
-    <string name="blur_mode_immersive">Équilibré (Recommandé)</string>
-    <string name="blur_mode_standard">Discret</string>
     <string name="bookmark_position">Position du marque-page</string>
     <string name="bookmark_preview_unavailable">Impossible de charger l\'aperçu du marque-page</string>
     <string name="breadcrumbs_separator"><![CDATA[" > "]]></string>
