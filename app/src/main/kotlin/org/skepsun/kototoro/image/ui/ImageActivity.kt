@@ -4,14 +4,9 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
 import androidx.activity.viewModels
 import androidx.core.graphics.drawable.toBitmap
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import androidx.swiperefreshlayout.widget.CircularProgressDrawable
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ErrorResult
@@ -23,112 +18,104 @@ import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.image.CoilMemoryCacheKey
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.ui.BaseActivity
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.PopupMenuMediator
 import org.skepsun.kototoro.core.util.ShareHelper
-import org.skepsun.kototoro.core.util.ext.consumeAll
-import org.skepsun.kototoro.core.util.ext.end
 import org.skepsun.kototoro.core.util.ext.enqueueWith
 import org.skepsun.kototoro.core.util.ext.getDisplayIcon
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
-import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
-import org.skepsun.kototoro.core.util.ext.start
-import org.skepsun.kototoro.databinding.ActivityImageBinding
-import org.skepsun.kototoro.databinding.ItemErrorStateBinding
 import javax.inject.Inject
-import kotlinx.coroutines.launch
-import androidx.appcompat.R as appcompatR
 
 @AndroidEntryPoint
-class ImageActivity : BaseActivity<ActivityImageBinding>(),
-	ImageRequest.Listener,
-	View.OnClickListener {
+class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 
 	@Inject
 	lateinit var coil: ImageLoader
 
-	private var errorBinding: ItemErrorStateBinding? = null
 	private val viewModel: ImageViewModel by viewModels()
 	private lateinit var menuMediator: PopupMenuMediator
+	private var imageView: SubsamplingScaleImageView? = null
+	private var menuAnchor: View? = null
+	private var inlineImageJob: Job? = null
+	private var hasStartedImageLoad = false
+	private var isImageLoading by androidx.compose.runtime.mutableStateOf(false)
+	private var imageError by androidx.compose.runtime.mutableStateOf<ImageErrorState?>(null)
+	private var isSaving by androidx.compose.runtime.mutableStateOf(false)
+
 	private val inlineImagePath: String?
 		get() = intent.getStringExtra(AppRouter.KEY_IMAGE_PATH)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		setContentView(ActivityImageBinding.inflate(layoutInflater))
-		viewBinding.buttonBack.setOnClickListener(this)
-		viewBinding.buttonMenu.setOnClickListener(this)
 
-		val menuProvider = ImageMenuProvider(
-			activity = this,
-			snackbarHost = viewBinding.root,
-			viewModel = viewModel,
+		menuMediator = PopupMenuMediator(
+			ImageMenuProvider(
+				activity = this,
+				snackbarHost = window.decorView,
+				viewModel = viewModel,
+			),
 		)
-		menuMediator = PopupMenuMediator(menuProvider)
-		viewBinding.buttonMenu.isVisible = inlineImagePath == null
-		viewModel.isLoading.observe(this, ::onLoadingStateChanged)
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(viewBinding.root, null))
+		viewModel.isLoading.observe(this) { isSaving = it }
+		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, null))
 		viewModel.onImageSaved.observeEvent(this, ::onImageSaved)
-		loadImage()
-	}
 
-	override fun onClick(v: View) {
-		when (v.id) {
-			R.id.button_back -> dispatchNavigateUp()
-			R.id.button_menu -> menuMediator.onLongClick(v)
-			else -> loadImage()
+		setComposeContent {
+			ImageViewerScreen(
+				showMenu = inlineImagePath == null,
+				isSaving = isSaving,
+				isLoading = isImageLoading,
+				error = imageError,
+				onBack = ::navigateUp,
+				onMenu = { menuAnchor?.let(menuMediator::onLongClick) },
+				onRetry = { loadImage() },
+				onImageViewCreated = { view ->
+					imageView = view
+					if (!hasStartedImageLoad) {
+						hasStartedImageLoad = true
+						loadImage(view)
+					}
+				},
+				onMenuAnchorCreated = { menuAnchor = it },
+			)
 		}
 	}
 
 	override fun onError(request: ImageRequest, result: ErrorResult) {
-		viewBinding.progressBar.hide()
-		with(errorBinding ?: ItemErrorStateBinding.bind(viewBinding.stubError.inflate())) {
-			errorBinding = this
-			root.isVisible = true
-			textViewError.text = result.throwable.getDisplayMessage(resources)
-			textViewError.setCompoundDrawablesWithIntrinsicBounds(0, result.throwable.getDisplayIcon(), 0, 0)
-			buttonRetry.isVisible = true
-			buttonRetry.setOnClickListener(this@ImageActivity)
-		}
+		isImageLoading = false
+		imageError = ImageErrorState(
+			message = result.throwable.getDisplayMessage(resources),
+			iconRes = result.throwable.getDisplayIcon(),
+		)
 	}
 
 	override fun onStart(request: ImageRequest) {
-		viewBinding.progressBar.show()
-		(errorBinding?.root ?: viewBinding.stubError).isVisible = false
+		isImageLoading = true
+		imageError = null
 	}
 
 	override fun onSuccess(request: ImageRequest, result: SuccessResult) {
-		viewBinding.progressBar.hide()
-		(errorBinding?.root ?: viewBinding.stubError).isVisible = false
+		isImageLoading = false
+		imageError = null
 	}
 
-	override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-		val typeMask = WindowInsetsCompat.Type.systemBars()
-		val barsInsets = insets.getInsets(typeMask)
-		val baseMargin = v.resources.getDimensionPixelOffset(R.dimen.screen_padding)
-		viewBinding.buttonMenu.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-			marginEnd = barsInsets.end(v) + baseMargin
-			topMargin = barsInsets.top + baseMargin
-		}
-		viewBinding.buttonBack.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-			marginStart = barsInsets.start(v) + baseMargin
-			topMargin = barsInsets.top + baseMargin
-		}
-		return insets.consumeAll(typeMask)
-	}
-
-	private fun loadImage() {
+	private fun loadImage(view: SubsamplingScaleImageView? = imageView) {
+		val targetView = view ?: return
+		isImageLoading = true
+		imageError = null
 		inlineImagePath?.let {
-			loadInlineImage(it)
+			loadInlineImage(targetView, it)
 			return
 		}
 		ImageRequest.Builder(this)
@@ -138,18 +125,17 @@ class ImageActivity : BaseActivity<ActivityImageBinding>(),
 			.lifecycle(this)
 			.listener(this)
 			.mangaSourceExtra(ContentSource(intent.getStringExtra(AppRouter.KEY_SOURCE)))
-			.target(SsivTarget(viewBinding.ssiv))
+			.target(SsivTarget(targetView))
 			.enqueueWith(coil)
 	}
 
-	private fun loadInlineImage(imagePath: String) {
-		viewBinding.progressBar.show()
-		(errorBinding?.root ?: viewBinding.stubError).isVisible = false
-		lifecycleScope.launch {
-			runCatching {
+	private fun loadInlineImage(view: SubsamplingScaleImageView, imagePath: String) {
+		inlineImageJob?.cancel()
+		inlineImageJob = lifecycleScope.launch {
+			try {
 				@Suppress("UNCHECKED_CAST")
 				val headers = intent.getSerializableExtra(AppRouter.KEY_IMAGE_HEADERS) as? HashMap<String, String>
-				NovelInlineImageLoader.loadBitmap(
+				val bitmap = NovelInlineImageLoader.loadBitmap(
 					context = this@ImageActivity,
 					imageLoader = coil,
 					imagePath = imagePath,
@@ -158,44 +144,36 @@ class ImageActivity : BaseActivity<ActivityImageBinding>(),
 					chapterPath = intent.getStringExtra(AppRouter.KEY_CHAPTER_PATH),
 					headers = headers.orEmpty(),
 				) ?: error("Image decode returned null")
-			}.onSuccess { bitmap ->
-				viewBinding.progressBar.hide()
-				viewBinding.ssiv.setImage(ImageSource.bitmap(bitmap))
-				(errorBinding?.root ?: viewBinding.stubError).isVisible = false
-			}.onFailure { error ->
-				viewBinding.progressBar.hide()
-				with(errorBinding ?: ItemErrorStateBinding.bind(viewBinding.stubError.inflate())) {
-					errorBinding = this
-					root.isVisible = true
-					textViewError.text = error.getDisplayMessage(resources)
-					textViewError.setCompoundDrawablesWithIntrinsicBounds(0, error.getDisplayIcon(), 0, 0)
-					buttonRetry.isVisible = true
-					buttonRetry.setOnClickListener(this@ImageActivity)
-				}
+				isImageLoading = false
+				imageError = null
+				view.setImage(ImageSource.bitmap(bitmap))
+			} catch (error: CancellationException) {
+				throw error
+			} catch (error: Throwable) {
+				isImageLoading = false
+				imageError = ImageErrorState(
+					message = error.getDisplayMessage(resources),
+					iconRes = error.getDisplayIcon(),
+				)
 			}
 		}
 	}
 
 	private fun onImageSaved(uri: Uri) {
-		Snackbar.make(viewBinding.root, R.string.page_saved, Snackbar.LENGTH_LONG)
+		Snackbar.make(window.decorView, R.string.page_saved, Snackbar.LENGTH_LONG)
 			.setAction(R.string.share) {
 				ShareHelper(this).shareImage(uri)
 			}.show()
 	}
 
-	private fun onLoadingStateChanged(isLoading: Boolean) {
-		val button = viewBinding.buttonMenu
-		button.isClickable = !isLoading
-		if (isLoading) {
-			button.setImageDrawable(
-				CircularProgressDrawable(this).also {
-					it.setStyle(CircularProgressDrawable.LARGE)
-					it.setColorSchemeColors(getThemeColor(appcompatR.attr.colorControlNormal))
-					it.start()
-				},
-			)
+	private fun navigateUp() {
+		val upIntent = parentActivityIntent
+		if (upIntent != null) {
+			if (!navigateUpTo(upIntent)) {
+				startActivity(upIntent)
+			}
 		} else {
-			button.setImageResource(appcompatR.drawable.abc_ic_menu_overflow_material)
+			finishAfterTransition()
 		}
 	}
 
