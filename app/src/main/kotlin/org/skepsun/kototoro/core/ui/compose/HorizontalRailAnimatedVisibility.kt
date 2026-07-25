@@ -107,7 +107,7 @@ fun HorizontalRailAnimatedVisibility(
     enableScrollLinkedAnimation: Boolean = true,
     content: @Composable (Modifier) -> Unit,
 ) {
-    if (animationFactor <= 0f) {
+    if (animationFactor <= 0f || !enableScrollLinkedAnimation) {
         content(modifier)
         return
     }

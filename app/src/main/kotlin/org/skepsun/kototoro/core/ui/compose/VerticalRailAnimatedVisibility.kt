@@ -31,7 +31,7 @@ fun VerticalRailAnimatedVisibility(
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
-    if (!isAnimationEnabled || animationFactor <= 0f) {
+    if (!isAnimationEnabled || animationFactor <= 0f || !enableScrollLinkedAnimation) {
         content(modifier)
         return
     }

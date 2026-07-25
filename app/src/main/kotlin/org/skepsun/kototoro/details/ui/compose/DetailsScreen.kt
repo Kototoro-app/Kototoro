@@ -240,7 +240,6 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import java.util.Locale
@@ -249,7 +248,6 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 
 private val DetailsTopBarHeight = 44.dp
-private const val ReadingRecordSheetLogTag = "ReadingRecordSheet"
 private const val DetailsSheetMinOpacityPercent = 80
 
 private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
@@ -4326,35 +4324,8 @@ private fun ReadingRecordSheet(
     val maxListHeight = remember(configuration.screenHeightDp) {
         (configuration.screenHeightDp.dp * 0.86f).coerceAtLeast(360.dp)
     }
-    LaunchedEffect(snapshot.summary, sessions.size, snapshot.jumpPoints.size, timelineItems.size) {
-        Log.d(
-            ReadingRecordSheetLogTag,
-            "show sessions=${sessions.size}, jumps=${snapshot.jumpPoints.size}, chapters=${snapshot.chapters.size}, " +
-                "timeline=${timelineItems.size}, progress=$progress",
-        )
-    }
-    LaunchedEffect(sheetState) {
-        snapshotFlow {
-            "current=${sheetState.currentValue}, target=${sheetState.targetValue}, visible=${sheetState.isVisible}"
-        }.distinctUntilChanged().collect { state ->
-            Log.d(ReadingRecordSheetLogTag, "sheetState $state")
-        }
-    }
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val layoutInfo = listState.layoutInfo
-            val first = layoutInfo.visibleItemsInfo.firstOrNull()
-            val last = layoutInfo.visibleItemsInfo.lastOrNull()
-            "scrolling=${listState.isScrollInProgress}, first=${first?.index}:${first?.offset}, " +
-                "last=${last?.index}:${last?.offset}, total=${layoutInfo.totalItemsCount}, " +
-                "viewport=${layoutInfo.viewportStartOffset}..${layoutInfo.viewportEndOffset}"
-        }.distinctUntilChanged().collect { state ->
-            Log.d(ReadingRecordSheetLogTag, "listState $state")
-        }
-    }
     ModalBottomSheet(
         onDismissRequest = {
-            Log.d(ReadingRecordSheetLogTag, "dismissRequest")
             onDismissRequest()
         },
         sheetState = sheetState,
@@ -4379,9 +4350,6 @@ private fun ReadingRecordSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = maxListHeight)
-                    .onSizeChanged { size ->
-                        Log.d(ReadingRecordSheetLogTag, "listSize width=${size.width}, height=${size.height}")
-                    }
                     .padding(horizontal = 20.dp),
                 contentPadding = PaddingValues(
                     top = 20.dp,
@@ -4425,10 +4393,6 @@ private fun ReadingRecordSheet(
                         when (item) {
                             is ReadingTimelineItem.Session -> TimelineSessionRow(item.session, chapterTitle)
                             is ReadingTimelineItem.Jump -> TimelineJumpRow(item.point, chapterTitle) { point ->
-                                Log.d(
-                                    ReadingRecordSheetLogTag,
-                                    "jumpClick id=${point.id}, from=${point.fromChapterId}:${point.fromPage}:${point.fromScroll}",
-                                )
                                 onJumpPointClick(point)
                             }
                         }

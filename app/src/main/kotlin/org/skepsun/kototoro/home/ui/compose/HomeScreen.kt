@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.home.ui.compose
 
 import android.content.res.Configuration
-import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -35,9 +35,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,7 +47,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -58,7 +55,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,12 +92,8 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.crossfade
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.mapNotNull
 import java.util.Locale
 import kotlin.math.absoluteValue
-import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
@@ -185,8 +177,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     autoAdvanceHero: Boolean = true,
 ) {
-    val recompositionCounter = remember { intArrayOf(0) }
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val layoutDirection = LocalLayoutDirection.current
     val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
     val context = LocalContext.current
@@ -227,16 +218,16 @@ fun HomeScreen(
         )
     }
     val quickActions = listOf(
-        HomeQuickAction(stringResource(R.string.home_quick_action_wizard), R.drawable.ic_welcome, actions.onSetupWizardClick),
-        HomeQuickAction(stringResource(R.string.favourites), R.drawable.ic_heart, actions.onLibraryOpenClick),
-        HomeQuickAction(stringResource(R.string.bookmarks), R.drawable.ic_bookmark, actions.onBookmarksClick),
-        HomeQuickAction(stringResource(R.string.local_storage), R.drawable.ic_storage, actions.onLocalClick),
-        HomeQuickAction(stringResource(R.string.downloads), R.drawable.ic_download, actions.onDownloadsClick),
-        HomeQuickAction(stringResource(R.string.random), R.drawable.ic_dice, actions.onRandomClick, !isRandomLoading),
-        HomeQuickAction(stringResource(R.string.home_quick_action_extensions), R.drawable.ic_extension, actions.onManageSourcesClick),
-        HomeQuickAction(stringResource(R.string.translation_settings), R.drawable.ic_language, actions.onAutoTranslateClick),
-        HomeQuickAction(stringResource(R.string.reader_settings), R.drawable.ic_read, actions.onReaderSettingsClick),
-        HomeQuickAction(stringResource(R.string.settings), R.drawable.ic_settings, actions.onSettingsClick),
+            HomeQuickAction(stringResource(R.string.home_quick_action_wizard), R.drawable.ic_welcome, actions.onSetupWizardClick),
+            HomeQuickAction(stringResource(R.string.favourites), R.drawable.ic_heart, actions.onLibraryOpenClick),
+            HomeQuickAction(stringResource(R.string.bookmarks), R.drawable.ic_bookmark, actions.onBookmarksClick),
+            HomeQuickAction(stringResource(R.string.local_storage), R.drawable.ic_storage, actions.onLocalClick),
+            HomeQuickAction(stringResource(R.string.downloads), R.drawable.ic_download, actions.onDownloadsClick),
+            HomeQuickAction(stringResource(R.string.random), R.drawable.ic_dice, actions.onRandomClick, !isRandomLoading),
+            HomeQuickAction(stringResource(R.string.home_quick_action_extensions), R.drawable.ic_extension, actions.onManageSourcesClick),
+            HomeQuickAction(stringResource(R.string.translation_settings), R.drawable.ic_language, actions.onAutoTranslateClick),
+            HomeQuickAction(stringResource(R.string.reader_settings), R.drawable.ic_read, actions.onReaderSettingsClick),
+            HomeQuickAction(stringResource(R.string.settings), R.drawable.ic_settings, actions.onSettingsClick),
     )
     val topInset = contentPadding.calculateTopPadding()
     val scrollTopInset = if (heroEntries.isEmpty()) {
@@ -249,36 +240,20 @@ fun HomeScreen(
     val heroHeightDp by remember(heroPx, density) {
         derivedStateOf { with(density) { heroPx.toDp() } }
     }
-    val heroScrollOffsetPx by remember(scrollState, heroPx) {
-        derivedStateOf {
-            (-scrollState.value.toFloat()).coerceIn(-heroPx.toFloat(), 0f)
-        }
-    }
-
-    SideEffect {
-        if (BuildConfig.DEBUG) {
-            recompositionCounter[0] += 1
-            Log.d(
-                "HomeScreenDiag",
-                "recompose#${recompositionCounter[0]} state=${state.homeDiagSignature()} hero=${heroEntries.homeHeroSignature()} listMode=$listMode gridScale=$gridScale scroll=${scrollState.value} heroPx=$heroPx heroOffset=$heroScrollOffsetPx",
-            )
-        }
-    }
-
-
     Box(modifier = modifier.fillMaxSize()) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(rememberNestedScrollInteropConnection())
-                .verticalScroll(scrollState)
                 .padding(
                     start = systemBarsPadding.calculateLeftPadding(layoutDirection) + CompactTopBarHorizontalPadding,
-                    top = scrollTopInset,
                     end = systemBarsPadding.calculateRightPadding(layoutDirection) + CompactTopBarHorizontalPadding,
-                    bottom = contentPadding.calculateBottomPadding(),
-                )
-                .padding(bottom = 12.dp),
+                ),
+            contentPadding = PaddingValues(
+                top = scrollTopInset,
+                bottom = contentPadding.calculateBottomPadding() + 12.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val hasHighlights = heroEntries.isNotEmpty() ||
@@ -288,30 +263,38 @@ fun HomeScreen(
                 recentSearches.isNotEmpty()
             if (hasHighlights) {
                 if (heroEntries.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(heroHeightDp))
+                    item(key = "home_hero_spacer") {
+                        Spacer(modifier = Modifier.height(heroHeightDp))
+                    }
                 }
-                HomeHighlightsSections(
-                    historyItems = state.recentHistoryItems,
-                    recentHistoryCount = state.recentHistoryCount,
-                    updateItems = state.recentUpdates,
-                    unreadUpdatesCount = state.unreadUpdatesCount,
-                    recommendationItems = state.recommendations,
-                    recommendationsCount = state.recommendationsCount,
-                    recentSearches = recentSearches,
-                    posterStyle = posterStyle,
-                    listMode = listMode,
-                    onItemClick = onContentClick,
-                    onViewAllRecentClick = actions.onViewAllRecentClick,
-                    onViewAllUpdatesClick = actions.onViewAllUpdatesClick,
-                    onViewAllRecommendationsClick = actions.onViewAllRecommendationsClick,
-                    onRecentSearchClick = actions.onRecentSearchClick,
-                )
+                item(key = "home_highlights") {
+                    HomeHighlightsSections(
+                        historyItems = state.recentHistoryItems,
+                        recentHistoryCount = state.recentHistoryCount,
+                        updateItems = state.recentUpdates,
+                        unreadUpdatesCount = state.unreadUpdatesCount,
+                        recommendationItems = state.recommendations,
+                        recommendationsCount = state.recommendationsCount,
+                        recentSearches = recentSearches,
+                        posterStyle = posterStyle,
+                        listMode = listMode,
+                        onItemClick = onContentClick,
+                        onViewAllRecentClick = actions.onViewAllRecentClick,
+                        onViewAllUpdatesClick = actions.onViewAllUpdatesClick,
+                        onViewAllRecommendationsClick = actions.onViewAllRecommendationsClick,
+                        onRecentSearchClick = actions.onRecentSearchClick,
+                    )
+                }
             }
             if (!hasHighlights && !state.isInitialized) {
-                HomeLoadingSkeleton(posterStyle = posterStyle)
+                item(key = "home_loading_skeleton") {
+                    HomeLoadingSkeleton(posterStyle = posterStyle)
+                }
             }
 
-            QuickActionsSection(actions = quickActions)
+            item(key = "home_quick_actions") {
+                QuickActionsSection(actions = quickActions)
+            }
         }
 
         if (heroEntries.isNotEmpty()) {
@@ -323,7 +306,14 @@ fun HomeScreen(
                 autoAdvance = autoAdvanceHero,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .graphicsLayer { translationY = heroScrollOffsetPx }
+                    .graphicsLayer {
+                        val scrollOffset = if (listState.firstVisibleItemIndex == 0) {
+                            listState.firstVisibleItemScrollOffset.toFloat()
+                        } else {
+                            heroPx.toFloat()
+                        }
+                        translationY = -scrollOffset.coerceIn(0f, heroPx.toFloat())
+                    }
                     .onGloballyPositioned { coordinates ->
                         val newHeight = coordinates.size.height
                         if (heroPx != newHeight) heroPx = newHeight
@@ -529,22 +519,6 @@ private fun HomeHeroSection(
         intervalMillis = 5200L,
         enabled = autoAdvance,
     )
-    LaunchedEffect(entries, pagerState) {
-        snapshotFlow { pagerState.settledPage.coerceIn(0, entries.lastIndex) }
-            .distinctUntilChanged()
-            .mapNotNull { index ->
-                entries.getOrNull(index)?.let { entry -> index to entry }
-            }
-            .collectLatest { (index, entry) ->
-                if (BuildConfig.DEBUG) {
-                    Log.d(
-                        "HomeScreenDiag",
-                        "heroPage index=$index kind=${entry.kind.name} groupKey=${entry.groupKey} contentId=${entry.content.id}",
-                    )
-                }
-            }
-    }
-
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
@@ -582,7 +556,7 @@ private fun HomeHeroSection(
                 state = pagerState,
                 pageSize = PageSize.Fixed(cardWidth),
                 pageSpacing = pageSpacing,
-                beyondViewportPageCount = 2,
+                beyondViewportPageCount = 1,
                 contentPadding = contentPadding,
                 key = { page ->
                     entries.getOrNull(page)?.let { entry ->
@@ -1843,22 +1817,6 @@ private fun buildHomeHeroEntries(
         }
 
     return entries
-}
-
-private fun HomeSummaryState.homeDiagSignature(): String {
-    return buildString {
-        append("tab=").append(selectedTab)
-        append(" initialized=").append(isInitialized)
-        append(" resume=").append(resumeState.content?.id).append('@').append(resumeState.groupKey)
-        append(" history=").append(recentHistoryItems.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
-        append(" updates=").append(recentUpdates.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}:${it.newChapters}" })
-        append(" recommendations=").append(recommendations.joinToString(limit = 6) { "${it.groupKey}:${it.content.id}" })
-        append(" searches=").append(recentSearches.joinToString(limit = 4) { it.query })
-    }
-}
-
-private fun List<HomeHeroEntry>.homeHeroSignature(): String {
-    return joinToString(limit = 6) { "${it.kind.name}:${it.groupKey}:${it.content.id}" }
 }
 
 @Composable

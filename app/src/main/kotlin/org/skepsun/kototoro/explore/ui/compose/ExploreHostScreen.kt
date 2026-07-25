@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.explore.ui.compose
 
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -90,7 +89,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
@@ -142,14 +140,9 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import java.util.Locale
 
 private const val BrowseLoadMoreBuffer = 4
-private const val ExploreRouteTraceTag = "ExploreRouteTrace"
 private val BrowseHeroContentOverlap = 56.dp
 
-private inline fun traceExploreRoute(message: () -> String) {
-    if (BuildConfig.DEBUG) {
-        Log.d(ExploreRouteTraceTag, message())
-    }
-}
+private inline fun traceExploreRoute(message: () -> String) = Unit
 
 private data class SourceQuickAccessMetrics(
     val preferredColumns: Int,
@@ -173,6 +166,11 @@ private data class ExploreScreenPrefs(
 private data class SourceQuickAccessGroup(
     val title: String?,
     val sources: List<ContentSourceItem>,
+)
+
+private data class SourceQuickAccessRows(
+    val title: String?,
+    val rows: List<List<ContentSourceItem>>,
 )
 
 private data class BrowseSourceItems(
@@ -349,16 +347,6 @@ fun KototoroExploreHostRoute(
     ) + contentPadding.calculateTopPadding()
     val browseHeroHeightPx = with(density) { browseHeroHeight.toPx() }
     // 实时读取 LazyColumn 第一个 item 的滚动偏移，驱动 Hero 跟随滚动
-    val heroScrollOffsetPx by remember(listState, browseHeroHeightPx) {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex == 0) {
-                -listState.firstVisibleItemScrollOffset.toFloat()
-            } else {
-                -browseHeroHeightPx
-            }
-        }
-    }
-
     var selectedSourceIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     val hapticFeedback = LocalHapticFeedback.current
     val browseSourceItems = remember(sourceItems) {
@@ -449,6 +437,14 @@ fun KototoroExploreHostRoute(
         sourceGroups.takeVisibleSourceGroups(
             maxSources = if (areSourcesExpanded) Int.MAX_VALUE else sourceCollapsedVisibleCount,
         )
+    }
+    val visibleSourceRows = remember(visibleSourceGroups, sourceColumns) {
+        visibleSourceGroups.map { group ->
+            SourceQuickAccessRows(
+                title = group.title,
+                rows = group.sources.chunked(sourceColumns),
+            )
+        }
     }
     val hasMoreSources = !shouldForceSourcesExpanded && sources.size > sourceCollapsedVisibleCount
 
@@ -721,7 +717,7 @@ fun KototoroExploreHostRoute(
                     metrics = sourceMetrics,
                     browseListMode = browseListMode,
                     columns = sourceColumns,
-                    visibleGroups = visibleSourceGroups,
+                    visibleGroups = visibleSourceRows,
                     selectedSourceIds = selectedSourceIds,
                     hasMoreSources = hasMoreSources,
                     isExpanded = areSourcesExpanded,
@@ -898,7 +894,13 @@ fun KototoroExploreHostRoute(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopStart)
-                        .graphicsLayer { translationY = heroScrollOffsetPx },
+                        .graphicsLayer {
+                            translationY = if (listState.firstVisibleItemIndex == 0) {
+                                -listState.firstVisibleItemScrollOffset.toFloat()
+                            } else {
+                                -browseHeroHeightPx
+                            }
+                        },
                 )
             }
 
@@ -1178,7 +1180,7 @@ private fun LazyListScope.sourceQuickAccessItems(
     metrics: SourceQuickAccessMetrics,
     browseListMode: ListMode,
     columns: Int,
-    visibleGroups: List<SourceQuickAccessGroup>,
+    visibleGroups: List<SourceQuickAccessRows>,
     selectedSourceIds: Set<Long>,
     hasMoreSources: Boolean,
     isExpanded: Boolean,
@@ -1219,7 +1221,7 @@ private fun LazyListScope.sourceQuickAccessItems(
                 )
             }
         }
-        val rows = group.sources.chunked(columns)
+        val rows = group.rows
         itemsIndexed(
             items = rows,
             key = { rowIndex, rowSources ->
