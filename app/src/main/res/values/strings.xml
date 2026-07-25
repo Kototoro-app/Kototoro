@@ -909,6 +909,10 @@
     <string name="export_aniyomi_backup_summary">Export favorites, categories, and reading progress for Mihon manga sources and Aniyomi anime sources.</string>
     <string name="export_aniyomi_backup_saved">Aniyomi backup saved (%1$d entries)</string>
     <string name="export_aniyomi_backup_empty">No compatible Mihon or Aniyomi source favorites or history available to export</string>
+    <string name="export_usagi_backup">Export Usagi backup</string>
+    <string name="export_usagi_backup_summary">Export manga favorites, categories, history, tracking, bookmarks, and statistics for Usagi.</string>
+    <string name="export_usagi_backup_saved">Usagi backup saved (%1$d entries)</string>
+    <string name="export_usagi_backup_empty">No compatible manga favorites or history available to export</string>
     <string name="import_backup_choose_source_app">Choose source app</string>
     <string name="supported_apps">Supported apps</string>
     <string name="import_backup_supported_apps_summary">Mihon, Komikku, Aniyomi, Anikku, Animiru, Venera</string>

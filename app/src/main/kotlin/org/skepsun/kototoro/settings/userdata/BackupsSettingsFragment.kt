@@ -30,6 +30,7 @@ import org.skepsun.kototoro.backups.external.ExternalBackupApp
 import org.skepsun.kototoro.backups.ui.backup.AniyomiBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.BackupService
 import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
+import org.skepsun.kototoro.backups.ui.backup.UsagiBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.ManualWebDavRestoreMode
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.periodical.WebDavRemoteBackupRestoreStatus
@@ -108,6 +109,14 @@ class BackupsSettingsFragment : Fragment() {
         }
     }
 
+    private val usagiBackupExportCall = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null && !UsagiBackupExportService.start(requireContext(), uri)) {
+            showOperationNotSupported()
+        }
+    }
+
     private val outputSelectCall = OpenDocumentTreeHelper(this) { uri ->
         if (uri != null) {
             val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -156,6 +165,11 @@ class BackupsSettingsFragment : Fragment() {
                             showOperationNotSupported()
                         }
                     },
+                    onExportUsagiBackupClick = {
+                        if (!usagiBackupExportCall.tryLaunch(BackupUtils.generateUsagiBackupFileName(requireContext()))) {
+                            showOperationNotSupported()
+                        }
+                    },
                     onRestoreBackupClick = {
                         if (!backupSelectCall.tryLaunch(arrayOf("*/*"))) {
                             showOperationNotSupported()
@@ -194,6 +208,7 @@ fun BackupsSettingsRoute(
     onRestoreBackupClick: () -> Unit,
     onExportMihonBackupClick: () -> Unit,
     onExportAniyomiBackupClick: () -> Unit,
+    onExportUsagiBackupClick: () -> Unit,
     onImportExternalBackupFilePick: (ExternalBackupApp) -> Unit,
 ) {
     val context = LocalContext.current
@@ -337,6 +352,7 @@ fun BackupsSettingsRoute(
         onRestoreBackupClick = onRestoreBackupClick,
         onExportMihonBackupClick = onExportMihonBackupClick,
         onExportAniyomiBackupClick = onExportAniyomiBackupClick,
+        onExportUsagiBackupClick = onExportUsagiBackupClick,
         onImportExternalBackupClick = { isExternalImportDialogVisible = true },
         onDismissExternalImportDialog = { isExternalImportDialogVisible = false },
         onImportExternalBackupAppClick = { app ->
