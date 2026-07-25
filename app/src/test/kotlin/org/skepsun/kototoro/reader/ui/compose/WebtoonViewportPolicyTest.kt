@@ -6,6 +6,45 @@ import org.junit.jupiter.api.Test
 class WebtoonViewportPolicyTest {
 
 	@Test
+	fun `zoomed out canvas keeps the inverse scaled layout centered`() {
+		assertEquals(
+			WebtoonCanvasOffsetBounds(
+				minX = 0f,
+				maxX = 0f,
+				minY = 0f,
+				maxY = 0f,
+			),
+			resolveWebtoonCanvasOffsetBounds(1000, 2000, 0.8f),
+		)
+	}
+
+	@Test
+	fun `zoomed in canvas uses symmetric viewport bounds`() {
+		assertEquals(
+			WebtoonCanvasOffsetBounds(
+				minX = -500f,
+				maxX = 500f,
+				minY = -500f,
+				maxY = 500f,
+			),
+			resolveWebtoonCanvasOffsetBounds(1000, 1000, 2f),
+		)
+	}
+
+	@Test
+	fun `zoomed out layout reserves inverse scaled viewport`() {
+		assertEquals(1250, resolveWebtoonLayoutViewportHeight(1000, 0.8f))
+		assertEquals(1000, resolveWebtoonLayoutViewportHeight(1000, 1f))
+	}
+
+	@Test
+	fun `boundary handoff follows the opposite direction and accounts for scale`() {
+		assertEquals(50, resolveWebtoonBoundaryHandoff(scale = 2f, desiredY = -600f, boundedY = -500f))
+		assertEquals(-50, resolveWebtoonBoundaryHandoff(scale = 2f, desiredY = 600f, boundedY = 500f))
+		assertEquals(0, resolveWebtoonBoundaryHandoff(scale = 1f, desiredY = 600f, boundedY = 0f))
+	}
+
+	@Test
 	fun `unknown image reserves complete viewport`() {
 		assertEquals(
 			WebtoonViewportMeasurement(itemHeightPx = 2000, internalScrollRangePx = 0),

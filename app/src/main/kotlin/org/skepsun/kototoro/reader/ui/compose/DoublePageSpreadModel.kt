@@ -1,23 +1,48 @@
 package org.skepsun.kototoro.reader.ui.compose
 
+import org.skepsun.kototoro.reader.ui.pager.ReaderPage
+
+internal data class DoublePageDisplayItem(
+	val page: ReaderPage?,
+	val originalPosition: Int,
+)
+
+internal fun buildDoublePageDisplayItems(
+	pages: List<ReaderPage>,
+	coverPage: Boolean = false,
+): List<DoublePageDisplayItem> {
+	if (pages.isEmpty()) return emptyList()
+	return buildList {
+		var currentChapterId = pages.first().chapterId
+		if (coverPage) add(DoublePageDisplayItem(page = null, originalPosition = -1))
+		pages.forEachIndexed { position, page ->
+			if (page.chapterId != currentChapterId) {
+				if (size % 2 != 0) add(DoublePageDisplayItem(page = null, originalPosition = -1))
+				currentChapterId = page.chapterId
+				if (coverPage) add(DoublePageDisplayItem(page = null, originalPosition = -1))
+			}
+			add(DoublePageDisplayItem(page = page, originalPosition = position))
+		}
+	}
+}
+
 internal data class DoublePageSpread(
 	val lowerPosition: Int,
 	val upperPosition: Int,
 ) {
 	val positions: IntRange
 		get() = lowerPosition..upperPosition
+
+	fun orderedPositions(reverseLayout: Boolean): List<Int> =
+		if (reverseLayout) positions.toList().reversed() else positions.toList()
 }
 
 internal class DoublePageSpreadModel private constructor(
 	val spreads: List<DoublePageSpread>,
 ) {
-	fun spreadIndexForPage(position: Int): Int {
-		if (spreads.isEmpty()) return 0
-		val clampedPosition = position.coerceIn(0, spreads.last().upperPosition)
-		return (clampedPosition / PAGES_PER_SPREAD).coerceIn(spreads.indices)
-	}
-
 	companion object {
+		const val SPACER_KEY = Long.MIN_VALUE
+
 		fun create(pageCount: Int): DoublePageSpreadModel {
 			require(pageCount >= 0) { "pageCount must not be negative" }
 			val spreads = buildList {
@@ -35,6 +60,13 @@ internal class DoublePageSpreadModel private constructor(
 
 		private const val PAGES_PER_SPREAD = 2
 	}
+
+	fun spreadIndexForPage(position: Int): Int {
+		if (spreads.isEmpty()) return 0
+		val clampedPosition = position.coerceIn(0, spreads.last().upperPosition)
+		return (clampedPosition / PAGES_PER_SPREAD).coerceIn(spreads.indices)
+	}
+
 }
 
 internal fun resolvePageNavigationTarget(

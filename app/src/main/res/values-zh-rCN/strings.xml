@@ -142,6 +142,7 @@
     <string name="double_page_mode">双页模式</string>
     <string name="double_page_landscape">横屏时双页</string>
     <string name="double_page_foldable">折叠屏双页</string>
+    <string name="double_page_cover_page">首图作为封面（单独显示）</string>
     <string name="miscellaneous">杂项</string>
     <string name="grid_size">网格大小</string>
     <string name="grid_aspect_ratio">网格比例</string>

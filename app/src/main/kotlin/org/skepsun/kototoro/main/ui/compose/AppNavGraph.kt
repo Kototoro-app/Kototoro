@@ -2,9 +2,15 @@ package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +70,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
@@ -86,7 +97,8 @@ import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.handleDetailsAction
 import org.skepsun.kototoro.parsers.model.Content
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.list.ui.model.ListModel
@@ -118,6 +130,17 @@ import dev.chrisbanes.haze.hazeSource
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
 }
+
+private data class PendingFavoritesDialog(
+    val requestId: Long,
+    val isSync: Boolean,
+)
+
+private data class FavoritesSelectionDialogState(
+    val request: PendingFavoritesDialog,
+    val candidates: List<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel.ImportSource>,
+    val selectedIndices: Set<Int>,
+)
 
 @Composable
 private inline fun <reified VM> spaceBoundHiltViewModel(owner: String): VM
@@ -1404,6 +1427,7 @@ internal fun LocalTopLevelRouteContent(
 ) {
     val viewModel = hiltViewModel<org.skepsun.kototoro.local.ui.LocalListViewModel>()
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
+    var pendingRemoveSelection by remember { mutableStateOf<Set<Long>?>(null) }
 
     DisposableEffect(appRouter) {
         onContextualMenuActionsChanged(
@@ -1462,14 +1486,7 @@ internal fun LocalTopLevelRouteContent(
             },
             isSourceTagFilterVisible = false,
             onRemoveSelection = { ids ->
-                if (activity != null) {
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                        .setTitle(org.skepsun.kototoro.R.string.delete_manga)
-                        .setMessage(org.skepsun.kototoro.R.string.text_delete_local_manga_batch)
-                        .setPositiveButton(org.skepsun.kototoro.R.string.delete) { _, _ -> viewModel.delete(ids) }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
-                }
+                pendingRemoveSelection = ids.toSet()
             },
             onShareSelection = { ids ->
                 if (activity != null) {
@@ -1489,6 +1506,33 @@ internal fun LocalTopLevelRouteContent(
             onEmptyActionClick = { appRouter.showImportDialog() },
             listHeader = null,
         )
+
+        pendingRemoveSelection?.let { ids ->
+            AlertDialog(
+                onDismissRequest = { pendingRemoveSelection = null },
+                title = {
+                    Text(text = stringResource(org.skepsun.kototoro.R.string.delete_manga))
+                },
+                text = {
+                    Text(text = stringResource(org.skepsun.kototoro.R.string.text_delete_local_manga_batch))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingRemoveSelection = null
+                            viewModel.delete(ids)
+                        },
+                    ) {
+                        Text(text = stringResource(org.skepsun.kototoro.R.string.delete))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingRemoveSelection = null }) {
+                        Text(text = stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -2024,8 +2068,10 @@ internal fun FavoritesTopLevelRouteContent(
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
     var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
-    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    var nextFavoritesDialogId by remember { mutableLongStateOf(0L) }
+    var pendingFavoritesDialog by remember { mutableStateOf<PendingFavoritesDialog?>(null) }
+    var favoritesSelectionDialog by remember { mutableStateOf<FavoritesSelectionDialogState?>(null) }
 
     fun showToast(messageRes: Int) {
         android.widget.Toast.makeText(context, messageRes, android.widget.Toast.LENGTH_SHORT).show()
@@ -2035,25 +2081,35 @@ internal fun FavoritesTopLevelRouteContent(
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    fun showImportDialog(scope: CoroutineScope) {
-        scope.launch {
-            val candidates = viewModel.loadImportCandidates()
-            if (candidates.isEmpty()) {
-                showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
-                return@launch
-            }
-            val checked = BooleanArray(candidates.size) { true }
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-                .setTitle(org.skepsun.kototoro.R.string.import_favourites_title)
-                .setMultiChoiceItems(candidates.map { it.title }.toTypedArray(), checked) { _, which, isChecked ->
-                    checked[which] = isChecked
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    viewModel.importFavorites(candidates.filterIndexed { index, _ -> checked[index] })
-                }
-                .show()
+    fun showImportDialog() {
+        nextFavoritesDialogId += 1
+        pendingFavoritesDialog = PendingFavoritesDialog(nextFavoritesDialogId, isSync = false)
+        favoritesSelectionDialog = null
+    }
+
+    LaunchedEffect(pendingFavoritesDialog) {
+        val request = pendingFavoritesDialog ?: return@LaunchedEffect
+        val candidates = if (request.isSync) {
+            viewModel.loadSyncCandidates()
+        } else {
+            viewModel.loadImportCandidates()
         }
+        currentCoroutineContext().ensureActive()
+        if (candidates.isEmpty()) {
+            if (pendingFavoritesDialog == request) {
+                pendingFavoritesDialog = null
+                showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
+            }
+            return@LaunchedEffect
+        }
+        if (pendingFavoritesDialog != request) {
+            return@LaunchedEffect
+        }
+        favoritesSelectionDialog = FavoritesSelectionDialogState(
+            request = request,
+            candidates = candidates,
+            selectedIndices = candidates.indices.toSet(),
+        )
     }
 
     LaunchedEffect(entityOrganizeResultSource) {
@@ -2075,26 +2131,106 @@ internal fun FavoritesTopLevelRouteContent(
         }
     }
 
-    fun showSyncDialog(scope: CoroutineScope) {
-        scope.launch {
-            val candidates = viewModel.loadSyncCandidates()
-            if (candidates.isEmpty()) {
-                showToast(org.skepsun.kototoro.R.string.import_favourites_no_available)
-                return@launch
-            }
-            val checked = BooleanArray(candidates.size) { true }
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-                .setTitle(org.skepsun.kototoro.R.string.sync_favourites_title)
-                .setMessage(org.skepsun.kototoro.R.string.sync_favourites_warning)
-                .setMultiChoiceItems(candidates.map { it.title }.toTypedArray(), checked) { _, which, isChecked ->
-                    checked[which] = isChecked
+    fun showSyncDialog() {
+        nextFavoritesDialogId += 1
+        pendingFavoritesDialog = PendingFavoritesDialog(nextFavoritesDialogId, isSync = true)
+        favoritesSelectionDialog = null
+    }
+
+    favoritesSelectionDialog?.let { dialog ->
+        AlertDialog(
+            onDismissRequest = {
+                favoritesSelectionDialog = null
+                pendingFavoritesDialog = null
+            },
+            title = {
+                Text(
+                    text = stringResource(
+                        if (dialog.request.isSync) {
+                            org.skepsun.kototoro.R.string.sync_favourites_title
+                        } else {
+                            org.skepsun.kototoro.R.string.import_favourites_title
+                        },
+                    ),
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (dialog.request.isSync) {
+                        Text(
+                            text = stringResource(org.skepsun.kototoro.R.string.sync_favourites_warning),
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp),
+                    ) {
+                        itemsIndexed(dialog.candidates) { index, candidate ->
+                            androidx.compose.foundation.layout.Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val selected = dialog.selectedIndices.toMutableSet()
+                                        if (!selected.add(index)) {
+                                            selected.remove(index)
+                                        }
+                                        favoritesSelectionDialog = dialog.copy(selectedIndices = selected)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(
+                                    checked = index in dialog.selectedIndices,
+                                    onCheckedChange = { checked ->
+                                        val selected = dialog.selectedIndices.toMutableSet()
+                                        if (checked) {
+                                            selected.add(index)
+                                        } else {
+                                            selected.remove(index)
+                                        }
+                                        favoritesSelectionDialog = dialog.copy(selectedIndices = selected)
+                                    },
+                                )
+                                Text(
+                                    text = candidate.title,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
+                        }
+                    }
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    viewModel.syncFavorites(candidates.filterIndexed { index, _ -> checked[index] })
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selectedCandidates = dialog.candidates.filterIndexed { index, _ ->
+                            index in dialog.selectedIndices
+                        }
+                        favoritesSelectionDialog = null
+                        pendingFavoritesDialog = null
+                        if (dialog.request.isSync) {
+                            viewModel.syncFavorites(selectedCandidates)
+                        } else {
+                            viewModel.importFavorites(selectedCandidates)
+                        }
+                    },
+                ) {
+                    Text(text = stringResource(android.R.string.ok))
                 }
-                .show()
-        }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        favoritesSelectionDialog = null
+                        pendingFavoritesDialog = null
+                    },
+                ) {
+                    Text(text = stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
 
     DisposableEffect(appRouter, viewModel) {
@@ -2109,10 +2245,10 @@ internal fun FavoritesTopLevelRouteContent(
                         appRouter.openEntityOrganizeSettings()
                     },
                     KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
-                        showImportDialog(coroutineScope)
+                        showImportDialog()
                     },
                     KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
-                        showSyncDialog(coroutineScope)
+                        showSyncDialog()
                     },
                 ),
             ),

@@ -4,10 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.compose.ui.res.stringResource
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.logs.CrashLogManager
@@ -23,6 +26,7 @@ import java.io.File
 class CrashLogActivity : BaseComposeActivity() {
 
     private var logFiles by mutableStateOf<List<File>>(emptyList())
+    private var showClearConfirm by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,19 +38,39 @@ class CrashLogActivity : BaseComposeActivity() {
                     startActivity(CrashLogDetailActivity.newIntent(this, file.absolutePath))
                 },
                 onClearAll = {
-                    MaterialAlertDialogBuilder(this)
-                        .setTitle(R.string.clear_crash_logs)
-                        .setMessage(R.string.clear_crash_logs_confirm)
-                        .setPositiveButton(R.string.clear_crash_logs) { _, _ ->
-                            CrashLogManager.clearAll(this)
-                            refreshList()
-                            Toast.makeText(this, R.string.crash_logs_cleared, Toast.LENGTH_SHORT).show()
-                        }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
+                    showClearConfirm = true
                 },
                 onNavigateUp = ::finishAfterTransition,
             )
+
+            if (showClearConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showClearConfirm = false },
+                    title = { Text(stringResource(R.string.clear_crash_logs)) },
+                    text = { Text(stringResource(R.string.clear_crash_logs_confirm)) },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showClearConfirm = false
+                                CrashLogManager.clearAll(this)
+                                refreshList()
+                                Toast.makeText(
+                                    this,
+                                    R.string.crash_logs_cleared,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            },
+                        ) {
+                            Text(stringResource(R.string.clear_crash_logs))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showClearConfirm = false }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                    },
+                )
+            }
         }
     }
 

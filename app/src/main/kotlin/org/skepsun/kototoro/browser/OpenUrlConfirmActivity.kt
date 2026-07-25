@@ -4,11 +4,16 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
-class OpenUrlConfirmActivity : AppCompatActivity() {
+class OpenUrlConfirmActivity : BaseComposeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -20,23 +25,44 @@ class OpenUrlConfirmActivity : AppCompatActivity() {
         val mimeType = intent?.getStringExtra(EXTRA_MIME_TYPE)
         val sourceName = intent?.getStringExtra(EXTRA_SOURCE_NAME).orEmpty()
 
-        buildAlertDialog(this) {
-            setTitle(R.string.open_in_browser)
-            setMessage(
-                listOfNotNull(
-                    url,
-                    sourceName.takeIf { it.isNotBlank() }?.let { getString(R.string.source) + ": " + it },
-                ).joinToString("\n"),
+        val message = listOfNotNull(
+            url,
+            sourceName.takeIf { it.isNotBlank() }?.let { getString(R.string.source) + ": " + it },
+        ).joinToString("\n")
+
+        setComposeContent {
+            OpenUrlConfirmDialog(
+                message = message,
+                onDismissRequest = ::finish,
+                onConfirm = {
+                    openTarget(url, mimeType)
+                    finish()
+                },
             )
-            setNegativeButton(android.R.string.cancel) { _, _ ->
-                finish()
-            }
-            setPositiveButton(R.string.confirm) { _, _ ->
-                openTarget(url, mimeType)
-                finish()
-            }
-            setOnCancelListener { finish() }
-        }.show()
+        }
+    }
+
+    @Composable
+    private fun OpenUrlConfirmDialog(
+        message: String,
+        onDismissRequest: () -> Unit,
+        onConfirm: () -> Unit,
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismissRequest,
+            title = { Text(text = stringResource(R.string.open_in_browser)) },
+            text = { Text(text = message) },
+            confirmButton = {
+                TextButton(onClick = onConfirm) {
+                    Text(text = stringResource(R.string.confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissRequest) {
+                    Text(text = stringResource(android.R.string.cancel))
+                }
+            },
+        )
     }
 
     private fun openTarget(url: String, mimeType: String?) {

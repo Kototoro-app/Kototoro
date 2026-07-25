@@ -4,21 +4,37 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.media.MediaPlayer
-import android.os.Bundle
 import android.speech.tts.TextToSpeech
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +48,6 @@ import okhttp3.Request
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.novel.tts.LegadoTtsParser
 import org.skepsun.kototoro.reader.novel.tts.engine.HttpTTSEngine
 import org.skepsun.kototoro.reader.novel.tts.engine.SystemTTSEngine
@@ -45,7 +60,6 @@ import org.skepsun.kototoro.settings.compose.TtsSettingsScreen
 import org.skepsun.kototoro.settings.compose.TtsSettingsUiState
 import kotlinx.coroutines.SupervisorJob
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 
 @Composable
 fun TtsSettingsRoute(
@@ -53,6 +67,12 @@ fun TtsSettingsRoute(
     coordinator: TtsSettingsCoordinator,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    var managedSources by remember { mutableStateOf<List<TtsHttpConfig>?>(null) }
+    var selectedSourceIndexes by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var isImportUrlDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var importUrl by rememberSaveable { mutableStateOf("") }
+
     val enabled = settings.observeAsState(TtsSettingsCoordinator.KEY_TTS_ENABLED) {
         prefs.getBoolean(TtsSettingsCoordinator.KEY_TTS_ENABLED, true)
     }.value
@@ -103,10 +123,121 @@ fun TtsSettingsRoute(
         },
         onTestClick = coordinator::testTtsVoice,
         onImportClipboardClick = coordinator::importFromClipboard,
-        onImportUrlClick = coordinator::importFromUrl,
-        onManageSourcesClick = coordinator::manageLegadoSources,
+        onImportUrlClick = {
+            importUrl = ""
+            isImportUrlDialogVisible = true
+        },
+        onManageSourcesClick = {
+            val sources = coordinator.getLegadoSourcesForManagement()
+            if (sources.isEmpty()) {
+                Toast.makeText(context, R.string.tts_legado_sources_empty, Toast.LENGTH_SHORT).show()
+            } else {
+                managedSources = sources
+                selectedSourceIndexes = emptySet()
+            }
+        },
         modifier = modifier,
     )
+
+    managedSources?.let { sources ->
+        AlertDialog(
+            onDismissRequest = {
+                managedSources = null
+                selectedSourceIndexes = emptySet()
+            },
+            title = { Text(stringResource(R.string.tts_legado_manage_delete_title)) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    itemsIndexed(
+                        items = sources,
+                        key = { index, source -> "$index:${source.url}" },
+                    ) { index, source ->
+                        val isSelected = index in selectedSourceIndexes
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = isSelected,
+                                    onValueChange = { checked ->
+                                        selectedSourceIndexes = if (checked) {
+                                            selectedSourceIndexes + index
+                                        } else {
+                                            selectedSourceIndexes - index
+                                        }
+                                    },
+                                )
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = null,
+                            )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text(text = source.name, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = selectedSourceIndexes.isNotEmpty(),
+                    onClick = {
+                        coordinator.deleteLegadoSources(selectedSourceIndexes)
+                        managedSources = null
+                        selectedSourceIndexes = emptySet()
+                    },
+                ) {
+                    Text(stringResource(R.string.tts_legado_manage_delete_action))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        managedSources = null
+                        selectedSourceIndexes = emptySet()
+                    },
+                ) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
+
+    if (isImportUrlDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { isImportUrlDialogVisible = false },
+            title = { Text(stringResource(R.string.tts_legado_import_dialog_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.tts_legado_import_dialog_message))
+                    Spacer(modifier = Modifier.size(16.dp))
+                    OutlinedTextField(
+                        value = importUrl,
+                        onValueChange = { importUrl = it },
+                        placeholder = { Text(TtsSettingsCoordinator.URL_HINT) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isImportUrlDialogVisible = false
+                        coordinator.importFromUrl(importUrl.trim())
+                    },
+                ) {
+                    Text(stringResource(R.string.tts_legado_import_url))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isImportUrlDialogVisible = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 class TtsSettingsCoordinator(
@@ -228,70 +359,35 @@ class TtsSettingsCoordinator(
         }
     }
 
-    fun manageLegadoSources() {
-        val configs = parseLegadoConfigs().toMutableList()
-        if (configs.isEmpty()) {
-            Toast.makeText(context, R.string.tts_legado_sources_empty, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val names = configs.map { it.name }.toTypedArray()
-        val checkedItems = BooleanArray(configs.size)
-
-        MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.tts_legado_manage_delete_title)
-            .setMultiChoiceItems(names, checkedItems) { _, which, isChecked ->
-                checkedItems[which] = isChecked
-            }
-            .setPositiveButton(R.string.tts_legado_manage_delete_action) { _, _ ->
-                val remaining = configs.filterIndexed { index, _ -> !checkedItems[index] }
-                if (remaining.size == configs.size) return@setPositiveButton
-
-                appSettings.prefs.edit {
-                    putString(KEY_LEGADO_TTS_CONFIGS, Gson().toJson(remaining))
-                    val currentVoice = appSettings.prefs.getString(KEY_TTS_LEGADO_VOICE, "")
-                    if (currentVoice != null && remaining.none { it.url == currentVoice }) {
-                        putString(KEY_TTS_LEGADO_VOICE, "")
-                    }
-                }
-                Toast.makeText(
-                    context,
-                    string(R.string.tts_legado_sources_deleted, configs.size - remaining.size),
-                    Toast.LENGTH_SHORT,
-                ).show()
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+    fun getLegadoSourcesForManagement(): List<TtsHttpConfig> {
+        return parseLegadoConfigs()
     }
 
-    fun importFromUrl() {
-        val input = EditText(context).apply {
-            hint = URL_HINT
-            isSingleLine = true
-        }
+    fun deleteLegadoSources(selectedIndexes: Set<Int>) {
+        if (selectedIndexes.isEmpty()) return
 
-        val container = FrameLayout(context)
-        val params = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-        )
-        val margin = (24 * context.resources.displayMetrics.density).toInt()
-        params.setMargins(margin, 0, margin, 0)
-        input.layoutParams = params
-        container.addView(input)
+        val configs = parseLegadoConfigs()
+        val remaining = configs.filterIndexed { index, _ -> index !in selectedIndexes }
+        if (remaining.size == configs.size) return
 
-        MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.tts_legado_import_dialog_title)
-            .setMessage(R.string.tts_legado_import_dialog_message)
-            .setView(container)
-            .setPositiveButton(R.string.tts_legado_import_url) { _, _ ->
-                val url = input.text.toString().trim()
-                if (url.isNotEmpty()) {
-                    downloadAndImportUrl(url)
-                }
+        appSettings.prefs.edit {
+            putString(KEY_LEGADO_TTS_CONFIGS, Gson().toJson(remaining))
+            val currentVoice = appSettings.prefs.getString(KEY_TTS_LEGADO_VOICE, "")
+            if (currentVoice != null && remaining.none { it.url == currentVoice }) {
+                putString(KEY_TTS_LEGADO_VOICE, "")
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        }
+        Toast.makeText(
+            context,
+            string(R.string.tts_legado_sources_deleted, configs.size - remaining.size),
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    fun importFromUrl(url: String) {
+        if (url.isNotEmpty()) {
+            downloadAndImportUrl(url)
+        }
     }
 
     fun importFromClipboard() {

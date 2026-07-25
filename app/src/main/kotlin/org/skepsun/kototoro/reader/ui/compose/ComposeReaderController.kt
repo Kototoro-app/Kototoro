@@ -36,7 +36,6 @@ internal class ComposeReaderController(
 		private set
 	private var isDoublePage by mutableStateOf(false)
 	private var chromeState by mutableStateOf(ComposeReaderChromeState(controlsVisible = false))
-	private var translationTaskPanelVisible by mutableStateOf(false)
 	private var chaptersTabId by mutableIntStateOf(DETAILS_TAB_CHAPTERS)
 	private var selectionDialog by mutableStateOf<ReaderSelectionDialogState?>(null)
 	private var isChromeEnabled = false
@@ -51,7 +50,7 @@ internal class ComposeReaderController(
 					state = chromeState,
 					chaptersPanelContent = { chaptersPanelContent(chaptersTabId) },
 					translationTaskPanelContent = {
-						if (translationTaskPanelVisible) {
+						if (chromeState.translationTaskPanelVisible) {
 							ComposeTranslationTaskPanel(viewModel = viewModel, onDismiss = ::hideTranslationTaskPanel)
 						}
 					},
@@ -182,7 +181,7 @@ internal class ComposeReaderController(
 	}
 
 	fun showTranslationTaskPanel() {
-		translationTaskPanelVisible = true
+		chromeState = chromeState.copy(translationTaskPanelVisible = true)
 		hideTools()
 	}
 
@@ -208,8 +207,57 @@ internal class ComposeReaderController(
 	}
 
 	private fun hideTranslationTaskPanel() {
-		translationTaskPanelVisible = false
+		chromeState = chromeState.copy(translationTaskPanelVisible = false)
 	}
+
+	fun closeExpandedPanel(): Boolean {
+		return when {
+			chromeState.translationTaskPanelVisible -> {
+				hideTranslationTaskPanel()
+				true
+			}
+			chromeState.options.visible -> {
+				hideOptions()
+				true
+			}
+			chromeState.toolsVisible -> {
+				hideTools()
+				true
+			}
+			chromeState.chaptersVisible -> {
+				hideChapters()
+				true
+			}
+			chromeState.autoScroll.visible -> {
+				updateAutoScroll { copy(visible = false) }
+				true
+			}
+			else -> false
+		}
+	}
+
+	fun closeChrome(): Boolean {
+		val isVisible = chromeState.controlsVisible ||
+			chromeState.translationTaskPanelVisible ||
+			chromeState.options.visible ||
+			chromeState.toolsVisible ||
+			chromeState.chaptersVisible ||
+			chromeState.autoScroll.visible
+		if (!isVisible) return false
+		areControlsVisible = false
+		chromeState = chromeState.copy(
+			controlsVisible = false,
+			translationTaskPanelVisible = false,
+			options = chromeState.options.copy(visible = false),
+			toolsVisible = false,
+			chaptersVisible = false,
+			autoScroll = chromeState.autoScroll.copy(visible = false),
+		)
+		return true
+	}
+
+	val isChromeControlsVisible: Boolean
+		get() = chromeState.controlsVisible
 
 	fun toggleChapters(defaultTab: Int = DETAILS_TAB_CHAPTERS) {
 		chromeState = if (chromeState.chaptersVisible) {

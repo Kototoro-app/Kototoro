@@ -19,6 +19,54 @@ data class WebtoonInternalScrollConsumption(
 	val consumedPx: Int,
 )
 
+data class WebtoonCanvasOffsetBounds(
+	val minX: Float,
+	val maxX: Float,
+	val minY: Float,
+	val maxY: Float,
+)
+
+/** Matches WebtoonScalingFrame's translation bounds for the zoomed webtoon canvas. */
+fun resolveWebtoonCanvasOffsetBounds(
+	viewportWidthPx: Int,
+	viewportHeightPx: Int,
+	scale: Float,
+): WebtoonCanvasOffsetBounds {
+	val safeScale = scale.coerceAtLeast(0.01f)
+	val maxX = (viewportWidthPx * (safeScale - 1f) / 2f).coerceAtLeast(0f)
+	if (safeScale < 1f) {
+		// The layout height is inverse-scaled below. Its center transform already keeps the
+		// scaled content flush with the viewport, so an extra negative translation clips the top.
+		return WebtoonCanvasOffsetBounds(minX = 0f, maxX = 0f, minY = 0f, maxY = 0f)
+	}
+	val maxY = (viewportHeightPx * (safeScale - 1f) / 2f).coerceAtLeast(0f)
+	return WebtoonCanvasOffsetBounds(
+		minX = -maxX,
+		maxX = maxX,
+		minY = -maxY,
+		maxY = maxY,
+	)
+}
+
+/**
+ * A zoomed-out webtoon container must reserve the inverse-scaled viewport. Otherwise a page
+ * capped at the normal viewport is rendered shorter than the visible container and leaves a gap.
+ */
+fun resolveWebtoonLayoutViewportHeight(viewportHeightPx: Int, scale: Float): Int {
+	val viewport = viewportHeightPx.coerceAtLeast(1)
+	val safeScale = scale.coerceIn(0.5f, 1f)
+	return if (safeScale < 1f) {
+		(viewport / safeScale).roundToInt().coerceAtLeast(viewport)
+	} else {
+		viewport
+	}
+}
+
+fun resolveWebtoonBoundaryHandoff(scale: Float, desiredY: Float, boundedY: Float): Int {
+	if (scale <= 1f) return 0
+	return ((boundedY - desiredY) / scale).roundToInt()
+}
+
 fun measureWebtoonViewport(
 	viewportHeightPx: Int,
 	availableWidthPx: Int,

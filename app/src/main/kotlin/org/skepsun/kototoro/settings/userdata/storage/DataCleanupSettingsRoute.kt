@@ -1,30 +1,16 @@
 package org.skepsun.kototoro.settings.userdata.storage
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.fragment.app.viewModels
-import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
-import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.local.data.CacheDir
-import org.skepsun.kototoro.settings.SettingsActivity
-import org.skepsun.kototoro.settings.SettingsDestination
 import org.skepsun.kototoro.settings.compose.DataCleanupSettingsScreen
-import javax.inject.Inject
 
 @Composable
 fun DataCleanupSettingsRoute(

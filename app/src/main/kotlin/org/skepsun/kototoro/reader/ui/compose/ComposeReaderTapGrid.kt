@@ -42,6 +42,9 @@ internal fun Modifier.readerTapGrid(
 				val change = event.changes.firstOrNull() ?: continue
 				when {
 					change.changedToDownIgnoreConsumed() -> {
+						// A second down starts a double-tap before the first tap's delayed
+						// callback can toggle the reader chrome.
+						pendingTapJob?.cancel()
 						downPosition = change.position
 						moved = false
 						longPressDispatched = false

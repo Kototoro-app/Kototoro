@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import androidx.compose.runtime.saveable.listSaver
+import org.skepsun.kototoro.core.model.ZoomMode
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -20,14 +21,25 @@ class ReaderZoomState(
 	private var fittedImageWidth = 0f
 	private var fittedImageHeight = 0f
 
-	fun updateGeometry(viewportWidth: Int, viewportHeight: Int, imageWidth: Int, imageHeight: Int) {
+	fun updateGeometry(
+		viewportWidth: Int,
+		viewportHeight: Int,
+		imageWidth: Int,
+		imageHeight: Int,
+		mode: ZoomMode = ZoomMode.FIT_CENTER,
+	) {
 		if (viewportWidth <= 0 || viewportHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) return
 		this.viewportWidth = viewportWidth.toFloat()
 		this.viewportHeight = viewportHeight.toFloat()
-		val fitScale = min(
-			this.viewportWidth / imageWidth,
-			this.viewportHeight / imageHeight,
-		)
+		val fitScale = when (mode) {
+			ZoomMode.FIT_CENTER,
+			ZoomMode.KEEP_START -> min(
+				this.viewportWidth / imageWidth,
+				this.viewportHeight / imageHeight,
+			)
+			ZoomMode.FIT_HEIGHT -> this.viewportHeight / imageHeight
+			ZoomMode.FIT_WIDTH -> this.viewportWidth / imageWidth
+		}
 		fittedImageWidth = imageWidth * fitScale
 		fittedImageHeight = imageHeight * fitScale
 		clampOffset()
@@ -121,5 +133,31 @@ class ReaderZoomState(
 		private const val MIN_SCALE = 1f
 		private const val DOUBLE_TAP_SCALE = 2f
 		private const val EPSILON = 0.001f
+	}
+}
+
+internal fun initialReaderScale(
+	mode: ZoomMode,
+	viewportWidth: Int,
+	viewportHeight: Int,
+	imageWidth: Int,
+	imageHeight: Int,
+): Float {
+	if (viewportWidth <= 0 || viewportHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) return 1f
+	val fitScale = min(
+		viewportWidth.toFloat() / imageWidth,
+		viewportHeight.toFloat() / imageHeight,
+	)
+	if (fitScale <= 0f) return 1f
+	return when (mode) {
+		ZoomMode.FIT_CENTER,
+		ZoomMode.FIT_HEIGHT,
+		ZoomMode.FIT_WIDTH -> 1f
+		ZoomMode.KEEP_START -> {
+			2f * maxOf(
+				viewportWidth.toFloat() / imageWidth,
+				viewportHeight.toFloat() / imageHeight,
+			) / fitScale
+		}
 	}
 }

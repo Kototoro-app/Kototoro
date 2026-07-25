@@ -4,8 +4,33 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.ZoomMode
 
 class ReaderZoomStateTest {
+
+	@Test
+	fun `reader scale modes keep fit modes at one`() {
+		assertEquals(
+			1f,
+			initialReaderScale(ZoomMode.FIT_CENTER, 1000, 2000, 2000, 1000),
+		)
+		assertEquals(
+			1f,
+			initialReaderScale(ZoomMode.FIT_HEIGHT, 1000, 2000, 2000, 1000),
+		)
+		assertEquals(
+			1f,
+			initialReaderScale(ZoomMode.FIT_WIDTH, 1000, 2000, 2000, 1000),
+		)
+	}
+
+	@Test
+	fun `keep start matches legacy scale relative to fit`() {
+		assertEquals(
+			8f,
+			initialReaderScale(ZoomMode.KEEP_START, 1000, 2000, 2000, 1000),
+		)
+	}
 
 	@Test
 	fun `unscaled image does not consume pan`() {

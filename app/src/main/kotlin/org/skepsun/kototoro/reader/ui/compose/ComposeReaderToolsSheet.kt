@@ -42,6 +42,7 @@ internal fun ComposeReaderToolsSheet(
 		modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 360.dp),
 	) {
 		Column {
+			ReaderPanelDragHandle(onDismiss = onDismiss)
 			Text(
 				text = stringResource(R.string.ai),
 				style = if (embedded) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge,

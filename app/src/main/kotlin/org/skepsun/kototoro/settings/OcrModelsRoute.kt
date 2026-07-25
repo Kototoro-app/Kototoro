@@ -1,9 +1,5 @@
 package org.skepsun.kototoro.settings
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.compose.runtime.Composable
@@ -12,11 +8,13 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.translate.data.OnnxModelCategory
 import org.skepsun.kototoro.reader.translate.data.OnnxModelDownloadWorker
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
@@ -33,7 +31,6 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
 import org.skepsun.kototoro.reader.translate.data.AdvancedOcrModelPackWorker
 import androidx.core.content.edit
-import javax.inject.Inject
 
 internal val READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS = linkedSetOf(
     "mangaocr_2025_onnx",
@@ -54,6 +51,7 @@ fun OcrModelsRoute(
     val context = LocalContext.current
     val transientStateByModelId = remember { mutableStateMapOf<String, ModelTransientState>() }
     var refreshKey by remember { mutableStateOf(0) }
+    var modelPendingDeletion by remember { mutableStateOf<OnnxOfficialModel?>(null) }
 
     fun updateTransientState(modelId: String, state: ModelTransientState?) {
         if (state == null) {
@@ -141,25 +139,7 @@ fun OcrModelsRoute(
     fun handleModelClick(modelId: String) {
         val model = OnnxOfficialModelCatalog.findById(modelId) ?: return
         if (onnxModelManager.isModelDownloaded(model.id)) {
-            MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.delete)
-                .setMessage(context.getString(R.string.reader_translation_model_delete_confirm, model.title))
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    OnnxModelDownloadWorker.cancel(context, model.id)
-                    if (onnxModelManager.deleteModel(model.id)) {
-						if (model.id in AdvancedOcrModelPackWorker.REQUIRED_MODEL_IDS) {
-							settings.readerTranslationOcrMode = ReaderOcrMode.BASIC
-						}
-                        updateTransientState(model.id, null)
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.reader_translation_model_deleted, model.title),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
+            modelPendingDeletion = model
         } else {
             OnnxModelDownloadWorker.enqueue(context, model.id)
             Toast.makeText(context, R.string.reader_translation_model_download_started_background, Toast.LENGTH_LONG).show()
@@ -181,6 +161,42 @@ fun OcrModelsRoute(
         onModelClick = ::handleModelClick,
         modifier = modifier,
     )
+
+    modelPendingDeletion?.let { model ->
+        AlertDialog(
+            onDismissRequest = { modelPendingDeletion = null },
+            title = { Text(stringResource(R.string.delete)) },
+            text = {
+                Text(stringResource(R.string.reader_translation_model_delete_confirm, model.title))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        modelPendingDeletion = null
+                        OnnxModelDownloadWorker.cancel(context, model.id)
+                        if (onnxModelManager.deleteModel(model.id)) {
+                            if (model.id in AdvancedOcrModelPackWorker.REQUIRED_MODEL_IDS) {
+                                settings.readerTranslationOcrMode = ReaderOcrMode.BASIC
+                            }
+                            updateTransientState(model.id, null)
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.reader_translation_model_deleted, model.title),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
+                ) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { modelPendingDeletion = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 private data class ModelTransientState(

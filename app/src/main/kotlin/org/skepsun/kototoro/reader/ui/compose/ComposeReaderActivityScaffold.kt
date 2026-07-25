@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
@@ -106,6 +107,7 @@ internal data class ComposeReaderChromeState(
 	val options: ComposeReaderOptionsState = ComposeReaderOptionsState(),
 	val toolsVisible: Boolean = false,
 	val chaptersVisible: Boolean = false,
+	val translationTaskPanelVisible: Boolean = false,
 )
 
 @Immutable
@@ -157,6 +159,7 @@ internal data class ComposeReaderChromeCallbacks(
 	val onReaderInteraction: () -> Unit = {},
 	val onGridTap: (TapGridArea) -> Unit = {},
 	val onGridLongTap: (TapGridArea, Offset, IntSize) -> Unit = { _, _, _ -> },
+	val onBackPressed: () -> Unit = {},
 	val options: ComposeReaderOptionsCallbacks = ComposeReaderOptionsCallbacks(),
 	val onPrimaryDestination: (ReaderControlDestination) -> Unit = {},
 	val onPrimaryDestinationLongPress: (ReaderControlDestination) -> Unit = {},
@@ -173,6 +176,16 @@ internal fun ComposeReaderActivityScaffold(
 	content: @Composable () -> Unit,
 ) {
 	var progressExpanded by remember { mutableStateOf(true) }
+	BackHandler {
+		if (progressExpanded && state.controlsVisible) {
+			progressExpanded = false
+		} else {
+			callbacks.onBackPressed()
+		}
+	}
+	LaunchedEffect(state.controlsVisible) {
+		progressExpanded = state.controlsVisible
+	}
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	val readerBackdrop = rememberLayerBackdrop {
 		drawContent()
@@ -236,8 +249,17 @@ internal fun ComposeReaderActivityScaffold(
 						modifier = Modifier
 							.fillMaxWidth()
 							.height(420.dp),
-					) {
-						chaptersPanelContent(DETAILS_TAB_CHAPTERS)
+						) {
+							Column {
+								ReaderPanelDragHandle(
+									onDismiss = {
+										callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
+									},
+								)
+								Box(modifier = Modifier.weight(1f)) {
+									chaptersPanelContent(DETAILS_TAB_CHAPTERS)
+								}
+							}
 					}
 					HorizontalDivider(
 						modifier = Modifier.padding(horizontal = 12.dp),
@@ -274,6 +296,7 @@ internal fun ComposeReaderActivityScaffold(
 				}
 				if (state.actions.sliderEnabled && progressExpanded) {
 					if (isIosStyle) {
+						ReaderPanelDragHandle(onDismiss = { progressExpanded = false })
 						ReaderProgressControl(
 							state = state.actions,
 							callbacks = callbacks.actions,
@@ -289,11 +312,14 @@ internal fun ComposeReaderActivityScaffold(
 							color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
 							modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
 						) {
-							ReaderProgressControl(
-								state = state.actions,
-								callbacks = callbacks.actions,
-								isIosStyle = false,
-							)
+							Column {
+								ReaderPanelDragHandle(onDismiss = { progressExpanded = false })
+								ReaderProgressControl(
+									state = state.actions,
+									callbacks = callbacks.actions,
+									isIosStyle = false,
+								)
+							}
 						}
 						Spacer(modifier = Modifier.height(6.dp))
 					}
@@ -486,6 +512,7 @@ private fun ReaderProgressControl(
 private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: ReaderAutoScrollCallbacks) {
 	Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
 		Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+			ReaderPanelDragHandle(onDismiss = callbacks.onClose)
 			Row(verticalAlignment = Alignment.CenterVertically) {
 				Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
 				IconButton(onClick = callbacks.onClose) { Text("×", style = MaterialTheme.typography.titleLarge) }

@@ -629,7 +629,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .navigationBarsPadding()
-                            .padding(16.dp)
+                            .padding(
+                                end = 16.dp,
+                                bottom = if (composeControlState.controlsVisible) 176.dp else 16.dp,
+                            )
                             .size(56.dp),
                     )
                     SnackbarHost(

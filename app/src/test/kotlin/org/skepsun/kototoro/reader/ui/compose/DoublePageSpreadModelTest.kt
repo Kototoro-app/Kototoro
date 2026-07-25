@@ -3,8 +3,59 @@ package org.skepsun.kototoro.reader.ui.compose
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 
 class DoublePageSpreadModelTest {
+
+	private val source = object : ContentSource {
+		override val name = "test"
+		override val locale = "en"
+		override val contentType = ContentType.MANGA
+	}
+
+	private fun page(position: Int, chapterId: Long) = ReaderPage(
+		id = position.toLong(),
+		url = "https://example.test/$position",
+		preview = null,
+		headers = null,
+		chapterId = chapterId,
+		index = position,
+		source = source,
+	)
+
+	@Test
+	fun `inserts a spacer between odd chapter boundaries`() {
+		val items = buildDoublePageDisplayItems(
+			listOf(page(0, 1), page(1, 2), page(2, 2)),
+		)
+
+		assertEquals(listOf(0, -1, 1, 2), items.map { it.originalPosition })
+		assertEquals(null, items[1].page)
+	}
+
+	@Test
+	fun `inserts a spacer before the first page when cover mode is enabled`() {
+		val items = buildDoublePageDisplayItems(
+			listOf(page(0, 1), page(1, 1)),
+			coverPage = true,
+		)
+
+		assertEquals(listOf(-1, 0, 1), items.map { it.originalPosition })
+		assertEquals(null, items.first().page)
+	}
+
+	@Test
+	fun `inserts a cover spacer at every chapter boundary`() {
+		val items = buildDoublePageDisplayItems(
+			listOf(page(0, 1), page(1, 1), page(2, 2)),
+			coverPage = true,
+		)
+
+		assertEquals(listOf(-1, 0, 1, -1, -1, 2), items.map { it.originalPosition })
+		assertEquals(null, items[4].page)
+	}
 
 	@Test
 	fun `creates complete spreads for an even page count`() {
@@ -24,6 +75,14 @@ class DoublePageSpreadModelTest {
 		val model = DoublePageSpreadModel.create(pageCount = 5)
 
 		assertEquals(DoublePageSpread(lowerPosition = 4, upperPosition = 4), model.spreads.last())
+	}
+
+	@Test
+	fun `reversed spreads render the partner page first`() {
+		val spread = DoublePageSpread(lowerPosition = 2, upperPosition = 3)
+
+		assertEquals(listOf(2, 3), spread.orderedPositions(reverseLayout = false))
+		assertEquals(listOf(3, 2), spread.orderedPositions(reverseLayout = true))
 	}
 
 	@Test

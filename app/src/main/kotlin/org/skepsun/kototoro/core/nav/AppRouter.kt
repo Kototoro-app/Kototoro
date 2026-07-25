@@ -26,6 +26,15 @@ import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.findFragment
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import dagger.hilt.android.EntryPointAccessors
@@ -58,6 +67,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.dialog.BigButtonsAlertDialog
 import org.skepsun.kototoro.core.ui.dialog.ErrorDetailsActivity
 import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
@@ -134,6 +145,39 @@ import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsRoute
 
 import java.io.File
 import androidx.appcompat.R as appcompatR
+
+@Composable
+private fun AppRouterChoiceDialog(
+    icon: @Composable () -> Unit,
+    title: String,
+    options: List<String>,
+    dismissLabel: String,
+    onDismissRequest: () -> Unit,
+    onOptionSelected: (Int) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = icon,
+        title = { Text(title) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, option ->
+                    TextButton(
+                        onClick = { onOptionSelected(index) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(option, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(dismissLabel)
+            }
+        },
+    )
+}
 
 class AppRouter private constructor(
     private val activity: FragmentActivity?,
@@ -959,7 +1003,36 @@ class AppRouter private constructor(
     }
 
     fun showTagDialog(tag: ContentTag) {
-        buildAlertDialog(contextOrNull() ?: return) {
+        val context = contextOrNull() ?: return
+        val composeActivity = activity as? BaseComposeActivity
+        if (composeActivity != null) {
+            composeActivity.showComposeModal {
+                AppRouterChoiceDialog(
+                    icon = {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_tag),
+                            contentDescription = null,
+                        )
+                    },
+                    title = tag.title,
+                    options = listOf(
+                        stringResource(R.string.search_on_s, tag.source.getTitle(composeActivity)),
+                        stringResource(R.string.search_everywhere),
+                    ),
+                    dismissLabel = stringResource(R.string.close),
+                    onDismissRequest = composeActivity::dismissComposeModal,
+                    onOptionSelected = { which ->
+                        composeActivity.dismissComposeModal()
+                        when (which) {
+                            0 -> openList(tag)
+                            1 -> openSearch(tag.title, SearchKind.TAG)
+                        }
+                    },
+                )
+            }
+            return
+        }
+        buildAlertDialog(context) {
             setIcon(R.drawable.ic_tag)
             setTitle(tag.title)
             setItems(
@@ -979,7 +1052,36 @@ class AppRouter private constructor(
     }
 
     fun showAuthorDialog(author: String, source: ContentSource) {
-        buildAlertDialog(contextOrNull() ?: return) {
+        val context = contextOrNull() ?: return
+        val composeActivity = activity as? BaseComposeActivity
+        if (composeActivity != null) {
+            composeActivity.showComposeModal {
+                AppRouterChoiceDialog(
+                    icon = {
+                        Icon(
+                            painter = rememberSafePainter(R.drawable.ic_user),
+                            contentDescription = null,
+                        )
+                    },
+                    title = author,
+                    options = listOf(
+                        stringResource(R.string.search_on_s, source.getTitle(composeActivity)),
+                        stringResource(R.string.search_everywhere),
+                    ),
+                    dismissLabel = stringResource(R.string.close),
+                    onDismissRequest = composeActivity::dismissComposeModal,
+                    onOptionSelected = { which ->
+                        composeActivity.dismissComposeModal()
+                        when (which) {
+                            0 -> openList(source, ContentListFilter(author = author), null)
+                            1 -> openSearch(author, SearchKind.AUTHOR)
+                        }
+                    },
+                )
+            }
+            return
+        }
+        buildAlertDialog(context) {
             setIcon(R.drawable.ic_user)
             setTitle(author)
             setItems(
@@ -1008,7 +1110,38 @@ class AppRouter private constructor(
             }
             return
         }
-        buildAlertDialog(contextOrNull() ?: return) {
+        val context = contextOrNull() ?: return
+        val composeActivity = activity as? BaseComposeActivity
+        if (composeActivity != null) {
+            composeActivity.showComposeModal {
+                AppRouterChoiceDialog(
+                    icon = {
+                        Icon(
+                            painter = rememberDrawablePainter(
+                                composeActivity.getThemeDrawable(appcompatR.attr.actionModeShareDrawable),
+                            ),
+                            contentDescription = null,
+                        )
+                    },
+                    title = stringResource(R.string.share),
+                    options = listOf(
+                        stringResource(R.string.link_to_manga_in_app),
+                        stringResource(R.string.link_to_manga_on_s, manga.source.getTitle(composeActivity)),
+                    ),
+                    dismissLabel = stringResource(android.R.string.cancel),
+                    onDismissRequest = composeActivity::dismissComposeModal,
+                    onOptionSelected = { which ->
+                        composeActivity.dismissComposeModal()
+                        when (which) {
+                            0 -> shareLink(manga.appUrl.toString(), manga.title)
+                            1 -> shareLink(manga.publicUrl, manga.title)
+                        }
+                    },
+                )
+            }
+            return
+        }
+        buildAlertDialog(context) {
             setIcon(context.getThemeDrawable(appcompatR.attr.actionModeShareDrawable))
             setTitle(R.string.share)
             setItems(

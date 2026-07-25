@@ -91,6 +91,7 @@ fun ComposeReaderScreenRoot(
 			pages = content.pages,
 			initialPage = initialPosition,
 			reverseLayout = mode == ReaderMode.REVERSED,
+			coverPage = readerSettings.isReaderDoubleCoverPage,
 			imageLoader = imageLoader,
 			imagePipeline = imagePipeline,
 			onPagesChanged = { lower, upper ->
@@ -107,9 +108,9 @@ fun ComposeReaderScreenRoot(
 			pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
 			readerBackground = readerSettings.background,
 			readerBackgroundColor = readerBackgroundColor,
-			bookBackgroundTint = bookBackgroundTint,
-			imageColorFilter = readerImageColorFilter,
-			isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+				bookBackgroundTint = bookBackgroundTint,
+				imageColorFilter = readerImageColorFilter,
+				isCropEnabled = readerSettings.isPagesCropEnabledStandard,
 			modifier = modifier,
 		)
 	} else if (mode == ReaderMode.WEBTOON) {
@@ -142,6 +143,7 @@ fun ComposeReaderScreenRoot(
 			isAnimationEnabled = isAnimationEnabled,
 			readerBackgroundColor = readerBackgroundColor,
 			imageColorFilter = readerImageColorFilter,
+			bitmapConfig = readerSettings.bitmapConfig,
 			isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
 			modifier = modifier,
 		)
@@ -162,9 +164,10 @@ fun ComposeReaderScreenRoot(
 		isAnimationEnabled = isAnimationEnabled,
 		pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
 		readerBackground = readerSettings.background,
-		readerBackgroundColor = readerBackgroundColor,
-		bookBackgroundTint = bookBackgroundTint,
-		imageColorFilter = readerImageColorFilter,
-		isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+			readerBackgroundColor = readerBackgroundColor,
+			bookBackgroundTint = bookBackgroundTint,
+			imageColorFilter = readerImageColorFilter,
+			zoomMode = readerSettings.zoomMode,
+			isCropEnabled = readerSettings.isPagesCropEnabledStandard,
 	)
 }

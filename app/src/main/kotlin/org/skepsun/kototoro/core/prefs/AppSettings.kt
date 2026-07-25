@@ -517,6 +517,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_READER_DOUBLE_FOLDABLE, false)
 		set(value) = prefs.edit { putBoolean(KEY_READER_DOUBLE_FOLDABLE, value) }
 
+	var isReaderDoubleCoverPage: Boolean
+		get() = prefs.getBoolean(KEY_READER_DOUBLE_COVER_PAGE, false)
+		set(value) = prefs.edit { putBoolean(KEY_READER_DOUBLE_COVER_PAGE, value) }
+
 	var isReaderSplitPagesEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_SPLIT_PAGES, false)
 		set(value) = prefs.edit { putBoolean(KEY_READER_SPLIT_PAGES, value) }
@@ -2192,6 +2196,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_DOUBLE_PAGES = "reader_double_pages"
 		const val KEY_READER_DOUBLE_PAGES_SENSITIVITY = "reader_double_pages_sensitivity_2"
 		const val KEY_READER_DOUBLE_FOLDABLE = "reader_double_foldable"
+		const val KEY_READER_DOUBLE_COVER_PAGE = "reader_double_cover_page"
 		const val KEY_READER_SPLIT_PAGES = "reader_split_pages"
 		const val KEY_READER_ZOOM_BUTTONS = "reader_zoom_buttons"
 		const val KEY_READER_CONTROL_LTR = "reader_taps_ltr"

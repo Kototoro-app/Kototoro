@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.reader.ui
 
 import android.app.assist.AssistContent
-import android.content.DialogInterface
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -9,12 +8,18 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -54,8 +60,6 @@ import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.SystemUiController
-import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
-import org.skepsun.kototoro.core.ui.dialog.setCheckbox
 import org.skepsun.kototoro.core.ui.util.MenuInvalidator
 import org.skepsun.kototoro.core.util.IdlingDetector
 import org.skepsun.kototoro.core.util.ShareHelper
@@ -150,6 +154,7 @@ class ReaderActivity :
     private var composeSliderValue = 0
 	private var areControlsVisible = true
 	private var loadingError by mutableStateOf<Throwable?>(null)
+	private var pendingIncognitoDialog by mutableStateOf<IncognitoDialogState?>(null)
 
     // Tracks whether the foldable device is in an unfolded state (half-opened or flat)
     private var isFoldUnfolded: Boolean = false
@@ -278,6 +283,10 @@ class ReaderActivity :
 						composeReaderController.updateOptions { copy(doublePageFoldable = enabled) }
 						onDoubleModeChanged(settings.isReaderDoubleOnLandscape)
 					},
+					onDoublePageCoverChanged = { enabled ->
+						settings.isReaderDoubleCoverPage = enabled
+						composeReaderController.updateOptions { copy(doublePageCover = enabled) }
+					},
 					onSplitPagesChanged = { enabled ->
 						settings.isReaderSplitPagesEnabled = enabled
 						composeReaderController.updateOptions { copy(splitPages = enabled) }
@@ -316,8 +325,15 @@ class ReaderActivity :
 					onTranslationLog = { composeReaderController.showTranslationTaskPanel() },
 				),
 				onReaderInteraction = { scrollTimer.onUserInteraction() },
-				onGridTap = ::onGridTouch,
+				onGridTap = { area ->
+					if (composeReaderController.closeChrome()) {
+						setUiIsVisible(false)
+					} else {
+						onGridTouch(area)
+					}
+				},
 				onGridLongTap = ::onGridLongTouch,
+				onBackPressed = ::onReaderBackPressed,
 				onPrimaryDestination = { destination ->
 					when (destination) {
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.NAVIGATION -> {
@@ -379,6 +395,17 @@ class ReaderActivity :
 						resolveActionStringId = exceptionResolver.getResolveStringId(error),
 						onDismiss = ::dismissLoadingError,
 						onResolve = { resolveLoadingError(error) },
+					)
+				}
+				pendingIncognitoDialog?.let { dialog ->
+					IncognitoModeDialog(
+						dontAskAgain = dialog.dontAskAgain,
+						onDismissRequest = ::dismissIncognitoModeDialog,
+						onDontAskAgainChange = { checked ->
+							pendingIncognitoDialog = dialog.copy(dontAskAgain = checked)
+						},
+						onIncognitoModeSelected = { consumeIncognitoMode(true) },
+						onDisabledSelected = { consumeIncognitoMode(false) },
 					)
 				}
 				spaceSwitcherDelegate.Overlays()
@@ -592,9 +619,18 @@ class ReaderActivity :
         invalidateOptionsMenu()
     }
 
-    private fun onGridTouch(area: TapGridArea) {
-        if (isReaderResumed()) controlDelegate.onGridTouch(area)
-    }
+	private fun onGridTouch(area: TapGridArea) {
+		if (isReaderResumed()) controlDelegate.onGridTouch(area)
+	}
+
+	private fun onReaderBackPressed() {
+		if (composeReaderController.closeExpandedPanel()) return
+		if (composeReaderController.isChromeControlsVisible) {
+			setUiIsVisible(false)
+		} else {
+			dispatchNavigateUp()
+		}
+	}
 
     private fun onGridLongTouch(area: TapGridArea, position: androidx.compose.ui.geometry.Offset, size: androidx.compose.ui.unit.IntSize) {
         if (isReaderResumed()) {
@@ -764,6 +800,7 @@ class ReaderActivity :
 				mode = composeReaderController.readerMode,
 				doublePage = settings.isReaderDoubleOnLandscape,
 				doublePageFoldable = settings.isReaderDoubleOnFoldable,
+				doublePageCover = settings.isReaderDoubleCoverPage,
 				splitPages = settings.isReaderSplitPagesEnabled,
 				doublePageSensitivity = settings.readerDoublePagesSensitivity,
 				superResolution = settings.isReaderSuperResolutionEnabled,
@@ -1146,27 +1183,18 @@ class ReaderActivity :
     }
 
     private fun askForIncognitoMode() {
-        buildAlertDialog(this, isCentered = true) {
-            var dontAskAgain = false
-            val listener = DialogInterface.OnClickListener { _, which ->
-                if (which == DialogInterface.BUTTON_NEUTRAL) {
-                    finishAfterTransition()
-                } else {
-                    viewModel.setIncognitoMode(which == DialogInterface.BUTTON_POSITIVE, dontAskAgain)
-                }
-            }
-            setCheckbox(R.string.dont_ask_again, dontAskAgain) { _, isChecked ->
-                dontAskAgain = isChecked
-            }
-            setIcon(R.drawable.ic_incognito)
-            setTitle(R.string.incognito_mode)
-            setMessage(R.string.incognito_mode_hint_nsfw)
-            setPositiveButton(R.string.incognito, listener)
-            setNegativeButton(R.string.disable, listener)
-            setNeutralButton(android.R.string.cancel, listener)
-            setOnCancelListener { finishAfterTransition() }
-            setCancelable(true)
-        }.show()
+        pendingIncognitoDialog = IncognitoDialogState()
+    }
+
+    private fun dismissIncognitoModeDialog() {
+        pendingIncognitoDialog = null
+        finishAfterTransition()
+    }
+
+    private fun consumeIncognitoMode(isIncognito: Boolean) {
+        val dialog = pendingIncognitoDialog ?: return
+        pendingIncognitoDialog = null
+        viewModel.setIncognitoMode(isIncognito, dialog.dontAskAgain)
     }
 
     companion object {
@@ -1178,6 +1206,10 @@ class ReaderActivity :
         private const val STATE_ENABLE_TRANSLATION_AFTER_SETUP = "enable_translation_after_setup"
     }
 }
+
+private data class IncognitoDialogState(
+    val dontAskAgain: Boolean = false,
+)
 
 @Composable
 private fun ReaderLoadingErrorDialog(
@@ -1199,6 +1231,57 @@ private fun ReaderLoadingErrorDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.close))
+            }
+        },
+    )
+}
+
+@Composable
+private fun IncognitoModeDialog(
+    dontAskAgain: Boolean,
+    onDismissRequest: () -> Unit,
+    onDontAskAgainChange: (Boolean) -> Unit,
+    onIncognitoModeSelected: () -> Unit,
+    onDisabledSelected: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        icon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_incognito),
+                contentDescription = null,
+            )
+        },
+        title = { Text(stringResource(R.string.incognito_mode)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.incognito_mode_hint_nsfw))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = dontAskAgain,
+                        onCheckedChange = onDontAskAgainChange,
+                    )
+                    Text(stringResource(R.string.dont_ask_again))
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDisabledSelected) {
+                    Text(stringResource(R.string.disable))
+                }
+                TextButton(onClick = onDismissRequest) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+                TextButton(onClick = onIncognitoModeSelected) {
+                    Text(stringResource(R.string.incognito))
+                }
             }
         },
     )

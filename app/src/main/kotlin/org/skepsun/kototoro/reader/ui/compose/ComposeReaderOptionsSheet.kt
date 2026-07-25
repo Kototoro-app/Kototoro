@@ -49,6 +49,7 @@ internal data class ComposeReaderOptionsState(
 	val mode: ReaderMode = ReaderMode.STANDARD,
 	val doublePage: Boolean = false,
 	val doublePageFoldable: Boolean = false,
+	val doublePageCover: Boolean = false,
 	val splitPages: Boolean = false,
 	val doublePageSensitivity: Float = 0.5f,
 	val superResolution: Boolean = false,
@@ -61,6 +62,7 @@ internal data class ComposeReaderOptionsCallbacks(
 	val onModeChanged: (ReaderMode) -> Unit = {},
 	val onDoublePageChanged: (Boolean) -> Unit = {},
 	val onDoublePageFoldableChanged: (Boolean) -> Unit = {},
+	val onDoublePageCoverChanged: (Boolean) -> Unit = {},
 	val onSplitPagesChanged: (Boolean) -> Unit = {},
 	val onDoublePageSensitivityChanged: (Float) -> Unit = {},
 	val onSuperResolutionChanged: (Boolean) -> Unit = {},
@@ -96,6 +98,7 @@ internal fun ComposeReaderOptionsSheet(
 		color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
 		modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 420.dp),
 	) {
+		ReaderPanelDragHandle(onDismiss = callbacks.onDismiss)
 		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
 			val contentWidth = minOf(maxWidth, 760.dp)
 			LazyColumn(
@@ -154,6 +157,13 @@ internal fun ComposeReaderOptionsSheet(
 						checked = state.doublePageFoldable,
 						enabled = state.doublePage && (state.mode == ReaderMode.STANDARD || state.mode == ReaderMode.REVERSED),
 						onCheckedChange = callbacks.onDoublePageFoldableChanged,
+						modifier = Modifier.weight(1f),
+					)
+					OptionSwitch(
+						text = stringResource(R.string.double_page_cover_page),
+						checked = state.doublePageCover,
+						enabled = state.doublePage && (state.mode == ReaderMode.STANDARD || state.mode == ReaderMode.REVERSED),
+						onCheckedChange = callbacks.onDoublePageCoverChanged,
 						modifier = Modifier.weight(1f),
 					)
 					if (state.doublePage) {

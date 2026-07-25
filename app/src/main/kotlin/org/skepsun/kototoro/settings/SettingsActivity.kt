@@ -15,13 +15,27 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -30,7 +44,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -223,6 +236,24 @@ class SettingsActivity :
 
 	private var isFoldUnfolded = false
 	private var composeDestination: SettingsDestination? by mutableStateOf(null)
+	private var pendingSettingsDialog by mutableStateOf<SettingsDialogState?>(null)
+	private sealed interface SettingsDialogState {
+		data class Confirmation(
+			val titleRes: Int,
+			val messageRes: Int,
+			val confirmRes: Int,
+			val onConfirm: () -> Unit,
+		) : SettingsDialogState
+
+		data class ModelPicker(
+			val titleRes: Int,
+			val models: List<String>,
+			val selectedIndex: Int? = null,
+			val onSelected: (String) -> Unit,
+		) : SettingsDialogState
+
+		data class ProxyTestResult(val message: String) : SettingsDialogState
+	}
 	private val composeNavigationStack = ArrayDeque<SettingsDestination>()
 	private var ttsSettingsCoordinator: TtsSettingsCoordinator? = null
 	private var isDataCleanupObserversBound = false
@@ -384,6 +415,7 @@ class SettingsActivity :
 					rootContent = { modifier -> RenderSettingsRootContent(modifier) },
 					destinationContent = { destination -> RenderComposeDestination(destination) },
 				)
+				RenderSettingsDialog()
 			}
 		}
 		if (initialComposeDestination != null) {
@@ -1302,6 +1334,120 @@ class SettingsActivity :
 		}
 	}
 
+	@Composable
+	private fun RenderSettingsDialog() {
+		val dialog = pendingSettingsDialog ?: return
+		when (dialog) {
+			is SettingsDialogState.Confirmation -> {
+				AlertDialog(
+					onDismissRequest = { dismissSettingsDialog(dialog) },
+					title = { Text(stringResource(dialog.titleRes)) },
+					text = { Text(stringResource(dialog.messageRes)) },
+					confirmButton = {
+						TextButton(onClick = { confirmSettingsDialog(dialog) }) {
+							Text(stringResource(dialog.confirmRes))
+						}
+					},
+					dismissButton = {
+						TextButton(onClick = { dismissSettingsDialog(dialog) }) {
+							Text(stringResource(android.R.string.cancel))
+						}
+					},
+				)
+			}
+			is SettingsDialogState.ModelPicker -> {
+				AlertDialog(
+					onDismissRequest = { dismissSettingsDialog(dialog) },
+					title = { Text(stringResource(dialog.titleRes)) },
+					text = {
+						LazyColumn(
+							modifier = Modifier
+								.fillMaxWidth()
+								.heightIn(max = 360.dp),
+						) {
+							itemsIndexed(dialog.models) { index, model ->
+								Row(
+									modifier = Modifier
+										.fillMaxWidth()
+										.selectable(
+											selected = dialog.selectedIndex == index,
+											onClick = { selectModel(dialog, index) },
+										)
+										.padding(vertical = 4.dp),
+									verticalAlignment = Alignment.CenterVertically,
+								) {
+									if (dialog.selectedIndex != null) {
+										RadioButton(
+											selected = dialog.selectedIndex == index,
+											onClick = null,
+										)
+									}
+									Text(
+										text = model,
+										modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+									)
+								}
+							}
+							}
+						},
+					confirmButton = {},
+					dismissButton = {
+						TextButton(onClick = { dismissSettingsDialog(dialog) }) {
+							Text(stringResource(android.R.string.cancel))
+						}
+					},
+				)
+			}
+			is SettingsDialogState.ProxyTestResult -> {
+				AlertDialog(
+					onDismissRequest = { dismissSettingsDialog(dialog) },
+					title = { Text(stringResource(R.string.proxy)) },
+					text = { Text(dialog.message) },
+					confirmButton = {
+						TextButton(onClick = { dismissSettingsDialog(dialog) }) {
+							Text(stringResource(android.R.string.ok))
+						}
+					},
+				)
+			}
+		}
+	}
+
+	private fun showConfirmationDialog(
+		titleRes: Int,
+		messageRes: Int,
+		confirmRes: Int,
+		onConfirm: () -> Unit,
+	) {
+		pendingSettingsDialog = SettingsDialogState.Confirmation(
+			titleRes = titleRes,
+			messageRes = messageRes,
+			confirmRes = confirmRes,
+			onConfirm = onConfirm,
+		)
+	}
+
+	private fun dismissSettingsDialog(dialog: SettingsDialogState) {
+		if (pendingSettingsDialog === dialog) {
+			pendingSettingsDialog = null
+		}
+	}
+
+	private fun confirmSettingsDialog(dialog: SettingsDialogState.Confirmation) {
+		if (pendingSettingsDialog !== dialog) return
+		pendingSettingsDialog = null
+		dialog.onConfirm()
+	}
+
+	private fun selectModel(dialog: SettingsDialogState.ModelPicker, index: Int) {
+		if (pendingSettingsDialog !== dialog) return
+		val model = dialog.models.getOrNull(index).orEmpty()
+		pendingSettingsDialog = null
+		if (model.isNotBlank()) {
+			dialog.onSelected(model)
+		}
+	}
+
 	private fun bindDataCleanupObservers() {
 		if (isDataCleanupObserversBound) return
 		isDataCleanupObserversBound = true
@@ -1328,36 +1474,30 @@ class SettingsActivity :
 	}
 
 	private fun confirmClearSearchHistory() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.clear_search_history)
-			.setMessage(R.string.text_clear_search_history_prompt)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.clear) { _, _ ->
-				dataCleanupSettingsViewModel.clearSearchHistory()
-			}
-			.show()
+		showConfirmationDialog(
+			titleRes = R.string.clear_search_history,
+			messageRes = R.string.text_clear_search_history_prompt,
+			confirmRes = R.string.clear,
+			onConfirm = dataCleanupSettingsViewModel::clearSearchHistory,
+		)
 	}
 
 	private fun confirmClearCookies() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.clear_cookies)
-			.setMessage(R.string.text_clear_cookies_prompt)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.clear) { _, _ ->
-				dataCleanupSettingsViewModel.clearCookies()
-			}
-			.show()
+		showConfirmationDialog(
+			titleRes = R.string.clear_cookies,
+			messageRes = R.string.text_clear_cookies_prompt,
+			confirmRes = R.string.clear,
+			onConfirm = dataCleanupSettingsViewModel::clearCookies,
+		)
 	}
 
 	private fun confirmCleanupChapters() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.delete_read_chapters)
-			.setMessage(R.string.delete_read_chapters_prompt)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.delete) { _, _ ->
-				dataCleanupSettingsViewModel.cleanupChapters()
-			}
-			.show()
+		showConfirmationDialog(
+			titleRes = R.string.delete_read_chapters,
+			messageRes = R.string.delete_read_chapters_prompt,
+			confirmRes = R.string.delete,
+			onConfirm = dataCleanupSettingsViewModel::cleanupChapters,
+		)
 	}
 
 	private fun onLocalContentCleanedUp(result: DataCleanupSettingsViewModel.LocalContentCleanupResult) {
@@ -1380,36 +1520,30 @@ class SettingsActivity :
 	}
 
 	private fun confirmClearLocalManga() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.clear_local_manga_storage)
-			.setMessage(R.string.clear_local_manga_storage_prompt)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.clear) { _, _ ->
-				dataCleanupSettingsViewModel.clearLocalMangaContent()
-			}
-			.show()
+		showConfirmationDialog(
+			titleRes = R.string.clear_local_manga_storage,
+			messageRes = R.string.clear_local_manga_storage_prompt,
+			confirmRes = R.string.clear,
+			onConfirm = dataCleanupSettingsViewModel::clearLocalMangaContent,
+		)
 	}
 
 	private fun confirmClearLocalNovels() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.clear_local_novel_storage)
-			.setMessage(R.string.clear_local_novel_storage_prompt)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.clear) { _, _ ->
-				dataCleanupSettingsViewModel.clearLocalNovelContent()
-			}
-			.show()
+		showConfirmationDialog(
+			titleRes = R.string.clear_local_novel_storage,
+			messageRes = R.string.clear_local_novel_storage_prompt,
+			confirmRes = R.string.clear,
+			onConfirm = dataCleanupSettingsViewModel::clearLocalNovelContent,
+		)
 	}
 
 	private fun confirmClearLocalVideos() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.clear_local_video_storage)
-			.setMessage(R.string.clear_local_video_storage_prompt)
-			.setNegativeButton(android.R.string.cancel, null)
-			.setPositiveButton(R.string.clear) { _, _ ->
-				dataCleanupSettingsViewModel.clearLocalVideoContent()
-			}
-			.show()
+		showConfirmationDialog(
+			titleRes = R.string.clear_local_video_storage,
+			messageRes = R.string.clear_local_video_storage_prompt,
+			confirmRes = R.string.clear,
+			onConfirm = dataCleanupSettingsViewModel::clearLocalVideoContent,
+		)
 	}
 
 	private fun fetchAndPickTranslationApiModel() {
@@ -1446,19 +1580,16 @@ class SettingsActivity :
 	private fun showTranslationApiModelPicker(models: List<String>) {
 		val current = kototoroAppSettings.readerTranslationApiModel.trim()
 		val selected = models.indexOf(current).coerceAtLeast(0)
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.reader_translation_api_models_pick_title)
-			.setSingleChoiceItems(models.toTypedArray(), selected) { dialog, which ->
-				val chosen = models.getOrNull(which).orEmpty()
-				if (chosen.isNotBlank()) {
-					PreferenceManager.getDefaultSharedPreferences(this).edit {
-						putString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, chosen)
-					}
+		pendingSettingsDialog = SettingsDialogState.ModelPicker(
+			titleRes = R.string.reader_translation_api_models_pick_title,
+			models = models,
+			selectedIndex = selected,
+			onSelected = { chosen ->
+				PreferenceManager.getDefaultSharedPreferences(this).edit {
+					putString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, chosen)
 				}
-				dialog.dismiss()
-			}
-			.setNegativeButton(android.R.string.cancel, null)
-			.show()
+			},
+		)
 	}
 
 	private fun fetchAndPickTranslationE2EApiModel() {
@@ -1493,15 +1624,15 @@ class SettingsActivity :
 						Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_models_fetch_failed, Toast.LENGTH_SHORT).show()
 						return@withContext
 					}
-					MaterialAlertDialogBuilder(this@SettingsActivity)
-						.setTitle(R.string.reader_translation_api_models_fetch)
-						.setItems(models.toTypedArray()) { _, which ->
+					pendingSettingsDialog = SettingsDialogState.ModelPicker(
+						titleRes = R.string.reader_translation_api_models_fetch,
+						models = models,
+						onSelected = { chosen ->
 							kototoroAppSettings.prefs.edit()
-								.putString(AppSettings.KEY_READER_E2E_API_MODEL, models[which])
+								.putString(AppSettings.KEY_READER_E2E_API_MODEL, chosen)
 								.apply()
-						}
-						.setNegativeButton(android.R.string.cancel, null)
-						.show()
+						},
+					)
 				}
 			} catch (_: Exception) {
 				withContext(Dispatchers.Main) {
@@ -1739,12 +1870,9 @@ class SettingsActivity :
 	}
 
 	private fun showProxyTestResult(error: Throwable?) {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.proxy)
-			.setMessage(error?.getDisplayMessage(resources) ?: getString(R.string.connection_ok))
-			.setPositiveButton(android.R.string.ok, null)
-			.setCancelable(true)
-			.show()
+		pendingSettingsDialog = SettingsDialogState.ProxyTestResult(
+			message = error?.getDisplayMessage(resources) ?: getString(R.string.connection_ok),
+		)
 	}
 
 	private fun onAboutUpdateAvailable(version: AppVersion?) {

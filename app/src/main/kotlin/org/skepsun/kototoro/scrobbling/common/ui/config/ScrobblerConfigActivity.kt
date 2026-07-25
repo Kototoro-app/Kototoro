@@ -4,9 +4,26 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,6 +48,7 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
 	private val viewModel: ScrobblerConfigViewModel by viewModels()
 	private var pendingBindInfo: ScrobblingInfo? = null
 	private var pendingBindHandled = false
+	private var pendingDialog by mutableStateOf<ScrobblerDialogState?>(null)
 
 	private val pickContentLauncher = registerForActivityResult(
 		androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
@@ -64,6 +82,7 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
 				onItemClick = ::onItemClick,
 				onContentBound = viewModel::onContentBound,
 			)
+			RenderScrobblerDialog()
 		}
 		processIntent(intent)
 	}
@@ -126,27 +145,7 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
 	}
 
 	private fun showSearchContentKindDialog(item: ScrobblingInfo) {
-		val choices = arrayOf(
-			getString(R.string.all),
-			getString(R.string.manga),
-			getString(R.string.novel),
-			getString(R.string.video),
-		)
-		MaterialAlertDialogBuilder(this)
-			.setTitle(R.string.search_content_kind)
-			.setItems(choices) { _, which ->
-				pendingBindInfo = item
-				val contentKinds = when (which) {
-					1 -> setOf(SearchContentKind.MANGA)
-					2 -> setOf(SearchContentKind.NOVEL)
-					3 -> setOf(SearchContentKind.VIDEO)
-					else -> null
-				}
-				pickContentLauncher.launch(
-					AppRouter.searchIntent(this, item.title, contentKinds = contentKinds, pickMode = true),
-				)
-			}
-			.show()
+		pendingDialog = ScrobblerDialogState.SearchContentKind(item)
 	}
 
 	private fun processIntent(intent: Intent) {
@@ -181,13 +180,112 @@ class ScrobblerConfigActivity : BaseComposeActivity() {
 	}
 
 	private fun showUserDialog() {
-		MaterialAlertDialogBuilder(this)
-			.setTitle(viewModel.titleResId)
-			.setMessage(getString(R.string.logged_in_as, viewModel.user.value?.nickname))
-			.setNegativeButton(R.string.close, null)
-			.setPositiveButton(R.string.logout) { _, _ -> viewModel.logout() }
-			.show()
+		pendingDialog = ScrobblerDialogState.User
 	}
+
+	@Composable
+	private fun RenderScrobblerDialog() {
+		when (val dialog = pendingDialog) {
+			is ScrobblerDialogState.SearchContentKind -> {
+				AlertDialog(
+					onDismissRequest = { dismissDialog(dialog) },
+					title = { Text(stringResource(R.string.search_content_kind)) },
+					text = {
+						LazyColumn {
+							items(searchContentKindChoices) { choice ->
+								Row(
+								modifier = Modifier
+									.fillMaxWidth()
+									.selectable(
+										selected = false,
+										onClick = { selectContentKind(dialog, choice) },
+									)
+									.padding(vertical = 4.dp),
+									verticalAlignment = Alignment.CenterVertically,
+								) {
+									RadioButton(
+										selected = false,
+										onClick = null,
+									)
+									Text(
+										text = stringResource(choice.labelRes),
+										modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+									)
+								}
+							}
+						}
+					},
+					confirmButton = {},
+				)
+			}
+			ScrobblerDialogState.User -> {
+				AlertDialog(
+					onDismissRequest = { dismissDialog(dialog) },
+					title = { Text(stringResource(viewModel.titleResId)) },
+					text = {
+						Text(stringResource(R.string.logged_in_as, viewModel.user.value?.nickname.orEmpty()))
+					},
+					confirmButton = {
+						TextButton(onClick = ::logout) {
+							Text(stringResource(R.string.logout))
+						}
+					},
+					dismissButton = {
+						TextButton(onClick = { dismissDialog(dialog) }) {
+							Text(stringResource(R.string.close))
+						}
+					},
+				)
+			}
+			null -> Unit
+		}
+	}
+
+	private fun dismissDialog(dialog: ScrobblerDialogState) {
+		if (pendingDialog === dialog) {
+			pendingDialog = null
+		}
+	}
+
+	private fun selectContentKind(
+		dialog: ScrobblerDialogState.SearchContentKind,
+		choice: ContentKindChoice,
+	) {
+		if (pendingDialog !== dialog) return
+		pendingDialog = null
+		pendingBindInfo = dialog.item
+		pickContentLauncher.launch(
+			AppRouter.searchIntent(
+				this,
+				dialog.item.title,
+				contentKinds = choice.contentKinds,
+				pickMode = true,
+			),
+		)
+	}
+
+	private fun logout() {
+		if (pendingDialog !== ScrobblerDialogState.User) return
+		pendingDialog = null
+		viewModel.logout()
+	}
+
+	private sealed interface ScrobblerDialogState {
+		data class SearchContentKind(val item: ScrobblingInfo) : ScrobblerDialogState
+		data object User : ScrobblerDialogState
+	}
+
+	private data class ContentKindChoice(
+		val labelRes: Int,
+		val contentKinds: Set<SearchContentKind>?,
+	)
+
+	private val searchContentKindChoices = listOf(
+		ContentKindChoice(R.string.all, null),
+		ContentKindChoice(R.string.manga, setOf(SearchContentKind.MANGA)),
+		ContentKindChoice(R.string.novel, setOf(SearchContentKind.NOVEL)),
+		ContentKindChoice(R.string.video, setOf(SearchContentKind.VIDEO)),
+	)
 
 	companion object {
 		const val HOST_SHIKIMORI_AUTH = "shikimori-auth"

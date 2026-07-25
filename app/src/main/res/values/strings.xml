@@ -101,6 +101,7 @@
     <string name="double_page_mode">Two-page mode</string>
     <string name="double_page_landscape">Two pages in landscape</string>
     <string name="double_page_foldable">Two pages on foldables</string>
+    <string name="double_page_cover_page">First page as cover (solo)</string>
     <string name="miscellaneous">Miscellaneous</string>
     <string name="grid_size">Grid size</string>
     <string name="grid_aspect_ratio">Grid ratio</string>
