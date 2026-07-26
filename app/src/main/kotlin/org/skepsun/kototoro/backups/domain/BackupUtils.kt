@@ -53,4 +53,11 @@ object BackupUtils {
 		append(dateTimeFormat.format(Date()))
 		append(".aniyomibk")
 	}
+
+	fun generateUsagiBackupFileName(context: Context) = buildString {
+		append(context.getString(R.string.app_name).replace(' ', '_').lowercase(Locale.ROOT))
+		append("_usagi_")
+		append(dateTimeFormat.format(Date()))
+		append(".bk.zip")
+	}
 }

@@ -460,6 +460,10 @@
 			android:foregroundServiceType="dataSync"
 			android:label="@string/export_aniyomi_backup" />
 		<service
+			android:name="org.skepsun.kototoro.backups.ui.backup.UsagiBackupExportService"
+			android:foregroundServiceType="dataSync"
+			android:label="@string/export_usagi_backup" />
+		<service
 			android:name="org.skepsun.kototoro.backups.ui.restore.RestoreService"
 			android:foregroundServiceType="dataSync"
 			android:label="@string/restoring_backup" />
