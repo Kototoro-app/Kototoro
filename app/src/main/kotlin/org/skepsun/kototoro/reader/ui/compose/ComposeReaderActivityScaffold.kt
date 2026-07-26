@@ -251,11 +251,6 @@ internal fun ComposeReaderActivityScaffold(
 							.height(420.dp),
 						) {
 							Column {
-								ReaderPanelDragHandle(
-									onDismiss = {
-										callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
-									},
-								)
 								Box(modifier = Modifier.weight(1f)) {
 									chaptersPanelContent(DETAILS_TAB_CHAPTERS)
 								}
@@ -296,7 +291,6 @@ internal fun ComposeReaderActivityScaffold(
 				}
 				if (state.actions.sliderEnabled && progressExpanded) {
 					if (isIosStyle) {
-						ReaderPanelDragHandle(onDismiss = { progressExpanded = false })
 						ReaderProgressControl(
 							state = state.actions,
 							callbacks = callbacks.actions,
@@ -313,7 +307,6 @@ internal fun ComposeReaderActivityScaffold(
 							modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
 						) {
 							Column {
-								ReaderPanelDragHandle(onDismiss = { progressExpanded = false })
 								ReaderProgressControl(
 									state = state.actions,
 									callbacks = callbacks.actions,
@@ -475,8 +468,19 @@ private fun ReaderBottomControlDock(
 				horizontalAlignment = Alignment.CenterHorizontally,
 				modifier = Modifier
 					.fillMaxWidth()
-					.padding(horizontal = 6.dp, vertical = 4.dp),
-				content = { content() },
+					.padding(horizontal = 4.dp),
+				content = {
+					androidx.compose.runtime.CompositionLocalProvider(
+						androidx.compose.material3.LocalContentColor provides
+							if (androidx.compose.foundation.isSystemInDarkTheme()) {
+								androidx.compose.ui.graphics.Color.White
+							} else {
+								MaterialTheme.colorScheme.onSurface
+							},
+					) {
+						content()
+					}
+				},
 			)
 		}
 	} else {
@@ -512,7 +516,6 @@ private fun ReaderProgressControl(
 private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: ReaderAutoScrollCallbacks) {
 	Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
 		Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-			ReaderPanelDragHandle(onDismiss = callbacks.onClose)
 			Row(verticalAlignment = Alignment.CenterVertically) {
 				Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
 				IconButton(onClick = callbacks.onClose) { Text("×", style = MaterialTheme.typography.titleLarge) }

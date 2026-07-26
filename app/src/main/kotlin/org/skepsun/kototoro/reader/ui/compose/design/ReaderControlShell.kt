@@ -98,25 +98,27 @@ fun ReaderPrimaryControlBar(
 		}
 	}
 	Surface(
-		shape = RoundedCornerShape(32.dp),
+		shape = RoundedCornerShape(26.dp),
 		color = if (transparentContainer) {
 			androidx.compose.ui.graphics.Color.Transparent
 		} else {
 			MaterialTheme.colorScheme.surfaceContainerHigh
 		},
 		contentColor = MaterialTheme.colorScheme.onSurface,
-		modifier = modifier.width((items.size * 56 + (items.size - 1) * 8 + 16).dp),
+		modifier = modifier
+			.width((items.size * 48 + (items.size - 1) * 4 + 8).dp)
+			.height(if (showLabels) 52.dp else 48.dp),
 	) {
 		Row(
-			horizontalArrangement = Arrangement.spacedBy(8.dp),
+			horizontalArrangement = Arrangement.spacedBy(4.dp),
 			modifier = Modifier.padding(
-				horizontal = 8.dp,
-				vertical = if (showLabels) 0.dp else 4.dp,
+				horizontal = 4.dp,
+				vertical = 0.dp,
 			),
 		) {
 			items.forEach { item ->
 				NavigationBarItem(
-					modifier = Modifier.width(56.dp),
+					modifier = Modifier.width(48.dp),
 					selected = item.active,
 					onClick = { onDestinationSelected(item.destination) },
 					icon = {
@@ -240,7 +242,7 @@ fun ReaderProgressBar(
 	BoxWithConstraints(
 		modifier = modifier
 			.fillMaxWidth()
-			.padding(horizontal = 12.dp, vertical = 2.dp),
+			.padding(horizontal = 6.dp),
 	) {
 		Row(verticalAlignment = Alignment.CenterVertically) {
 			IconButton(

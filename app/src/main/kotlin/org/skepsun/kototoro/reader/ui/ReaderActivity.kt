@@ -383,11 +383,7 @@ class ReaderActivity :
 			Box(modifier = Modifier.fillMaxSize()) {
 				composeReaderController.Content()
 				spaceSwitcherDelegate.Fab(
-					modifier = Modifier
-						.align(Alignment.BottomEnd)
-						.navigationBarsPadding()
-						.padding(end = 16.dp, bottom = if (areControlsVisible) 176.dp else 16.dp)
-						.size(56.dp),
+					modifier = Modifier.fillMaxSize(),
 				)
 				loadingError?.let { error ->
 					ReaderLoadingErrorDialog(

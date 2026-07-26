@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,22 +43,15 @@ internal fun ComposeReaderToolsSheet(
 		modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 360.dp),
 	) {
 		Column {
-			ReaderPanelDragHandle(onDismiss = onDismiss)
-			Text(
-				text = stringResource(R.string.ai),
-				style = if (embedded) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge,
-				color = MaterialTheme.colorScheme.onSurface,
-				modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-			)
 			ReaderPanelSection(
 				embedded = embedded,
-				modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+				modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 2.dp),
 			) {
 				FlowRow(
 					maxItemsInEachRow = 2,
-					horizontalArrangement = Arrangement.spacedBy(8.dp),
-					verticalArrangement = Arrangement.spacedBy(8.dp),
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+					horizontalArrangement = Arrangement.spacedBy(4.dp),
+					verticalArrangement = Arrangement.spacedBy(4.dp),
+					modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
 				) {
 					Tool(R.drawable.ic_translate, R.string.reader_translation_action, translateActive, callbacks.onTranslation)
 					Tool(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_page, false, callbacks.onRetranslatePage)
@@ -80,7 +74,7 @@ private fun androidx.compose.foundation.layout.FlowRowScope.Tool(
 		onClick = onClick,
 		modifier = Modifier
 			.weight(1f)
-			.heightIn(min = 54.dp)
+			.heightIn(min = 48.dp)
 			.background(
 				color = if (active) {
 					MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
@@ -90,17 +84,22 @@ private fun androidx.compose.foundation.layout.FlowRowScope.Tool(
 				shape = RoundedCornerShape(18.dp),
 			),
 	) {
+		val contentColor = if (isSystemInDarkTheme()) {
+			androidx.compose.ui.graphics.Color.White
+		} else {
+			MaterialTheme.colorScheme.onSurface
+		}
 		Icon(
 			painter = painterResource(icon),
 			contentDescription = null,
-			tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-			modifier = Modifier.size(22.dp),
+			tint = if (active) MaterialTheme.colorScheme.primary else contentColor,
+			modifier = Modifier.size(20.dp),
 		)
 		Text(
 			text = stringResource(label),
-			color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+			color = if (active) MaterialTheme.colorScheme.primary else contentColor,
 			style = MaterialTheme.typography.labelMedium,
-			modifier = Modifier.padding(start = 8.dp),
+			modifier = Modifier.padding(start = 6.dp),
 		)
 	}
 }

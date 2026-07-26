@@ -7,6 +7,8 @@ import android.view.View
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -16,9 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -34,13 +35,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.main.ui.compose.LocalRootGlassMenuHost
-import org.skepsun.kototoro.main.ui.compose.RootGlassMenuHost
-import org.skepsun.kototoro.main.ui.compose.RootGlassMenuOverlay
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
 import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -74,9 +74,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private var controlsVisible = false
 	private var composeFabVisible by mutableStateOf(false)
 	private var composeFabEnabled by mutableStateOf(true)
-	private var composeFabAnchorBounds: Rect? = null
 	private var switcherVisible by mutableStateOf(false)
-	private var switcherFabAnchorBounds by mutableStateOf<Rect?>(null)
 	private var sessionSpaceId: SpaceId? = null
 	private var pendingRevealTarget: SpaceId? = null
 	private var transitionDrawn = CompletableDeferred<Unit>()
@@ -153,14 +151,29 @@ class SpaceSwitcherDelegate @Inject constructor(
 		if (!composeFabVisible) return
 		val activeSpaceId by spaceRepository.activeSpace.collectAsState()
 		val spaces by catalogRepository.spaces.collectAsState()
-		SpaceSwitcherFab(
-			activeSpaceId = activeSpaceId,
-			activeSpace = spaces.firstOrNull { it.id == activeSpaceId },
-			onClick = { if (composeFabEnabled) showSwitcher() },
-			modifier = modifier.onGloballyPositioned { coordinates ->
-				composeFabAnchorBounds = coordinates.boundsInWindow()
-			},
-		)
+		val position by settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
+			spaceSwitcherPosition
+		}
+		Box(modifier = modifier.fillMaxSize()) {
+			SpaceSidekickHandle(
+				state = SpaceUiState(
+					activeSpaceId = activeSpaceId,
+					switcherEnabled = true,
+					spaces = spaces,
+				),
+				onOpen = { if (composeFabEnabled) showSwitcher() },
+				position = position,
+				modifier = Modifier
+					.align(position.handleAlignment())
+					.then(
+						if (position.isCentered()) {
+							Modifier
+						} else {
+							Modifier.statusBarsPadding().padding(top = 72.dp)
+						},
+					),
+			)
+		}
 	}
 
 	@Suppress("UNUSED_PARAMETER")
@@ -186,7 +199,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 		activity ?: return
 		if (!featureEnabled || availabilityProvider() == SpaceSwitchAvailability.UNAVAILABLE) return
 		if (switcherVisible) return
-		switcherFabAnchorBounds = composeFabAnchorBounds
 		switcherVisible = true
 	}
 
@@ -195,15 +207,16 @@ class SpaceSwitcherDelegate @Inject constructor(
 		val transitionState by transitionController.state.collectAsState()
 		val spaces by catalogRepository.spaces.collectAsState()
 		val activeSpaceId by spaceRepository.activeSpace.collectAsState()
+		val position by settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
+			spaceSwitcherPosition
+		}
 		LaunchedEffect(transitionState.isVisible) {
 			if (!transitionState.isVisible) pendingRevealTarget = null
 		}
 		Box(modifier = modifier.fillMaxSize()) {
 			if (switcherVisible) {
 				val activity = activity ?: return@Box
-				val rootMenuHost = remember { RootGlassMenuHost() }
-				CompositionLocalProvider(LocalRootGlassMenuHost provides rootMenuHost) {
-					RouteLiquidGlassBackdrop(ownerKey = this@SpaceSwitcherDelegate, active = true) { backdrop ->
+				RouteLiquidGlassBackdrop(ownerKey = this@SpaceSwitcherDelegate, active = true) { backdrop ->
 						Box(
 							modifier = Modifier
 								.fillMaxSize()
@@ -212,7 +225,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 				val switchState by coordinator.state.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
 				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
-				SpaceSwitcherSheet(
+				SpaceSidekick(
 					state = SpaceUiState(
 						activeSpaceId = activeSpaceId,
 						switcherVisible = true,
@@ -236,15 +249,11 @@ class SpaceSwitcherDelegate @Inject constructor(
 							requestSwitch(target, resumeReading = true)
 						}
 					},
-					anchorBounds = switcherFabAnchorBounds,
-					useGlobalRootMenu = true,
+					visible = false,
+					position = position,
+					modifier = Modifier.fillMaxSize(),
 				)
 						}
-						RootGlassMenuOverlay(
-							host = rootMenuHost,
-							modifier = Modifier.fillMaxSize(),
-						)
-					}
 				}
 			}
 			if (transitionState.isVisible) {
@@ -340,7 +349,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 	private fun dismissSwitcher() {
 		if (!switcherVisible) return
 		switcherVisible = false
-		switcherFabAnchorBounds = null
 	}
 
 	private suspend fun awaitTransitionCurtainDraw() {
@@ -390,6 +398,16 @@ class SpaceSwitcherDelegate @Inject constructor(
 		}
 	}
 
+}
+
+private fun SpaceSwitcherPosition.isCentered(): Boolean =
+	this == SpaceSwitcherPosition.CENTER_LEFT || this == SpaceSwitcherPosition.CENTER_RIGHT
+
+private fun SpaceSwitcherPosition.handleAlignment(): Alignment = when (this) {
+	SpaceSwitcherPosition.TOP_LEFT -> Alignment.TopStart
+	SpaceSwitcherPosition.TOP_RIGHT -> Alignment.TopEnd
+	SpaceSwitcherPosition.CENTER_LEFT -> Alignment.CenterStart
+	SpaceSwitcherPosition.CENTER_RIGHT -> Alignment.CenterEnd
 }
 
 private data class SwitcherChromeState(

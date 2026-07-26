@@ -104,6 +104,13 @@ enum class AppFontPreset {
 	INTER,
 }
 
+enum class SpaceSwitcherPosition {
+	TOP_LEFT,
+	TOP_RIGHT,
+	CENTER_LEFT,
+	CENTER_RIGHT,
+}
+
 @Singleton
 class AppSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -2615,6 +2622,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED = "entity_space_persistent_navigation_enabled"
 		const val KEY_SPACE_IMMERSIVE_SWITCH_ENABLED = "entity_space_immersive_switch_enabled"
 		const val KEY_SPACE_ROUTE_PREFERENCES_ENABLED = "entity_space_route_preferences_enabled"
+		const val KEY_SPACE_SWITCHER_POSITION = "entity_space_switcher_position"
 	}
 
 	// ==================== Video Intro/Outro Skip ====================
@@ -2689,6 +2697,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var isSpaceRoutePreferencesEnabled: Boolean
 		get() = prefs.getBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_SPACE_ROUTE_PREFERENCES_ENABLED, value) }
+
+	var spaceSwitcherPosition: SpaceSwitcherPosition
+		get() = prefs.getString(KEY_SPACE_SWITCHER_POSITION, null)
+			?.let { value -> SpaceSwitcherPosition.entries.firstOrNull { it.name == value } }
+			?: SpaceSwitcherPosition.TOP_RIGHT
+		set(value) = prefs.edit { putString(KEY_SPACE_SWITCHER_POSITION, value.name) }
 
 	object GlassMaterialDefaults {
 		const val DEFAULT_OPACITY_PERCENT = 30

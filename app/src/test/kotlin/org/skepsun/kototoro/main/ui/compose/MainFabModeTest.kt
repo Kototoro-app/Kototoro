@@ -6,18 +6,10 @@ import org.junit.jupiter.api.Test
 class MainFabModeTest {
 
     @Test
-    fun `space switcher takes priority when enabled`() {
-        assertEquals(
-            MainFabMode.SPACE_SWITCHER,
-            resolveMainFabMode(spaceSwitcherEnabled = true, resumeEnabled = true),
-        )
-    }
-
-    @Test
-    fun `continue reading is used when spaces are disabled`() {
+    fun `continue reading is used when available`() {
         assertEquals(
             MainFabMode.CONTINUE_READING,
-            resolveMainFabMode(spaceSwitcherEnabled = false, resumeEnabled = true),
+            resolveMainFabMode(resumeEnabled = true),
         )
     }
 
@@ -25,7 +17,7 @@ class MainFabModeTest {
     fun `fab is hidden when neither action is available`() {
         assertEquals(
             MainFabMode.HIDDEN,
-            resolveMainFabMode(spaceSwitcherEnabled = false, resumeEnabled = false),
+            resolveMainFabMode(resumeEnabled = false),
         )
     }
 }

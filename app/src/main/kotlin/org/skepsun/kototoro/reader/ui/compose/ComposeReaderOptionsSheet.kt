@@ -98,15 +98,14 @@ internal fun ComposeReaderOptionsSheet(
 		color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
 		modifier = modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 420.dp),
 	) {
-		ReaderPanelDragHandle(onDismiss = callbacks.onDismiss)
 		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
 			val contentWidth = minOf(maxWidth, 760.dp)
 			LazyColumn(
-				verticalArrangement = Arrangement.spacedBy(8.dp),
+				verticalArrangement = Arrangement.spacedBy(4.dp),
 				modifier = Modifier
 					.widthIn(max = contentWidth)
 					.align(Alignment.TopCenter)
-					.padding(horizontal = 16.dp),
+					.padding(horizontal = 12.dp, vertical = 4.dp),
 			) {
 			item {
 				ReaderPanelSection(embedded = embedded) {
@@ -115,7 +114,7 @@ internal fun ComposeReaderOptionsSheet(
 					FlowRow(
 						maxItemsInEachRow = 2,
 						horizontalArrangement = Arrangement.spacedBy(12.dp),
-						modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+						modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
 					) {
 						SelectRow(
 							title = stringResource(R.string.reader_page_turning_mode),
@@ -143,7 +142,7 @@ internal fun ComposeReaderOptionsSheet(
 					maxItemsInEachRow = 2,
 					horizontalArrangement = Arrangement.spacedBy(12.dp),
 					verticalArrangement = Arrangement.spacedBy(2.dp),
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+					modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
 				) {
 					OptionSwitch(
 						text = stringResource(R.string.double_page_landscape),
@@ -199,7 +198,7 @@ internal fun ComposeReaderOptionsSheet(
 						maxItemsInEachRow = 2,
 						horizontalArrangement = Arrangement.spacedBy(12.dp),
 						verticalArrangement = Arrangement.spacedBy(2.dp),
-						modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+						modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
 					) {
 						OptionSwitch(
 							text = stringResource(R.string.reader_super_resolution),
@@ -262,7 +261,7 @@ private fun OptionSwitch(
 ) {
 	Row(
 		verticalAlignment = Alignment.CenterVertically,
-		modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+		modifier = modifier.fillMaxWidth(),
 	) {
 		Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
 		Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
@@ -271,7 +270,7 @@ private fun OptionSwitch(
 
 @Composable
 private fun SectionTitle(text: String) {
-	Text(text = text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+	Text(text = text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp))
 }
 
 @Composable
@@ -289,7 +288,7 @@ private fun SelectRow(
 			modifier = Modifier
 				.fillMaxWidth()
 				.clickable { expanded = true }
-				.padding(horizontal = 12.dp, vertical = 12.dp),
+				.padding(horizontal = 12.dp, vertical = 7.dp),
 		) {
 			Column(modifier = Modifier.weight(1f)) {
 				Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)

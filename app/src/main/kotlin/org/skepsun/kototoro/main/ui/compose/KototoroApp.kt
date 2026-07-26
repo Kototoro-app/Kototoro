@@ -81,6 +81,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
@@ -105,8 +106,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.ui.SpaceAction
-import org.skepsun.kototoro.space.ui.SpaceSwitcherFab
-import org.skepsun.kototoro.space.ui.SpaceSwitcherSheet
+import org.skepsun.kototoro.space.ui.SpaceSidekick
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
@@ -863,9 +863,22 @@ fun KototoroApp(
             detailsBottomPanelRoute = null
         }
     }
+    val activeSpaceResumeItem = spaceResumeUiState.items[spaceUiState.activeSpaceId]
+    val effectiveResumeEnabled = if (spaceUiState.switcherEnabled) {
+        activeSpaceResumeItem?.canResume == true
+    } else {
+        isResumeEnabled
+    }
+    val effectiveResumeClick = if (spaceUiState.switcherEnabled) {
+        { onSpaceResume(spaceUiState.activeSpaceId) }
+    } else {
+        onResumeClick
+    }
+    val sidekickPosition by appSettings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
+        spaceSwitcherPosition
+    }
     val mainFabMode = resolveMainFabMode(
-        spaceSwitcherEnabled = spaceUiState.switcherEnabled,
-        resumeEnabled = isResumeEnabled,
+        resumeEnabled = effectiveResumeEnabled,
     )
     val showContinueReadingFab = mainFabMode == MainFabMode.CONTINUE_READING
     val showMainFab = mainFabMode != MainFabMode.HIDDEN
@@ -1292,24 +1305,7 @@ fun KototoroApp(
                 },
                 label = "space_switcher_fab_position",
             )
-            val spaceSwitcherFabAnchorBounds = rootBounds?.let { bounds ->
-                fabTargetForAnimation?.let { offset ->
-                    androidx.compose.ui.geometry.Rect(
-                        left = bounds.left + offset.x,
-                        top = bounds.top + offset.y,
-                        right = bounds.left + offset.x + with(density) { spaceSwitcherFabSize.toPx() },
-                        bottom = bounds.top + offset.y + with(density) { spaceSwitcherFabSize.toPx() },
-                    )
-                }
-            }
-            val showFabOnCurrentRoute = if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
-                (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
-                    (!isDetailsRoute ||
-                        detailsBottomPanelRoute != currentDestinationRoute ||
-                        detailsBottomPanelExpansion <= 0.01f)
-            } else {
-                showContinueReadingFab && shouldShowChrome
-            }
+            val showFabOnCurrentRoute = showContinueReadingFab && shouldShowChrome
             val mainFloatingAction: @Composable BoxScope.() -> Unit = {
                 if (
                     showMainFab &&
@@ -1320,19 +1316,10 @@ fun KototoroApp(
                         .align(Alignment.TopStart)
                         .offset { animatedSpaceSwitcherFabOffset }
                         .size(spaceSwitcherFabSize)
-                    if (mainFabMode == MainFabMode.SPACE_SWITCHER) {
-                        SpaceSwitcherFab(
-                            activeSpaceId = spaceUiState.activeSpaceId,
-                            activeSpace = spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId },
-                            onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
-                            modifier = fabModifier,
-                        )
-                    } else {
-                        ContinueReadingFab(
-                            onClick = onResumeClick,
-                            modifier = fabModifier,
-                        )
-                    }
+                    ContinueReadingFab(
+                        onClick = effectiveResumeClick,
+                        modifier = fabModifier,
+                    )
                 }
             }
             val mainShellChrome: @Composable BoxScope.() -> Unit = {
@@ -1492,8 +1479,8 @@ fun KototoroApp(
                         navStateFlow = navStateFlow,
                         onItemSelected = bottomNavDispatcher,
                         onItemReselected = bottomNavDispatcher,
-                        isResumeEnabled = isResumeEnabled,
-                        onResumeClick = onResumeClick,
+                        isResumeEnabled = effectiveResumeEnabled,
+                        onResumeClick = effectiveResumeClick,
                         railHeaderContent = null,
                         adjacentAction = if (showMainFab && !isLandscapeNavigation) {
                             {
@@ -1695,11 +1682,6 @@ fun KototoroApp(
                                                 mainShellChrome()
                                             }
                                         },
-                                        routeFab = {
-                                            if (renderedSpaceId == navigationSpaceId) {
-                                                mainFloatingAction()
-                                            }
-                                        },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
@@ -1712,13 +1694,19 @@ fun KototoroApp(
                         }
                     }
                 }
-                SpaceSwitcherSheet(
+                mainFloatingAction()
+                SpaceSidekick(
                     state = spaceUiState,
                     onAction = onSpaceAction,
                     resumeItems = spaceResumeUiState.items,
                     onResume = onSpaceResume,
-                    anchorBounds = spaceSwitcherFabAnchorBounds,
-                    useGlobalRootMenu = true,
+                    position = sidekickPosition,
+                    visible = spaceUiState.switcherEnabled &&
+                        (shouldShowChrome || isImmersiveRoute || isSearchRoute) &&
+                        (!isDetailsRoute ||
+                            detailsBottomPanelRoute != currentDestinationRoute ||
+                            detailsBottomPanelExpansion <= 0.01f),
+                    modifier = Modifier.matchParentSize(),
                 )
                 RootGlassMenuOverlay(
                     host = rootGlassMenuHost,

@@ -545,18 +545,7 @@ class NovelReaderActivity :
                         }
                         if (!state.settingsSheetVisible && !state.chaptersSheetVisible) {
                             spaceSwitcherDelegate.Fab(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .navigationBarsPadding()
-                                    .padding(
-                                        end = dimensionResource(R.dimen.space_switcher_fab_margin),
-                                        bottom = if (state.controlsVisible) {
-                                            176.dp
-                                        } else {
-                                            dimensionResource(R.dimen.space_switcher_fab_control_gap)
-                                        },
-                                    )
-                                    .size(56.dp),
+                                modifier = Modifier.fillMaxSize(),
                             )
                         }
                         ttsVoiceDialogState?.let { NovelTtsVoiceDialog(it) }

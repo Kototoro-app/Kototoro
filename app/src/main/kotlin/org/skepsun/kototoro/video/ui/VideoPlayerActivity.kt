@@ -626,14 +626,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         )
                     }
                     spaceSwitcherDelegate.Fab(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .navigationBarsPadding()
-                            .padding(
-                                end = 16.dp,
-                                bottom = if (composeControlState.controlsVisible) 176.dp else 16.dp,
-                            )
-                            .size(56.dp),
+                        modifier = Modifier.fillMaxSize(),
                     )
                     SnackbarHost(
                         hostState = snackbarHostState,

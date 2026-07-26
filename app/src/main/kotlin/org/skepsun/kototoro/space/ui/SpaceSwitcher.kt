@@ -2,19 +2,31 @@ package org.skepsun.kototoro.space.ui
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +34,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,16 +43,26 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -47,13 +70,19 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import java.text.BreakIterator
+import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
@@ -62,11 +91,308 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.core.util.ext.mangaExtra
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
 
 private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
+
+@Composable
+fun BoxScope.SpaceSidekick(
+	state: SpaceUiState,
+	onAction: (SpaceAction) -> Unit,
+	resumeItems: Map<SpaceId, SpaceResumeItem> = emptyMap(),
+	onResume: (SpaceId) -> Unit = {},
+	visible: Boolean,
+	position: SpaceSwitcherPosition = SpaceSwitcherPosition.TOP_RIGHT,
+	modifier: Modifier = Modifier,
+) {
+	if (!state.switcherEnabled) return
+	val isLeft = position == SpaceSwitcherPosition.TOP_LEFT ||
+		position == SpaceSwitcherPosition.CENTER_LEFT
+	val isCentered = position == SpaceSwitcherPosition.CENTER_LEFT ||
+		position == SpaceSwitcherPosition.CENTER_RIGHT
+
+	Box(modifier = modifier.zIndex(20f)) {
+		AnimatedVisibility(
+			visible = state.switcherVisible,
+			enter = fadeIn(),
+			exit = fadeOut(),
+		) {
+			Box(
+				modifier = Modifier
+					.fillMaxSize()
+					.background(Color.Black.copy(alpha = 0.32f))
+					.clickable(
+						interactionSource = remember { MutableInteractionSource() },
+						indication = null,
+						onClick = { onAction(SpaceAction.DismissSwitcher) },
+					),
+			)
+		}
+
+		AnimatedVisibility(
+			visible = state.switcherVisible,
+			modifier = Modifier.align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd),
+			enter = slideInHorizontally(initialOffsetX = { if (isLeft) -it else it }),
+			exit = slideOutHorizontally(targetOffsetX = { if (isLeft) -it else it }),
+		) {
+			SpaceSidekickPanel(
+				state = state,
+				onAction = onAction,
+				resumeItems = resumeItems,
+				onResume = onResume,
+				isLeft = isLeft,
+			)
+		}
+
+		AnimatedVisibility(
+			visible = visible && !state.switcherVisible,
+			modifier = Modifier
+				.align(
+					when {
+						isCentered && isLeft -> Alignment.CenterStart
+						isCentered -> Alignment.CenterEnd
+						isLeft -> Alignment.TopStart
+						else -> Alignment.TopEnd
+					},
+				)
+				.then(if (isCentered) Modifier else Modifier.statusBarsPadding().padding(top = 72.dp)),
+			enter = fadeIn(),
+			exit = fadeOut(),
+		) {
+			SpaceSidekickHandle(
+				state = state,
+				onOpen = { onAction(SpaceAction.OpenSwitcher) },
+				position = position,
+			)
+		}
+	}
+
+	BackHandler(enabled = state.switcherVisible) {
+		onAction(SpaceAction.DismissSwitcher)
+	}
+}
+
+@Composable
+internal fun BoxScope.SpaceSidekickHandle(
+	state: SpaceUiState,
+	onOpen: () -> Unit,
+	position: SpaceSwitcherPosition,
+	modifier: Modifier = Modifier,
+) {
+	val isLeft = position == SpaceSwitcherPosition.TOP_LEFT ||
+		position == SpaceSwitcherPosition.CENTER_LEFT
+	val activeSpace = state.spaces.firstOrNull { it.id == state.activeSpaceId }
+	val presentation = activeSpace?.presentation() ?: state.activeSpaceId.presentation()
+	val label = activeSpace?.title ?: stringResource(presentation.labelRes)
+	val description = stringResource(R.string.space_switcher_content_description, label)
+	var dragDistance by remember { mutableFloatStateOf(0f) }
+	val openDragThreshold = with(LocalDensity.current) { 36.dp.toPx() }
+	val shape = if (isLeft) {
+		RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
+	} else {
+		RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)
+	}
+
+	Box(
+		modifier = modifier
+			.size(width = 48.dp, height = 80.dp)
+			.pointerInput(onOpen) {
+				detectHorizontalDragGestures(
+					onDragStart = { dragDistance = 0f },
+					onHorizontalDrag = { change, amount ->
+						if ((isLeft && amount > 0f) || (!isLeft && amount < 0f)) {
+							change.consume()
+							dragDistance += kotlin.math.abs(amount)
+						}
+					},
+					onDragEnd = {
+						if (dragDistance >= openDragThreshold) onOpen()
+						dragDistance = 0f
+					},
+					onDragCancel = { dragDistance = 0f },
+				)
+			}
+			.clickable(
+				role = Role.Button,
+				onClickLabel = description,
+				onClick = onOpen,
+			)
+			.semantics { contentDescription = description },
+		contentAlignment = if (isLeft) Alignment.CenterStart else Alignment.CenterEnd,
+	) {
+		GlassSurface(
+			modifier = Modifier
+				.offset(x = if (isLeft) (-10).dp else 10.dp)
+				.size(width = 32.dp, height = 64.dp)
+				.graphicsLayer {
+					translationX = dragDistance.coerceAtMost(16f) * if (isLeft) 1f else -1f
+				},
+			style = GlassDefaults.topBarChromeStyle().copy(
+				containerAlpha = 0.68f,
+				borderAlpha = 0.28f,
+			),
+			shape = shape,
+			expandHazeLayerBounds = false,
+			visualTreatment = GlassVisualTreatment.TopBarPrototype,
+			componentRole = GlassComponentRole.TopBar,
+		) {
+			Box(
+				modifier = Modifier
+					.fillMaxSize()
+					.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), shape),
+				contentAlignment = if (isLeft) Alignment.CenterEnd else Alignment.CenterStart,
+			) {
+				SpaceGlyph(
+					presentation = presentation,
+					monogram = activeSpace?.customMonogram(),
+					modifier = Modifier
+						.padding(
+							start = if (isLeft) 0.dp else 7.dp,
+							end = if (isLeft) 7.dp else 0.dp,
+						)
+						.size(18.dp),
+				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun SpaceSidekickPanel(
+	state: SpaceUiState,
+	onAction: (SpaceAction) -> Unit,
+	resumeItems: Map<SpaceId, SpaceResumeItem>,
+	onResume: (SpaceId) -> Unit,
+	isLeft: Boolean,
+) {
+	val shape = if (isLeft) {
+		RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+	} else {
+		RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
+	}
+	GlassSurface(
+		modifier = Modifier
+			.fillMaxHeight()
+			.fillMaxWidth(0.68f)
+			.widthIn(max = 280.dp),
+		style = GlassDefaults.topBarChromeStyle().copy(
+			containerAlpha = 0.94f,
+			borderAlpha = 0.22f,
+		),
+		shape = shape,
+		expandHazeLayerBounds = false,
+		visualTreatment = GlassVisualTreatment.TopBarPrototype,
+		componentRole = GlassComponentRole.TopBar,
+	) {
+		Column(
+			modifier = Modifier
+				.fillMaxSize()
+				.background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.56f), shape)
+				.statusBarsPadding()
+				.navigationBarsPadding()
+				.padding(top = 20.dp),
+		) {
+			Text(
+				text = stringResource(R.string.space_workbench_title),
+				style = MaterialTheme.typography.headlineSmall,
+				modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp),
+			)
+			Text(
+				text = stringResource(R.string.space_workbench_summary),
+				style = MaterialTheme.typography.bodyMedium,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+				modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp),
+			)
+			LazyColumn(
+				modifier = Modifier.fillMaxSize(),
+				contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
+			) {
+				state.spaces.forEach { context ->
+					item(key = context.id.value) {
+						val selected = context.id == state.activeSpaceId
+						val resumeItem = resumeItems[context.id]
+						val coverRequest = rememberSidekickCoverRequest(resumeItem)
+						Surface(
+							modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+							shape = RoundedCornerShape(20.dp),
+							color = if (selected) {
+								MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+							} else {
+								MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.62f)
+							},
+						) {
+							Box(
+								modifier = Modifier.fillMaxWidth().heightIn(min = 112.dp),
+								contentAlignment = Alignment.CenterStart,
+							) {
+								if (coverRequest != null) {
+									AsyncImage(
+										model = coverRequest,
+										contentDescription = null,
+										contentScale = ContentScale.Crop,
+										modifier = Modifier.matchParentSize(),
+									)
+								}
+								Box(
+									modifier = Modifier
+										.matchParentSize()
+										.background(
+											Brush.horizontalGradient(
+												0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+												0.62f to MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+												1f to MaterialTheme.colorScheme.surface.copy(alpha = 0.46f),
+											),
+										),
+								)
+								SpaceRow(
+									context = context,
+									selected = selected,
+									enabled = !state.switchInProgress,
+									resumeItem = resumeItem,
+									onResume = { onResume(context.id) },
+									onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+								)
+							}
+						}
+					}
+				}
+				if (state.switchInProgress) {
+					item {
+						Box(
+							modifier = Modifier.fillMaxWidth().padding(16.dp),
+							contentAlignment = Alignment.Center,
+						) {
+							CircularProgressIndicator(modifier = Modifier.size(28.dp))
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+@Composable
+private fun rememberSidekickCoverRequest(resumeItem: SpaceResumeItem?): ImageRequest? {
+	val localContext = LocalContext.current
+	val content = resumeItem?.content
+	val coverUrl = content?.coverUrl?.takeIf { it.isNotBlank() }
+	return remember(localContext, content?.id, coverUrl) {
+		content?.takeIf { coverUrl != null }?.let {
+			val cacheKey = contentCoverCacheKey(it, coverUrl)
+			ImageRequest.Builder(localContext)
+				.data(coverUrl)
+				.memoryCacheKey(cacheKey)
+				.diskCacheKey(cacheKey)
+				.apply { mangaExtra(it) }
+				.diskCachePolicy(CachePolicy.READ_ONLY)
+				.networkCachePolicy(CachePolicy.DISABLED)
+				.build()
+		}
+	}
+}
 
 @Composable
 fun SpaceSwitcherFab(

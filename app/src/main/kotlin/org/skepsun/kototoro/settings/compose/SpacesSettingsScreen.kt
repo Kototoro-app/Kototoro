@@ -41,6 +41,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.SpaceContext
@@ -49,10 +50,7 @@ import org.skepsun.kototoro.space.domain.SpaceKind
 
 data class SpacesSettingsUiState(
     val spacesEnabled: Boolean,
-    val switcherEnabled: Boolean,
-    val persistentNavigationEnabled: Boolean,
-    val immersiveSwitchEnabled: Boolean,
-    val routePreferencesEnabled: Boolean,
+    val switcherPosition: SpaceSwitcherPosition,
 )
 
 @Composable
@@ -64,25 +62,18 @@ fun SpacesSettingsRoute(
     val definitions by viewModel.uiState.collectAsStateWithLifecycle()
     val state = SpacesSettingsUiState(
         spacesEnabled = settings.observeAsState(AppSettings.KEY_ENTITY_SPACE_ENABLED) { isEntitySpaceEnabled }.value,
-        switcherEnabled = settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_ENABLED) { isSpaceSwitcherEnabled }.value,
-        persistentNavigationEnabled = settings.observeAsState(AppSettings.KEY_SPACE_PERSISTENT_NAVIGATION_ENABLED) {
-            isSpacePersistentNavigationEnabled
-        }.value,
-        immersiveSwitchEnabled = settings.observeAsState(AppSettings.KEY_SPACE_IMMERSIVE_SWITCH_ENABLED) {
-            isSpaceImmersiveSwitchEnabled
-        }.value,
-        routePreferencesEnabled = settings.observeAsState(AppSettings.KEY_SPACE_ROUTE_PREFERENCES_ENABLED) {
-            isSpaceRoutePreferencesEnabled
+        switcherPosition = settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
+            spaceSwitcherPosition
         }.value,
     )
     SpacesSettingsScreen(
         state = state,
         definitions = definitions,
-        onSpacesEnabledChange = { settings.isEntitySpaceEnabled = it },
-        onSwitcherEnabledChange = { settings.isSpaceSwitcherEnabled = it },
-        onPersistentNavigationEnabledChange = { settings.isSpacePersistentNavigationEnabled = it },
-        onImmersiveSwitchEnabledChange = { settings.isSpaceImmersiveSwitchEnabled = it },
-        onRoutePreferencesEnabledChange = { settings.isSpaceRoutePreferencesEnabled = it },
+        onSpacesEnabledChange = {
+            settings.isEntitySpaceEnabled = it
+            settings.isSpaceSwitcherEnabled = it
+        },
+        onSwitcherPositionChange = { settings.spaceSwitcherPosition = it },
         onCreate = viewModel::create,
         onSave = viewModel::save,
         onDelete = viewModel::delete,
@@ -96,10 +87,7 @@ fun SpacesSettingsScreen(
     state: SpacesSettingsUiState,
     definitions: SpaceDefinitionsUiState,
     onSpacesEnabledChange: (Boolean) -> Unit,
-    onSwitcherEnabledChange: (Boolean) -> Unit,
-    onPersistentNavigationEnabledChange: (Boolean) -> Unit,
-    onImmersiveSwitchEnabledChange: (Boolean) -> Unit,
-    onRoutePreferencesEnabledChange: (Boolean) -> Unit,
+    onSwitcherPositionChange: (SpaceSwitcherPosition) -> Unit,
     onCreate: (SpaceContext) -> Unit,
     onSave: (SpaceContext) -> Unit,
     onDelete: (SpaceContext) -> Unit,
@@ -127,36 +115,29 @@ fun SpacesSettingsScreen(
                         onCheckedChange = onSpacesEnabledChange,
                     )
                     SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.space_switcher_enabled),
-                        summary = stringResource(R.string.space_switcher_enabled_summary),
-                        checked = state.switcherEnabled,
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.space_switcher_position),
+                        value = state.switcherPosition,
+                        options = listOf(
+                            SettingsChoiceOption(
+                                SpaceSwitcherPosition.TOP_RIGHT,
+                                stringResource(R.string.space_switcher_position_top_right),
+                            ),
+                            SettingsChoiceOption(
+                                SpaceSwitcherPosition.CENTER_RIGHT,
+                                stringResource(R.string.space_switcher_position_center_right),
+                            ),
+                            SettingsChoiceOption(
+                                SpaceSwitcherPosition.TOP_LEFT,
+                                stringResource(R.string.space_switcher_position_top_left),
+                            ),
+                            SettingsChoiceOption(
+                                SpaceSwitcherPosition.CENTER_LEFT,
+                                stringResource(R.string.space_switcher_position_center_left),
+                            ),
+                        ),
                         enabled = state.spacesEnabled,
-                        onCheckedChange = onSwitcherEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.space_persistent_navigation_enabled),
-                        summary = stringResource(R.string.space_persistent_navigation_enabled_summary),
-                        checked = state.persistentNavigationEnabled,
-                        enabled = state.spacesEnabled && state.switcherEnabled,
-                        onCheckedChange = onPersistentNavigationEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.space_immersive_switch_enabled),
-                        summary = stringResource(R.string.space_immersive_switch_enabled_summary),
-                        checked = state.immersiveSwitchEnabled,
-                        enabled = state.spacesEnabled && state.switcherEnabled,
-                        onCheckedChange = onImmersiveSwitchEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.space_route_preferences_enabled),
-                        summary = stringResource(R.string.space_route_preferences_enabled_summary),
-                        checked = state.routePreferencesEnabled,
-                        enabled = state.spacesEnabled,
-                        onCheckedChange = onRoutePreferencesEnabledChange,
+                        onValueChange = onSwitcherPositionChange,
                     )
                 }
             }

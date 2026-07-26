@@ -3217,6 +3217,13 @@
     <string name="space_immersive_switch_enabled_summary">Allow space switching from details, readers, and the video player</string>
     <string name="space_route_preferences_enabled">Remember page preferences per space</string>
     <string name="space_route_preferences_enabled_summary">Keep supported page filters and layout choices separate for each space</string>
+    <string name="space_switcher_position">Space button position</string>
+    <string name="space_switcher_position_top_right">Top right</string>
+    <string name="space_switcher_position_center_right">Center right</string>
+    <string name="space_switcher_position_top_left">Top left</string>
+    <string name="space_switcher_position_center_left">Center left</string>
+    <string name="space_workbench_title">Space Workbench</string>
+    <string name="space_workbench_summary">Switch context or continue where you left off</string>
     <string name="custom_spaces">Space definitions</string>
     <string name="add_custom_space">Add custom space</string>
     <string name="edit_custom_space">Edit custom space</string>
