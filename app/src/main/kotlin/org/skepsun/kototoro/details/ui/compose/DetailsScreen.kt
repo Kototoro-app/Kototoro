@@ -305,6 +305,55 @@ fun DetailsScreen(
     onActionClick: (DetailsAction) -> Unit = {},
     isTemporaryReadOnly: Boolean = false,
 ) {
+    val isDarkTheme = isSystemInDarkTheme()
+    val baseColorScheme = MaterialTheme.colorScheme
+    val detailsColorScheme = remember(baseColorScheme, isDarkTheme) {
+        if (isDarkTheme) {
+            baseColorScheme.copy(
+                onBackground = Color.White,
+                onSurface = Color.White,
+                onSurfaceVariant = Color.White,
+            )
+        } else {
+            baseColorScheme
+        }
+    }
+    MaterialTheme(colorScheme = detailsColorScheme) {
+        DetailsScreenContent(
+            viewModel = viewModel,
+            pagesViewModel = pagesViewModel,
+            bookmarksViewModel = bookmarksViewModel,
+            settings = settings,
+            appRouter = appRouter,
+            pageSaveHelper = pageSaveHelper,
+            onBackClick = onBackClick,
+            activeSpaceId = activeSpaceId,
+            onSpaceSwitcherClick = onSpaceSwitcherClick,
+            onBottomPanelStateChanged = onBottomPanelStateChanged,
+            sharedElementKey = sharedElementKey,
+            onActionClick = onActionClick,
+            isTemporaryReadOnly = isTemporaryReadOnly,
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+private fun DetailsScreenContent(
+    viewModel: DetailsViewModel,
+    pagesViewModel: PagesViewModel,
+    bookmarksViewModel: BookmarksViewModel,
+    settings: AppSettings,
+    appRouter: AppRouter,
+    pageSaveHelper: PageSaveHelper,
+    onBackClick: () -> Unit,
+    activeSpaceId: SpaceId? = null,
+    onSpaceSwitcherClick: () -> Unit = {},
+    onBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
+    sharedElementKey: String? = null,
+    onActionClick: (DetailsAction) -> Unit = {},
+    isTemporaryReadOnly: Boolean = false,
+) {
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
     val readingRecordSnapshot by viewModel.readingRecordSnapshot.collectAsStateWithLifecycle()
     val translationUiState by viewModel.translationUiState.collectAsStateWithLifecycle()

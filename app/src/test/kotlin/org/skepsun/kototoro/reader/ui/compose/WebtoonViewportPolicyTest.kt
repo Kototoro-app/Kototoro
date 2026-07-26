@@ -53,6 +53,12 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
+	fun `boundary handoff ignores non finite gesture values`() {
+		assertEquals(0, resolveWebtoonBoundaryHandoff(scale = 2f, desiredY = Float.NaN, boundedY = 0f))
+		assertEquals(0, resolveWebtoonBoundaryHandoff(scale = Float.NaN, desiredY = 0f, boundedY = 0f))
+	}
+
+	@Test
 	fun `long image is capped to viewport with internal range`() {
 		assertEquals(
 			WebtoonViewportMeasurement(itemHeightPx = 2000, internalScrollRangePx = 3000),

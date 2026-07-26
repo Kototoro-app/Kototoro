@@ -489,20 +489,8 @@ class NovelReaderActivity :
                                 onTtsStopClicked()
                                 composeReaderViewModel.hideTtsControls()
                             },
-                            onRequestPreviousChapter = {
-                                if (readerSettings.readingMode == ReadingMode.PAGED) {
-                                    switchChapterBy(-1)
-                                } else {
-                                    requestPreviousComposeChapter()
-                                }
-                            },
-                            onRequestNextChapter = {
-                                if (readerSettings.readingMode == ReadingMode.PAGED) {
-                                    switchChapterBy(1)
-                                } else {
-                                    requestNextComposeChapter()
-                                }
-                            },
+                            onRequestPreviousChapter = ::requestPreviousComposeChapter,
+                            onRequestNextChapter = ::requestNextComposeChapter,
                             onVisibleChapterChanged = ::onComposeVisibleChapterChanged,
                             onVisibleProgress = ::onComposeVisibleProgress,
                             onPagedPositionChanged = { page, pageCount ->
@@ -846,14 +834,10 @@ class NovelReaderActivity :
      * 获取当前章节的原始文本内容（用于翻译）
      */
     private fun getCurrentChapterContent(): String? {
-        val isScrollMode = readerSettings.readingMode == ReadingMode.SCROLL
-        return if (isScrollMode) {
-			composeReaderViewModel.uiState.value.continuousChapters
-				.firstOrNull { it.chapterIndex == currentChapterIndex }
-				?.content
-        } else {
-            composeReaderViewModel.uiState.value.content
-        }
+		return composeReaderViewModel.uiState.value.continuousChapters
+			.firstOrNull { it.chapterIndex == currentChapterIndex }
+			?.content
+			?: composeReaderViewModel.uiState.value.content
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean = false
@@ -1591,8 +1575,8 @@ class NovelReaderActivity :
         
         lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
             try {
-                // Give the current chapter a head start
-                kotlinx.coroutines.delay(2000)
+				// Paged navigation reaches the boundary quickly, so start warming the next chapter earlier.
+				kotlinx.coroutines.delay(if (readerSettings.readingMode == ReadingMode.PAGED) 350L else 2000L)
                 
                 if (novelContentLoader.isCached(nextChapter)) return@launch
                 
@@ -2728,6 +2712,7 @@ class NovelReaderActivity :
 		val chapter = chapters.getOrNull(data.chapterIndex) ?: return
 		composeReaderViewModel.publishAdjacentChapter(
 			NovelComposeChapterContent(
+				chapterId = chapter.id,
 				chapterIndex = data.chapterIndex,
 				chapterTitle = chapter.title.orEmpty(),
 				content = data.content,

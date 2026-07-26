@@ -63,6 +63,7 @@ fun resolveWebtoonLayoutViewportHeight(viewportHeightPx: Int, scale: Float): Int
 }
 
 fun resolveWebtoonBoundaryHandoff(scale: Float, desiredY: Float, boundedY: Float): Int {
+	if (!scale.isFinite() || !desiredY.isFinite() || !boundedY.isFinite()) return 0
 	if (scale <= 1f) return 0
 	return ((boundedY - desiredY) / scale).roundToInt()
 }

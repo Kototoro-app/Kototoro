@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalAbsoluteTonalElevation
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -425,26 +426,28 @@ fun LiquidGlassSurface(
         else -> MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.18f)
     }
 
-    Box(
-        modifier = modifier
-            .drawBackdrop(
-                backdrop = backdrop!!,
-                exportedBackdrop = exportedBackdrop,
-                shape = { shape },
-                effects = {
-                    vibrancy()
-                    blur(8.dp.toPx())
-                    lens(
-                        refractionHeight = 12.dp.toPx(),
-                        refractionAmount = 10.dp.toPx(),
-                        chromaticAberration = false,
-                    )
-                },
-            )
-            .background(surfaceTint, shape)
-            .border(1.dp, Color.White.copy(alpha = 0.16f), shape),
-        content = content,
-    )
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        Box(
+            modifier = modifier
+                .drawBackdrop(
+                    backdrop = backdrop!!,
+                    exportedBackdrop = exportedBackdrop,
+                    shape = { shape },
+                    effects = {
+                        vibrancy()
+                        blur(8.dp.toPx())
+                        lens(
+                            refractionHeight = 12.dp.toPx(),
+                            refractionAmount = 10.dp.toPx(),
+                            chromaticAberration = false,
+                        )
+                    },
+                )
+                .background(surfaceTint, shape)
+                .border(1.dp, Color.White.copy(alpha = 0.16f), shape),
+            content = content,
+        )
+    }
 }
 
 private fun Modifier.debugGlassBounds(
@@ -519,27 +522,29 @@ fun GlassBottomBarContainer(
     val backdrop = LocalLiquidGlassBackdrop.current
     val exportedBackdrop = rememberLayerBackdrop()
     if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-        Box(
-            modifier = modifier
-                .background(Color.White.copy(alpha = 0.08f), shape)
-                .then(
-                    if (backdrop != null) {
-                        Modifier.drawBackdrop(
-                            backdrop = backdrop,
-                            exportedBackdrop = exportedBackdrop,
-                            shape = { shape },
-                            effects = {
-                                vibrancy()
-                                blur(8.dp.toPx())
-                            },
-                        )
-                    } else {
-                        Modifier
-                    },
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.24f), shape),
-            content = content,
-        )
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            Box(
+                modifier = modifier
+                    .background(Color.White.copy(alpha = 0.08f), shape)
+                    .then(
+                        if (backdrop != null) {
+                            Modifier.drawBackdrop(
+                                backdrop = backdrop,
+                                exportedBackdrop = exportedBackdrop,
+                                shape = { shape },
+                                effects = {
+                                    vibrancy()
+                                    blur(8.dp.toPx())
+                                },
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.24f), shape),
+                content = content,
+            )
+        }
     } else {
         GlassSurface(
             modifier = modifier,

@@ -60,6 +60,7 @@ data class NovelScrollRequest(
 
 @Immutable
 data class NovelComposeChapterContent(
+	val chapterId: Long = 0L,
 	val chapterIndex: Int,
 	val chapterTitle: String,
 	val content: String,
@@ -133,6 +134,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 		val previous = _uiState.value
 		val sameChapter = previous.chapterId == chapterId
 		val chapter = NovelComposeChapterContent(
+			chapterId = chapterId,
 			chapterIndex = chapterIndex,
 			chapterTitle = chapterTitle,
 			content = content,
@@ -159,11 +161,11 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 			currentPageEnd = previous.currentPageEnd.takeIf { sameChapter } ?: 0,
 			scrollPosition = previous.scrollPosition.takeIf { previous.chapterIndex == chapterIndex },
 			imageContext = previous.imageContext.takeIf { sameChapter } ?: NovelComposeImageContext(),
-			continuousChapters = mergeContinuousChapterWindow(
-				existing = previous.continuousChapters,
-				incoming = chapter,
-				continuous = settings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL,
-			),
+				continuousChapters = mergeContinuousChapterWindow(
+					existing = previous.continuousChapters,
+					incoming = chapter,
+					continuous = true,
+				),
 		)
 	}
 
@@ -226,7 +228,6 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 
 	fun publishAdjacentChapter(chapter: NovelComposeChapterContent) {
 		val state = _uiState.value
-		if (state.settings?.readingMode != org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL) return
 		_uiState.value = state.copy(
 			continuousChapters = mergeContinuousChapterWindow(
 				existing = state.continuousChapters,
@@ -241,6 +242,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 		val chapter = state.continuousChapters.firstOrNull { it.chapterIndex == chapterIndex } ?: return
 		if (state.chapterIndex == chapterIndex) return
 		_uiState.value = state.copy(
+			chapterId = chapter.chapterId,
 			chapterIndex = chapter.chapterIndex,
 			chapterTitle = chapter.chapterTitle,
 			content = chapter.content,

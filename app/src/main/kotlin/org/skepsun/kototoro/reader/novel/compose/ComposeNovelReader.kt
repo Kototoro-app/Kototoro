@@ -435,10 +435,30 @@ fun ComposeNovelReaderRoute(
 	val state by viewModel.uiState.collectAsStateWithLifecycle()
 	val settings = state.settings
 	if (renderContent && settings != null && state.content.isNotBlank()) {
-		val blocks = androidx.compose.runtime.remember(state.content, state.translation) {
-			buildNovelComposeDocument(state.content, state.translation)
-		}
-		key(if (settings.readingMode == ReadingMode.SCROLL) "continuous" else state.chapterIndex) {
+		if (settings.readingMode == ReadingMode.PAGED) {
+			ComposeNovelPagedChapter(
+				state = state,
+				chapters = state.continuousChapters,
+				settings = settings,
+				imageModel = imageModel,
+				onImageClick = onImageClick,
+				onTap = onTap,
+				onBookmark = onBookmark,
+				onRequestPreviousChapter = onRequestPreviousChapter,
+				onRequestNextChapter = onRequestNextChapter,
+				onPositionChanged = { chapterIndex, page, pageCount, charStart, charEnd, text ->
+					viewModel.focusContinuousChapter(chapterIndex)
+					onVisibleChapterChanged(chapterIndex)
+					viewModel.publishPagedPosition(page, pageCount, charStart, charEnd, text)
+					onPagedPositionChanged(page, pageCount)
+				},
+				modifier = modifier,
+			)
+		} else {
+			val blocks = androidx.compose.runtime.remember(state.content, state.translation) {
+				buildNovelComposeDocument(state.content, state.translation)
+			}
+			key("continuous") {
 			val listState = rememberLazyListState(
 				initialFirstVisibleItemIndex = state.scrollPosition
 					?.firstVisibleBlock
@@ -483,22 +503,6 @@ fun ComposeNovelReaderRoute(
 					onVisibleProgress = onVisibleProgress,
 					ttsHighlightRange = state.ttsHighlightRange,
 				)
-			} else if (settings.readingMode == ReadingMode.PAGED) {
-				ComposeNovelPagedChapter(
-					state = state,
-					settings = settings,
-					imageModel = imageModel,
-					onImageClick = onImageClick,
-					onTap = onTap,
-					onBookmark = onBookmark,
-					onRequestPreviousChapter = onRequestPreviousChapter,
-					onRequestNextChapter = onRequestNextChapter,
-					onPositionChanged = { page, pageCount, charStart, charEnd, text ->
-						viewModel.publishPagedPosition(page, pageCount, charStart, charEnd, text)
-						onPagedPositionChanged(page, pageCount)
-					},
-					modifier = modifier,
-				)
 			} else {
 				ComposeNovelChapter(
 					content = state.content,
@@ -512,6 +516,7 @@ fun ComposeNovelReaderRoute(
 					modifier = modifier,
 				)
 			}
+		}
 		}
 	}
 	NovelReaderOverlay(
@@ -560,31 +565,40 @@ fun ComposeNovelReaderRoute(
 }
 
 private sealed interface NovelComposePagedElement {
-	data class Text(val value: String, val sourceStart: Int) : NovelComposePagedElement
-	data class Image(val path: String, val sourcePosition: Int) : NovelComposePagedElement
+	data class Text(val value: String, val chapterIndex: Int, val sourceStart: Int) : NovelComposePagedElement
+	data class Image(val path: String, val chapterIndex: Int, val sourcePosition: Int) : NovelComposePagedElement
 }
 
 private sealed interface NovelComposePage {
+	val chapterIndex: Int
 	val charStart: Int
 	val charEnd: Int
 
 	data class Text(
 		val value: String,
+		override val chapterIndex: Int,
 		override val charStart: Int,
 		override val charEnd: Int,
 	) : NovelComposePage
 
 	data class Image(
 		val path: String,
+		override val chapterIndex: Int,
 		override val charStart: Int,
 		override val charEnd: Int,
 	) : NovelComposePage
+}
+
+private fun novelComposePageKey(page: NovelComposePage): String = when (page) {
+	is NovelComposePage.Text -> "text:${page.chapterIndex}:${page.charStart}:${page.charEnd}"
+	is NovelComposePage.Image -> "image:${page.chapterIndex}:${page.charStart}:${page.path}"
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ComposeNovelPagedChapter(
 	state: NovelComposeReaderUiState,
+	chapters: List<NovelComposeChapterContent>,
 	settings: NovelReaderSettings,
 	imageModel: (String) -> Any?,
 	onImageClick: ((String) -> Unit)?,
@@ -592,7 +606,7 @@ private fun ComposeNovelPagedChapter(
 	onBookmark: () -> Unit,
 	onRequestPreviousChapter: () -> Unit,
 	onRequestNextChapter: () -> Unit,
-	onPositionChanged: (Int, Int, Int, Int, String) -> Unit,
+	onPositionChanged: (Int, Int, Int, Int, Int, String) -> Unit,
 	modifier: Modifier,
 ) {
 	val density = LocalDensity.current
@@ -663,14 +677,24 @@ private fun ComposeNovelPagedChapter(
 			(maxHeight - settings.marginVertical.dp * 2).coerceAtLeast(1.dp).roundToPx()
 		}
 		val pages = androidx.compose.runtime.remember(
-			state.content,
-			state.translation,
+			chapters,
 			settings,
 			contentWidthPx,
 			contentHeightPx,
 		) {
-			paginateNovelComposeDocument(
-				blocks = buildNovelComposeDocument(state.content, state.translation),
+			paginateNovelComposeChapterWindow(
+				chapters = chapters.ifEmpty {
+					listOf(
+						NovelComposeChapterContent(
+							chapterId = state.chapterId,
+							chapterIndex = state.chapterIndex,
+							chapterTitle = state.chapterTitle,
+							content = state.content,
+							translation = state.translation,
+							imageContext = state.imageContext,
+						),
+					)
+				},
 				textMeasurer = textMeasurer,
 				style = style,
 				widthPx = contentWidthPx,
@@ -678,14 +702,24 @@ private fun ComposeNovelPagedChapter(
 			)
 		}
 		if (pages.isEmpty()) return@BoxWithConstraints
-		val initialPage = state.position
-			?.page
-			?.coerceIn(pages.indices)
-			?: 0
 		val pagerState = rememberPagerState(
-			initialPage = initialPage,
 			pageCount = pages::size,
 		)
+		var settledPageKey by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+		LaunchedEffect(pages) {
+			val anchor = settledPageKey ?: return@LaunchedEffect
+			val targetPage = pages.indexOfFirst { novelComposePageKey(it) == anchor }
+			if (targetPage >= 0 && targetPage != pagerState.currentPage) {
+				pagerState.scrollToPage(targetPage)
+			}
+		}
+		LaunchedEffect(state.chapterId) {
+			val visibleChapterIndex = pages.getOrNull(pagerState.currentPage)?.chapterIndex
+			if (visibleChapterIndex != state.chapterIndex) {
+				val targetPage = pages.indexOfFirst { it.chapterIndex == state.chapterIndex }
+				if (targetPage >= 0) pagerState.scrollToPage(targetPage)
+			}
+		}
 		val boundarySwipeThresholdPx = with(density) { 48.dp.toPx() }
 		val boundarySwipeConnection = androidx.compose.runtime.remember(
 			pagerState,
@@ -717,25 +751,38 @@ private fun ComposeNovelPagedChapter(
 				}
 			}
 		}
-		LaunchedEffect(state.pageRequest?.id, pages.size) {
+		LaunchedEffect(state.pageRequest?.id) {
 			val request = state.pageRequest ?: return@LaunchedEffect
-			pagerState.animateScrollToPage(request.page.coerceIn(pages.indices))
+			val chapterStart = pages.indexOfFirst { it.chapterIndex == state.chapterIndex }
+			if (chapterStart >= 0) {
+				pagerState.animateScrollToPage((chapterStart + request.page).coerceIn(pages.indices))
+			}
 		}
 		LaunchedEffect(pagerState, pages) {
 			snapshotFlow { pagerState.settledPage }
 				.distinctUntilChanged()
 				.collect { index ->
-					when (val page = pages[index]) {
+					val page = pages.getOrNull(index) ?: return@collect
+					settledPageKey = novelComposePageKey(page)
+					val chapterStart = pages.indexOfFirst { it.chapterIndex == page.chapterIndex }
+					val chapterEnd = pages.indexOfLast { it.chapterIndex == page.chapterIndex }
+					if (index <= chapterStart + 2) onRequestPreviousChapter()
+					if (index >= chapterEnd - 2) onRequestNextChapter()
+					val localPage = (index - chapterStart).coerceAtLeast(0)
+					val localPageCount = (chapterEnd - chapterStart + 1).coerceAtLeast(1)
+					when (page) {
 						is NovelComposePage.Text -> onPositionChanged(
-							index,
-							pages.size,
+							page.chapterIndex,
+							localPage,
+							localPageCount,
 							page.charStart,
 							page.charEnd,
 							page.value,
 						)
 						is NovelComposePage.Image -> onPositionChanged(
-							index,
-							pages.size,
+							page.chapterIndex,
+							localPage,
+							localPageCount,
 							page.charStart,
 							page.charEnd,
 							"",
@@ -795,7 +842,7 @@ private fun ComposeNovelPagedChapter(
 		HorizontalPager(
 			state = pagerState,
 			pageSize = if (dualPage) PageSize.Fixed(maxWidth / 2) else PageSize.Fill,
-			key = { index -> "${state.chapterId}:${pages[index].charStart}:$index" },
+			key = { index -> novelComposePageKey(pages[index]) },
 			modifier = Modifier
 				.fillMaxSize()
 				.background(Color(palette.backgroundColor))
@@ -831,7 +878,9 @@ private fun ComposeNovelPagedChapter(
 					NovelComposeImage(
 						path = page.path,
 						imageModel = imageModel,
-						imageContext = state.imageContext,
+						imageContext = chapters.firstOrNull {
+							it.chapterIndex == page.chapterIndex
+						}?.imageContext ?: state.imageContext,
 						onClick = onImageClick,
 					)
 				}
@@ -842,6 +891,7 @@ private fun ComposeNovelPagedChapter(
 
 private fun paginateNovelComposeDocument(
 	blocks: List<NovelComposeBlock>,
+	chapterIndex: Int,
 	textMeasurer: androidx.compose.ui.text.TextMeasurer,
 	style: androidx.compose.ui.text.TextStyle,
 	widthPx: Int,
@@ -852,7 +902,7 @@ private fun paginateNovelComposeDocument(
 		blocks.forEach { block ->
 			when (block) {
 				is NovelComposeBlock.Image -> add(
-					NovelComposePagedElement.Image(block.path, 0),
+					NovelComposePagedElement.Image(block.path, chapterIndex, 0),
 				)
 				is NovelComposeBlock.Text -> {
 					val displayed = when {
@@ -861,10 +911,22 @@ private fun paginateNovelComposeDocument(
 						else -> "${block.original}\n\n${block.translation}"
 					}
 					if (displayed.isNotBlank()) {
-						add(NovelComposePagedElement.Text(displayed, block.sourceRange?.first ?: 0))
+						add(
+							NovelComposePagedElement.Text(
+								value = displayed,
+								chapterIndex = chapterIndex,
+								sourceStart = block.sourceRange?.first ?: 0,
+							),
+						)
 					}
 					block.inlineImages.values.forEach { path ->
-						add(NovelComposePagedElement.Image(path, block.sourceRange?.last ?: 0))
+						add(
+							NovelComposePagedElement.Image(
+								path = path,
+								chapterIndex = chapterIndex,
+								sourcePosition = block.sourceRange?.last ?: 0,
+							),
+						)
 					}
 				}
 			}
@@ -881,6 +943,7 @@ private fun paginateNovelComposeDocument(
 	}
 	val pages = mutableListOf<NovelComposePage>()
 	var current = ""
+	var currentChapterIndex = chapterIndex
 	var currentStart = 0
 	var currentEnd = 0
 	fun flushText() {
@@ -888,7 +951,12 @@ private fun paginateNovelComposeDocument(
 			current = ""
 			return
 		}
-		pages += NovelComposePage.Text(current.trimEnd(), currentStart, currentEnd)
+		pages += NovelComposePage.Text(
+				value = current.trimEnd(),
+				chapterIndex = currentChapterIndex,
+				charStart = currentStart,
+				charEnd = currentEnd,
+			)
 		current = ""
 	}
 	elements.forEach { element ->
@@ -897,18 +965,25 @@ private fun paginateNovelComposeDocument(
 				flushText()
 				pages += NovelComposePage.Image(
 					path = element.path,
+					chapterIndex = element.chapterIndex,
 					charStart = element.sourcePosition,
 					charEnd = element.sourcePosition,
 				)
 			}
 			is NovelComposePagedElement.Text -> {
+				if (current.isNotEmpty() && currentChapterIndex != element.chapterIndex) {
+					flushText()
+				}
 				var remaining = element.value
 				var consumed = 0
 				while (remaining.isNotEmpty()) {
 					val separator = if (current.isEmpty()) "" else "\n\n"
 					val candidate = current + separator + remaining
 					if (fits(candidate)) {
-						if (current.isEmpty()) currentStart = element.sourceStart + consumed
+						if (current.isEmpty()) {
+							currentChapterIndex = element.chapterIndex
+							currentStart = element.sourceStart + consumed
+						}
 						current = candidate
 						currentEnd = element.sourceStart + consumed + remaining.length
 						remaining = ""
@@ -931,6 +1006,7 @@ private fun paginateNovelComposeDocument(
 							charArrayOf('\n', ' ', '。', '！', '？', '.', '!', '?'),
 							startIndex = (best - 1).coerceAtLeast(0),
 						).takeIf { it >= best / 2 }?.plus(1) ?: best
+						currentChapterIndex = element.chapterIndex
 						currentStart = element.sourceStart + consumed
 						currentEnd = currentStart + breakAt
 						current = remaining.substring(0, breakAt)
@@ -944,6 +1020,25 @@ private fun paginateNovelComposeDocument(
 	}
 	flushText()
 	return pages
+}
+
+private fun paginateNovelComposeChapterWindow(
+	chapters: List<NovelComposeChapterContent>,
+	textMeasurer: androidx.compose.ui.text.TextMeasurer,
+	style: androidx.compose.ui.text.TextStyle,
+	widthPx: Int,
+	heightPx: Int,
+): List<NovelComposePage> {
+	return chapters.flatMap { chapter ->
+		paginateNovelComposeDocument(
+			blocks = buildNovelComposeDocument(chapter.content, chapter.translation),
+			chapterIndex = chapter.chapterIndex,
+			textMeasurer = textMeasurer,
+			style = style,
+			widthPx = widthPx,
+			heightPx = heightPx,
+		)
+	}
 }
 
 private fun highlightedNovelText(

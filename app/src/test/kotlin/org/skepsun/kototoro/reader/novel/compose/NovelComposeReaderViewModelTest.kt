@@ -123,4 +123,29 @@ class NovelComposeReaderViewModelTest {
 		assertEquals(180, state.currentPageEnd)
 		assertEquals("4 / 10", state.progressLabel)
 	}
+
+	@Test
+	fun `paged chapter publication keeps adjacent chapters in the reading window`() {
+		val viewModel = NovelComposeReaderViewModel()
+		val settings = NovelReaderSettings(readingMode = org.skepsun.kototoro.reader.novel.ReadingMode.PAGED)
+		viewModel.publishChapter(
+			chapterId = 1L,
+			chapterIndex = 0,
+			chapterTitle = "Chapter 1",
+			content = "First",
+			settings = settings,
+			translation = null,
+		)
+		viewModel.publishAdjacentChapter(
+			NovelComposeChapterContent(
+				chapterId = 2L,
+				chapterIndex = 1,
+				chapterTitle = "Chapter 2",
+				content = "Second",
+				translation = null,
+			),
+		)
+
+		assertEquals(listOf(0, 1), viewModel.uiState.value.continuousChapters.map { it.chapterIndex })
+	}
 }

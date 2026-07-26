@@ -325,6 +325,7 @@ fun ComposeWebtoonReader(
 		listState.dispatchRawDelta((deltaPx - internallyConsumed).toFloat())
 	}
 	fun applyCanvasPan(pan: Offset) {
+		if (!pan.x.isFinite() || !pan.y.isFinite()) return
 		val desiredX = canvasOffsetX + pan.x
 		val desiredY = canvasOffsetY + pan.y
 		val bounded = clampCanvasOffset(canvasScale, desiredX, desiredY)
@@ -343,6 +344,7 @@ fun ComposeWebtoonReader(
 		return center + (focus - offset - center) / safeScale
 	}
 	fun applyCanvasScaleAtFocus(nextScale: Float, focus: Offset) {
+		if (!nextScale.isFinite() || !focus.x.isFinite() || !focus.y.isFinite()) return
 		val previousScale = canvasScale
 		val previousLayoutHeight = resolveWebtoonLayoutViewportHeight(viewportHeightPx, previousScale)
 		val nextLayoutHeight = resolveWebtoonLayoutViewportHeight(viewportHeightPx, nextScale)
@@ -519,17 +521,21 @@ fun ComposeWebtoonReader(
 								velocityTracker.addPosition(it.uptimeMillis, it.position)
 							}
 							val pressedCount = event.changes.count { it.pressed }
-							if (pressedCount >= 2 || canvasScale > 1f) {
+							if (pressedCount > 0 && (pressedCount >= 2 || canvasScale > 1f)) {
 								webtoonZoomAnimationJob?.cancel()
 								val centroid = event.calculateCentroid(useCurrent = false)
 								val pan = event.calculatePan()
 								val zoom = event.calculateZoom()
-								val previousScale = canvasScale
-								val nextScale = (previousScale * zoom).coerceIn(0.5f, 2.5f)
-								applyCanvasScaleAtFocus(nextScale, centroid)
-								applyCanvasPan(pan)
-								event.changes.forEach { it.consume() }
-								transformed = true
+								if (centroid.x.isFinite() && centroid.y.isFinite() &&
+									pan.x.isFinite() && pan.y.isFinite() && zoom.isFinite()
+								) {
+									val previousScale = canvasScale
+									val nextScale = (previousScale * zoom).coerceIn(0.5f, 2.5f)
+									applyCanvasScaleAtFocus(nextScale, centroid)
+									applyCanvasPan(pan)
+									event.changes.forEach { it.consume() }
+									transformed = true
+								}
 							}
 						} while (event.changes.any { it.pressed })
 						if (transformed) {
