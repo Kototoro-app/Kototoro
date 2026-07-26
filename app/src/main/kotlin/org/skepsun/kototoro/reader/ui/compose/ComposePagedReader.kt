@@ -3,6 +3,7 @@ package org.skepsun.kototoro.reader.ui.compose
 import android.graphics.Bitmap
 import android.net.Uri
 import android.graphics.drawable.Animatable
+import android.view.ViewConfiguration
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.FloatExponentialDecaySpec
@@ -262,6 +263,10 @@ fun ComposeWebtoonReader(
 	isCropEnabled: Boolean = false,
 	modifier: Modifier = Modifier,
 ) {
+	val context = LocalContext.current
+	val doubleTapSlop = remember(context) {
+		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
+	}
 	val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage.coerceIn(pages.indices))
 	// Keep dimensions outside individual lazy items. When an item is recycled and later returns
 	// from Coil's cache, its height is known before the bitmap is drawn, preventing scroll jumps.
@@ -548,13 +553,24 @@ fun ComposeWebtoonReader(
 			}
 			.pointerInput(isZoomEnabled, defaultScale) {
 				if (isZoomEnabled) {
-					var lastTapAt = 0L
+					var lastTapUpAt = 0L
 					var lastTapPosition: Offset? = null
 					awaitEachGesture {
 						val down = awaitFirstDown(
 							requireUnconsumed = false,
 							pass = PointerEventPass.Initial,
 						)
+						val previousPosition = lastTapPosition
+						val isDoubleTapCandidate = previousPosition != null &&
+							isWebtoonDoubleTapCandidate(
+								firstTapPosition = previousPosition,
+								firstTapUpTimeMillis = lastTapUpAt,
+								secondTapPosition = down.position,
+								secondTapDownTimeMillis = down.uptimeMillis,
+								minTimeMillis = viewConfiguration.doubleTapMinTimeMillis,
+								timeoutMillis = viewConfiguration.doubleTapTimeoutMillis,
+								doubleTapSlop = doubleTapSlop,
+							)
 						var moved = false
 						var eventTime = down.uptimeMillis
 						do {
@@ -563,25 +579,26 @@ fun ComposeWebtoonReader(
 							if (event.changes.count { it.pressed } >= 2) {
 								moved = true
 							} else if (event.changes.any { it.pressed }) {
-								val pan = event.calculatePan()
-								if (kotlin.math.hypot(pan.x, pan.y) > viewConfiguration.touchSlop) {
+								val currentPosition = event.changes.firstOrNull { it.pressed }?.position
+								if (currentPosition != null &&
+									hasExceededWebtoonTapSlop(
+										start = down.position,
+										current = currentPosition,
+										touchSlop = viewConfiguration.touchSlop,
+									)
+								) {
 									moved = true
 								}
 							}
 						} while (event.changes.any { it.pressed })
 
-						if (moved) {
+						val heldTooLong =
+							eventTime - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis
+						if (moved || heldTooLong) {
 							lastTapPosition = null
 							return@awaitEachGesture
 						}
-						val previousPosition = lastTapPosition
-						val isDoubleTap = previousPosition != null &&
-							eventTime - lastTapAt <= viewConfiguration.doubleTapTimeoutMillis &&
-							kotlin.math.hypot(
-								down.position.x - previousPosition.x,
-								down.position.y - previousPosition.y,
-							) <= viewConfiguration.touchSlop
-						if (isDoubleTap) {
+						if (isDoubleTapCandidate) {
 							lastTapPosition = null
 							val targetScale = if (kotlin.math.abs(canvasScale - defaultScale) > 0.001f) {
 								defaultScale.coerceIn(0.5f, 1f)
@@ -594,7 +611,7 @@ fun ComposeWebtoonReader(
 							}
 						} else {
 							lastTapPosition = down.position
-							lastTapAt = eventTime
+							lastTapUpAt = eventTime
 						}
 					}
 				}
