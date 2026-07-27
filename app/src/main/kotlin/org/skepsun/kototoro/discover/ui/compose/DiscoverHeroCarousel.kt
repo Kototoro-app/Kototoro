@@ -415,11 +415,11 @@ fun DiscoverHeroCarousel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (onOpenSchedule != null) {
-                            DiscoverHeroOverlaySurface {
-                                IconButton(
-                                    onClick = onOpenSchedule,
-                                    modifier = Modifier.size(48.dp),
-                                ) {
+                                DiscoverHeroOverlaySurface {
+                                    IconButton(
+                                        onClick = onOpenSchedule,
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
                                     Icon(
                                         imageVector = Icons.Filled.DateRange,
                                         contentDescription = stringResource(R.string.open_daily_schedule),
@@ -433,12 +433,12 @@ fun DiscoverHeroCarousel(
                             DiscoverHeroOverlaySurface {
                                 Row(
                                     modifier = Modifier
-                                        .heightIn(min = 48.dp)
-                                        .widthIn(min = 48.dp)
+                                        .heightIn(min = 40.dp)
+                                        .widthIn(min = 40.dp)
                                         .clickable(role = Role.Button) {
                                             isServiceMenuExpanded = true
                                         }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -626,36 +626,6 @@ fun DiscoverHeroCarousel(
                 }
             }
             if (!detachedBottomContent) {
-                DiscoverHeroOverlaySurface(
-                    modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding),
-                ) {
-                    HeroPagerIndicator(
-                        pageCount = items.size,
-                        currentPage = selectedIndex,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        activeColor = heroContentColor,
-                        inactiveColor = heroContentColor.copy(alpha = 0.34f),
-                        pageCounter = "${selectedIndex + 1} / ${items.size}",
-                    )
-                }
-            }
-            if (bottomContent != null) {
-                if (!detachedBottomContent) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                }
-                bottomContent()
-            }
-        }
-        if (detachedBottomContent) {
-            DiscoverHeroOverlaySurface(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(
-                        start = CompactTopBarHorizontalPadding,
-                        end = CompactTopBarHorizontalPadding,
-                        bottom = 14.dp,
-                    ),
-            ) {
                 HeroPagerIndicator(
                     pageCount = items.size,
                     currentPage = selectedIndex,
@@ -665,6 +635,28 @@ fun DiscoverHeroCarousel(
                     pageCounter = "${selectedIndex + 1} / ${items.size}",
                 )
             }
+            if (bottomContent != null) {
+                if (!detachedBottomContent) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+                bottomContent()
+            }
+        }
+        if (detachedBottomContent) {
+            HeroPagerIndicator(
+                pageCount = items.size,
+                currentPage = selectedIndex,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(
+                        start = CompactTopBarHorizontalPadding + 8.dp,
+                        end = CompactTopBarHorizontalPadding,
+                        bottom = 20.dp,
+                    ),
+                activeColor = heroContentColor,
+                inactiveColor = heroContentColor.copy(alpha = 0.34f),
+                pageCounter = "${selectedIndex + 1} / ${items.size}",
+            )
         }
     }
 }

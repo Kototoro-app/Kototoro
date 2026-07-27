@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -17,8 +18,10 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -26,8 +29,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 
-private val CompactSourceTagButtonSize = 32.dp
-private val CompactSourceTagIconSize = 16.dp
+private val CompactSourceTagIconSize = 18.dp
 
 /**
  * Icon button + dropdown menu for selecting a single [SourceTag].
@@ -43,6 +45,8 @@ fun SourceTagDropdown(
     onButtonClickIntercept: (android.view.View?) -> Boolean = { false },
     onTagSelected: (SourceTag?) -> Unit,
     modifier: Modifier = Modifier,
+    buttonSize: Dp = CompactTopBarCompactButtonSize,
+    iconSize: Dp = CompactSourceTagIconSize,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
@@ -62,7 +66,9 @@ fun SourceTagDropdown(
     }
 
     Box(
-        modifier = modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() },
+        modifier = modifier
+            .size(buttonSize)
+            .onGloballyPositioned { anchorBounds = it.boundsInRoot() },
     ) {
         IconButton(
             onClick = {
@@ -70,12 +76,12 @@ fun SourceTagDropdown(
                     expanded = true
                 }
             },
-            modifier = Modifier.size(CompactSourceTagButtonSize),
+            modifier = Modifier.fillMaxSize(),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
                 contentDescription = stringResource(R.string.filter),
-                modifier = Modifier.size(CompactSourceTagIconSize),
+                modifier = Modifier.size(iconSize),
                 tint = tint,
             )
         }

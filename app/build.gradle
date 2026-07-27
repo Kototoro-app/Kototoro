@@ -229,6 +229,8 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		// the API/plugin classes we actually use and strip library/app generated glue that causes R8 duplicates.
 		exclude 'coil3/**'
 		exclude 'androidx/**'
+		// Coroutines must resolve to the host ABI; bundled copies break Mihon suspend calls.
+		exclude 'kotlinx/coroutines/**'
 		exclude 'com/google/android/material/**'
 		exclude 'com/lagradost/cloudstream3/databinding/**'
 		exclude 'com/lagradost/cloudstream3/metaproviders/**'
@@ -288,6 +290,7 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 				if (
 					entry.name.startsWith('coil3/') ||
 					entry.name.startsWith('androidx/') ||
+					entry.name.startsWith('kotlinx/coroutines/') ||
 					entry.name.startsWith('com/google/android/material/') ||
 					(
 						(entry.name ==~ /.*\/R(\$[^\/]+)?\.class$/ || entry.name.endsWith('/BuildConfig.class')) &&

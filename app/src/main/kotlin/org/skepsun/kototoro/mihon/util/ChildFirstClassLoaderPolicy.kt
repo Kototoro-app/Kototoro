@@ -6,6 +6,7 @@ internal object ChildFirstClassLoaderPolicy {
 		"java.",
 		"javax.",
 		"kotlin.",
+		"kotlinx.coroutines.",
 		"android.",
 		"androidx.",
 		"org.json.",

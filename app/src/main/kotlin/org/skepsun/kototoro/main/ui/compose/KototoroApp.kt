@@ -321,7 +321,7 @@ private fun TopLevelNavKey?.supportsGridSizeSlider(): Boolean = when (this) {
 private fun TopLevelNavKey?.titleRes(): Int? = when (this) {
     HomeNavKey -> R.string.home
     HistoryNavKey -> R.string.history
-    FavoritesNavKey -> R.string.favourites
+    FavoritesNavKey -> null
     ExploreNavKey -> R.string.explore
     DiscoverNavKey -> R.string.discover
     FeedNavKey -> R.string.feed

@@ -258,6 +258,7 @@ fun KototoroTopBar(
                                 .height(topBarControlHeight)
                                 .padding(start = 2.dp, end = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             if (isContentTypeFilterVisible) {
                                 SwipeableFilterChip(
@@ -276,6 +277,8 @@ fun KototoroTopBar(
                                     enabledTags = enabledSourceTags,
                                     onButtonClickIntercept = onSourceTagFilterClick,
                                     onTagSelected = onSourceTagSelected,
+                                    buttonSize = topBarControlHeight,
+                                    iconSize = topBarIconSize,
                                 )
                             }
                             if (showMoreActions) {

@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -205,16 +206,24 @@ private fun SettingsSeparatedTopAppBar(
 
 @Composable
 private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
-	Surface(
+	val surface = MaterialTheme.colorScheme.surface
+	val surfaceHalf = surface.copy(alpha = 0.52f)
+	Box(
 		modifier = Modifier
 			.fillMaxWidth()
-			.background(
-				Brush.verticalGradient(
-					colors = listOf(MaterialTheme.colorScheme.surface, Color.Transparent),
+			.drawBehind {
+				drawRect(
+					brush = Brush.verticalGradient(
+						*arrayOf(
+							0.0f to surface,
+							0.28f to surface,
+							0.68f to surfaceHalf,
+							1.0f to Color.Transparent,
+							),
+						endY = 220.dp.toPx(),
 				),
-			),
-		color = Color.Transparent,
-	) {
+			)
+		}	) {
 		Box(
 			modifier = Modifier
 				.fillMaxWidth()
