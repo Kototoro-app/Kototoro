@@ -174,17 +174,10 @@ class HistoryListViewModel @Inject constructor(
 	)
 
 	val isResumeEnabled = combine(
-		settings.observe(
-			AppSettings.KEY_MAIN_FAB,
-			AppSettings.KEY_INCOGNITO_MODE,
-		),
 		activeSpaceScope.flatMapLatest(repository::observeLast),
 		networkState,
-	) { _, last, isOnline ->
-		settings.isMainFabEnabled &&
-			!settings.isIncognitoModeEnabled &&
-			last != null &&
-			(isOnline || last.isLocal)
+	) { last, isOnline ->
+		last != null && (isOnline || last.isLocal)
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5000), false)
 
 	val headerQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions

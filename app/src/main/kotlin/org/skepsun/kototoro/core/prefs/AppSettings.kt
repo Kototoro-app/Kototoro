@@ -229,7 +229,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var interfaceStyle: InterfaceStyle
 		get() = prefs.getEnumValue(
 			KEY_INTERFACE_STYLE,
-			InterfaceStyle.MATERIAL_3_EXPRESSIVE,
+			InterfaceStyle.IOS,
 		).normalized()
 		set(value) {
 			val normalizedValue = value.normalized()
@@ -267,10 +267,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var navFloatingHeight: Int
 		get() = prefs.getSafeInt(KEY_NAV_FLOATING_HEIGHT, 52).coerceIn(48, 84)
 		set(value) = prefs.edit { putInt(KEY_NAV_FLOATING_HEIGHT, value.coerceIn(48, 84)) }
-
-	var isMainFabEnabled: Boolean
-		get() = prefs.getBoolean(KEY_MAIN_FAB, true)
-		set(value) = prefs.edit { putBoolean(KEY_MAIN_FAB, value) }
 
 	var gridSize: Int
 		get() = prefs.getSafeInt(KEY_GRID_SIZE, 100).coerceIn(50, 150)
@@ -547,6 +543,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val isReaderZoomButtonsEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_ZOOM_BUTTONS, false)
 
+	val isReaderControlLabelsEnabled: Boolean
+		get() = prefs.getBoolean(KEY_READER_CONTROL_LABELS, false)
+
 	val isReaderControlAlwaysLTR: Boolean
 		get() = prefs.getBoolean(KEY_READER_CONTROL_LTR, false)
 
@@ -556,17 +555,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val isReaderFullscreenEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_FULLSCREEN, true)
 
-	var isReaderToolbarFloating: Boolean
-		get() = prefs.getBoolean(KEY_READER_TOOLBAR_FLOATING, true)
-		set(value) = prefs.edit { putBoolean(KEY_READER_TOOLBAR_FLOATING, value) }
-
 	val isReaderOptimizationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_OPTIMIZE, false)
-
-	val readerControls: Set<ReaderControl>
-		get() = prefs.getStringSet(KEY_READER_CONTROLS, null)?.mapNotNullTo(EnumSet.noneOf(ReaderControl::class.java)) {
-			ReaderControl.entries.find(it)
-		} ?: ReaderControl.DEFAULT
 
 	var isOfflineCheckDisabled: Boolean
 		get() = prefs.getBoolean(KEY_OFFLINE_DISABLED, false)
@@ -2169,6 +2159,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_DOUBLE_COVER_PAGE = "reader_double_cover_page"
 		const val KEY_READER_SPLIT_PAGES = "reader_split_pages"
 		const val KEY_READER_ZOOM_BUTTONS = "reader_zoom_buttons"
+		const val KEY_READER_CONTROL_LABELS = "reader_control_labels"
 		const val KEY_READER_CONTROL_LTR = "reader_taps_ltr"
 		const val KEY_READER_NAVIGATION_INVERTED = "reader_navigation_inverted"
 		const val KEY_READER_FULLSCREEN = "reader_fullscreen"
@@ -2190,7 +2181,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NOTIFICATIONS_LIGHT = "notifications_light"
 		const val KEY_NOTIFICATIONS_INFO = "tracker_notifications_info"
 		const val KEY_READER_ANIMATION = "reader_animation2"
-		const val KEY_READER_CONTROLS = "reader_controls"
 		const val KEY_READER_MODE = "reader_mode"
 		const val KEY_READER_MODE_DETECT = "reader_mode_detect"
 		const val KEY_READER_CROP = "reader_crop"
@@ -2436,14 +2426,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NAV_EXPRESSIVE_PILL = "nav_expressive_pill"
 		const val KEY_NAV_HEIGHT = "nav_height"
 		const val KEY_NAV_FLOATING_HEIGHT = "nav_floating_height"
-		const val KEY_READER_TOOLBAR_FLOATING = "reader_toolbar_floating"
+
 		const val KEY_LOADING_CIRCLE_STYLE = "loading_circle_style"
 		const val KEY_POPUP_RADIUS = "popup_radius"
 		const val KEY_GLASS_IMMERSIVE_STRENGTH = "glass_immersive_strength"
 		const val KEY_GLASS_EFFECT_ENABLED = "glass_effect_enabled"
 		const val KEY_REDUCED_VISUAL_EFFECTS = "reduced_visual_effects"
 		const val KEY_DETAILS_PANORAMA_SCROLL_LINKED = "details_panorama_scroll_linked"
-		const val KEY_MAIN_FAB = "main_fab"
 		const val KEY_32BIT_COLOR = "enhanced_colors"
 		const val KEY_SOURCES_ORDER = "sources_sort_order"
 		const val KEY_SOURCES_CATALOG = "sources_catalog"

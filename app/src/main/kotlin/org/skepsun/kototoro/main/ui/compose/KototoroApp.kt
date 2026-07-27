@@ -875,11 +875,6 @@ fun KototoroApp(
     val sidekickPosition by appSettings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
         spaceSwitcherPosition
     }
-    val mainFabMode = resolveMainFabMode(
-        resumeEnabled = effectiveResumeEnabled,
-    )
-    val showContinueReadingFab = mainFabMode == MainFabMode.CONTINUE_READING
-    val showMainFab = mainFabMode != MainFabMode.HIDDEN
     LaunchedEffect(shouldShowChrome, navigationSpaceId, isLandscapeNavigation) {
         traceSpaceFab {
             "space changed space=${navigationSpaceId.value} chrome=$shouldShowChrome landscape=$isLandscapeNavigation " +
@@ -1291,33 +1286,6 @@ fun KototoroApp(
                     lastValidSpaceSwitcherFabTarget = spaceSwitcherFabTargetOffset
                 }
             }
-            val fabTargetForAnimation = spaceSwitcherFabTargetOffset ?: lastValidSpaceSwitcherFabTarget
-            val animatedSpaceSwitcherFabOffset by animateIntOffsetAsState(
-                targetValue = fabTargetForAnimation ?: androidx.compose.ui.unit.IntOffset.Zero,
-                animationSpec = if (spaceMotionMode == SpaceMotionMode.FULL) {
-                    tween(durationMillis = MainNavigationMotion.DetailsRouteSlideMillis)
-                } else {
-                    snap()
-                },
-                label = "space_switcher_fab_position",
-            )
-            val showFabOnCurrentRoute = showContinueReadingFab && shouldShowChrome
-            val mainFloatingAction: @Composable BoxScope.() -> Unit = {
-                if (
-                    showMainFab &&
-                    fabTargetForAnimation != null &&
-                    showFabOnCurrentRoute
-                ) {
-                    val fabModifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset { animatedSpaceSwitcherFabOffset }
-                        .size(spaceSwitcherFabSize)
-                    ContinueReadingFab(
-                        onClick = effectiveResumeClick,
-                        modifier = fabModifier,
-                    )
-                }
-            }
             val mainShellChrome: @Composable BoxScope.() -> Unit = {
                 if (shouldShowChrome || isChromeVisible || chromeAlpha > 0f) {
                     if (!isImmersiveRoute) {
@@ -1478,37 +1446,14 @@ fun KototoroApp(
                         isResumeEnabled = effectiveResumeEnabled,
                         onResumeClick = effectiveResumeClick,
                         railHeaderContent = null,
-                        adjacentAction = if (showMainFab && !isLandscapeNavigation) {
+                        adjacentAction = if (!isLandscapeNavigation && isResumeEnabled) {
                             {
-                                Box(
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .onGloballyPositioned { coordinates ->
-                                            if (
-                                                canMeasureMainSpaceSwitcherFab &&
-                                                shouldShowChrome &&
-                                                mainSpaceSwitcherFabMeasurementSpaceId == navigationSpaceId
-                                            ) {
-                                                val bounds = coordinates.boundsInRoot()
-                                                val normalizedBounds = bounds.copy(
-                                                    top = bounds.top - effectiveBottomNavOffset,
-                                                    bottom = bounds.bottom - effectiveBottomNavOffset,
-                                                )
-                                                val candidate = navigationSpaceId to normalizedBounds
-                                                if (mainSpaceSwitcherFabCandidate != candidate) {
-                                                    traceSpaceFab {
-                                                        "anchor candidate space=${navigationSpaceId.value} raw=$bounds " +
-                                                            "bottomOffset=$effectiveBottomNavOffset normalized=$normalizedBounds"
-                                                    }
-                                                    mainSpaceSwitcherFabCandidate = candidate
-                                                }
-                                            }
-                                        },
+                                ContinueReadingFab(
+                                    onClick = onResumeClick,
+                                    modifier = Modifier.size(56.dp),
                                 )
                             }
-                        } else {
-                            null
-                        },
+                        } else null,
                     )
                 }
             }
@@ -1690,7 +1635,6 @@ fun KototoroApp(
                         }
                     }
                 }
-                mainFloatingAction()
                 SpaceSidekick(
                     state = spaceUiState,
                     onAction = onSpaceAction,

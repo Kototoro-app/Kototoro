@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.skepsun.kototoro.reader.novel.NovelChapterTranslation
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
+import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.reader.novel.tts.TtsState
 import javax.inject.Inject
@@ -161,11 +162,15 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 			currentPageEnd = previous.currentPageEnd.takeIf { sameChapter } ?: 0,
 			scrollPosition = previous.scrollPosition.takeIf { previous.chapterIndex == chapterIndex },
 			imageContext = previous.imageContext.takeIf { sameChapter } ?: NovelComposeImageContext(),
-				continuousChapters = mergeContinuousChapterWindow(
-					existing = previous.continuousChapters,
-					incoming = chapter,
-					continuous = true,
-				),
+				continuousChapters = if (settings.readingMode == ReadingMode.PAGED) {
+					listOf(chapter)
+				} else {
+					mergeContinuousChapterWindow(
+						existing = previous.continuousChapters,
+						incoming = chapter,
+						continuous = true,
+					)
+				},
 		)
 	}
 
@@ -373,7 +378,7 @@ internal fun mergeContinuousChapterWindow(
 	incoming: NovelComposeChapterContent,
 	continuous: Boolean,
 ): List<NovelComposeChapterContent> {
-	if (!continuous || existing.isEmpty()) return listOf(incoming)
+		if (!continuous || existing.isEmpty()) return listOf(incoming)
 	val existingIndex = existing.indexOfFirst { it.chapterIndex == incoming.chapterIndex }
 	if (existingIndex >= 0) {
 		return existing.toMutableList().apply { this[existingIndex] = incoming }

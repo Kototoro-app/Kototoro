@@ -169,7 +169,6 @@ private class AppearanceSettingsCoordinator(
             settings.observeAsState(AppSettings.KEY_HIDDEN_SOURCE_TAG) { hiddenSourceTag }
                 .value
                 .let(::parseHiddenSourceTagSelection)
-        val isMainFabEnabled = settings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }.value
         val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
         val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
         val isNavFloating = settings.observeAsState(AppSettings.KEY_NAV_FLOATING) { isNavFloating }.value
@@ -177,8 +176,6 @@ private class AppearanceSettingsCoordinator(
             settings.observeAsState(AppSettings.KEY_NAV_EXPRESSIVE_PILL) { isNavExpressivePillEnabled }.value
         val navHeight = settings.observeAsState(AppSettings.KEY_NAV_HEIGHT) { navHeight }.value
         val navFloatingHeight = settings.observeAsState(AppSettings.KEY_NAV_FLOATING_HEIGHT) { navFloatingHeight }.value
-        val isReaderToolbarFloating =
-            settings.observeAsState(AppSettings.KEY_READER_TOOLBAR_FLOATING) { isReaderToolbarFloating }.value
         val isExitConfirmationEnabled =
             settings.observeAsState(AppSettings.KEY_EXIT_CONFIRM) { isExitConfirmationEnabled }.value
         val isDynamicShortcutsEnabled =
@@ -232,7 +229,6 @@ private class AppearanceSettingsCoordinator(
             isAmoledTheme = isAmoledTheme,
             appFontPreset = appFontPreset,
             expressiveAppFontPreset = expressiveAppFontPreset,
-            isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
             tabletUiMode = tabletUiMode,
             appLocale = appLocale,
             loadingCircleStyle = loadingCircleStyle,
@@ -274,14 +270,12 @@ private class AppearanceSettingsCoordinator(
             hiddenContentType = hiddenContentType,
             isShowSourceTagFilter = isShowSourceTagFilter,
             hiddenSourceTag = hiddenSourceTag,
-            isMainFabEnabled = isMainFabEnabled,
             isNavBarPinned = isNavBarPinned,
             isNavLabelsVisible = isNavLabelsVisible,
             isNavFloating = isNavFloating,
             isNavExpressivePillEnabled = isNavExpressivePillEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
-            isReaderToolbarFloating = isReaderToolbarFloating,
             isExitConfirmationEnabled = isExitConfirmationEnabled,
             isDynamicShortcutsVisible = appShortcutManager.isDynamicShortcutsAvailable(),
             isDynamicShortcutsEnabled = isDynamicShortcutsEnabled,
@@ -304,7 +298,6 @@ private class AppearanceSettingsCoordinator(
             onExpressiveAppFontPresetChange = {
                 updateAndRestart(coroutineScope) { settings.expressiveAppFontPreset = it }
             },
-            onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
             onTabletUiModeChange = { settings.tabletUiMode = it },
             onAppLocaleChange = ::updateAppLocale,
             onLoadingCircleStyleChange = { updateAndRestart(coroutineScope) { settings.loadingCircleStyle = it } },
@@ -352,14 +345,12 @@ private class AppearanceSettingsCoordinator(
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(",")
             },
-            onMainFabChange = { settings.isMainFabEnabled = it },
             onNavPinnedChange = { settings.isNavBarPinned = it },
             onNavLabelsVisibleChange = { settings.isNavLabelsVisible = it },
             onNavFloatingChange = { settings.isNavFloating = it },
             onNavExpressivePillChange = { settings.isNavExpressivePillEnabled = it },
             onNavHeightChange = { settings.navHeight = it },
             onNavFloatingHeightChange = { settings.navFloatingHeight = it },
-            onReaderToolbarFloatingChange = { settings.isReaderToolbarFloating = it },
             onExitConfirmationChange = { settings.isExitConfirmationEnabled = it },
             onDynamicShortcutsChange = { settings.isDynamicShortcutsEnabled = it },
             onAppProtectionChange = { updateAppProtection(it) },

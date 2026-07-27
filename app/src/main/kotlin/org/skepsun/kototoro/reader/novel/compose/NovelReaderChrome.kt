@@ -2,7 +2,6 @@ package org.skepsun.kototoro.reader.novel.compose
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -16,21 +15,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -44,16 +38,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.tts.TtsState
 import org.skepsun.kototoro.reader.ui.ReaderToolbarChrome
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDock
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlItem
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPrimaryControlBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
 
 internal data class NovelReaderChromeCallbacks(
@@ -135,7 +130,9 @@ internal fun NovelReaderTopChrome(
 internal fun NovelReaderBottomChrome(
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
+	showControlLabels: Boolean,
 ) {
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	val visible = state.controlsVisible || state.ttsControlsVisible
 	val toolsPanelVisible = state.toolsSheetVisible || state.ttsControlsVisible
 	val dismissiblePanelVisible =
@@ -160,33 +157,27 @@ internal fun NovelReaderBottomChrome(
 			contentAlignment = Alignment.BottomCenter,
 			modifier = Modifier.fillMaxWidth(),
 		) {
-			GlassSurface(
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				verticalArrangement = Arrangement.spacedBy(6.dp),
 				modifier = Modifier
-					.padding(horizontal = 12.dp, vertical = 4.dp)
-					.then(
-						if (state.progressMax > 0f || dismissiblePanelVisible) {
-							Modifier.fillMaxWidth()
-						} else {
-							Modifier.wrapContentWidth()
-						},
-					)
-					.widthIn(max = 360.dp)
-					.animateContentSize(alignment = Alignment.BottomCenter),
-				shape = RoundedCornerShape(28.dp),
-				style = GlassDefaults.bottomBarChromeStyle().copy(
-					containerAlpha = 0.86f,
-					borderAlpha = 0.18f,
-				),
-				componentRole = GlassComponentRole.BottomBar,
+					.fillMaxWidth()
+					.padding(horizontal = 12.dp, vertical = 4.dp),
 			) {
-				CompositionLocalProvider(
-					LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+				if (state.controlsVisible && state.progressMax > 0f) {
+					ReaderProgressDock(isIosStyle = isIosStyle) {
+						NovelProgressPanel(
+							state = state,
+							callbacks = callbacks,
+							isIosStyle = isIosStyle,
+						)
+					}
+				}
+				ReaderControlDock(
+					isIosStyle = isIosStyle,
+					expanded = dismissiblePanelVisible,
 				) {
-					Column(
-						horizontalAlignment = Alignment.CenterHorizontally,
-						modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
-					) {
-						when {
+					when {
 						state.chaptersSheetVisible -> {
 							ComposeNovelChaptersPanel(
 								chapters = state.chapters,
@@ -206,62 +197,56 @@ internal fun NovelReaderBottomChrome(
 							NovelToolsPanel(state, callbacks)
 							NovelChromeDivider()
 						}
-						}
-						if (state.controlsVisible && state.progressMax > 0f) {
-							NovelProgressPanel(state, callbacks)
-							NovelChromeDivider()
-						}
-						if (state.controlsVisible) {
-							ReaderPrimaryControlBar(
-								items = listOf(
-							ReaderControlItem(
-								ReaderControlDestination.NAVIGATION,
-								stringResource(R.string.chapters),
-								R.drawable.ic_grid,
-								active = state.chaptersSheetVisible,
+					}
+					if (state.controlsVisible) {
+						ReaderPrimaryControlBar(
+							items = listOf(
+								ReaderControlItem(
+									ReaderControlDestination.NAVIGATION,
+									stringResource(R.string.chapters),
+									R.drawable.ic_grid,
+									active = state.chaptersSheetVisible,
+								),
+								ReaderControlItem(
+									ReaderControlDestination.DISPLAY,
+									stringResource(R.string.appearance),
+									R.drawable.ic_appearance,
+									active = state.settingsSheetVisible,
+								),
+								ReaderControlItem(
+									ReaderControlDestination.TOOLS,
+									stringResource(R.string.reader_actions),
+									R.drawable.ic_more_vert,
+									active = toolsPanelVisible,
+								),
 							),
-							ReaderControlItem(
-								ReaderControlDestination.DISPLAY,
-								stringResource(R.string.appearance),
-								R.drawable.ic_appearance,
-								active = state.settingsSheetVisible,
-							),
-							ReaderControlItem(
-								ReaderControlDestination.TOOLS,
-								stringResource(R.string.reader_actions),
-								R.drawable.ic_more_vert,
-								active = toolsPanelVisible,
-							),
-						),
-						onDestinationSelected = { destination ->
-							when (destination) {
-								ReaderControlDestination.NAVIGATION -> {
-									callbacks.onDismissSettings()
-									callbacks.onDismissTools()
-									if (state.chaptersSheetVisible) callbacks.onDismissChapters() else callbacks.onShowChapters()
-								}
-								ReaderControlDestination.DISPLAY -> {
-									callbacks.onDismissChapters()
-									callbacks.onDismissTools()
-									if (state.settingsSheetVisible) callbacks.onDismissSettings() else callbacks.onShowSettings()
-								}
-								ReaderControlDestination.TOOLS -> {
-									callbacks.onDismissSettings()
-									callbacks.onDismissChapters()
-									if (toolsPanelVisible) {
+							onDestinationSelected = { destination ->
+								when (destination) {
+									ReaderControlDestination.NAVIGATION -> {
+										callbacks.onDismissSettings()
 										callbacks.onDismissTools()
-									} else {
-										callbacks.onShowTools()
+										if (state.chaptersSheetVisible) callbacks.onDismissChapters() else callbacks.onShowChapters()
 									}
+									ReaderControlDestination.DISPLAY -> {
+										callbacks.onDismissChapters()
+										callbacks.onDismissTools()
+										if (state.settingsSheetVisible) callbacks.onDismissSettings() else callbacks.onShowSettings()
+									}
+									ReaderControlDestination.TOOLS -> {
+										callbacks.onDismissSettings()
+										callbacks.onDismissChapters()
+										if (toolsPanelVisible) {
+											callbacks.onDismissTools()
+										} else {
+											callbacks.onShowTools()
+										}
+									}
+									else -> Unit
 								}
-								else -> Unit
-							}
-						},
-								transparentContainer = true,
-								showLabels = true,
-								modifier = Modifier.widthIn(max = 352.dp),
-							)
-						}
+							},
+							transparentContainer = true,
+							showLabels = showControlLabels,
+						)
 					}
 				}
 			}
@@ -318,6 +303,7 @@ internal fun NovelReaderBottomChrome(
 private fun NovelProgressPanel(
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
+	isIosStyle: Boolean,
 ) {
 	var selectedValue by remember(state.progressValue) { mutableFloatStateOf(state.progressValue) }
 	ReaderProgressBar(
@@ -329,7 +315,7 @@ private fun NovelProgressPanel(
 		onNextChapter = callbacks.onNextChapter,
 		previousEnabled = state.currentChapterIndex > 0,
 		nextEnabled = state.currentChapterIndex < state.chapters.lastIndex,
-		isIosStyle = true,
+		isIosStyle = isIosStyle,
 	)
 }
 

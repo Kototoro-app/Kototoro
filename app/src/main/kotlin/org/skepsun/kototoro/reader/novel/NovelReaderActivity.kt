@@ -52,7 +52,7 @@ import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
-import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -153,6 +153,8 @@ class NovelReaderActivity :
 
     private var chapters: List<ContentChapter> = emptyList()
     private var currentChapterIndex: Int = 0
+    private var chapterLoadJob: Job? = null
+    private var preloadJob: Job? = null
     private var isUiVisible: Boolean = false
     private var currentPageIndex: Int = 0
     private var desiredProgressRatio: Float? = null
@@ -354,12 +356,6 @@ class NovelReaderActivity :
         updateFullscreenMode()
         updateReadingStatusVisibility()
 
-        settings.observeAsFlow(AppSettings.KEY_READER_TOOLBAR_FLOATING) {
-            isReaderToolbarFloating
-        }.onEach { isFloating ->
-            updateToolbarFloatingStyle(isFloating)
-        }.launchIn(lifecycleScope)
-
         applyInitialUiVisibility()
 
         loadChapters()
@@ -461,6 +457,9 @@ class NovelReaderActivity :
         setContent {
             KototoroTheme {
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
+                val showControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+                    isReaderControlLabelsEnabled
+                }
                 val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
                     rememberLayerBackdrop { drawContent() }
                 } else {
@@ -545,7 +544,11 @@ class NovelReaderActivity :
                                 .align(Alignment.BottomCenter)
                                 .navigationBarsPadding(),
                         ) {
-                            NovelReaderBottomChrome(state, callbacks)
+                            NovelReaderBottomChrome(
+                                state = state,
+                                callbacks = callbacks,
+                                showControlLabels = showControlLabels,
+                            )
                         }
                         if (!state.settingsSheetVisible && !state.chaptersSheetVisible) {
                             spaceSwitcherDelegate.Fab(
@@ -1330,7 +1333,7 @@ class NovelReaderActivity :
                 if (manga.isLocal && originalContent?.chapters.isNullOrEmpty() && originalContent != null) {
                     runCatching {
                         val onlineRepo = mangaRepositoryFactory.create(originalContent!!.source)
-                        val remoteDetails = runBlocking { onlineRepo.getDetails(originalContent!!) }
+                        val remoteDetails = onlineRepo.getDetails(originalContent!!)
                         originalContent = remoteDetails
                         android.util.Log.d(
                             "NovelReaderActivity",
@@ -1393,14 +1396,15 @@ class NovelReaderActivity :
     private fun loadChapter(index: Int) {
         android.util.Log.d("NovelReaderActivity", "=== loadChapter($index) called ===")
         android.util.Log.d("NovelReaderActivity", "Total chapters available: ${chapters.size}")
-        
+
         val chapter = chapters.getOrNull(index)
         if (chapter == null) {
             android.util.Log.e("NovelReaderActivity", "❌ Chapter at index $index not found")
             return
         }
-        
-        lifecycleScope.launch(org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.FOREGROUND)) {
+
+        chapterLoadJob?.cancel()
+        chapterLoadJob = lifecycleScope.launch(org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.FOREGROUND)) {
             try {
                 // Determine if we need to show the loading spinner
                 val needsLoading = !chapter.url.startsWith("epub://") && 
@@ -1517,44 +1521,25 @@ class NovelReaderActivity :
                 android.util.Log.d("NovelReaderActivity", "nextChapterUrl for boundary check: $nextChapterUrl")
                 
                 try {
-                    var isFirstEmit = true
-                    novelContentLoader.loadChapterContentFlow(
-                        chapterRepo, 
-                        chapter, 
+                    val plainText = novelContentLoader.loadChapterContentFlow(
+                        chapterRepo,
+                        chapter,
                         prefetchedPages = prefetchedPages,
                         priority = org.skepsun.kototoro.core.parser.legado.RequestPriority.FOREGROUND,
-                        nextChapterUrl = nextChapterUrl
-                    ).onCompletion {
-                        showLoading(false)
-                    }.collect { plainText: String ->
-                        android.util.Log.d("NovelReaderActivity", "Incremental content emit, length: ${plainText.length}")
-                        
-                        if (isFirstEmit) {
-                            showLoading(false)
-                            renderChapter(chapter, plainText)
-                            isFirstEmit = false
-                        } else {
-							composeReaderViewModel.publishChapter(
-								chapterId = chapter.id,
-								chapterIndex = index,
-								chapterTitle = chapter.title.orEmpty(),
-								content = plainText,
-								settings = readerSettings,
-								translation = chapterTranslations[index],
-							)
-							if (readerSettings.readingMode == ReadingMode.PAGED) {
-								composeReaderViewModel.requestPage(currentPageIndex.coerceAtLeast(0))
-							}
-                        }
-                    }
+                        nextChapterUrl = nextChapterUrl,
+                    ).lastOrNull().orEmpty()
+                    showLoading(false)
+                    renderChapter(chapter, plainText)
                 } catch (e: Exception) {
                     android.util.Log.e("NovelReaderActivity", "Error collecting novel flow", e)
                     showLoading(false)
                     // Optionally show error to user
                 }
                 
-                // Preload next chapter
-                preloadNextChapter(index + 1)
+                if (readerSettings.readingMode == ReadingMode.PAGED) {
+                    // 分页模式只保留当前章节，避免一次分页测量整段连续章节内容。
+                    preloadJob?.cancel()
+                }
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Failed to load chapter", e)
                 showLoading(false)
@@ -1564,9 +1549,11 @@ class NovelReaderActivity :
     }
 
     private fun preloadNextChapter(nextIndex: Int) {
+        if (readerSettings.readingMode == ReadingMode.SCROLL) return
+        preloadJob?.cancel()
         val nextChapter = chapters.getOrNull(nextIndex) ?: return
         
-        lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
+        preloadJob = lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
             try {
 				// Paged navigation reaches the boundary quickly, so start warming the next chapter earlier.
 				kotlinx.coroutines.delay(if (readerSettings.readingMode == ReadingMode.PAGED) 350L else 2000L)
@@ -1581,7 +1568,7 @@ class NovelReaderActivity :
                     nextChapter,
                     priority = org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND,
                     nextChapterUrl = nextNextChapterUrl
-                ).collect { /* just consume and cache */ }
+                ).conflate().collect { /* just consume and cache */ }
                 android.util.Log.d("NovelReaderActivity", "Successfully preloaded: ${nextChapter.title}")
                 withContext(Dispatchers.Main) {
                     if (readerSettings.readingMode == ReadingMode.PAGED && currentChapterIndex == nextIndex - 1) {
@@ -2760,7 +2747,7 @@ class NovelReaderActivity :
 		updateReadingStatus(blockIndex, blockCount)
 	}
 
-    private var isToolbarFloating = false
+    private var isToolbarFloating = true
     
     private fun updateToolbarFloatingStyle(isFloating: Boolean) {
         if (isToolbarFloating == isFloating) return

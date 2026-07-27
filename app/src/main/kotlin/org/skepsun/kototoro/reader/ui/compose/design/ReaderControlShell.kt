@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose.design
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +53,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import kotlin.math.roundToInt
 
 enum class ReaderControlDestination {
@@ -76,6 +82,8 @@ object ReaderControlTokens {
 	val ItemSpacing = 8.dp
 	val SheetHorizontalPadding = 16.dp
 	val SheetMaxWidth = 760.dp
+	val DockMaxWidth = 360.dp
+	val DockShape = RoundedCornerShape(28.dp)
 }
 
 @Composable
@@ -105,8 +113,14 @@ fun ReaderPrimaryControlBar(
 		},
 		contentColor = MaterialTheme.colorScheme.onSurface,
 		modifier = modifier
-			.width((items.size * 48 + (items.size - 1) * 4 + 8).dp)
-			.height(if (showLabels) 52.dp else 48.dp),
+			.width(
+				if (showLabels) {
+					(items.size * 96 + (items.size - 1) * 4 + 8).dp
+				} else {
+					(items.size * 48 + (items.size - 1) * 4 + 8).dp
+				},
+			)
+			.height(if (showLabels) 64.dp else 48.dp),
 	) {
 		Row(
 			horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -117,7 +131,7 @@ fun ReaderPrimaryControlBar(
 		) {
 			items.forEach { item ->
 				NavigationBarItem(
-					modifier = Modifier.width(48.dp),
+					modifier = Modifier.width(if (showLabels) 96.dp else 48.dp),
 					selected = item.active,
 					onClick = { onDestinationSelected(item.destination) },
 					icon = {
@@ -174,6 +188,98 @@ fun ReaderPrimaryControlBar(
 				)
 			}
 		}
+	}
+}
+
+@Composable
+fun ReaderControlDock(
+	isIosStyle: Boolean,
+	expanded: Boolean,
+	modifier: Modifier = Modifier,
+	content: @Composable () -> Unit,
+) {
+	val dockModifier = modifier
+		.then(
+			if (expanded) {
+				Modifier.fillMaxWidth()
+			} else {
+				Modifier.wrapContentWidth()
+			},
+		)
+		.animateContentSize(alignment = Alignment.BottomCenter)
+	if (isIosStyle) {
+		GlassSurface(
+			modifier = dockModifier,
+			shape = ReaderControlTokens.DockShape,
+			style = GlassDefaults.bottomBarChromeStyle().copy(
+				containerAlpha = 0.86f,
+				borderAlpha = 0.18f,
+			),
+			componentRole = GlassComponentRole.BottomBar,
+		) {
+			ReaderControlDockContent(content)
+		}
+	} else {
+		Surface(
+			modifier = dockModifier,
+			shape = ReaderControlTokens.DockShape,
+			color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
+			contentColor = MaterialTheme.colorScheme.onSurface,
+			tonalElevation = 2.dp,
+		) {
+			ReaderControlDockContent(content)
+		}
+	}
+}
+
+@Composable
+private fun ReaderControlDockContent(content: @Composable () -> Unit) {
+	Column(
+		horizontalAlignment = Alignment.CenterHorizontally,
+		modifier = Modifier.wrapContentWidth().padding(horizontal = 4.dp),
+	) {
+		androidx.compose.runtime.CompositionLocalProvider(
+			LocalContentColor provides if (isSystemInDarkTheme()) {
+				Color.White
+			} else {
+				MaterialTheme.colorScheme.onSurface
+			},
+		) {
+			content()
+		}
+	}
+}
+
+@Composable
+fun ReaderProgressDock(
+	isIosStyle: Boolean,
+	modifier: Modifier = Modifier,
+	content: @Composable () -> Unit,
+) {
+	val dockModifier = modifier
+		.widthIn(max = ReaderControlTokens.DockMaxWidth)
+		.fillMaxWidth()
+	if (isIosStyle) {
+		GlassSurface(
+			modifier = dockModifier,
+			shape = RoundedCornerShape(22.dp),
+			style = GlassDefaults.bottomBarChromeStyle().copy(
+				containerAlpha = 0.86f,
+				borderAlpha = 0.18f,
+			),
+			componentRole = GlassComponentRole.BottomBar,
+		) {
+			content()
+		}
+	} else {
+		Surface(
+			modifier = dockModifier,
+			shape = MaterialTheme.shapes.large,
+			color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
+			contentColor = MaterialTheme.colorScheme.onSurface,
+			tonalElevation = 2.dp,
+			content = content,
+		)
 	}
 }
 

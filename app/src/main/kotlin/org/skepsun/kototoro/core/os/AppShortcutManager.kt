@@ -166,9 +166,9 @@ class AppShortcutManager @Inject constructor(
 		val entityId = workResolver.resolveByMangaId(manga.id).entityId
 		val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
 		val resolvedId = preferredLocalMangaId ?: manga.id
-		val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = true)
-			?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = true)
-			?: mangaRepository.findContentById(resolvedId, withChapters = true)
+		val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = false)
+			?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = false)
+			?: mangaRepository.findContentById(resolvedId, withChapters = false)
 			?: manga
 		val icon = runCatchingCancellable {
 			coil.execute(
@@ -196,7 +196,7 @@ class AppShortcutManager @Inject constructor(
 			.setLongLived(true)
 			.setIntent(
 				ReaderIntent.Builder(context)
-					.manga(currentManga)
+					.mangaId(currentManga.id)
 					.build()
 					.intent,
 			).build()

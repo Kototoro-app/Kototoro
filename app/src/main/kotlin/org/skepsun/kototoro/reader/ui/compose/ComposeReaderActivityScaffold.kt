@@ -7,7 +7,6 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -28,15 +27,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
@@ -79,9 +75,6 @@ import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.ui.ReaderActionsCallbacks
 import org.skepsun.kototoro.reader.ui.ReaderActionsContent
@@ -90,7 +83,9 @@ import org.skepsun.kototoro.reader.ui.ReaderToolbarChrome
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlItem
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDock
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderPrimaryControlBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
 import kotlin.math.roundToInt
 
@@ -171,6 +166,7 @@ internal data class ComposeReaderChromeCallbacks(
 internal fun ComposeReaderActivityScaffold(
 	state: ComposeReaderChromeState,
 	callbacks: ComposeReaderChromeCallbacks,
+	showControlLabels: Boolean,
 	modifier: Modifier = Modifier,
 	chaptersPanelContent: @Composable (Int) -> Unit = {},
 	translationTaskPanelContent: @Composable () -> Unit = {},
@@ -233,90 +229,72 @@ internal fun ComposeReaderActivityScaffold(
 			exit = slideOutVertically { it } + fadeOut(),
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
-			ReaderBottomControlDock(
-				isIosStyle = isIosStyle,
-				expanded = state.actions.sliderEnabled ||
-					state.chaptersVisible ||
-					state.options.visible ||
-					state.toolsVisible,
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
 				modifier = Modifier
 					.navigationBarsPadding()
 					.padding(horizontal = 12.dp, vertical = 4.dp),
 			) {
-				if (isIosStyle && state.chaptersVisible) {
-					Box(
-						modifier = Modifier
-							.fillMaxWidth()
-							.height(420.dp),
-						) {
-							Column {
-								Box(modifier = Modifier.weight(1f)) {
-									chaptersPanelContent(DETAILS_TAB_CHAPTERS)
-								}
-							}
-					}
-					HorizontalDivider(
-						modifier = Modifier.padding(horizontal = 12.dp),
-						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
-					)
-				}
-				if (isIosStyle && state.options.visible) {
-					ComposeReaderOptionsSheet(
-						state = state.options,
-						callbacks = callbacks.options,
-						embedded = true,
-						modifier = Modifier.fillMaxWidth(),
-					)
-					HorizontalDivider(
-						modifier = Modifier.padding(horizontal = 12.dp),
-						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
-					)
-				}
-				if (isIosStyle && state.toolsVisible) {
-					ComposeReaderToolsSheet(
-						visible = true,
-						translateActive = state.actions.translateActive,
-						callbacks = callbacks.options,
-						onDismiss = {
-							callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
-						},
-						embedded = true,
-						modifier = Modifier.fillMaxWidth(),
-					)
-					HorizontalDivider(
-						modifier = Modifier.padding(horizontal = 12.dp),
-						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
-					)
-				}
 				if (state.actions.sliderEnabled) {
-					if (isIosStyle) {
+					ReaderProgressDock(isIosStyle = isIosStyle) {
 						ReaderProgressControl(
 							state = state.actions,
 							callbacks = callbacks.actions,
-							isIosStyle = true,
+							isIosStyle = isIosStyle,
+						)
+					}
+				}
+				ReaderControlDock(
+					isIosStyle = isIosStyle,
+					expanded = state.chaptersVisible || state.options.visible || state.toolsVisible,
+				) {
+					if (state.chaptersVisible) {
+						Box(
+							modifier = Modifier
+								.fillMaxWidth()
+								.height(420.dp),
+							) {
+								Column {
+									Box(modifier = Modifier.weight(1f)) {
+										chaptersPanelContent(DETAILS_TAB_CHAPTERS)
+									}
+								}
+							}
+						HorizontalDivider(
+							modifier = Modifier.padding(horizontal = 12.dp),
+							color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+						)
+					}
+					if (state.options.visible) {
+						ComposeReaderOptionsSheet(
+							state = state.options,
+							callbacks = callbacks.options,
+							embedded = true,
+							modifier = Modifier.fillMaxWidth(),
 						)
 						HorizontalDivider(
 							modifier = Modifier.padding(horizontal = 12.dp),
 							color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
 						)
-					} else {
-						Surface(
-							shape = MaterialTheme.shapes.large,
-							color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-							modifier = Modifier.fillMaxWidth().widthIn(max = 360.dp),
-						) {
-							Column {
-								ReaderProgressControl(
-									state = state.actions,
-									callbacks = callbacks.actions,
-									isIosStyle = false,
-								)
-							}
-						}
-						Spacer(modifier = Modifier.height(6.dp))
 					}
-				}
-				ReaderPrimaryControlBar(
+					if (state.toolsVisible) {
+						ComposeReaderToolsSheet(
+							visible = true,
+							translateActive = state.actions.translateActive,
+							callbacks = callbacks.options,
+							onDismiss = {
+								callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
+							},
+							embedded = true,
+							modifier = Modifier.fillMaxWidth(),
+						)
+						HorizontalDivider(
+							modifier = Modifier.padding(horizontal = 12.dp),
+							color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+						)
+					}
+					ReaderPrimaryControlBar(
 						items = listOf(
 							ReaderControlItem(
 								ReaderControlDestination.NAVIGATION,
@@ -324,28 +302,33 @@ internal fun ComposeReaderActivityScaffold(
 								R.drawable.ic_grid,
 								active = state.chaptersVisible,
 							),
-							ReaderControlItem(ReaderControlDestination.DISPLAY, stringResource(R.string.appearance), R.drawable.ic_appearance, active = state.options.visible),
+							ReaderControlItem(
+								ReaderControlDestination.DISPLAY,
+								stringResource(R.string.appearance),
+								R.drawable.ic_appearance,
+								active = state.options.visible,
+							),
 							ReaderControlItem(
 								ReaderControlDestination.TRANSLATION,
 								stringResource(R.string.reader_translation_action),
 								R.drawable.ic_translate,
-								active = if (isIosStyle) state.toolsVisible else state.actions.translateActive,
+								active = state.toolsVisible,
 							),
 						),
 						onDestinationSelected = { destination ->
-							if (isIosStyle && destination == ReaderControlDestination.NAVIGATION) {
+							if (destination == ReaderControlDestination.NAVIGATION) {
 								callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
-							} else if (isIosStyle && destination == ReaderControlDestination.TRANSLATION) {
+							} else if (destination == ReaderControlDestination.TRANSLATION) {
 								callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
 							} else {
 								callbacks.onPrimaryDestination(destination)
 							}
 						},
 						onDestinationLongPressed = callbacks.onPrimaryDestinationLongPress,
-						transparentContainer = isIosStyle,
-						showLabels = isIosStyle,
-						modifier = Modifier.widthIn(max = 352.dp),
+						transparentContainer = true,
+						showLabels = showControlLabels,
 					)
+				}
 			}
 		}
 
@@ -403,87 +386,8 @@ internal fun ComposeReaderActivityScaffold(
 			ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
 		}
 
-		if (!isIosStyle) {
-			if (state.chaptersVisible) {
-				ModalBottomSheet(
-					onDismissRequest = {
-						callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
-					},
-				) {
-					chaptersPanelContent(DETAILS_TAB_CHAPTERS)
-				}
-			}
-			ComposeReaderOptionsSheet(
-				state.options,
-				callbacks.options,
-				modifier = Modifier
-					.align(Alignment.BottomCenter)
-					.navigationBarsPadding()
-					.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
-			)
-			ComposeReaderToolsSheet(
-				visible = state.toolsVisible,
-				translateActive = state.actions.translateActive,
-				callbacks = callbacks.options,
-				onDismiss = { callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS) },
-				modifier = Modifier
-					.align(Alignment.BottomCenter)
-					.navigationBarsPadding()
-					.padding(start = 12.dp, end = 12.dp, bottom = 72.dp),
-			)
-		}
 		translationTaskPanelContent()
 	}
-	}
-}
-
-@Composable
-private fun ReaderBottomControlDock(
-	isIosStyle: Boolean,
-	expanded: Boolean,
-	modifier: Modifier = Modifier,
-	content: @Composable () -> Unit,
-) {
-	if (isIosStyle) {
-		GlassSurface(
-			modifier = modifier
-				.then(if (expanded) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-				.widthIn(max = 360.dp)
-				.animateContentSize(alignment = Alignment.BottomCenter),
-			shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-			style = GlassDefaults.bottomBarChromeStyle().copy(
-				containerAlpha = 0.86f,
-				borderAlpha = 0.18f,
-			),
-			componentRole = GlassComponentRole.BottomBar,
-		) {
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = 4.dp),
-				content = {
-					androidx.compose.runtime.CompositionLocalProvider(
-						androidx.compose.material3.LocalContentColor provides
-							if (androidx.compose.foundation.isSystemInDarkTheme()) {
-								androidx.compose.ui.graphics.Color.White
-							} else {
-								MaterialTheme.colorScheme.onSurface
-							},
-					) {
-						content()
-					}
-				},
-			)
-		}
-	} else {
-		Column(
-			horizontalAlignment = Alignment.CenterHorizontally,
-			modifier = modifier.then(
-				if (expanded) Modifier.fillMaxWidth().widthIn(max = 360.dp) else Modifier.wrapContentWidth(),
-			),
-			content = { content() },
-		)
 	}
 }
 

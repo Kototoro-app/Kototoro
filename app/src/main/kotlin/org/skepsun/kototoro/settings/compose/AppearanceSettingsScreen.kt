@@ -40,7 +40,6 @@ data class AppearanceSettingsUiState(
     val isAmoledTheme: Boolean,
     val appFontPreset: AppFontPreset,
     val expressiveAppFontPreset: AppFontPreset,
-    val isReducedVisualEffectsEnabled: Boolean,
     val tabletUiMode: TabletUiMode,
     val appLocale: String,
     val loadingCircleStyle: AppSettings.LoadingCircleStyle,
@@ -82,14 +81,12 @@ data class AppearanceSettingsUiState(
     val hiddenContentType: String,
     val isShowSourceTagFilter: Boolean,
     val hiddenSourceTag: Set<String>,
-    val isMainFabEnabled: Boolean,
     val isNavBarPinned: Boolean,
     val isNavLabelsVisible: Boolean,
     val isNavFloating: Boolean,
     val isNavExpressivePillEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
-    val isReaderToolbarFloating: Boolean,
     val isExitConfirmationEnabled: Boolean,
     val isDynamicShortcutsVisible: Boolean,
     val isDynamicShortcutsEnabled: Boolean,
@@ -132,7 +129,6 @@ fun AppearanceSettingsScreen(
     onAmoledThemeChange: (Boolean) -> Unit,
     onAppFontPresetChange: (AppFontPreset) -> Unit,
     onExpressiveAppFontPresetChange: (AppFontPreset) -> Unit,
-    onReducedVisualEffectsChange: (Boolean) -> Unit,
     onTabletUiModeChange: (TabletUiMode) -> Unit,
     onAppLocaleChange: (String) -> Unit,
     onLoadingCircleStyleChange: (AppSettings.LoadingCircleStyle) -> Unit,
@@ -172,14 +168,12 @@ fun AppearanceSettingsScreen(
     onHiddenContentTypeChange: (String) -> Unit,
     onShowSourceTagFilterChange: (Boolean) -> Unit,
     onHiddenSourceTagChange: (Set<String>) -> Unit,
-    onMainFabChange: (Boolean) -> Unit,
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
     onNavExpressivePillChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
-    onReaderToolbarFloatingChange: (Boolean) -> Unit,
     onExitConfirmationChange: (Boolean) -> Unit,
     onDynamicShortcutsChange: (Boolean) -> Unit,
     onAppProtectionChange: (Boolean) -> Unit,
@@ -272,13 +266,6 @@ fun AppearanceSettingsScreen(
                     } else {
                         onAppFontPresetChange
                     },
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.pref_reduce_visual_effects),
-                    checked = state.isReducedVisualEffectsEnabled,
-                    summary = stringResource(R.string.pref_reduce_visual_effects_summary),
-                    onCheckedChange = onReducedVisualEffectsChange,
                 )
                 SettingsSectionDivider()
                 SettingsChoicePreference(
@@ -572,13 +559,6 @@ fun AppearanceSettingsScreen(
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
-                    title = stringResource(R.string.main_screen_fab),
-                    checked = state.isMainFabEnabled,
-                    summary = stringResource(R.string.main_screen_fab_summary),
-                    onCheckedChange = onMainFabChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
                     title = stringResource(R.string.pin_navigation_ui),
                     checked = state.isNavBarPinned,
                     summary = stringResource(R.string.pin_navigation_ui_summary),
@@ -627,13 +607,6 @@ fun AppearanceSettingsScreen(
                     step = 4,
                     valueText = { "${it}dp" },
                     onValueChange = onNavFloatingHeightChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.pref_reader_toolbar_floating),
-                    checked = state.isReaderToolbarFloating,
-                    summary = stringResource(R.string.pref_reader_toolbar_floating_summary),
-                    onCheckedChange = onReaderToolbarFloatingChange,
                 )
                 SettingsSectionDivider()
                 SettingsSwitchPreference(

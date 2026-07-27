@@ -79,12 +79,8 @@ class SpaceResumeStateSource @Inject constructor(
 	fun observe() = combine(
 		recentBySpace,
 		networkState,
-		settings.observe(
-			AppSettings.KEY_MAIN_FAB,
-			AppSettings.KEY_INCOGNITO_MODE,
-		).map { settings.isMainFabEnabled && !settings.isIncognitoModeEnabled },
-	) { recent, isOnline, resumeEnabled ->
-		buildSpaceResumeUiState(recent, isOnline, resumeEnabled)
+	) { recent, isOnline ->
+		buildSpaceResumeUiState(recent, isOnline, true)
 	}.distinctUntilChanged()
 }
 

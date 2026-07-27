@@ -737,13 +737,6 @@ fun DetailsHeader(
                                         blendMode = BlendMode.DstIn,
                                     )
                                 }
-                            }
-                            .clickable(
-                                enabled = canExpandDescription,
-                                role = Role.Button,
-                                onClickLabel = descriptionToggleLabel,
-                            ) {
-                                isDescriptionExpanded = !isDescriptionExpanded
                             },
                         maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
                         overflow = TextOverflow.Ellipsis,

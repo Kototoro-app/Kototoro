@@ -45,9 +45,10 @@ internal class ComposeReaderController(
 	private var messageAction: (() -> Unit)? = null
 
 	@Composable
-	fun Content() {
+	fun Content(showControlLabels: Boolean) {
 		ComposeReaderActivityScaffold(
 					state = chromeState,
+					showControlLabels = showControlLabels,
 					chaptersPanelContent = { chaptersPanelContent(chaptersTabId) },
 					translationTaskPanelContent = {
 						if (chromeState.translationTaskPanelVisible) {

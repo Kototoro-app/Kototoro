@@ -65,6 +65,8 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ReaderControl
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -410,7 +412,7 @@ class ReaderActivity :
         )
         composeReaderController.updateActions {
             copy(
-                controls = settings.readerControls,
+                controls = ReaderControl.entries.toSet(),
                 pagesMode = settings.defaultDetailsTab == DETAILS_TAB_PAGES,
                 translateRequestedVisible = viewModel.shouldShowTranslationToggle(),
                 translateContextualVisible = translationShortcutVisibleForSession,
@@ -433,8 +435,11 @@ class ReaderActivity :
         )
         spaceSwitcherDelegate.setControlsVisible(areControlsVisible)
 		setComposeContent {
+			val showControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+				isReaderControlLabelsEnabled
+			}
 			Box(modifier = Modifier.fillMaxSize()) {
-				composeReaderController.Content()
+				composeReaderController.Content(showControlLabels = showControlLabels)
 				spaceSwitcherDelegate.Fab(
 					modifier = Modifier.fillMaxSize(),
 				)

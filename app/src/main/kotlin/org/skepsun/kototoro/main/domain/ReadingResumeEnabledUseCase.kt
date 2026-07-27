@@ -18,21 +18,10 @@ class ReadingResumeEnabledUseCase @Inject constructor(
 	private val settings: AppSettings,
 ) {
 
-	operator fun invoke(): Flow<Boolean> = settings.observe(
-		AppSettings.KEY_MAIN_FAB,
-		AppSettings.KEY_INCOGNITO_MODE,
-	).map {
-		settings.isMainFabEnabled && !settings.isIncognitoModeEnabled
-	}.distinctUntilChanged()
-		.flatMapLatest { isFabEnabled ->
-			if (isFabEnabled) {
-				observeCanResume()
-			} else {
-				flowOf(false)
-			}
-		}
-
-	private fun observeCanResume() = combine(networkState, historyRepository.observeLast()) { isOnline, last ->
+	operator fun invoke(): Flow<Boolean> = combine(
+		networkState,
+		historyRepository.observeLast(),
+	) { isOnline, last ->
 		last != null && (isOnline || last.isLocal)
 	}.distinctUntilChanged()
 }

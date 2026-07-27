@@ -73,12 +73,7 @@ class MainViewModel @Inject constructor(
 	}
 
 	val isResumeEnabled = readingResumeEnabledUseCase()
-		.withErrorHandling()
-		.stateIn(
-			scope = viewModelScope + Dispatchers.Default,
-			started = SharingStarted.WhileSubscribed(5000),
-			initialValue = false,
-		)
+		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5000), false)
 
 	val lastReadContent = historyRepository.observeLast()
 		.withErrorHandling()

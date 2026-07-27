@@ -20,7 +20,6 @@ import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
-import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 
@@ -35,7 +34,6 @@ fun ReaderSettingsScreen(
 
     val readerModeNames = ReaderMode.entries.map { it.name }
     val zoomModeNames = ZoomMode.entries.map { it.name }
-    val readerControlsNames = ReaderControl.entries.map { it.name }
     val readerCropNames = listOf("1", "2")
     val readerOrientationNames = listOf(
         ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED.toString(),
@@ -124,14 +122,15 @@ fun ReaderSettingsScreen(
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_GAPS, it) } }
             )
 
-            SettingsMultiChoicePreference(
-                title = stringResource(R.string.reader_controls_in_bottom_bar),
-                options = stringArrayResource(R.array.reader_controls).mapIndexed { index, label ->
-                    SettingsChoiceOption(readerControlsNames[index], label)
+            SettingsSwitchPreference(
+                title = stringResource(R.string.reader_control_labels),
+                summary = stringResource(R.string.reader_control_labels_summary),
+                checked = settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+                    isReaderControlLabelsEnabled
+                }.value,
+                onCheckedChange = {
+                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CONTROL_LABELS, it) }
                 },
-                values = settings.observeAsState(AppSettings.KEY_READER_CONTROLS) { prefs.getStringSet(AppSettings.KEY_READER_CONTROLS, emptySet()) ?: emptySet() }.value,
-                emptySelectionText = stringResource(R.string.none),
-                onValueChange = { settings.prefs.edit { putStringSet(AppSettings.KEY_READER_CONTROLS, it) } }
             )
 
             SettingsActionPreference(
