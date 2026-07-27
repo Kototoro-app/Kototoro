@@ -13,6 +13,51 @@ Kototoro 是一个开源的 Android 应用，将漫画、小说和视频整合�
 - 纯 Kotlin 实现的 OTA 增量更新（bspatch）
 - WebDAV 多设备同步
 
+# 开发和调试工具
+
+除 Gradle 构建和测试外，优先使用官方 `android` CLI 完成设备/模拟器相关的开发与调试；它能补充 Gradle 不擅长的项目元数据发现、APK 部署、设备交互、UI 层级检查、截图、AVD 管理以及官方 Android 文档检索能力。Gradle 仍是本项目构建和测试结果的权威来源。
+
+```bash
+# 检查 CLI 和 SDK 环境
+command -v android
+android --version
+android info
+
+# 分析项目并定位构建目标/APK
+android describe --project_dir=.
+
+# 构建后部署并以调试模式启动（可按需指定设备、Activity 或 APK）
+./gradlew :app:assembleDebug
+android run --debug
+# android run --debug --device=<serial> --activity=<activity>
+# android run --debug --apks=<path/to.apk>
+
+# 设备和 UI 调试：优先结构化层级，WebView/动画等场景再看截图
+adb devices
+android layout --pretty
+android layout --diff
+android screen capture -o /tmp/kototoro-screen.png
+adb shell input tap <x> <y>
+adb shell input swipe <x1> <y1> <x2> <y2> 500
+
+# AVD 管理与官方 Android 知识库
+android emulator list
+android emulator create --list-profiles
+android emulator create <profile>
+android emulator start <avd-name>
+android emulator stop <avd-name>
+android docs search "<Android topic>"
+android docs fetch <kb://...>
+```
+
+Android CLI 是面向 Agent 的 Android 终端工具层，而不是另一个 AI 编程模型。Google 官方博客将它与 Android skills、Android Knowledge Base 一起作为 Agent 工作流套件：CLI 负责环境/SDK、项目、设备和部署；skills 提供任务专用指导；Knowledge Base 通过 `android docs` 提供持续更新的 Android、Firebase、Google Developers 和 Kotlin 官方上下文。它可以补充 Gradle、ADB，但不能替代 Gradle 的构建/测试权威性。
+
+官方博客强调，Android CLI 可以创建设备、运行应用并帮助 Agent 导航 UI，也适合 CI、维护和脚本自动化。它不是只能用于新项目；现有 Kototoro 项目应优先使用 `android describe` 发现目标，再结合 Gradle 构建和 `android run` 部署。完成快速原型或终端调试后，仍可转入 Android Studio 做视觉编辑、深度调试和高级性能分析。
+
+当前版本没有 `android doctor`、`android inspect` 或独立的 `android journey` 命令；先运行 `android help`，以实际安装版本暴露的子命令为准。Journeys 是 Android CLI/Agent 的测试工作流概念，应在运行中的应用上按步骤执行并验证结果，而不是直接假设存在同名 CLI 子命令。`android emulator create --list-profiles` 可查看当前版本支持的设备 profile。
+
+使用 `android screen capture` 或带标注截图时，必须先实际查看 PNG，再依据截图操作；对 UI 变化优先使用 `android layout --diff` 以减少无关输出。需要更新 CLI 时运行 `android update`；`android init` 用于初始化环境并安装用户级 Android CLI skill。若 CLI 或 Gradle 下载在当前网络环境失败，可在适用的命令/Java 参数中使用本地代理 `127.0.0.1:7890`。不要将 APK、截图、CLI 缓存或本地配置提交到仓库。
+
 ## 构建和测试命令
 
 ### 基础构建

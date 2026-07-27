@@ -13,6 +13,25 @@ Use the bundled wrappers and keep commands scoped:
 - `npm ci && npm run docs:dev` starts the local VitePress docs site.
 - `npm run docs:build` builds the static docs output.
 
+### Android CLI for development and debugging
+Prefer the official [Android CLI](https://developer.android.com/blog/posts/android-cli-build-android-apps-3x-faster-using-any-agent) for agent-oriented Android development from the terminal when it provides a better signal than Gradle alone. Google positions it as the primary terminal interface for Android development: it complements Gradle/ADB with environment setup, SDK management, project creation, device management, deployment, UI navigation, and easy updates. Gradle remains the project build/test authority.
+
+The official Agent workflow consists of three related pieces:
+
+- **Android CLI** — terminal entry point for environment, project, SDK, device, and deployment workflows.
+- **Android skills** — installable, task-specific guidance that makes an Agent more effective; inspect available skills with `android skills list` and manage them with `android skills ...`.
+- **Android Knowledge Base** — authoritative, frequently updated Android, Firebase, Google Developers, and Kotlin guidance queried through `android docs search` and `android docs fetch`.
+
+- Check availability with `command -v android` and inspect the environment with `android info`.
+- Use `android describe --project_dir=.` to discover project targets and generated APK locations before deploying.
+- Use `android run --debug` (optionally with `--device=<serial>`, `--activity=<activity>`, or `--apks=<path>`) to deploy and launch a debug build/APK on a connected device or emulator.
+- Use `android layout --pretty` or `android layout --diff` as the primary UI inspection tool; use `android screen capture -o <path>.png` for visual/WebView cases and examine the resulting PNG before acting on it.
+- Use `android emulator list|create|start|stop|remove` to manage AVDs (run `android emulator create --list-profiles` to see supported profiles), and use `adb devices`/`adb shell input ...` for device connection and interaction when needed.
+- Use `android docs search \"<Android topic>\"` and `android docs fetch <kb://...>` for current official Android guidance.
+- The installed CLI currently exposes `info`, `describe`, `run`, `layout`, `screen`, `emulator`, `docs`, `sdk`, `studio`, and `skills`; use `android help` to verify version-specific capabilities rather than inventing commands such as `android doctor` or `android inspect`.
+- Run `android update` periodically. `android init` initializes the local Agent environment; use `android skills` to browse/install the growing skill collection.
+- If Android CLI or Gradle downloads need network access in this environment, retry with the local proxy at `127.0.0.1:7890` where applicable. Never commit generated APKs, screenshots, CLI caches, or local configuration.
+
 ## Non-Obvious Build Facts
 
 - **JDK 17 is required** for Gradle, even though `compileOptions` target Java 11. CI uses `temurin-17`.
