@@ -1114,6 +1114,11 @@ private fun DetailsScreenContent(
             }
             val commonTopBar: @Composable () -> Unit = {
                 val titleAlpha = ((toolbarTitleProgressProvider() - 0.82f) / 0.18f).coerceIn(0f, 1f)
+                val panoramaTopBarContainerColor = if (panoramaPrefs.isEnabled) {
+                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.68f)
+                } else {
+                    null
+                }
 
                 Box(
                     modifier = Modifier
@@ -1135,7 +1140,9 @@ private fun DetailsScreenContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     ) {
-                        TopBarControlSurface {
+                        TopBarControlSurface(
+                            fallbackContainerColor = panoramaTopBarContainerColor,
+                        ) {
                             CompositionLocalProvider(
                                 LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
                             ) {
@@ -1170,7 +1177,9 @@ private fun DetailsScreenContent(
                             )
                         }
 
-                        TopBarControlSurface {
+                        TopBarControlSurface(
+                            fallbackContainerColor = panoramaTopBarContainerColor,
+                        ) {
                             CompositionLocalProvider(
                                 LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
                             ) {
@@ -2647,6 +2656,7 @@ private fun DetailsScrollableContent(
             translatedTitle = translatedTitle,
             translatedDescription = translatedDescription,
             isShowingTranslation = isShowingTranslation,
+            panoramaEnabled = settings.isPanoramaCoverEnabled,
             settings = settings,
             collapseProgressProvider = collapseProgressProvider,
             coverVisualAlpha = coverVisualAlpha,
@@ -3011,10 +3021,21 @@ private fun DetailsDockContainer(
     content: @Composable () -> Unit,
 ) {
     if (modernStyle) {
-        GlassBottomBarContainer(
-            modifier = modifier,
-        ) {
-            content()
+        if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+            GlassBottomBarContainer(modifier = modifier) {
+                content()
+            }
+        } else {
+            Surface(
+                modifier = modifier,
+                shape = RoundedCornerShape(32.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 0.dp,
+                shadowElevation = 6.dp,
+            ) {
+                content()
+            }
         }
     } else {
         Box(modifier = modifier) {

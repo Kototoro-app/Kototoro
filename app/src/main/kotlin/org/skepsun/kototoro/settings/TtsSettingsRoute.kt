@@ -24,16 +24,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -140,12 +140,12 @@ fun TtsSettingsRoute(
     )
 
     managedSources?.let { sources ->
-        AlertDialog(
+        SettingsAlertDialog(
+            title = stringResource(R.string.tts_legado_manage_delete_title),
             onDismissRequest = {
                 managedSources = null
                 selectedSourceIndexes = emptySet()
             },
-            title = { Text(stringResource(R.string.tts_legado_manage_delete_title)) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
                     itemsIndexed(
@@ -180,34 +180,32 @@ fun TtsSettingsRoute(
                 }
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.tts_legado_manage_delete_action),
                     enabled = selectedSourceIndexes.isNotEmpty(),
                     onClick = {
                         coordinator.deleteLegadoSources(selectedSourceIndexes)
                         managedSources = null
                         selectedSourceIndexes = emptySet()
                     },
-                ) {
-                    Text(stringResource(R.string.tts_legado_manage_delete_action))
-                }
+                )
             },
             dismissButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
                     onClick = {
                         managedSources = null
                         selectedSourceIndexes = emptySet()
                     },
-                ) {
-                    Text(stringResource(android.R.string.cancel))
-                }
+                )
             },
         )
     }
 
     if (isImportUrlDialogVisible) {
-        AlertDialog(
+        SettingsAlertDialog(
+            title = stringResource(R.string.tts_legado_import_dialog_title),
             onDismissRequest = { isImportUrlDialogVisible = false },
-            title = { Text(stringResource(R.string.tts_legado_import_dialog_title)) },
             text = {
                 Column {
                     Text(stringResource(R.string.tts_legado_import_dialog_message))
@@ -222,19 +220,19 @@ fun TtsSettingsRoute(
                 }
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.tts_legado_import_url),
                     onClick = {
                         isImportUrlDialogVisible = false
                         coordinator.importFromUrl(importUrl.trim())
                     },
-                ) {
-                    Text(stringResource(R.string.tts_legado_import_url))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { isImportUrlDialogVisible = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { isImportUrlDialogVisible = false },
+                )
             },
         )
     }

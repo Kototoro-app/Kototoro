@@ -31,19 +31,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
-private val SettingsSearchTopBarHeight = 56.dp
 internal val SettingsContentHorizontalPadding = CompactTopBarHorizontalPadding
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,11 +74,11 @@ fun SettingsSearchTopBarAction(
 	onStartSearch: () -> Unit,
 ) {
 	SettingsTopBarIconButton(onClick = onStartSearch) {
-		val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+		val tokens = LocalInterfaceStyleTokens.current
 		Icon(
 			painter = rememberSafePainter(androidx.appcompat.R.drawable.abc_ic_search_api_material),
 			contentDescription = stringResource(R.string.search),
-			modifier = Modifier.size(if (isIosStyle) 23.dp else CompactTopBarIconSize),
+			modifier = Modifier.size(tokens.topBarIconSize),
 		)
 	}
 }
@@ -94,12 +91,13 @@ fun SettingsSearchTopAppBar(
 	onQueryChange: (String) -> Unit,
 ) {
 	val colorScheme = MaterialTheme.colorScheme
+	val tokens = LocalInterfaceStyleTokens.current
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	SettingsTopBarSurface {
 		Row(
 			modifier = Modifier
 				.fillMaxWidth()
-				.height(SettingsSearchTopBarHeight),
+				.height(tokens.secondaryTopBarHeight),
 			horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
@@ -107,7 +105,7 @@ fun SettingsSearchTopAppBar(
 				Icon(
 					imageVector = Icons.AutoMirrored.Filled.ArrowBack,
 					contentDescription = null,
-					modifier = Modifier.size(if (isIosStyle) 23.dp else CompactTopBarIconSize),
+					modifier = Modifier.size(tokens.topBarIconSize),
 				)
 			}
 			TextField(
@@ -115,7 +113,7 @@ fun SettingsSearchTopAppBar(
 				onValueChange = onQueryChange,
 				modifier = Modifier
 					.weight(1f)
-					.height(if (isIosStyle) 44.dp else SettingsSearchTopBarHeight)
+					.height(tokens.topBarButtonSize)
 					.then(
 						if (isIosStyle) {
 							Modifier.border(
@@ -168,12 +166,11 @@ private fun SettingsSeparatedTopAppBar(
 ) {
 	val colorScheme = MaterialTheme.colorScheme
 	val tokens = LocalInterfaceStyleTokens.current
-	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	SettingsTopBarSurface {
 		Row(
 			modifier = Modifier
 				.fillMaxWidth()
-				.height(tokens.topBarButtonSize.coerceAtLeast(tokens.compactControlHeight)),
+				.height(tokens.secondaryTopBarHeight),
 			horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
@@ -182,14 +179,13 @@ private fun SettingsSeparatedTopAppBar(
 					Icon(
 						imageVector = Icons.AutoMirrored.Filled.ArrowBack,
 						contentDescription = null,
-						modifier = Modifier.size(if (isIosStyle) 23.dp else CompactTopBarIconSize),
+						modifier = Modifier.size(tokens.topBarIconSize),
 					)
 				}
 			}
 			Text(
 				text = title,
 				style = MaterialTheme.typography.titleLarge,
-				fontWeight = FontWeight.SemiBold,
 				color = colorScheme.onSurface,
 				maxLines = 1,
 				overflow = TextOverflow.Ellipsis,
@@ -218,7 +214,6 @@ private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
 				.padding(
 					start = CompactTopBarHorizontalPadding,
 					end = CompactTopBarHorizontalPadding,
-					bottom = 6.dp,
 				),
 			content = { content() },
 		)
@@ -233,15 +228,26 @@ private fun SettingsTopBarIconButton(
 	val tokens = LocalInterfaceStyleTokens.current
 	Surface(
 		onClick = onClick,
-		modifier = Modifier.size(tokens.topBarButtonSize),
+		modifier = Modifier.size(tokens.minimumTouchTarget),
 		shape = CircleShape,
-		color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
-		border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
+		color = Color.Transparent,
 	) {
 		Box(
 			modifier = Modifier.fillMaxSize(),
 			contentAlignment = Alignment.Center,
-			content = { content() },
-		)
+		) {
+			Surface(
+				modifier = Modifier.size(tokens.topBarButtonSize),
+				shape = CircleShape,
+				color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+				border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
+			) {
+				Box(
+					modifier = Modifier.fillMaxSize(),
+					contentAlignment = Alignment.Center,
+					content = { content() },
+				)
+			}
+		}
 	}
 }

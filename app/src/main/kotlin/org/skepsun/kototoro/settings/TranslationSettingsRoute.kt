@@ -6,9 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -17,6 +15,8 @@ import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.AdvancedOcrModelPackWorker
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
 import android.widget.Toast
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
 @Composable
 fun TranslationSettingsRoute(
@@ -50,25 +50,25 @@ fun TranslationSettingsRoute(
     )
 
 	if (showAdvancedOcrDownloadDialog) {
-		AlertDialog(
+		SettingsAlertDialog(
+			title = stringResource(R.string.reader_translation_ocr_pack_title),
 			onDismissRequest = { showAdvancedOcrDownloadDialog = false },
-			title = { Text(stringResource(R.string.reader_translation_ocr_pack_title)) },
 			text = { Text(stringResource(R.string.reader_translation_ocr_pack_message)) },
 			confirmButton = {
-				TextButton(
+				SettingsDialogActionButton(
+					text = stringResource(R.string.reader_translation_ocr_pack_download),
 					onClick = {
 						showAdvancedOcrDownloadDialog = false
 						AdvancedOcrModelPackWorker.enqueue(context)
 						Toast.makeText(context, R.string.reader_translation_ocr_pack_started, Toast.LENGTH_LONG).show()
 					},
-				) {
-					Text(stringResource(R.string.reader_translation_ocr_pack_download))
-				}
+				)
 			},
 			dismissButton = {
-				TextButton(onClick = { showAdvancedOcrDownloadDialog = false }) {
-					Text(stringResource(android.R.string.cancel))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(android.R.string.cancel),
+					onClick = { showAdvancedOcrDownloadDialog = false },
+				)
 			},
 		)
 	}

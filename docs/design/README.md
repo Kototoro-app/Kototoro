@@ -15,6 +15,7 @@ Kototoro 的理解方式。
 
 | 层级 | 文档 | 作用 |
 | :--- | :--- | :--- |
+| L0 入口 | [Kototoro Design System](./DESIGN.md) | 机器可读令牌、共享约定、组件映射和设计护栏 |
 | L1 基础 | [Kototoro 核心语言](./kototoro-design-language.md) | 品牌原则、层级模型、共性交互和跨风格契约 |
 | L2 风格 | [Material 3 Expressive](./material3-expressive.md) | Android 原生视觉语法 |
 | L2 风格 | [iOS Glass](./ios-glass.md) | iOS 风格材质、层级、动效与降级规范 |
@@ -29,10 +30,11 @@ Kototoro 的理解方式。
 出现冲突时，按以下顺序处理：
 
 1. 无障碍、可读性和系统行为；
-2. Kototoro 核心语言；
-3. 场景规范；
-4. 当前风格规范；
-5. 组件默认值与已有实现。
+2. `DESIGN.md` 的结构化语义和数值令牌；
+3. Kototoro 核心语言；
+4. 场景规范；
+5. 当前风格规范；
+6. 组件默认值与已有实现。
 
 官方平台文档决定平台行为，Kototoro 文档决定产品身份。第三方项目只能作为实现或组织方式参考，
 不能直接成为视觉规范。
@@ -40,6 +42,7 @@ Kototoro 的理解方式。
 ## 维护规则
 
 - 新组件先定义语义和状态，再决定 Material 或 Glass 的渲染方式。
+- 共享字号、尺寸、间距、颜色角色和组件映射先更新 `DESIGN.md` Frontmatter。
 - 能由共享令牌表达的差异，不在业务页面硬编码。
 - 规范中的“必须”是合并前验收条件；“建议”允许在记录理由后偏离。
 - 新增视觉效果必须说明它服务的层级或状态；没有明确作用的效果不进入设计系统。
@@ -52,4 +55,3 @@ Kototoro 的理解方式。
 - iOS：Apple Human Interface Guidelines 与 Apple Design Resources。
 - Backdrop：仅作为 Kototoro iOS Glass 的 Android 渲染实现依据。
 - Miuix：只参考紧凑布局、圆角连续性和 Overlay 组织，不作为设计权威，也不引入依赖。
-

@@ -222,6 +222,7 @@ class AppRouter private constructor(
 
     private fun prepareImmersiveIntent(intent: Intent): Intent {
         ImmersiveSpaceSwitcherTransition.attachDetailsOrigin(intent)
+        intent.putExtra(EXTRA_HAS_IN_APP_CALLER, true)
         val immersiveSwitchEnabled = spaceFeatureFlagsRepository.flags.value.effectiveImmersiveSwitchEnabled
         val flags = immersiveTaskFlags(immersiveSwitchEnabled)
         if (immersiveSwitchEnabled) {
@@ -1692,6 +1693,8 @@ class AppRouter private constructor(
         const val KEY_KIND = "kind"
         const val KEY_LIST_SECTION = "list_section"
         const val KEY_DETAILS_ORIGIN = "details_origin"
+        internal const val EXTRA_HAS_IN_APP_CALLER =
+            "org.skepsun.kototoro.extra.HAS_IN_APP_CALLER"
         const val KEY_MANGA = "manga"
         const val KEY_MANGA_LIST = "manga_list"
         const val KEY_TEMPORARY_DETAILS = "temporary_details"

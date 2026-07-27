@@ -1023,7 +1023,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putBoolean(KEY_DETAILS_TRANSLATE_BUTTON, value) }
 
 	var isModernDetailsDockEnabled: Boolean
-		get() = prefs.getBoolean(KEY_MODERN_DETAILS_DOCK, false)
+		get() = prefs.getBoolean(KEY_MODERN_DETAILS_DOCK, true)
 		set(value) = prefs.edit { putBoolean(KEY_MODERN_DETAILS_DOCK, value) }
 
 	var defaultDetailsTab: Int

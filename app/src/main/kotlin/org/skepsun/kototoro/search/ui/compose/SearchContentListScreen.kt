@@ -138,6 +138,7 @@ import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
@@ -154,6 +155,7 @@ import org.skepsun.kototoro.core.parser.favicon.directFaviconUriOrNull
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.main.ui.MainActivity
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -237,17 +239,11 @@ private fun lerpFloat(
 @Composable
 private fun SearchFilterSheetSurface(
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(28.dp),
-    componentRole: GlassComponentRole = GlassComponentRole.Sheet,
     showDragHandle: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    GlassSurface(
+    KototoroSheetSurface(
         modifier = modifier,
-        shape = shape,
-        style = GlassDefaults.prominentStyle(),
-        dialogSurface = true,
-        componentRole = componentRole,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             if (showDragHandle) {
@@ -255,6 +251,30 @@ private fun SearchFilterSheetSurface(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchDialogSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    GlassSurface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        style = GlassDefaults.prominentStyle(),
+        dialogSurface = true,
+        componentRole = GlassComponentRole.Dialog,
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -288,7 +308,7 @@ private fun SearchInputDialogSurface(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            SearchFilterSheetSurface(
+            SearchDialogSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
@@ -297,8 +317,6 @@ private fun SearchInputDialogSurface(
                         indication = null,
                         onClick = {},
                     ),
-                shape = RoundedCornerShape(24.dp),
-                componentRole = GlassComponentRole.Dialog,
             ) {
                 Column(
                     modifier = Modifier
@@ -1615,7 +1633,7 @@ private fun MoreActionsButton(
             style = GlassDefaults.subtleStyle(),
         ) {
             if (showRandomAction) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.random)) },
                     leadingIcon = {
                         Icon(
@@ -1632,7 +1650,7 @@ private fun MoreActionsButton(
             }
 
             if (showSettingsAction) {
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.settings)) },
                     leadingIcon = {
                         Icon(
@@ -1649,7 +1667,7 @@ private fun MoreActionsButton(
 
             if (showDisplayActions) {
                 HorizontalDivider()
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.display_options)) },
                     leadingIcon = {
                         Icon(
@@ -1666,7 +1684,7 @@ private fun MoreActionsButton(
 
             if (isFilterApplied) {
                 HorizontalDivider()
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.reset_filter)) },
                     leadingIcon = {
                         Icon(
@@ -2428,7 +2446,7 @@ private fun SortOrderFilterSection(
         ) {
             sortOrders.forEach { item ->
                 val selected = item == selectedSortOrder
-                DropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = { Text(resolveSortOrderLabel(sourceName, item)) },
                     onClick = {
                         onSortOrderChange(item)

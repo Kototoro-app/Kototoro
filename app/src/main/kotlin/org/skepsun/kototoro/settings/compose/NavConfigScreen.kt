@@ -19,13 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,9 +99,9 @@ fun NavConfigScreen(
 	}
 
 	if (isAddDialogVisible) {
-		AlertDialog(
+		SettingsAlertDialog(
 			onDismissRequest = { isAddDialogVisible = false },
-			title = { Text(text = stringResource(R.string.add)) },
+			title = stringResource(R.string.add),
 			text = {
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
 				LazyColumn(state = listState,
@@ -132,9 +130,10 @@ fun NavConfigScreen(
 			},
 			confirmButton = {},
 			dismissButton = {
-				TextButton(onClick = { isAddDialogVisible = false }) {
-					Text(text = stringResource(android.R.string.cancel))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(android.R.string.cancel),
+					onClick = { isAddDialogVisible = false },
+				)
 			},
 		)
 	}

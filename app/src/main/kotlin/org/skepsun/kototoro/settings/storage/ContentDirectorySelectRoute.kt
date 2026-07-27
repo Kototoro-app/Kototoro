@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
 @Composable
 fun ContentDirectorySelectRoute(
@@ -47,9 +47,9 @@ fun ContentDirectorySelectRoute(
         ContentDirectorySelectViewModel.CONTENT_TYPE_VIDEO -> R.string.video_save_location
         else -> R.string.manga_save_location
     }
-    AlertDialog(
+    SettingsAlertDialog(
+        title = stringResource(title),
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(title)) },
         text = {
             LazyColumn {
                 items(entries, key = { it.title ?: it.titleRes.toString() }) { item ->
@@ -64,6 +64,11 @@ fun ContentDirectorySelectRoute(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } },
+        dismissButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismiss,
+            )
+        },
     )
 }

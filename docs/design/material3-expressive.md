@@ -26,11 +26,26 @@ Material 3 Expressive 是 Kototoro 的 Android 原生默认表达。表现力来
 ## 4. 组件原则
 
 - 使用 `MaterialExpressiveTheme` 与统一 `MotionScheme`，不在业务组件散落动画参数。
+- 一级主界面使用共享的 64 dp 顶栏骨架和 28/36 sp 大标题；二级任务页使用 56 dp 小顶栏和
+  22/28 sp 标题。Expressive 不等于把所有页面都改成 `LargeTopAppBar`。
 - ButtonGroup 只用于同级互斥或紧密相关操作，不把整条工具栏做成胶囊集合。
 - Carousel 只用于媒体发现和封面浏览，不用于设置项与普通导航。
 - FAB 只表示当前页面的主要动作；主界面固定为继续阅读/播放。
 - Loading 必须表达真实等待状态，不能成为常驻装饰。
 - 设置页面以列表和分组层级为主，顶栏可轻微半透明，其余保持稳定 Surface。
+
+### 4.1 Kototoro 的 Expressive 语法
+
+Kototoro 的 Expressive 不是普遍放大和普遍加粗，而是以下组合：
+
+1. 用 28/36 sp 的一级主标题建立页面身份；
+2. 用 14/20 sp 的高对比说明补充上下文；
+3. 用一个语义容器表达当前任务组或选中状态；
+4. 用紧凑间距保持内容扫描效率，同时保留 48 dp 命中区；
+5. 把强颜色、异形或主导动效留给当前唯一焦点。
+
+字体、字号、字重和组件映射以[组件与令牌](./components-and-tokens.md)为准。页面不得自行把
+`bodyMedium` 降低透明度，也不得为每个卡片标题重复指定 `Bold`。
 
 ## 5. 色彩、形状与动效
 

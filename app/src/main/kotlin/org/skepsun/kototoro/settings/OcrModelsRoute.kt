@@ -8,9 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -26,6 +24,8 @@ import org.skepsun.kototoro.settings.compose.OcrModelItemUiState
 import org.skepsun.kototoro.settings.compose.OcrModelSectionUiState
 import org.skepsun.kototoro.settings.compose.OcrModelsSettingsScreen
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
@@ -163,14 +163,15 @@ fun OcrModelsRoute(
     )
 
     modelPendingDeletion?.let { model ->
-        AlertDialog(
+        SettingsAlertDialog(
+            title = stringResource(R.string.delete),
             onDismissRequest = { modelPendingDeletion = null },
-            title = { Text(stringResource(R.string.delete)) },
             text = {
                 Text(stringResource(R.string.reader_translation_model_delete_confirm, model.title))
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.ok),
                     onClick = {
                         modelPendingDeletion = null
                         OnnxModelDownloadWorker.cancel(context, model.id)
@@ -186,14 +187,13 @@ fun OcrModelsRoute(
                             ).show()
                         }
                     },
-                ) {
-                    Text(stringResource(android.R.string.ok))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { modelPendingDeletion = null }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { modelPendingDeletion = null },
+                )
             },
         )
     }

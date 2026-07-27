@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,18 +40,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import org.skepsun.kototoro.core.ui.glass.ApplyDynamicArtworkBlurDialogStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -73,26 +69,6 @@ data class SettingsChoiceOption<T>(
     val value: T,
     val label: String,
 )
-
-private data class SettingsDialogVisuals(
-    val shape: Shape,
-    val containerColor: Color,
-    val tonalElevation: Dp,
-)
-
-@Composable
-private fun settingsDialogVisuals(): SettingsDialogVisuals {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    return SettingsDialogVisuals(
-        shape = if (isIosStyle) RoundedCornerShape(22.dp) else MaterialTheme.shapes.extraLarge,
-        containerColor = if (isIosStyle) {
-            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-        tonalElevation = if (isIosStyle) 0.dp else 6.dp,
-    )
-}
 
 @Composable
 private fun settingsSwitchColors(): SwitchColors {
@@ -460,14 +436,9 @@ fun <T> SettingsChoicePreference(
 
     if (isDialogVisible) {
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-        val dialogVisuals = settingsDialogVisuals()
-        ApplyDynamicArtworkBlurDialogStyle()
-        AlertDialog(
+        SettingsAlertDialog(
+            title = title,
             onDismissRequest = { isDialogVisible = false },
-            shape = dialogVisuals.shape,
-            containerColor = dialogVisuals.containerColor,
-            tonalElevation = dialogVisuals.tonalElevation,
-            title = { Text(text = title) },
             text = {
                 LazyColumn(
                     modifier = Modifier
@@ -501,6 +472,8 @@ fun <T> SettingsChoicePreference(
                             Text(
                                 text = option.label,
                                 modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             if (isIosStyle && selected) {
                                 Icon(
@@ -517,9 +490,10 @@ fun <T> SettingsChoicePreference(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { isDialogVisible = false }) {
-                    Text(text = stringResource(android.R.string.ok))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.ok),
+                    onClick = { isDialogVisible = false },
+                )
             },
         )
     }
@@ -586,14 +560,9 @@ fun <T> SettingsMultiChoicePreference(
 
     if (isDialogVisible) {
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-        val dialogVisuals = settingsDialogVisuals()
-        ApplyDynamicArtworkBlurDialogStyle()
-        AlertDialog(
+        SettingsAlertDialog(
+            title = title,
             onDismissRequest = { isDialogVisible = false },
-            shape = dialogVisuals.shape,
-            containerColor = dialogVisuals.containerColor,
-            tonalElevation = dialogVisuals.tonalElevation,
-            title = { Text(text = title) },
             text = {
                 LazyColumn(
                     modifier = Modifier
@@ -629,6 +598,8 @@ fun <T> SettingsMultiChoicePreference(
                             Text(
                                 text = option.label,
                                 modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             if (isIosStyle && checked) {
                                 Icon(
@@ -645,19 +616,19 @@ fun <T> SettingsMultiChoicePreference(
                 }
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.ok),
                     onClick = {
                         onValueChange(pendingValues)
                         isDialogVisible = false
                     },
-                ) {
-                    Text(text = stringResource(android.R.string.ok))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { isDialogVisible = false }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { isDialogVisible = false },
+                )
             },
         )
     }
@@ -838,17 +809,12 @@ fun SettingsDialogTextPreference(
 
     if (isDialogVisible) {
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-        val dialogVisuals = settingsDialogVisuals()
-        ApplyDynamicArtworkBlurDialogStyle()
-        AlertDialog(
+        SettingsAlertDialog(
+            title = title,
             onDismissRequest = {
                 isSuggestionsExpanded = false
                 isDialogVisible = false
             },
-            shape = dialogVisuals.shape,
-            containerColor = dialogVisuals.containerColor,
-            tonalElevation = dialogVisuals.tonalElevation,
-            title = { Text(text = title) },
             text = {
                 Column {
                     OutlinedTextField(
@@ -898,25 +864,23 @@ fun SettingsDialogTextPreference(
                 }
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.ok),
                     onClick = {
                         onValueChange(pendingValue)
                         isSuggestionsExpanded = false
                         isDialogVisible = false
                     },
-                ) {
-                    Text(text = stringResource(android.R.string.ok))
-                }
+                )
             },
             dismissButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
                     onClick = {
                         isSuggestionsExpanded = false
                         isDialogVisible = false
                     },
-                ) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
+                )
             },
         )
     }
@@ -980,14 +944,9 @@ fun SettingsReorderPreference(
     }
 
     if (isDialogVisible) {
-        val dialogVisuals = settingsDialogVisuals()
-        ApplyDynamicArtworkBlurDialogStyle()
-        AlertDialog(
+        SettingsAlertDialog(
+            title = title,
             onDismissRequest = { isDialogVisible = false },
-            shape = dialogVisuals.shape,
-            containerColor = dialogVisuals.containerColor,
-            tonalElevation = dialogVisuals.tonalElevation,
-            title = { Text(text = title) },
             text = {
                 if (pendingValue.isEmpty()) {
                     Text(
@@ -1055,19 +1014,19 @@ fun SettingsReorderPreference(
                 }
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.ok),
                     onClick = {
                         onValueChange(pendingValue)
                         isDialogVisible = false
                     },
-                ) {
-                    Text(text = stringResource(android.R.string.ok))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { isDialogVisible = false }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { isDialogVisible = false },
+                )
             },
         )
     }

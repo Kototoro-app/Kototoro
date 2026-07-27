@@ -134,50 +134,92 @@ private fun AppFontPreset.toFontFamily(provider: GoogleFont.Provider): FontFamil
     return FontFamily(Font(googleFont = GoogleFont(fontName), fontProvider = provider))
 }
 
-private fun kototoroTypography(
-    isExpressiveStyle: Boolean,
-    defaultFontFamily: FontFamily?,
+internal fun kototoroTypography(
+	isExpressiveStyle: Boolean,
+	defaultFontFamily: FontFamily?,
 ): Typography {
-    val base = Typography()
-    fun androidx.compose.ui.text.TextStyle.withDefaultFont(): androidx.compose.ui.text.TextStyle {
-        return if (defaultFontFamily == null) this else copy(fontFamily = defaultFontFamily)
-    }
-    if (!isExpressiveStyle) {
-        return base.copy(
-            displayLarge = base.displayLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
-            displayMedium = base.displayMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
-            displaySmall = base.displaySmall.copy(letterSpacing = 0.sp).withDefaultFont(),
-            headlineLarge = base.headlineLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
-            headlineMedium = base.headlineMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
-            headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-            titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-            titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-            titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-            bodyLarge = base.bodyLarge.copy(letterSpacing = 0.sp).withDefaultFont(),
-            bodyMedium = base.bodyMedium.copy(letterSpacing = 0.sp).withDefaultFont(),
-            bodySmall = base.bodySmall.copy(letterSpacing = 0.sp).withDefaultFont(),
-            labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-            labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-            labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-        )
-    }
-    return base.copy(
-        displayLarge = base.displayLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-        displayMedium = base.displayMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-        displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp).withDefaultFont(),
-        headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
-        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
-        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp).withDefaultFont(),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = 0.sp).withDefaultFont(),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Medium, fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = 0.sp).withDefaultFont(),
-        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp).withDefaultFont(),
-        bodyLarge = base.bodyLarge.copy(fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = 0.sp).withDefaultFont(),
-        bodyMedium = base.bodyMedium.copy(fontSize = 15.sp, lineHeight = 21.sp, letterSpacing = 0.sp).withDefaultFont(),
-        bodySmall = base.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.sp).withDefaultFont(),
-        labelLarge = base.labelLarge.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp).withDefaultFont(),
-        labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.sp).withDefaultFont(),
-        labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.sp).withDefaultFont(),
-    )
+	val base = Typography()
+	val destinationTitleWeight = if (isExpressiveStyle) FontWeight.SemiBold else FontWeight.Bold
+	fun androidx.compose.ui.text.TextStyle.withDefaultFont(): androidx.compose.ui.text.TextStyle {
+		return if (defaultFontFamily == null) this else copy(fontFamily = defaultFontFamily)
+	}
+	return base.copy(
+		displayLarge = base.displayLarge.copy(fontWeight = destinationTitleWeight, letterSpacing = 0.sp).withDefaultFont(),
+		displayMedium = base.displayMedium.copy(fontWeight = destinationTitleWeight, letterSpacing = 0.sp).withDefaultFont(),
+		displaySmall = base.displaySmall.copy(fontWeight = destinationTitleWeight, letterSpacing = 0.sp).withDefaultFont(),
+		headlineLarge = base.headlineLarge.copy(
+			fontWeight = destinationTitleWeight,
+			fontSize = 32.sp,
+			lineHeight = 40.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		headlineMedium = base.headlineMedium.copy(
+			fontWeight = destinationTitleWeight,
+			fontSize = 28.sp,
+			lineHeight = 36.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		headlineSmall = base.headlineSmall.copy(
+			fontWeight = FontWeight.SemiBold,
+			fontSize = 24.sp,
+			lineHeight = 32.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		titleLarge = base.titleLarge.copy(
+			fontWeight = FontWeight.SemiBold,
+			fontSize = 22.sp,
+			lineHeight = 28.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		titleMedium = base.titleMedium.copy(
+			fontWeight = FontWeight.SemiBold,
+			fontSize = 16.sp,
+			lineHeight = 24.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		titleSmall = base.titleSmall.copy(
+			fontWeight = FontWeight.Medium,
+			fontSize = 14.sp,
+			lineHeight = 20.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		bodyLarge = base.bodyLarge.copy(
+			fontWeight = FontWeight.Normal,
+			fontSize = 16.sp,
+			lineHeight = 24.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		bodyMedium = base.bodyMedium.copy(
+			fontWeight = FontWeight.Normal,
+			fontSize = 14.sp,
+			lineHeight = 20.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		bodySmall = base.bodySmall.copy(
+			fontWeight = FontWeight.Normal,
+			fontSize = 12.sp,
+			lineHeight = 16.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		labelLarge = base.labelLarge.copy(
+			fontWeight = FontWeight.Medium,
+			fontSize = 14.sp,
+			lineHeight = 20.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		labelMedium = base.labelMedium.copy(
+			fontWeight = FontWeight.Medium,
+			fontSize = 12.sp,
+			lineHeight = 16.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+		labelSmall = base.labelSmall.copy(
+			fontWeight = FontWeight.Medium,
+			fontSize = 11.sp,
+			lineHeight = 16.sp,
+			letterSpacing = 0.sp,
+		).withDefaultFont(),
+	)
 }
 
 private fun android.content.Context.resolveComposeColorScheme(

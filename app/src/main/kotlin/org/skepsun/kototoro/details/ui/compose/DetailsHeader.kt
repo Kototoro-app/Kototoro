@@ -41,7 +41,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -93,6 +92,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -195,6 +195,7 @@ fun DetailsHeader(
     translatedTitle: String?,
     translatedDescription: String?,
     isShowingTranslation: Boolean,
+    panoramaEnabled: Boolean,
     settings: AppSettings,
     collapseProgressProvider: () -> Float,
     coverVisualAlpha: Float,
@@ -226,6 +227,7 @@ fun DetailsHeader(
     onManageTrackingSuggestion: (org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult) -> Unit,
 ) {
     val context = LocalContext.current
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val content = mangaDetails?.toContent()
     val originalTitle = content?.title.orEmpty()
     val displayTitle = translatedTitle ?: originalTitle
@@ -355,6 +357,11 @@ fun DetailsHeader(
     val description = displayDescription.ifBlank { fallbackDescription }
     val collapsedDescriptionMaxLines = 3
     var canExpandDescription by remember(description) { mutableStateOf(false) }
+    val descriptionToggleLabel = if (isDescriptionExpanded) {
+        stringResource(R.string.show_less)
+    } else {
+        stringResource(R.string.show_more)
+    }
 
     val coverModel = remember(content?.source?.name, content?.url, currentCoverUrl) {
         when {
@@ -615,6 +622,7 @@ fun DetailsHeader(
         val showInfoCard = infoItems.isNotEmpty() || showProgress
         if (showInfoCard) {
             DetailsInfoPanelSurface(
+                panoramaEnabled = panoramaEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .onGloballyPositioned { coordinates ->
@@ -692,64 +700,62 @@ fun DetailsHeader(
             )
         }
 
-        Column(
+        DetailsDescriptionSurface(
+            panoramaEnabled = panoramaEnabled,
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = stringResource(R.string.description),
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (canExpandDescription) {
-                    TextButton(
-                        onClick = { isDescriptionExpanded = !isDescriptionExpanded },
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    ) {
-                        Text(
-                            text = if (isDescriptionExpanded) {
-                                stringResource(R.string.show_less)
-                            } else {
-                                stringResource(R.string.show_more)
+                SelectionContainer {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                if (canExpandDescription && !isDescriptionExpanded) {
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startY = size.height * 0.62f,
+                                            endY = size.height,
+                                        ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                }
+                            }
+                            .clickable(
+                                enabled = canExpandDescription,
+                                role = Role.Button,
+                                onClickLabel = descriptionToggleLabel,
+                            ) {
+                                isDescriptionExpanded = !isDescriptionExpanded
                             },
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        Icon(
-                            imageVector = if (isDescriptionExpanded) {
-                                Icons.Filled.KeyboardArrowUp
-                            } else {
-                                Icons.Filled.KeyboardArrowDown
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { textLayoutResult ->
+                            val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
+                                textLayoutResult.lineCount > collapsedDescriptionMaxLines
+                            if (canExpandDescription != hasCollapsedOverflow) {
+                                canExpandDescription = hasCollapsedOverflow
+                            }
+                        },
+                    )
                 }
-            }
-            SelectionContainer {
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize()
-                        .clickable { if (canExpandDescription) isDescriptionExpanded = !isDescriptionExpanded },
-                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
-                    overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { textLayoutResult ->
-                        val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
-                            textLayoutResult.lineCount > collapsedDescriptionMaxLines
-                        if (canExpandDescription != hasCollapsedOverflow) {
-                            canExpandDescription = hasCollapsedOverflow
-                        }
-                    },
-                )
             }
         }
 
@@ -805,34 +811,100 @@ fun DetailsHeader(
 }
 
 @Composable
-private fun DetailsInfoPanelSurface(
+private fun DetailsDescriptionSurface(
+    panoramaEnabled: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    LiquidGlassSurface(
-        modifier = modifier,
-        style = if (isIosStyle) {
-            GlassDefaults.regularStyle().copy(
+    val shape = RoundedCornerShape(
+        when {
+            expressive -> 28.dp
+            isIosStyle -> 22.dp
+            else -> 24.dp
+        },
+    )
+    if (isIosStyle) {
+        LiquidGlassSurface(
+            modifier = modifier,
+            style = GlassDefaults.regularStyle().copy(
+                containerAlpha = 0.84f,
+                borderAlpha = 0.18f,
+            ),
+            shape = shape,
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            shape = shape,
+            color = if (panoramaEnabled) {
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.76f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(
+                    alpha = if (panoramaEnabled) 0.42f else 0.24f,
+                ),
+            ),
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun DetailsInfoPanelSurface(
+    panoramaEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val shape = RoundedCornerShape(
+        when {
+            expressive -> 28.dp
+            isIosStyle -> 22.dp
+            else -> 24.dp
+        },
+    )
+    if (isIosStyle) {
+        LiquidGlassSurface(
+            modifier = modifier,
+            style = GlassDefaults.regularStyle().copy(
                 containerAlpha = 0.88f,
                 borderAlpha = 0.18f,
-            )
-        } else {
-            GlassDefaults.subtleStyle().copy(
-                containerAlpha = if (expressive) 0.78f else 0.76f,
-                borderAlpha = if (expressive) 0.24f else 0.20f,
-            )
-        },
-        shape = RoundedCornerShape(
-            when {
-                expressive -> 28.dp
-                isIosStyle -> 22.dp
-                else -> 24.dp
+            ),
+            shape = shape,
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            shape = shape,
+            color = if (panoramaEnabled) {
+                MaterialTheme.colorScheme.surfaceContainer.copy(
+                    alpha = if (expressive) 0.72f else 0.76f,
+                )
+            } else {
+                MaterialTheme.colorScheme.surfaceContainer
             },
-        ),
-    ) {
-        content()
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f),
+            ),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            content()
+        }
     }
 }
 

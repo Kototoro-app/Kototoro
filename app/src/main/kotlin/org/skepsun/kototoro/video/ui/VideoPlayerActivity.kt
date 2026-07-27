@@ -114,6 +114,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -135,6 +136,7 @@ import org.skepsun.kototoro.video.ui.compose.VideoActionDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControls
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerInfoDialog
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerNativeInitErrorDialog
+import org.skepsun.kototoro.video.ui.compose.PlayerMenuPlacement
 import org.skepsun.kototoro.video.ui.compose.VideoSelectionDialog
 import org.skepsun.kototoro.video.ui.compose.VideoSelectionDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoShaderOption
@@ -227,6 +229,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var unlockButtonVisible by mutableStateOf(false)
     private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
+    private var submenuAnchorBounds = IntRect.Zero
+    private var submenuPlacement = PlayerMenuPlacement.BesideAnchor
+    private var lastSettingsAnchorBounds = IntRect.Zero
+    private var lastMoreAnchorBounds = IntRect.Zero
     private val snackbarHostState = SnackbarHostState()
     private val playerRoot: View
         get() = findViewById(android.R.id.content)
@@ -581,10 +587,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     actionDialogState?.let { state ->
                         VideoActionDialog(
                             state = state,
-                            onDismissRequest = { actionDialogState = null },
-                            onItemSelected = { item ->
+                            onDismissRequest = {
                                 actionDialogState = null
+                                selectionDialogState = null
+                                superResolutionDialogVisible = false
+                            },
+                            onItemSelected = { item, itemBounds ->
+                                submenuAnchorBounds = itemBounds
+                                submenuPlacement = PlayerMenuPlacement.BesideAnchor
                                 item.onClick()
+                                if (selectionDialogState == null && !superResolutionDialogVisible) {
+                                    actionDialogState = null
+                                }
                             },
                         )
                     }
@@ -600,6 +614,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             onDismissRequest = { selectionDialogState = null },
                             onSelect = { index ->
                                 selectionDialogState = null
+                                actionDialogState = null
                                 dialogState.onSelect(index)
                             },
                         )
@@ -690,14 +705,23 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             is VideoPlayerAction.SeekBy -> mpvPlayer?.let { it.seekTo((it.positionMs + action.offsetMs).coerceIn(0L, it.durationMs)) }
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
-            VideoPlayerAction.OpenSubtitleTracks -> showSubtitleTrackDialog()
-            VideoPlayerAction.OpenChapterSelection -> showChapterSelectionPanel()
-            VideoPlayerAction.OpenPlaybackSpeed -> showPlaybackSpeedDialog()
+            is VideoPlayerAction.OpenSubtitleTracks -> {
+                prepareDirectMenu(action.anchorBounds)
+                showSubtitleTrackDialog()
+            }
+            is VideoPlayerAction.OpenChapterSelection -> showChapterSelectionPanel(action.anchorBounds)
+            is VideoPlayerAction.OpenPlaybackSpeed -> {
+                prepareDirectMenu(action.anchorBounds)
+                showPlaybackSpeedDialog()
+            }
             VideoPlayerAction.ToggleIntroMarker -> toggleIntroMarker()
             VideoPlayerAction.ToggleOutroMarker -> toggleOutroMarker()
-            VideoPlayerAction.OpenQuality -> showQualityDialog()
-            VideoPlayerAction.OpenSettings -> showVideoSettingsPanel()
-            VideoPlayerAction.OpenMore -> showOverflowMenu()
+            is VideoPlayerAction.OpenQuality -> {
+                prepareDirectMenu(action.anchorBounds)
+                showQualityDialog()
+            }
+            is VideoPlayerAction.OpenSettings -> showVideoSettingsPanel(action.anchorBounds)
+            is VideoPlayerAction.OpenMore -> showOverflowMenu(action.anchorBounds)
             VideoPlayerAction.ToggleFullscreen -> {
                 orientationHelper.isLandscape = !orientationHelper.isLandscape
             }
@@ -706,6 +730,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
         }
         syncComposeControlState()
+    }
+
+    private fun prepareDirectMenu(anchorBounds: IntRect) {
+        actionDialogState = null
+        submenuAnchorBounds = anchorBounds
+        submenuPlacement = PlayerMenuPlacement.BelowAnchor
     }
 
     private fun syncComposeControlState() {
@@ -1921,7 +1951,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         syncComposeControlState()
     }
 
-    private fun showOverflowMenu() {
+    private fun showOverflowMenu(anchorBounds: IntRect = lastMoreAnchorBounds) {
+        if (anchorBounds != IntRect.Zero) {
+            lastMoreAnchorBounds = anchorBounds
+        }
         val showMarkerActions = !isLandscapeOrientation()
         val actions = buildList {
             if (showMarkerActions) {
@@ -1967,6 +2000,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             items = actions.map { action ->
                 VideoActionDialogItem(action.title, iconRes = action.iconRes, onClick = action.onClick)
             },
+            anchorBounds = lastMoreAnchorBounds,
         )
     }
 
@@ -2089,7 +2123,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun showChapterSelectionPanel() {
+    private fun showChapterSelectionPanel(anchorBounds: IntRect) {
         val chapters = playerChapterList()
         if (chapters.isEmpty()) return
 
@@ -2105,6 +2139,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     onClick = { onChapterSelected(chapter) },
                 )
             },
+            anchorBounds = anchorBounds,
         )
     }
 
@@ -2504,7 +2539,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             messageRes = messageRes,
             duration = SnackbarDuration.Long,
             actionLabel = getString(R.string.settings),
-            onAction = ::showVideoSettingsPanel,
+            onAction = { showVideoSettingsPanel() },
         )
     }
 
@@ -2519,11 +2554,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             messageRes = messageRes,
             duration = SnackbarDuration.Long,
             actionLabel = getString(R.string.settings),
-            onAction = ::showVideoSettingsPanel,
+            onAction = { showVideoSettingsPanel() },
         )
     }
 
-    private fun showVideoSettingsPanel() {
+    private fun showVideoSettingsPanel(anchorBounds: IntRect = lastSettingsAnchorBounds) {
+        if (anchorBounds != IntRect.Zero) {
+            lastSettingsAnchorBounds = anchorBounds
+        }
         actionDialogState = VideoActionDialogState(
             title = getString(R.string.options),
             items = buildPlayerSettingsActions().map { action ->
@@ -2535,6 +2573,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     onClick = action.onClick,
                 )
             },
+            anchorBounds = lastSettingsAnchorBounds,
         )
     }
 
@@ -2699,6 +2738,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             title = getString(titleRes),
             options = options,
             selectedIndex = selectedIndex,
+            anchorBounds = submenuAnchorBounds,
+            placement = submenuPlacement,
             onSelect = onSelect,
         )
     }
@@ -2751,6 +2792,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             selectedShader = shader,
             shaderLabels = VideoSuperResolutionShader.entries.associateWith(::superResolutionShaderLabel),
             customShaders = customShaders,
+            anchorBounds = submenuAnchorBounds,
         )
     }
 

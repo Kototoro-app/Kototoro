@@ -4,9 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,6 +13,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.logs.CrashLogManager
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import java.io.File
 
 /**
@@ -44,12 +44,13 @@ class CrashLogActivity : BaseComposeActivity() {
             )
 
             if (showClearConfirm) {
-                AlertDialog(
+                SettingsAlertDialog(
+                    title = stringResource(R.string.clear_crash_logs),
                     onDismissRequest = { showClearConfirm = false },
-                    title = { Text(stringResource(R.string.clear_crash_logs)) },
                     text = { Text(stringResource(R.string.clear_crash_logs_confirm)) },
                     confirmButton = {
-                        TextButton(
+                        SettingsDialogActionButton(
+                            text = stringResource(R.string.clear_crash_logs),
                             onClick = {
                                 showClearConfirm = false
                                 CrashLogManager.clearAll(this)
@@ -60,14 +61,13 @@ class CrashLogActivity : BaseComposeActivity() {
                                     Toast.LENGTH_SHORT,
                                 ).show()
                             },
-                        ) {
-                            Text(stringResource(R.string.clear_crash_logs))
-                        }
+                        )
                     },
                     dismissButton = {
-                        TextButton(onClick = { showClearConfirm = false }) {
-                            Text(stringResource(android.R.string.cancel))
-                        }
+                        SettingsDialogActionButton(
+                            text = stringResource(android.R.string.cancel),
+                            onClick = { showClearConfirm = false },
+                        )
                     },
                 )
             }

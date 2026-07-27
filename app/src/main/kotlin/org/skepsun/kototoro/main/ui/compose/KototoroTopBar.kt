@@ -67,10 +67,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -78,7 +76,6 @@ import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
@@ -88,6 +85,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -102,9 +100,8 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 
-private val CompactTopTabsRailHeight = 40.dp
-private val CompactTopFilterRailHeight = 36.dp
-private val CompactFilterRailChipHeight = 34.dp
+private val CompactTopTabsRailVisualHeight = 40.dp
+private val CompactTopFilterRailVisualHeight = 36.dp
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
     val onClick: () -> Unit,
@@ -176,9 +173,9 @@ fun KototoroTopBar(
     }
 
     val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues()
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val topBarControlHeight = if (isIosStyle) 44.dp else CompactTopBarPillHeight
-    val topBarIconSize = if (isIosStyle) 21.dp else CompactTopBarIconSize
+    val tokens = LocalInterfaceStyleTokens.current
+    val topBarControlHeight = tokens.topBarButtonSize
+    val topBarIconSize = tokens.topBarIconSize
     val collapsedAlpha by animateFloatAsState(
         targetValue = if (isCollapsedFullyTransparent) 0f else 1f,
         label = "top_bar_alpha",
@@ -202,10 +199,8 @@ fun KototoroTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(
-                    horizontal = if (isIosStyle) 18.dp else CompactTopBarHorizontalPadding,
-                    vertical = if (isIosStyle) 15.dp else 0.dp,
-                )
+                .height(tokens.mainTopBarHeight)
+                .padding(horizontal = CompactTopBarHorizontalPadding)
                 .graphicsLayer { alpha = collapsedAlpha },
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
             verticalAlignment = Alignment.CenterVertically,
@@ -230,28 +225,13 @@ fun KototoroTopBar(
             }
             if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
                 val maxWidth = if (compactTabsState != null) 72.dp else 128.dp
-                var useSmall by remember(topBarTitle) { mutableStateOf(false) }
                 Text(
                     text = topBarTitle,
                     modifier = Modifier.widthIn(max = maxWidth),
-                    style = when {
-                        isIosStyle && !useSmall -> MaterialTheme.typography.headlineLarge.copy(
-                            fontSize = 32.sp,
-                            lineHeight = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.6).sp,
-                        )
-                        useSmall -> MaterialTheme.typography.titleSmall
-                        else -> MaterialTheme.typography.titleLarge
-                    },
+                    style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (useSmall) 2 else 1,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { result ->
-                        if (result.hasVisualOverflow && !useSmall) {
-                            useSmall = true
-                        }
-                    },
                 )
             }
             if (compactTabsState != null) {
@@ -458,9 +438,7 @@ fun KototoroTopBar(
         filterRailState?.let { state ->
             CompactTopBarFilterRail(
                 state = state,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         if (
@@ -536,6 +514,7 @@ fun KototoroTopBar(
 @Composable
 internal fun TopBarControlSurface(
     allowBackdrop: Boolean = true,
+    fallbackContainerColor: Color? = null,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -581,6 +560,19 @@ internal fun TopBarControlSurface(
                 content = content,
             )
         }
+    } else if (fallbackContainerColor != null) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            Box(
+                modifier = modifier
+                    .background(fallbackContainerColor, shape)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
+                        shape = shape,
+                    ),
+                content = content,
+            )
+        }
     } else {
         GlassSurface(
             modifier = modifier,
@@ -597,17 +589,23 @@ fun CompactTopBarTabsRail(
     state: CompactTabsTopBarOverrideState,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
+    val tokens = LocalInterfaceStyleTokens.current
     val listState = rememberLazyListState()
     EnsureItemFullyVisible(listState = listState, targetIndex = state.items.indexOfFirst { it.id == state.selectedItemId })
-    TopBarControlSurface(
-        modifier = modifier,
+    Box(
+        modifier = modifier.height(tokens.minimumTouchTarget),
     ) {
+        TopBarControlSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(CompactTopTabsRailVisualHeight)
+                .align(Alignment.Center),
+        ) {}
         LazyRow(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(CompactTopTabsRailHeight)
+                .height(tokens.minimumTouchTarget)
                 .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -615,20 +613,29 @@ fun CompactTopBarTabsRail(
         ) {
             items(items = state.items, key = { it.id }) { item ->
                 val selected = item.id == state.selectedItemId
-                Text(
-                    text = item.title,
+                Box(
                     modifier = Modifier
+                        .height(tokens.minimumTouchTarget)
                         .clickable { state.onItemSelected(item.id) }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
-                )
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        fontWeight = if (selected) {
+                            androidx.compose.ui.text.font.FontWeight.SemiBold
+                        } else {
+                            androidx.compose.ui.text.font.FontWeight.Normal
+                        },
+                    )
+                }
             }
         }
     }
@@ -640,7 +647,7 @@ private fun InlineCompactTopBarTabsRail(
     modifier: Modifier = Modifier,
     onExpandedChange: (Boolean) -> Unit = {},
 ) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val tokens = LocalInterfaceStyleTokens.current
     val density = LocalDensity.current
     val listState = rememberLazyListState()
     var restoreRequest by remember { mutableIntStateOf(0) }
@@ -682,14 +689,20 @@ private fun InlineCompactTopBarTabsRail(
             onExpandedChange(false)
         }
     }
-    TopBarControlSurface(
-        modifier = modifier,
+    Box(
+        modifier = modifier.height(tokens.minimumTouchTarget),
     ) {
+        TopBarControlSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(tokens.topBarButtonSize)
+                .align(Alignment.Center),
+        ) {}
         LazyRow(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (isIosStyle) 44.dp else CompactTopBarPillHeight)
+                .height(tokens.minimumTouchTarget)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -697,19 +710,32 @@ private fun InlineCompactTopBarTabsRail(
         ) {
             items(items = state.items, key = { it.id }) { item ->
                 val selected = item.id == state.selectedItemId
-                Text(
-                    text = item.title,
+                Box(
                     modifier = Modifier
+                        .height(tokens.minimumTouchTarget)
                         .clickable {
                             restoreRequest += 1
                             state.onItemSelected(item.id)
                         }
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
-                )
+                        .padding(horizontal = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        fontWeight = if (selected) {
+                            androidx.compose.ui.text.font.FontWeight.SemiBold
+                        } else {
+                            androidx.compose.ui.text.font.FontWeight.Normal
+                        },
+                    )
+                }
             }
         }
     }
@@ -720,6 +746,7 @@ fun CompactTopBarFilterRail(
     state: CompactFilterRailOverrideState,
     modifier: Modifier = Modifier,
 ) {
+    val tokens = LocalInterfaceStyleTokens.current
     val listState = rememberLazyListState()
     val firstSelectedIndex = remember(state.items) {
         state.items.indexOfFirst { it.isSelected }
@@ -736,14 +763,22 @@ fun CompactTopBarFilterRail(
         val maxVisible = visibleItems.maxOfOrNull { it.index } ?: -1
         (minVisible - 2).coerceAtLeast(0)..(maxVisible + 2).coerceAtLeast(-1)
     }
-    TopBarControlSurface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(CompactTopFilterRailHeight),
+            .height(tokens.minimumTouchTarget),
     ) {
+        TopBarControlSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(CompactTopFilterRailVisualHeight)
+                .align(Alignment.BottomCenter),
+        ) {}
         LazyRow(
             state = listState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(tokens.minimumTouchTarget),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             contentPadding = PaddingValues(horizontal = 12.dp),
@@ -756,38 +791,43 @@ fun CompactTopBarFilterRail(
                     state.items.indexOfFirst { it.id == item.id }
                 }
                 val shouldLoadIcon = itemIndex in visibleItemRange
-                Row(
+                Box(
                     modifier = Modifier
+                        .height(tokens.minimumTouchTarget)
                         .clickable { item.onClick() }
-                        .height(CompactFilterRailChipHeight)
                         .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    contentAlignment = Alignment.BottomCenter,
                 ) {
-                    item.source?.let { source ->
-                        ContentSourceIcon(
-                            source = source,
-                            loadEnabled = shouldLoadIcon,
-                            throttleNetworkLoad = shouldLoadIcon,
-                            modifier = Modifier.size(16.dp),
-                            contentDescription = null,
+                    Row(
+                        modifier = Modifier.height(CompactTopFilterRailVisualHeight),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        item.source?.let { source ->
+                            ContentSourceIcon(
+                                source = source,
+                                loadEnabled = shouldLoadIcon,
+                                throttleNetworkLoad = shouldLoadIcon,
+                                modifier = Modifier.size(16.dp),
+                                contentDescription = null,
+                            )
+                        }
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (item.isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontWeight = if (item.isSelected) {
+                                androidx.compose.ui.text.font.FontWeight.SemiBold
+                            } else {
+                                androidx.compose.ui.text.font.FontWeight.Normal
+                            },
+                            maxLines = 1,
                         )
                     }
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (item.isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        fontWeight = if (item.isSelected) {
-                            androidx.compose.ui.text.font.FontWeight.SemiBold
-                        } else {
-                            androidx.compose.ui.text.font.FontWeight.Normal
-                        },
-                        maxLines = 1,
-                    )
                 }
             }
         }

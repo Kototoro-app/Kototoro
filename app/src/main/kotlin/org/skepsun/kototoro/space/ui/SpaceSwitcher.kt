@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -68,6 +69,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -76,6 +78,8 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
@@ -302,7 +306,9 @@ private fun SpaceSidekickPanel(
 				modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 14.dp),
 			)
 			LazyColumn(
-				modifier = Modifier.fillMaxSize(),
+				modifier = Modifier
+					.fillMaxSize()
+					.selectableGroup(),
 				contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
 			) {
 				state.spaces.forEach { context ->
@@ -310,17 +316,26 @@ private fun SpaceSidekickPanel(
 						val selected = context.id == state.activeSpaceId
 						val resumeItem = resumeItems[context.id]
 						val coverRequest = rememberSidekickCoverRequest(resumeItem)
+						val cardShape = RoundedCornerShape(20.dp)
 						Surface(
 							modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-							shape = RoundedCornerShape(20.dp),
+							shape = cardShape,
 							color = if (selected) {
-								MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+								MaterialTheme.colorScheme.primaryContainer
 							} else {
 								MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.62f)
 							},
+							border = BorderStroke(
+								width = if (selected) 2.dp else 1.dp,
+								color = if (selected) {
+									MaterialTheme.colorScheme.primary
+								} else {
+									MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
+								},
+							),
 						) {
 							Box(
-								modifier = Modifier.fillMaxWidth().heightIn(min = 112.dp),
+								modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp),
 								contentAlignment = Alignment.CenterStart,
 							) {
 								if (coverRequest != null) {
@@ -342,6 +357,13 @@ private fun SpaceSidekickPanel(
 											),
 										),
 								)
+								if (selected) {
+									Box(
+										modifier = Modifier
+											.matchParentSize()
+											.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+									)
+								}
 								SpaceSidekickCardContent(
 									context = context,
 									selected = selected,
@@ -396,42 +418,79 @@ private fun SpaceSidekickCardContent(
 			)
 			.padding(14.dp),
 	) {
-		Column(
-			modifier = Modifier.align(Alignment.BottomStart).padding(end = 48.dp),
-			verticalArrangement = Arrangement.spacedBy(5.dp),
+		Row(
+			modifier = Modifier
+				.align(Alignment.TopStart)
+				.padding(end = 42.dp),
+			horizontalArrangement = Arrangement.spacedBy(8.dp),
+			verticalAlignment = Alignment.CenterVertically,
 		) {
 			SpaceGlyph(
 				presentation = presentation,
 				monogram = context.customMonogram(),
-				modifier = Modifier.size(26.dp),
+				modifier = Modifier.size(24.dp),
 			)
 			Text(
 				text = context.title ?: stringResource(presentation.labelRes),
-				style = MaterialTheme.typography.titleMedium,
+				style = MaterialTheme.typography.titleSmall,
+				fontWeight = FontWeight.SemiBold,
 				maxLines = 1,
 				overflow = TextOverflow.Ellipsis,
 			)
 		}
 		if (resumeItem?.canResume == true) {
+			Text(
+				text = resumeItem.title,
+				style = MaterialTheme.typography.bodyLarge,
+				fontWeight = FontWeight.SemiBold,
+				color = MaterialTheme.colorScheme.onSurface,
+				maxLines = 2,
+				overflow = TextOverflow.Ellipsis,
+				modifier = Modifier
+					.align(Alignment.CenterStart)
+					.padding(top = 30.dp, end = 56.dp, bottom = 24.dp),
+			)
+		}
+		if (selected) {
 			Surface(
-				modifier = Modifier.align(Alignment.BottomEnd),
+				modifier = Modifier
+					.align(Alignment.TopEnd)
+					.size(28.dp),
 				shape = CircleShape,
-				color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-				contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+				color = MaterialTheme.colorScheme.primary,
+				contentColor = MaterialTheme.colorScheme.onPrimary,
 			) {
-				IconButton(
-					onClick = onResume,
-					enabled = enabled,
+				Icon(
+					painter = painterResource(R.drawable.ic_check),
+					contentDescription = null,
+					modifier = Modifier.padding(6.dp),
+				)
+			}
+		}
+		if (resumeItem?.canResume == true) {
+			IconButton(
+				onClick = onResume,
+				enabled = enabled,
+				modifier = Modifier
+					.align(Alignment.BottomEnd)
+					.size(48.dp),
+			) {
+				Surface(
 					modifier = Modifier.size(42.dp),
+					shape = CircleShape,
+					color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+					contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
 				) {
-					Icon(
-						painter = painterResource(presentation.resumeIconRes),
-						contentDescription = stringResource(
-							R.string.space_continue_content_description,
-							resumeItem.title,
-						),
-						modifier = Modifier.size(20.dp),
-					)
+					Box(contentAlignment = Alignment.Center) {
+						Icon(
+							painter = painterResource(presentation.resumeIconRes),
+							contentDescription = stringResource(
+								R.string.space_continue_content_description,
+								resumeItem.title,
+							),
+							modifier = Modifier.size(20.dp),
+						)
+					}
 				}
 			}
 		}
@@ -608,7 +667,11 @@ fun SpaceSwitcherSheet(
 				modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
 			)
 		} else {
-			CompactDropdownMenuText(stringResource(R.string.space_switcher_title))
+			Text(
+				text = stringResource(R.string.space_switcher_title),
+				style = MaterialTheme.typography.titleLarge,
+				modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+			)
 		}
 		state.spaces.forEach { context ->
 			SpaceRow(
@@ -641,11 +704,28 @@ fun SpaceSwitcherSheet(
 			menuContent()
 		}
 	} else {
-		ModalBottomSheet(onDismissRequest = { onAction(SpaceAction.DismissSwitcher) }) {
-			LazyColumn(
-				modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+		ModalBottomSheet(
+			onDismissRequest = { onAction(SpaceAction.DismissSwitcher) },
+			containerColor = Color.Transparent,
+			tonalElevation = 0.dp,
+			shape = RoundedCornerShape(0.dp),
+			dragHandle = null,
+		) {
+			KototoroSheetSurface(
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = 12.dp, vertical = 8.dp),
 			) {
-				item { menuContent() }
+				Column(modifier = Modifier.fillMaxWidth()) {
+					SheetDragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
+					LazyColumn(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(bottom = 24.dp),
+					) {
+						item { menuContent() }
+					}
+				}
 			}
 		}
 	}

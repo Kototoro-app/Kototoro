@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -75,19 +77,32 @@ fun ContentStatsRoute(
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
+        dragHandle = null,
+        shape = RoundedCornerShape(0.dp),
+        containerColor = Color.Transparent,
+        tonalElevation = 0.dp,
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.reading_stats),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-            ContentStatsSheetContent(
-                manga = manga,
-                viewModel = viewModel,
-                onOpenDetails = onOpenDetails,
-                modifier = Modifier,
-            )
+        KototoroSheetSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                SheetDragHandle(
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+                Text(
+                    text = stringResource(R.string.reading_stats),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+                ContentStatsSheetContent(
+                    manga = manga,
+                    viewModel = viewModel,
+                    onOpenDetails = onOpenDetails,
+                    modifier = Modifier,
+                )
+            }
         }
     }
 }

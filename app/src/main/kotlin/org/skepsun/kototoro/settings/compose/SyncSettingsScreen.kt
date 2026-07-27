@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -174,68 +172,68 @@ fun SyncSettingsScreen(
         }
     }
     if (isDeleteRemoteDialogVisible) {
-        AlertDialog(
+        SettingsAlertDialog(
             onDismissRequest = { isDeleteRemoteDialogVisible = false },
-            title = { Text(text = stringResource(R.string.sync_delete_remote_data)) },
+            title = stringResource(R.string.sync_delete_remote_data),
             text = { Text(text = stringResource(R.string.sync_delete_remote_data_confirm)) },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.clear),
                     onClick = {
                         isDeleteRemoteDialogVisible = false
                         onGoogleDriveDeleteRemoteClick()
                     },
-                ) {
-                    Text(text = stringResource(R.string.clear))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { isDeleteRemoteDialogVisible = false }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { isDeleteRemoteDialogVisible = false },
+                )
             },
         )
     }
     if (isEnableGoogleDriveConfirmVisible) {
-        AlertDialog(
+        SettingsAlertDialog(
             onDismissRequest = { isEnableGoogleDriveConfirmVisible = false },
-            title = { Text(text = stringResource(R.string.sync_backend_switch_google_drive_title)) },
+            title = stringResource(R.string.sync_backend_switch_google_drive_title),
             text = { Text(text = stringResource(R.string.sync_backend_switch_google_drive_confirm)) },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.enable),
                     onClick = {
                         isEnableGoogleDriveConfirmVisible = false
                         onGoogleDriveEnabledChange(true)
                     },
-                ) {
-                    Text(text = stringResource(R.string.enable))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { isEnableGoogleDriveConfirmVisible = false }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { isEnableGoogleDriveConfirmVisible = false },
+                )
             },
         )
     }
     if (isImportLegacyDialogVisible) {
-        AlertDialog(
+        SettingsAlertDialog(
             onDismissRequest = { isImportLegacyDialogVisible = false },
-            title = { Text(text = stringResource(R.string.sync_import_legacy_remote_data)) },
+            title = stringResource(R.string.sync_import_legacy_remote_data),
             text = { Text(text = stringResource(R.string.sync_import_legacy_remote_data_confirm)) },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.import_legacy_sync),
                     onClick = {
                         isImportLegacyDialogVisible = false
                         onGoogleDriveImportLegacyClick()
                     },
-                ) {
-                    Text(text = stringResource(R.string.import_legacy_sync))
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { isImportLegacyDialogVisible = false }) {
-                    Text(text = stringResource(android.R.string.cancel))
-                }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { isImportLegacyDialogVisible = false },
+                )
             },
         )
     }

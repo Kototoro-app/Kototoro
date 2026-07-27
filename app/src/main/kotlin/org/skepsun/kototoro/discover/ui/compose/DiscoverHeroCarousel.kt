@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -98,7 +99,6 @@ import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.secondaryTitleText
@@ -415,13 +415,10 @@ fun DiscoverHeroCarousel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (onOpenSchedule != null) {
-                            GlassSurface(
-                                shape = RoundedCornerShape(999.dp),
-                                style = GlassDefaults.subtleStyle(),
-                            ) {
+                            DiscoverHeroOverlaySurface {
                                 IconButton(
                                     onClick = onOpenSchedule,
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier.size(48.dp),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.DateRange,
@@ -433,15 +430,12 @@ fun DiscoverHeroCarousel(
                             }
                         }
                         Box {
-                            GlassSurface(
-                                shape = RoundedCornerShape(999.dp),
-                                style = GlassDefaults.subtleStyle(),
-                            ) {
+                            DiscoverHeroOverlaySurface {
                                 Row(
                                     modifier = Modifier
-                                        .heightIn(min = 40.dp)
-                                        .widthIn(min = 40.dp)
-                                        .clickable {
+                                        .heightIn(min = 48.dp)
+                                        .widthIn(min = 48.dp)
+                                        .clickable(role = Role.Button) {
                                             isServiceMenuExpanded = true
                                         }
                                         .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -566,18 +560,16 @@ fun DiscoverHeroCarousel(
                             },
                         )
                         item.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
-                            Surface(
+                            DiscoverHeroOverlaySurface(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(8.dp),
-                                shape = RoundedCornerShape(999.dp),
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
                             ) {
                                 Text(
                                     text = scoreText,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    color = heroContentColor,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 )
                             }
@@ -634,14 +626,18 @@ fun DiscoverHeroCarousel(
                 }
             }
             if (!detachedBottomContent) {
-                HeroPagerIndicator(
-                    pageCount = items.size,
-                    currentPage = selectedIndex,
-                modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding),
-                    activeColor = heroContentColor,
-                    inactiveColor = heroContentColor.copy(alpha = 0.34f),
-                    pageCounter = "${selectedIndex + 1} / ${items.size}",
-                )
+                DiscoverHeroOverlaySurface(
+                    modifier = Modifier.padding(horizontal = CompactTopBarHorizontalPadding),
+                ) {
+                    HeroPagerIndicator(
+                        pageCount = items.size,
+                        currentPage = selectedIndex,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        activeColor = heroContentColor,
+                        inactiveColor = heroContentColor.copy(alpha = 0.34f),
+                        pageCounter = "${selectedIndex + 1} / ${items.size}",
+                    )
+                }
             }
             if (bottomContent != null) {
                 if (!detachedBottomContent) {
@@ -651,16 +647,24 @@ fun DiscoverHeroCarousel(
             }
         }
         if (detachedBottomContent) {
-            HeroPagerIndicator(
-                pageCount = items.size,
-                currentPage = selectedIndex,
+            DiscoverHeroOverlaySurface(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = CompactTopBarHorizontalPadding, end = CompactTopBarHorizontalPadding, bottom = 14.dp),
-                activeColor = heroContentColor,
-                inactiveColor = heroContentColor.copy(alpha = 0.34f),
-                pageCounter = "${selectedIndex + 1} / ${items.size}",
-            )
+                    .padding(
+                        start = CompactTopBarHorizontalPadding,
+                        end = CompactTopBarHorizontalPadding,
+                        bottom = 14.dp,
+                    ),
+            ) {
+                HeroPagerIndicator(
+                    pageCount = items.size,
+                    currentPage = selectedIndex,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    activeColor = heroContentColor,
+                    inactiveColor = heroContentColor.copy(alpha = 0.34f),
+                    pageCounter = "${selectedIndex + 1} / ${items.size}",
+                )
+            }
         }
     }
 }
@@ -679,9 +683,9 @@ private fun DiscoverHeroPill(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     containerColor: Color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
 ) {
-    GlassSurface(
-        shape = RoundedCornerShape(999.dp),
-        style = GlassDefaults.subtleStyle(),
+    DiscoverHeroOverlaySurface(
+        containerColor = containerColor,
+        contentColor = contentColor,
     ) {
         Text(
             text = text,
@@ -692,4 +696,22 @@ private fun DiscoverHeroPill(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }
+}
+
+@Composable
+private fun DiscoverHeroOverlaySurface(
+    modifier: Modifier = Modifier,
+    containerColor: Color = Color.Black.copy(alpha = 0.42f),
+    contentColor: Color = Color.White,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        content = content,
+    )
 }

@@ -28,7 +28,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import com.kyant.backdrop.backdrops.layerBackdrop
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.combine
@@ -37,7 +36,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.main.ui.MainActivity
@@ -216,12 +214,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 		Box(modifier = modifier.fillMaxSize()) {
 			if (switcherVisible) {
 				val activity = activity ?: return@Box
-				RouteLiquidGlassBackdrop(ownerKey = this@SpaceSwitcherDelegate, active = true) { backdrop ->
-						Box(
-							modifier = Modifier
-								.fillMaxSize()
-								.then(backdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
-						) {
 				val switchState by coordinator.state.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
 				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
@@ -253,8 +245,6 @@ class SpaceSwitcherDelegate @Inject constructor(
 					position = position,
 					modifier = Modifier.fillMaxSize(),
 				)
-						}
-				}
 			}
 			if (transitionState.isVisible) {
 				SpaceTransitionCurtain(

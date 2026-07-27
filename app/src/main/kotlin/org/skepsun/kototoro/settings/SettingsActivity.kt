@@ -23,10 +23,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -107,7 +105,9 @@ import org.skepsun.kototoro.settings.about.AppUpdateActivity
 import org.skepsun.kototoro.settings.about.changelog.ChangelogRoute
 import org.skepsun.kototoro.settings.about.changelog.ChangelogViewModel
 import org.skepsun.kototoro.settings.compose.SettingsAdaptiveShell
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import org.skepsun.kototoro.settings.compose.SettingsRootScreen
 import org.skepsun.kototoro.settings.compose.SettingsSectionScaffold
 import org.skepsun.kototoro.settings.compose.SettingsSearchTopBarAction
@@ -1339,26 +1339,28 @@ class SettingsActivity :
 		val dialog = pendingSettingsDialog ?: return
 		when (dialog) {
 			is SettingsDialogState.Confirmation -> {
-				AlertDialog(
+				SettingsAlertDialog(
+					title = stringResource(dialog.titleRes),
 					onDismissRequest = { dismissSettingsDialog(dialog) },
-					title = { Text(stringResource(dialog.titleRes)) },
 					text = { Text(stringResource(dialog.messageRes)) },
 					confirmButton = {
-						TextButton(onClick = { confirmSettingsDialog(dialog) }) {
-							Text(stringResource(dialog.confirmRes))
-						}
+						SettingsDialogActionButton(
+							text = stringResource(dialog.confirmRes),
+							onClick = { confirmSettingsDialog(dialog) },
+						)
 					},
 					dismissButton = {
-						TextButton(onClick = { dismissSettingsDialog(dialog) }) {
-							Text(stringResource(android.R.string.cancel))
-						}
+						SettingsDialogActionButton(
+							text = stringResource(android.R.string.cancel),
+							onClick = { dismissSettingsDialog(dialog) },
+						)
 					},
 				)
 			}
 			is SettingsDialogState.ModelPicker -> {
-				AlertDialog(
+				SettingsAlertDialog(
+					title = stringResource(dialog.titleRes),
 					onDismissRequest = { dismissSettingsDialog(dialog) },
-					title = { Text(stringResource(dialog.titleRes)) },
 					text = {
 						LazyColumn(
 							modifier = Modifier
@@ -1389,24 +1391,26 @@ class SettingsActivity :
 								}
 							}
 							}
-						},
+					},
 					confirmButton = {},
 					dismissButton = {
-						TextButton(onClick = { dismissSettingsDialog(dialog) }) {
-							Text(stringResource(android.R.string.cancel))
-						}
+						SettingsDialogActionButton(
+							text = stringResource(android.R.string.cancel),
+							onClick = { dismissSettingsDialog(dialog) },
+						)
 					},
 				)
 			}
 			is SettingsDialogState.ProxyTestResult -> {
-				AlertDialog(
+				SettingsAlertDialog(
+					title = stringResource(R.string.proxy),
 					onDismissRequest = { dismissSettingsDialog(dialog) },
-					title = { Text(stringResource(R.string.proxy)) },
 					text = { Text(dialog.message) },
 					confirmButton = {
-						TextButton(onClick = { dismissSettingsDialog(dialog) }) {
-							Text(stringResource(android.R.string.ok))
-						}
+						SettingsDialogActionButton(
+							text = stringResource(android.R.string.ok),
+							onClick = { dismissSettingsDialog(dialog) },
+						)
 					},
 				)
 			}

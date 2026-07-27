@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
@@ -39,35 +42,48 @@ fun MediaUniverseSheet(
 	onContentClick: (Content) -> Unit,
 ) {
 	if (!state.visible) return
-	ModalBottomSheet(onDismissRequest = onDismiss) {
-		Column(
+	ModalBottomSheet(
+		onDismissRequest = onDismiss,
+		containerColor = Color.Transparent,
+		tonalElevation = 0.dp,
+		shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+		dragHandle = null,
+	) {
+		KototoroSheetSurface(
 			modifier = Modifier
 				.fillMaxWidth()
-				.padding(bottom = 24.dp),
+				.padding(horizontal = 12.dp, vertical = 8.dp),
 		) {
-			Text(
-				text = stringResource(R.string.media_universe_title),
-				style = MaterialTheme.typography.titleLarge,
-				modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-			)
-			when {
-				state.loading -> CircularProgressIndicator(
-					modifier = Modifier
-						.size(32.dp)
-						.align(Alignment.CenterHorizontally),
+			Column(
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(bottom = 24.dp),
+			) {
+				SheetDragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
+				Text(
+					text = stringResource(R.string.media_universe_title),
+					style = MaterialTheme.typography.titleLarge,
+					modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
 				)
-				state.items.isEmpty() -> Text(
-					text = stringResource(R.string.media_universe_empty),
-					style = MaterialTheme.typography.bodyMedium,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-					modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-				)
-				else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-					items(
-						items = state.items,
-						key = { item -> item.content.id },
-					) { item ->
-						MediaUniverseRow(item = item, onClick = { onContentClick(item.content) })
+				when {
+					state.loading -> CircularProgressIndicator(
+						modifier = Modifier
+							.size(32.dp)
+							.align(Alignment.CenterHorizontally),
+					)
+					state.items.isEmpty() -> Text(
+						text = stringResource(R.string.media_universe_empty),
+						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.onSurfaceVariant,
+						modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+					)
+					else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+						items(
+							items = state.items,
+							key = { item -> item.content.id },
+						) { item ->
+							MediaUniverseRow(item = item, onClick = { onContentClick(item.content) })
+						}
 					}
 				}
 			}

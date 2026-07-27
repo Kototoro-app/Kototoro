@@ -23,11 +23,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
@@ -51,87 +54,100 @@ internal fun ComposeTranslationTaskPanel(
     val generating = filtered.count { it.state == TranslationLayerState.GENERATING }
     val failed = filtered.count { it.state == TranslationLayerState.FAILED }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color.Transparent,
+        tonalElevation = 0.dp,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+        dragHandle = null,
+    ) {
+        KototoroSheetSurface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            Text(
-                text = stringResource(R.string.reader_translation_task_panel_title),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                text = if (snapshots.isEmpty()) {
-                    stringResource(R.string.reader_translation_task_panel_empty)
-                } else {
-                    stringResource(
-                        R.string.reader_translation_task_panel_summary,
-                        filtered.size,
-                        ready,
-                        generating,
-                        failed,
-                    )
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(max = 72.dp),
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
             ) {
-                items(TranslationTaskFilter.entries) { item ->
-                    FilterChip(
-                        selected = filter == item,
-                        onClick = { filter = item },
-                        label = { Text(stringResource(item.label)) },
-                    )
-                }
-            }
-            Row(
-                horizontalArrangement = Arrangement.End,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                TextButton(onClick = viewModel::retranslateFailedInCurrentChapter) {
-                    Text(stringResource(R.string.reader_translation_retry_failed_pages))
-                }
-            }
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 520.dp),
-            ) {
-                if (benchmark.isNotBlank()) {
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { benchmarkVisible = true }
-                                .padding(vertical = 10.dp),
-                        ) {
-                            Text(
-                                stringResource(R.string.reader_translation_task_benchmark_title),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                benchmark.lineSequence().drop(1).firstOrNull().orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-                if (filtered.isEmpty() && snapshots.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(
-                                R.string.reader_translation_task_panel_empty_for_filter,
-                                stringResource(filter.label),
-                            ),
-                            modifier = Modifier.padding(vertical = 16.dp),
+                SheetDragHandle(modifier = Modifier.align(androidx.compose.ui.Alignment.CenterHorizontally))
+                Text(
+                    text = stringResource(R.string.reader_translation_task_panel_title),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text(
+                    text = if (snapshots.isEmpty()) {
+                        stringResource(R.string.reader_translation_task_panel_empty)
+                    } else {
+                        stringResource(
+                            R.string.reader_translation_task_panel_summary,
+                            filtered.size,
+                            ready,
+                            generating,
+                            failed,
+                        )
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 72.dp),
+                ) {
+                    items(TranslationTaskFilter.entries) { item ->
+                        FilterChip(
+                            selected = filter == item,
+                            onClick = { filter = item },
+                            label = { Text(stringResource(item.label)) },
                         )
                     }
                 }
-                items(filtered, key = { it.pageId }) { snapshot ->
-                    TranslationTaskRow(snapshot = snapshot, onClick = { detail = snapshot })
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    TextButton(onClick = viewModel::retranslateFailedInCurrentChapter) {
+                        Text(stringResource(R.string.reader_translation_retry_failed_pages))
+                    }
+                }
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 520.dp),
+                ) {
+                    if (benchmark.isNotBlank()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { benchmarkVisible = true }
+                                    .padding(vertical = 10.dp),
+                            ) {
+                                Text(
+                                    stringResource(R.string.reader_translation_task_benchmark_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    benchmark.lineSequence().drop(1).firstOrNull().orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                    if (filtered.isEmpty() && snapshots.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(
+                                    R.string.reader_translation_task_panel_empty_for_filter,
+                                    stringResource(filter.label),
+                                ),
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        }
+                    }
+                    items(filtered, key = { it.pageId }) { snapshot ->
+                        TranslationTaskRow(snapshot = snapshot, onClick = { detail = snapshot })
+                    }
                 }
             }
         }

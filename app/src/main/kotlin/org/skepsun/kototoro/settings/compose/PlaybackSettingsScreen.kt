@@ -9,14 +9,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -139,9 +137,9 @@ fun PlaybackSettingsScreen(
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
     mpvConfigDraft?.let { draft ->
-        AlertDialog(
+        SettingsAlertDialog(
+            title = stringResource(R.string.video_mpv_conf),
             onDismissRequest = { mpvConfigDraft = null },
-            title = { Text(stringResource(R.string.video_mpv_conf)) },
             text = {
                 Column {
                     Text(
@@ -149,14 +147,14 @@ fun PlaybackSettingsScreen(
                             stringResource(R.string.video_mpv_conf_guide),
                             Html.FROM_HTML_MODE_COMPACT,
                         ).toString(),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     OutlinedTextField(
                         value = draft,
                         onValueChange = { mpvConfigDraft = it },
                         label = { Text(stringResource(R.string.video_mpv_conf)) },
                         supportingText = { Text(stringResource(R.string.video_mpv_conf_hint)) },
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
                         minLines = 8,
                         maxLines = 18,
                         modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
@@ -164,24 +162,35 @@ fun PlaybackSettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    MpvConfigManager.write(context, draft)
-                    mpvConfigDraft = null
-                    coroutineScope.launch { snackbarHostState.showSnackbar(context.getString(R.string.video_mpv_conf_saved)) }
-                }) { Text(stringResource(R.string.save)) }
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.save),
+                    onClick = {
+                        MpvConfigManager.write(context, draft)
+                        mpvConfigDraft = null
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(context.getString(R.string.video_mpv_conf_saved))
+                        }
+                    },
+                )
             },
             dismissButton = {
                 Column {
                     if (MpvConfigManager.hasCustomConfig(context)) {
-                        TextButton(onClick = {
-                            MpvConfigManager.reset(context)
-                            mpvConfigDraft = null
-                            coroutineScope.launch { snackbarHostState.showSnackbar(context.getString(R.string.video_mpv_conf_reset)) }
-                        }) { Text(stringResource(R.string.reset)) }
+                        SettingsDialogActionButton(
+                            text = stringResource(R.string.reset),
+                            onClick = {
+                                MpvConfigManager.reset(context)
+                                mpvConfigDraft = null
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(context.getString(R.string.video_mpv_conf_reset))
+                                }
+                            },
+                        )
                     }
-                    TextButton(onClick = { mpvConfigDraft = null }) {
-                        Text(stringResource(android.R.string.cancel))
-                    }
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = { mpvConfigDraft = null },
+                    )
                 }
             },
         )

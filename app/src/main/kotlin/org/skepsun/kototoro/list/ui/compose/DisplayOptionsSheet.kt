@@ -40,9 +40,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -109,18 +108,14 @@ fun DisplayOptionsSheet(
             label = "modal_content_slot",
             modifier = Modifier.fillMaxWidth(),
         ) {
-            GlassSurface(
+            KototoroSheetSurface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(28.dp),
                 style = GlassDefaults.prominentStyle().copy(
                     containerAlpha = 0.8f,
                     minimumContainerAlpha = 0.6f,
                 ),
-                dialogSurface = true,
-                componentRole = GlassComponentRole.Sheet,
-                debugLabel = "display_options_glass",
             ) {
                 Column(
                         modifier = Modifier

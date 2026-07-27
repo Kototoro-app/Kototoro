@@ -35,15 +35,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import kotlin.math.roundToInt
 
 /** Immutable projection of playback state consumed by the Compose player chrome. */
 data class VideoPlayerControlState(
@@ -70,14 +80,14 @@ sealed interface VideoPlayerAction {
     data class SeekBy(val offsetMs: Long) : VideoPlayerAction
     data object PreviousChapter : VideoPlayerAction
     data object NextChapter : VideoPlayerAction
-    data object OpenSubtitleTracks : VideoPlayerAction
-    data object OpenChapterSelection : VideoPlayerAction
-    data object OpenPlaybackSpeed : VideoPlayerAction
+    data class OpenSubtitleTracks(val anchorBounds: IntRect) : VideoPlayerAction
+    data class OpenChapterSelection(val anchorBounds: IntRect) : VideoPlayerAction
+    data class OpenPlaybackSpeed(val anchorBounds: IntRect) : VideoPlayerAction
     data object ToggleIntroMarker : VideoPlayerAction
     data object ToggleOutroMarker : VideoPlayerAction
-    data object OpenQuality : VideoPlayerAction
-    data object OpenSettings : VideoPlayerAction
-    data object OpenMore : VideoPlayerAction
+    data class OpenQuality(val anchorBounds: IntRect) : VideoPlayerAction
+    data class OpenSettings(val anchorBounds: IntRect) : VideoPlayerAction
+    data class OpenMore(val anchorBounds: IntRect) : VideoPlayerAction
     data object ToggleFullscreen : VideoPlayerAction
     data object ToggleScreenLock : VideoPlayerAction
 }
@@ -115,6 +125,9 @@ fun VideoPlayerTopControls(
     onAction: (VideoPlayerAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var settingsAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
+    var moreAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
+    var subtitleAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     Surface(
         color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.64f),
         contentColor = PlayerControlsForeground,
@@ -150,17 +163,26 @@ fun VideoPlayerTopControls(
             PlayerIconButton(
                 icon = { Icon(Icons.Filled.Subtitles, contentDescription = null) },
                 contentDescription = "Subtitle tracks",
-                onClick = { onAction(VideoPlayerAction.OpenSubtitleTracks) },
+                onClick = { onAction(VideoPlayerAction.OpenSubtitleTracks(subtitleAnchorBounds)) },
+                modifier = Modifier.onGloballyPositioned {
+                    subtitleAnchorBounds = it.boundsInWindowIntRect()
+                },
             )
             PlayerIconButton(
                 icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                 contentDescription = "Player settings",
-                onClick = { onAction(VideoPlayerAction.OpenSettings) },
+                onClick = { onAction(VideoPlayerAction.OpenSettings(settingsAnchorBounds)) },
+                modifier = Modifier.onGloballyPositioned {
+                    settingsAnchorBounds = it.boundsInWindowIntRect()
+                },
             )
             PlayerIconButton(
                 icon = { Icon(Icons.Filled.MoreVert, contentDescription = null) },
                 contentDescription = "More options",
-                onClick = { onAction(VideoPlayerAction.OpenMore) },
+                onClick = { onAction(VideoPlayerAction.OpenMore(moreAnchorBounds)) },
+                modifier = Modifier.onGloballyPositioned {
+                    moreAnchorBounds = it.boundsInWindowIntRect()
+                },
             )
         }
     }
@@ -173,6 +195,9 @@ fun VideoPlayerBottomControls(
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
+    var chaptersAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
+    var speedAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
+    var qualityAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     val progress = if (state.durationMs > 0L) {
         state.positionMs.toFloat() / state.durationMs.toFloat()
     } else {
@@ -245,16 +270,31 @@ fun VideoPlayerBottomControls(
                 PlayerIconButton(
                     icon = { Icon(Icons.Filled.GridView, contentDescription = null) },
                     contentDescription = "Chapters",
-                    onClick = { onAction(VideoPlayerAction.OpenChapterSelection) },
+                    onClick = { onAction(VideoPlayerAction.OpenChapterSelection(chaptersAnchorBounds)) },
+                    modifier = Modifier.onGloballyPositioned {
+                        chaptersAnchorBounds = it.boundsInWindowIntRect()
+                    },
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                PlayerTextButton(state.playbackSpeedLabel) { onAction(VideoPlayerAction.OpenPlaybackSpeed) }
+                PlayerTextButton(
+                    text = state.playbackSpeedLabel,
+                    onClick = { onAction(VideoPlayerAction.OpenPlaybackSpeed(speedAnchorBounds)) },
+                    modifier = Modifier.onGloballyPositioned {
+                        speedAnchorBounds = it.boundsInWindowIntRect()
+                    },
+                )
                 if (state.showChapterMarkers) {
                     PlayerTextButton("Intro") { onAction(VideoPlayerAction.ToggleIntroMarker) }
                     PlayerTextButton("Outro") { onAction(VideoPlayerAction.ToggleOutroMarker) }
                 }
                 state.qualityLabel?.let { label ->
-                    PlayerTextButton(label) { onAction(VideoPlayerAction.OpenQuality) }
+                    PlayerTextButton(
+                        text = label,
+                        onClick = { onAction(VideoPlayerAction.OpenQuality(qualityAnchorBounds)) },
+                        modifier = Modifier.onGloballyPositioned {
+                            qualityAnchorBounds = it.boundsInWindowIntRect()
+                        },
+                    )
                 }
                 PlayerIconButton(
                     icon = { Icon(Icons.Filled.Lock, contentDescription = null) },
@@ -279,20 +319,36 @@ private fun PlayerIconButton(
     contentDescription: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(36.dp).semantics { this.contentDescription = contentDescription },
+        modifier = modifier.size(36.dp).semantics { this.contentDescription = contentDescription },
         content = icon,
     )
 }
 
+private fun LayoutCoordinates.boundsInWindowIntRect(): IntRect {
+    val position = positionInWindow()
+    val topLeft = IntOffset(position.x.roundToInt(), position.y.roundToInt())
+    return IntRect(
+        left = topLeft.x,
+        top = topLeft.y,
+        right = topLeft.x + size.width,
+        bottom = topLeft.y + size.height,
+    )
+}
+
 @Composable
-private fun PlayerTextButton(text: String, onClick: () -> Unit) {
+private fun PlayerTextButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     TextButton(
         onClick = onClick,
-        modifier = Modifier.height(40.dp),
+        modifier = modifier.height(40.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
     ) {
         Text(text = text, color = PlayerControlsForeground, style = MaterialTheme.typography.labelLarge)

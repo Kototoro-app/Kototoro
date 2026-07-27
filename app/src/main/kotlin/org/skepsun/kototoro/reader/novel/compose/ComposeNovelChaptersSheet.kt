@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.LocalNovelSource
+import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.parsers.model.ContentChapter
 
 internal sealed interface NovelChapterListItem {
@@ -65,70 +68,93 @@ internal fun ComposeNovelChaptersSheet(
 	LaunchedEffect(reversed, query) {
 		if (query.isBlank()) listState.scrollToItem(currentPosition)
 	}
-	ModalBottomSheet(onDismissRequest = onDismiss) {
-		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-			val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
-			Column(
-				verticalArrangement = Arrangement.spacedBy(10.dp),
-				modifier = Modifier
-					.widthIn(max = contentWidth)
-					.align(Alignment.TopCenter)
-					.padding(horizontal = 16.dp),
-			) {
-				Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-					Column(modifier = Modifier.weight(1f)) {
-						Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleLarge)
-						Text(
-							stringResource(R.string.novel_chapters_count, chapters.size),
-							style = MaterialTheme.typography.bodySmall,
-							color = MaterialTheme.colorScheme.onSurfaceVariant,
-						)
+	ModalBottomSheet(
+		onDismissRequest = onDismiss,
+		containerColor = Color.Transparent,
+		tonalElevation = 0.dp,
+		shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+		dragHandle = null,
+	) {
+		KototoroSheetSurface(
+			modifier = Modifier
+				.fillMaxWidth()
+				.padding(horizontal = 12.dp, vertical = 8.dp),
+		) {
+			BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+				val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
+				Column(
+					verticalArrangement = Arrangement.spacedBy(10.dp),
+					modifier = Modifier
+						.widthIn(max = contentWidth)
+						.align(Alignment.TopCenter)
+						.padding(horizontal = 16.dp),
+				) {
+					SheetDragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
+					Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+						Column(modifier = Modifier.weight(1f)) {
+							Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleLarge)
+							Text(
+								stringResource(R.string.novel_chapters_count, chapters.size),
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+							)
+						}
+						IconButton(onClick = { reversed = !reversed }) {
+							Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
+						}
 					}
-					IconButton(onClick = { reversed = !reversed }) {
-						Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
-					}
-				}
-				OutlinedTextField(
-					value = query,
-					onValueChange = { query = it },
-					label = { Text(stringResource(R.string.search_chapters)) },
-					singleLine = true,
-					modifier = Modifier.fillMaxWidth(),
-				)
-				LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
-					items(items, key = NovelChapterListItem::key) { item ->
-						when (item) {
-							is NovelChapterListItem.Header -> {
-								Text(
-									item.title,
-									style = MaterialTheme.typography.titleSmall,
-									fontWeight = FontWeight.SemiBold,
-									color = MaterialTheme.colorScheme.primary,
-									modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-								)
-							}
-							is NovelChapterListItem.Chapter -> {
-								val selected = item.originalIndex == currentIndex
-								ListItem(
-									headlineContent = {
-										Text(
-											item.chapter.title ?: stringResource(R.string.unnamed_chapter),
-											maxLines = 2,
-											overflow = TextOverflow.Ellipsis,
-											fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-										)
-									},
-									leadingContent = if (selected) {
-										{ Icon(painterResource(R.drawable.ic_current_chapter), null) }
-									} else {
-										null
-									},
-									colors = ListItemDefaults.colors(
-										containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-									),
-									modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
-								)
-								HorizontalDivider()
+					OutlinedTextField(
+						value = query,
+						onValueChange = { query = it },
+						label = { Text(stringResource(R.string.search_chapters)) },
+						singleLine = true,
+						modifier = Modifier.fillMaxWidth(),
+					)
+					LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+						items(items, key = NovelChapterListItem::key) { item ->
+							when (item) {
+								is NovelChapterListItem.Header -> {
+									Text(
+										item.title,
+										style = MaterialTheme.typography.titleSmall,
+										fontWeight = FontWeight.SemiBold,
+										color = MaterialTheme.colorScheme.primary,
+										modifier = Modifier
+											.fillMaxWidth()
+											.padding(horizontal = 16.dp, vertical = 10.dp),
+									)
+								}
+								is NovelChapterListItem.Chapter -> {
+									val selected = item.originalIndex == currentIndex
+									ListItem(
+										headlineContent = {
+											Text(
+												item.chapter.title ?: stringResource(R.string.unnamed_chapter),
+												maxLines = 2,
+												overflow = TextOverflow.Ellipsis,
+												fontWeight = if (selected) {
+													FontWeight.SemiBold
+												} else {
+													FontWeight.Normal
+												},
+											)
+										},
+										leadingContent = if (selected) {
+											{ Icon(painterResource(R.drawable.ic_current_chapter), null) }
+										} else {
+											null
+										},
+										colors = ListItemDefaults.colors(
+											containerColor = if (selected) {
+												MaterialTheme.colorScheme.secondaryContainer
+											} else {
+												MaterialTheme.colorScheme.surfaceContainerLow
+											},
+										),
+										modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
+									)
+									HorizontalDivider()
+								}
 							}
 						}
 					}

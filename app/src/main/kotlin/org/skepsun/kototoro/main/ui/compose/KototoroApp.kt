@@ -145,6 +145,7 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -576,6 +577,7 @@ fun KototoroApp(
     var offsetDestinationOwnerKey by chromeScrollState.offsetDestinationOwnerKey
 
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     val spaceSwitcherFabMargin = dimensionResource(R.dimen.space_switcher_fab_margin)
     val spaceSwitcherFabControlGap = dimensionResource(R.dimen.space_switcher_fab_control_gap)
     val statusBarHeightPx = with(density) {
@@ -1138,7 +1140,7 @@ fun KototoroApp(
 
     val reservedTopBarHeightPx = maxOf(
         topBarHeightPx,
-        statusBarHeightPx + with(density) { 44.dp.roundToPx() },
+        statusBarHeightPx + with(density) { interfaceStyleTokens.mainTopBarHeight.roundToPx() },
     )
     val maxCollapsePx = (reservedTopBarHeightPx - statusBarHeightPx).coerceAtLeast(0)
     val contentTopInsetPx = if (shouldReserveChromeInsets) {

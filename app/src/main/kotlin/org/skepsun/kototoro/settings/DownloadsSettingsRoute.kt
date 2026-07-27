@@ -10,10 +10,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +41,8 @@ import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import org.skepsun.kototoro.core.util.ext.powerManager
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.resolveFile
@@ -135,35 +135,31 @@ fun DownloadsSettingsRoute(
     )
 
     if (showUncappedWarning) {
-        AlertDialog(
+        SettingsAlertDialog(
+            title = stringResource(R.string.download_max_active_series_warning_title),
             onDismissRequest = {
                 showUncappedWarning = false
-            },
-            title = {
-                Text(stringResource(R.string.download_max_active_series_warning_title))
             },
             text = {
                 Text(stringResource(R.string.download_max_active_series_warning_message))
             },
             confirmButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.continue_action),
                     onClick = {
                         settings.downloadMaxActiveSeries = AppSettings.UNLIMITED_SERIES
                         showUncappedWarning = false
-                    }
-                ) {
-                    Text(stringResource(R.string.continue_action))
-                }
+                    },
+                )
             },
             dismissButton = {
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
                     onClick = {
                         showUncappedWarning = false
-                    }
-                ) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
+                    },
+                )
+            },
         )
     }
 

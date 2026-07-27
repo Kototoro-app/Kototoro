@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,7 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -185,15 +183,24 @@ fun SpacesSettingsScreen(
         )
     }
     deleting?.let { space ->
-        AlertDialog(
+        SettingsAlertDialog(
+            title = stringResource(R.string.delete_custom_space),
             onDismissRequest = { deleting = null },
-            title = { Text(stringResource(R.string.delete_custom_space)) },
             text = { Text(stringResource(R.string.delete_custom_space_message, space.title.orEmpty())) },
             confirmButton = {
-                TextButton(onClick = { onDelete(space); deleting = null }) { Text(stringResource(R.string.delete)) }
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.delete),
+                    onClick = {
+                        onDelete(space)
+                        deleting = null
+                    },
+                )
             },
             dismissButton = {
-                TextButton(onClick = { deleting = null }) { Text(stringResource(android.R.string.cancel)) }
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { deleting = null },
+                )
             },
         )
     }
@@ -257,9 +264,11 @@ private fun SpaceEditorDialog(
     onConfirm: (SpaceContext) -> Unit,
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
-    AlertDialog(
+    SettingsAlertDialog(
+        title = stringResource(
+            if (initial.id.value == "custom:draft") R.string.add_custom_space else R.string.edit_custom_space,
+        ),
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (initial.id.value == "custom:draft") R.string.add_custom_space else R.string.edit_custom_space)) },
         text = {
             LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
                 item {
@@ -304,18 +313,24 @@ private fun SpaceEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.ok),
                 enabled = draft.title?.isNotBlank() == true && draft.allowedContentTypes.isNotEmpty(),
                 onClick = { onConfirm(draft) },
-            ) { Text(stringResource(android.R.string.ok)) }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } },
+        dismissButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismiss,
+            )
+        },
     )
 }
 
 @Composable
 private fun RuleSectionTitle(text: String) {
-    Text(text = text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+    Text(text = text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
 }
 
 @Composable

@@ -9,11 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -355,9 +353,9 @@ fun BackupsSettingsScreen(
             }
         }
         if (state.isExternalImportDialogVisible) {
-            AlertDialog(
+            SettingsAlertDialog(
                 onDismissRequest = onDismissExternalImportDialog,
-                title = { Text(text = stringResource(R.string.import_backup_choose_source_app)) },
+                title = stringResource(R.string.import_backup_choose_source_app),
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -366,51 +364,50 @@ fun BackupsSettingsScreen(
                         Text(text = stringResource(R.string.import_backup_supported_apps_summary))
                         HorizontalDivider()
                         ExternalBackupApp.entries.forEach { app ->
-                            TextButton(
+                            SettingsDialogActionButton(
+                                text = app.displayName(),
                                 onClick = { onImportExternalBackupAppClick(app) },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(text = app.displayName())
-                            }
+                            )
                         }
                     }
                 },
                 confirmButton = {},
                 dismissButton = {
-                    TextButton(onClick = onDismissExternalImportDialog) {
-                        Text(text = stringResource(android.R.string.cancel))
-                    }
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = onDismissExternalImportDialog,
+                    )
                 },
             )
         }
         selectedRemoteBackup?.let { backup ->
-            AlertDialog(
+            SettingsAlertDialog(
                 onDismissRequest = { selectedRemoteBackup = null },
-                title = { Text(text = backup.title) },
+                title = backup.title,
                 text = { Text(text = backup.summary) },
                 confirmButton = {
-                    TextButton(
+                    SettingsDialogActionButton(
+                        text = stringResource(R.string.restore_backup),
                         onClick = {
                             selectedRemoteBackup = null
                             pendingRestoreRemoteBackup = backup
                         },
                         enabled = backup.restoreStatus != WebDavRemoteBackupRestoreStatus.UNRESTORABLE,
-                    ) {
-                        Text(text = stringResource(R.string.restore_backup))
-                    }
+                    )
                 },
                 dismissButton = {
-                    TextButton(
+                    SettingsDialogActionButton(
+                        text = stringResource(R.string.delete),
                         onClick = {
                             selectedRemoteBackup = null
                             onWebDavDeleteRemoteBackupClick(backup.file)
                         },
-                    ) {
-                        Text(text = stringResource(R.string.delete))
-                    }
-                    TextButton(onClick = { selectedRemoteBackup = null }) {
-                        Text(text = stringResource(android.R.string.cancel))
-                    }
+                    )
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = { selectedRemoteBackup = null },
+                    )
                 },
             )
         }
@@ -433,46 +430,46 @@ fun BackupsSettingsScreen(
             )
         }
         if (isClearRemoteBackupsConfirmVisible) {
-            AlertDialog(
+            SettingsAlertDialog(
                 onDismissRequest = { isClearRemoteBackupsConfirmVisible = false },
-                title = { Text(text = stringResource(R.string.webdav_remote_backups_clear)) },
+                title = stringResource(R.string.webdav_remote_backups_clear),
                 text = { Text(text = stringResource(R.string.webdav_remote_backups_clear_confirm)) },
                 confirmButton = {
-                    TextButton(
+                    SettingsDialogActionButton(
+                        text = stringResource(R.string.clear),
                         onClick = {
                             isClearRemoteBackupsConfirmVisible = false
                             onWebDavClearRemoteBackupsClick()
                         },
-                    ) {
-                        Text(text = stringResource(R.string.clear))
-                    }
+                    )
                 },
                 dismissButton = {
-                    TextButton(onClick = { isClearRemoteBackupsConfirmVisible = false }) {
-                        Text(text = stringResource(android.R.string.cancel))
-                    }
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = { isClearRemoteBackupsConfirmVisible = false },
+                    )
                 },
             )
         }
         if (isEnableWebDavConfirmVisible) {
-            AlertDialog(
+            SettingsAlertDialog(
                 onDismissRequest = { isEnableWebDavConfirmVisible = false },
-                title = { Text(text = stringResource(R.string.sync_backend_switch_webdav_title)) },
+                title = stringResource(R.string.sync_backend_switch_webdav_title),
                 text = { Text(text = stringResource(R.string.sync_backend_switch_webdav_confirm)) },
                 confirmButton = {
-                    TextButton(
+                    SettingsDialogActionButton(
+                        text = stringResource(R.string.enable),
                         onClick = {
                             isEnableWebDavConfirmVisible = false
                             onWebDavEnabledChange(true)
                         },
-                    ) {
-                        Text(text = stringResource(R.string.enable))
-                    }
+                    )
                 },
                 dismissButton = {
-                    TextButton(onClick = { isEnableWebDavConfirmVisible = false }) {
-                        Text(text = stringResource(android.R.string.cancel))
-                    }
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = { isEnableWebDavConfirmVisible = false },
+                    )
                 },
             )
         }
@@ -493,9 +490,9 @@ private fun WebDavRestoreModeDialog(
     onDismissRequest: () -> Unit,
     onModeSelected: (ManualWebDavRestoreMode) -> Unit,
 ) {
-    AlertDialog(
+    SettingsAlertDialog(
         onDismissRequest = onDismissRequest,
-        title = { Text(text = stringResource(R.string.webdav_restore_mode_title)) },
+        title = stringResource(R.string.webdav_restore_mode_title),
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -503,25 +500,24 @@ private fun WebDavRestoreModeDialog(
             ) {
                 Text(text = stringResource(R.string.webdav_restore_mode_summary))
                 HorizontalDivider()
-                TextButton(
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.webdav_restore_mode_replace),
                     onClick = { onModeSelected(ManualWebDavRestoreMode.SNAPSHOT_REPLACE) },
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = stringResource(R.string.webdav_restore_mode_replace))
-                }
-                TextButton(
+                )
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.webdav_restore_mode_merge),
                     onClick = { onModeSelected(ManualWebDavRestoreMode.MERGE) },
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = stringResource(R.string.webdav_restore_mode_merge))
-                }
+                )
             }
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(text = stringResource(android.R.string.cancel))
-            }
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismissRequest,
+            )
         },
     )
 }

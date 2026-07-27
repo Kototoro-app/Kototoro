@@ -22,7 +22,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -59,6 +57,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.tapgrid.TapAction
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 
 private const val ACTION_TINT_ALPHA = 40 / 255f
 
@@ -146,24 +146,24 @@ internal fun ReaderTapGridConfigScreen(
 			}
 		}
 	if (showResetConfirmation) {
-		AlertDialog(
+		SettingsAlertDialog(
 			onDismissRequest = { showResetConfirmation = false },
-			title = { Text(stringResource(R.string.reader_actions)) },
+			title = stringResource(R.string.reader_actions),
 			text = { Text(stringResource(R.string.config_reset_confirm)) },
 			confirmButton = {
-				TextButton(
+				SettingsDialogActionButton(
+					text = stringResource(R.string.reset),
 					onClick = {
 						showResetConfirmation = false
 						onReset()
 					},
-				) {
-					Text(stringResource(R.string.reset))
-				}
+				)
 			},
 			dismissButton = {
-				TextButton(onClick = { showResetConfirmation = false }) {
-					Text(stringResource(android.R.string.cancel))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(android.R.string.cancel),
+					onClick = { showResetConfirmation = false },
+				)
 			},
 		)
 	}
@@ -276,9 +276,9 @@ private fun ActionSelectorDialog(
 	onDismissRequest: () -> Unit,
 ) {
 	val actions: List<TapAction?> = listOf(null) + TapAction.entries
-	AlertDialog(
+	SettingsAlertDialog(
 		onDismissRequest = onDismissRequest,
-		title = { Text(stringResource(if (isLongTap) R.string.long_tap_action else R.string.tap_action)) },
+		title = stringResource(if (isLongTap) R.string.long_tap_action else R.string.tap_action),
 		icon = {
 			Icon(
 				painter = painterResource(R.drawable.ic_tap),
@@ -310,9 +310,10 @@ private fun ActionSelectorDialog(
 			}
 		},
 		dismissButton = {
-			TextButton(onClick = onDismissRequest) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismissRequest,
+			)
 		},
 		confirmButton = {},
 	)

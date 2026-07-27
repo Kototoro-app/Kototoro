@@ -256,10 +256,10 @@ internal fun CompactDropdownMenuItem(
     leadingIcon: (@Composable (() -> Unit))? = null,
     trailingIcon: (@Composable (() -> Unit))? = null,
 ) {
-    CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.labelMedium) {
+    CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.labelLarge) {
         Row(
             modifier = modifier
-                .height(40.dp)
+                .height(48.dp)
                 .fillMaxWidth()
                 .alpha(if (enabled) 1f else 0.38f)
                 .clickable(enabled = enabled, onClick = onClick)
@@ -289,7 +289,7 @@ private fun CompactMenuContent(
     scrollState: androidx.compose.foundation.ScrollState,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 48.dp) {
         Column(
             modifier = Modifier
                 .width(IntrinsicSize.Max)
@@ -308,7 +308,7 @@ internal fun CompactDropdownMenuText(
     Text(
         text = text,
         modifier = modifier,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelLarge,
     )
 }
 

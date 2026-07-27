@@ -1151,6 +1151,10 @@ class ReaderActivity :
     }
 
 	private fun dispatchNavigateUp() {
+		if (intent.getBooleanExtra(AppRouter.EXTRA_HAS_IN_APP_CALLER, false)) {
+			finishAfterTransition()
+			return
+		}
 		val upIntent = parentActivityIntent
 		if (upIntent != null) {
 			if (!navigateUpTo(upIntent)) startActivity(upIntent)

@@ -40,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -98,6 +97,8 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.settings.sources.extensions.formatExtensionFingerprint
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
 import org.skepsun.kototoro.settings.sources.extensions.toInstalledIReaderPackageName
+import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import java.util.Locale
 import kotlinx.coroutines.launch
 
@@ -524,14 +525,15 @@ private fun <T> UnifiedSelectionDialog(
 	onDismiss: () -> Unit,
 	onSelected: (T) -> Unit,
 ) {
-	AlertDialog(
+	SettingsAlertDialog(
+		title = title,
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
 		},
-		title = { Text(title) },
 		text = {
 			Column(
 				modifier = Modifier
@@ -569,19 +571,21 @@ private fun UnifiedRepositoryUrlDialog(
 		UnifiedSourceKind.TVBOX -> "http://z.qiqiv.cn/123.txt"
 		else -> "https://example.com/index.min.json"
 	}
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.repository_url),
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = { onConfirm(value) }) {
-				Text(stringResource(android.R.string.ok))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.ok),
+				onClick = { onConfirm(value) },
+			)
 		},
 		dismissButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
 		},
-			title = { Text(stringResource(R.string.repository_url)) },
 		text = {
 			OutlinedTextField(
 				value = value,
@@ -601,19 +605,21 @@ private fun UnifiedInlineRepositoryDialog(
 	onConfirm: (String) -> Unit,
 ) {
 	var value by remember(kind) { mutableStateOf("") }
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.paste_repository_with_kind, stringResource(kind.dialogLabelResId())),
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = { onConfirm(value) }) {
-				Text(stringResource(android.R.string.ok))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.ok),
+				onClick = { onConfirm(value) },
+			)
 		},
 		dismissButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
 		},
-			title = { Text(stringResource(R.string.paste_repository_with_kind, stringResource(kind.dialogLabelResId()))) },
 		text = {
 			OutlinedTextField(
 				value = value,
@@ -632,19 +638,21 @@ private fun UnifiedDisclaimerDialog(
 	onDismiss: () -> Unit,
 	onConfirm: () -> Unit,
 ) {
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.add_repository),
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = onConfirm) {
-				Text(stringResource(android.R.string.ok))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.ok),
+				onClick = onConfirm,
+			)
 		},
 		dismissButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
 		},
-		title = { Text(stringResource(R.string.add_repository)) },
 		text = { Text(stringResource(R.string.welcome_plugins_disclaimer)) },
 	)
 }
@@ -655,20 +663,22 @@ private fun UnifiedDeleteRepositoryDialog(
 	onDismiss: () -> Unit,
 	onConfirm: () -> Unit,
 ) {
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.delete_repository_title),
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = onConfirm) {
-				Text(stringResource(R.string.delete))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(R.string.delete),
+				onClick = onConfirm,
+			)
 		},
 		dismissButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
 		},
-			title = { Text(stringResource(R.string.delete_repository_title)) },
-			text = { Text(stringResource(R.string.delete_repository_message, repository.name)) },
+		text = { Text(stringResource(R.string.delete_repository_message, repository.name)) },
 	)
 }
 
@@ -701,27 +711,30 @@ private fun UnifiedDeleteSelectedSourcesDialog(
 		}
 		else -> stringResource(R.string.unified_sources_delete_selected_no_packages)
 	}
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.delete),
 		onDismissRequest = onDismiss,
 		confirmButton = {
 			if (plan.deletablePackageIds.isNotEmpty()) {
-				TextButton(onClick = onConfirm) {
-					Text(stringResource(R.string.delete))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(R.string.delete),
+					onClick = onConfirm,
+				)
 			} else {
-				TextButton(onClick = onDismiss) {
-					Text(stringResource(android.R.string.ok))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(android.R.string.ok),
+					onClick = onDismiss,
+				)
 			}
 		},
 		dismissButton = {
 			if (plan.deletablePackageIds.isNotEmpty()) {
-				TextButton(onClick = onDismiss) {
-					Text(stringResource(android.R.string.cancel))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(android.R.string.cancel),
+					onClick = onDismiss,
+				)
 			}
 		},
-		title = { Text(stringResource(R.string.delete)) },
 		text = { Text(message) },
 	)
 }
@@ -732,19 +745,21 @@ private fun UnifiedTrustRepositoryDialog(
 	onDismiss: () -> Unit,
 	onConfirm: () -> Unit,
 ) {
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.trust_extension_repository),
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = onConfirm) {
-				Text(stringResource(R.string.trust_and_add))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(R.string.trust_and_add),
+				onClick = onConfirm,
+			)
 		},
 		dismissButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(android.R.string.cancel))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
 		},
-		title = { Text(stringResource(R.string.trust_extension_repository)) },
 		text = {
 			Text(
 				text = stringResource(
@@ -788,26 +803,29 @@ private fun UnifiedPackageStateDetailsDialog(
 		}
 		else -> return
 	}
-	AlertDialog(
+	SettingsAlertDialog(
+		title = title,
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = if (item.isInstalled) onUninstall else onDismiss) {
-				Text(stringResource(if (item.isInstalled) R.string.remove else android.R.string.ok))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(if (item.isInstalled) R.string.remove else android.R.string.ok),
+				onClick = if (item.isInstalled) onUninstall else onDismiss,
+			)
 		},
 		dismissButton = {
 			Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-				TextButton(onClick = onManageRepositories) {
-					Text(stringResource(R.string.manage_extension_repositories))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(R.string.manage_extension_repositories),
+					onClick = onManageRepositories,
+				)
 				if (item.isInstalled) {
-					TextButton(onClick = onDismiss) {
-						Text(stringResource(android.R.string.cancel))
-					}
+					SettingsDialogActionButton(
+						text = stringResource(android.R.string.cancel),
+						onClick = onDismiss,
+					)
 				}
 			}
 		},
-		title = { Text(title) },
 		text = { Text(message) },
 	)
 }
@@ -828,24 +846,27 @@ private fun UnifiedLanguageFilterDialog(
 		)
 	}
 
-	AlertDialog(
+	SettingsAlertDialog(
+		title = stringResource(R.string.filter_extensions_by_language),
 		onDismissRequest = onDismiss,
 		confirmButton = {
-			TextButton(onClick = onDismiss) {
-				Text(stringResource(R.string.done))
-			}
+			SettingsDialogActionButton(
+				text = stringResource(R.string.done),
+				onClick = onDismiss,
+			)
 		},
 		dismissButton = {
 			Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-				TextButton(onClick = onClear) {
-					Text(stringResource(R.string.clear))
-				}
-				TextButton(onClick = onApplyPreferredLanguages) {
-					Text(stringResource(R.string.use_setup_wizard_languages))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(R.string.clear),
+					onClick = onClear,
+				)
+				SettingsDialogActionButton(
+					text = stringResource(R.string.use_setup_wizard_languages),
+					onClick = onApplyPreferredLanguages,
+				)
 			}
 		},
-		title = { Text(stringResource(R.string.filter_extensions_by_language)) },
 		text = {
 			LazyVerticalGrid(
 				columns = GridCells.Adaptive(minSize = 120.dp),
@@ -1072,23 +1093,25 @@ private fun UnifiedFilterGroupDialog(
 	onClear: () -> Unit,
 	content: @Composable () -> Unit,
 ) {
-	AlertDialog(
+	SettingsAlertDialog(
+		title = title,
 		onDismissRequest = onDismiss,
-		title = { Text(title) },
 		text = {
 			Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
 				content()
 			}
 		},
 		confirmButton = {
-				TextButton(onClick = onDismiss) {
-					Text(stringResource(R.string.done))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(R.string.done),
+					onClick = onDismiss,
+				)
 			},
 			dismissButton = {
-				TextButton(onClick = onClear) {
-					Text(stringResource(R.string.clear))
-				}
+				SettingsDialogActionButton(
+					text = stringResource(R.string.clear),
+					onClick = onClear,
+				)
 			},
 	)
 }
