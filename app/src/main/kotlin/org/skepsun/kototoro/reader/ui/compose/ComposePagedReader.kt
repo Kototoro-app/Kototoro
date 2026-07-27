@@ -157,6 +157,7 @@ fun ComposePagedReader(
 	}
 
 	val reverseLayout = mode == ReaderMode.REVERSED
+	val isVertical = mode == ReaderMode.VERTICAL
 	val pagerState = rememberPagerState(
 		initialPage = initialPage.coerceIn(pages.indices),
 		pageCount = pages::size,
@@ -177,31 +178,17 @@ fun ComposePagedReader(
 			}
 		}
 	}
+	val pageCurlState = rememberComposeReaderPageCurlState()
 
 	val pageContent: @Composable PagerScope.(Int) -> Unit = { position ->
 		val page = pages[position]
-		val isVertical = mode == ReaderMode.VERTICAL
 		val logicalOffset = (position - pagerState.currentPage) - pagerState.currentPageOffsetFraction
 		val pageOffset = if (reverseLayout && !isVertical) -logicalOffset else logicalOffset
 		val transform = resolveComposeReaderPageTransform(pageAnimation, pageOffset, isVertical, reverseLayout)
-		ComposeReaderPage(
-			page = page,
-			imageLoader = imageLoader,
-			imagePipeline = imagePipeline,
-			zoomCommand = zoomCommand,
-			onShowErrorDetails = onShowErrorDetails,
-			onRetryError = onRetryError,
-			resolveErrorStringId = resolveErrorStringId,
-			isAnimationEnabled = isAnimationEnabled,
-			readerBackground = readerBackground,
-			readerBackgroundColor = readerBackgroundColor,
-				bookBackgroundTint = bookBackgroundTint,
-				imageColorFilter = imageColorFilter,
-				zoomMode = zoomMode,
-				isCropEnabled = isCropEnabled,
-			isPageVisible = pagerState.settledPage == position,
+		Box(
 			modifier = Modifier
 				.fillMaxSize()
+				.zIndex(transform.zIndex)
 				.graphicsLayer {
 					alpha = transform.alpha
 					translationX = if (isVertical) 0f else transform.translationFactor * size.width
@@ -210,21 +197,48 @@ fun ComposePagedReader(
 					rotationY = transform.rotationY
 					transformOrigin = transform.transformOrigin
 					cameraDistance = READER_PAGE_CAMERA_DISTANCE
-				},
-		)
+				}
+				.composeReaderPageCurl(transform, isVertical, reverseLayout, pageCurlState),
+		) {
+			ComposeReaderPage(
+				page = page,
+				imageLoader = imageLoader,
+				imagePipeline = imagePipeline,
+				zoomCommand = zoomCommand,
+				onShowErrorDetails = onShowErrorDetails,
+				onRetryError = onRetryError,
+				resolveErrorStringId = resolveErrorStringId,
+				isAnimationEnabled = isAnimationEnabled,
+				readerBackground = readerBackground,
+				readerBackgroundColor = readerBackgroundColor,
+				bookBackgroundTint = bookBackgroundTint,
+				imageColorFilter = imageColorFilter,
+				zoomMode = zoomMode,
+				isCropEnabled = isCropEnabled,
+				isPageVisible = pagerState.settledPage == position,
+				modifier = Modifier.fillMaxSize(),
+			)
+			if (pageAnimation == ReaderAnimation.SIMULATION) {
+				ComposeReaderSimulationPageShadow(transform)
+			}
+		}
 	}
 
-	if (mode == ReaderMode.VERTICAL) {
+	if (isVertical) {
 		VerticalPager(
 			state = pagerState,
-			modifier = modifier.fillMaxSize(),
+			modifier = modifier
+				.fillMaxSize()
+				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
 			key = { pages[it].readerKey },
 			pageContent = pageContent,
 		)
 	} else {
 		HorizontalPager(
 			state = pagerState,
-			modifier = modifier.fillMaxSize(),
+			modifier = modifier
+				.fillMaxSize()
+				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
 			reverseLayout = reverseLayout,
 			key = { pages[it].readerKey },
 			pageContent = pageContent,
@@ -846,6 +860,7 @@ fun ComposeDoublePageReader(
 	}
 	val autoBackgroundColors = remember { mutableStateMapOf<Long, Int>() }
 	val pageDisplaySizes = remember { mutableStateMapOf<Long, PageDisplaySize>() }
+	val pageCurlState = rememberComposeReaderPageCurlState()
 
 	LaunchedEffect(pageKeys, requestedPage) {
 		if (requestedPage == null) {
@@ -935,7 +950,9 @@ fun ComposeDoublePageReader(
 	HorizontalPager(
 		state = pagerState,
 		reverseLayout = reverseLayout,
-		modifier = modifier.fillMaxSize(),
+		modifier = modifier
+			.fillMaxSize()
+			.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
 		key = { spreadIndex ->
 			spreads[spreadIndex].positions.joinToString(separator = ":") {
 				displayItems[it].page?.readerKey?.toString() ?: DoublePageSpreadModel.SPACER_KEY.toString()
@@ -967,9 +984,31 @@ fun ComposeDoublePageReader(
 			rawSpreadBackground
 		}
 		val orderedPositions = spread.orderedPositions(reverseLayout)
-		Row(
+		Box(
 			modifier = Modifier
 				.fillMaxSize()
+				.zIndex(transform.zIndex)
+				.graphicsLayer {
+					alpha = transform.alpha
+					scaleX = spreadScale
+					scaleY = spreadScale
+					translationX = spreadOffsetX + transform.translationFactor * size.width
+					translationY = spreadOffsetY
+					rotationY = transform.rotationY
+					transformOrigin = transform.transformOrigin
+					cameraDistance = READER_PAGE_CAMERA_DISTANCE
+				}
+				.background(Color(spreadBackground))
+				.composeReaderPageCurl(
+					transform = transform,
+					isVertical = false,
+					isReversed = reverseLayout,
+					state = pageCurlState,
+				),
+		) {
+			Row(
+				modifier = Modifier
+					.fillMaxSize()
 				.pointerInput(isAnimationEnabled) {
 					awaitEachGesture {
 						awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -1013,19 +1052,8 @@ fun ComposeDoublePageReader(
 							}
 						}
 					}
-				}
-				.graphicsLayer {
-					alpha = transform.alpha
-					scaleX = spreadScale
-					scaleY = spreadScale
-					translationX = spreadOffsetX + transform.translationFactor * size.width
-					translationY = spreadOffsetY
-					rotationY = transform.rotationY
-					transformOrigin = transform.transformOrigin
-					cameraDistance = READER_PAGE_CAMERA_DISTANCE
-				}
-				.background(Color(spreadBackground)),
-		) {
+				},
+			) {
 				orderedPositions.forEachIndexed { visualIndex, position ->
 				val page = displayItems[position].page
 				if (page == null) {
@@ -1083,8 +1111,12 @@ fun ComposeDoublePageReader(
 				)
 				}
 			}
-			if (spread.lowerPosition == spread.upperPosition) {
-				Box(modifier = Modifier.weight(1f).fillMaxSize())
+				if (spread.lowerPosition == spread.upperPosition) {
+					Box(modifier = Modifier.weight(1f).fillMaxSize())
+				}
+			}
+			if (pageAnimation == ReaderAnimation.SIMULATION) {
+				ComposeReaderSimulationPageShadow(transform)
 			}
 		}
 	}

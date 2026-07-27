@@ -6,5 +6,5 @@ import androidx.annotation.Keep
 enum class ReaderAnimation {
 
 	// Do not rename this
-	NONE, DEFAULT, ADVANCED;
+	NONE, DEFAULT, ADVANCED, SIMULATION;
 }

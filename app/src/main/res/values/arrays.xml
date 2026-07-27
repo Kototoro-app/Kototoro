@@ -108,6 +108,7 @@
 		<item>@string/disabled</item>
 		<item>@string/system_default</item>
 		<item>@string/advanced</item>
+		<item>@string/novel_page_turn_simulation</item>
 	</string-array>
 	<string-array name="backup_frequency" translatable="false">
 		<item>@string/frequency_every_6_hours</item>

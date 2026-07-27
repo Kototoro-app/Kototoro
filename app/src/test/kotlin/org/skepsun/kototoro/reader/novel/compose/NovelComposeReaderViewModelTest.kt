@@ -148,4 +148,69 @@ class NovelComposeReaderViewModelTest {
 
 		assertEquals(listOf(0, 1), viewModel.uiState.value.continuousChapters.map { it.chapterIndex })
 	}
+
+	@Test
+	fun `focusing a paged chapter trims distant chapters from the pagination window`() {
+		val viewModel = NovelComposeReaderViewModel()
+		val settings = NovelReaderSettings(readingMode = org.skepsun.kototoro.reader.novel.ReadingMode.PAGED)
+		viewModel.publishChapter(1L, 0, "Chapter 1", "First", settings, null)
+		(1..4).forEach { index ->
+			viewModel.publishAdjacentChapter(
+				NovelComposeChapterContent(
+					chapterId = index.toLong() + 1,
+					chapterIndex = index,
+					chapterTitle = "Chapter ${index + 1}",
+					content = "Content $index",
+					translation = null,
+				),
+			)
+		}
+
+		viewModel.focusContinuousChapter(3)
+
+		assertEquals(listOf(2, 3, 4), viewModel.uiState.value.continuousChapters.map { it.chapterIndex })
+	}
+
+	@Test
+	fun `page request is bound to the chapter visible when it was created`() {
+		val viewModel = NovelComposeReaderViewModel()
+		viewModel.publishChapter(
+			chapterId = 42L,
+			chapterIndex = 7,
+			chapterTitle = "Chapter 8",
+			content = "Content",
+			settings = NovelReaderSettings(),
+			translation = null,
+		)
+
+		viewModel.requestPage(3)
+
+		val request = viewModel.uiState.value.pageRequest
+		assertEquals(42L, request?.chapterId)
+		assertEquals(7, request?.chapterIndex)
+		assertEquals(3, request?.page)
+	}
+
+	@Test
+	fun `consuming a handled page request does not clear a newer request`() {
+		val viewModel = NovelComposeReaderViewModel()
+		viewModel.requestPage(2)
+		val handledRequestId = viewModel.uiState.value.pageRequest!!.id
+		viewModel.requestPage(3)
+
+		viewModel.consumePageRequest(handledRequestId)
+
+		assertEquals(3, viewModel.uiState.value.pageRequest?.page)
+	}
+
+	@Test
+	fun `handled page request is consumed once`() {
+		val viewModel = NovelComposeReaderViewModel()
+		viewModel.requestPage(2)
+		val handledRequestId = viewModel.uiState.value.pageRequest!!.id
+
+		viewModel.consumePageRequest(handledRequestId)
+
+		assertNull(viewModel.uiState.value.pageRequest)
+	}
 }

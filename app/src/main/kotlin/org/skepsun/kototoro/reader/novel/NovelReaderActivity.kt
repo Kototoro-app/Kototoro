@@ -37,8 +37,9 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import dagger.hilt.android.AndroidEntryPoint
 import android.util.SparseArray
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
@@ -1428,7 +1429,7 @@ class NovelReaderActivity :
                     result.onSuccess { loadResult ->
                         android.util.Log.d("NovelReaderActivity", "Successfully loaded EPUB internal chapter")
                         showLoading(false)  // Dismiss loading indicator
-                        renderChapterWithEpubInfo(chapter, loadResult.content, loadResult.epubFile, loadResult.chapterHref)
+                        renderChapterWithEpubInfo(index, chapter, loadResult.content, loadResult.epubFile, loadResult.chapterHref)
                     }.onFailure { error ->
                         android.util.Log.e("NovelReaderActivity", "Failed to load EPUB internal chapter", error)
                         showLoading(false)  // Dismiss loading indicator even on error
@@ -1455,7 +1456,7 @@ class NovelReaderActivity :
                     android.util.Log.d("NovelReaderActivity", "✅ Cache hit for chapter, loading directly")
                     val plainText = novelContentLoader.loadChapterContent(chapterRepo, chapter)
                     showLoading(false)
-                    renderChapter(chapter, plainText)
+                    renderChapter(index, chapter, plainText)
                     preloadNextChapter(index + 1)
                     return@launch
                 }
@@ -1480,12 +1481,12 @@ class NovelReaderActivity :
                     if (pages.size == 1 && pages[0].preview == "EPUB") {
                         android.util.Log.d("NovelReaderActivity", "Detected EPUB chapter, loading EPUB content")
                         // 尝试读取EPUB内容
-                        val epubContent = loadEpubContent(chapter)
+                        val epubContent = loadEpubContent(index, chapter)
                         showLoading(false)
                         
                         if (epubContent != null) {
                             // 成功读取EPUB，显示内容
-                            renderChapter(chapter, epubContent)
+                            renderChapter(index, chapter, epubContent)
                         } else {
                             // 读取失败，显示提示信息
                             val webUrl = pages[0].url
@@ -1509,7 +1510,7 @@ class NovelReaderActivity :
                                 - 下载后可以使用Moon+ Reader等阅读器打开
                                 - 未来版本将支持更便捷的下载方式
                             """.trimIndent()
-                            renderChapter(chapter, epubMessage)
+                            renderChapter(index, chapter, epubMessage)
                         }
                         return@launch
                     }
@@ -1529,17 +1530,18 @@ class NovelReaderActivity :
                         nextChapterUrl = nextChapterUrl,
                     ).lastOrNull().orEmpty()
                     showLoading(false)
-                    renderChapter(chapter, plainText)
+                    renderChapter(index, chapter, plainText)
+                    preloadNextChapter(index + 1)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.e("NovelReaderActivity", "Error collecting novel flow", e)
                     showLoading(false)
                     // Optionally show error to user
                 }
                 
-                if (readerSettings.readingMode == ReadingMode.PAGED) {
-                    // 分页模式只保留当前章节，避免一次分页测量整段连续章节内容。
-                    preloadJob?.cancel()
-                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Failed to load chapter", e)
                 showLoading(false)
@@ -1574,13 +1576,15 @@ class NovelReaderActivity :
                     if (readerSettings.readingMode == ReadingMode.PAGED && currentChapterIndex == nextIndex - 1) {
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.w("NovelReaderActivity", "Failed to preload chapter: ${nextChapter.title}", e)
             }
         }
     }
 
-    private suspend fun loadEpubContent(chapter: ContentChapter): String? {
+    private suspend fun loadEpubContent(chapterIndex: Int, chapter: ContentChapter): String? {
         return try {
             android.util.Log.d("NovelReaderActivity", "Loading EPUB content for: ${chapter.title}, URL: ${chapter.url}")
             
@@ -1597,6 +1601,7 @@ class NovelReaderActivity :
                         // 直接用带 href 的渲染，保证图片相对路径解析正确
                         if (loadResult != null) {
                             renderChapterWithEpubInfo(
+                                chapterIndex = chapterIndex,
                                 chapter = chapter,
                                 text = loadResult.content,
                                 epubFile = loadResult.epubFile,
@@ -1642,6 +1647,8 @@ class NovelReaderActivity :
                 android.util.Log.d("NovelReaderActivity", "EPUB content loaded successfully, length: ${fullContent.length}")
                 return fullContent
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("NovelReaderActivity", "Failed to load EPUB content", e)
             null
@@ -1657,19 +1664,21 @@ class NovelReaderActivity :
      * @param chapterHref The chapter's path in EPUB (e.g., "OEBPS/Text/content_1.html")
      */
     private fun renderChapterWithEpubInfo(
+        chapterIndex: Int,
         chapter: ContentChapter,
         text: String,
         epubFile: java.io.File? = null,
         chapterHref: String? = null,
     ) {
+        if (!isCurrentChapter(chapterIndex, chapter)) return
         val content = text.ifBlank { getString(R.string.chapter_is_missing) }
         composeReaderViewModel.publishChapter(
             chapterId = chapter.id,
-            chapterIndex = currentChapterIndex,
+            chapterIndex = chapterIndex,
             chapterTitle = chapter.title.orEmpty(),
             content = content,
             settings = readerSettings,
-            translation = chapterTranslations[currentChapterIndex],
+            translation = chapterTranslations[chapterIndex],
         )
         if (readerSettings.readingMode == ReadingMode.PAGED) {
             composeReaderViewModel.requestPage(
@@ -1678,29 +1687,36 @@ class NovelReaderActivity :
         }
         publishComposeImageContext(epubFile, chapterHref)
         if (epubFile == null && chapterHref == null) {
-            resolveComposeImageContext(chapter)
+            resolveComposeImageContext(chapterIndex, chapter)
         }
         finishComposeChapterRender(chapter)
     }
 
-    private fun renderChapter(chapter: ContentChapter, text: String) {
+    private fun renderChapter(chapterIndex: Int, chapter: ContentChapter, text: String) {
+        if (!isCurrentChapter(chapterIndex, chapter)) return
         val content = text.ifBlank { getString(R.string.chapter_is_missing) }
         composeReaderViewModel.publishChapter(
             chapterId = chapter.id,
-            chapterIndex = currentChapterIndex,
+            chapterIndex = chapterIndex,
             chapterTitle = chapter.title.orEmpty(),
             content = content,
             settings = readerSettings,
-            translation = chapterTranslations[currentChapterIndex],
+            translation = chapterTranslations[chapterIndex],
         )
         if (readerSettings.readingMode == ReadingMode.PAGED) {
-            composeReaderViewModel.requestPage(currentPageIndex.coerceAtLeast(0))
+            composeReaderViewModel.requestPage(
+                if (currentPageIndex < 0) Int.MAX_VALUE else currentPageIndex,
+            )
         }
-        resolveComposeImageContext(chapter)
+        resolveComposeImageContext(chapterIndex, chapter)
         finishComposeChapterRender(chapter)
     }
 
-    private fun resolveComposeImageContext(chapter: ContentChapter) {
+    private fun isCurrentChapter(chapterIndex: Int, chapter: ContentChapter): Boolean {
+        return currentChapterIndex == chapterIndex && chapters.getOrNull(chapterIndex)?.id == chapter.id
+    }
+
+    private fun resolveComposeImageContext(expectedChapterIndex: Int, chapter: ContentChapter) {
         lifecycleScope.launch(Dispatchers.IO) {
             val chapterIndex = when {
                 chapter.url.startsWith("epub://") -> Regex("epub://(-?\\d+)/chapter/(\\d+)")
@@ -1732,13 +1748,15 @@ class NovelReaderActivity :
                 ?.epubFilePath
                 ?.let { path -> java.io.File(path) }
                 ?.takeIf { file -> file.exists() }
-            val chapterPath = if (epubFile != null && chapterIndex != null) {
+            val chapterPath = if (epubFile != null) {
                 epubContentCache.get(epubFile)?.chapters?.getOrNull(chapterIndex)?.href
             } else {
                 null
             }
             withContext(Dispatchers.Main) {
-                publishComposeImageContext(epubFile, chapterPath)
+                if (isCurrentChapter(expectedChapterIndex, chapter)) {
+                    publishComposeImageContext(epubFile, chapterPath)
+                }
             }
         }
     }
@@ -2210,6 +2228,7 @@ class NovelReaderActivity :
                 )
             }
             currentChapterIndex = index
+            currentPageIndex = 0
             loadChapter(currentChapterIndex)
         } else {
             android.util.Log.w("NovelReaderActivity", "Chapter selection ignored: index=$index, same as current or out of bounds")
@@ -2680,6 +2699,8 @@ class NovelReaderActivity :
 					publishComposeBoundary(data)
                     if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     if (isPrevious) isLoadingPrevious = false else isLoadingNext = false

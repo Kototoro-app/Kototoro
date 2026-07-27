@@ -49,6 +49,8 @@ data class NovelComposeReaderUiState(
 @Immutable
 data class NovelPageRequest(
 	val id: Long,
+	val chapterId: Long,
+	val chapterIndex: Int,
 	val page: Int,
 )
 
@@ -175,9 +177,27 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 	}
 
 	fun requestPage(page: Int) {
-		_uiState.value = _uiState.value.copy(
-			pageRequest = NovelPageRequest(++nextPageRequestId, page.coerceAtLeast(0)),
+		val state = _uiState.value
+		val request = NovelPageRequest(
+			id = ++nextPageRequestId,
+			chapterId = state.chapterId,
+			chapterIndex = state.chapterIndex,
+			page = page.coerceAtLeast(0),
 		)
+		_uiState.value = _uiState.value.copy(
+			pageRequest = request,
+		)
+		android.util.Log.d(
+			NOVEL_PAGER_LOG_TAG,
+			"request id=${request.id} chapter=${request.chapterIndex}/${request.chapterId} page=${request.page}",
+		)
+	}
+
+	fun consumePageRequest(requestId: Long) {
+		val state = _uiState.value
+		if (state.pageRequest?.id != requestId) return
+		_uiState.value = state.copy(pageRequest = null)
+		android.util.Log.d(NOVEL_PAGER_LOG_TAG, "consume request id=$requestId")
 	}
 
 	fun requestScrollByPage(delta: Int) {
@@ -246,6 +266,13 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 		val state = _uiState.value
 		val chapter = state.continuousChapters.firstOrNull { it.chapterIndex == chapterIndex } ?: return
 		if (state.chapterIndex == chapterIndex) return
+		val chapterWindow = if (state.settings?.readingMode == ReadingMode.PAGED) {
+			state.continuousChapters.filter {
+				it.chapterIndex in (chapterIndex - 1)..(chapterIndex + 1)
+			}
+		} else {
+			state.continuousChapters
+		}
 		_uiState.value = state.copy(
 			chapterId = chapter.chapterId,
 			chapterIndex = chapter.chapterIndex,
@@ -254,6 +281,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 			translation = chapter.translation,
 			scrollPosition = chapter.scrollPosition,
 			imageContext = chapter.imageContext,
+			continuousChapters = chapterWindow,
 		)
 	}
 
@@ -372,6 +400,8 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 		_uiState.value = _uiState.value.copy(ttsHighlightRange = range)
 	}
 }
+
+internal const val NOVEL_PAGER_LOG_TAG = "NovelPager"
 
 internal fun mergeContinuousChapterWindow(
 	existing: List<NovelComposeChapterContent>,

@@ -329,6 +329,10 @@ class ReaderActivity :
 						composeReaderController.updateOptions { copy(mode = mode) }
 						onReaderModeChanged(mode)
 					},
+					onAnimationChanged = { animation ->
+						settings.readerAnimation = animation
+						composeReaderController.updateOptions { copy(animation = animation) }
+					},
 					onDoublePageChanged = { enabled ->
 						settings.isReaderDoubleOnLandscape = enabled
 						composeReaderController.updateOptions { copy(doublePage = enabled) }
@@ -862,6 +866,7 @@ class ReaderActivity :
 		composeReaderController.showOptions(
 			ComposeReaderOptionsState(
 				mode = composeReaderController.readerMode,
+				animation = settings.readerAnimation,
 				doublePage = settings.isReaderDoubleOnLandscape,
 				doublePageFoldable = settings.isReaderDoubleOnFoldable,
 				doublePageCover = settings.isReaderDoubleCoverPage,

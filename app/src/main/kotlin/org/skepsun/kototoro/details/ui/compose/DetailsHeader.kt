@@ -41,6 +41,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -708,12 +709,38 @@ fun DetailsHeader(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = stringResource(R.string.description),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.description),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (canExpandDescription) {
+                        TextButton(
+                            onClick = { isDescriptionExpanded = !isDescriptionExpanded },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        ) {
+                            Text(
+                                text = descriptionToggleLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Icon(
+                                imageVector = if (isDescriptionExpanded) {
+                                    Icons.Filled.KeyboardArrowUp
+                                } else {
+                                    Icons.Filled.KeyboardArrowDown
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
                 SelectionContainer {
                     Text(
                         text = description,
@@ -721,6 +748,12 @@ fun DetailsHeader(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clickable(
+                                enabled = canExpandDescription,
+                                role = Role.Button,
+                            ) {
+                                isDescriptionExpanded = !isDescriptionExpanded
+                            }
                             .animateContentSize()
                             .graphicsLayer {
                                 compositingStrategy = CompositingStrategy.Offscreen

@@ -191,9 +191,9 @@ class NovelContentLoader @Inject constructor(
     /**
      * 检查章节是否已缓存
      */
-    suspend fun isCached(chapter: ContentChapter): Boolean {
+    suspend fun isCached(chapter: ContentChapter): Boolean = withContext(Dispatchers.IO) {
         val cacheKey = generateCacheKey(chapter)
-        return cache.get(cacheKey)?.let { !isErrorContent(readTextFromFile(it)) } ?: false
+        cache.get(cacheKey)?.let { !isErrorContent(readTextFromFile(it)) } ?: false
     }
 
     /**

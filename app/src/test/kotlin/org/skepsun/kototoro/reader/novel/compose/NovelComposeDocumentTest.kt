@@ -49,4 +49,14 @@ class NovelComposeDocumentTest {
 
 		assertEquals("https://example.com/inline.jpg", block.inlineImages["[INLINE_IMAGE_0]"])
 	}
+
+	@Test
+	fun `repeated block image urls keep distinct source identities`() {
+		val url = "https://example.com/repeated.jpg"
+		val document = buildNovelComposeDocument("📷 [图片: $url]\n\n📷 [图片: $url]")
+		val images = document.filterIsInstance<NovelComposeBlock.Image>()
+
+		assertEquals(listOf("image-0", "image-1"), images.map(NovelComposeBlock.Image::key))
+		assertEquals(listOf(url, url), images.map(NovelComposeBlock.Image::path))
+	}
 }

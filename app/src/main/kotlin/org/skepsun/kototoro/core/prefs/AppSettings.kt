@@ -611,8 +611,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_NOTIFICATIONS_LIGHT, true)
 		set(value) = prefs.edit { putBoolean(KEY_NOTIFICATIONS_LIGHT, value) }
 
-	val readerAnimation: ReaderAnimation
+	var readerAnimation: ReaderAnimation
 		get() = prefs.getEnumValue(KEY_READER_ANIMATION, ReaderAnimation.DEFAULT)
+		set(value) = prefs.edit { putEnumValue(KEY_READER_ANIMATION, value) }
 
 	var readerBackground: ReaderBackground
 		get() = prefs.getEnumValue(KEY_READER_BACKGROUND, ReaderBackground.AUTO)

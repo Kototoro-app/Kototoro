@@ -38,6 +38,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.ui.config.ImageServerOptions
@@ -47,6 +48,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderPanelSection
 internal data class ComposeReaderOptionsState(
 	val visible: Boolean = false,
 	val mode: ReaderMode = ReaderMode.STANDARD,
+	val animation: ReaderAnimation = ReaderAnimation.DEFAULT,
 	val doublePage: Boolean = false,
 	val doublePageFoldable: Boolean = false,
 	val doublePageCover: Boolean = false,
@@ -60,6 +62,7 @@ internal data class ComposeReaderOptionsState(
 internal data class ComposeReaderOptionsCallbacks(
 	val onDismiss: () -> Unit = {},
 	val onModeChanged: (ReaderMode) -> Unit = {},
+	val onAnimationChanged: (ReaderAnimation) -> Unit = {},
 	val onDoublePageChanged: (Boolean) -> Unit = {},
 	val onDoublePageFoldableChanged: (Boolean) -> Unit = {},
 	val onDoublePageCoverChanged: (Boolean) -> Unit = {},
@@ -93,6 +96,7 @@ internal fun ComposeReaderOptionsSheet(
 ) {
 	if (!state.visible) return
 	val backgroundLabels = stringArrayResource(R.array.reader_backgrounds)
+	val animationLabels = stringArrayResource(R.array.reader_animation)
 	Surface(
 		shape = if (embedded) androidx.compose.foundation.shape.RoundedCornerShape(0.dp) else MaterialTheme.shapes.large,
 		color = if (embedded) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -128,6 +132,13 @@ internal fun ComposeReaderOptionsSheet(
 							selected = backgroundLabels.getOrElse(state.background.ordinal) { state.background.name },
 							options = backgroundLabels.toList(),
 							onSelected = { callbacks.onBackgroundChanged(ReaderBackground.entries[it]) },
+							modifier = Modifier.weight(1f),
+						)
+						SelectRow(
+							title = stringResource(R.string.pages_animation),
+							selected = animationLabels.getOrElse(state.animation.ordinal) { state.animation.name },
+							options = animationLabels.toList(),
+							onSelected = { callbacks.onAnimationChanged(ReaderAnimation.entries[it]) },
 							modifier = Modifier.weight(1f),
 						)
 						}
