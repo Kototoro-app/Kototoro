@@ -56,6 +56,8 @@ import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.core.util.ext.isNightMode
@@ -459,8 +461,10 @@ class NovelReaderActivity :
         setContent {
             KototoroTheme {
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
-                val readerBackdrop = rememberLayerBackdrop {
-                    drawContent()
+                val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                    rememberLayerBackdrop { drawContent() }
+                } else {
+                    null
                 }
                 CompositionLocalProvider(
                     LocalLiquidGlassBackdrop provides readerBackdrop,
@@ -531,7 +535,7 @@ class NovelReaderActivity :
                             },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .layerBackdrop(readerBackdrop),
+                                .then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
                         )
                         Box(modifier = Modifier.align(Alignment.TopCenter)) {
                             NovelReaderTopChrome(state, callbacks)

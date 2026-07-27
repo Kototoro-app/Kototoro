@@ -57,7 +57,6 @@ enum class ReaderControlDestination {
 	DISPLAY,
 	TOOLS,
 	TRANSLATION,
-	PROGRESS,
 	CHAPTERS_PANEL,
 }
 

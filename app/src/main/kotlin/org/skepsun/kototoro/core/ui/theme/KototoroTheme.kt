@@ -33,9 +33,10 @@ import androidx.compose.ui.unit.dp
 
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.normalized
 
 val LocalMaterialExpressiveComponentsEnabled = staticCompositionLocalOf { false }
-val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MATERIAL_3 }
+val LocalInterfaceStyle = staticCompositionLocalOf { InterfaceStyle.MATERIAL_3_EXPRESSIVE }
 val LocalBackgroundStyle = staticCompositionLocalOf { BackgroundStyle.DEFAULT }
 
 @Composable
@@ -51,22 +52,28 @@ fun KototoroTheme(
     val interfaceStyle by settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) {
         interfaceStyle
     }
-    val expressiveComponents = interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE
-    val styleTokens = interfaceStyle.tokens()
-	val stylePolicy = remember(interfaceStyle) { InterfaceStylePolicy.from(interfaceStyle) }
+    val effectiveInterfaceStyle = interfaceStyle.normalized()
+    val expressiveComponents = effectiveInterfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE
+    val styleTokens = effectiveInterfaceStyle.tokens()
+	val stylePolicy = remember(effectiveInterfaceStyle) { InterfaceStylePolicy.from(effectiveInterfaceStyle) }
     val appFontPreset by settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) {
         appFontPreset
     }
     val expressiveAppFontPreset by settings.observeAsState(AppSettings.KEY_EXPRESSIVE_APP_FONT_PRESET) {
         expressiveAppFontPreset
     }
-    val backgroundStyle by settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) {
+    val selectedBackgroundStyle by settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) {
         backgroundStyle
     }
+    val backgroundStyle = selectedBackgroundStyle.takeIf {
+        effectiveInterfaceStyle == InterfaceStyle.IOS ||
+            it != BackgroundStyle.DYNAMIC_ARTWORK_BLUR &&
+            it != BackgroundStyle.DYNAMIC_TONAL_GLASS
+    } ?: BackgroundStyle.DEFAULT
     val selectedColorScheme by settings.observeAsState(AppSettings.KEY_COLOR_THEME) {
         colorScheme
     }
-    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle, interfaceStyle, selectedColorScheme) {
+    val colorScheme = remember(context, darkTheme, dynamicColor, backgroundStyle, effectiveInterfaceStyle, selectedColorScheme) {
         context.resolveComposeColorScheme(darkTheme, backgroundStyle)
     }
     
@@ -92,16 +99,16 @@ fun KototoroTheme(
     val fontFamily = remember(activeFontPreset, googleFontProvider) {
         activeFontPreset.toFontFamily(provider = googleFontProvider)
     }
-    val typography = remember(interfaceStyle, fontFamily) {
+    val typography = remember(effectiveInterfaceStyle, fontFamily) {
         kototoroTypography(
-            isExpressiveStyle = interfaceStyle != InterfaceStyle.MATERIAL_3,
+            isExpressiveStyle = expressiveComponents,
             defaultFontFamily = fontFamily,
         )
     }
 
     CompositionLocalProvider(
         LocalMaterialExpressiveComponentsEnabled provides expressiveComponents,
-        LocalInterfaceStyle provides interfaceStyle,
+        LocalInterfaceStyle provides effectiveInterfaceStyle,
         LocalInterfaceStyleTokens provides styleTokens,
 		LocalInterfaceStylePolicy provides stylePolicy,
         LocalBackgroundStyle provides backgroundStyle,

@@ -99,8 +99,8 @@ fun SwipeableFilterChip(
     val panelWidth = CompactFilterChipSize * swipeableFilterChipWidthMultiplier(exp)
     val panelShape = RoundedCornerShape(999.dp)
     val backdrop = LocalLiquidGlassBackdrop.current
-    val exportedBackdrop = rememberLayerBackdrop()
     val useBackdrop = exp > 0.01f && LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val exportedBackdrop = if (useBackdrop) rememberLayerBackdrop() else null
 
     fun selectCenterType(): Boolean {
         if (ContentType.MANGA !in enabledTypes) return false
@@ -205,7 +205,7 @@ fun SwipeableFilterChip(
                                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.22f), panelShape)
                                 .drawBackdrop(
                                     backdrop = backdrop!!,
-                                    exportedBackdrop = exportedBackdrop,
+                                    exportedBackdrop = exportedBackdrop!!,
                                     shape = { panelShape },
                                     effects = {
                                         vibrancy()

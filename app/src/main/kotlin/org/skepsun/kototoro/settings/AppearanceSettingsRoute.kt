@@ -27,15 +27,12 @@ import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavItem
-import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialFamily
-import org.skepsun.kototoro.core.prefs.AppSettings.GlassMaterialPreset
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletUiMode
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.prefs.resolvePreset
-import org.skepsun.kototoro.core.prefs.toFamily
+import org.skepsun.kototoro.core.prefs.normalized
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.util.LocaleComparator
@@ -108,31 +105,6 @@ private class AppearanceSettingsCoordinator(
             settings.observeAsState(AppSettings.KEY_EXPRESSIVE_APP_FONT_PRESET) { expressiveAppFontPreset }.value
         val isReducedVisualEffectsEnabled =
             settings.observeAsState(AppSettings.KEY_REDUCED_VISUAL_EFFECTS) { isReducedVisualEffectsEnabled }.value
-        val isGlassEffectEnabled =
-            settings.observeAsState(AppSettings.KEY_GLASS_EFFECT_ENABLED) { isGlassEffectEnabled }.value
-        val persistedGlassMaterialPreset =
-            settings.observeAsState(AppSettings.KEY_GLASS_MATERIAL_PRESET) { glassMaterialPreset }.value
-        val hazeOpacityPercent = settings.observeAsState(AppSettings.KEY_HAZE_OPACITY) { hazeOpacityPercent }.value
-        val glassBlurStrengthPercent =
-            settings.observeAsState(AppSettings.KEY_GLASS_BLUR_STRENGTH) { glassBlurStrengthPercent }.value
-        val glassNoiseStrengthPercent =
-            settings.observeAsState(AppSettings.KEY_GLASS_NOISE_STRENGTH) { glassNoiseStrengthPercent }.value
-        val glassImmersiveStrengthPercent =
-            settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH) { glassImmersiveStrengthPercent }.value
-        val glassMaterialPreset = remember(
-            persistedGlassMaterialPreset,
-            glassBlurStrengthPercent,
-            glassNoiseStrengthPercent,
-        ) {
-            GlassMaterialPreset.resolve(
-                preset = persistedGlassMaterialPreset,
-                blurStrengthPercent = glassBlurStrengthPercent,
-                noiseStrengthPercent = glassNoiseStrengthPercent,
-            )
-        }
-        val glassMaterialFamily = remember(glassMaterialPreset) {
-            glassMaterialPreset.toFamily()
-        }
         val tabletUiMode = settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }.value
         val appLocale = settings.observeAsState(AppSettings.KEY_APP_LOCALE) { appLocales.toLanguageTags() }.value
         val loadingCircleStyle = settings.observeAsState(AppSettings.KEY_LOADING_CIRCLE_STYLE) { loadingCircleStyle }.value
@@ -219,19 +191,21 @@ private class AppearanceSettingsCoordinator(
             .map(::buildLanguagePresetOptions)
             .collectAsStateWithLifecycle(initialValue = buildLanguagePresetOptions(emptyList()))
             .value
-        val effectiveGlassEffectEnabled = isGlassEffectEnabled && !isReducedVisualEffectsEnabled
         val effectivePanoramaCoverAnimationEnabled =
             isPanoramaCoverAnimationEnabled && !isReducedVisualEffectsEnabled
         val effectiveSharedElementTransitionsEnabled =
             isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
 
+        val backgroundStyleOptions = buildBackgroundStyleOptions(interfaceStyle)
+        val effectiveBackgroundStyle = backgroundStyle.takeIf { selected ->
+            backgroundStyleOptions.any { it.value == selected }
+        } ?: BackgroundStyle.DEFAULT
         val options = AppearanceSettingsOptions(
 			colorSchemes = buildColorSchemeOptions(interfaceStyle),
             interfaceStyles = buildInterfaceStyleOptions(),
             themes = buildThemeOptions(),
-            backgroundStyles = buildBackgroundStyleOptions(),
+            backgroundStyles = backgroundStyleOptions,
             fontPresets = buildFontPresetOptions(),
-            glassMaterialFamilies = buildGlassMaterialFamilyOptions(),
             tabletUiModes = buildTabletUiModeOptions(),
             appLocales = buildLocaleOptions(),
             loadingCircleStyles = buildLoadingCircleStyleOptions(),
@@ -254,19 +228,11 @@ private class AppearanceSettingsCoordinator(
             interfaceStyle = interfaceStyle,
             colorScheme = colorScheme,
             theme = theme,
-            backgroundStyle = backgroundStyle,
+            backgroundStyle = effectiveBackgroundStyle,
             isAmoledTheme = isAmoledTheme,
             appFontPreset = appFontPreset,
             expressiveAppFontPreset = expressiveAppFontPreset,
             isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
-            isGlassEffectEnabled = effectiveGlassEffectEnabled,
-            isGlassEffectSettingsEnabled = !isReducedVisualEffectsEnabled,
-            isGlassEffectDetailSettingsEnabled = effectiveGlassEffectEnabled,
-            glassMaterialFamily = glassMaterialFamily,
-            hazeOpacityPercent = hazeOpacityPercent,
-            glassBlurStrengthPercent = glassBlurStrengthPercent,
-            glassNoiseStrengthPercent = glassNoiseStrengthPercent,
-            glassImmersiveStrengthPercent = glassImmersiveStrengthPercent,
             tabletUiMode = tabletUiMode,
             appLocale = appLocale,
             loadingCircleStyle = loadingCircleStyle,
@@ -339,12 +305,6 @@ private class AppearanceSettingsCoordinator(
                 updateAndRestart(coroutineScope) { settings.expressiveAppFontPreset = it }
             },
             onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
-            onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
-            onGlassMaterialFamilyChange = { family -> applyGlassMaterialFamily(family) },
-            onHazeOpacityChange = { settings.hazeOpacityPercent = it },
-            onGlassBlurStrengthChange = { updateGlassPresetSetting { settings.glassBlurStrengthPercent = it } },
-            onGlassNoiseStrengthChange = { updateGlassPresetSetting { settings.glassNoiseStrengthPercent = it } },
-            onGlassImmersiveStrengthChange = { settings.glassImmersiveStrengthPercent = it },
             onTabletUiModeChange = { settings.tabletUiMode = it },
             onAppLocaleChange = ::updateAppLocale,
             onLoadingCircleStyleChange = { updateAndRestart(coroutineScope) { settings.loadingCircleStyle = it } },
@@ -426,25 +386,6 @@ private class AppearanceSettingsCoordinator(
         }
     }
 
-    private fun applyGlassMaterialPreset(preset: GlassMaterialPreset) {
-        settings.glassMaterialPreset = preset
-        if (preset == GlassMaterialPreset.CUSTOM) return
-        settings.glassBlurStrengthPercent = preset.defaultBlurStrengthPercent
-        settings.glassNoiseStrengthPercent = preset.defaultNoiseStrengthPercent
-    }
-
-    private fun applyGlassMaterialFamily(family: GlassMaterialFamily) {
-        val preset = family.resolvePreset(componentRole = org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface)
-        applyGlassMaterialPreset(preset)
-    }
-
-    private inline fun updateGlassPresetSetting(block: () -> Unit) {
-        if (settings.glassMaterialPreset != GlassMaterialPreset.CUSTOM) {
-            settings.glassMaterialPreset = GlassMaterialPreset.CUSTOM
-        }
-        block()
-    }
-
     private fun updateAndRestart(scope: CoroutineScope, block: () -> Unit) {
         block()
         scope.launch {
@@ -469,7 +410,7 @@ private class AppearanceSettingsCoordinator(
 	}
 
     private fun buildInterfaceStyleOptions(): List<SettingsChoiceOption<InterfaceStyle>> {
-        return InterfaceStyle.entries.map {
+        return InterfaceStyle.selectableEntries.map {
             SettingsChoiceOption(
                 value = it,
                 label = context.getString(it.titleResId),
@@ -483,23 +424,20 @@ private class AppearanceSettingsCoordinator(
         return labels.zip(values).map { (label, value) -> SettingsChoiceOption(value, label) }
     }
 
-    private fun buildBackgroundStyleOptions(): List<SettingsChoiceOption<BackgroundStyle>> {
-        return listOf(
+    private fun buildBackgroundStyleOptions(
+        interfaceStyle: InterfaceStyle,
+    ): List<SettingsChoiceOption<BackgroundStyle>> {
+        val materialStyles = listOf(
             SettingsChoiceOption(BackgroundStyle.DEFAULT, context.getString(R.string.bg_style_default)),
-            SettingsChoiceOption(BackgroundStyle.DYNAMIC_ARTWORK_BLUR, context.getString(R.string.bg_style_artwork_blur)),
-            SettingsChoiceOption(BackgroundStyle.DYNAMIC_TONAL_GLASS, context.getString(R.string.bg_style_tonal_glass)),
             SettingsChoiceOption(BackgroundStyle.SYSTEM_DYNAMIC_TINT, context.getString(R.string.bg_style_system_tint)),
             SettingsChoiceOption(BackgroundStyle.ELEVATED_CONTAINERS, context.getString(R.string.bg_style_elevated_containers)),
         )
-    }
-
-    private fun buildGlassMaterialFamilyOptions(): List<SettingsChoiceOption<GlassMaterialFamily>> {
-        return listOf(
-            SettingsChoiceOption(GlassMaterialFamily.KOTOTORO, context.getString(R.string.glass_material_family_kototoro)),
-            SettingsChoiceOption(GlassMaterialFamily.HAZE, context.getString(R.string.glass_material_family_haze)),
-            SettingsChoiceOption(GlassMaterialFamily.CUPERTINO, context.getString(R.string.glass_material_family_cupertino)),
-            SettingsChoiceOption(GlassMaterialFamily.FLUENT, context.getString(R.string.glass_material_family_fluent)),
-            SettingsChoiceOption(GlassMaterialFamily.CUSTOM, context.getString(R.string.custom)),
+        if (interfaceStyle.normalized() != InterfaceStyle.IOS) {
+            return materialStyles
+        }
+        return materialStyles + listOf(
+            SettingsChoiceOption(BackgroundStyle.DYNAMIC_ARTWORK_BLUR, context.getString(R.string.bg_style_artwork_blur)),
+            SettingsChoiceOption(BackgroundStyle.DYNAMIC_TONAL_GLASS, context.getString(R.string.bg_style_tonal_glass)),
         )
     }
 

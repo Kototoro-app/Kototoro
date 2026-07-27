@@ -144,10 +144,8 @@ import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
-import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.util.AlphanumComparator
@@ -184,9 +182,6 @@ import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.SortOrder
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 import java.util.TreeSet
 
@@ -243,7 +238,6 @@ private fun lerpFloat(
 private fun SearchFilterSheetSurface(
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(28.dp),
-    allowRuntimeHaze: Boolean = true,
     componentRole: GlassComponentRole = GlassComponentRole.Sheet,
     showDragHandle: Boolean = false,
     content: @Composable () -> Unit,
@@ -252,7 +246,6 @@ private fun SearchFilterSheetSurface(
         modifier = modifier,
         shape = shape,
         style = GlassDefaults.prominentStyle(),
-        allowRuntimeHaze = allowRuntimeHaze,
         dialogSurface = true,
         componentRole = componentRole,
     ) {
@@ -516,16 +509,19 @@ fun AppSearchContentListRoute(
     val wideGridState = remember { LazyGridState() }
     val wideListState = remember { LazyListState() }
     val wideDetailedListState = remember { LazyListState() }
-    val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-    val useRuntimeHaze = isRuntimeHazeAvailable()
     val providedLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
     val backdropBackground = MaterialTheme.colorScheme.background
-    val fallbackLayerBackdrop = rememberLayerBackdrop {
-        drawRect(backdropBackground)
-        drawContent()
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val fallbackLayerBackdrop = if (isIosStyle && providedLayerBackdrop == null) {
+        rememberLayerBackdrop {
+            drawRect(backdropBackground)
+            drawContent()
+        }
+    } else {
+        null
     }
     val listLayerBackdrop = providedLayerBackdrop ?: fallbackLayerBackdrop
-    val liquidGlassSourceModifier = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+    val liquidGlassSourceModifier = if (isIosStyle && listLayerBackdrop != null) {
         Modifier.layerBackdrop(listLayerBackdrop)
     } else {
         Modifier
@@ -663,7 +659,6 @@ fun AppSearchContentListRoute(
     }
 
     CompositionLocalProvider(
-        LocalHazeState provides hazeState,
         LocalLiquidGlassBackdrop provides listLayerBackdrop,
         LocalLiquidGlassLayerBackdrop provides listLayerBackdrop,
     ) {
@@ -682,8 +677,7 @@ fun AppSearchContentListRoute(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(liquidGlassSourceModifier)
-                                .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+                                .then(liquidGlassSourceModifier),
                         ) {
                             KototoroContentListScreen(
                                 items = contentItems,
@@ -769,8 +763,7 @@ fun AppSearchContentListRoute(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
-                            .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+                            .fillMaxHeight(),
                     ) {
                         if (sidePaneMode == SearchSidePaneMode.Preview && previewContent != null) {
                             SearchPreviewPane(
@@ -846,8 +839,7 @@ fun AppSearchContentListRoute(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(liquidGlassSourceModifier)
-                            .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+                            .then(liquidGlassSourceModifier),
                     ) {
                         KototoroContentListScreen(
                             items = contentItems,

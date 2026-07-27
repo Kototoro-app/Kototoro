@@ -175,11 +175,8 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
-import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -235,9 +232,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -248,8 +242,6 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 
 private val DetailsTopBarHeight = 44.dp
-private const val DetailsSheetMinOpacityPercent = 80
-
 private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
     return copy(alpha = alpha.coerceAtLeast(minAlpha))
 }
@@ -258,17 +250,7 @@ private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70
 
 @Composable
 private fun rememberDetailsBottomBarGlassPrefs() =
-    rememberGlassPrefsOrFallback().let { prefs ->
-        remember(prefs) {
-            if (prefs.isGlassEffectEnabled) {
-                prefs
-            } else {
-                prefs.copy(
-                    hazeOpacityPercent = prefs.hazeOpacityPercent.coerceAtLeast(70),
-                )
-            }
-        }
-    }
+    rememberGlassPrefsOrFallback()
 
 private val DetailsTopPrimaryActionButtonSize = 44.dp
 private val DetailsTopCompactActionButtonSize = 44.dp
@@ -965,23 +947,26 @@ private fun DetailsScreenContent(
     }
 
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
-    val detailsHazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-    val useBackgroundHaze = effectiveGlassPrefs.isGlassEffectEnabled && isRuntimeHazeAvailable()
     val routeLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
     val detailsBackdropBackground = MaterialTheme.colorScheme.background
-    val detailsBackgroundBackdrop = rememberLayerBackdrop {
-        drawRect(detailsBackdropBackground)
-        drawContent()
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val detailsBackgroundBackdrop = if (isIosStyle) {
+        rememberLayerBackdrop {
+            drawRect(detailsBackdropBackground)
+            drawContent()
+        }
+    } else {
+        null
     }
-    val detailsContentBackdrop = rememberLayerBackdrop()
+    val detailsContentBackdrop = if (isIosStyle) rememberLayerBackdrop() else null
     val routeLiquidGlassSourceModifier = if (
-        LocalInterfaceStyle.current == InterfaceStyle.IOS && routeLayerBackdrop != null
+        isIosStyle && routeLayerBackdrop != null
     ) {
         Modifier.layerBackdrop(routeLayerBackdrop)
     } else {
         Modifier
     }
-    val detailsBackgroundSourceModifier = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+    val detailsBackgroundSourceModifier = if (detailsBackgroundBackdrop != null) {
         Modifier.layerBackdrop(detailsBackgroundBackdrop)
     } else {
         Modifier
@@ -1062,7 +1047,6 @@ private fun DetailsScreenContent(
     }
 
     CompositionLocalProvider(
-        LocalHazeState provides detailsHazeState,
         LocalLiquidGlassBackdrop provides detailsBackgroundBackdrop,
         LocalLiquidGlassLayerBackdrop provides detailsBackgroundBackdrop,
     ) {
@@ -1074,8 +1058,7 @@ private fun DetailsScreenContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(detailsBackgroundSourceModifier)
-                    .then(if (useBackgroundHaze) Modifier.hazeSource(detailsHazeState) else Modifier),
+                    .then(detailsBackgroundSourceModifier),
             ) {
                 Box(
                     modifier = Modifier
@@ -1328,7 +1311,7 @@ private fun DetailsScreenContent(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .then(
-                                        if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                                        if (detailsContentBackdrop != null) {
                                             Modifier.layerBackdrop(detailsContentBackdrop)
                                         } else {
                                             Modifier
@@ -1506,7 +1489,7 @@ private fun DetailsScreenContent(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .then(
-                                        if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                                        if (detailsContentBackdrop != null) {
                                             Modifier.layerBackdrop(detailsContentBackdrop)
                                         } else {
                                             Modifier
@@ -4327,18 +4310,7 @@ private fun modernDockDragHandleGap(revealProgress: Float): androidx.compose.ui.
 
 @Composable
 private fun rememberDetailsSheetGlassPrefs() =
-    rememberGlassPrefsOrFallback().let { prefs ->
-        remember(prefs) {
-            val minOpacity = if (prefs.isGlassEffectEnabled) {
-                prefs.hazeOpacityPercent
-            } else {
-                prefs.hazeOpacityPercent.coerceAtLeast(DetailsSheetMinOpacityPercent)
-            }
-            prefs.copy(
-                hazeOpacityPercent = minOpacity,
-            )
-        }
-    }
+    rememberGlassPrefsOrFallback()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

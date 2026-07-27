@@ -247,7 +247,7 @@
     <string name="bg_style_artwork_blur">图片背景</string>
     <string name="bg_style_artwork_blur_summary">使用柔化后的作品封面作为应用背景</string>
     <string name="bg_style_tonal_glass">色调玻璃</string>
-    <string name="bg_style_tonal_glass_summary">使用高级纯色基底和克制的 Haze 表面（推荐）</string>
+    <string name="bg_style_tonal_glass_summary">使用高级纯色基底和克制的半透明表面（推荐）</string>
     <string name="bg_style_system_tint">系统配色</string>
     <string name="bg_style_system_tint_summary">使用系统壁纸颜色为深色界面添加色调</string>
     <string name="bg_style_elevated_containers">层次表面</string>
@@ -508,7 +508,7 @@
     <string name="interface_style_material3_expressive">md3 expressive</string>
     <string name="interface_style_material3_expressive_summary">更大的自适应控件、更强调的形状和更鲜明的字体层级</string>
     <string name="interface_style_ios">ios (modern)</string>
-    <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、分组 Haze 和柔和菜单</string>
+    <string name="interface_style_ios_summary">更圆润的控件、更克制的表面、Backdrop 玻璃和柔和菜单</string>
     <string name="appearance_style_override_note">当前 %1$s 风格下实际使用：%2$s</string>
     <string name="appearance_style_default_value">当前 %1$s 风格默认值：%2$s</string>
     <string name="appearance_style_custom_override">当前 %1$s 风格默认值为 %2$s，当前使用手动值</string>
@@ -2223,7 +2223,7 @@
     <string name="pref_haze_opacity">玻璃容器不透明度</string>
     <string name="pref_haze_opacity_summary">独立控制玻璃容器的不透明度，不受预设影响，关闭模糊后依然生效</string>
     <string name="pref_reduce_visual_effects">减少视觉特效</string>
-    <string name="pref_reduce_visual_effects_summary">适合低配设备。一键关闭运行时 Haze、Hero 过渡动画和全景背景运动效果，以换取更稳定的流畅度，但不改动它们各自的独立设置</string>
+    <string name="pref_reduce_visual_effects_summary">适合低配设备。一键关闭 Backdrop 玻璃、Hero 过渡动画和全景背景运动效果，以换取更稳定的流畅度，但不改动它们各自的独立设置</string>
     <string name="mark_as_safe">标记为非 NSFW</string>
     <string name="mark_as_nsfw">标记为 NSFW</string>
     <string name="video_mpv_conf_guide"><![CDATA[<b>常用配置:</b><br/>• <tt>deband=yes</tt> (减少色带)<br/>• <tt>interpolation=yes</tt> (平滑播放)<br/>• <tt>hwdec=mediacodec</tt> (硬件解码)<br/><br/><a href="https://mpv.io/manual/master/#options">查看详细的 MPV 配置手册</a>]]></string>
@@ -3124,9 +3124,9 @@ SHA-256 指纹:
     <string name="space_continue_content_description">继续 %1$s</string>
     <string name="space_switch_failed">无法保存进度。Space 未切换。</string>
     <string name="space_switch_unavailable">Space 切换暂不可用。</string>
-    <string name="space_manga">漫画 Space</string>
-    <string name="space_novel">小说 Space</string>
-    <string name="space_anime">动画 Space</string>
+    <string name="space_manga">漫画</string>
+    <string name="space_novel">小说</string>
+    <string name="space_anime">动画</string>
     <string name="media_universe_title">媒体宇宙</string>
     <string name="media_universe_empty">暂无历史记录或收藏</string>
     <string name="media_universe_history_and_favorites">历史记录与收藏</string>

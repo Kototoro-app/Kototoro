@@ -53,7 +53,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -76,8 +75,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
-import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.getDisplayName
@@ -85,9 +82,6 @@ import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.parsers.model.ContentType
 import kotlinx.coroutines.launch
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import java.util.Locale
 
 private const val REPO_KOTOTORO =
@@ -153,23 +147,17 @@ private fun WelcomeContent(
 	var showAdvanced by rememberSaveable { mutableStateOf(false) }
 	var showDisclaimer by rememberSaveable { mutableStateOf(false) }
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
-	val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-	val useRuntimeHaze = isRuntimeHazeAvailable()
-
 	BackHandler(enabled = pagerState.currentPage > 0 && !isInitializing) {
 		scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
 	}
 
-	CompositionLocalProvider(LocalHazeState provides hazeState) {
 	Box(
 		modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
 	) {
 		HorizontalPager(
 			state = pagerState,
 			userScrollEnabled = !isInitializing,
-			modifier = Modifier
-				.fillMaxSize()
-				.then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+			modifier = Modifier.fillMaxSize(),
 		) { page ->
 			Column(
 				modifier = Modifier
@@ -267,8 +255,6 @@ private fun WelcomeContent(
 			}
 			}
 		}
-	}
-
 	if (showDisclaimer) {
 		AlertDialog(
 			onDismissRequest = { showDisclaimer = false },

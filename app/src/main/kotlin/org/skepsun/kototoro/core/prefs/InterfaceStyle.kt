@@ -9,6 +9,7 @@ enum class InterfaceStyle(
 	@StringRes val titleResId: Int,
 	@StringRes val summaryResId: Int,
 ) {
+	@Deprecated("Kept only to migrate preferences written by older versions")
 	MATERIAL_3(
 		titleResId = R.string.interface_style_material3,
 		summaryResId = R.string.interface_style_material3_summary,
@@ -21,4 +22,17 @@ enum class InterfaceStyle(
 		titleResId = R.string.interface_style_ios,
 		summaryResId = R.string.interface_style_ios_summary,
 	),
+	;
+
+	companion object {
+		val selectableEntries: List<InterfaceStyle> = listOf(MATERIAL_3_EXPRESSIVE, IOS)
+	}
+}
+
+@Suppress("DEPRECATION")
+fun InterfaceStyle.normalized(): InterfaceStyle = when (this) {
+	InterfaceStyle.MATERIAL_3 -> InterfaceStyle.MATERIAL_3_EXPRESSIVE
+	InterfaceStyle.MATERIAL_3_EXPRESSIVE,
+	InterfaceStyle.IOS,
+	-> this
 }

@@ -174,7 +174,6 @@ private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70
 
 private fun Color.detailsButtonContainerColor(): Color = withDetailsMinAlpha(0.80f)
 
-private const val DetailsSourceOverlayMinOpacityPercent = 80
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -2501,18 +2500,7 @@ private fun DetailsSourceOverlayDialog(
 
 @Composable
 private fun rememberDetailsSourceOverlayGlassPrefs() =
-    rememberGlassPrefsOrFallback().let { prefs ->
-        remember(prefs) {
-            val minOpacity = if (prefs.isGlassEffectEnabled) {
-                prefs.hazeOpacityPercent
-            } else {
-                prefs.hazeOpacityPercent.coerceAtLeast(DetailsSourceOverlayMinOpacityPercent)
-            }
-            prefs.copy(
-                hazeOpacityPercent = minOpacity,
-            )
-        }
-    }
+    rememberGlassPrefsOrFallback()
 
 @Composable
 private fun MetadataSearchSection(

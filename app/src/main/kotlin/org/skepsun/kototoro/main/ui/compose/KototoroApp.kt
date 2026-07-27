@@ -87,7 +87,6 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -117,9 +116,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.lifecycle.Lifecycle
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
@@ -1208,7 +1204,6 @@ fun KototoroApp(
 
 
     KototoroTheme(cornerRadius = cornerRadius) {
-        val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
         val liquidGlassBackdropHost = remember { LiquidGlassBackdropHost() }
         val rootGlassMenuHost = remember { RootGlassMenuHost() }
         val expectedLiquidGlassOwnerKey = navBackStackEntry?.id?.let { entryId ->
@@ -1222,7 +1217,6 @@ fun KototoroApp(
             LocalLiquidGlassLayerBackdrop provides activeLiquidGlassBackdrop,
             LocalLiquidGlassBackdropHost provides liquidGlassBackdropHost,
             LocalRootGlassMenuHost provides rootGlassMenuHost,
-            LocalHazeState provides hazeState,
             LocalGlassPrefs provides glassPrefs,
             LocalRailAnimationFactor provides railAnimationFactor,
         ) {

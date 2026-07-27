@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -175,20 +176,14 @@ internal fun ComposeReaderActivityScaffold(
 	translationTaskPanelContent: @Composable () -> Unit = {},
 	content: @Composable () -> Unit,
 ) {
-	var progressExpanded by remember { mutableStateOf(true) }
 	BackHandler {
-		if (progressExpanded && state.controlsVisible) {
-			progressExpanded = false
-		} else {
-			callbacks.onBackPressed()
-		}
-	}
-	LaunchedEffect(state.controlsVisible) {
-		progressExpanded = state.controlsVisible
+		callbacks.onBackPressed()
 	}
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-	val readerBackdrop = rememberLayerBackdrop {
-		drawContent()
+	val readerBackdrop = if (isIosStyle) {
+		rememberLayerBackdrop { drawContent() }
+	} else {
+		null
 	}
 	CompositionLocalProvider(
 		LocalLiquidGlassBackdrop provides readerBackdrop,
@@ -198,7 +193,7 @@ internal fun ComposeReaderActivityScaffold(
 		Box(
 			modifier = Modifier
 				.fillMaxSize()
-				.layerBackdrop(readerBackdrop)
+				.then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier)
 				.readerTapGrid(
 					enabled = true,
 					onInteraction = callbacks.onReaderInteraction,
@@ -240,6 +235,10 @@ internal fun ComposeReaderActivityScaffold(
 		) {
 			ReaderBottomControlDock(
 				isIosStyle = isIosStyle,
+				expanded = state.actions.sliderEnabled ||
+					state.chaptersVisible ||
+					state.options.visible ||
+					state.toolsVisible,
 				modifier = Modifier
 					.navigationBarsPadding()
 					.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -289,7 +288,7 @@ internal fun ComposeReaderActivityScaffold(
 						color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
 					)
 				}
-				if (state.actions.sliderEnabled && progressExpanded) {
+				if (state.actions.sliderEnabled) {
 					if (isIosStyle) {
 						ReaderProgressControl(
 							state = state.actions,
@@ -318,11 +317,7 @@ internal fun ComposeReaderActivityScaffold(
 					}
 				}
 				ReaderPrimaryControlBar(
-						items = buildList {
-							if (state.actions.sliderEnabled) {
-								add(ReaderControlItem(ReaderControlDestination.PROGRESS, stringResource(R.string.progress), R.drawable.ic_progress_marker, active = progressExpanded))
-							}
-							addAll(listOf(
+						items = listOf(
 							ReaderControlItem(
 								ReaderControlDestination.NAVIGATION,
 								stringResource(R.string.chapters),
@@ -336,12 +331,9 @@ internal fun ComposeReaderActivityScaffold(
 								R.drawable.ic_translate,
 								active = if (isIosStyle) state.toolsVisible else state.actions.translateActive,
 							),
-							))
-						},
+						),
 						onDestinationSelected = { destination ->
-							if (destination == ReaderControlDestination.PROGRESS) {
-								progressExpanded = !progressExpanded
-							} else if (isIosStyle && destination == ReaderControlDestination.NAVIGATION) {
+							if (isIosStyle && destination == ReaderControlDestination.NAVIGATION) {
 								callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
 							} else if (isIosStyle && destination == ReaderControlDestination.TRANSLATION) {
 								callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
@@ -448,13 +440,14 @@ internal fun ComposeReaderActivityScaffold(
 @Composable
 private fun ReaderBottomControlDock(
 	isIosStyle: Boolean,
+	expanded: Boolean,
 	modifier: Modifier = Modifier,
 	content: @Composable () -> Unit,
 ) {
 	if (isIosStyle) {
 		GlassSurface(
 			modifier = modifier
-				.fillMaxWidth()
+				.then(if (expanded) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
 				.widthIn(max = 360.dp)
 				.animateContentSize(alignment = Alignment.BottomCenter),
 			shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
@@ -486,7 +479,9 @@ private fun ReaderBottomControlDock(
 	} else {
 		Column(
 			horizontalAlignment = Alignment.CenterHorizontally,
-			modifier = modifier,
+			modifier = modifier.then(
+				if (expanded) Modifier.fillMaxWidth().widthIn(max = 360.dp) else Modifier.wrapContentWidth(),
+			),
 			content = { content() },
 		)
 	}

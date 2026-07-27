@@ -35,20 +35,17 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderControl
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
 @Immutable
 internal data class ReaderActionsUiState(
@@ -113,31 +110,30 @@ internal fun ReaderActionsContent(
 		stringResource(R.string.novel_translate)
 	}
 	val sliderReversed = state.sliderReversed != isRtl
-	val hazeState = remember {
-		HazeState().apply {
-			positionStrategy = HazePositionStrategy.Screen
-		}
-	}
 	val backdropBackground = MaterialTheme.colorScheme.background
-	val backdrop = rememberLayerBackdrop {
-		drawRect(backdropBackground)
-		drawContent()
+	val backdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+		rememberLayerBackdrop {
+			drawRect(backdropBackground)
+			drawContent()
+		}
+	} else {
+		null
 	}
 
 	CompositionLocalProvider(
-		LocalHazeState provides hazeState,
 		LocalLiquidGlassBackdrop provides backdrop,
 		LocalLiquidGlassLayerBackdrop provides backdrop,
 	) {
 		Box(
 			modifier = Modifier.fillMaxWidth(),
 		) {
-			Box(
-				modifier = Modifier
-					.matchParentSize()
-					.layerBackdrop(backdrop)
-					.hazeSource(hazeState),
-			)
+			if (backdrop != null) {
+				Box(
+					modifier = Modifier
+						.matchParentSize()
+						.layerBackdrop(backdrop),
+				)
+			}
 			Row(
 				modifier = Modifier
 					.fillMaxWidth()
@@ -333,7 +329,6 @@ private fun RowScope.ReaderActionButton(
 			shape = CircleShape,
 			style = GlassDefaults.subtleStyle(),
 			componentRole = GlassComponentRole.Surface,
-			visualTreatment = GlassVisualTreatment.Standard,
 		) {
 			Icon(
 				painter = painterResource(iconRes),

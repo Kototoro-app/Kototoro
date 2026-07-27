@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.normalized
 
 class InterfaceStylePolicyTest {
 
@@ -28,11 +29,14 @@ class InterfaceStylePolicyTest {
 	}
 
 	@Test
-	fun standardMd3KeepsCompactDefaults() {
-		val policy = InterfaceStylePolicy.from(InterfaceStyle.MATERIAL_3)
+	@Suppress("DEPRECATION")
+	fun legacyMd3MigratesToExpressiveDefaults() {
+		val migratedStyle = InterfaceStyle.MATERIAL_3.normalized()
+		val policy = InterfaceStylePolicy.from(migratedStyle)
 
-		assertFalse(policy.useExpressiveComponents)
-		assertFalse(policy.useExpandedTouchTargets)
-		assertEquals(48, InterfaceStyle.MATERIAL_3.tokens().controlHeight.value.toInt())
+		assertEquals(InterfaceStyle.MATERIAL_3_EXPRESSIVE, migratedStyle)
+		assertTrue(policy.useExpressiveComponents)
+		assertTrue(policy.useExpandedTouchTargets)
+		assertEquals(56, migratedStyle.tokens().controlHeight.value.toInt())
 	}
 }

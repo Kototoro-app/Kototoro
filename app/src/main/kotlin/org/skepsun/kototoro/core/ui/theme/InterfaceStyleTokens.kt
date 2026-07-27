@@ -22,22 +22,7 @@ data class InterfaceStyleTokens(
 	companion object
 }
 
-val LocalInterfaceStyleTokens = staticCompositionLocalOf { InterfaceStyleTokens.Material3 }
-
-val InterfaceStyleTokens.Companion.Material3: InterfaceStyleTokens
-	get() = InterfaceStyleTokens(
-		screenHorizontalPadding = 16.dp,
-		sectionVerticalSpacing = 16.dp,
-		groupCornerRadius = 16.dp,
-		controlCornerRadius = 12.dp,
-		controlHeight = 48.dp,
-		compactControlHeight = 40.dp,
-		topBarButtonSize = 36.dp,
-		sliderTrackHeight = 8.dp,
-		sliderThumbSize = 24.dp,
-		sliderPressedThumbWidth = 24.dp,
-		sliderPressedThumbHeight = 32.dp,
-	)
+val LocalInterfaceStyleTokens = staticCompositionLocalOf { InterfaceStyleTokens.Material3Expressive }
 
 val InterfaceStyleTokens.Companion.Ios: InterfaceStyleTokens
 	get() = InterfaceStyleTokens(
@@ -70,7 +55,8 @@ val InterfaceStyleTokens.Companion.Material3Expressive: InterfaceStyleTokens
 	)
 
 fun InterfaceStyle.tokens(): InterfaceStyleTokens = when (this) {
-	InterfaceStyle.MATERIAL_3 -> InterfaceStyleTokens.Material3
+	@Suppress("DEPRECATION")
+	InterfaceStyle.MATERIAL_3,
 	InterfaceStyle.MATERIAL_3_EXPRESSIVE -> InterfaceStyleTokens.Material3Expressive
 	InterfaceStyle.IOS -> InterfaceStyleTokens.Ios
 }

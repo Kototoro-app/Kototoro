@@ -1,5 +1,10 @@
 # Kototoro Documentation
 
+## UI development
+
+- [Kototoro design language](design/README.md)
+- [Interface style system implementation](development/interface-style-system.md)
+
 This directory is organized by task, not by internal implementation. Start with the page that matches what you want to do next.
 
 > [!IMPORTANT]

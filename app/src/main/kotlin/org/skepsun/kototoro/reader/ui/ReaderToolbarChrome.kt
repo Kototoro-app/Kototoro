@@ -10,45 +10,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
 @Composable
 fun ReaderToolbarChrome(
 	modifier: Modifier = Modifier,
 ) {
-	val hazeState = remember {
-		HazeState().apply {
-			positionStrategy = HazePositionStrategy.Screen
-		}
-	}
 	val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 
-	CompositionLocalProvider(
-		LocalHazeState provides hazeState,
-	) {
-		Box(modifier = modifier.fillMaxWidth().height(96.dp)) {
+	Box(modifier = modifier.fillMaxWidth().height(96.dp)) {
 			Box(
 				modifier = Modifier
 					.fillMaxWidth()
 					.height(96.dp)
-					.hazeSource(hazeState)
 					.drawWithCache {
 						val brush = Brush.verticalGradient(
 							colorStops = arrayOf(
@@ -76,9 +60,7 @@ fun ReaderToolbarChrome(
 				},
 				shape = if (isIosStyle) RoundedCornerShape(25.dp) else androidx.compose.ui.graphics.RectangleShape,
 				style = GlassDefaults.topBarChromeStyle(),
-				visualTreatment = GlassVisualTreatment.TopBarPrototype,
 				componentRole = GlassComponentRole.TopBar,
 			) { }
-		}
 	}
 }

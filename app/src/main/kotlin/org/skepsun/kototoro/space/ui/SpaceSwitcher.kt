@@ -80,7 +80,6 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -235,8 +234,6 @@ internal fun BoxScope.SpaceSidekickHandle(
 				borderAlpha = 0.28f,
 			),
 			shape = shape,
-			expandHazeLayerBounds = false,
-			visualTreatment = GlassVisualTreatment.TopBarPrototype,
 			componentRole = GlassComponentRole.TopBar,
 		) {
 			Box(
@@ -283,8 +280,6 @@ private fun SpaceSidekickPanel(
 			borderAlpha = 0.22f,
 		),
 		shape = shape,
-		expandHazeLayerBounds = false,
-		visualTreatment = GlassVisualTreatment.TopBarPrototype,
 		componentRole = GlassComponentRole.TopBar,
 	) {
 		Column(
@@ -347,7 +342,7 @@ private fun SpaceSidekickPanel(
 											),
 										),
 								)
-								SpaceRow(
+								SpaceSidekickCardContent(
 									context = context,
 									selected = selected,
 									enabled = !state.switchInProgress,
@@ -368,6 +363,75 @@ private fun SpaceSidekickPanel(
 							CircularProgressIndicator(modifier = Modifier.size(28.dp))
 						}
 					}
+				}
+			}
+		}
+	}
+}
+
+@Composable
+private fun SpaceSidekickCardContent(
+	context: SpaceContext,
+	selected: Boolean,
+	enabled: Boolean,
+	resumeItem: SpaceResumeItem?,
+	onResume: () -> Unit,
+	onClick: () -> Unit,
+) {
+	val presentation = context.presentation()
+	val hapticFeedback = LocalHapticFeedback.current
+	Box(
+		modifier = Modifier
+			.fillMaxSize()
+			.selectable(
+				selected = selected,
+				enabled = enabled,
+				role = Role.RadioButton,
+				onClick = {
+					if (!selected) {
+						hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+					}
+					onClick()
+				},
+			)
+			.padding(14.dp),
+	) {
+		Column(
+			modifier = Modifier.align(Alignment.BottomStart).padding(end = 48.dp),
+			verticalArrangement = Arrangement.spacedBy(5.dp),
+		) {
+			SpaceGlyph(
+				presentation = presentation,
+				monogram = context.customMonogram(),
+				modifier = Modifier.size(26.dp),
+			)
+			Text(
+				text = context.title ?: stringResource(presentation.labelRes),
+				style = MaterialTheme.typography.titleMedium,
+				maxLines = 1,
+				overflow = TextOverflow.Ellipsis,
+			)
+		}
+		if (resumeItem?.canResume == true) {
+			Surface(
+				modifier = Modifier.align(Alignment.BottomEnd),
+				shape = CircleShape,
+				color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+				contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+			) {
+				IconButton(
+					onClick = onResume,
+					enabled = enabled,
+					modifier = Modifier.size(42.dp),
+				) {
+					Icon(
+						painter = painterResource(presentation.resumeIconRes),
+						contentDescription = stringResource(
+							R.string.space_continue_content_description,
+							resumeItem.title,
+						),
+						modifier = Modifier.size(20.dp),
+					)
 				}
 			}
 		}
@@ -479,8 +543,6 @@ fun SpaceSwitcherFab(
 				borderAlpha = 0.24f,
 			),
 			shape = CircleShape,
-			expandHazeLayerBounds = false,
-			visualTreatment = GlassVisualTreatment.TopBarPrototype,
 			componentRole = GlassComponentRole.TopBar,
 			content = content,
 		)

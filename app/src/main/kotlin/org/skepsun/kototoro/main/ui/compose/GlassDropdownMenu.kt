@@ -59,7 +59,6 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 
 internal class RootGlassMenuHost {
@@ -239,10 +238,8 @@ fun GlassDropdownMenu(
             style = style,
             // DropdownMenu is rendered in a separate Popup window. A layer backdrop
             // from the main window would be sampled with the wrong coordinate origin.
-            allowRuntimeHaze = false,
             dialogSurface = true,
             componentRole = GlassComponentRole.Menu,
-            visualTreatment = GlassVisualTreatment.Standard,
         ) {
             CompactMenuContent(scrollState, content)
         }

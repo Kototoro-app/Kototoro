@@ -220,7 +220,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 						Box(
 							modifier = Modifier
 								.fillMaxSize()
-								.layerBackdrop(backdrop),
+								.then(backdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
 						) {
 				val switchState by coordinator.state.collectAsState()
 				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }

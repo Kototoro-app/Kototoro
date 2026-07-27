@@ -2661,9 +2661,9 @@ SHA-256 指紋:
     <string name="space_continue_content_description">繼續 %1$s</string>
     <string name="space_switch_failed">無法儲存進度。Space 未切換。</string>
     <string name="space_switch_unavailable">Space 切換暫時無法使用。</string>
-    <string name="space_manga">漫畫 Space</string>
-    <string name="space_novel">小說 Space</string>
-    <string name="space_anime">動畫 Space</string>
+    <string name="space_manga">漫畫</string>
+    <string name="space_novel">小說</string>
+    <string name="space_anime">動畫</string>
     <string name="media_universe_title">媒體宇宙</string>
     <string name="media_universe_empty">暫無歷史記錄或收藏</string>
     <string name="media_universe_history_and_favorites">歷史記錄與收藏</string>

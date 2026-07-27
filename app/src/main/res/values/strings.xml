@@ -218,7 +218,7 @@
     <string name="bg_style_artwork_blur">Blurred artwork</string>
     <string name="bg_style_artwork_blur_summary">Use a softened cover image as the app background</string>
     <string name="bg_style_tonal_glass">Tonal glass</string>
-    <string name="bg_style_tonal_glass_summary">Use refined solid colors with subtle Haze surfaces (recommended)</string>
+    <string name="bg_style_tonal_glass_summary">Use refined solid colors with restrained translucent surfaces (recommended)</string>
     <string name="bg_style_system_tint">System colors</string>
     <string name="bg_style_system_tint_summary">Tint dark surfaces with colors from the system wallpaper</string>
     <string name="bg_style_elevated_containers">Layered surfaces</string>
@@ -839,7 +839,7 @@
     <string name="interface_style_material3_expressive">md3 expressive</string>
     <string name="interface_style_material3_expressive_summary">Larger adaptive controls, emphasized shapes, and bolder type hierarchy</string>
     <string name="interface_style_ios">ios (modern)</string>
-    <string name="interface_style_ios_summary">Rounder controls, quieter surfaces, grouped Haze, and softer menus</string>
+    <string name="interface_style_ios_summary">Rounder controls, quieter surfaces, Backdrop glass, and softer menus</string>
     <string name="appearance_style_override_note">Effective in the current %1$s style: %2$s</string>
     <string name="appearance_style_default_value">Current %1$s style default: %2$s</string>
     <string name="appearance_style_custom_override">Current %1$s style default is %2$s; manual value is active</string>
@@ -3122,7 +3122,7 @@
     <string name="font_preset_noto_sans">Noto Sans</string>
     <string name="font_preset_inter">Inter</string>
     <string name="pref_reduce_visual_effects">Reduce visual effects</string>
-    <string name="pref_reduce_visual_effects_summary">Recommended for lower-end devices. Disable runtime Haze, Hero transitions, and panorama background motion with one switch without changing their individual settings</string>
+    <string name="pref_reduce_visual_effects_summary">Recommended for lower-end devices. Disable Backdrop glass, Hero transitions, and panorama background motion without changing their individual settings</string>
     <string name="pref_haze_opacity">Glass surface opacity</string>
     <string name="pref_haze_opacity_summary">Controls glass surface opacity independently of the selected material preset, even when blur is off</string>
     <string name="pref_glass_blur_strength">Glass blur radius</string>
@@ -3198,9 +3198,9 @@
     <string name="space_continue_content_description">Continue %1$s</string>
     <string name="space_switch_failed">Could not save progress. Space was not changed.</string>
     <string name="space_switch_unavailable">Space switching is not available right now.</string>
-    <string name="space_manga">Manga space</string>
-    <string name="space_novel">Novel space</string>
-    <string name="space_anime">Anime space</string>
+    <string name="space_manga">Manga</string>
+    <string name="space_novel">Novel</string>
+    <string name="space_anime">Anime</string>
     <string name="media_universe_title">Media universe</string>
     <string name="media_universe_empty">No history or favorites yet</string>
     <string name="media_universe_history_and_favorites">History and favorites</string>

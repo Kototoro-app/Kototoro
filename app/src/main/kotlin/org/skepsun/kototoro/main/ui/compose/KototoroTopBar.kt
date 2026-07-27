@@ -86,7 +86,6 @@ import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import com.kyant.backdrop.drawBackdrop
@@ -536,7 +535,7 @@ fun KototoroTopBar(
 
 @Composable
 internal fun TopBarControlSurface(
-    allowRuntimeHaze: Boolean = true,
+    allowBackdrop: Boolean = true,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -549,19 +548,19 @@ internal fun TopBarControlSurface(
             )
         } else {
             GlassDefaults.topBarChromeStyle()
-        }
+    }
     val backdrop = LocalLiquidGlassBackdrop.current
-    val exportedBackdrop = rememberLayerBackdrop()
-    val useBackdrop = allowRuntimeHaze &&
+    val useBackdrop = allowBackdrop &&
         LocalInterfaceStyle.current == InterfaceStyle.IOS &&
         backdrop != null
+    val exportedBackdrop = if (useBackdrop) rememberLayerBackdrop() else null
     if (useBackdrop) {
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Box(
                 modifier = modifier
                     .drawBackdrop(
                         backdrop = backdrop,
-                        exportedBackdrop = exportedBackdrop,
+                        exportedBackdrop = exportedBackdrop!!,
                         shape = { shape },
                         effects = {
                             vibrancy()
@@ -585,10 +584,8 @@ internal fun TopBarControlSurface(
     } else {
         GlassSurface(
             modifier = modifier,
-            allowRuntimeHaze = allowRuntimeHaze,
             shape = shape,
             style = style,
-            visualTreatment = GlassVisualTreatment.TopBarPrototype,
             componentRole = GlassComponentRole.TopBar,
             content = content,
         )

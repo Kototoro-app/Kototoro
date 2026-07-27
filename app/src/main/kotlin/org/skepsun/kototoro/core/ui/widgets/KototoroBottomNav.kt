@@ -60,7 +60,6 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
-import org.skepsun.kototoro.core.ui.glass.GlassVisualTreatment
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 import com.kyant.backdrop.drawBackdrop
@@ -495,7 +494,6 @@ private fun MainNavSurface(
             modifier = modifier,
             style = style,
             shape = shape,
-            visualTreatment = GlassVisualTreatment.TopBarPrototype,
             componentRole = GlassComponentRole.BottomBar,
             content = content,
         )

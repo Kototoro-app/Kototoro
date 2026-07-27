@@ -229,24 +229,24 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var interfaceStyle: InterfaceStyle
 		get() = prefs.getEnumValue(
 			KEY_INTERFACE_STYLE,
-			if (isMaterialExpressiveComponentsEnabled) {
-				InterfaceStyle.MATERIAL_3_EXPRESSIVE
-			} else {
-				InterfaceStyle.MATERIAL_3
-			},
-		)
+			InterfaceStyle.MATERIAL_3_EXPRESSIVE,
+		).normalized()
 		set(value) {
+			val normalizedValue = value.normalized()
 			prefs.edit {
-				putEnumValue(KEY_INTERFACE_STYLE, value)
-				putBoolean(KEY_MATERIAL_EXPRESSIVE_COMPONENTS, value == InterfaceStyle.MATERIAL_3_EXPRESSIVE)
-				if (value == InterfaceStyle.IOS && !prefs.contains(KEY_COLOR_THEME)) {
+				putEnumValue(KEY_INTERFACE_STYLE, normalizedValue)
+				putBoolean(
+					KEY_MATERIAL_EXPRESSIVE_COMPONENTS,
+					normalizedValue == InterfaceStyle.MATERIAL_3_EXPRESSIVE,
+				)
+				if (normalizedValue == InterfaceStyle.IOS && !prefs.contains(KEY_COLOR_THEME)) {
 					putEnumValue(KEY_COLOR_THEME, ColorScheme.IOS)
-				} else if (value == InterfaceStyle.MATERIAL_3 &&
+				} else if (normalizedValue == InterfaceStyle.MATERIAL_3_EXPRESSIVE &&
 					prefs.getString(KEY_COLOR_THEME, null) == ColorScheme.IOS.name
 				) {
 					putEnumValue(KEY_COLOR_THEME, ColorScheme.default)
 				}
-				if (value == InterfaceStyle.IOS && !prefs.contains(KEY_BACKGROUND_STYLE)) {
+				if (normalizedValue == InterfaceStyle.IOS && !prefs.contains(KEY_BACKGROUND_STYLE)) {
 					putEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DYNAMIC_TONAL_GLASS)
 				}
 			}
@@ -930,43 +930,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) { cornerRadius = value }
 
 
-	var hazeOpacityPercent: Int
-		get() = prefs.getSafeInt(
-			KEY_HAZE_OPACITY,
-			GlassMaterialDefaults.DEFAULT_OPACITY_PERCENT,
-		).coerceIn(0, 100)
-		set(value) = prefs.edit { putInt(KEY_HAZE_OPACITY, value.coerceIn(0, 100)) }
-
-	var glassMaterialPreset: GlassMaterialPreset
-		get() = prefs.getString(KEY_GLASS_MATERIAL_PRESET, GlassMaterialPreset.KOTOTORO.name)
-			?.let { raw ->
-				GlassMaterialPreset.entries.firstOrNull { preset -> preset.name == raw }
-			}
-			?: GlassMaterialPreset.migrateLegacy(
-				raw = prefs.getString(KEY_GLASS_MATERIAL_PRESET, null),
-				blurStrengthPercent = glassBlurStrengthPercent,
-				noiseStrengthPercent = glassNoiseStrengthPercent,
-			)
-		set(value) = prefs.edit { putString(KEY_GLASS_MATERIAL_PRESET, value.name) }
-
-	var glassBlurStrengthPercent: Int
-		get() = prefs.getSafeInt(
-			KEY_GLASS_BLUR_STRENGTH,
-			GlassMaterialPreset.KOTOTORO.defaultBlurStrengthPercent,
-		).coerceIn(0, 100)
-		set(value) = prefs.edit { putInt(KEY_GLASS_BLUR_STRENGTH, value.coerceIn(0, 100)) }
-
-	var glassNoiseStrengthPercent: Int
-		get() = prefs.getSafeInt(
-			KEY_GLASS_NOISE_STRENGTH,
-			GlassMaterialPreset.KOTOTORO.defaultNoiseStrengthPercent,
-		).coerceIn(0, 100)
-		set(value) = prefs.edit { putInt(KEY_GLASS_NOISE_STRENGTH, value.coerceIn(0, 100)) }
-
 	var glassImmersiveStrengthPercent: Int
 		get() = prefs.getSafeInt(
 			KEY_GLASS_IMMERSIVE_STRENGTH,
-			GlassMaterialDefaults.DEFAULT_IMMERSIVE_STRENGTH_PERCENT,
+			100,
 		).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_GLASS_IMMERSIVE_STRENGTH, value.coerceIn(0, 100)) }
 
@@ -1980,10 +1947,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, isDetailsPanoramaLimitedToInfoCardMidpoint)
 			putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, isDetailsPanoramaScrollLinkedEnabled)
 			putString(KEY_POPUP_RADIUS, popupRadius.toString())
-			putInt(KEY_HAZE_OPACITY, hazeOpacityPercent)
-			putString(KEY_GLASS_MATERIAL_PRESET, glassMaterialPreset.name)
-			putInt(KEY_GLASS_BLUR_STRENGTH, glassBlurStrengthPercent)
-			putInt(KEY_GLASS_NOISE_STRENGTH, glassNoiseStrengthPercent)
 			putInt(KEY_GLASS_IMMERSIVE_STRENGTH, glassImmersiveStrengthPercent)
 			putBoolean(KEY_GLASS_EFFECT_ENABLED, isGlassEffectEnabled)
 			putBoolean(KEY_REDUCED_VISUAL_EFFECTS, isReducedVisualEffectsEnabled)
@@ -2476,10 +2439,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_READER_TOOLBAR_FLOATING = "reader_toolbar_floating"
 		const val KEY_LOADING_CIRCLE_STYLE = "loading_circle_style"
 		const val KEY_POPUP_RADIUS = "popup_radius"
-		const val KEY_HAZE_OPACITY = "haze_opacity"
-		const val KEY_GLASS_MATERIAL_PRESET = "glass_material_preset"
-		const val KEY_GLASS_BLUR_STRENGTH = "glass_blur_strength"
-		const val KEY_GLASS_NOISE_STRENGTH = "glass_noise_strength"
 		const val KEY_GLASS_IMMERSIVE_STRENGTH = "glass_immersive_strength"
 		const val KEY_GLASS_EFFECT_ENABLED = "glass_effect_enabled"
 		const val KEY_REDUCED_VISUAL_EFFECTS = "reduced_visual_effects"
@@ -2704,192 +2663,4 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			?: SpaceSwitcherPosition.TOP_RIGHT
 		set(value) = prefs.edit { putString(KEY_SPACE_SWITCHER_POSITION, value.name) }
 
-	object GlassMaterialDefaults {
-		const val DEFAULT_OPACITY_PERCENT = 30
-		const val STYLE_BASELINE_OPACITY_PERCENT = 80
-		const val DEFAULT_IMMERSIVE_STRENGTH_PERCENT = 100
-	}
-
-	enum class GlassMaterialPreset(
-		val defaultBlurStrengthPercent: Int,
-		val defaultNoiseStrengthPercent: Int,
-	) {
-		KOTOTORO(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		HAZE_ULTRA_THIN(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		HAZE_THIN(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		HAZE_REGULAR(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		HAZE_THICK(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		HAZE_ULTRA_THICK(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		CUPERTINO_ULTRA_THIN(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		CUPERTINO_THIN(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		CUPERTINO_REGULAR(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		CUPERTINO_THICK(
-			defaultBlurStrengthPercent = 24,
-			defaultNoiseStrengthPercent = 0,
-		),
-		FLUENT_THIN_ACRYLIC(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		FLUENT_ACCENT_ACRYLIC_BASE(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		FLUENT_ACCENT_ACRYLIC_DEFAULT(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		FLUENT_ACRYLIC_BASE(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		FLUENT_ACRYLIC_DEFAULT(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		FLUENT_MICA(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		FLUENT_MICA_ALT(
-			defaultBlurStrengthPercent = 60,
-			defaultNoiseStrengthPercent = 2,
-		),
-		CUSTOM(
-			defaultBlurStrengthPercent = -1,
-			defaultNoiseStrengthPercent = -1,
-		);
-
-		companion object {
-			fun resolve(
-				preset: GlassMaterialPreset,
-				blurStrengthPercent: Int,
-				noiseStrengthPercent: Int,
-			): GlassMaterialPreset {
-				return preset.takeIf { candidate ->
-					candidate != CUSTOM &&
-						candidate.defaultBlurStrengthPercent == blurStrengthPercent &&
-						candidate.defaultNoiseStrengthPercent == noiseStrengthPercent
-				} ?: CUSTOM
-			}
-
-			fun migrateLegacy(
-				raw: String?,
-				blurStrengthPercent: Int,
-				noiseStrengthPercent: Int,
-			): GlassMaterialPreset {
-				return when (raw) {
-					"SUBTLE" -> HAZE_THIN
-					"BALANCED" -> KOTOTORO
-					"STRONG" -> FLUENT_ACRYLIC_DEFAULT
-					"FLUENT_ACRYLIC" -> FLUENT_ACRYLIC_DEFAULT
-					"CUSTOM" -> CUSTOM
-					else -> entries.firstOrNull { preset ->
-						preset != CUSTOM &&
-							preset.defaultBlurStrengthPercent == blurStrengthPercent &&
-							preset.defaultNoiseStrengthPercent == noiseStrengthPercent
-					} ?: KOTOTORO
-				}
-			}
-		}
-	}
-
-	enum class GlassMaterialFamily(
-		val defaultPreset: GlassMaterialPreset,
-	) {
-		KOTOTORO(GlassMaterialPreset.KOTOTORO),
-		HAZE(GlassMaterialPreset.HAZE_THIN),
-		CUPERTINO(GlassMaterialPreset.CUPERTINO_THIN),
-		FLUENT(GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT),
-		CUSTOM(GlassMaterialPreset.CUSTOM),
-	}
-
-	fun resolveGlassMaterialFamily(
-		preset: GlassMaterialPreset = glassMaterialPreset,
-	): GlassMaterialFamily {
-		return preset.toFamily()
-	}
-}
-
-fun AppSettings.GlassMaterialPreset.toFamily(): AppSettings.GlassMaterialFamily {
-	return when (this) {
-		AppSettings.GlassMaterialPreset.KOTOTORO -> AppSettings.GlassMaterialFamily.KOTOTORO
-		AppSettings.GlassMaterialPreset.HAZE_ULTRA_THIN,
-		AppSettings.GlassMaterialPreset.HAZE_THIN,
-		AppSettings.GlassMaterialPreset.HAZE_REGULAR,
-		AppSettings.GlassMaterialPreset.HAZE_THICK,
-		AppSettings.GlassMaterialPreset.HAZE_ULTRA_THICK -> AppSettings.GlassMaterialFamily.HAZE
-		AppSettings.GlassMaterialPreset.CUPERTINO_ULTRA_THIN,
-		AppSettings.GlassMaterialPreset.CUPERTINO_THIN,
-		AppSettings.GlassMaterialPreset.CUPERTINO_REGULAR,
-		AppSettings.GlassMaterialPreset.CUPERTINO_THICK -> AppSettings.GlassMaterialFamily.CUPERTINO
-		AppSettings.GlassMaterialPreset.FLUENT_THIN_ACRYLIC,
-		AppSettings.GlassMaterialPreset.FLUENT_ACCENT_ACRYLIC_BASE,
-		AppSettings.GlassMaterialPreset.FLUENT_ACCENT_ACRYLIC_DEFAULT,
-		AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_BASE,
-		AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT,
-		AppSettings.GlassMaterialPreset.FLUENT_MICA,
-		AppSettings.GlassMaterialPreset.FLUENT_MICA_ALT -> AppSettings.GlassMaterialFamily.FLUENT
-		AppSettings.GlassMaterialPreset.CUSTOM -> AppSettings.GlassMaterialFamily.CUSTOM
-	}
-}
-
-fun AppSettings.GlassMaterialFamily.resolvePreset(
-	componentRole: org.skepsun.kototoro.core.ui.glass.GlassComponentRole,
-): AppSettings.GlassMaterialPreset {
-	return when (this) {
-		AppSettings.GlassMaterialFamily.KOTOTORO -> AppSettings.GlassMaterialPreset.KOTOTORO
-		AppSettings.GlassMaterialFamily.HAZE -> when (componentRole) {
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.TopBar,
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.BottomBar -> AppSettings.GlassMaterialPreset.HAZE_THIN
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Menu,
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Dialog -> AppSettings.GlassMaterialPreset.HAZE_REGULAR
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Sheet -> AppSettings.GlassMaterialPreset.HAZE_THICK
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface -> AppSettings.GlassMaterialPreset.HAZE_THIN
-		}
-		AppSettings.GlassMaterialFamily.CUPERTINO -> when (componentRole) {
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.TopBar,
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.BottomBar -> AppSettings.GlassMaterialPreset.CUPERTINO_THIN
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Menu,
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Dialog -> AppSettings.GlassMaterialPreset.CUPERTINO_REGULAR
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Sheet -> AppSettings.GlassMaterialPreset.CUPERTINO_THICK
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface -> AppSettings.GlassMaterialPreset.CUPERTINO_THIN
-		}
-		AppSettings.GlassMaterialFamily.FLUENT -> when (componentRole) {
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.TopBar,
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.BottomBar -> AppSettings.GlassMaterialPreset.FLUENT_MICA
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Menu,
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Dialog -> AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Sheet -> AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_BASE
-			org.skepsun.kototoro.core.ui.glass.GlassComponentRole.Surface -> AppSettings.GlassMaterialPreset.FLUENT_ACRYLIC_DEFAULT
-		}
-		AppSettings.GlassMaterialFamily.CUSTOM -> AppSettings.GlassMaterialPreset.CUSTOM
-	}
 }

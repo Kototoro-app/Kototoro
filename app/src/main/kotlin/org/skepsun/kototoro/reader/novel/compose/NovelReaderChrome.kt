@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -32,9 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -137,7 +136,6 @@ internal fun NovelReaderBottomChrome(
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
 ) {
-	var progressExpanded by rememberSaveable { mutableStateOf(true) }
 	val visible = state.controlsVisible || state.ttsControlsVisible
 	val toolsPanelVisible = state.toolsSheetVisible || state.ttsControlsVisible
 	val dismissiblePanelVisible =
@@ -165,7 +163,13 @@ internal fun NovelReaderBottomChrome(
 			GlassSurface(
 				modifier = Modifier
 					.padding(horizontal = 12.dp, vertical = 4.dp)
-					.fillMaxWidth()
+					.then(
+						if (state.progressMax > 0f || dismissiblePanelVisible) {
+							Modifier.fillMaxWidth()
+						} else {
+							Modifier.wrapContentWidth()
+						},
+					)
 					.widthIn(max = 360.dp)
 					.animateContentSize(alignment = Alignment.BottomCenter),
 				shape = RoundedCornerShape(28.dp),
@@ -202,23 +206,14 @@ internal fun NovelReaderBottomChrome(
 							NovelToolsPanel(state, callbacks)
 							NovelChromeDivider()
 						}
-						progressExpanded && state.progressMax > 0f -> {
+						}
+						if (state.controlsVisible && state.progressMax > 0f) {
 							NovelProgressPanel(state, callbacks)
 							NovelChromeDivider()
-						}
 						}
 						if (state.controlsVisible) {
 							ReaderPrimaryControlBar(
 								items = listOf(
-							ReaderControlItem(
-								ReaderControlDestination.PROGRESS,
-								stringResource(R.string.progress),
-								R.drawable.ic_progress_marker,
-								active = progressExpanded &&
-									!state.settingsSheetVisible &&
-									!state.chaptersSheetVisible &&
-									!toolsPanelVisible,
-							),
 							ReaderControlItem(
 								ReaderControlDestination.NAVIGATION,
 								stringResource(R.string.chapters),
@@ -240,28 +235,19 @@ internal fun NovelReaderBottomChrome(
 						),
 						onDestinationSelected = { destination ->
 							when (destination) {
-								ReaderControlDestination.PROGRESS -> {
-									callbacks.onDismissSettings()
-									callbacks.onDismissChapters()
-									callbacks.onDismissTools()
-									progressExpanded = !progressExpanded
-								}
 								ReaderControlDestination.NAVIGATION -> {
 									callbacks.onDismissSettings()
 									callbacks.onDismissTools()
-									progressExpanded = false
 									if (state.chaptersSheetVisible) callbacks.onDismissChapters() else callbacks.onShowChapters()
 								}
 								ReaderControlDestination.DISPLAY -> {
 									callbacks.onDismissChapters()
 									callbacks.onDismissTools()
-									progressExpanded = false
 									if (state.settingsSheetVisible) callbacks.onDismissSettings() else callbacks.onShowSettings()
 								}
 								ReaderControlDestination.TOOLS -> {
 									callbacks.onDismissSettings()
 									callbacks.onDismissChapters()
-									progressExpanded = false
 									if (toolsPanelVisible) {
 										callbacks.onDismissTools()
 									} else {

@@ -18,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -39,15 +38,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
-import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
@@ -253,9 +248,6 @@ fun KototoroFavoritesHostRoute(
         }
     }
 
-    val hazeState = remember { HazeState() }
-    val useBackgroundHaze = isRuntimeHazeAvailable()
-
     if (uiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -294,13 +286,10 @@ fun KototoroFavoritesHostRoute(
         return
     }
 
-    CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (useBackgroundHaze) Modifier.hazeSource(hazeState) else Modifier),
-            ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+        ) {
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
@@ -329,7 +318,6 @@ fun KototoroFavoritesHostRoute(
                         onFilterRailOverrideChanged = {},
                     )
                 }
-            }
         }
     }
 }

@@ -12,12 +12,8 @@ data class InterfaceStylePolicy(
 ) {
 	companion object {
 		fun from(style: InterfaceStyle): InterfaceStylePolicy = when (style) {
-			InterfaceStyle.MATERIAL_3 -> InterfaceStylePolicy(
-				useLiquidGlass = false,
-				useExpressiveComponents = false,
-				emphasizeNavigationSelection = false,
-				useExpandedTouchTargets = false,
-			)
+			@Suppress("DEPRECATION")
+			InterfaceStyle.MATERIAL_3,
 			InterfaceStyle.MATERIAL_3_EXPRESSIVE -> InterfaceStylePolicy(
 				useLiquidGlass = false,
 				useExpressiveComponents = true,
@@ -35,5 +31,5 @@ data class InterfaceStylePolicy(
 }
 
 val LocalInterfaceStylePolicy = staticCompositionLocalOf {
-	InterfaceStylePolicy.from(InterfaceStyle.MATERIAL_3)
+	InterfaceStylePolicy.from(InterfaceStyle.MATERIAL_3_EXPRESSIVE)
 }

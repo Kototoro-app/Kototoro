@@ -88,9 +88,6 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
-import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
-import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import com.kyant.backdrop.backdrops.layerBackdrop
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
 import org.skepsun.kototoro.details.ui.DetailsViewModel
@@ -125,7 +122,6 @@ import org.skepsun.kototoro.main.ui.compose.selectedFirst
 import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.spaceViewModelKey
-import dev.chrisbanes.haze.hazeSource
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
@@ -531,7 +527,7 @@ fun AppNavGraph(
                             .fillMaxSize()
                             .then(
                                 if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-                                    Modifier.layerBackdrop(routeBackdrop)
+                                    routeBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier
                                 } else {
                                     Modifier
                                 },
@@ -650,7 +646,7 @@ fun AppNavGraph(
                                 .fillMaxSize()
                                 .then(
                                     if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-                                        Modifier.layerBackdrop(routeBackdrop)
+                                        routeBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier
                                     } else {
                                         Modifier
                                     },
@@ -798,14 +794,11 @@ internal fun MainShellRouteContent(
     mainShellChrome: @Composable BoxScope.() -> Unit,
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
-    val hazeState = LocalHazeState.current
     val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
         SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
     }
     Box(modifier = Modifier.fillMaxSize()) {
         val useLiquidGlass = LocalInterfaceStyle.current == InterfaceStyle.IOS
-        val useRuntimeHaze = (LocalGlassPrefs.current?.isGlassEffectEnabled == true) &&
-            isRuntimeHazeAvailable()
         RouteLiquidGlassBackdrop(
             ownerKey = backStackEntry.id,
             active = isRouteVisible,
@@ -814,8 +807,13 @@ internal fun MainShellRouteContent(
                 MainRouteScene(
                     landscapeStartPadding = landscapeStartPadding,
                     sourceModifier = Modifier
-                        .then(if (useLiquidGlass) Modifier.layerBackdrop(layerBackdrop) else Modifier)
-                        .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
+                        .then(
+                            if (useLiquidGlass && layerBackdrop != null) {
+                                Modifier.layerBackdrop(layerBackdrop)
+                            } else {
+                                Modifier
+                            },
+                        ),
                 ) {
                     MainTopLevelNavDisplay(
                         navState = mainNavState,

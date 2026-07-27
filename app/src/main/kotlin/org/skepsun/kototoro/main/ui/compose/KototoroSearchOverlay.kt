@@ -367,7 +367,7 @@ fun KototoroSearchOverlay(
                     horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TopBarControlSurface(allowRuntimeHaze = false) {
+                    TopBarControlSurface(allowBackdrop = false) {
                         IconButton(
                             onClick = onDismissRequest,
                             modifier = Modifier.size(CompactTopBarPillHeight),
@@ -429,7 +429,7 @@ fun KototoroSearchOverlay(
                             },
                         ),
                     )
-                    TopBarControlSurface(allowRuntimeHaze = false) {
+                    TopBarControlSurface(allowBackdrop = false) {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
                             Row(
                                 modifier = Modifier

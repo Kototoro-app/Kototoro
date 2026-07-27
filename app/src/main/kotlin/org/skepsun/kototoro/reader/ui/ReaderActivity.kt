@@ -342,7 +342,6 @@ class ReaderActivity :
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY -> openMenu()
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS -> composeReaderController.showTools()
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION -> onTranslateClick()
-						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.PROGRESS -> Unit
 						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.CHAPTERS_PANEL -> {
 							composeReaderController.toggleChapters()
 						}

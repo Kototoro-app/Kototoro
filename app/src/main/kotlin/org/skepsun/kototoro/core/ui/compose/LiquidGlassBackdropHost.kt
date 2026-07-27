@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
 @Stable
 internal class LiquidGlassBackdropHost {
@@ -50,8 +52,12 @@ internal val LocalLiquidGlassBackdropHost = staticCompositionLocalOf<LiquidGlass
 internal fun RouteLiquidGlassBackdrop(
     ownerKey: Any,
     active: Boolean,
-    content: @Composable (LayerBackdrop) -> Unit,
+    content: @Composable (LayerBackdrop?) -> Unit,
 ) {
+    if (LocalInterfaceStyle.current != InterfaceStyle.IOS) {
+        content(null)
+        return
+    }
     val host = LocalLiquidGlassBackdropHost.current
     val backgroundColor = MaterialTheme.colorScheme.background
     val backdrop = key(ownerKey) {

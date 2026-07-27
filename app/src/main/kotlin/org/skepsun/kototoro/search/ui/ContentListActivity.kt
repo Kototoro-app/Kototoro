@@ -34,8 +34,6 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
-import org.skepsun.kototoro.core.ui.glass.LocalHazeState
-import org.skepsun.kototoro.core.ui.glass.isRuntimeHazeAvailable
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.compose.DetailsScreen
@@ -57,9 +55,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import dev.chrisbanes.haze.HazePositionStrategy
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -114,16 +109,11 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
             settings.observeAsState(AppSettings.KEY_SHARED_ELEMENT_TRANSITIONS) {
                 isSharedElementTransitionsEnabled
             }.value
-        val hazeState = remember { HazeState().apply { positionStrategy = HazePositionStrategy.Screen } }
-        val useRuntimeHaze = isRuntimeHazeAvailable()
-
-        CompositionLocalProvider(LocalHazeState provides hazeState) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-                    .then(if (useRuntimeHaze) Modifier.hazeSource(hazeState) else Modifier),
-            ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
                 SharedTransitionLayout {
                     CompositionLocalProvider(
                         LocalSharedTransitionScope provides if (isSharedElementTransitionsEnabled) {
@@ -226,7 +216,6 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                         }
                     }
                 }
-            }
         }
     }
 

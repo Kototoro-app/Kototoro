@@ -23,10 +23,12 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.details.ui.compose.DetailsAction
@@ -88,9 +90,13 @@ class DetailsActivity :
 
         setComposeContent {
             val backdropBackground = MaterialTheme.colorScheme.background
-            val backdrop = rememberLayerBackdrop {
-                drawRect(backdropBackground)
-                drawContent()
+            val backdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                rememberLayerBackdrop {
+                    drawRect(backdropBackground)
+                    drawContent()
+                }
+            } else {
+                null
             }
             CompositionLocalProvider(
                 LocalLiquidGlassBackdrop provides backdrop,

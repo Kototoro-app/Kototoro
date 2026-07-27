@@ -22,7 +22,6 @@ class SettingsSearchHelper @Inject constructor(
 			"amoled_theme" to R.string.black_dark_theme,
 			"reduced_visual_effects" to R.string.pref_reduce_visual_effects,
 			"glass_material_preset" to R.string.pref_blur_mode,
-			"haze_opacity" to R.string.pref_haze_opacity,
 			"glass_blur_strength" to R.string.pref_glass_blur_strength,
 			"glass_noise_strength" to R.string.pref_glass_noise_strength,
 			"glass_immersive_strength" to R.string.pref_glass_immersive_strength,
