@@ -77,6 +77,8 @@ import org.skepsun.kototoro.core.model.getMergeKey
 import org.skepsun.kototoro.core.model.mergeRepeated
 import org.skepsun.kototoro.core.model.isManga
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.domain.PageLoader
 import org.skepsun.kototoro.reader.domain.ReaderPageEnhancementController
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
@@ -165,6 +167,7 @@ class ReaderViewModel @Inject constructor(
     val onLoadingError = MutableEventFlow<Throwable>()
     val onShowToast = MutableEventFlow<Int>()
     val onAskNsfwIncognito = MutableEventFlow<Unit>()
+    val onRedirectToReader = MutableEventFlow<Content>()
     val uiState = MutableStateFlow<ReaderUiState?>(null)
     val targetPagePosition = MutableStateFlow<Int?>(null)
     val translationLayerState = MutableStateFlow(TranslationLayerState.IDLE)
@@ -827,6 +830,17 @@ class ReaderViewModel @Inject constructor(
                         }
                         chaptersLoader.init(details)
                         val manga = details.toContent()
+                        val contentType = if (manga.looksLikeLocalVideoContent()) {
+                            ContentType.VIDEO
+                        } else {
+                            manga.source.getContentType()
+                        }
+                        if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL ||
+                            contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO
+                        ) {
+                            onRedirectToReader.call(manga)
+                            return@collect
+                        }
                         // obtain state
                         if (readingState.value == null) {
                             val newState = getStateFromIntent(manga)

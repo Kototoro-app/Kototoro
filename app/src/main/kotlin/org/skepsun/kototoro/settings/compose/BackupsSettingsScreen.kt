@@ -77,6 +77,7 @@ fun BackupsSettingsScreen(
     onRestoreBackupClick: () -> Unit,
     onExportMihonBackupClick: () -> Unit,
     onExportAniyomiBackupClick: () -> Unit,
+    onExportUsagiBackupClick: () -> Unit,
     onImportExternalBackupClick: () -> Unit,
     onDismissExternalImportDialog: () -> Unit,
     onImportExternalBackupAppClick: (ExternalBackupApp) -> Unit,
@@ -187,6 +188,12 @@ fun BackupsSettingsScreen(
                         title = stringResource(R.string.export_aniyomi_backup),
                         summary = stringResource(R.string.export_aniyomi_backup_summary),
                         onClick = onExportAniyomiBackupClick,
+                    )
+                    SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.export_usagi_backup),
+                        summary = stringResource(R.string.export_usagi_backup_summary),
+                        onClick = onExportUsagiBackupClick,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(

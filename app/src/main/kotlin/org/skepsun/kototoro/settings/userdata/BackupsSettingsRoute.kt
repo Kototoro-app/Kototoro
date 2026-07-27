@@ -55,6 +55,7 @@ fun BackupsSettingsRoute(
     onRestoreBackupClick: () -> Unit,
     onExportMihonBackupClick: () -> Unit,
     onExportAniyomiBackupClick: () -> Unit,
+    onExportUsagiBackupClick: () -> Unit,
     onImportExternalBackupFilePick: (ExternalBackupApp) -> Unit,
 ) {
     val context = LocalContext.current
@@ -198,6 +199,7 @@ fun BackupsSettingsRoute(
         onRestoreBackupClick = onRestoreBackupClick,
         onExportMihonBackupClick = onExportMihonBackupClick,
         onExportAniyomiBackupClick = onExportAniyomiBackupClick,
+        onExportUsagiBackupClick = onExportUsagiBackupClick,
         onImportExternalBackupClick = { isExternalImportDialogVisible = true },
         onDismissExternalImportDialog = { isExternalImportDialogVisible = false },
         onImportExternalBackupAppClick = { app ->

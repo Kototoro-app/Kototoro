@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.favourites.ui.container
 
 import android.content.Context
+import androidx.room.withTransaction
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,6 +47,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
+import org.skepsun.kototoro.parsers.util.levenshteinDistance
 
 @HiltViewModel
 class FavouritesContainerViewModel @Inject constructor(
@@ -59,6 +61,7 @@ class FavouritesContainerViewModel @Inject constructor(
 	internal val globalFavoritesState: GlobalFavoritesState,
 	private val sourceGroupManager: SourceGroupManager,
 	spaceBrowseScope: SpaceBrowseScope,
+	private val db: org.skepsun.kototoro.core.db.MangaDatabase,
 ) : BaseViewModel(), SpaceBindableViewModel {
 	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
 	init {
@@ -460,4 +463,421 @@ class FavouritesContainerViewModel @Inject constructor(
 		if (provider == null) return null
 		return runCatching { provider.fetchFavoriteFolders() }.getOrNull()
 	}
+
+	val duplicatesFinderState = MutableStateFlow<DuplicatesFinderState?>(null)
+	val duplicatesSummary = MutableStateFlow<DuplicatesSummaryState?>(null)
+
+	private var duplicatesJob: kotlinx.coroutines.Job? = null
+	private var isDuplicatesCancellationRequested = false
+
+	fun openDuplicatesFinder() {
+		duplicatesFinderState.value = DuplicatesFinderState()
+		duplicatesSummary.value = null
+		isDuplicatesCancellationRequested = false
+	}
+
+	fun dismissDuplicatesFinder() {
+		duplicatesJob?.cancel()
+		duplicatesJob = null
+		duplicatesFinderState.value = null
+		duplicatesSummary.value = null
+		isDuplicatesCancellationRequested = false
+	}
+
+	fun cancelDuplicatesFinder() {
+		isDuplicatesCancellationRequested = true
+		val current = duplicatesFinderState.value
+		if (current == null || !current.isScanning) {
+			dismissDuplicatesFinder()
+		}
+	}
+
+	fun toggleGroupChecked(index: Int) {
+		val current = duplicatesFinderState.value ?: return
+		val updatedGroups = current.groups.toMutableList()
+		if (index in updatedGroups.indices) {
+			val group = updatedGroups[index]
+			updatedGroups[index] = group.copy(isChecked = !group.isChecked)
+			duplicatesFinderState.value = current.copy(groups = updatedGroups)
+		}
+	}
+
+	fun startQuickDuplicatesFix() {
+		val current = duplicatesFinderState.value ?: return
+		duplicatesFinderState.value = current.copy(
+			isScanning = true,
+			progress = 0f,
+			statusText = appContext.getString(R.string.duplicates_scanning_status)
+		)
+		isDuplicatesCancellationRequested = false
+
+		duplicatesJob = launchJob(Dispatchers.Default) {
+			try {
+				val allFavs = favouritesRepository.observeAllProjectionContents(
+					order = ListSortOrder.NEWEST,
+					filterOptions = emptySet(),
+					limit = Int.MAX_VALUE
+				).first()
+
+				if (isDuplicatesCancellationRequested) return@launchJob
+
+				val grouped = allFavs.groupBy { it.title.trim().lowercase() }
+				val duplicateGroupsList = grouped.values.filter { it.size > 1 }
+
+				if (duplicateGroupsList.isEmpty()) {
+					duplicatesFinderState.value = DuplicatesFinderState(
+						isScanning = false,
+						statusText = appContext.getString(R.string.duplicates_no_found),
+						isFinished = true
+					)
+					return@launchJob
+				}
+
+				val finalGroups = mutableListOf<DuplicatesGroup>()
+				var processedCount = 0
+
+				for (group in duplicateGroupsList) {
+					if (isDuplicatesCancellationRequested) {
+						break
+					}
+
+					val firstManga = group.first()
+					duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+						progress = processedCount.toFloat() / duplicateGroupsList.size,
+						statusText = appContext.getString(R.string.duplicates_probing_status, firstManga.title)
+					)
+
+					val probedCandidates = group.map { manga ->
+						val isAlive = try {
+							val repo = mangaRepositoryFactory.create(manga.source)
+							repo.getDetails(manga)
+							true
+						} catch (e: Exception) {
+							false
+						}
+						
+						val chapterCount = if (isAlive) {
+							val repo = mangaRepositoryFactory.create(manga.source)
+							val detailed = repo.getDetails(manga)
+							detailed.chapters?.size ?: 0
+						} else {
+							db.getChaptersDao().findAll(manga.id).size
+						}
+
+						ProbedManga(manga, isAlive, chapterCount)
+					}
+
+					val aliveCandidates = probedCandidates.filter { it.isAlive }
+					val representativeProbed = if (aliveCandidates.isNotEmpty()) {
+						aliveCandidates.maxByOrNull { it.chapterCount } ?: aliveCandidates.first()
+					} else {
+						probedCandidates.maxByOrNull { it.chapterCount } ?: probedCandidates.first()
+					}
+
+					val rep = representativeProbed.manga
+					val dups = group.filter { it.id != rep.id }
+
+					finalGroups.add(DuplicatesGroup(
+						representative = rep,
+						duplicates = dups,
+						isChecked = true,
+						allOptions = group
+					))
+
+					processedCount++
+				}
+
+				if (isDuplicatesCancellationRequested) {
+					duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+						isScanning = false,
+						statusText = "Cancelled."
+					)
+					return@launchJob
+				}
+
+				var deletedCount = 0
+				var deduplicatedSeries = 0
+				val groupsToDeduplicate = mutableListOf<DuplicatesGroup>()
+				for (fg in finalGroups) {
+					groupsToDeduplicate.add(fg)
+					deletedCount += fg.duplicates.size
+					deduplicatedSeries++
+				}
+
+				if (groupsToDeduplicate.isNotEmpty()) {
+					performDeduplication(groupsToDeduplicate)
+				}
+
+				duplicatesFinderState.value = null
+				duplicatesSummary.value = DuplicatesSummaryState(
+					totalDuplicatesFound = deletedCount,
+					totalSeries = finalGroups.size,
+					deduplicatedSeries = deduplicatedSeries
+				)
+
+			} catch (e: Exception) {
+				duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+					isScanning = false,
+					statusText = "Error: ${e.localizedMessage}"
+				)
+			}
+		}
+	}
+
+	fun startFuzzyDuplicatesFix(tolerance: Int) {
+		val current = duplicatesFinderState.value ?: return
+		duplicatesFinderState.value = current.copy(
+			isScanning = true,
+			progress = 0f,
+			statusText = appContext.getString(R.string.duplicates_scanning_status),
+			isFuzzy = true,
+			tolerance = tolerance
+		)
+		isDuplicatesCancellationRequested = false
+
+		duplicatesJob = launchJob(Dispatchers.Default) {
+			try {
+				val allFavs = favouritesRepository.observeAllProjectionContents(
+					order = ListSortOrder.NEWEST,
+					filterOptions = emptySet(),
+					limit = Int.MAX_VALUE
+				).first()
+
+				if (isDuplicatesCancellationRequested) return@launchJob
+
+				val remaining = allFavs.toMutableList()
+				val fuzzyGroups = mutableListOf<List<org.skepsun.kototoro.parsers.model.Content>>()
+				val similarityThreshold = tolerance / 100.0
+
+				while (remaining.isNotEmpty()) {
+					if (isDuplicatesCancellationRequested) break
+					val root = remaining.removeAt(0)
+					val duplicates = mutableListOf<org.skepsun.kototoro.parsers.model.Content>()
+					duplicates.add(root)
+
+					val iterator = remaining.iterator()
+					while (iterator.hasNext()) {
+						val item = iterator.next()
+						val clean1 = root.title.trim().lowercase()
+						val clean2 = item.title.trim().lowercase()
+						
+						val similarity = if (clean1 == clean2) {
+							1.0
+						} else {
+							val distance = clean1.levenshteinDistance(clean2)
+							val maxLen = maxOf(clean1.length, clean2.length)
+							if (maxLen == 0) 1.0 else 1.0 - (distance.toDouble() / maxLen)
+						}
+
+						if (similarity >= similarityThreshold) {
+							duplicates.add(item)
+							iterator.remove()
+						}
+					}
+
+					if (duplicates.size > 1) {
+						fuzzyGroups.add(duplicates)
+					}
+				}
+
+				if (isDuplicatesCancellationRequested) {
+					duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+						isScanning = false,
+						statusText = "Cancelled."
+					)
+					return@launchJob
+				}
+
+				if (fuzzyGroups.isEmpty()) {
+					duplicatesFinderState.value = DuplicatesFinderState(
+						isScanning = false,
+						statusText = appContext.getString(R.string.duplicates_no_found),
+						isFinished = true,
+						isFuzzy = true,
+						tolerance = tolerance
+					)
+					return@launchJob
+				}
+
+				val finalGroups = mutableListOf<DuplicatesGroup>()
+				var processedCount = 0
+
+				for (group in fuzzyGroups) {
+					if (isDuplicatesCancellationRequested) {
+						break
+					}
+
+					val firstManga = group.first()
+					duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+						progress = processedCount.toFloat() / fuzzyGroups.size,
+						statusText = appContext.getString(R.string.duplicates_probing_status, firstManga.title),
+						isFuzzy = true,
+						tolerance = tolerance
+					)
+
+					val probedCandidates = group.map { manga ->
+						val isAlive = try {
+							val repo = mangaRepositoryFactory.create(manga.source)
+							repo.getDetails(manga)
+							true
+						} catch (e: Exception) {
+							false
+						}
+						
+						val chapterCount = if (isAlive) {
+							val repo = mangaRepositoryFactory.create(manga.source)
+							val detailed = repo.getDetails(manga)
+							detailed.chapters?.size ?: 0
+						} else {
+							db.getChaptersDao().findAll(manga.id).size
+						}
+
+						ProbedManga(manga, isAlive, chapterCount)
+					}
+
+					val aliveCandidates = probedCandidates.filter { it.isAlive }
+					val representativeProbed = if (aliveCandidates.isNotEmpty()) {
+						aliveCandidates.maxByOrNull { it.chapterCount } ?: aliveCandidates.first()
+					} else {
+						probedCandidates.maxByOrNull { it.chapterCount } ?: probedCandidates.first()
+					}
+
+					val rep = representativeProbed.manga
+					val dups = group.filter { it.id != rep.id }
+
+					finalGroups.add(DuplicatesGroup(
+						representative = rep,
+						duplicates = dups,
+						isChecked = true,
+						allOptions = group
+					))
+
+					processedCount++
+				}
+
+				if (isDuplicatesCancellationRequested) {
+					duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+						isScanning = false,
+						statusText = "Cancelled."
+					)
+					return@launchJob
+				}
+
+				duplicatesFinderState.value = DuplicatesFinderState(
+					isScanning = false,
+					progress = 1f,
+					statusText = appContext.getString(R.string.duplicates_complete_status, finalGroups.size),
+					groups = finalGroups,
+					isFinished = true,
+					isFuzzy = true,
+					tolerance = tolerance
+				)
+
+			} catch (e: Exception) {
+				duplicatesFinderState.value = duplicatesFinderState.value?.copy(
+					isScanning = false,
+					statusText = "Error: ${e.localizedMessage}"
+				)
+			}
+		}
+	}
+
+	fun applyDuplicateDeletions() {
+		val current = duplicatesFinderState.value ?: return
+		launchJob(Dispatchers.Default) {
+			try {
+				val groupsToDeduplicate = mutableListOf<DuplicatesGroup>()
+				var deletedCount = 0
+				var deduplicatedSeries = 0
+				for (group in current.groups) {
+					if (group.isChecked) {
+						groupsToDeduplicate.add(group)
+						deletedCount += group.duplicates.size
+						deduplicatedSeries++
+					}
+				}
+
+				if (groupsToDeduplicate.isNotEmpty()) {
+					performDeduplication(groupsToDeduplicate)
+				}
+
+				duplicatesFinderState.value = null
+				duplicatesSummary.value = DuplicatesSummaryState(
+					totalDuplicatesFound = deletedCount,
+					totalSeries = current.groups.size,
+					deduplicatedSeries = deduplicatedSeries
+				)
+
+			} catch (e: Exception) {
+			}
+		}
+	}
+
+	private suspend fun performDeduplication(groupsToDelete: List<DuplicatesGroup>) {
+		db.withTransaction {
+			for (group in groupsToDelete) {
+				val rep = group.representative
+				val repProjectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(rep.url, rep.publicUrl)
+				val repEntityId = repProjectionKey?.let { db.getEntityGraphDao().findActiveBinding(rep.source.name, it)?.entityId }
+					?: db.getEntityGraphDao().findActiveBinding("local_manga", rep.id.toString())?.entityId
+					?: db.getEntityGraphDao().findActiveBinding("0", rep.id.toString())?.entityId
+
+				for (dup in group.duplicates) {
+					val projectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(dup.url, dup.publicUrl)
+					val dupEntityId = projectionKey?.let { db.getEntityGraphDao().findActiveBinding(dup.source.name, it)?.entityId }
+						?: db.getEntityGraphDao().findActiveBinding("local_manga", dup.id.toString())?.entityId
+						?: db.getEntityGraphDao().findActiveBinding("0", dup.id.toString())?.entityId
+
+					// 1. Delete entity bindings for the duplicate projection
+					if (projectionKey != null) {
+						db.getEntityGraphDao().deleteBindingBySource(dup.source.name, projectionKey)
+					}
+					db.getEntityGraphDao().deleteBindingBySource("local_manga", dup.id.toString())
+					db.getEntityGraphDao().deleteBindingBySource("0", dup.id.toString())
+
+					// 2. If it was a separate work, remove it from work_favourites
+					if (dupEntityId != null && dupEntityId != repEntityId) {
+						db.getWorkFavouritesDao().delete(dupEntityId)
+					}
+
+					// 3. Clear the duplicate manga metadata and its chapters from database
+					db.getMangaDao().find(dup.id)?.manga?.let { entity ->
+						db.getMangaDao().delete(listOf(entity))
+					}
+					db.getChaptersDao().deleteAll(dup.id)
+				}
+			}
+			// Final GC sweeps
+			db.getChaptersDao().gc()
+		}
+	}
 }
+
+private data class ProbedManga(
+	val manga: org.skepsun.kototoro.parsers.model.Content,
+	val isAlive: Boolean,
+	val chapterCount: Int
+)
+
+data class DuplicatesGroup(
+	val representative: org.skepsun.kototoro.parsers.model.Content,
+	val duplicates: List<org.skepsun.kototoro.parsers.model.Content>,
+	val isChecked: Boolean = true,
+	val allOptions: List<org.skepsun.kototoro.parsers.model.Content> = emptyList()
+)
+
+data class DuplicatesFinderState(
+	val isScanning: Boolean = false,
+	val progress: Float = 0f,
+	val statusText: String = "",
+	val groups: List<DuplicatesGroup> = emptyList(),
+	val isFinished: Boolean = false,
+	val isFuzzy: Boolean = false,
+	val tolerance: Int = 90
+)
+
+data class DuplicatesSummaryState(
+	val totalDuplicatesFound: Int,
+	val totalSeries: Int,
+	val deduplicatedSeries: Int
+)
