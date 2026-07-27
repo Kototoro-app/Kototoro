@@ -10,10 +10,16 @@
 
 Kototoro is an open-source Android app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync.
 
+> **Compose-first, end to end**: Kototoro may be one of the first genuinely all-Compose manga, novel, and video reading apps. Compose is not just used for the surrounding screens: the comic/novel reader and the video player are Compose too. The former XML, Fragment, and hybrid transition layers have been reduced to the bare minimum, so the core reading and playback experience is now built around Jetpack Compose.
+>
 > **中文简介**：Kototoro 是一款开源的 Android 应用程序，将漫画、小说和视频整合到了一个阅读器中。它结合了极好的图源兼容性、本地 OCR + 机器翻译、视频超分辨率加载以及基于 WebDAV 的多设备同步功能。
+>
+> **Compose 优先，端到端构建**：Kototoro 可能是最早一批真正意义上的全 Jetpack Compose 漫画、小说和视频阅读器之一。Compose 不只是用于外围页面，漫画/小说阅读器和视频播放器本身也全部采用 Compose 构建。旧的 XML、Fragment 以及混合过渡层已经基本清空，核心阅读与播放体验如今都围绕 Jetpack Compose 打造。
 
 ## Why Kototoro / 核心特性
 
+- **A genuinely all-Compose reading experience** — the manga/novel reader and video player are Compose as well as the surrounding UI; legacy XML, Fragment, and transitional hybrid layers are now largely gone
+  *(真正全 Compose 的阅读体验：漫画/小说阅读器和视频播放器与外围界面一样采用 Compose，旧 XML、Fragment 和过渡态混合层已基本清空)*
 - One app for manga, novels, and video 
   *(一个应用搞定漫画、小说和视频)*
 - Local automatic OCR + translation directly inside the reader 

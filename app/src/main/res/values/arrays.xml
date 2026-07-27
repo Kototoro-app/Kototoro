@@ -65,7 +65,7 @@
 		<item>SOCKS (v4/v5)</item>
 	</string-array>
 	<string-array name="reader_backgrounds" translatable="false">
-		<item>@string/system_default</item>
+		<item>@string/reader_background_theme</item>
 		<item>@string/color_light</item>
 		<item>@string/color_dark</item>
 		<item>@string/color_white</item>

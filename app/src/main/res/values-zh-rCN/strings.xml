@@ -690,6 +690,8 @@
     <string name="anime_offline_database_update_progress">正在下载 %1$d MB / %2$d MB</string>
     <string name="anime_offline_database_update_channel_description">显示 Anime Offline 跨站离线数据库的后台下载进度。</string>
     <string name="background">阅读背景颜色</string>
+    <string name="reader_background">阅读背景</string>
+    <string name="reader_background_theme">跟随应用主题</string>
     <string name="manga_list">漫画列表</string>
     <string name="disable_nsfw">隐藏成人内容</string>
     <string name="color_white">白色</string>

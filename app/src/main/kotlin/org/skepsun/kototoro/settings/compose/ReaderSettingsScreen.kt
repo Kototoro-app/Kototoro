@@ -258,11 +258,13 @@ fun ReaderSettingsScreen(
             )
 
             SettingsChoicePreference(
-                title = stringResource(R.string.background),
+                title = stringResource(R.string.reader_background),
                 options = stringArrayResource(R.array.reader_backgrounds).mapIndexed { index, label ->
                     SettingsChoiceOption(readerBackgroundNames[index], label)
                 },
-                value = settings.observeAsState(AppSettings.KEY_READER_BACKGROUND) { prefs.getString(AppSettings.KEY_READER_BACKGROUND, "") ?: "" }.value,
+                value = settings.observeAsState(AppSettings.KEY_READER_BACKGROUND) {
+                    prefs.getString(AppSettings.KEY_READER_BACKGROUND, ReaderBackground.AUTO.name) ?: ReaderBackground.AUTO.name
+                }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_BACKGROUND, it) } }
             )
 

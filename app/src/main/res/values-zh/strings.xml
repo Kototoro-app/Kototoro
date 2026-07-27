@@ -431,6 +431,8 @@
     <string name="available_section">可用</string>
     <string name="back">返回</string>
     <string name="background">阅读背景颜色</string>
+    <string name="reader_background">阅读背景</string>
+    <string name="reader_background_theme">跟随应用主题</string>
     <string name="backup_date_">备份日期：%s</string>
     <string name="backup_frequency">备份频率</string>
     <string name="backup_information">创建整包备份，用于本地保存或 WebDAV 恢复。</string>

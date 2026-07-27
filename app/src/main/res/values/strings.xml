@@ -1011,6 +1011,8 @@
     <string name="color_white">White</string>
     <string name="color_black">Black</string>
     <string name="background">Background</string>
+    <string name="reader_background">Reader background</string>
+    <string name="reader_background_theme">Follow app theme</string>
     <string name="data_not_restored">Data was not restored</string>
     <string name="data_not_restored_text">Make sure you have selected the correct backup file</string>
     <string name="manage_categories">Manage categories</string>
