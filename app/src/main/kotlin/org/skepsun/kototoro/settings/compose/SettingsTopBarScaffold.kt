@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -204,8 +206,14 @@ private fun SettingsSeparatedTopAppBar(
 @Composable
 private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
 	Surface(
-		modifier = Modifier.fillMaxWidth(),
-		color = MaterialTheme.colorScheme.surface.copy(alpha = 0.80f),
+		modifier = Modifier
+			.fillMaxWidth()
+			.background(
+				Brush.verticalGradient(
+					colors = listOf(MaterialTheme.colorScheme.surface, Color.Transparent),
+				),
+			),
+		color = Color.Transparent,
 	) {
 		Box(
 			modifier = Modifier

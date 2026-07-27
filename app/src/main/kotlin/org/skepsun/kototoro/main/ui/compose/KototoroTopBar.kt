@@ -264,6 +264,8 @@ fun KototoroTopBar(
                                     selectedType = selectedContentType,
                                     enabledTypes = enabledContentTypes,
                                     onTypeSelected = onContentTypeSelected,
+                                    controlSize = topBarControlHeight,
+                                    iconSize = topBarIconSize,
                                     modifier = Modifier.zIndex(1f),
                                 )
                             }

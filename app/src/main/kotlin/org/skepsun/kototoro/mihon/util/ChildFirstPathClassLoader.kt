@@ -24,30 +24,9 @@ class ChildFirstPathClassLoader(
      * List of packages that should always be loaded from the parent ClassLoader.
      * These are core Android/Kotlin classes and Mihon API classes that must be shared.
      */
-    private val parentPackages = setOf(
-        "java.",
-        "javax.",
-        "kotlin.",
-        "kotlinx.",
-        "android.",
-        "androidx.",
-        "org.json.",
-        "org.jsoup.",
-        "okhttp3.",
-        "okio.",
-        "rx.",
-        "eu.kanade.tachiyomi.source.",
-        "eu.kanade.tachiyomi.network.",
-        "eu.kanade.tachiyomi.util.",
-        "uy.kohesive.injekt.",
-        "ireader.core.",
-        "io.ktor.",
-        "com.fleeksoft.",
-    )
-
     override fun loadClass(name: String, resolve: Boolean): Class<*> {
         // Check if we should delegate to parent immediately
-        if (parentPackages.any { name.startsWith(it) }) {
+        if (ChildFirstClassLoaderPolicy.shouldDelegateToParent(name)) {
             return parent.loadClass(name)
         }
 

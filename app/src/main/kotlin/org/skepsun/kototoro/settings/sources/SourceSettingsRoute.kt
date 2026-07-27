@@ -55,6 +55,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
+import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.ext.observeChanges
 import org.skepsun.kototoro.mihon.MihonMangaRepository
@@ -135,8 +136,8 @@ fun SourceSettingsRoute(
     }
 
     LaunchedEffect(viewModel.onError) {
-        val resolver = (context as? BaseActivity<*>)?.exceptionResolver
-            ?: entryPoint.exceptionResolverFactory.create(context as androidx.fragment.app.FragmentActivity)
+        val resolver = (context as? BaseComposeActivity)?.exceptionResolver
+            ?: (context as? BaseActivity<*>)?.exceptionResolver
         val observer = SnackbarErrorObserver(rootView, null, resolver) { viewModel.onResume() }
         viewModel.onError.collect { event -> event?.consume(observer) }
     }

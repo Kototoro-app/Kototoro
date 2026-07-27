@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
@@ -65,6 +66,8 @@ fun SwipeableFilterChip(
     selectedType: ContentType?,
     enabledTypes: Set<ContentType>,
     onTypeSelected: (ContentType?) -> Unit,
+    controlSize: Dp = CompactFilterChipSize,
+    iconSize: Dp = 16.dp,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -95,8 +98,8 @@ fun SwipeableFilterChip(
     val iconAll = painterResource(R.drawable.ic_filter_content_type)
     val filterDescription = stringResource(R.string.content_type_filter)
     val exp = expansion.value
-    val slotWidth = CompactFilterChipSize * (1f + exp)
-    val panelWidth = CompactFilterChipSize * swipeableFilterChipWidthMultiplier(exp)
+    val slotWidth = controlSize * (1f + exp)
+    val panelWidth = controlSize * swipeableFilterChipWidthMultiplier(exp)
     val panelShape = RoundedCornerShape(999.dp)
     val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = exp > 0.01f && LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
@@ -114,7 +117,7 @@ fun SwipeableFilterChip(
     Box(
         modifier = modifier
             .width(slotWidth)
-            .height(CompactFilterChipSize)
+            .height(controlSize)
             .semantics {
                 role = Role.Button
                 contentDescription = filterDescription
@@ -195,8 +198,8 @@ fun SwipeableFilterChip(
         Box(
             modifier = Modifier
                 .requiredWidth(panelWidth)
-                .height(CompactFilterChipSize)
-                .offset(x = CompactFilterChipSize * 0.5f * exp)
+                .height(controlSize)
+                .offset(x = controlSize * 0.5f * exp)
                 .zIndex(1f)
                 .then(
                     if (exp > 0.01f) {
@@ -226,13 +229,12 @@ fun SwipeableFilterChip(
                 )
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-            val baseW = with(density) { CompactFilterChipSize.toPx() }
+            val baseW = with(density) { controlSize.toPx() }
             val h = size.height
             val totalW = baseW * (1f + 2f * exp)
             val radius = h / 2f
             val cornerRadius = CornerRadius(radius, radius)
-            val iconPadding = baseW * 0.25f
-            val iconSize = baseW - iconPadding * 2f
+            val filterIconSize = with(density) { iconSize.toPx() }
 
             if (exp > 0.01f && isPressed) {
                 val highlightX = when (highlightIndex) {
@@ -259,10 +261,10 @@ fun SwipeableFilterChip(
                     val isHighlighted = i == highlightIndex
                     val alpha = if (isEnabled) exp * if (isHighlighted) 1f else 0.5f else exp * 0.24f
                     val tint = if (isEnabled && isHighlighted) onPrimaryContainer else onSurfaceVariant
-                    translate(left = centerX - iconSize / 2f, top = (h - iconSize) / 2f) {
+                    translate(left = centerX - filterIconSize / 2f, top = (h - filterIconSize) / 2f) {
                         with(icons[i]) {
                             draw(
-                                size = Size(iconSize, iconSize),
+                                size = Size(filterIconSize, filterIconSize),
                                 alpha = alpha,
                                 colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
                             )
@@ -275,13 +277,12 @@ fun SwipeableFilterChip(
         if (exp < 0.99f && !isPressed) {
             Canvas(
                 modifier = Modifier
-                    .width(CompactFilterChipSize)
-                    .height(CompactFilterChipSize)
+                    .width(controlSize)
+                    .height(controlSize)
                     .zIndex(2f),
             ) {
-                val baseW = with(density) { CompactFilterChipSize.toPx() }
-                val iconPadding = baseW * 0.25f
-                val iconSize = baseW - iconPadding * 2f
+                val filterIconSize = with(density) { iconSize.toPx() }
+                val iconPadding = (size.width - filterIconSize) / 2f
                 val collapsedIcon = when (displayedSelectedType) {
                     ContentType.VIDEO, ContentType.HENTAI_VIDEO -> icons[0]
                     ContentType.MANGA, ContentType.HENTAI_MANGA -> icons[1]
@@ -289,10 +290,10 @@ fun SwipeableFilterChip(
                     else -> iconAll
                 }
                 val tint = if (displayedSelectedType != null) onPrimaryContainer else onSurfaceVariant
-                translate(left = iconPadding, top = (size.height - iconSize) / 2f) {
+                translate(left = iconPadding, top = (size.height - filterIconSize) / 2f) {
                     with(collapsedIcon) {
                         draw(
-                            size = Size(iconSize, iconSize),
+                            size = Size(filterIconSize, filterIconSize),
                             alpha = 1f - exp,
                             colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
                         )

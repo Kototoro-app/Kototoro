@@ -3,6 +3,7 @@ package org.skepsun.kototoro.video.ui.compose
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,11 +41,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +56,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.R
 import kotlin.math.roundToInt
 
 /** Immutable projection of playback state consumed by the Compose player chrome. */
@@ -129,11 +133,18 @@ fun VideoPlayerTopControls(
     var moreAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var subtitleAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     Surface(
-        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.64f),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent),
+                ),
+            ),
+        color = Color.Transparent,
         contentColor = PlayerControlsForeground,
     ) {
         Row(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 4.dp),
@@ -212,11 +223,18 @@ fun VideoPlayerBottomControls(
         disabledInactiveTrackColor = PlayerControlsForeground.copy(alpha = 0.16f),
     )
     Surface(
-        color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.64f),
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                ),
+            ),
+        color = Color.Transparent,
         contentColor = PlayerControlsForeground,
     ) {
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = tokens.screenHorizontalPadding, vertical = 8.dp),
@@ -284,8 +302,12 @@ fun VideoPlayerBottomControls(
                     },
                 )
                 if (state.showChapterMarkers) {
-                    PlayerTextButton("Intro") { onAction(VideoPlayerAction.ToggleIntroMarker) }
-                    PlayerTextButton("Outro") { onAction(VideoPlayerAction.ToggleOutroMarker) }
+                    PlayerTextButton(stringResource(R.string.video_mark_intro)) {
+                        onAction(VideoPlayerAction.ToggleIntroMarker)
+                    }
+                    PlayerTextButton(stringResource(R.string.video_mark_outro)) {
+                        onAction(VideoPlayerAction.ToggleOutroMarker)
+                    }
                 }
                 state.qualityLabel?.let { label ->
                     PlayerTextButton(

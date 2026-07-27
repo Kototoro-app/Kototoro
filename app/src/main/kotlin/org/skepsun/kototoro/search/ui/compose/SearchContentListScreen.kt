@@ -90,6 +90,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -98,6 +99,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -1616,8 +1619,11 @@ private fun MoreActionsButton(
     onShowDisplayOptionsSheet: () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
+    var anchorBounds by remember { mutableStateOf<Rect?>(null) }
 
-    Box {
+    Box(
+        modifier = Modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() },
+    ) {
         IconButton(onClick = { expanded = true }, modifier = Modifier.size(SearchTopPrimaryActionButtonSize)) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
@@ -1631,6 +1637,8 @@ private fun MoreActionsButton(
             offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
             shape = RoundedCornerShape(28.dp),
             style = GlassDefaults.subtleStyle(),
+            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            anchorBounds = anchorBounds,
         ) {
             if (showRandomAction) {
                 CompactDropdownMenuItem(
