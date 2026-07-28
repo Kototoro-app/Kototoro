@@ -1775,10 +1775,5 @@ class AppRouter private constructor(
     }
 }
 
-internal fun immersiveTaskFlags(enabled: Boolean): Int = if (enabled) {
-    Intent.FLAG_ACTIVITY_NEW_DOCUMENT or
-        Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
-        Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
-} else {
-    0
-}
+@Suppress("UNUSED_PARAMETER")
+internal fun immersiveTaskFlags(enabled: Boolean): Int = 0

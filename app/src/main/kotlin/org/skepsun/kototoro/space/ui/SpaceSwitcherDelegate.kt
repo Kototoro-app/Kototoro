@@ -367,11 +367,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 		resumeReading: Boolean,
 	) {
 		val intent = Intent(activity, MainActivity::class.java)
-			.addFlags(
-				Intent.FLAG_ACTIVITY_CLEAR_TOP or
-					Intent.FLAG_ACTIVITY_SINGLE_TOP or
-					Intent.FLAG_ACTIVITY_NO_ANIMATION,
-			)
+			.addFlags(mainReturnActivityFlags())
 			.putExtra(MainActivity.EXTRA_RESTORE_IMMERSIVE_SPACE_ID, targetSpaceId.value)
 		resumeSpaceExtraValue(targetSpaceId, resumeReading)?.let { spaceId ->
 			intent.putExtra(MainActivity.EXTRA_RESUME_SPACE_ID, spaceId)
@@ -408,6 +404,11 @@ private data class SwitcherChromeState(
 
 internal fun resumeSpaceExtraValue(targetSpaceId: SpaceId, resumeReading: Boolean): String? =
 	targetSpaceId.value.takeIf { resumeReading }
+
+internal fun mainReturnActivityFlags(): Int =
+	Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+		Intent.FLAG_ACTIVITY_SINGLE_TOP or
+		Intent.FLAG_ACTIVITY_NO_ANIMATION
 
 internal fun immersiveSessionSpaceId(rawSpaceId: String?, fallback: SpaceId): SpaceId =
 	rawSpaceId?.takeIf(String::isNotBlank)?.let(::SpaceId) ?: fallback

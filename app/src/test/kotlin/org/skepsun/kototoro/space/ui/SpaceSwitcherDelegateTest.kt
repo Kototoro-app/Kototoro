@@ -1,11 +1,21 @@
 package org.skepsun.kototoro.space.ui
 
+import android.content.Intent
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 
 class SpaceSwitcherDelegateTest {
+
+	@Test
+	fun `returning to main preserves immersive reader activities`() {
+		mainReturnActivityFlags() shouldBe (
+			Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+				Intent.FLAG_ACTIVITY_SINGLE_TOP or
+				Intent.FLAG_ACTIVITY_NO_ANIMATION
+		)
+	}
 
 	@Test
 	fun `ordinary immersive switch does not request resume`() {
