@@ -25,6 +25,24 @@ class ReaderPageSelectionResolverTest {
 	}
 
 	@Test
+	fun `live compose page wins over stale persisted state during layout switch`() {
+		val pages = listOf(
+			page(chapterId = 183L, index = 0),
+			page(chapterId = 183L, index = 1),
+			page(chapterId = 183L, index = 2),
+			page(chapterId = 183L, index = 3),
+		)
+
+		val position = resolveReaderCurrentPagePosition(
+			pages = pages,
+			currentPageKey = pages[3].readerKey,
+			fallbackState = ReaderState(chapterId = 183L, page = 0, scroll = 0),
+		)
+
+		assertEquals(3, position)
+	}
+
+	@Test
 	fun `prefers lower page when visible double spread crosses into preloaded next chapter`() {
 		val pages = listOf(
 			page(chapterId = 1L, index = 0),

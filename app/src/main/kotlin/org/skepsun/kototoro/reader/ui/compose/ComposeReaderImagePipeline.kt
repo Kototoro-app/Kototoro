@@ -4,10 +4,13 @@ import android.net.Uri
 import androidx.core.net.toFile
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.util.ext.isFileUri
@@ -15,6 +18,7 @@ import org.skepsun.kototoro.reader.domain.PageLoader
 import org.skepsun.kototoro.reader.domain.ReaderSuperResolutionManager
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /** Compose-owned image pipeline. It intentionally does not expose the legacy reader page state. */
@@ -80,6 +84,7 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 ) : ComposeReaderImagePipeline {
 
 	val imageLoader get() = pageLoader.imageLoader
+	private val metadataCache = ReaderImageMetadataCache()
 
 	override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = channelFlow {
 		send(ComposeReaderImageState.LoadingOriginal)
@@ -93,10 +98,13 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 		}
 		try {
 			val display = task.await()
-			val isAnimated = display.isFileUri() && BitmapDecoderCompat.isAnimated(display.toFile())
+			val isAnimated = display.isFileUri() && metadataCache.isAnimated(display.toString(), refresh = force) {
+				withContext(Dispatchers.IO) { BitmapDecoderCompat.isAnimated(display.toFile()) }
+			}
 			send(ComposeReaderImageState.OriginalReady(display, isAnimated))
 		} finally {
 			progressJob.cancel()
+			pageLoader.releasePageTask(page.toContentPage(), task)
 		}
 	}.catch { error ->
 		if (error is CancellationException) throw error
@@ -107,6 +115,42 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 		if (page.split == ReaderPageSplit.NONE && isWideReaderPage(width, height)) {
 			pageLoader.widePageDetectedEvent.tryEmit(page.id)
 		}
+	}
+}
+
+internal class ReaderImageMetadataCache(
+	private val maxEntries: Int = 512,
+) {
+
+	private val animated = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+
+	suspend fun isAnimated(key: String, refresh: Boolean = false, probe: suspend () -> Boolean): Boolean {
+		val candidate = CompletableDeferred<Boolean>()
+		val existing = if (refresh) {
+			animated.put(key, candidate)
+			null
+		} else {
+			animated.putIfAbsent(key, candidate)
+		}
+		if (existing != null) return existing.await()
+		return try {
+			probe().also { result ->
+				candidate.complete(result)
+				trimCompletedEntries()
+			}
+		} catch (error: Throwable) {
+			candidate.completeExceptionally(error)
+			animated.remove(key, candidate)
+			throw error
+		}
+	}
+
+	private fun trimCompletedEntries() {
+		if (animated.size <= maxEntries) return
+		animated.entries.asSequence()
+			.filter { it.value.isCompleted }
+			.take(animated.size - maxEntries)
+			.forEach { animated.remove(it.key, it.value) }
 	}
 }
 

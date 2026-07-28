@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
@@ -42,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -147,6 +149,7 @@ fun ComposePagedReader(
 	readerBackgroundColor: Int = android.graphics.Color.BLACK,
 	bookBackgroundTint: Int? = null,
 	imageColorFilter: ColorFilter? = null,
+	bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
 	zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
 	isCropEnabled: Boolean = false,
 	modifier: Modifier = Modifier,
@@ -158,21 +161,32 @@ fun ComposePagedReader(
 		return
 	}
 
+	var displayedPages by remember { mutableStateOf(pages) }
 	val reverseLayout = mode == ReaderMode.REVERSED
 	val isVertical = mode == ReaderMode.VERTICAL
 	val pagerState = rememberPagerState(
-		initialPage = initialPage.coerceIn(pages.indices),
-		pageCount = pages::size,
+		initialPage = initialPage.coerceIn(displayedPages.indices),
+		pageCount = displayedPages::size,
 	)
-
-	LaunchedEffect(pagerState, pages) {
+	var hasAppliedInitialPosition by remember { mutableStateOf(false) }
+	LaunchedEffect(displayedPages) {
+		if (!hasAppliedInitialPosition) {
+			val target = initialPage.coerceIn(displayedPages.indices)
+			if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+			hasAppliedInitialPosition = true
+		}
+	}
+	LaunchedEffect(pages, pagerState.isScrollInProgress) {
+		if (!pagerState.isScrollInProgress) displayedPages = pages
+	}
+	LaunchedEffect(pagerState, displayedPages) {
 		snapshotFlow { pagerState.settledPage }
 			.distinctUntilChanged()
-			.collect { position -> pages.getOrNull(position)?.let(onPageChanged) }
+			.collect { position -> displayedPages.getOrNull(position)?.let(onPageChanged) }
 	}
 
-	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled) {
-		requestedPage?.takeIf { it in pages.indices && it != pagerState.currentPage }?.let {
+	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, displayedPages) {
+		requestedPage?.takeIf { it in displayedPages.indices && it != pagerState.currentPage }?.let {
 			if (shouldAnimatePageNavigation(pagerState.currentPage, it, requestedPageSmooth, isAnimationEnabled)) {
 				pagerState.animateScrollToPage(it)
 			} else {
@@ -183,10 +197,14 @@ fun ComposePagedReader(
 	val pageCurlState = rememberComposeReaderPageCurlState()
 
 	val pageContent: @Composable PagerScope.(Int) -> Unit = { position ->
-		val page = pages[position]
-		val logicalOffset = (position - pagerState.currentPage) - pagerState.currentPageOffsetFraction
-		val pageOffset = if (reverseLayout && !isVertical) -logicalOffset else logicalOffset
-		val transform = resolveComposeReaderPageTransform(pageAnimation, pageOffset, isVertical, reverseLayout)
+		val page = displayedPages[position]
+		val transform = if (pageAnimation == ReaderAnimation.DEFAULT) {
+			ComposeReaderPageTransform()
+		} else {
+			val logicalOffset = (position - pagerState.currentPage) - pagerState.currentPageOffsetFraction
+			val pageOffset = if (reverseLayout && !isVertical) -logicalOffset else logicalOffset
+			resolveComposeReaderPageTransform(pageAnimation, pageOffset, isVertical, reverseLayout)
+		}
 		Box(
 			modifier = Modifier
 				.fillMaxSize()
@@ -215,6 +233,7 @@ fun ComposePagedReader(
 				readerBackgroundColor = readerBackgroundColor,
 				bookBackgroundTint = bookBackgroundTint,
 				imageColorFilter = imageColorFilter,
+				bitmapConfig = bitmapConfig,
 				zoomMode = zoomMode,
 				isCropEnabled = isCropEnabled,
 				isPageVisible = pagerState.settledPage == position,
@@ -229,25 +248,28 @@ fun ComposePagedReader(
 	if (isVertical) {
 		VerticalPager(
 			state = pagerState,
+			beyondViewportPageCount = PAGER_BEYOND_VIEWPORT_PAGE_COUNT,
 			modifier = modifier
 				.fillMaxSize()
 				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
-			key = { pages[it].readerKey },
+			key = { displayedPages[it].readerKey },
 			pageContent = pageContent,
 		)
 	} else {
 		HorizontalPager(
 			state = pagerState,
+			beyondViewportPageCount = PAGER_BEYOND_VIEWPORT_PAGE_COUNT,
 			modifier = modifier
 				.fillMaxSize()
 				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
 			reverseLayout = reverseLayout,
-			key = { pages[it].readerKey },
+			key = { displayedPages[it].readerKey },
 			pageContent = pageContent,
 		)
 	}
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ComposeWebtoonReader(
 	pages: List<ReaderPage>,
@@ -283,7 +305,19 @@ fun ComposeWebtoonReader(
 	val doubleTapSlop = remember(context) {
 		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
 	}
-	val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage.coerceIn(pages.indices))
+	val listState = rememberLazyListState(
+		cacheWindow = LazyLayoutCacheWindow(
+			aheadFraction = WEBTOON_AHEAD_CACHE_FRACTION,
+			behindFraction = 0f,
+		),
+		initialFirstVisibleItemIndex = initialPage.coerceIn(pages.indices),
+	)
+	val visiblePageRange by remember(listState) {
+		derivedStateOf {
+			val visibleItems = listState.layoutInfo.visibleItemsInfo
+			if (visibleItems.isEmpty()) IntRange.EMPTY else visibleItems.first().index..visibleItems.last().index
+		}
+	}
 	val pageKeys = remember(pages) { pages.map(ReaderPage::readerKey) }
 	val currentPages by rememberUpdatedState(pages)
 	val currentOnPageChanged by rememberUpdatedState(onPageChanged)
@@ -748,18 +782,20 @@ fun ComposeWebtoonReader(
 				items(
 					count = pages.size,
 					key = { pages[it].readerKey },
+					contentType = { WEBTOON_PAGE_CONTENT_TYPE },
 				) { position ->
+					val measurement = measurementFor(position)
 					ComposeWebtoonPage(
 						page = pages[position],
 						imageLoader = imageLoader,
 						imagePipeline = imagePipeline,
-						measurement = measurementFor(position),
+						measurement = measurement,
 						decodeWidthPx = viewportWidthPx,
-						decodeHeightPx = measurementFor(position).itemHeightPx,
+						decodeHeightPx = measurement.itemHeightPx,
 						bitmapConfig = bitmapConfig,
 						internalOffsetPx = restoreWebtoonInternalScroll(
 							savedOffsetPx = internalOffsets[pages[position].readerKey] ?: 0,
-							scrollRangePx = measurementFor(position).internalScrollRangePx,
+							scrollRangePx = measurement.internalScrollRangePx,
 						),
 						onImageSizeResolved = { width, height ->
 							if (width > 0 && height > 0) {
@@ -797,7 +833,7 @@ fun ComposeWebtoonReader(
 						readerBackgroundColor = readerBackgroundColor,
 						imageColorFilter = imageColorFilter,
 						isCropEnabled = isCropEnabled,
-						isPageVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == position },
+						isPageVisible = position in visiblePageRange,
 						modifier = Modifier.fillMaxWidth(),
 					)
 				}
@@ -851,11 +887,15 @@ fun ComposeDoublePageReader(
 	readerBackgroundColor: Int = android.graphics.Color.BLACK,
 	bookBackgroundTint: Int? = null,
 	imageColorFilter: ColorFilter? = null,
+	bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
 	zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
 	isCropEnabled: Boolean = false,
 	modifier: Modifier = Modifier,
 ) {
-	val displayItems = remember(pages, coverPage) { buildDoublePageDisplayItems(pages, coverPage = coverPage) }
+	var displayedPages by remember { mutableStateOf(pages) }
+	val displayItems = remember(displayedPages, coverPage) {
+		buildDoublePageDisplayItems(displayedPages, coverPage = coverPage)
+	}
 	val displayPagePositions = remember(displayItems) { displayItems.map { it.originalPosition } }
 	val spreadModel = remember(displayItems.size) { DoublePageSpreadModel.create(displayItems.size) }
 	val spreads = spreadModel.spreads
@@ -875,6 +915,14 @@ fun ComposeDoublePageReader(
 		initialPage = spreadModel.spreadIndexForPage(initialDisplayPosition),
 		pageCount = spreads::size,
 	)
+	var hasAppliedInitialPosition by remember { mutableStateOf(false) }
+	LaunchedEffect(displayItems) {
+		if (!hasAppliedInitialPosition) {
+			val target = spreadModel.spreadIndexForPage(initialDisplayPosition)
+			if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+			hasAppliedInitialPosition = true
+		}
+	}
 	fun clampSpreadOffset(scale: Float, x: Float, y: Float): Offset {
 		val maxX = (pagerState.layoutInfo.viewportSize.width * (scale - 1f) / 2f).coerceAtLeast(0f)
 		val maxY = (pagerState.layoutInfo.viewportSize.height * (scale - 1f) / 2f).coerceAtLeast(0f)
@@ -931,7 +979,7 @@ fun ComposeDoublePageReader(
 				}
 			}
 	}
-	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled) {
+	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, displayPagePositions) {
 		requestedPage?.let { position ->
 			val displayPosition = displayPagePositions.indexOf(position).takeIf { it >= 0 }
 				?: return@LaunchedEffect
@@ -986,6 +1034,7 @@ fun ComposeDoublePageReader(
 
 	HorizontalPager(
 		state = pagerState,
+		beyondViewportPageCount = PAGER_BEYOND_VIEWPORT_PAGE_COUNT,
 		reverseLayout = reverseLayout,
 		modifier = modifier
 			.fillMaxSize()
@@ -997,14 +1046,18 @@ fun ComposeDoublePageReader(
 		},
 	) { spreadIndex ->
 		val spread = spreads[spreadIndex]
-		val logicalOffset = (spreadIndex - pagerState.currentPage) - pagerState.currentPageOffsetFraction
-		val pageOffset = if (reverseLayout) -logicalOffset else logicalOffset
-		val transform = resolveComposeReaderPageTransform(
-			animation = pageAnimation,
-			pageOffset = pageOffset,
-			isVertical = false,
-			isReversed = reverseLayout,
-		)
+		val transform = if (pageAnimation == ReaderAnimation.DEFAULT) {
+			ComposeReaderPageTransform()
+		} else {
+			val logicalOffset = (spreadIndex - pagerState.currentPage) - pagerState.currentPageOffsetFraction
+			val pageOffset = if (reverseLayout) -logicalOffset else logicalOffset
+			resolveComposeReaderPageTransform(
+				animation = pageAnimation,
+				pageOffset = pageOffset,
+				isVertical = false,
+				isReversed = reverseLayout,
+			)
+		}
 		val firstPageKey = displayItems[spread.lowerPosition].page?.readerKey
 		val secondPageKey = displayItems.getOrNull(spread.upperPosition)
 			?.takeIf { spread.upperPosition != spread.lowerPosition }
@@ -1112,6 +1165,7 @@ fun ComposeDoublePageReader(
 					readerBackgroundColor = readerBackgroundColor,
 					bookBackgroundTint = bookBackgroundTint,
 					imageColorFilter = imageColorFilter,
+					bitmapConfig = bitmapConfig,
 					zoomMode = zoomMode,
 					isCropEnabled = isCropEnabled,
 					isPageVisible = pagerState.settledPage == spreadIndex,
@@ -1177,6 +1231,7 @@ fun ComposeReaderPage(
 	readerBackgroundColor: Int = android.graphics.Color.BLACK,
 	bookBackgroundTint: Int? = null,
 	imageColorFilter: ColorFilter? = null,
+	bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
 	isCropEnabled: Boolean = false,
 	zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
 	isPageVisible: Boolean = true,
@@ -1186,6 +1241,7 @@ fun ComposeReaderPage(
 ) {
 	var retryKey by remember(page.readerKey) { mutableIntStateOf(0) }
 	var renderError by remember(page.readerKey) { mutableStateOf<Throwable?>(null) }
+	var forceCoil by remember(page.readerKey) { mutableStateOf(false) }
 	val state by produceState<ComposeReaderImageState>(
 		initialValue = ComposeReaderImageState.LoadingOriginal,
 		key1 = page.readerKey,
@@ -1262,7 +1318,7 @@ fun ComposeReaderPage(
 				contentScale = ContentScale.Fit,
 				modifier = Modifier.fillMaxSize(),
 			)
-			is ComposeReaderImageState.OriginalReady -> ZoomableReaderImage(
+			is ComposeReaderImageState.OriginalReady -> PagedReaderImage(
 				uri = value.original,
 				imageLoader = imageLoader,
 				onImageSizeResolved = { width, height ->
@@ -1275,14 +1331,17 @@ fun ComposeReaderPage(
 				isZoomEnabled = isZoomEnabled,
 				isAnimationEnabled = isAnimationEnabled,
 				colorFilter = imageColorFilter,
+				bitmapConfig = bitmapConfig,
 				isCropEnabled = isCropEnabled,
 				zoomMode = zoomMode,
 				isAnimated = value.isAnimated,
 				isPageVisible = isPageVisible,
+				forceCoil = forceCoil,
+				onSubsamplingError = { forceCoil = true },
 				onImageError = { renderError = it },
 				modifier = Modifier.fillMaxSize(),
 			)
-			is ComposeReaderImageState.Enhancing -> ZoomableReaderImage(
+			is ComposeReaderImageState.Enhancing -> PagedReaderImage(
 				uri = value.original,
 				imageLoader = imageLoader,
 				onImageSizeResolved = { width, height ->
@@ -1295,14 +1354,17 @@ fun ComposeReaderPage(
 				isZoomEnabled = isZoomEnabled,
 				isAnimationEnabled = isAnimationEnabled,
 				colorFilter = imageColorFilter,
+				bitmapConfig = bitmapConfig,
 				isCropEnabled = isCropEnabled,
 				zoomMode = zoomMode,
 				isAnimated = false,
 				isPageVisible = isPageVisible,
+				forceCoil = forceCoil,
+				onSubsamplingError = { forceCoil = true },
 				onImageError = { renderError = it },
 				modifier = Modifier.fillMaxSize(),
 			)
-			is ComposeReaderImageState.EnhancedReady -> ZoomableReaderImage(
+			is ComposeReaderImageState.EnhancedReady -> PagedReaderImage(
 				uri = value.enhanced,
 				imageLoader = imageLoader,
 				onImageSizeResolved = onImageSizeResolved,
@@ -1312,10 +1374,13 @@ fun ComposeReaderPage(
 				isZoomEnabled = isZoomEnabled,
 				isAnimationEnabled = isAnimationEnabled,
 				colorFilter = imageColorFilter,
+				bitmapConfig = bitmapConfig,
 				isCropEnabled = isCropEnabled,
 				zoomMode = zoomMode,
 				isAnimated = false,
 				isPageVisible = isPageVisible,
+				forceCoil = forceCoil,
+				onSubsamplingError = { forceCoil = true },
 				onImageError = { renderError = it },
 				modifier = Modifier.fillMaxSize(),
 			)
@@ -1632,6 +1697,61 @@ private fun WebtoonImage(
 }
 
 @Composable
+private fun PagedReaderImage(
+	uri: Uri,
+	imageLoader: ImageLoader,
+	onImageSizeResolved: (width: Int, height: Int) -> Unit,
+	pageKey: Long,
+	split: ReaderPageSplit,
+	zoomCommand: ComposeReaderZoomCommand?,
+	isZoomEnabled: Boolean,
+	isAnimationEnabled: Boolean,
+	colorFilter: ColorFilter?,
+	bitmapConfig: Bitmap.Config,
+	isCropEnabled: Boolean,
+	isAnimated: Boolean,
+	isPageVisible: Boolean,
+	zoomMode: ZoomMode,
+	forceCoil: Boolean,
+	onSubsamplingError: () -> Unit,
+	onImageError: (Throwable) -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	if (!forceCoil && !isAnimated && !isCropEnabled && split == ReaderPageSplit.NONE && zoomMode != ZoomMode.KEEP_START) {
+		ComposePagedSubsamplingImage(
+			uri = uri,
+			bitmapConfig = bitmapConfig,
+			colorFilter = colorFilter,
+			zoomMode = zoomMode,
+			zoomCommand = zoomCommand,
+			isZoomEnabled = isZoomEnabled,
+			isAnimationEnabled = isAnimationEnabled,
+			onImageSizeResolved = onImageSizeResolved,
+			onImageError = { onSubsamplingError() },
+			modifier = modifier,
+		)
+	} else {
+		ZoomableReaderImage(
+			uri = uri,
+			imageLoader = imageLoader,
+			onImageSizeResolved = onImageSizeResolved,
+			pageKey = pageKey,
+			split = split,
+			zoomCommand = zoomCommand,
+			isZoomEnabled = isZoomEnabled,
+			isAnimationEnabled = isAnimationEnabled,
+			colorFilter = colorFilter,
+			isCropEnabled = isCropEnabled,
+			isAnimated = isAnimated,
+			isPageVisible = isPageVisible,
+			zoomMode = zoomMode,
+			onImageError = onImageError,
+			modifier = modifier,
+		)
+	}
+}
+
+@Composable
 private fun ZoomableReaderImage(
 	uri: Uri,
 	imageLoader: ImageLoader,
@@ -1803,5 +1923,8 @@ private fun AnimatedDrawableLifecycle(animatable: Animatable?, isPageVisible: Bo
 
 private const val ZOOM_ANIMATION_DURATION_MS = 220
 private const val DOUBLE_PAGE_WIDE_RATIO = 1.3f
+private const val PAGER_BEYOND_VIEWPORT_PAGE_COUNT = 1
+private const val WEBTOON_AHEAD_CACHE_FRACTION = 0.5f
+private const val WEBTOON_PAGE_CONTENT_TYPE = "webtoon_page"
 private const val WEBTOON_PULL_THRESHOLD = 0.3f
 private const val AUTO_BACKGROUND_SAMPLE_SIZE = 64

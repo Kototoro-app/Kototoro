@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui.compose
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +14,7 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigator
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
+import org.skepsun.kototoro.reader.ui.resolveReaderCurrentPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 
@@ -36,6 +38,9 @@ internal class ComposeReaderController(
 	var readerMode by mutableStateOf(viewModel.readerMode.value ?: ReaderMode.STANDARD)
 		private set
 	private var isDoublePage by mutableStateOf(false)
+	private var layoutGeneration by mutableIntStateOf(0)
+	val readerLayoutGeneration: Int
+		get() = layoutGeneration
 	private var chromeState by mutableStateOf(ComposeReaderChromeState(controlsVisible = false))
 	private var chaptersTabId by mutableIntStateOf(DETAILS_TAB_CHAPTERS)
 	private var selectionDialog by mutableStateOf<ReaderSelectionDialogState?>(null)
@@ -44,6 +49,7 @@ internal class ComposeReaderController(
 	private var nextCommandId = 0L
 	private var nextMessageId = 0L
 	private var messageAction: (() -> Unit)? = null
+	private var lastLayoutAnchor: ReaderState? = null
 
 	@Composable
 	fun Content(showControlLabels: Boolean) {
@@ -83,13 +89,43 @@ internal class ComposeReaderController(
 						zoomCommand = zoomCommand,
 						webtoonZoomCommand = webtoonZoomCommand,
 						isDoublePage = isDoublePage,
+						layoutGeneration = readerLayoutGeneration,
+						shouldAcceptReaderPosition = { position -> shouldAcceptPosition(position) },
 						onShowErrorDetails = errorHost::showReaderErrorDetails,
 						onRetryError = errorHost::resolveReaderError,
 						resolveErrorStringId = errorHost::getReaderErrorActionStringId,
-						onReaderPositionChanged = { position, internalScroll ->
+						onReaderPositionChanged = positionChanged@ { position, internalScroll ->
+							val pendingPosition = requestedPosition.takeIf { it != NO_REQUEST }
+							val statePosition = resolveReaderInitialPagePosition(
+								viewModel.content.value.pages,
+								viewModel.getCurrentState(),
+							)
+							if (pendingPosition == null && currentPageKey == null && position != statePosition) {
+								Log.d(
+									READER_DEBUG_TAG,
+									"Ignore stale initial page callback position=$position statePosition=$statePosition " +
+										"state=${viewModel.getCurrentState()}",
+								)
+								return@positionChanged
+							}
+							Log.d(
+								READER_DEBUG_TAG,
+								"positionCallback mode=$readerMode double=$isDoublePage position=$position " +
+									"pending=$pendingPosition currentKey=$currentPageKey state=${viewModel.getCurrentState()} " +
+									"pages=${viewModel.content.value.pages.size}",
+							)
+							if (!shouldAcceptReaderPosition(position, pendingPosition)) {
+								Log.d(
+									READER_DEBUG_TAG,
+									"Ignore transitional page callback position=$position pending=$pendingPosition",
+								)
+								return@positionChanged
+							}
 							currentPageKey = viewModel.content.value.pages.getOrNull(position)?.readerKey
 							currentInternalScroll = internalScroll
-							requestedPosition = NO_REQUEST
+							if (pendingPosition != null && kotlin.math.abs(position - pendingPosition) <= 1) {
+				requestedPosition = NO_REQUEST
+			}
 						},
 						onReaderInternalScrollChanged = { pageKey, internalScroll ->
 							if (pageKey == currentPageKey) {
@@ -104,13 +140,44 @@ internal class ComposeReaderController(
 		}
 
 	fun updateConfiguration(mode: ReaderMode, doublePage: Boolean) {
-		readerMode = mode
-		isDoublePage = doublePage && mode != ReaderMode.WEBTOON && mode != ReaderMode.VERTICAL
+		applyReaderLayout(mode, doublePage)
 	}
 
 	fun setDoublePageEnabled(enabled: Boolean) {
 		val effectiveMode = viewModel.readerMode.value ?: readerMode
-		isDoublePage = enabled && effectiveMode != ReaderMode.WEBTOON && effectiveMode != ReaderMode.VERTICAL
+		val state = viewModel.getCurrentState()
+		if (readerMode == effectiveMode && isDoublePage == enabled && currentPageKey == null &&
+			state != null && state != lastLayoutAnchor
+		) {
+			requestedPosition = resolveReaderInitialPagePosition(viewModel.content.value.pages, state)
+			requestedPositionSmooth = false
+			lastLayoutAnchor = state
+			layoutGeneration++
+			Log.d(READER_DEBUG_TAG, "resyncReaderLayout state=$state requested=$requestedPosition generation=$layoutGeneration")
+			return
+		}
+		applyReaderLayout(effectiveMode, enabled)
+	}
+
+	private fun applyReaderLayout(mode: ReaderMode, doublePage: Boolean) {
+		val nextDoublePage = doublePage && mode != ReaderMode.WEBTOON && mode != ReaderMode.VERTICAL
+		if (readerMode == mode && isDoublePage == nextDoublePage) return
+		val anchorPosition = resolveCurrentPosition()
+		val anchorState = getCurrentState()
+		Log.d(
+			READER_DEBUG_TAG,
+			"applyReaderLayout from=$readerMode/$isDoublePage to=$mode/$nextDoublePage " +
+				"anchorPosition=$anchorPosition anchorState=$anchorState currentKey=$currentPageKey " +
+				"requested=$requestedPosition contentState=${viewModel.getCurrentState()}",
+		)
+		if (anchorState != null) {
+			lastLayoutAnchor = anchorState
+			requestedPosition = anchorPosition
+			requestedPositionSmooth = false
+		}
+		readerMode = mode
+		isDoublePage = nextDoublePage
+		layoutGeneration++
 	}
 
 	fun setChromeEnabled(enabled: Boolean) {
@@ -329,10 +396,20 @@ internal class ComposeReaderController(
 
 	private fun resolveCurrentPosition(): Int {
 		val pages = viewModel.content.value.pages
-		currentPageKey?.let { pageKey ->
-			pages.indexOfFirst { it.readerKey == pageKey }.takeIf { it >= 0 }?.let { return it }
+		return resolveReaderCurrentPagePosition(pages, currentPageKey, viewModel.getCurrentState())
+	}
+
+	private fun shouldAcceptPosition(position: Int): Boolean {
+		val pendingPosition = requestedPosition.takeIf { it != NO_REQUEST }
+		if (!shouldAcceptReaderPosition(position, pendingPosition)) return false
+		if (pendingPosition == null && currentPageKey == null) {
+			val statePosition = resolveReaderInitialPagePosition(
+				viewModel.content.value.pages,
+				viewModel.getCurrentState(),
+			)
+			return position == statePosition
 		}
-		return resolveReaderInitialPagePosition(pages, viewModel.getCurrentState())
+		return true
 	}
 
 	override fun onZoomIn() = issueZoomCommand(1.1f)
@@ -350,5 +427,14 @@ internal class ComposeReaderController(
 
 	private companion object {
 		const val NO_REQUEST = -1
+		const val READER_DEBUG_TAG = "ReaderDebug"
 	}
+}
+
+internal fun shouldAcceptReaderPosition(position: Int, requestedPosition: Int?): Boolean {
+	// A double-page settled callback reports the selected page in the spread,
+	// which can be the neighbour of the requested anchor (usually the lower
+	// page). Accept that callback so the transition request cannot remain
+	// pending forever and block all later page callbacks.
+	return requestedPosition == null || kotlin.math.abs(position - requestedPosition) <= 1
 }

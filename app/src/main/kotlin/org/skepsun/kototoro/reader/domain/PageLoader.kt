@@ -32,9 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okio.source
@@ -108,7 +106,7 @@ class PageLoader @Inject constructor(
 	val loaderScope = lifecycle.lifecycleScope + InternalErrorHandler() + Dispatchers.Default
 
 	private val tasks = LongSparseArray<PageTaskRecord>()
-	private val semaphore = Semaphore(settings.readerThreads)
+	private val downloadPermits = PriorityPermitPool(settings.readerThreads)
 	private val convertLock = Mutex()
 	private val prefetchLock = Mutex()
 
@@ -128,6 +126,9 @@ class PageLoader @Inject constructor(
 	private data class PageTaskRecord(
 		val task: ProgressDeferred<Uri, Float>,
 		val translationWorkSignature: String,
+		val ticket: PriorityPermitPool.Ticket,
+		val isPrefetch: Boolean,
+		val consumers: AtomicInteger,
 	)
 
 	fun isPrefetchApplicable(): Boolean {
@@ -141,10 +142,11 @@ class PageLoader @Inject constructor(
 	fun prefetch(pages: List<ReaderPage>) = loaderScope.launch {
 		prefetchLock.withLock {
 			for (page in pages.asReversed()) {
-				if (tasks.containsKey(page.readerKey)) {
+				val contentPage = page.toContentPage()
+				if (synchronized(tasks) { tasks.containsKey(contentPage.taskKey()) }) {
 					continue
 				}
-				prefetchQueue.offerFirst(page.toContentPage())
+				prefetchQueue.offerFirst(contentPage)
 				if (prefetchQueue.size > prefetchQueueLimit) {
 					prefetchQueue.pollLast()
 				}
@@ -199,32 +201,50 @@ class PageLoader @Inject constructor(
 	): ProgressDeferred<Uri, Float> {
 		val currentSignature = enhancementController.currentWorkSignature()
 		val taskKey = page.taskKey()
-		var task = tasks[taskKey]
-			?.takeIf { it.translationWorkSignature == currentSignature }
-			?.task
-			?.takeIf { it.isValid() }
-		if (force) {
-			task?.cancel()
-		} else if (task?.isCancelled == false) {
-			return task
-		}
-		task = loadPageAsyncImpl(
-			page,
-			skipCache = force,
-			isPrefetch = false,
-			pageUrlOverride = pageUrlOverride,
-		)
-		synchronized(tasks) {
-			tasks[taskKey] = PageTaskRecord(
-				task = task,
+		return synchronized(tasks) {
+			val record = tasks[taskKey]
+				?.takeIf { it.translationWorkSignature == currentSignature }
+				?.takeIf { it.task.isValid() }
+			if (force) {
+				record?.task?.cancel()
+			} else if (record?.task?.isCancelled == false) {
+				record.consumers.incrementAndGet()
+				downloadPermits.promote(record.ticket, LOAD_PRIORITY_VISIBLE)
+				return@synchronized record.task
+			}
+			val newRecord = createPageTask(
+				page = page,
+				skipCache = force,
+				isPrefetch = false,
+				priority = if (force) LOAD_PRIORITY_RETRY else LOAD_PRIORITY_VISIBLE,
 				translationWorkSignature = currentSignature,
+				initialConsumers = 1,
+				pageUrlOverride = pageUrlOverride,
 			)
+			tasks[taskKey] = newRecord
+			newRecord.task
 		}
-		return task
 	}
 
 	suspend fun loadPage(page: ContentPage, force: Boolean): Uri {
-		return loadPageAsync(page, force).await()
+		val task = loadPageAsync(page, force)
+		return try {
+			task.await()
+		} finally {
+			releasePageTask(page, task)
+		}
+	}
+
+	fun releasePageTask(page: ContentPage, task: ProgressDeferred<Uri, Float>) {
+		synchronized(tasks) {
+			val taskKey = page.taskKey()
+			val record = tasks[taskKey]?.takeIf { it.task === task } ?: return
+			val remainingConsumers = record.consumers.updateAndGet { count -> (count - 1).coerceAtLeast(0) }
+			if (remainingConsumers == 0 && !record.isPrefetch && !record.task.isCompleted) {
+				record.task.cancel()
+				tasks.remove(taskKey)
+			}
+		}
 	}
 
 	/** Loads the cached source image without reader translation or super-resolution stages. */
@@ -235,6 +255,7 @@ class PageLoader @Inject constructor(
 			isPrefetch = false,
 			skipCache = force,
 			pageUrlOverride = null,
+			ticket = downloadPermits.ticket(if (force) LOAD_PRIORITY_RETRY else LOAD_PRIORITY_VISIBLE),
 		)
 	}
 
@@ -319,7 +340,9 @@ class PageLoader @Inject constructor(
 	}
 
 	suspend fun invalidate(clearCache: Boolean) {
-		tasks.clear()
+		synchronized(tasks) {
+			tasks.clear()
+		}
 		enhancementController.cancelAllTranslationTasks()
 		srManager.release()
 		loaderScope.cancelChildrenAndJoin()
@@ -348,22 +371,35 @@ class PageLoader @Inject constructor(
 			while (prefetchQueue.isNotEmpty()) {
 				val page = prefetchQueue.pollFirst() ?: return@launch
 				synchronized(tasks) {
-					tasks[page.taskKey()] = PageTaskRecord(
-						task = loadPageAsyncImpl(page, skipCache = false, isPrefetch = true),
-						translationWorkSignature = enhancementController.currentWorkSignature(),
+					val taskKey = page.taskKey()
+					val signature = enhancementController.currentWorkSignature()
+					val existing = tasks[taskKey]
+					if (existing?.translationWorkSignature == signature && existing.task.isValid()) {
+						return@synchronized
+					}
+					tasks[taskKey] = createPageTask(
+						page = page,
+						skipCache = false,
+						isPrefetch = true,
+						priority = LOAD_PRIORITY_PREFETCH,
+						translationWorkSignature = signature,
 					)
 				}
 			}
 		}
 	}
 
-	private fun loadPageAsyncImpl(
+	private fun createPageTask(
 		page: ContentPage,
 		skipCache: Boolean,
 		isPrefetch: Boolean,
+		priority: Int,
+		translationWorkSignature: String,
+		initialConsumers: Int = 0,
 		pageUrlOverride: String? = null,
-	): ProgressDeferred<Uri, Float> {
+	): PageTaskRecord {
 		val progress = MutableStateFlow(PROGRESS_UNDEFINED)
+		val ticket = downloadPermits.ticket(priority)
 		val deferred = loaderScope.async {
 			counter.incrementAndGet()
 			try {
@@ -373,6 +409,7 @@ class PageLoader @Inject constructor(
 					isPrefetch = isPrefetch,
 					skipCache = skipCache,
 					pageUrlOverride = pageUrlOverride,
+					ticket = ticket,
 				)
 			} finally {
 				if (counter.decrementAndGet() == 0) {
@@ -380,7 +417,13 @@ class PageLoader @Inject constructor(
 				}
 			}
 		}
-		return ProgressDeferred(deferred, progress)
+		return PageTaskRecord(
+			task = ProgressDeferred(deferred, progress),
+			translationWorkSignature = translationWorkSignature,
+			ticket = ticket,
+			isPrefetch = isPrefetch,
+			consumers = AtomicInteger(initialConsumers),
+		)
 	}
 
 	@Synchronized
@@ -401,15 +444,16 @@ class PageLoader @Inject constructor(
 		isPrefetch: Boolean,
 		skipCache: Boolean,
 		pageUrlOverride: String?,
+		ticket: PriorityPermitPool.Ticket,
 	): Uri {
-		val sourceUri = loadOriginalPageImpl(page, progress, isPrefetch, skipCache, pageUrlOverride)
+		val sourceUri = loadOriginalPageImpl(page, progress, isPrefetch, skipCache, pageUrlOverride, ticket)
 		val preparedPage = enhancementController.preparePage(
 			page = page,
 			sourceUri = sourceUri,
 			convertZipBitmap = ::convertBimap,
 		)
 
-		// Super-resolution runs outside the download semaphore and remains legacy-reader behavior.
+		// Super-resolution runs outside the download permit pool and remains legacy-reader behavior.
 		var displayUri = preparedPage.displayUri
 		if (settings.isReaderSuperResolutionEnabled && !isLowRam() && !context.isPowerSaveMode()) {
 			val engine = settings.readerSuperResolutionEngine
@@ -451,7 +495,8 @@ class PageLoader @Inject constructor(
 		isPrefetch: Boolean,
 		skipCache: Boolean,
 		pageUrlOverride: String?,
-	): Uri = semaphore.withPermit {
+		ticket: PriorityPermitPool.Ticket,
+	): Uri = downloadPermits.withPermit(ticket) {
 			val pageUrl = pageUrlOverride ?: getPageUrl(page)
 			check(pageUrl.isNotBlank()) { "Cannot obtain full image url for $page" }
 			val sourceUri = if (!skipCache) {
@@ -544,6 +589,9 @@ class PageLoader @Inject constructor(
 	companion object {
 
 		private const val PROGRESS_UNDEFINED = -1f
+		private const val LOAD_PRIORITY_PREFETCH = 0
+		private const val LOAD_PRIORITY_VISIBLE = 1
+		private const val LOAD_PRIORITY_RETRY = 2
 		private const val PREFETCH_LIMIT_DEFAULT = 6
 		private const val PREFETCH_MIN_RAM_MB = 80L
 

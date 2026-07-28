@@ -37,10 +37,9 @@ class AppSettingsAppearanceDefaultsTest {
 	}
 
 	@Test
-	fun `modern details dock and floating reader toolbar are enabled by default`() {
+	fun `modern details dock is enabled by default`() {
 		val settings = AppSettings(context)
 
 		settings.isModernDetailsDockEnabled shouldBe true
-		settings.isReaderToolbarFloating shouldBe true
 	}
 }

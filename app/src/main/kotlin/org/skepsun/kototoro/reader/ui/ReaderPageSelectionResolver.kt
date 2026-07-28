@@ -56,4 +56,15 @@ internal fun resolveReaderInitialPagePosition(pages: List<ReaderPage>, state: Re
 	}.takeIf { it >= 0 } ?: 0
 }
 
+internal fun resolveReaderCurrentPagePosition(
+	pages: List<ReaderPage>,
+	currentPageKey: Long?,
+	fallbackState: ReaderState?,
+): Int {
+	currentPageKey?.let { pageKey ->
+		pages.indexOfFirst { it.readerKey == pageKey }.takeIf { it >= 0 }?.let { return it }
+	}
+	return resolveReaderInitialPagePosition(pages, fallbackState)
+}
+
 private const val LOG_TAG = "ReaderDebug"

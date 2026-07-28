@@ -1,10 +1,12 @@
 package org.skepsun.kototoro.reader.ui.compose
 
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +19,7 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
+import org.skepsun.kototoro.reader.ui.resolveVisiblePageSelection
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 
@@ -35,6 +38,8 @@ fun ComposeReaderScreenRoot(
 	zoomCommand: ComposeReaderZoomCommand? = null,
 	webtoonZoomCommand: ComposeWebtoonZoomCommand? = null,
 	isDoublePage: Boolean = false,
+	layoutGeneration: Int = 0,
+	shouldAcceptReaderPosition: (Int) -> Boolean = { true },
 	onShowErrorDetails: (Throwable, String?) -> Unit = { _, _ -> },
 	onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
 	resolveErrorStringId: (Throwable) -> Int = ExceptionResolver::getResolveStringId,
@@ -79,12 +84,15 @@ fun ComposeReaderScreenRoot(
 
 	val pageChanged: (org.skepsun.kototoro.reader.ui.pager.ReaderPage) -> Unit = { page ->
 		val position = content.pages.indexOf(page)
-		if (position >= 0) {
+		if (position >= 0 && shouldAcceptReaderPosition(position)) {
 			viewModel.onCurrentPageChanged(position, position)
 			onReaderPositionChanged(position, 0)
+		} else if (position >= 0) {
+			Log.d("ReaderDebug", "Ignore pageChanged before ViewModel update position=$position")
 		}
 	}
 
+	key(mode, isDoublePage, layoutGeneration) {
 	if (isDoublePage) {
 		ComposeDoublePageReader(
 			pages = content.pages,
@@ -94,8 +102,32 @@ fun ComposeReaderScreenRoot(
 			imageLoader = imageLoader,
 			imagePipeline = imagePipeline,
 			onPagesChanged = { lower, upper ->
+				val stateBefore = viewModel.getCurrentState()
+				Log.d(
+					"ReaderDebug",
+					"doublePagesChanged lower=$lower upper=$upper stateBefore=$stateBefore " +
+						"requested=$requestedPage contentPages=${content.pages.size} " +
+						"lowerPage=${content.pages.getOrNull(lower)?.chapterId}:${content.pages.getOrNull(lower)?.index} " +
+						"upperPage=${content.pages.getOrNull(upper)?.chapterId}:${content.pages.getOrNull(upper)?.index}",
+				)
 				viewModel.onCurrentPageChanged(lower, upper)
-				onReaderPositionChanged(lower, 0)
+				// Keep the controller's page key aligned with the same visible-page
+				// policy used by ReaderViewModel. Reporting only the spread's lower
+				// page makes a rotation back to single-page mode restore stale state.
+				val currentState = viewModel.getCurrentState()
+				val selectedPosition = resolveVisiblePageSelection(
+					pages = content.pages,
+					lowerPos = lower,
+					upperPos = upper,
+					currentChapterId = currentState?.chapterId,
+					boundsPageOffset = 1,
+				)
+				Log.d(
+					"ReaderDebug",
+					"doublePagesChanged selected=$selectedPosition " +
+						"selectedPage=${content.pages.getOrNull(selectedPosition)?.chapterId}:${content.pages.getOrNull(selectedPosition)?.index}",
+				)
+				onReaderPositionChanged(selectedPosition, 0)
 			},
 			requestedPage = requestedPage,
 			requestedPageSmooth = requestedPageSmooth,
@@ -107,9 +139,10 @@ fun ComposeReaderScreenRoot(
 			pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
 			readerBackground = readerSettings.background,
 			readerBackgroundColor = readerBackgroundColor,
-				bookBackgroundTint = bookBackgroundTint,
-				imageColorFilter = readerImageColorFilter,
-				isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+			bookBackgroundTint = bookBackgroundTint,
+			imageColorFilter = readerImageColorFilter,
+			bitmapConfig = readerSettings.bitmapConfig,
+			isCropEnabled = readerSettings.isPagesCropEnabledStandard,
 			modifier = modifier,
 		)
 	} else if (mode == ReaderMode.WEBTOON) {
@@ -162,10 +195,12 @@ fun ComposeReaderScreenRoot(
 		isAnimationEnabled = isAnimationEnabled,
 		pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
 		readerBackground = readerSettings.background,
-			readerBackgroundColor = readerBackgroundColor,
-			bookBackgroundTint = bookBackgroundTint,
-			imageColorFilter = readerImageColorFilter,
-			zoomMode = readerSettings.zoomMode,
-			isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+		readerBackgroundColor = readerBackgroundColor,
+		bookBackgroundTint = bookBackgroundTint,
+		imageColorFilter = readerImageColorFilter,
+		bitmapConfig = readerSettings.bitmapConfig,
+		zoomMode = readerSettings.zoomMode,
+		isCropEnabled = readerSettings.isPagesCropEnabledStandard,
 	)
+	}
 }

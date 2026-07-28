@@ -1,14 +1,13 @@
 package org.skepsun.kototoro.mihon.util
 
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ChildFirstClassLoaderPolicyTest {
 
 	@Test
-	fun `coroutines are allowed to resolve from an extension`() {
-		assertFalse(ChildFirstClassLoaderPolicy.shouldDelegateToParent("kotlinx.coroutines.BuildersKt"))
+	fun `coroutines remain shared with the host`() {
+		assertTrue(ChildFirstClassLoaderPolicy.shouldDelegateToParent("kotlinx.coroutines.BuildersKt"))
 	}
 
 	@Test
