@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -23,5 +24,42 @@ class ComposeReaderControllerPolicyTest {
 	@Test
 	fun `normal paging accepts every settled position`() {
 		assertTrue(shouldAcceptReaderPosition(position = 13, requestedPosition = null))
+	}
+
+	@Test
+	fun `pending page key follows the same page after a chapter prepend`() {
+		val requestedPageKey = 103L
+		val pagesAfterPrepend = listOf(1L, 2L, 101L, 102L, requestedPageKey, 104L)
+
+		assertEquals(4, resolvePageKeyPosition(pagesAfterPrepend, requestedPageKey))
+	}
+
+	@Test
+	fun `repeated navigation continues from the pending target`() {
+		val pageKeys = listOf(101L, 102L, 103L, 104L)
+
+		assertEquals(
+			2,
+			resolvePageNavigationBasePosition(
+				pageKeys = pageKeys,
+				requestedPageKey = 103L,
+				settledPosition = 0,
+			),
+		)
+	}
+
+	@Test
+	fun `twenty navigation commands accumulate without waiting for settled callbacks`() {
+		val pageKeys = (100L..130L).toList()
+		var requestedPageKey: Long? = null
+		val settledPosition = 0
+
+		repeat(20) {
+			val base = resolvePageNavigationBasePosition(pageKeys, requestedPageKey, settledPosition)
+			val target = resolvePageNavigationTarget(base, delta = 1, pageStep = 1, navigationDirection = 1)
+			requestedPageKey = pageKeys[target]
+		}
+
+		assertEquals(120L, requestedPageKey)
 	}
 }

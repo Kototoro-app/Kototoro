@@ -30,6 +30,12 @@ internal fun resolveWebtoonAnchorPosition(pageKeys: List<Long>, anchorPageKey: L
 	return pageKeys.indexOf(anchorPageKey)
 }
 
+internal fun shouldTrackWebtoonViewport(
+	isAnchorRestorePending: Boolean,
+	anchorShiftPending: Boolean,
+	viewportConfigurationChanged: Boolean,
+): Boolean = !isAnchorRestorePending && !anchorShiftPending && !viewportConfigurationChanged
+
 /** Matches WebtoonScalingFrame's translation bounds for the zoomed webtoon canvas. */
 fun resolveWebtoonCanvasOffsetBounds(
 	viewportWidthPx: Int,

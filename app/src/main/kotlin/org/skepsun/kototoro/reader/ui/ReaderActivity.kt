@@ -304,7 +304,9 @@ class ReaderActivity :
                     onDownload = ::onDownloadClick,
                     onTranslate = ::onTranslateClick,
                     onTranslateLongClick = { onTranslateLongClick() },
-                    onOptions = ::openMenu,
+                    onOptions = {
+                        if (!composeReaderController.closeOptions()) openMenu()
+                    },
                     onOptionsLongClick = router::openReaderSettings,
 						onSliderValueChanged = { value ->
 							val page = value.toInt()
@@ -317,12 +319,31 @@ class ReaderActivity :
 						onSliderValueChangeFinished = { switchPageTo(composeSliderValue) },
                 ),
                 autoScroll = ReaderAutoScrollCallbacks(
+                    onOpen = {
+                        setUiIsVisible(true)
+                        composeReaderController.showAutoScroll()
+                    },
                     onClose = { composeReaderController.updateAutoScroll { copy(visible = false) } },
-                    onActiveChanged = { scrollTimer.setActive(it) },
-                    onPausedChanged = { scrollTimer.setManuallyPaused(it) },
-                    onSpeedChanged = { settings.readerAutoscrollSpeed = it },
-                    onFabChanged = { settings.isReaderAutoscrollFabVisible = it },
-                    onPauseOnUiChanged = { settings.isReaderAutoscrollPauseOnUi = it },
+                    onActiveChanged = {
+                        scrollTimer.setActive(it)
+                        composeReaderController.updateAutoScroll { copy(active = it) }
+                    },
+                    onPausedChanged = {
+                        scrollTimer.setManuallyPaused(it)
+                        composeReaderController.updateAutoScroll { copy(manuallyPaused = it) }
+                    },
+                    onSpeedChanged = {
+                        settings.readerAutoscrollSpeed = it
+                        composeReaderController.updateAutoScroll { copy(speed = it) }
+                    },
+                    onFabChanged = {
+                        settings.isReaderAutoscrollFabVisible = it
+                        composeReaderController.updateAutoScroll { copy(fabVisible = it) }
+                    },
+                    onPauseOnUiChanged = {
+                        settings.isReaderAutoscrollPauseOnUi = it
+                        composeReaderController.updateAutoScroll { copy(pauseOnUi = it) }
+                    },
                 ),
 				options = ComposeReaderOptionsCallbacks(
 					onModeChanged = { mode ->
@@ -367,10 +388,15 @@ class ReaderActivity :
 					},
 					onImageServerChanged = ::updateImageServer,
 					onSavePage = ::onSavePageClick,
+					onPreviousChapter = { switchChapterBy(-1) },
+					onNextChapter = { switchChapterBy(1) },
+					onPages = { composeReaderController.toggleChapters() },
 					onBookmark = ::onBookmarkClick,
+					onDownload = ::onDownloadClick,
 					onRotate = ::toggleScreenOrientation,
 					onAutoScroll = { onScrollTimerClick(false) },
 					onTranslation = ::onTranslateClick,
+					onTranslationTools = { composeReaderController.showTools() },
 					onOpenSettings = router::openReaderSettings,
 					onColorFilter = {
 						val manga = viewModel.getContentOrNull()
@@ -416,12 +442,22 @@ class ReaderActivity :
         )
         composeReaderController.updateActions {
             copy(
-                controls = ReaderControl.entries.toSet(),
+                controls = settings.readerControls,
                 pagesMode = settings.defaultDetailsTab == DETAILS_TAB_PAGES,
                 translateRequestedVisible = viewModel.shouldShowTranslationToggle(),
                 translateContextualVisible = translationShortcutVisibleForSession,
             )
         }
+		viewModel.readerControls
+			.onEach { controls -> composeReaderController.updateActions { copy(controls = controls) } }
+			.launchIn(lifecycleScope)
+		composeReaderController.updateAutoScroll {
+			copy(
+				speed = settings.readerAutoscrollSpeed,
+				fabVisible = settings.isReaderAutoscrollFabVisible,
+				pauseOnUi = settings.isReaderAutoscrollPauseOnUi,
+			)
+		}
 		composeReaderController.setChromeEnabled(true)
 		systemUiController = SystemUiController(window)
 		systemUiController.setSystemUiVisible(true)
@@ -868,6 +904,7 @@ class ReaderActivity :
     }
 
     override fun openMenu() {
+        setUiIsVisible(true)
         viewModel.saveCurrentState(composeReaderController.getCurrentState())
 		composeReaderController.showOptions(
 			ComposeReaderOptionsState(
@@ -961,10 +998,11 @@ class ReaderActivity :
         if (isLongClick) {
             scrollTimer.setActive(!scrollTimer.isActive.value)
         } else {
-            composeReaderController.updateAutoScroll {
-                copy(visible = !visible, active = scrollTimer.isActive.value, manuallyPaused = scrollTimer.isManuallyPaused.value)
-            }
-        }
+			composeReaderController.updateAutoScroll {
+				copy(active = scrollTimer.isActive.value, manuallyPaused = scrollTimer.isManuallyPaused.value)
+			}
+			composeReaderController.toggleAutoScroll()
+		}
     }
 
     override fun onTranslateClick() {
@@ -972,9 +1010,6 @@ class ReaderActivity :
     }
 
     override fun onTranslateLongClick(): Boolean {
-        if (!viewModel.shouldShowTranslationToggle()) {
-            return false
-        }
         showTranslationLanguageQuickActions()
         return true
     }

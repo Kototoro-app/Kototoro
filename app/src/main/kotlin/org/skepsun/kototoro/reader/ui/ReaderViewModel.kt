@@ -40,6 +40,7 @@ import org.skepsun.kototoro.core.nav.ReaderIntent
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
 import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
@@ -196,6 +197,12 @@ class ReaderViewModel @Inject constructor(
         scope = viewModelScope + Dispatchers.Default,
         key = AppSettings.KEY_READER_ANIMATION,
         valueProducer = { readerAnimation },
+    )
+
+    val readerControls = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_READER_CONTROLS,
+        valueProducer = { readerControls },
     )
 
     val isInfoBarEnabled = settings.observeAsStateFlow(

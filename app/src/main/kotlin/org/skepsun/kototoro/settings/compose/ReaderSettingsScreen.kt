@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
+import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 
@@ -44,6 +45,15 @@ fun ReaderSettingsScreen(
     val readerBackgroundNames = ReaderBackground.entries.map { it.name }
     val readerAnimationNames = ReaderAnimation.entries.map { it.name }
     val pagesPreloadNames = listOf("1", "2", "0")
+    val readerControlOptions = listOf(
+        SettingsChoiceOption(ReaderControl.PAGES_SHEET, stringResource(R.string.chapters_and_pages)),
+        SettingsChoiceOption(ReaderControl.SCREEN_ROTATION, stringResource(R.string.screen_orientation)),
+        SettingsChoiceOption(ReaderControl.SAVE_PAGE, stringResource(R.string.save_page)),
+        SettingsChoiceOption(ReaderControl.TIMER, stringResource(R.string.automatic_scroll)),
+        SettingsChoiceOption(ReaderControl.BOOKMARK, stringResource(R.string.bookmark_add)),
+        SettingsChoiceOption(ReaderControl.TRANSLATE, stringResource(R.string.novel_translate)),
+        SettingsChoiceOption(ReaderControl.DOWNLOAD, stringResource(R.string.download)),
+    )
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -130,6 +140,18 @@ fun ReaderSettingsScreen(
                 }.value,
                 onCheckedChange = {
                     settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CONTROL_LABELS, it) }
+                },
+            )
+
+            SettingsMultiChoicePreference(
+                title = stringResource(R.string.reader_controls_in_bottom_bar),
+                values = settings.observeAsState(AppSettings.KEY_READER_CONTROLS) {
+                    readerControls
+                }.value,
+                options = readerControlOptions,
+                emptySelectionText = stringResource(R.string.none),
+                onValueChange = { controls ->
+                    prefs.edit { putStringSet(AppSettings.KEY_READER_CONTROLS, controls.map { it.name }.toSet()) }
                 },
             )
 

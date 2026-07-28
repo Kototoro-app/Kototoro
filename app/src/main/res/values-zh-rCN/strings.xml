@@ -136,7 +136,7 @@
     <string name="webtoon">条漫</string>
     <string name="read_mode">阅读模式</string>
     <string name="ai">AI</string>
-    <string name="reader_translation_long_press_hint">长按翻译按钮打开 AI 面板</string>
+    <string name="reader_translation_long_press_hint">长按翻译按钮可快捷切换语言</string>
     <string name="reader_translation_status_compact">翻译%1$d/%2$d</string>
     <string name="reader_page_turning_mode">翻页模式</string>
     <string name="double_page_mode">双页模式</string>

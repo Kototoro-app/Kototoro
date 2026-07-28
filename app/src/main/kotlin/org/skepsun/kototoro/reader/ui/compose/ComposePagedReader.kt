@@ -73,6 +73,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
@@ -94,7 +95,6 @@ import coil3.request.allowHardware
 import coil3.request.transformations
 import coil3.toBitmap
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
@@ -102,6 +102,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
@@ -123,9 +124,26 @@ private data class PageDisplaySize(
 	val height: Int,
 )
 
+private data class DoublePageTransform(
+	val scale: Float = 1f,
+	val offsetX: Float = 0f,
+	val offsetY: Float = 0f,
+)
+
 private data class WebtoonListAnchor(
 	val pageKey: Long,
 	val offsetPx: Int,
+)
+
+private class WebtoonViewportAnchorState(
+	var pageKey: Long,
+	var offsetPx: Int,
+)
+
+private data class WebtoonViewportConfiguration(
+	val orientation: Int,
+	val screenWidthDp: Int,
+	val screenHeightDp: Int,
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -301,10 +319,6 @@ fun ComposeWebtoonReader(
 	isCropEnabled: Boolean = false,
 	modifier: Modifier = Modifier,
 ) {
-	val context = LocalContext.current
-	val doubleTapSlop = remember(context) {
-		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
-	}
 	val listState = rememberLazyListState(
 		cacheWindow = LazyLayoutCacheWindow(
 			aheadFraction = WEBTOON_AHEAD_CACHE_FRACTION,
@@ -319,13 +333,31 @@ fun ComposeWebtoonReader(
 		}
 	}
 	val pageKeys = remember(pages) { pages.map(ReaderPage::readerKey) }
+	val configuration = LocalConfiguration.current
+	val viewportConfiguration = WebtoonViewportConfiguration(
+		orientation = configuration.orientation,
+		screenWidthDp = configuration.screenWidthDp,
+		screenHeightDp = configuration.screenHeightDp,
+	)
+	var appliedViewportConfiguration by remember { mutableStateOf(viewportConfiguration) }
+	val viewportConfigurationChanged = appliedViewportConfiguration != viewportConfiguration
+	val viewportConfigurationChangedState = rememberUpdatedState(viewportConfigurationChanged)
 	val currentPages by rememberUpdatedState(pages)
 	val currentOnPageChanged by rememberUpdatedState(onPageChanged)
 	val currentOnInternalScrollChanged by rememberUpdatedState(onInternalScrollChanged)
 	var anchorPageKey by remember {
 		mutableStateOf(pageKeys[initialPage.coerceIn(pageKeys.indices)])
 	}
+	val stableViewportAnchor = remember {
+		WebtoonViewportAnchorState(
+			pageKey = pageKeys[initialPage.coerceIn(pageKeys.indices)],
+			offsetPx = 0,
+		)
+	}
 	var isAnchorRestorePending by remember { mutableStateOf(true) }
+	var previousPageKeys by remember { mutableStateOf(pageKeys) }
+	val anchorShiftPending = hasWebtoonAnchorShifted(previousPageKeys, pageKeys, anchorPageKey)
+	val anchorShiftPendingState = rememberUpdatedState(anchorShiftPending)
 	// Keep dimensions outside individual lazy items. When an item is recycled and later returns
 	// from Coil's cache, its height is known before the bitmap is drawn, preventing scroll jumps.
 	val imageSizes = remember { mutableStateMapOf<Long, WebtoonImageSize>() }
@@ -342,6 +374,10 @@ fun ComposeWebtoonReader(
 	var canvasOffsetX by remember { mutableFloatStateOf(0f) }
 	var canvasOffsetY by remember { mutableFloatStateOf(0f) }
 	val zoomAnimationScope = rememberCoroutineScope()
+	val context = LocalContext.current
+	val doubleTapSlop = remember(context) {
+		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
+	}
 	val webtoonDecay = FloatExponentialDecaySpec()
 	var webtoonZoomAnimationJob by remember { mutableStateOf<Job?>(null) }
 	var webtoonFlingJob by remember { mutableStateOf<Job?>(null) }
@@ -512,23 +548,40 @@ fun ComposeWebtoonReader(
 
 	LaunchedEffect(pageKeys, viewportWidthPx, viewportHeightPx) {
 		if (viewportWidthPx <= 0 || viewportHeightPx <= 0) return@LaunchedEffect
-		val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, anchorPageKey)
-		if (anchorPosition >= 0 && anchorPosition != listState.firstVisibleItemIndex) {
-			listState.scrollToItem(anchorPosition)
-			snapshotFlow { listState.firstVisibleItemIndex }
-				.first { position -> position == anchorPosition }
+		val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, stableViewportAnchor.pageKey)
+		if ((isAnchorRestorePending || anchorShiftPending || viewportConfigurationChanged) && anchorPosition >= 0) {
+			isAnchorRestorePending = true
+			listState.scrollToItem(anchorPosition, stableViewportAnchor.offsetPx)
 		}
+		previousPageKeys = pageKeys
+		appliedViewportConfiguration = viewportConfiguration
 		isAnchorRestorePending = false
 	}
 	LaunchedEffect(listState) {
-		snapshotFlow { listState.firstVisibleItemIndex to isAnchorRestorePending }
+		var reportedPosition: Int? = null
+		snapshotFlow {
+			Triple(
+				listState.firstVisibleItemIndex,
+				listState.firstVisibleItemScrollOffset,
+				shouldTrackWebtoonViewport(
+					isAnchorRestorePending = isAnchorRestorePending,
+					anchorShiftPending = anchorShiftPendingState.value,
+					viewportConfigurationChanged = viewportConfigurationChangedState.value,
+				),
+			)
+		}
 			.distinctUntilChanged()
-			.collect { (position, restorePending) ->
-				if (restorePending) return@collect
+			.collect { (position, offsetPx, shouldTrackViewport) ->
+				if (!shouldTrackViewport) return@collect
 				currentPages.getOrNull(position)?.let { page ->
-					anchorPageKey = page.readerKey
-					currentOnPageChanged(page)
-					currentOnInternalScrollChanged(page, internalOffsets[page.readerKey] ?: 0)
+					stableViewportAnchor.pageKey = page.readerKey
+					stableViewportAnchor.offsetPx = offsetPx
+					if (reportedPosition != position) {
+						reportedPosition = position
+						anchorPageKey = page.readerKey
+						currentOnPageChanged(page)
+						currentOnInternalScrollChanged(page, internalOffsets[page.readerKey] ?: 0)
+					}
 				}
 			}
 	}
@@ -598,6 +651,7 @@ fun ComposeWebtoonReader(
 						var transformed = false
 						do {
 							val event = awaitPointerEvent(PointerEventPass.Initial)
+							if (event.changes.any { it.isConsumed }) continue
 							event.changes.filter { it.pressed }.forEach {
 								velocityTracker.addPosition(it.uptimeMillis, it.position)
 							}
@@ -637,20 +691,23 @@ fun ComposeWebtoonReader(
 							pass = PointerEventPass.Initial,
 						)
 						val previousPosition = lastTapPosition
-						val isDoubleTapCandidate = previousPosition != null &&
-							isWebtoonDoubleTapCandidate(
-								firstTapPosition = previousPosition,
-								firstTapUpTimeMillis = lastTapUpAt,
-								secondTapPosition = down.position,
-								secondTapDownTimeMillis = down.uptimeMillis,
-								minTimeMillis = viewConfiguration.doubleTapMinTimeMillis,
-								timeoutMillis = viewConfiguration.doubleTapTimeoutMillis,
+						val isDoubleTapCandidate = isTapGridDoubleTapCandidate(
+							previousPosition = previousPosition,
+							previousTapAt = lastTapUpAt,
+							position = down.position,
+							now = down.uptimeMillis,
+							minTimeMillis = viewConfiguration.doubleTapMinTimeMillis,
+							timeoutMillis = viewConfiguration.doubleTapTimeoutMillis,
 								doubleTapSlop = doubleTapSlop,
-							)
+						)
+						if (isDoubleTapCandidate) down.consume()
 						var moved = false
 						var eventTime = down.uptimeMillis
 						do {
 							val event = awaitPointerEvent(PointerEventPass.Initial)
+							if (event.changes.any { it.isConsumed }) {
+								moved = true
+							}
 							event.changes.maxByOrNull { it.uptimeMillis }?.let { eventTime = it.uptimeMillis }
 							if (event.changes.count { it.pressed } >= 2) {
 								moved = true
@@ -904,12 +961,14 @@ fun ComposeDoublePageReader(
 	var anchorPageKey by remember { mutableStateOf(pageKeys[initialDisplayPosition.coerceIn(pageKeys.indices)]) }
 	val retainedAnchorPageKey = anchorPageKey
 	var isRestoringAnchor by remember { mutableStateOf(false) }
-	var spreadScale by remember { mutableFloatStateOf(1f) }
-	var spreadOffsetX by remember { mutableFloatStateOf(0f) }
-	var spreadOffsetY by remember { mutableFloatStateOf(0f) }
+	val spreadTransforms = remember(displayItems) { mutableStateMapOf<Int, DoublePageTransform>() }
 	var spreadZoomJob by remember { mutableStateOf<Job?>(null) }
 	var spreadFlingJob by remember { mutableStateOf<Job?>(null) }
 	val spreadGestureScope = rememberCoroutineScope()
+	val context = LocalContext.current
+	val doubleTapSlop = remember(context) {
+		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
+	}
 	val spreadDecay = FloatExponentialDecaySpec()
 	val pagerState = rememberPagerState(
 		initialPage = spreadModel.spreadIndexForPage(initialDisplayPosition),
@@ -928,17 +987,68 @@ fun ComposeDoublePageReader(
 		val maxY = (pagerState.layoutInfo.viewportSize.height * (scale - 1f) / 2f).coerceAtLeast(0f)
 		return Offset(x.coerceIn(-maxX, maxX), y.coerceIn(-maxY, maxY))
 	}
-	suspend fun flingSpread(velocity: Velocity) {
-		if (spreadScale <= 1f || maxOf(kotlin.math.abs(velocity.x), kotlin.math.abs(velocity.y)) < 50f) return
+	fun spreadTransform(spreadIndex: Int): DoublePageTransform =
+		spreadTransforms[spreadIndex] ?: DoublePageTransform()
+
+	fun applySpreadTransform(
+		spreadIndex: Int,
+		nextScale: Float,
+		pan: Offset,
+		focus: Offset,
+	): DoublePageTransform {
+		val previous = spreadTransform(spreadIndex)
+		val boundedScale = nextScale.coerceIn(1f, 2.5f)
+		val factor = if (previous.scale > 0f) boundedScale / previous.scale else 1f
+		val center = Offset(
+			pagerState.layoutInfo.viewportSize.width / 2f,
+			pagerState.layoutInfo.viewportSize.height / 2f,
+		)
+		val focusedTranslation = (focus - center) * (1f - factor)
+		val bounded = clampSpreadOffset(
+			boundedScale,
+			previous.offsetX + pan.x + focusedTranslation.x,
+			previous.offsetY + pan.y + focusedTranslation.y,
+		)
+		return DoublePageTransform(
+			scale = boundedScale,
+			offsetX = bounded.x,
+			offsetY = bounded.y,
+		).also { spreadTransforms[spreadIndex] = it }
+	}
+
+	suspend fun animateSpreadScaleTo(spreadIndex: Int, targetScale: Float, focus: Offset) {
+		val initialScale = spreadTransform(spreadIndex).scale
+		val boundedTarget = targetScale.coerceIn(1f, 2.5f)
+		if (!isAnimationEnabled) {
+			applySpreadTransform(spreadIndex, boundedTarget, Offset.Zero, focus)
+			return
+		}
+		animate(
+			initialValue = initialScale,
+			targetValue = boundedTarget,
+			animationSpec = tween(ZOOM_ANIMATION_DURATION_MS),
+		) { value, _ ->
+			applySpreadTransform(spreadIndex, value, Offset.Zero, focus)
+		}
+	}
+
+	suspend fun flingSpread(spreadIndex: Int, velocity: Velocity) {
+		if (spreadTransform(spreadIndex).scale <= 1f ||
+			maxOf(kotlin.math.abs(velocity.x), kotlin.math.abs(velocity.y)) < 50f
+		) return
 		coroutineScope {
 			launch {
-				animateDecay(spreadOffsetX, velocity.x, spreadDecay) { value, _ ->
-					spreadOffsetX = clampSpreadOffset(spreadScale, value, spreadOffsetY).x
+				animateDecay(spreadTransform(spreadIndex).offsetX, velocity.x, spreadDecay) { value, _ ->
+					val current = spreadTransform(spreadIndex)
+					val bounded = clampSpreadOffset(current.scale, value, current.offsetY)
+					spreadTransforms[spreadIndex] = current.copy(offsetX = bounded.x)
 				}
 			}
 			launch {
-				animateDecay(spreadOffsetY, velocity.y, spreadDecay) { value, _ ->
-					spreadOffsetY = clampSpreadOffset(spreadScale, spreadOffsetX, value).y
+				animateDecay(spreadTransform(spreadIndex).offsetY, velocity.y, spreadDecay) { value, _ ->
+					val current = spreadTransform(spreadIndex)
+					val bounded = clampSpreadOffset(current.scale, current.offsetX, value)
+					spreadTransforms[spreadIndex] = current.copy(offsetY = bounded.y)
 				}
 			}
 		}
@@ -1007,24 +1117,33 @@ fun ComposeDoublePageReader(
 		val job = currentCoroutineContext().job
 		spreadZoomJob = job
 		try {
-			val target = (spreadScale * command.factor).coerceIn(1f, 2.5f)
+			val current = spreadTransform(pagerState.currentPage)
+			val target = (current.scale * command.factor).coerceIn(1f, 2.5f)
 			if (!isAnimationEnabled) {
-				spreadScale = target
-				clampSpreadOffset(target, spreadOffsetX, spreadOffsetY).let {
-					spreadOffsetX = it.x
-					spreadOffsetY = it.y
-				}
+				applySpreadTransform(
+					spreadIndex = pagerState.currentPage,
+					nextScale = target,
+					pan = Offset.Zero,
+					focus = Offset(
+						pagerState.layoutInfo.viewportSize.width / 2f,
+						pagerState.layoutInfo.viewportSize.height / 2f,
+					),
+				)
 			} else {
 				animate(
-					initialValue = spreadScale,
+					initialValue = current.scale,
 					targetValue = target,
 					animationSpec = tween(ZOOM_ANIMATION_DURATION_MS),
 				) { value, _ ->
-					spreadScale = value
-					clampSpreadOffset(value, spreadOffsetX, spreadOffsetY).let {
-						spreadOffsetX = it.x
-						spreadOffsetY = it.y
-					}
+					applySpreadTransform(
+						spreadIndex = pagerState.currentPage,
+						nextScale = value,
+						pan = Offset.Zero,
+						focus = Offset(
+							pagerState.layoutInfo.viewportSize.width / 2f,
+							pagerState.layoutInfo.viewportSize.height / 2f,
+						),
+					)
 				}
 			}
 		} finally {
@@ -1074,16 +1193,17 @@ fun ComposeDoublePageReader(
 			rawSpreadBackground
 		}
 		val orderedPositions = spread.orderedPositions(reverseLayout)
+		val currentTransform = spreadTransform(spreadIndex)
 		Box(
 			modifier = Modifier
 				.fillMaxSize()
 				.zIndex(transform.zIndex)
 				.graphicsLayer {
 					alpha = transform.alpha
-					scaleX = spreadScale
-					scaleY = spreadScale
-					translationX = spreadOffsetX + transform.translationFactor * size.width
-					translationY = spreadOffsetY
+					scaleX = currentTransform.scale
+					scaleY = currentTransform.scale
+					translationX = currentTransform.offsetX + transform.translationFactor * size.width
+					translationY = currentTransform.offsetY
 					rotationY = transform.rotationY
 					transformOrigin = transform.transformOrigin
 					cameraDistance = READER_PAGE_CAMERA_DISTANCE
@@ -1100,46 +1220,93 @@ fun ComposeDoublePageReader(
 				modifier = Modifier
 					.fillMaxSize()
 				.pointerInput(isAnimationEnabled) {
+					var lastTapUpAt = 0L
+					var lastTapPosition: Offset? = null
 					awaitEachGesture {
-						awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+						val down = awaitFirstDown(
+							requireUnconsumed = false,
+							pass = PointerEventPass.Initial,
+						)
+						val isDoubleTapCandidate = isTapGridDoubleTapCandidate(
+							previousPosition = lastTapPosition,
+							previousTapAt = lastTapUpAt,
+							position = down.position,
+							now = down.uptimeMillis,
+							minTimeMillis = viewConfiguration.doubleTapMinTimeMillis,
+							timeoutMillis = viewConfiguration.doubleTapTimeoutMillis,
+								doubleTapSlop = doubleTapSlop,
+						)
+						if (isDoubleTapCandidate) down.consume()
 						spreadFlingJob?.cancel()
 						val velocityTracker = VelocityTracker()
 						var transformed = false
+						var moved = false
+						var eventTime = down.uptimeMillis
 						do {
 							val event = awaitPointerEvent(PointerEventPass.Initial)
+							if (event.changes.any { it.isConsumed }) {
+								moved = true
+								continue
+							}
+							event.changes.maxByOrNull { it.uptimeMillis }?.let { eventTime = it.uptimeMillis }
 							event.changes.filter { it.pressed }.forEach {
 								velocityTracker.addPosition(it.uptimeMillis, it.position)
 							}
 							val pressedCount = event.changes.count { it.pressed }
-							if (pressedCount >= 2 || spreadScale > 1f) {
+							if (pressedCount >= 2) {
+								moved = true
+							} else if (event.changes.any { it.pressed }) {
+								val currentPosition = event.changes.firstOrNull { it.pressed }?.position
+								if (currentPosition != null && hasExceededWebtoonTapSlop(
+										start = down.position,
+										current = currentPosition,
+										touchSlop = viewConfiguration.touchSlop,
+									)
+								) {
+									moved = true
+								}
+							}
+							if (pressedCount >= 2 || spreadTransform(spreadIndex).scale > 1f) {
 								spreadZoomJob?.cancel()
 								val centroid = event.calculateCentroid(useCurrent = false)
 								val pan = event.calculatePan()
 								val zoom = event.calculateZoom()
-								val previousScale = spreadScale
+								val previous = spreadTransform(spreadIndex)
+								val previousScale = previous.scale
 								val nextScale = (previousScale * zoom).coerceIn(1f, 2.5f)
-								val factor = if (previousScale > 0f) nextScale / previousScale else 1f
-								val center = Offset(
-									pagerState.layoutInfo.viewportSize.width / 2f,
-									pagerState.layoutInfo.viewportSize.height / 2f,
-								)
-								val focusedTranslation = (centroid - center) * (1f - factor)
-								val bounded = clampSpreadOffset(
-									nextScale,
-									spreadOffsetX + pan.x + focusedTranslation.x,
-									spreadOffsetY + pan.y + focusedTranslation.y,
-								)
-								spreadScale = nextScale
-								spreadOffsetX = bounded.x
-								spreadOffsetY = bounded.y
-								event.changes.forEach { it.consume() }
-								transformed = true
+								val updated = applySpreadTransform(spreadIndex, nextScale, pan, centroid)
+								val consumedPanX = updated.offsetX - previous.offsetX
+								val consumedPanY = updated.offsetY - previous.offsetY
+								val consumed = abs(nextScale - previousScale) > 0.001f ||
+									abs(consumedPanX) > 0.001f || abs(consumedPanY) > 0.001f
+								if (consumed) {
+									event.changes.forEach { it.consume() }
+									transformed = true
+								}
 							}
 						} while (event.changes.any { it.pressed })
 						if (transformed) {
 							spreadFlingJob = spreadGestureScope.launch {
-								flingSpread(velocityTracker.calculateVelocity())
+								flingSpread(spreadIndex, velocityTracker.calculateVelocity())
 							}
+							lastTapPosition = null
+						} else if (!moved && eventTime - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) {
+							if (isDoubleTapCandidate) {
+								lastTapPosition = null
+								spreadZoomJob?.cancel()
+								spreadZoomJob = spreadGestureScope.launch {
+									animateSpreadScaleTo(
+										spreadIndex,
+										if (spreadTransform(spreadIndex).scale > 1f) 1f else 2f,
+										down.position,
+									)
+								}
+							} else {
+								lastTapPosition = down.position
+								lastTapUpAt = eventTime
+							}
+						} else {
+							lastTapPosition = null
 						}
 					}
 				},

@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class WebtoonViewportPolicyTest {
@@ -11,6 +13,39 @@ class WebtoonViewportPolicyTest {
 		val pagesAfterPrepend = listOf(18201L, 18202L, currentPageKey, 18302L)
 
 		assertEquals(2, resolveWebtoonAnchorPosition(pagesAfterPrepend, currentPageKey))
+	}
+
+	@Test
+	fun `prepending pages requires an anchor restore but appending does not`() {
+		val currentPageKey = 18301L
+		val original = listOf(currentPageKey, 18302L)
+
+		assertEquals(
+			true,
+			hasWebtoonAnchorShifted(original, listOf(18201L, 18202L) + original, currentPageKey),
+		)
+		assertEquals(
+			false,
+			hasWebtoonAnchorShifted(original, original + 18401L, currentPageKey),
+		)
+	}
+
+	@Test
+	fun `configuration change freezes viewport tracking until anchor restoration`() {
+		assertFalse(
+			shouldTrackWebtoonViewport(
+				isAnchorRestorePending = false,
+				anchorShiftPending = false,
+				viewportConfigurationChanged = true,
+			),
+		)
+		assertTrue(
+			shouldTrackWebtoonViewport(
+				isAnchorRestorePending = false,
+				anchorShiftPending = false,
+				viewportConfigurationChanged = false,
+			),
+		)
 	}
 
 	@Test

@@ -53,9 +53,13 @@ class ReaderZoomState(
 		offsetX += panX
 		offsetY += panY
 		clampOffset()
+		val consumedPanX = offsetX - previousX
+		val consumedPanY = offsetY - previousY
 		return TransformConsumption(
-			panX = offsetX - previousX,
-			panY = offsetY - previousY,
+			panX = consumedPanX,
+			panY = consumedPanY,
+			remainingPanX = panX - consumedPanX,
+			remainingPanY = panY - consumedPanY,
 			zoomed = abs(scale - previousScale) > EPSILON,
 		)
 	}
@@ -106,8 +110,12 @@ class ReaderZoomState(
 	}
 
 	data class TransformConsumption(
+		/** Pan actually consumed by the image after clamping to its bounds. */
 		val panX: Float,
 		val panY: Float,
+		/** Pan that can be offered to the parent pager/list at an image edge. */
+		val remainingPanX: Float,
+		val remainingPanY: Float,
 		val zoomed: Boolean,
 	) {
 		val consumed: Boolean

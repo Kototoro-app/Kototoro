@@ -30,7 +30,7 @@ internal class ComposeReaderController(
 
 	private var currentPageKey: Long? = null
 	private var currentInternalScroll by mutableIntStateOf(viewModel.getCurrentState()?.scroll ?: 0)
-	private var requestedPosition by mutableIntStateOf(NO_REQUEST)
+	private var requestedPageKey by mutableStateOf<Long?>(null)
 	private var requestedPositionSmooth by mutableStateOf(false)
 	private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
 	private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
@@ -83,7 +83,7 @@ internal class ComposeReaderController(
 						viewModel = viewModel,
 						imageLoader = imagePipeline.imageLoader,
 						imagePipeline = imagePipeline,
-						requestedPage = requestedPosition.takeIf { it != NO_REQUEST },
+						requestedPageKey = requestedPageKey,
 						requestedPageSmooth = requestedPositionSmooth,
 						webtoonScrollRequest = scrollRequest,
 						zoomCommand = zoomCommand,
@@ -95,7 +95,7 @@ internal class ComposeReaderController(
 						onRetryError = errorHost::resolveReaderError,
 						resolveErrorStringId = errorHost::getReaderErrorActionStringId,
 						onReaderPositionChanged = positionChanged@ { position, internalScroll ->
-							val pendingPosition = requestedPosition.takeIf { it != NO_REQUEST }
+							val pendingPosition = resolveRequestedPosition()
 							val statePosition = resolveReaderInitialPagePosition(
 								viewModel.content.value.pages,
 								viewModel.getCurrentState(),
@@ -124,14 +124,17 @@ internal class ComposeReaderController(
 							currentPageKey = viewModel.content.value.pages.getOrNull(position)?.readerKey
 							currentInternalScroll = internalScroll
 							if (pendingPosition != null && kotlin.math.abs(position - pendingPosition) <= 1) {
-				requestedPosition = NO_REQUEST
-			}
+								requestedPageKey = null
+							}
 						},
 						onReaderInternalScrollChanged = { pageKey, internalScroll ->
 							if (pageKey == currentPageKey) {
 								currentInternalScroll = internalScroll
 							}
 						},
+						onReaderInteraction = chromeCallbacks.onReaderInteraction,
+						onGridTap = chromeCallbacks.onGridTap,
+						onGridLongTap = chromeCallbacks.onGridLongTap,
 					)
 				}
 		selectionDialog?.let { state ->
@@ -149,11 +152,10 @@ internal class ComposeReaderController(
 		if (readerMode == effectiveMode && isDoublePage == enabled && currentPageKey == null &&
 			state != null && state != lastLayoutAnchor
 		) {
-			requestedPosition = resolveReaderInitialPagePosition(viewModel.content.value.pages, state)
-			requestedPositionSmooth = false
+			requestPagePosition(resolveReaderInitialPagePosition(viewModel.content.value.pages, state), smooth = false)
 			lastLayoutAnchor = state
 			layoutGeneration++
-			Log.d(READER_DEBUG_TAG, "resyncReaderLayout state=$state requested=$requestedPosition generation=$layoutGeneration")
+			Log.d(READER_DEBUG_TAG, "resyncReaderLayout state=$state requestedKey=$requestedPageKey generation=$layoutGeneration")
 			return
 		}
 		applyReaderLayout(effectiveMode, enabled)
@@ -168,12 +170,11 @@ internal class ComposeReaderController(
 			READER_DEBUG_TAG,
 			"applyReaderLayout from=$readerMode/$isDoublePage to=$mode/$nextDoublePage " +
 				"anchorPosition=$anchorPosition anchorState=$anchorState currentKey=$currentPageKey " +
-				"requested=$requestedPosition contentState=${viewModel.getCurrentState()}",
+				"requestedKey=$requestedPageKey contentState=${viewModel.getCurrentState()}",
 		)
 		if (anchorState != null) {
 			lastLayoutAnchor = anchorState
-			requestedPosition = anchorPosition
-			requestedPositionSmooth = false
+			requestPagePosition(anchorPosition, smooth = false)
 		}
 		readerMode = mode
 		isDoublePage = nextDoublePage
@@ -235,6 +236,24 @@ internal class ComposeReaderController(
 		chromeState = chromeState.copy(autoScroll = chromeState.autoScroll.transform())
 	}
 
+	fun showAutoScroll() {
+		chromeState = chromeState.copy(
+			autoScroll = chromeState.autoScroll.copy(visible = true),
+			options = chromeState.options.copy(visible = false),
+			toolsVisible = false,
+			chaptersVisible = false,
+			translationTaskPanelVisible = false,
+		)
+	}
+
+	fun toggleAutoScroll() {
+		if (chromeState.autoScroll.visible) {
+			updateAutoScroll { copy(visible = false) }
+		} else {
+			showAutoScroll()
+		}
+	}
+
 	fun updateActions(transform: ReaderActionsUiState.() -> ReaderActionsUiState) {
 		chromeState = chromeState.copy(actions = chromeState.actions.transform())
 	}
@@ -242,22 +261,31 @@ internal class ComposeReaderController(
 	fun showOptions(state: ComposeReaderOptionsState) {
 		chromeState = chromeState.copy(
 			options = state.copy(visible = true),
+			autoScroll = chromeState.autoScroll.copy(visible = false),
 			toolsVisible = false,
 			chaptersVisible = false,
+			translationTaskPanelVisible = false,
 		)
 	}
 
 	fun showTools() {
 		chromeState = chromeState.copy(
 			options = chromeState.options.copy(visible = false),
+			autoScroll = chromeState.autoScroll.copy(visible = false),
 			toolsVisible = true,
 			chaptersVisible = false,
+			translationTaskPanelVisible = false,
 		)
 	}
 
 	fun showTranslationTaskPanel() {
-		chromeState = chromeState.copy(translationTaskPanelVisible = true)
-		hideTools()
+		chromeState = chromeState.copy(
+			options = chromeState.options.copy(visible = false),
+			autoScroll = chromeState.autoScroll.copy(visible = false),
+			toolsVisible = false,
+			chaptersVisible = false,
+			translationTaskPanelVisible = true,
+		)
 	}
 
 	fun showSelectionDialog(
@@ -342,7 +370,9 @@ internal class ComposeReaderController(
 			chromeState.copy(
 				chaptersVisible = true,
 				options = chromeState.options.copy(visible = false),
+				autoScroll = chromeState.autoScroll.copy(visible = false),
 				toolsVisible = false,
+				translationTaskPanelVisible = false,
 			)
 		}
 	}
@@ -363,23 +393,32 @@ internal class ComposeReaderController(
 		chromeState = chromeState.copy(options = chromeState.options.copy(visible = false))
 	}
 
+	fun closeOptions(): Boolean {
+		if (!chromeState.options.visible) return false
+		hideOptions()
+		return true
+	}
+
 	override val isReaderResumed: Boolean
 		get() = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
 	override fun switchPageBy(delta: Int) {
 		val pageStep = if (isDoublePage) 2 else 1
 		val direction = if (readerMode == ReaderMode.REVERSED) -1 else 1
+		val pages = viewModel.content.value.pages
+		val basePosition = resolvePageNavigationBasePosition(
+			pageKeys = pages.map { it.readerKey },
+			requestedPageKey = requestedPageKey,
+			settledPosition = resolveCurrentPosition(),
+		)
 		switchPageTo(
-			position = resolvePageNavigationTarget(resolveCurrentPosition(), delta, pageStep, direction),
+			position = resolvePageNavigationTarget(basePosition, delta, pageStep, direction),
 			smooth = true,
 		)
 	}
 
 	override fun switchPageTo(position: Int, smooth: Boolean) {
-		if (position in viewModel.content.value.pages.indices) {
-			requestedPosition = position
-			requestedPositionSmooth = smooth
-		}
+		requestPagePosition(position, smooth)
 	}
 
 	override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
@@ -400,7 +439,7 @@ internal class ComposeReaderController(
 	}
 
 	private fun shouldAcceptPosition(position: Int): Boolean {
-		val pendingPosition = requestedPosition.takeIf { it != NO_REQUEST }
+		val pendingPosition = resolveRequestedPosition()
 		if (!shouldAcceptReaderPosition(position, pendingPosition)) return false
 		if (pendingPosition == null && currentPageKey == null) {
 			val statePosition = resolveReaderInitialPagePosition(
@@ -410,6 +449,19 @@ internal class ComposeReaderController(
 			return position == statePosition
 		}
 		return true
+	}
+
+	private fun resolveRequestedPosition(): Int? {
+		return resolvePageKeyPosition(
+			pageKeys = viewModel.content.value.pages.map { it.readerKey },
+			pageKey = requestedPageKey,
+		)
+	}
+
+	private fun requestPagePosition(position: Int, smooth: Boolean) {
+		val page = viewModel.content.value.pages.getOrNull(position) ?: return
+		requestedPageKey = page.readerKey
+		requestedPositionSmooth = smooth
 	}
 
 	override fun onZoomIn() = issueZoomCommand(1.1f)
@@ -426,7 +478,6 @@ internal class ComposeReaderController(
 	}
 
 	private companion object {
-		const val NO_REQUEST = -1
 		const val READER_DEBUG_TAG = "ReaderDebug"
 	}
 }
@@ -438,3 +489,14 @@ internal fun shouldAcceptReaderPosition(position: Int, requestedPosition: Int?):
 	// pending forever and block all later page callbacks.
 	return requestedPosition == null || kotlin.math.abs(position - requestedPosition) <= 1
 }
+
+internal fun resolvePageKeyPosition(pageKeys: List<Long>, pageKey: Long?): Int? {
+	if (pageKey == null) return null
+	return pageKeys.indexOf(pageKey).takeIf { it >= 0 }
+}
+
+internal fun resolvePageNavigationBasePosition(
+	pageKeys: List<Long>,
+	requestedPageKey: Long?,
+	settledPosition: Int,
+): Int = resolvePageKeyPosition(pageKeys, requestedPageKey) ?: settledPosition

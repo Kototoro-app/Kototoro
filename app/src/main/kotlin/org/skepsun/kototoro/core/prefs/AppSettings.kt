@@ -558,6 +558,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val isReaderOptimizationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_OPTIMIZE, false)
 
+	val readerControls: Set<ReaderControl>
+		get() = prefs.getStringSet(KEY_READER_CONTROLS, null)
+			?.mapNotNullTo(EnumSet.noneOf(ReaderControl::class.java)) { value ->
+				ReaderControl.entries.find { it.name == value }
+			}
+			?.apply { retainAll(ReaderControl.BOTTOM_BAR) }
+			?: ReaderControl.BOTTOM_BAR_DEFAULT
+
 	var isOfflineCheckDisabled: Boolean
 		get() = prefs.getBoolean(KEY_OFFLINE_DISABLED, false)
 		set(value) = prefs.edit { putBoolean(KEY_OFFLINE_DISABLED, value) }
@@ -2182,6 +2190,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NOTIFICATIONS_LIGHT = "notifications_light"
 		const val KEY_NOTIFICATIONS_INFO = "tracker_notifications_info"
 		const val KEY_READER_ANIMATION = "reader_animation2"
+		const val KEY_READER_CONTROLS = "reader_controls"
 		const val KEY_READER_MODE = "reader_mode"
 		const val KEY_READER_MODE_DETECT = "reader_mode_detect"
 		const val KEY_READER_CROP = "reader_crop"

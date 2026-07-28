@@ -6,13 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SliderDefaults
@@ -41,15 +40,12 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
 @Immutable
 internal data class ReaderActionsUiState(
-	val controls: Set<ReaderControl> = ReaderControl.DEFAULT,
+	val controls: Set<ReaderControl> = ReaderControl.BOTTOM_BAR_DEFAULT,
 	val sliderValue: Float = 0f,
 	val sliderMax: Int = 1,
 	val sliderEnabled: Boolean = false,
@@ -95,7 +91,7 @@ internal fun ReaderActionsContent(
 ) {
 	val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 	val isSliderVisible = ReaderControl.SLIDER in state.controls
-	val equalButtonWidth = !isSliderVisible
+	val widthModifier = if (isSliderVisible) Modifier.fillMaxWidth() else Modifier.wrapContentWidth()
 	val visibleTranslate = state.translateRequestedVisible && (
 		state.translateContextualVisible || ReaderControl.TRANSLATE in state.controls
 		)
@@ -125,7 +121,7 @@ internal fun ReaderActionsContent(
 		LocalLiquidGlassLayerBackdrop provides backdrop,
 	) {
 		Box(
-			modifier = Modifier.fillMaxWidth(),
+			modifier = widthModifier,
 		) {
 			if (backdrop != null) {
 				Box(
@@ -135,15 +131,14 @@ internal fun ReaderActionsContent(
 				)
 			}
 			Row(
-				modifier = Modifier
-					.fillMaxWidth()
+				modifier = widthModifier
 					.heightIn(min = 48.dp),
 				verticalAlignment = Alignment.CenterVertically,
-				horizontalArrangement = if (equalButtonWidth) Arrangement.SpaceEvenly else Arrangement.Start,
+				horizontalArrangement = Arrangement.Start,
 			) {
 		if (ReaderControl.PREV_CHAPTER in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = R.drawable.ic_prev,
 				contentDescription = stringResource(R.string.prev_chapter),
 				enabled = state.previousEnabled,
@@ -198,7 +193,7 @@ internal fun ReaderActionsContent(
 
 		if (ReaderControl.NEXT_CHAPTER in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = R.drawable.ic_next,
 				contentDescription = stringResource(R.string.next_chapter),
 				enabled = state.nextEnabled,
@@ -208,7 +203,7 @@ internal fun ReaderActionsContent(
 		}
 		if (ReaderControl.SAVE_PAGE in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = R.drawable.ic_save,
 				contentDescription = stringResource(R.string.save_page),
 				contentColor = normalContentColor,
@@ -217,7 +212,7 @@ internal fun ReaderActionsContent(
 		}
 		if (ReaderControl.TIMER in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = if (state.timerActive) R.drawable.ic_timer_run else R.drawable.ic_timer,
 				contentDescription = stringResource(R.string.automatic_scroll),
 				contentColor = normalContentColor,
@@ -227,7 +222,7 @@ internal fun ReaderActionsContent(
 		}
 		if (ReaderControl.SCREEN_ROTATION in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = if (state.autoRotationEnabled) {
 					R.drawable.ic_screen_rotation_lock
 				} else {
@@ -242,7 +237,7 @@ internal fun ReaderActionsContent(
 		}
 		if (ReaderControl.BOOKMARK in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = if (state.bookmarkAdded) R.drawable.ic_bookmark_added else R.drawable.ic_bookmark,
 				contentDescription = stringResource(
 					if (state.bookmarkAdded) R.string.bookmark_remove else R.string.bookmark_add,
@@ -254,7 +249,7 @@ internal fun ReaderActionsContent(
 		}
 		if (ReaderControl.DOWNLOAD in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = R.drawable.ic_download,
 				contentDescription = stringResource(R.string.download),
 				contentColor = normalContentColor,
@@ -263,7 +258,7 @@ internal fun ReaderActionsContent(
 		}
 		if (ReaderControl.PAGES_SHEET in state.controls) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = if (state.pagesMode) R.drawable.ic_grid else R.drawable.ic_list,
 				contentDescription = pageDescription,
 				contentColor = normalContentColor,
@@ -273,7 +268,7 @@ internal fun ReaderActionsContent(
 		}
 		if (visibleTranslate) {
 			ReaderActionButton(
-				modifier = actionModifier(equalButtonWidth),
+				modifier = actionModifier(),
 				iconRes = R.drawable.ic_translate,
 				contentDescription = translateDescription,
 				contentColor = if (state.translateActive) {
@@ -286,7 +281,7 @@ internal fun ReaderActionsContent(
 			)
 		}
 		ReaderActionButton(
-			modifier = actionModifier(equalButtonWidth),
+			modifier = actionModifier(),
 			iconRes = androidx.appcompat.R.drawable.abc_ic_menu_overflow_material,
 			contentDescription = stringResource(R.string.options),
 			contentColor = normalContentColor,
@@ -322,33 +317,16 @@ private fun RowScope.ReaderActionButton(
 			},
 		contentAlignment = Alignment.Center,
 	) {
-		GlassSurface(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(4.dp),
-			shape = CircleShape,
-			style = GlassDefaults.subtleStyle(),
-			componentRole = GlassComponentRole.Surface,
-		) {
-			Icon(
-				painter = painterResource(iconRes),
-				contentDescription = null,
-				tint = contentColor,
-				modifier = Modifier
-					.align(Alignment.Center)
-					.size(24.dp),
-			)
-		}
+		Icon(
+			painter = painterResource(iconRes),
+			contentDescription = null,
+			tint = contentColor,
+			modifier = Modifier.size(24.dp),
+		)
 	}
 }
 
-private fun RowScope.actionModifier(equalButtonWidth: Boolean): Modifier = if (equalButtonWidth) {
-	Modifier
-		.weight(1f)
-		.height(48.dp)
-} else {
-	Modifier.size(48.dp)
-}
+private fun actionModifier(): Modifier = Modifier.size(48.dp)
 
 @Preview(showBackground = true, widthDp = 640)
 @Composable

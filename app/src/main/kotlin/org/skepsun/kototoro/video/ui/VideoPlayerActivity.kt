@@ -1957,6 +1957,34 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         val showMarkerActions = !isLandscapeOrientation()
         val actions = buildList {
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.open_external_player),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_open_external,
+                    onClick = ::openInExternalPlayer,
+                ),
+            )
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.cast_to_device),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_cast,
+                    onClick = ::showDlnaDeviceSheet,
+                ),
+            )
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.video_picture_in_picture),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_picture_in_picture,
+                    onClick = ::enterPictureInPicture,
+                ),
+            )
+            add(
+                PlayerOverflowAction(
+                    title = getString(R.string.video_detail),
+                    iconRes = org.skepsun.kototoro.R.drawable.ic_info_outline,
+                    onClick = ::openVideoDetails,
+                ),
+            )
             if (showMarkerActions) {
                 add(
                     PlayerOverflowAction(

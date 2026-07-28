@@ -2,7 +2,6 @@ package org.skepsun.kototoro.reader.ui.compose
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.ZoomMode
 
@@ -41,6 +40,8 @@ class ReaderZoomStateTest {
 		val consumption = state.transform(panX = 200f, panY = 100f, zoom = 1f)
 
 		assertFalse(consumption.consumed)
+		assertEquals(200f, consumption.remainingPanX)
+		assertEquals(100f, consumption.remainingPanY)
 		assertEquals(0f, state.offsetX)
 		assertEquals(0f, state.offsetY)
 	}
@@ -54,7 +55,8 @@ class ReaderZoomStateTest {
 
 		val consumption = state.transform(panX = 800f, panY = -1600f, zoom = 1f)
 
-		assertTrue(consumption.consumed)
+		assertEquals(300f, consumption.remainingPanX)
+		assertEquals(-600f, consumption.remainingPanY)
 		assertEquals(500f, state.offsetX)
 		assertEquals(-1000f, state.offsetY)
 	}
@@ -69,7 +71,8 @@ class ReaderZoomStateTest {
 
 		val consumption = state.transform(panX = 100f, panY = 0f, zoom = 1f)
 
-		assertFalse(consumption.consumed)
+		assertEquals(100f, consumption.remainingPanX)
+		assertEquals(0f, consumption.remainingPanY)
 		assertEquals(500f, state.offsetX)
 	}
 

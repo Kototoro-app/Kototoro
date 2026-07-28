@@ -3,6 +3,16 @@ package org.skepsun.kototoro.reader.ui.compose
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.hypot
 
+internal fun hasWebtoonAnchorShifted(
+	previousPageKeys: List<Long>,
+	pageKeys: List<Long>,
+	anchorPageKey: Long,
+): Boolean {
+	val previousPosition = previousPageKeys.indexOf(anchorPageKey)
+	val position = pageKeys.indexOf(anchorPageKey)
+	return previousPosition >= 0 && position >= 0 && previousPosition != position
+}
+
 internal fun isWebtoonDoubleTapCandidate(
 	firstTapPosition: Offset,
 	firstTapUpTimeMillis: Long,
@@ -12,12 +22,15 @@ internal fun isWebtoonDoubleTapCandidate(
 	timeoutMillis: Long,
 	doubleTapSlop: Float,
 ): Boolean {
-	val interval = secondTapDownTimeMillis - firstTapUpTimeMillis
-	return interval in minTimeMillis..timeoutMillis &&
-		hypot(
-			secondTapPosition.x - firstTapPosition.x,
-			secondTapPosition.y - firstTapPosition.y,
-		) <= doubleTapSlop
+	return isTapGridDoubleTapCandidate(
+		previousPosition = firstTapPosition,
+		previousTapAt = firstTapUpTimeMillis,
+		position = secondTapPosition,
+		now = secondTapDownTimeMillis,
+		minTimeMillis = minTimeMillis,
+		timeoutMillis = timeoutMillis,
+		doubleTapSlop = doubleTapSlop,
+	)
 }
 
 internal fun hasExceededWebtoonTapSlop(

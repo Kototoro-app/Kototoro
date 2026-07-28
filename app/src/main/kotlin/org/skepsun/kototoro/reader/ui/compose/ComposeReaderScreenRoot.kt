@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import android.util.Log
+import android.view.ViewConfiguration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,6 +20,7 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
+import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.resolveVisiblePageSelection
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
@@ -32,7 +34,7 @@ fun ComposeReaderScreenRoot(
 	viewModel: ReaderViewModel,
 	imageLoader: ImageLoader,
 	imagePipeline: ComposeReaderImagePipeline,
-	requestedPage: Int? = null,
+	requestedPageKey: Long? = null,
 	requestedPageSmooth: Boolean = false,
 	webtoonScrollRequest: ComposeReaderScrollRequest? = null,
 	zoomCommand: ComposeReaderZoomCommand? = null,
@@ -45,6 +47,9 @@ fun ComposeReaderScreenRoot(
 	resolveErrorStringId: (Throwable) -> Int = ExceptionResolver::getResolveStringId,
 	onReaderPositionChanged: (position: Int, internalScroll: Int) -> Unit = { _, _ -> },
 	onReaderInternalScrollChanged: (pageKey: Long, internalScroll: Int) -> Unit = { _, _ -> },
+	onReaderInteraction: () -> Unit = {},
+	onGridTap: (TapGridArea) -> Unit = {},
+	onGridLongTap: (TapGridArea, androidx.compose.ui.geometry.Offset, androidx.compose.ui.unit.IntSize) -> Unit = { _, _, _ -> },
 	modifier: Modifier = Modifier,
 ) {
 	val content by viewModel.content.collectAsStateWithLifecycle()
@@ -58,6 +63,9 @@ fun ComposeReaderScreenRoot(
 	val readerSettings by viewModel.readerSettingsProducer.collectAsStateWithLifecycle()
 	val isAnimationEnabled = LocalContext.current.isAnimationsEnabled && pageAnimation != ReaderAnimation.NONE
 	val context = LocalContext.current
+	val doubleTapSlop = remember(context) {
+		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
+	}
 	val bookBackgroundTint = readerSettings.colorFilter?.getBackgroundTint()?.defaultColor
 	val resolvedReaderBackgroundColor = resolveComposeReaderBackground(
 		background = readerSettings.background,
@@ -74,6 +82,13 @@ fun ComposeReaderScreenRoot(
 	}
 	val restoredState = viewModel.getCurrentState() ?: content.state
 	val initialPosition = resolveReaderInitialPagePosition(content.pages, restoredState)
+	val requestedPage = resolvePageKeyPosition(content.pages.map { it.readerKey }, requestedPageKey)
+	val readerModifier = modifier.readerTapGestures(
+		onInteraction = onReaderInteraction,
+		onTap = onGridTap,
+		onLongTap = onGridLongTap,
+		doubleTapSlop = doubleTapSlop,
+	)
 
 	if (mode == null || content.pages.isEmpty()) {
 		Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -143,7 +158,7 @@ fun ComposeReaderScreenRoot(
 			imageColorFilter = readerImageColorFilter,
 			bitmapConfig = readerSettings.bitmapConfig,
 			isCropEnabled = readerSettings.isPagesCropEnabledStandard,
-			modifier = modifier,
+				modifier = readerModifier,
 		)
 	} else if (mode == ReaderMode.WEBTOON) {
 		ComposeWebtoonReader(
@@ -176,7 +191,7 @@ fun ComposeReaderScreenRoot(
 			imageColorFilter = readerImageColorFilter,
 			bitmapConfig = readerSettings.bitmapConfig,
 			isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
-			modifier = modifier,
+				modifier = readerModifier,
 		)
 	} else ComposePagedReader(
 		pages = content.pages,
@@ -185,7 +200,7 @@ fun ComposeReaderScreenRoot(
 		imageLoader = imageLoader,
 		imagePipeline = imagePipeline,
 		onPageChanged = pageChanged,
-		modifier = modifier,
+		modifier = readerModifier,
 		requestedPage = requestedPage,
 		requestedPageSmooth = requestedPageSmooth,
 		zoomCommand = zoomCommand,

@@ -95,7 +95,7 @@
     <string name="webtoon">Webtoon</string>
     <string name="read_mode">Read mode</string>
     <string name="ai">AI</string>
-    <string name="reader_translation_long_press_hint">Long press Translation to open AI options</string>
+    <string name="reader_translation_long_press_hint">Long press Translation for language shortcuts</string>
     <string name="reader_translation_status_compact">Translating %1$d/%2$d</string>
     <string name="reader_page_turning_mode">Page turning mode</string>
     <string name="double_page_mode">Two-page mode</string>
@@ -1534,6 +1534,7 @@
     <string name="reader_translation_action_disable">Turn off manga translation</string>
     <string name="reader_translation_action_setup">Set up manga translation</string>
     <string name="reader_translation_action_settings">Manga translation settings</string>
+    <string name="reader_translation_tools">Translation tools</string>
     <string name="reader_translation_show_translated">Show translated layer</string>
     <string name="reader_translation_show_translated_summary">Toggle between original image and translated rendering</string>
     <string name="reader_translation_debug_logs">Translation debug logs</string>

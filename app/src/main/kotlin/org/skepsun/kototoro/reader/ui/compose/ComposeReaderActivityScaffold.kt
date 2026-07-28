@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
@@ -82,11 +83,9 @@ import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
 import org.skepsun.kototoro.reader.ui.ReaderToolbarChrome
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlItem
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDock
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderPrimaryControlBar
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
 import kotlin.math.roundToInt
 
 @Immutable
@@ -136,6 +135,7 @@ internal data class ReaderAutoScrollUiState(
 )
 
 internal data class ReaderAutoScrollCallbacks(
+	val onOpen: () -> Unit = {},
 	val onClose: () -> Unit = {},
 	val onActiveChanged: (Boolean) -> Unit = {},
 	val onPausedChanged: (Boolean) -> Unit = {},
@@ -189,13 +189,7 @@ internal fun ComposeReaderActivityScaffold(
 		Box(
 			modifier = Modifier
 				.fillMaxSize()
-				.then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier)
-				.readerTapGrid(
-					enabled = true,
-					onInteraction = callbacks.onReaderInteraction,
-					onTap = callbacks.onGridTap,
-					onLongTap = callbacks.onGridLongTap,
-				),
+				.then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
 		) {
 			content()
 		}
@@ -224,7 +218,7 @@ internal fun ComposeReaderActivityScaffold(
 		}
 
 		AnimatedVisibility(
-			visible = state.controlsVisible,
+			visible = state.controlsVisible || state.autoScroll.visible,
 			enter = slideInVertically { it } + fadeIn(),
 			exit = slideOutVertically { it } + fadeOut(),
 			modifier = Modifier.align(Alignment.BottomCenter),
@@ -247,8 +241,16 @@ internal fun ComposeReaderActivityScaffold(
 				}
 				ReaderControlDock(
 					isIosStyle = isIosStyle,
-					expanded = state.chaptersVisible || state.options.visible || state.toolsVisible,
+					expanded = state.autoScroll.visible || state.chaptersVisible || state.options.visible ||
+						state.toolsVisible,
 				) {
+					if (state.autoScroll.visible) {
+						ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
+						HorizontalDivider(
+							modifier = Modifier.padding(horizontal = 12.dp),
+							color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
+						)
+					}
 					if (state.chaptersVisible) {
 						Box(
 							modifier = Modifier
@@ -294,40 +296,13 @@ internal fun ComposeReaderActivityScaffold(
 							color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
 						)
 					}
-					ReaderPrimaryControlBar(
-						items = listOf(
-							ReaderControlItem(
-								ReaderControlDestination.NAVIGATION,
-								stringResource(R.string.chapters),
-								R.drawable.ic_grid,
-								active = state.chaptersVisible,
-							),
-							ReaderControlItem(
-								ReaderControlDestination.DISPLAY,
-								stringResource(R.string.appearance),
-								R.drawable.ic_appearance,
-								active = state.options.visible,
-							),
-							ReaderControlItem(
-								ReaderControlDestination.TRANSLATION,
-								stringResource(R.string.reader_translation_action),
-								R.drawable.ic_translate,
-								active = state.toolsVisible,
-							),
-						),
-						onDestinationSelected = { destination ->
-							if (destination == ReaderControlDestination.NAVIGATION) {
-								callbacks.onPrimaryDestination(ReaderControlDestination.CHAPTERS_PANEL)
-							} else if (destination == ReaderControlDestination.TRANSLATION) {
-								callbacks.onPrimaryDestination(ReaderControlDestination.TOOLS)
-							} else {
-								callbacks.onPrimaryDestination(destination)
-							}
-						},
-						onDestinationLongPressed = callbacks.onPrimaryDestinationLongPress,
-						transparentContainer = true,
-						showLabels = showControlLabels,
-					)
+					if (state.controlsVisible) {
+						ReaderActionsContent(
+							state = state.actions,
+							isSliderTracking = false,
+							callbacks = callbacks.actions,
+						)
+					}
 				}
 			}
 		}
@@ -377,13 +352,19 @@ internal fun ComposeReaderActivityScaffold(
 				.padding(bottom = if (state.controlsVisible) 104.dp else 20.dp),
 		)
 
-		AnimatedVisibility(
-			visible = state.autoScroll.visible,
-			enter = slideInVertically { it } + fadeIn(),
-			exit = slideOutVertically { it } + fadeOut(),
-			modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
-		) {
-			ReaderAutoScrollPanel(state.autoScroll, callbacks.autoScroll)
+		if (state.autoScroll.active && state.autoScroll.fabVisible && !state.controlsVisible && !state.autoScroll.visible) {
+			SmallFloatingActionButton(
+				onClick = callbacks.autoScroll.onOpen,
+				modifier = Modifier
+					.align(Alignment.BottomEnd)
+					.navigationBarsPadding()
+					.padding(end = 16.dp, bottom = 16.dp),
+			) {
+				Icon(
+					painter = painterResource(R.drawable.ic_timer_run),
+					contentDescription = stringResource(R.string.automatic_scroll),
+				)
+			}
 		}
 
 		translationTaskPanelContent()
@@ -412,34 +393,33 @@ private fun ReaderProgressControl(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: ReaderAutoScrollCallbacks) {
-	Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-		Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-				IconButton(onClick = callbacks.onClose) { Text("×", style = MaterialTheme.typography.titleLarge) }
-			}
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(stringResource(R.string.reader_autoscroll), modifier = Modifier.weight(1f))
-				Switch(checked = state.active, onCheckedChange = callbacks.onActiveChanged)
-			}
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(if (state.manuallyPaused) stringResource(R.string.play) else stringResource(R.string.pause), modifier = Modifier.weight(1f))
-				Switch(checked = !state.manuallyPaused, onCheckedChange = { callbacks.onPausedChanged(!it) })
-			}
-			Text(text = stringResource(R.string.speed_value, 0.1f + state.speed * 10f))
-			Slider(value = state.speed, onValueChange = callbacks.onSpeedChanged, valueRange = 0f..1f)
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))
-				Switch(checked = state.fabVisible, onCheckedChange = callbacks.onFabChanged)
-			}
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(stringResource(R.string.reader_autoscroll_pause_on_ui), modifier = Modifier.weight(1f))
-				Switch(checked = state.pauseOnUi, onCheckedChange = callbacks.onPauseOnUiChanged)
-			}
-			if (state.showPageDelay) {
-				Text(stringResource(R.string.page_switch_timer, state.pageDelaySeconds), style = MaterialTheme.typography.bodySmall)
-			}
+	Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			Text(stringResource(R.string.reader_autoscroll), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+			IconButton(onClick = callbacks.onClose) { Text("×", style = MaterialTheme.typography.titleLarge) }
+		}
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			Text(stringResource(R.string.reader_autoscroll), modifier = Modifier.weight(1f))
+			Switch(checked = state.active, onCheckedChange = callbacks.onActiveChanged)
+		}
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			Text(if (state.manuallyPaused) stringResource(R.string.play) else stringResource(R.string.pause), modifier = Modifier.weight(1f))
+			Switch(checked = !state.manuallyPaused, onCheckedChange = { callbacks.onPausedChanged(!it) })
+		}
+		Text(text = stringResource(R.string.speed_value, 0.1f + state.speed * 10f))
+		Slider(value = state.speed, onValueChange = callbacks.onSpeedChanged, valueRange = 0f..1f)
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))
+			Switch(checked = state.fabVisible, onCheckedChange = callbacks.onFabChanged)
+		}
+		Row(verticalAlignment = Alignment.CenterVertically) {
+			Text(stringResource(R.string.reader_autoscroll_pause_on_ui), modifier = Modifier.weight(1f))
+			Switch(checked = state.pauseOnUi, onCheckedChange = callbacks.onPauseOnUiChanged)
+		}
+		if (state.showPageDelay) {
+			Text(stringResource(R.string.page_switch_timer, state.pageDelaySeconds), style = MaterialTheme.typography.bodySmall)
 		}
 	}
 }

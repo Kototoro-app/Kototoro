@@ -72,10 +72,15 @@ internal data class ComposeReaderOptionsCallbacks(
 	val onBackgroundChanged: (ReaderBackground) -> Unit = {},
 	val onImageServerChanged: (String?) -> Unit = {},
 	val onSavePage: () -> Unit = {},
+	val onPreviousChapter: () -> Unit = {},
+	val onNextChapter: () -> Unit = {},
+	val onPages: () -> Unit = {},
 	val onBookmark: () -> Unit = {},
+	val onDownload: () -> Unit = {},
 	val onRotate: () -> Unit = {},
 	val onAutoScroll: () -> Unit = {},
 	val onTranslation: () -> Unit = {},
+	val onTranslationTools: () -> Unit = {},
 	val onOpenSettings: () -> Unit = {},
 	val onColorFilter: () -> Unit = {},
 	val onOpenBrowser: () -> Unit = {},
@@ -95,6 +100,10 @@ internal fun ComposeReaderOptionsSheet(
 	modifier: Modifier = Modifier,
 ) {
 	if (!state.visible) return
+	fun dismissThen(action: () -> Unit): () -> Unit = {
+		callbacks.onDismiss()
+		action()
+	}
 	val backgroundLabels = stringArrayResource(R.array.reader_backgrounds)
 	val animationLabels = stringArrayResource(R.array.reader_animation)
 	Surface(
@@ -223,10 +232,23 @@ internal fun ComposeReaderOptionsSheet(
 							onCheckedChange = callbacks.onSplitPagesChanged,
 							modifier = Modifier.weight(1f),
 						)
-						OptionAction(R.drawable.ic_save, R.string.save_page, callbacks.onSavePage)
-						OptionAction(R.drawable.ic_appearance, R.string.color_correction, callbacks.onColorFilter)
-						OptionAction(R.drawable.ic_web, R.string.open_in_browser, callbacks.onOpenBrowser)
-						}
+							OptionAction(R.drawable.ic_save, R.string.save_page, dismissThen(callbacks.onSavePage))
+							OptionAction(R.drawable.ic_prev, R.string.prev_chapter, dismissThen(callbacks.onPreviousChapter))
+							OptionAction(R.drawable.ic_next, R.string.next_chapter, dismissThen(callbacks.onNextChapter))
+							OptionAction(R.drawable.ic_grid, R.string.chapters_and_pages, dismissThen(callbacks.onPages))
+							OptionAction(R.drawable.ic_bookmark, R.string.bookmark_add, dismissThen(callbacks.onBookmark))
+							OptionAction(R.drawable.ic_download, R.string.download, dismissThen(callbacks.onDownload))
+							OptionAction(R.drawable.ic_screen_rotation, R.string.rotate_screen, dismissThen(callbacks.onRotate))
+							OptionAction(R.drawable.ic_timer, R.string.automatic_scroll, dismissThen(callbacks.onAutoScroll))
+							OptionAction(
+								R.drawable.ic_translate,
+								R.string.reader_translation_tools,
+								dismissThen(callbacks.onTranslationTools),
+							)
+							OptionAction(R.drawable.ic_appearance, R.string.color_correction, dismissThen(callbacks.onColorFilter))
+							OptionAction(R.drawable.ic_web, R.string.open_in_browser, dismissThen(callbacks.onOpenBrowser))
+							OptionAction(R.drawable.ic_settings, R.string.settings, dismissThen(callbacks.onOpenSettings))
+					}
 					}
 				}
 			}
