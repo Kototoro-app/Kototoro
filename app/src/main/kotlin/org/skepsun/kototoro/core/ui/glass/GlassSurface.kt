@@ -16,6 +16,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
@@ -204,6 +205,7 @@ fun LiquidGlassSurface(
     CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
         Box(
             modifier = modifier
+                .clip(shape)
                 .drawBackdrop(
                     backdrop = backdrop,
                     exportedBackdrop = exportedBackdrop,

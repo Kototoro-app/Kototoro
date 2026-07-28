@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,16 +31,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderControl
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
-import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
-import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.reader.ui.compose.design.readerControlContentColor
 
 @Immutable
 internal data class ReaderActionsUiState(
@@ -95,7 +89,7 @@ internal fun ReaderActionsContent(
 	val visibleTranslate = state.translateRequestedVisible && (
 		state.translateContextualVisible || ReaderControl.TRANSLATE in state.controls
 		)
-	val normalContentColor = MaterialTheme.colorScheme.onSurface
+	val normalContentColor = readerControlContentColor()
 	val disabledContentColor = normalContentColor.copy(alpha = 0.38f)
 	val pageDescription = if (state.pagesMode) {
 		stringResource(R.string.pages)
@@ -106,36 +100,15 @@ internal fun ReaderActionsContent(
 		stringResource(R.string.novel_translate)
 	}
 	val sliderReversed = state.sliderReversed != isRtl
-	val backdropBackground = MaterialTheme.colorScheme.background
-	val backdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-		rememberLayerBackdrop {
-			drawRect(backdropBackground)
-			drawContent()
-		}
-	} else {
-		null
-	}
-
-	CompositionLocalProvider(
-		LocalLiquidGlassBackdrop provides backdrop,
-		LocalLiquidGlassLayerBackdrop provides backdrop,
+	Box(
+		modifier = widthModifier,
 	) {
-		Box(
-			modifier = widthModifier,
+		Row(
+			modifier = widthModifier
+				.heightIn(min = 48.dp),
+			verticalAlignment = Alignment.CenterVertically,
+			horizontalArrangement = Arrangement.Start,
 		) {
-			if (backdrop != null) {
-				Box(
-					modifier = Modifier
-						.matchParentSize()
-						.layerBackdrop(backdrop),
-				)
-			}
-			Row(
-				modifier = widthModifier
-					.heightIn(min = 48.dp),
-				verticalAlignment = Alignment.CenterVertically,
-				horizontalArrangement = Arrangement.Start,
-			) {
 		if (ReaderControl.PREV_CHAPTER in state.controls) {
 			ReaderActionButton(
 				modifier = actionModifier(),
@@ -288,7 +261,6 @@ internal fun ReaderActionsContent(
 			onClick = callbacks.onOptions,
 			onLongClick = callbacks.onOptionsLongClick,
 		)
-			}
 		}
 	}
 }
