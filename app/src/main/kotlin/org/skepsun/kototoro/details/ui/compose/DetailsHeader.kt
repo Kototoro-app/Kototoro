@@ -698,55 +698,55 @@ fun DetailsHeader(
             )
         }
 
-        DetailsDescriptionSurface(
-            panoramaEnabled = panoramaEnabled,
+        Column(
             modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SelectionContainer {
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                enabled = canExpandDescription,
-                                role = Role.Button,
-                            ) {
-                                isDescriptionExpanded = !isDescriptionExpanded
-                            }
-                            .animateContentSize()
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
-                                drawContent()
-                                if (canExpandDescription && !isDescriptionExpanded) {
-                                    drawRect(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(Color.Black, Color.Transparent),
-                                            startY = size.height * 0.62f,
-                                            endY = size.height,
-                                        ),
-                                        blendMode = BlendMode.DstIn,
-                                    )
-                                }
-                            },
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
-                        overflow = TextOverflow.Ellipsis,
-                        onTextLayout = { textLayoutResult ->
-                            val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
-                                textLayoutResult.lineCount > collapsedDescriptionMaxLines
-                            if (canExpandDescription != hasCollapsedOverflow) {
-                                canExpandDescription = hasCollapsedOverflow
+            Text(
+                text = stringResource(R.string.description),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            SelectionContainer {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            enabled = canExpandDescription,
+                            role = Role.Button,
+                        ) {
+                            isDescriptionExpanded = !isDescriptionExpanded
+                        }
+                        .animateContentSize()
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            if (canExpandDescription && !isDescriptionExpanded) {
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(Color.Black, Color.Transparent),
+                                        startY = size.height * 0.62f,
+                                        endY = size.height,
+                                    ),
+                                    blendMode = BlendMode.DstIn,
+                                )
                             }
                         },
-                    )
-                }
+                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { textLayoutResult ->
+                        val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
+                            textLayoutResult.lineCount > collapsedDescriptionMaxLines
+                        if (canExpandDescription != hasCollapsedOverflow) {
+                            canExpandDescription = hasCollapsedOverflow
+                        }
+                    },
+                )
             }
         }
 
@@ -797,54 +797,6 @@ fun DetailsHeader(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun DetailsDescriptionSurface(
-    panoramaEnabled: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val shape = RoundedCornerShape(
-        when {
-            expressive -> 28.dp
-            isIosStyle -> 22.dp
-            else -> 24.dp
-        },
-    )
-    if (isIosStyle) {
-        LiquidGlassSurface(
-            modifier = modifier,
-            style = GlassDefaults.regularStyle().copy(
-                containerAlpha = 0.84f,
-                borderAlpha = 0.18f,
-            ),
-            shape = shape,
-        ) {
-            content()
-        }
-    } else {
-        Surface(
-            modifier = modifier,
-            shape = shape,
-            color = if (panoramaEnabled) {
-                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.76f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(
-                    alpha = if (panoramaEnabled) 0.42f else 0.24f,
-                ),
-            ),
-        ) {
-            content()
         }
     }
 }

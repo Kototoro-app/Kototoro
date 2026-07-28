@@ -275,15 +275,14 @@ components:
       - hero-supporting-copy
       - popup-window-menu
   details-panorama:
+    descriptionTypography: "{typography.supporting}"
     material3-expressive:
       topBarControls: translucent-theme-surface
       infoCard: translucent-theme-surface
-      descriptionCard: translucent-stable-surface-without-backdrop-sampling
       bottomDock: opaque-stable-surface
     ios-glass:
       topBarControls: same-window-backdrop
       infoCard: same-window-backdrop
-      descriptionCard: same-window-backdrop
       bottomDock: same-window-backdrop
     panoramaDisabledFallback: opaque-stable-surface
   popup-menu:

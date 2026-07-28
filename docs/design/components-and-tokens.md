@@ -103,6 +103,7 @@ Kototoro 使用一套语义排版系统，两种风格共享字号和行高，�
 | 二级页顶栏 | 22/28 SemiBold | 不放副标题 | 图标或 14/20 Medium |
 | 普通列表/设置项 | 16/24 Medium | 14/20 Regular | 12/16 Medium |
 | 内容卡片 | 16/24 SemiBold，最多两行 | 14/20 Regular，最多两行 | 12/16 Medium |
+| 详情页简介 | 14/20 SemiBold | 14/20 Regular | — |
 | Popup Menu | 14/20 Medium | 原则上不放说明 | 快捷键/状态 12/16 Medium |
 | Sheet/对话式面板 | 22/28 SemiBold | 14/20 Regular | 按钮 14/20 SemiBold |
 | Alert Dialog | 22/28 SemiBold | 14/20 Regular | 按钮 14/20 SemiBold |
