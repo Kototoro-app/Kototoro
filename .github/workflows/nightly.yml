@@ -1,0 +1,106 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # 02:00 Asia/Shanghai. GitHub Actions may start this with a small delay.
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: true
+
+env:
+  NIGHTLY_REPOSITORY: Kototoro-app/Kototoro-Nightly
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout devel
+        uses: actions/checkout@v4
+        with:
+          ref: devel
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          echo "$KEYSTORE_BASE64" | base64 --decode > release.keystore
+
+      - name: Build Nightly APK
+        run: |
+          ./gradlew :app:assembleNightly --no-daemon --stacktrace \
+            -PRELEASE_STORE_FILE=../release.keystore \
+            -PRELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -PRELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+            -PRELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Collect APKs
+        id: assets
+        run: |
+          set -euo pipefail
+          date_utc=$(date -u +%Y%m%d)
+          version_name="N${date_utc}"
+          mkdir -p release
+          shopt -s nullglob
+          apk_files=(app/build/outputs/apk/nightly/*.apk)
+          test "${#apk_files[@]}" -gt 0
+
+          for apk in "${apk_files[@]}"; do
+            filename=$(basename "$apk")
+            case "$filename" in
+              *arm64-v8a*) abi=arm64-v8a ;;
+              *armeabi-v7a*) abi=armeabi-v7a ;;
+              *x86_64*) abi=x86_64 ;;
+              *x86*) abi=x86 ;;
+              *universal*) abi=universal ;;
+              *) echo "Unknown APK ABI: $filename" >&2; exit 1 ;;
+            esac
+            cp "$apk" "release/Kototoro-${version_name}-${abi}-nightly.apk"
+          done
+
+          echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
+          echo "tag=nightly-${date_utc}" >> "$GITHUB_OUTPUT"
+          find release -type f -maxdepth 1 -print
+
+      - name: Publish Nightly Release
+        env:
+          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_TOKEN }}
+          TAG_NAME: ${{ steps.assets.outputs.tag }}
+          VERSION_NAME: ${{ steps.assets.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          notes="Automated Nightly build from devel at ${GITHUB_SHA}."
+
+          if gh release view "$TAG_NAME" --repo "$NIGHTLY_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" release/*.apk \
+              --repo "$NIGHTLY_REPOSITORY" \
+              --clobber
+            gh release edit "$TAG_NAME" \
+              --repo "$NIGHTLY_REPOSITORY" \
+              --title "$VERSION_NAME" \
+              --notes "$notes"
+          else
+            gh release create "$TAG_NAME" release/*.apk \
+              --repo "$NIGHTLY_REPOSITORY" \
+              --title "$VERSION_NAME" \
+              --notes "$notes" \
+              --prerelease
+          fi
