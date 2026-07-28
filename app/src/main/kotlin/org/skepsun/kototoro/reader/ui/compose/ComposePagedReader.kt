@@ -50,6 +50,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -91,6 +92,7 @@ import coil3.request.allowHardware
 import coil3.request.transformations
 import coil3.toBitmap
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
@@ -120,7 +122,7 @@ private data class PageDisplaySize(
 )
 
 private data class WebtoonListAnchor(
-	val index: Int,
+	val pageKey: Long,
 	val offsetPx: Int,
 )
 
@@ -282,6 +284,14 @@ fun ComposeWebtoonReader(
 		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
 	}
 	val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage.coerceIn(pages.indices))
+	val pageKeys = remember(pages) { pages.map(ReaderPage::readerKey) }
+	val currentPages by rememberUpdatedState(pages)
+	val currentOnPageChanged by rememberUpdatedState(onPageChanged)
+	val currentOnInternalScrollChanged by rememberUpdatedState(onInternalScrollChanged)
+	var anchorPageKey by remember {
+		mutableStateOf(pageKeys[initialPage.coerceIn(pageKeys.indices)])
+	}
+	var isAnchorRestorePending by remember { mutableStateOf(true) }
 	// Keep dimensions outside individual lazy items. When an item is recycled and later returns
 	// from Coil's cache, its height is known before the bitmap is drawn, preventing scroll jumps.
 	val imageSizes = remember { mutableStateMapOf<Long, WebtoonImageSize>() }
@@ -466,17 +476,30 @@ fun ComposeWebtoonReader(
 		}
 	}
 
-	LaunchedEffect(listState, pages) {
-		snapshotFlow { listState.firstVisibleItemIndex }
+	LaunchedEffect(pageKeys, viewportWidthPx, viewportHeightPx) {
+		if (viewportWidthPx <= 0 || viewportHeightPx <= 0) return@LaunchedEffect
+		val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, anchorPageKey)
+		if (anchorPosition >= 0 && anchorPosition != listState.firstVisibleItemIndex) {
+			listState.scrollToItem(anchorPosition)
+			snapshotFlow { listState.firstVisibleItemIndex }
+				.first { position -> position == anchorPosition }
+		}
+		isAnchorRestorePending = false
+	}
+	LaunchedEffect(listState) {
+		snapshotFlow { listState.firstVisibleItemIndex to isAnchorRestorePending }
 			.distinctUntilChanged()
-			.collect { position ->
-				pages.getOrNull(position)?.let { page ->
-					onPageChanged(page)
-					onInternalScrollChanged(page, internalOffsets[page.readerKey] ?: 0)
+			.collect { (position, restorePending) ->
+				if (restorePending) return@collect
+				currentPages.getOrNull(position)?.let { page ->
+					anchorPageKey = page.readerKey
+					currentOnPageChanged(page)
+					currentOnInternalScrollChanged(page, internalOffsets[page.readerKey] ?: 0)
 				}
 			}
 	}
-	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled) {
+	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, isAnchorRestorePending) {
+		if (isAnchorRestorePending) return@LaunchedEffect
 		requestedPage?.takeIf { it in pages.indices }?.let { position ->
 			if (shouldAnimatePageNavigation(
 					listState.firstVisibleItemIndex,
@@ -509,10 +532,12 @@ fun ComposeWebtoonReader(
 			}
 		}
 	}
-	LaunchedEffect(pendingAnchor) {
+	LaunchedEffect(pendingAnchor, isAnchorRestorePending, pageKeys) {
 		pendingAnchor?.let { anchor ->
-			if (!listState.isScrollInProgress && anchor.index in pages.indices) {
-				listState.scrollToItem(anchor.index, anchor.offsetPx)
+			if (isAnchorRestorePending) return@let
+			val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, anchor.pageKey)
+			if (!listState.isScrollInProgress && anchorPosition >= 0) {
+				listState.scrollToItem(anchorPosition, anchor.offsetPx)
 			}
 			pendingAnchor = null
 		}
@@ -524,6 +549,9 @@ fun ComposeWebtoonReader(
 			.background(Color(readerBackgroundColor))
 			.onSizeChanged { size ->
 				// Keep the viewport independent from the zoomed-out LazyColumn layout.
+				if (size.width != viewportWidthPx || size.height != viewportHeightPx) {
+					isAnchorRestorePending = true
+				}
 				viewportWidthPx = size.width
 				viewportHeightPx = size.height
 			}
@@ -739,9 +767,18 @@ fun ComposeWebtoonReader(
 								val newSize = WebtoonImageSize(width, height)
 								if (imageSizes[pageKey] != newSize) {
 									if (!listState.isScrollInProgress) {
+										val visiblePosition = listState.firstVisibleItemIndex
 										pendingAnchor = WebtoonListAnchor(
-											index = listState.firstVisibleItemIndex,
-											offsetPx = listState.firstVisibleItemScrollOffset,
+											pageKey = if (isAnchorRestorePending) {
+												anchorPageKey
+											} else {
+												pages.getOrNull(visiblePosition)?.readerKey ?: anchorPageKey
+											},
+											offsetPx = if (isAnchorRestorePending) {
+												0
+											} else {
+												listState.firstVisibleItemScrollOffset
+											},
 										)
 									}
 									imageSizes[pageKey] = newSize

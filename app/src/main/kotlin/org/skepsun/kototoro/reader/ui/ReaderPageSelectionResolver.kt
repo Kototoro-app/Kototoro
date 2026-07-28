@@ -49,4 +49,11 @@ internal fun resolveVisiblePageSelection(
 	return selected
 }
 
+internal fun resolveReaderInitialPagePosition(pages: List<ReaderPage>, state: ReaderState?): Int {
+	if (state == null) return 0
+	return pages.indexOfFirst { page ->
+		page.chapterId == state.chapterId && page.index == state.page
+	}.takeIf { it >= 0 } ?: 0
+}
+
 private const val LOG_TAG = "ReaderDebug"

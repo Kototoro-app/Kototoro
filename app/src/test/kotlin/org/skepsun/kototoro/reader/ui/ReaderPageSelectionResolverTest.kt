@@ -8,6 +8,23 @@ import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 class ReaderPageSelectionResolverTest {
 
 	@Test
+	fun `restores current chapter page when previous chapter is preloaded`() {
+		val pages = listOf(
+			page(chapterId = 182L, index = 0),
+			page(chapterId = 182L, index = 1),
+			page(chapterId = 183L, index = 0),
+			page(chapterId = 183L, index = 1),
+		)
+
+		val position = resolveReaderInitialPagePosition(
+			pages = pages,
+			state = ReaderState(chapterId = 183L, page = 1, scroll = 120),
+		)
+
+		assertEquals(3, position)
+	}
+
+	@Test
 	fun `prefers lower page when visible double spread crosses into preloaded next chapter`() {
 		val pages = listOf(
 			page(chapterId = 1L, index = 0),

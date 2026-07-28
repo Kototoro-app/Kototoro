@@ -626,6 +626,11 @@ class ReaderActivity :
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        if (::composeReaderController.isInitialized) {
+            val currentState = composeReaderController.getCurrentState()
+            viewModel.beginTransientStateSuppression(currentState)
+            viewModel.saveCurrentState(currentState)
+        }
         outState.putBoolean(STATE_TRANSLATION_SHORTCUT_VISIBLE, translationShortcutVisibleForSession)
         outState.putBoolean(STATE_ENABLE_TRANSLATION_AFTER_SETUP, enableTranslationAfterSetup)
         super.onSaveInstanceState(outState)
@@ -644,6 +649,7 @@ class ReaderActivity :
 
     override fun onPause() {
         super.onPause()
+        viewModel.saveCurrentState(composeReaderController.getCurrentState())
         viewModel.onPause()
     }
 
@@ -1002,27 +1008,7 @@ class ReaderActivity :
     private fun onUiStateChanged(pair: Pair<ReaderUiState?, ReaderUiState?>) {
         val (previous: ReaderUiState?, uiState: ReaderUiState?) = pair
         title = uiState?.mangaName ?: getString(R.string.loading_)
-        composeReaderController.updateInfoBar {
-            copy(
-                text = uiState?.let {
-                    getString(
-                        R.string.reader_info_pattern,
-                        it.chapterNumber,
-                        it.chaptersTotal,
-                        it.currentPage + 1,
-                        it.totalPages,
-                    ) + if (it.percent in 0f..1f) {
-                        "     " + getString(
-                            R.string.percent_string_pattern,
-                            (it.percent * 100).roundToInt(),
-                        )
-                    } else {
-                        ""
-                    }
-                }.orEmpty(),
-                showSystemStatus = settings.isReaderFullscreenEnabled,
-            )
-        }
+        updateReaderInfoBar(uiState)
         if (uiState == null) {
             composeReaderController.setTitle(title.toString(), "")
             composeReaderController.updateActions {
@@ -1048,6 +1034,30 @@ class ReaderActivity :
                 previousEnabled = uiState.hasPreviousChapter(),
                 nextEnabled = uiState.hasNextChapter(),
                 pageLabel = "${uiState.currentPage + 1}/${uiState.totalPages}",
+            )
+        }
+    }
+
+    private fun updateReaderInfoBar(uiState: ReaderUiState?) {
+        composeReaderController.updateInfoBar {
+            copy(
+                text = uiState?.let {
+                    getString(
+                        R.string.reader_info_pattern,
+                        it.chapterNumber,
+                        it.chaptersTotal,
+                        it.currentPage + 1,
+                        it.totalPages,
+                    ) + if (it.percent in 0f..1f) {
+                        "     " + getString(
+                            R.string.percent_string_pattern,
+                            (it.percent * 100).roundToInt(),
+                        )
+                    } else {
+                        ""
+                    }
+                }.orEmpty(),
+                showSystemStatus = settings.isReaderFullscreenEnabled,
             )
         }
     }
@@ -1098,7 +1108,7 @@ class ReaderActivity :
     private fun onChapterTranslationProgressChanged(progress: ReaderViewModel.ChapterTranslationProgress?) {
         if (progress == null) {
             lastMangaTranslationProgress = null
-			composeReaderController.updateInfoBar { copy(text = "") }
+            updateReaderInfoBar(viewModel.uiState.value)
             return
         }
         lastMangaTranslationProgress = progress

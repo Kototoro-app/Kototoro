@@ -17,6 +17,7 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
+import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 
 /**
@@ -38,6 +39,7 @@ fun ComposeReaderScreenRoot(
 	onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
 	resolveErrorStringId: (Throwable) -> Int = ExceptionResolver::getResolveStringId,
 	onReaderPositionChanged: (position: Int, internalScroll: Int) -> Unit = { _, _ -> },
+	onReaderInternalScrollChanged: (pageKey: Long, internalScroll: Int) -> Unit = { _, _ -> },
 	modifier: Modifier = Modifier,
 ) {
 	val content by viewModel.content.collectAsStateWithLifecycle()
@@ -65,11 +67,8 @@ fun ComposeReaderScreenRoot(
 	val readerImageColorFilter = remember(readerSettings.colorFilter) {
 		readerSettings.colorFilter.toComposeColorFilter()
 	}
-	val initialPosition = content.state?.let { state ->
-		content.pages.indexOfFirst { page ->
-			page.chapterId == state.chapterId && page.index == state.page
-		}.takeIf { it >= 0 }
-	} ?: 0
+	val restoredState = viewModel.getCurrentState() ?: content.state
+	val initialPosition = resolveReaderInitialPagePosition(content.pages, restoredState)
 
 	if (mode == null || content.pages.isEmpty()) {
 		Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -117,13 +116,12 @@ fun ComposeReaderScreenRoot(
 		ComposeWebtoonReader(
 			pages = content.pages,
 			initialPage = initialPosition,
-			initialScroll = content.state?.scroll ?: 0,
+			initialScroll = restoredState?.scroll ?: 0,
 			imageLoader = imageLoader,
 			imagePipeline = imagePipeline,
 			onPageChanged = pageChanged,
 			onInternalScrollChanged = { page, scroll ->
-				val position = content.pages.indexOf(page)
-				if (position >= 0) onReaderPositionChanged(position, scroll)
+				onReaderInternalScrollChanged(page.readerKey, scroll)
 			},
 			requestedPage = requestedPage,
 			requestedPageSmooth = requestedPageSmooth,

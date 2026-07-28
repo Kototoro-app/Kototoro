@@ -6,6 +6,14 @@ import org.junit.jupiter.api.Test
 class WebtoonViewportPolicyTest {
 
 	@Test
+	fun `prepending chapter pages preserves the visible page anchor`() {
+		val currentPageKey = 18301L
+		val pagesAfterPrepend = listOf(18201L, 18202L, currentPageKey, 18302L)
+
+		assertEquals(2, resolveWebtoonAnchorPosition(pagesAfterPrepend, currentPageKey))
+	}
+
+	@Test
 	fun `zoomed out canvas keeps the inverse scaled layout centered`() {
 		assertEquals(
 			WebtoonCanvasOffsetBounds(

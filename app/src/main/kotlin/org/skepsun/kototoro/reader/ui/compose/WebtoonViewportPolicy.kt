@@ -26,6 +26,10 @@ data class WebtoonCanvasOffsetBounds(
 	val maxY: Float,
 )
 
+internal fun resolveWebtoonAnchorPosition(pageKeys: List<Long>, anchorPageKey: Long): Int {
+	return pageKeys.indexOf(anchorPageKey)
+}
+
 /** Matches WebtoonScalingFrame's translation bounds for the zoomed webtoon canvas. */
 fun resolveWebtoonCanvasOffsetBounds(
 	viewportWidthPx: Int,

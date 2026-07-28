@@ -13,6 +13,7 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigator
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
+import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
@@ -25,14 +26,14 @@ internal class ComposeReaderController(
 	private val chaptersPanelContent: @Composable (Int) -> Unit = {},
 ) : ReaderNavigator {
 
-	private var currentPosition by mutableIntStateOf(0)
-	private var currentInternalScroll by mutableIntStateOf(0)
+	private var currentPageKey: Long? = null
+	private var currentInternalScroll by mutableIntStateOf(viewModel.getCurrentState()?.scroll ?: 0)
 	private var requestedPosition by mutableIntStateOf(NO_REQUEST)
 	private var requestedPositionSmooth by mutableStateOf(false)
 	private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
 	private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
 	private var webtoonZoomCommand: ComposeWebtoonZoomCommand? by mutableStateOf(null)
-	var readerMode by mutableStateOf(ReaderMode.STANDARD)
+	var readerMode by mutableStateOf(viewModel.readerMode.value ?: ReaderMode.STANDARD)
 		private set
 	private var isDoublePage by mutableStateOf(false)
 	private var chromeState by mutableStateOf(ComposeReaderChromeState(controlsVisible = false))
@@ -86,9 +87,14 @@ internal class ComposeReaderController(
 						onRetryError = errorHost::resolveReaderError,
 						resolveErrorStringId = errorHost::getReaderErrorActionStringId,
 						onReaderPositionChanged = { position, internalScroll ->
-							currentPosition = position
+							currentPageKey = viewModel.content.value.pages.getOrNull(position)?.readerKey
 							currentInternalScroll = internalScroll
 							requestedPosition = NO_REQUEST
+						},
+						onReaderInternalScrollChanged = { pageKey, internalScroll ->
+							if (pageKey == currentPageKey) {
+								currentInternalScroll = internalScroll
+							}
 						},
 					)
 				}
@@ -103,7 +109,8 @@ internal class ComposeReaderController(
 	}
 
 	fun setDoublePageEnabled(enabled: Boolean) {
-		isDoublePage = enabled && readerMode != ReaderMode.WEBTOON && readerMode != ReaderMode.VERTICAL
+		val effectiveMode = viewModel.readerMode.value ?: readerMode
+		isDoublePage = enabled && effectiveMode != ReaderMode.WEBTOON && effectiveMode != ReaderMode.VERTICAL
 	}
 
 	fun setChromeEnabled(enabled: Boolean) {
@@ -296,7 +303,7 @@ internal class ComposeReaderController(
 		val pageStep = if (isDoublePage) 2 else 1
 		val direction = if (readerMode == ReaderMode.REVERSED) -1 else 1
 		switchPageTo(
-			position = resolvePageNavigationTarget(currentPosition, delta, pageStep, direction),
+			position = resolvePageNavigationTarget(resolveCurrentPosition(), delta, pageStep, direction),
 			smooth = true,
 		)
 	}
@@ -315,8 +322,17 @@ internal class ComposeReaderController(
 	}
 
 	override fun getCurrentState(): ReaderState? {
-		val page = viewModel.content.value.pages.getOrNull(currentPosition) ?: return null
+		val page = viewModel.content.value.pages.getOrNull(resolveCurrentPosition())
+			?: return viewModel.getCurrentState()
 		return ReaderState(page.chapterId, page.index, currentInternalScroll)
+	}
+
+	private fun resolveCurrentPosition(): Int {
+		val pages = viewModel.content.value.pages
+		currentPageKey?.let { pageKey ->
+			pages.indexOfFirst { it.readerKey == pageKey }.takeIf { it >= 0 }?.let { return it }
+		}
+		return resolveReaderInitialPagePosition(pages, viewModel.getCurrentState())
 	}
 
 	override fun onZoomIn() = issueZoomCommand(1.1f)
@@ -328,7 +344,7 @@ internal class ComposeReaderController(
 			webtoonZoomCommand = ComposeWebtoonZoomCommand(++nextCommandId, factor)
 			return
 		}
-		val page = viewModel.content.value.pages.getOrNull(currentPosition) ?: return
+		val page = viewModel.content.value.pages.getOrNull(resolveCurrentPosition()) ?: return
 		zoomCommand = ComposeReaderZoomCommand(++nextCommandId, page.readerKey, factor)
 	}
 
