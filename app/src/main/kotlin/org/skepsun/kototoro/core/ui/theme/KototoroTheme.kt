@@ -9,6 +9,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -21,11 +22,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
 import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
+import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
@@ -88,7 +91,11 @@ fun KototoroTheme(
         large = RoundedCornerShape(styleTokens.groupCornerRadius),
         extraLarge = RoundedCornerShape(styleTokens.groupCornerRadius),
     )
-    val activeFontPreset = if (expressiveComponents) expressiveAppFontPreset else appFontPreset
+    val activeFontPreset = if (effectiveInterfaceStyle == InterfaceStyle.IOS || expressiveComponents) {
+        expressiveAppFontPreset
+    } else {
+        appFontPreset
+    }
     val googleFontProvider = remember {
         GoogleFont.Provider(
             providerAuthority = "com.google.android.gms.fonts",
@@ -96,8 +103,14 @@ fun KototoroTheme(
             certificates = R.array.com_google_android_gms_fonts_certs,
         )
     }
-    val fontFamily = remember(activeFontPreset, googleFontProvider) {
-        activeFontPreset.toFontFamily(provider = googleFontProvider)
+    val onlineFontLoader = remember(appContext) {
+        EntryPointAccessors.fromApplication<BaseActivityEntryPoint>(appContext).onlineFontLoader
+    }
+    val fontFamily by produceState<FontFamily?>(initialValue = null, activeFontPreset) {
+        value = activeFontPreset.toFontFamily(
+            provider = googleFontProvider,
+            onlineFontLoader = onlineFontLoader,
+        )
     }
     val typography = remember(effectiveInterfaceStyle, fontFamily) {
         kototoroTypography(
@@ -122,8 +135,15 @@ fun KototoroTheme(
     }
 }
 
-private fun AppFontPreset.toFontFamily(provider: GoogleFont.Provider): FontFamily? {
+private suspend fun AppFontPreset.toFontFamily(
+    provider: GoogleFont.Provider,
+    onlineFontLoader: OnlineFontLoader,
+): FontFamily? {
     val fontName = when (this) {
+        AppFontPreset.SARASA_GOTHIC -> return onlineFontLoader.load(OnlineFontPreset.SARASA_GOTHIC)
+        AppFontPreset.LXGW_WENKAI -> return onlineFontLoader.load(OnlineFontPreset.LXGW_WENKAI)
+        AppFontPreset.NOTO_SANS_CJK_SC -> return onlineFontLoader.load(OnlineFontPreset.NOTO_SANS_CJK_SC)
+        AppFontPreset.SOURCE_HAN_SERIF_SC -> return onlineFontLoader.load(OnlineFontPreset.SOURCE_HAN_SERIF_SC)
         AppFontPreset.SYSTEM -> return null
         AppFontPreset.ROBOTO -> "Roboto"
         AppFontPreset.ROBOTO_FLEX -> "Roboto Flex"

@@ -3070,6 +3070,14 @@ SHA-256 指纹:
     <string name="font_preset_system">系统默认</string>
     <string name="font_preset_noto_sans">Noto Sans</string>
     <string name="font_preset_inter">Inter</string>
+    <string name="font_preset_sarasa_gothic">Sarasa Gothic</string>
+    <string name="font_preset_lxgw_wenkai">霞鹜文楷</string>
+    <string name="font_preset_noto_sans_cjk_sc">Noto Sans CJK SC</string>
+    <string name="font_preset_source_han_serif_sc">思源宋体 SC</string>
+    <string name="font_downloading">正在下载 %1$s 字体…</string>
+    <string name="font_download_ready">%1$s 字体已就绪</string>
+    <string name="font_download_failed">无法下载 %1$s，将使用系统字体。</string>
+    <string name="font_downloads">字体下载</string>
     <string name="pref_glass_immersive_strength">沉浸式着色强度</string>
     <string name="pref_glass_immersive_strength_summary">独立控制顶部和底部的沉浸式着色强度，不受预设影响</string>
     <string name="glass_material_family_kototoro">Kototoro（推荐）</string>

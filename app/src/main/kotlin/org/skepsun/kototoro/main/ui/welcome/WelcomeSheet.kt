@@ -73,6 +73,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -139,8 +141,13 @@ private fun WelcomeContent(
 	val locales by viewModel.locales.collectAsStateWithLifecycle()
 	val types by viewModel.types.collectAsStateWithLifecycle()
 	val spacesEnabled by viewModel.spacesEnabled.collectAsStateWithLifecycle()
+	val interfaceStyle by viewModel.interfaceStyle.collectAsStateWithLifecycle()
+	val heroTransitionsEnabled by viewModel.heroTransitionsEnabled.collectAsStateWithLifecycle()
+	val panoramaAnimationEnabled by viewModel.panoramaAnimationEnabled.collectAsStateWithLifecycle()
+	val detailsPanoramaHalfScreenEnabled by viewModel.detailsPanoramaHalfScreenEnabled.collectAsStateWithLifecycle()
+	val spaceSwitcherPosition by viewModel.spaceSwitcherPosition.collectAsStateWithLifecycle()
 	val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
-	val pagerState = rememberPagerState(pageCount = { 3 })
+	val pagerState = rememberPagerState(pageCount = { 4 })
 	val scope = rememberCoroutineScope()
 	val selectedRepos = remember { mutableStateListOf(REPO_KOTOTORO, REPO_REDO) }
 	var selectedMirrorIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -189,9 +196,22 @@ private fun WelcomeContent(
 						onTypeToggle = viewModel::setTypeChecked,
 					)
 
+					2 -> WelcomeAppearanceStep(
+						interfaceStyle = interfaceStyle,
+						heroTransitionsEnabled = heroTransitionsEnabled,
+						panoramaAnimationEnabled = panoramaAnimationEnabled,
+						detailsPanoramaHalfScreenEnabled = detailsPanoramaHalfScreenEnabled,
+						onInterfaceStyleChange = viewModel::setInterfaceStyle,
+						onHeroTransitionsChange = viewModel::setHeroTransitionsEnabled,
+						onPanoramaAnimationChange = viewModel::setPanoramaAnimationEnabled,
+						onDetailsPanoramaHalfScreenChange = viewModel::setDetailsPanoramaHalfScreenEnabled,
+					)
+
 					else -> WelcomeSpacesStep(
 						spacesEnabled = spacesEnabled,
 						onSpacesEnabledChange = viewModel::setSpacesEnabled,
+						spaceSwitcherPosition = spaceSwitcherPosition,
+						onSpaceSwitcherPositionChange = viewModel::setSpaceSwitcherPosition,
 					)
 				}
 			}
@@ -390,6 +410,8 @@ private fun WelcomePreferencesStep(
 private fun WelcomeSpacesStep(
 	spacesEnabled: Boolean,
 	onSpacesEnabledChange: (Boolean) -> Unit,
+	spaceSwitcherPosition: SpaceSwitcherPosition,
+	onSpaceSwitcherPositionChange: (SpaceSwitcherPosition) -> Unit,
 ) {
 	SectionHeader(
 		title = stringResource(R.string.welcome_spaces_title),
@@ -427,6 +449,101 @@ private fun WelcomeSpacesStep(
 			onCheckedChange = null,
 		)
 	}
+	if (spacesEnabled) {
+		Text(
+			text = stringResource(R.string.space_switcher_position),
+			style = MaterialTheme.typography.titleMedium,
+			fontWeight = FontWeight.SemiBold,
+		)
+		FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+			SpaceSwitcherPosition.entries.forEach { position ->
+				FilterChip(
+					selected = position == spaceSwitcherPosition,
+					onClick = { onSpaceSwitcherPositionChange(position) },
+					label = { Text(stringResource(position.labelResId())) },
+				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun WelcomeAppearanceStep(
+	interfaceStyle: InterfaceStyle,
+	heroTransitionsEnabled: Boolean,
+	panoramaAnimationEnabled: Boolean,
+	detailsPanoramaHalfScreenEnabled: Boolean,
+	onInterfaceStyleChange: (InterfaceStyle) -> Unit,
+	onHeroTransitionsChange: (Boolean) -> Unit,
+	onPanoramaAnimationChange: (Boolean) -> Unit,
+	onDetailsPanoramaHalfScreenChange: (Boolean) -> Unit,
+) {
+	SectionHeader(
+		title = stringResource(R.string.welcome_appearance_title),
+		summary = stringResource(R.string.welcome_appearance_summary),
+	)
+	Text(
+		text = stringResource(R.string.interface_style),
+		style = MaterialTheme.typography.titleMedium,
+		fontWeight = FontWeight.SemiBold,
+	)
+	FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+		InterfaceStyle.selectableEntries.forEach { style ->
+			FilterChip(
+				selected = style == interfaceStyle,
+				onClick = { onInterfaceStyleChange(style) },
+				label = { Text(stringResource(style.titleResId)) },
+			)
+		}
+	}
+	WelcomeSwitchRow(
+		title = stringResource(R.string.shared_element_transitions),
+		summary = stringResource(R.string.shared_element_transitions_summary),
+		checked = heroTransitionsEnabled,
+		onCheckedChange = onHeroTransitionsChange,
+	)
+	WelcomeSwitchRow(
+		title = stringResource(R.string.pref_panorama_animation),
+		summary = stringResource(R.string.pref_panorama_animation_summary),
+		checked = panoramaAnimationEnabled,
+		onCheckedChange = onPanoramaAnimationChange,
+	)
+	WelcomeSwitchRow(
+		title = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint),
+		summary = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint_summary),
+		checked = detailsPanoramaHalfScreenEnabled,
+		onCheckedChange = onDetailsPanoramaHalfScreenChange,
+	)
+}
+
+@Composable
+private fun WelcomeSwitchRow(
+	title: String,
+	summary: String,
+	checked: Boolean,
+	onCheckedChange: (Boolean) -> Unit,
+) {
+	Row(
+		modifier = Modifier
+			.fillMaxWidth()
+			.toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+			.padding(vertical = 8.dp),
+		verticalAlignment = Alignment.CenterVertically,
+		horizontalArrangement = Arrangement.spacedBy(16.dp),
+	) {
+		Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+			Text(text = title, style = MaterialTheme.typography.titleMedium)
+			Text(text = summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+		}
+		Switch(checked = checked, onCheckedChange = null)
+	}
+}
+
+private fun SpaceSwitcherPosition.labelResId(): Int = when (this) {
+	SpaceSwitcherPosition.TOP_RIGHT -> R.string.space_switcher_position_top_right
+	SpaceSwitcherPosition.CENTER_RIGHT -> R.string.space_switcher_position_center_right
+	SpaceSwitcherPosition.TOP_LEFT -> R.string.space_switcher_position_top_left
+	SpaceSwitcherPosition.CENTER_LEFT -> R.string.space_switcher_position_center_left
 }
 
 @Composable

@@ -440,6 +440,10 @@ private class AppearanceSettingsCoordinator(
             SettingsChoiceOption(AppFontPreset.GOOGLE_SANS, "Google Sans"),
             SettingsChoiceOption(AppFontPreset.NOTO_SANS, context.getString(R.string.font_preset_noto_sans)),
             SettingsChoiceOption(AppFontPreset.INTER, context.getString(R.string.font_preset_inter)),
+            SettingsChoiceOption(AppFontPreset.SARASA_GOTHIC, context.getString(R.string.font_preset_sarasa_gothic)),
+            SettingsChoiceOption(AppFontPreset.LXGW_WENKAI, context.getString(R.string.font_preset_lxgw_wenkai)),
+            SettingsChoiceOption(AppFontPreset.NOTO_SANS_CJK_SC, context.getString(R.string.font_preset_noto_sans_cjk_sc)),
+            SettingsChoiceOption(AppFontPreset.SOURCE_HAN_SERIF_SC, context.getString(R.string.font_preset_source_han_serif_sc)),
         )
     }
 

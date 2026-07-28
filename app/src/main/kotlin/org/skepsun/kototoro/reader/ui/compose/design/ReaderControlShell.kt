@@ -26,6 +26,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -34,6 +35,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -344,69 +346,71 @@ fun ReaderProgressBar(
 			}
 		}
 	}
-	BoxWithConstraints(
-		modifier = modifier
-			.fillMaxWidth()
-			.padding(horizontal = 6.dp),
-	) {
-		Row(verticalAlignment = Alignment.CenterVertically) {
-			IconButton(
-				onClick = onPreviousChapter,
-				enabled = previousEnabled,
-				modifier = Modifier.size(48.dp),
-			) {
-				Icon(
-					painterResource(R.drawable.ic_prev),
-					stringResource(R.string.prev_chapter),
-					tint = LocalContentColor.current,
-				)
-			}
-			Column(
-				modifier = Modifier
-					.weight(1f)
-					.onGloballyPositioned { coordinates ->
-						val position = coordinates.positionInWindow()
-						trackPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
-						trackWidthPx = coordinates.size.width
-					},
-			) {
-				Slider(
-					value = displayedValue,
-					onValueChange = {
-						dragValue = it
-						onValueChange(it)
-					},
-					onValueChangeFinished = {
-						dragValue = null
-						onValueChangeFinished()
-					},
-					valueRange = 0f..effectiveMax,
-					thumb = {
-						Box(
-							modifier = Modifier
-								.size(if (isIosStyle) 14.dp else 18.dp)
-								.background(MaterialTheme.colorScheme.primary, CircleShape),
-						)
-					},
-					track = { sliderState ->
-						SliderDefaults.Track(
-							sliderState = sliderState,
-							modifier = Modifier.height(if (isIosStyle) 4.dp else 10.dp),
-							thumbTrackGapSize = 0.dp,
-						)
-					},
-				)
-			}
-			IconButton(
-				onClick = onNextChapter,
-				enabled = nextEnabled,
-				modifier = Modifier.size(48.dp),
-			) {
-				Icon(
-					painterResource(R.drawable.ic_next),
-					stringResource(R.string.next_chapter),
-					tint = LocalContentColor.current,
-				)
+	CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+		BoxWithConstraints(
+			modifier = modifier
+				.fillMaxWidth()
+				.padding(horizontal = 6.dp, vertical = 1.dp),
+		) {
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				IconButton(
+					onClick = onPreviousChapter,
+					enabled = previousEnabled,
+					modifier = Modifier.size(40.dp),
+				) {
+					Icon(
+						painterResource(R.drawable.ic_prev),
+						stringResource(R.string.prev_chapter),
+						tint = LocalContentColor.current,
+					)
+				}
+				Column(
+					modifier = Modifier
+						.weight(1f)
+						.onGloballyPositioned { coordinates ->
+							val position = coordinates.positionInWindow()
+							trackPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
+							trackWidthPx = coordinates.size.width
+						},
+				) {
+					Slider(
+						value = displayedValue,
+						onValueChange = {
+							dragValue = it
+							onValueChange(it)
+						},
+						onValueChangeFinished = {
+							dragValue = null
+							onValueChangeFinished()
+						},
+						valueRange = 0f..effectiveMax,
+						thumb = {
+							Box(
+								modifier = Modifier
+									.size(if (isIosStyle) 14.dp else 18.dp)
+									.background(MaterialTheme.colorScheme.primary, CircleShape),
+							)
+						},
+						track = { sliderState ->
+							SliderDefaults.Track(
+								sliderState = sliderState,
+								modifier = Modifier.height(if (isIosStyle) 4.dp else 10.dp),
+								thumbTrackGapSize = 0.dp,
+							)
+						},
+					)
+				}
+				IconButton(
+					onClick = onNextChapter,
+					enabled = nextEnabled,
+					modifier = Modifier.size(40.dp),
+				) {
+					Icon(
+						painterResource(R.drawable.ic_next),
+						stringResource(R.string.next_chapter),
+						tint = LocalContentColor.current,
+					)
+				}
 			}
 		}
 	}

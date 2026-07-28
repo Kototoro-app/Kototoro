@@ -102,6 +102,10 @@ enum class AppFontPreset {
 	GOOGLE_SANS,
 	NOTO_SANS,
 	INTER,
+	SARASA_GOTHIC,
+	LXGW_WENKAI,
+	NOTO_SANS_CJK_SC,
+	SOURCE_HAN_SERIF_SC,
 }
 
 enum class SpaceSwitcherPosition {
@@ -257,7 +261,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putEnumValue(KEY_APP_FONT_PRESET, value) }
 
 	var expressiveAppFontPreset: AppFontPreset
-		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.NOTO_SANS)
+		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.SARASA_GOTHIC)
 		set(value) = prefs.edit { putEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, value) }
 
 	var navHeight: Int

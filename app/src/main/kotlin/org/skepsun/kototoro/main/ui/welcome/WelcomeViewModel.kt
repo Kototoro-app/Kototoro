@@ -10,6 +10,8 @@ import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.util.ext.mapSortedByCount
 import org.skepsun.kototoro.core.util.ext.sortedWithSafe
 import org.skepsun.kototoro.core.util.ext.toList
@@ -47,6 +49,17 @@ class WelcomeViewModel @Inject constructor(
 	val isInitializingPlugins = _isInitializingPlugins.asStateFlow()
 	private val _spacesEnabled = MutableStateFlow(settings.isEntitySpaceEnabled)
 	val spacesEnabled = _spacesEnabled.asStateFlow()
+	private val _interfaceStyle = MutableStateFlow(settings.interfaceStyle)
+	val interfaceStyle = _interfaceStyle.asStateFlow()
+	private val _heroTransitionsEnabled = MutableStateFlow(settings.isSharedElementTransitionsEnabled)
+	val heroTransitionsEnabled = _heroTransitionsEnabled.asStateFlow()
+	private val _panoramaAnimationEnabled = MutableStateFlow(settings.isPanoramaCoverAnimationEnabled)
+	val panoramaAnimationEnabled = _panoramaAnimationEnabled.asStateFlow()
+	private val _detailsPanoramaHalfScreenEnabled =
+		MutableStateFlow(settings.isDetailsPanoramaLimitedToInfoCardMidpoint)
+	val detailsPanoramaHalfScreenEnabled = _detailsPanoramaHalfScreenEnabled.asStateFlow()
+	private val _spaceSwitcherPosition = MutableStateFlow(settings.spaceSwitcherPosition)
+	val spaceSwitcherPosition = _spaceSwitcherPosition.asStateFlow()
 
 	val locales = MutableStateFlow(
 		FilterProperty<Locale>(
@@ -230,6 +243,32 @@ class WelcomeViewModel @Inject constructor(
 	fun setSpacesEnabled(enabled: Boolean) {
 		_spacesEnabled.value = enabled
 		settings.isEntitySpaceEnabled = enabled
+		settings.isSpaceSwitcherEnabled = enabled
+	}
+
+	fun setInterfaceStyle(value: InterfaceStyle) {
+		_interfaceStyle.value = value
+		settings.interfaceStyle = value
+	}
+
+	fun setHeroTransitionsEnabled(enabled: Boolean) {
+		_heroTransitionsEnabled.value = enabled
+		settings.isSharedElementTransitionsEnabled = enabled
+	}
+
+	fun setPanoramaAnimationEnabled(enabled: Boolean) {
+		_panoramaAnimationEnabled.value = enabled
+		settings.isPanoramaCoverAnimationEnabled = enabled
+	}
+
+	fun setDetailsPanoramaHalfScreenEnabled(enabled: Boolean) {
+		_detailsPanoramaHalfScreenEnabled.value = enabled
+		settings.isDetailsPanoramaLimitedToInfoCardMidpoint = enabled
+	}
+
+	fun setSpaceSwitcherPosition(position: SpaceSwitcherPosition) {
+		_spaceSwitcherPosition.value = position
+		settings.spaceSwitcherPosition = position
 	}
 
 	private suspend fun commit() {

@@ -292,6 +292,8 @@
     <string name="welcome_step_sources">Sources</string>
     <string name="welcome_step_preferences">Preferences</string>
     <string name="welcome_step_ready">Ready</string>
+    <string name="welcome_appearance_title">Customize the interface</string>
+    <string name="welcome_appearance_summary">Choose the visual style, navigation transitions, and details page panorama behavior. These options can be changed later in Appearance settings.</string>
     <string name="home_quick_action_wizard">Wizard</string>
     <string name="welcome_restore_summary">Already used Kototoro before? Restore a backup, sign in to sync, or add local folders first.</string>
     <string name="welcome_source_formats_title">Pick content formats</string>
@@ -3145,6 +3147,14 @@
     <string name="font_preset_system">System default</string>
     <string name="font_preset_noto_sans">Noto Sans</string>
     <string name="font_preset_inter">Inter</string>
+    <string name="font_preset_sarasa_gothic">Sarasa Gothic</string>
+    <string name="font_preset_lxgw_wenkai">LXGW WenKai</string>
+    <string name="font_preset_noto_sans_cjk_sc">Noto Sans CJK SC</string>
+    <string name="font_preset_source_han_serif_sc">Source Han Serif SC</string>
+    <string name="font_downloading">Downloading %1$s font…</string>
+    <string name="font_download_ready">%1$s font is ready</string>
+    <string name="font_download_failed">Unable to download %1$s. Using the system font.</string>
+    <string name="font_downloads">Font downloads</string>
     <string name="pref_reduce_visual_effects">Reduce visual effects</string>
     <string name="pref_reduce_visual_effects_summary">Recommended for lower-end devices. Disable Backdrop glass, Hero transitions, and panorama background motion without changing their individual settings</string>
     <string name="pref_haze_opacity">Glass surface opacity</string>

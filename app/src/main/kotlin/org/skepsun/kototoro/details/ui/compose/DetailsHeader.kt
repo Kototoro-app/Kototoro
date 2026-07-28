@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -25,6 +26,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -358,12 +361,6 @@ fun DetailsHeader(
     val description = displayDescription.ifBlank { fallbackDescription }
     val collapsedDescriptionMaxLines = 3
     var canExpandDescription by remember(description) { mutableStateOf(false) }
-    val descriptionToggleLabel = if (isDescriptionExpanded) {
-        stringResource(R.string.show_less)
-    } else {
-        stringResource(R.string.show_more)
-    }
-
     val coverModel = remember(content?.source?.name, content?.url, currentCoverUrl) {
         when {
             currentCoverUrl != null -> {
@@ -709,38 +706,6 @@ fun DetailsHeader(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = stringResource(R.string.description),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (canExpandDescription) {
-                        TextButton(
-                            onClick = { isDescriptionExpanded = !isDescriptionExpanded },
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                        ) {
-                            Text(
-                                text = descriptionToggleLabel,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            Icon(
-                                imageVector = if (isDescriptionExpanded) {
-                                    Icons.Filled.KeyboardArrowUp
-                                } else {
-                                    Icons.Filled.KeyboardArrowDown
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                }
                 SelectionContainer {
                     Text(
                         text = description,
@@ -948,40 +913,43 @@ private fun DetailsSourceSummaryRow(
     val readingTitle = readingDisplayModel?.selectorTitle.orEmpty()
     val metadataFallback = stringResource(R.string.details_metadata_binding_unavailable)
     val readingFallback = stringResource(R.string.details_reading_source_unavailable)
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.36f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+    BoxWithConstraints(modifier = Modifier.wrapContentWidth()) {
+        val maxSegmentWidth = ((maxWidth - 1.dp) / 2f).coerceAtLeast(1.dp)
+        Surface(
+            modifier = Modifier.widthIn(max = maxWidth),
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.36f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
         ) {
-            SourceSummarySegment(
-                label = metadataTitle,
-                fallbackLabel = metadataFallback,
-                displayModel = metadataDisplayModel,
-                color = MaterialTheme.colorScheme.primary,
-                onIconClick = onMetadataIconClick,
-                onNameClick = onMetadataNameClick,
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(24.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
-            )
-            SourceSummarySegment(
-                label = readingTitle,
-                fallbackLabel = readingFallback,
-                displayModel = readingDisplayModel,
-                color = MaterialTheme.colorScheme.tertiary,
-                onIconClick = onReadingIconClick,
-                onNameClick = onReadingNameClick,
-                modifier = Modifier.weight(1f),
-            )
+            Row(
+                modifier = Modifier.wrapContentWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SourceSummarySegment(
+                    label = metadataTitle,
+                    fallbackLabel = metadataFallback,
+                    displayModel = metadataDisplayModel,
+                    color = MaterialTheme.colorScheme.primary,
+                    onIconClick = onMetadataIconClick,
+                    onNameClick = onMetadataNameClick,
+                    modifier = Modifier.widthIn(max = maxSegmentWidth),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(24.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                )
+                SourceSummarySegment(
+                    label = readingTitle,
+                    fallbackLabel = readingFallback,
+                    displayModel = readingDisplayModel,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    onIconClick = onReadingIconClick,
+                    onNameClick = onReadingNameClick,
+                    modifier = Modifier.widthIn(max = maxSegmentWidth),
+                )
+            }
         }
     }
 }
@@ -1015,9 +983,7 @@ private fun SourceSummarySegment(
         }
         Text(
             text = label.ifBlank { fallbackLabel },
-            modifier = Modifier
-                .weight(1f)
-                .clickable(onClick = onNameClick),
+            modifier = Modifier.clickable(onClick = onNameClick),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasResolvedSource) 1f else 0.68f),
             maxLines = 1,
