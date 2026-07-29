@@ -364,11 +364,8 @@ fun ComposeWebtoonReader(
 	// Keep dimensions outside individual lazy items. When an item is recycled and later returns
 	// from Coil's cache, its height is known before the bitmap is drawn, preventing scroll jumps.
 	val imageSizes = remember { mutableStateMapOf<Long, WebtoonImageSize>() }
-	val internalOffsets = remember {
-		mutableStateMapOf<Long, Int>().apply {
-			pages.getOrNull(initialPage)?.let { page -> put(page.readerKey, initialScroll.coerceAtLeast(0)) }
-		}
-	}
+	val initialPageKey = pageKeys[initialPosition]
+	val initialPageSize = imageSizes[initialPageKey]
 	var pendingAnchor by remember { mutableStateOf<WebtoonListAnchor?>(null) }
 	var viewportWidthPx by remember { mutableIntStateOf(0) }
 	var viewportHeightPx by remember { mutableIntStateOf(0) }
@@ -385,34 +382,18 @@ fun ComposeWebtoonReader(
 	var webtoonZoomAnimationJob by remember { mutableStateOf<Job?>(null) }
 	var webtoonFlingJob by remember { mutableStateOf<Job?>(null) }
 	var wasZoomEnabled by remember { mutableStateOf(isZoomEnabled) }
+	var hasAppliedInitialScroll by remember { mutableStateOf(initialScroll <= 0) }
 	fun measurementFor(position: Int): WebtoonViewportMeasurement {
 		val size = pages.getOrNull(position)?.let { page -> imageSizes[page.readerKey] }
 		return measureWebtoonViewport(
-			viewportHeightPx = resolveWebtoonLayoutViewportHeight(viewportHeightPx, canvasScale),
+			viewportHeightPx = viewportHeightPx,
 			availableWidthPx = viewportWidthPx,
 			imageWidthPx = size?.width,
 			imageHeightPx = size?.height,
 		)
 	}
-	fun consumeVisibleInternalScroll(scrollDelta: Int): Int {
-		if (scrollDelta == 0) return 0
-		val visibleItems = listState.layoutInfo.visibleItemsInfo
-		val position = if (scrollDelta > 0) {
-			visibleItems.firstOrNull()?.index
-		} else {
-			visibleItems.lastOrNull()?.index
-		} ?: return 0
-		val page = pages.getOrNull(position) ?: return 0
-		val measurement = measurementFor(position)
-		if (measurement.internalScrollRangePx == 0) return 0
-		val result = consumeWebtoonInternalScroll(
-			offsetPx = internalOffsets[page.readerKey] ?: 0,
-			scrollRangePx = measurement.internalScrollRangePx,
-			deltaPx = scrollDelta,
-		)
-		internalOffsets[page.readerKey] = result.offsetPx
-		onInternalScrollChanged(page, result.offsetPx)
-		return result.consumedPx
+	fun dispatchWebtoonScroll(deltaPx: Float) {
+		if (deltaPx.isFinite() && deltaPx != 0f) listState.dispatchRawDelta(deltaPx)
 	}
 	fun clampCanvasOffset(scale: Float, x: Float, y: Float): Offset {
 		val bounds = resolveWebtoonCanvasOffsetBounds(viewportWidthPx, viewportHeightPx, scale)
@@ -421,11 +402,6 @@ fun ComposeWebtoonReader(
 			y.coerceIn(bounds.minY, bounds.maxY),
 		)
 	}
-	fun dispatchWebtoonScroll(deltaPx: Int) {
-		if (deltaPx == 0) return
-		val internallyConsumed = consumeVisibleInternalScroll(deltaPx)
-		listState.dispatchRawDelta((deltaPx - internallyConsumed).toFloat())
-	}
 	fun applyCanvasPan(pan: Offset) {
 		if (!pan.x.isFinite() || !pan.y.isFinite()) return
 		val desiredX = canvasOffsetX + pan.x
@@ -433,7 +409,7 @@ fun ComposeWebtoonReader(
 		val bounded = clampCanvasOffset(canvasScale, desiredX, desiredY)
 		canvasOffsetX = bounded.x
 		canvasOffsetY = bounded.y
-		dispatchWebtoonScroll(resolveWebtoonBoundaryHandoff(canvasScale, desiredY, bounded.y))
+		dispatchWebtoonScroll(resolveWebtoonBoundaryHandoff(canvasScale, desiredY, bounded.y).toFloat())
 	}
 	fun contentCoordinateAtFocus(
 		scale: Float,
@@ -484,7 +460,7 @@ fun ComposeWebtoonReader(
 			focus = focus.y,
 			layoutSize = nextLayoutHeight,
 		)
-		dispatchWebtoonScroll((focusedContentY - newFocusedContentY).toInt())
+		dispatchWebtoonScroll(focusedContentY - newFocusedContentY)
 	}
 	suspend fun flingCanvas(velocity: Velocity) {
 		if (canvasScale <= 1f || maxOf(kotlin.math.abs(velocity.x), kotlin.math.abs(velocity.y)) < 50f) return
@@ -500,7 +476,7 @@ fun ComposeWebtoonReader(
 					val desiredY = canvasOffsetY + (value - previousValue)
 					val bounded = clampCanvasOffset(canvasScale, canvasOffsetX, desiredY)
 					canvasOffsetY = bounded.y
-					dispatchWebtoonScroll(resolveWebtoonBoundaryHandoff(canvasScale, desiredY, bounded.y))
+					dispatchWebtoonScroll(resolveWebtoonBoundaryHandoff(canvasScale, desiredY, bounded.y).toFloat())
 					previousValue = value
 				}
 			}
@@ -556,20 +532,37 @@ fun ComposeWebtoonReader(
 			stableViewportAnchor.pageKey = targetPage.readerKey
 			stableViewportAnchor.offsetPx = 0
 			anchorPageKey = targetPage.readerKey
-			internalOffsets[targetPage.readerKey] = initialScroll.coerceAtLeast(0)
 			listState.scrollToItem(initialPosition)
 			snapshotFlow { listState.firstVisibleItemIndex }
 				.first { actualPosition -> actualPosition == initialPosition }
 			previousPageKeys = pageKeys
 			appliedViewportConfiguration = viewportConfiguration
 			hasAppliedInitialPosition = true
-			isAnchorRestorePending = false
+			isAnchorRestorePending = !hasAppliedInitialScroll
 		}
 	}
 
-	LaunchedEffect(pageKeys, viewportWidthPx, viewportHeightPx, hasAppliedInitialPosition) {
+	LaunchedEffect(initialPageSize, initialPosition, viewportWidthPx, viewportHeightPx, hasAppliedInitialPosition) {
+		if (initialScroll <= 0 || hasAppliedInitialScroll || !hasAppliedInitialPosition || initialPageSize == null) {
+			return@LaunchedEffect
+		}
+		val restoredOffset = initialScroll.coerceIn(
+			0,
+			(measurementFor(initialPosition).itemHeightPx - viewportHeightPx).coerceAtLeast(0),
+		)
+		isAnchorRestorePending = true
+		pendingAnchor = null
+		stableViewportAnchor.pageKey = initialPageKey
+		stableViewportAnchor.offsetPx = restoredOffset
+		anchorPageKey = initialPageKey
+		listState.scrollToItem(initialPosition, restoredOffset)
+		hasAppliedInitialScroll = true
+		isAnchorRestorePending = false
+	}
+
+	LaunchedEffect(pageKeys, viewportWidthPx, viewportHeightPx, hasAppliedInitialPosition, hasAppliedInitialScroll) {
 		if (viewportWidthPx <= 0 || viewportHeightPx <= 0) return@LaunchedEffect
-		if (!hasAppliedInitialPosition) return@LaunchedEffect
+		if (!hasAppliedInitialPosition || !hasAppliedInitialScroll) return@LaunchedEffect
 		val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, stableViewportAnchor.pageKey)
 		if ((isAnchorRestorePending || anchorShiftPending || viewportConfigurationChanged) && anchorPosition >= 0) {
 			isAnchorRestorePending = true
@@ -602,8 +595,8 @@ fun ComposeWebtoonReader(
 						reportedPosition = position
 						anchorPageKey = page.readerKey
 						currentOnPageChanged(page)
-						currentOnInternalScrollChanged(page, internalOffsets[page.readerKey] ?: 0)
 					}
+					currentOnInternalScrollChanged(page, offsetPx)
 				}
 			}
 	}
@@ -624,9 +617,7 @@ fun ComposeWebtoonReader(
 	}
 	LaunchedEffect(webtoonScrollRequest) {
 		webtoonScrollRequest?.let { request ->
-			fun dispatchScroll(delta: Float) {
-				dispatchWebtoonScroll(delta.toInt())
-			}
+			fun dispatchScroll(delta: Float) = dispatchWebtoonScroll(delta)
 			if (request.smooth) {
 				var previousValue = 0f
 				animate(
@@ -796,8 +787,7 @@ fun ComposeWebtoonReader(
 							return Offset(0f, consumed)
 						}
 					}
-					val consumed = consumeVisibleInternalScroll((-available.y).toInt())
-					return Offset(x = 0f, y = -consumed.toFloat())
+					return Offset.Zero
 				}
 
 				override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
@@ -873,10 +863,6 @@ fun ComposeWebtoonReader(
 						decodeWidthPx = viewportWidthPx,
 						decodeHeightPx = measurement.itemHeightPx,
 						bitmapConfig = bitmapConfig,
-						internalOffsetPx = restoreWebtoonInternalScroll(
-							savedOffsetPx = internalOffsets[pages[position].readerKey] ?: 0,
-							scrollRangePx = measurement.internalScrollRangePx,
-						),
 						onImageSizeResolved = { width, height ->
 							if (width > 0 && height > 0) {
 								val pageKey = pages[position].readerKey
@@ -898,12 +884,6 @@ fun ComposeWebtoonReader(
 										)
 									}
 									imageSizes[pageKey] = newSize
-									val restoredOffset = restoreWebtoonInternalScroll(
-										savedOffsetPx = internalOffsets[pageKey] ?: 0,
-										scrollRangePx = measurementFor(position).internalScrollRangePx,
-									)
-									internalOffsets[pageKey] = restoredOffset
-									onInternalScrollChanged(pages[position], restoredOffset)
 								}
 							}
 						},
@@ -1590,7 +1570,6 @@ private fun ComposeWebtoonPage(
 	imageLoader: ImageLoader,
 	imagePipeline: ComposeReaderImagePipeline,
 	measurement: WebtoonViewportMeasurement,
-	internalOffsetPx: Int,
 	onImageSizeResolved: (width: Int, height: Int) -> Unit,
 	onShowErrorDetails: (Throwable, String?) -> Unit,
 	onRetryError: (Throwable, retry: () -> Unit) -> Unit,
@@ -1659,7 +1638,6 @@ private fun ComposeWebtoonPage(
 			is ComposeReaderImageState.OriginalReady -> if (canUseSubsampling && !value.isAnimated) {
 				ComposeWebtoonSubsamplingImage(
 					uri = value.original,
-					internalOffsetPx = internalOffsetPx,
 					bitmapConfig = bitmapConfig,
 					colorFilter = imageColorFilter,
 					onImageSizeResolved = { width, height ->
@@ -1672,7 +1650,6 @@ private fun ComposeWebtoonPage(
 			} else WebtoonImage(
 				uri = value.original,
 				imageLoader = imageLoader,
-				internalOffsetPx = internalOffsetPx,
 				pageKey = page.readerKey,
 				split = page.split,
 				decodeWidthPx = decodeWidthPx,
@@ -1690,7 +1667,6 @@ private fun ComposeWebtoonPage(
 			is ComposeReaderImageState.Enhancing -> if (canUseSubsampling) {
 				ComposeWebtoonSubsamplingImage(
 					uri = value.original,
-					internalOffsetPx = internalOffsetPx,
 					bitmapConfig = bitmapConfig,
 					colorFilter = imageColorFilter,
 					onImageSizeResolved = { width, height ->
@@ -1703,7 +1679,6 @@ private fun ComposeWebtoonPage(
 			} else WebtoonImage(
 				uri = value.original,
 				imageLoader = imageLoader,
-				internalOffsetPx = internalOffsetPx,
 				pageKey = page.readerKey,
 				split = page.split,
 				decodeWidthPx = decodeWidthPx,
@@ -1721,7 +1696,6 @@ private fun ComposeWebtoonPage(
 			is ComposeReaderImageState.EnhancedReady -> if (canUseSubsampling) {
 				ComposeWebtoonSubsamplingImage(
 					uri = value.enhanced,
-					internalOffsetPx = internalOffsetPx,
 					bitmapConfig = bitmapConfig,
 					colorFilter = imageColorFilter,
 					onImageSizeResolved = onImageSizeResolved,
@@ -1731,7 +1705,6 @@ private fun ComposeWebtoonPage(
 			} else WebtoonImage(
 				uri = value.enhanced,
 				imageLoader = imageLoader,
-				internalOffsetPx = internalOffsetPx,
 				pageKey = page.readerKey,
 				split = page.split,
 				decodeWidthPx = decodeWidthPx,
@@ -1833,7 +1806,6 @@ private fun ReaderPreviewImage(
 private fun WebtoonImage(
 	uri: Uri,
 	imageLoader: ImageLoader,
-	internalOffsetPx: Int,
 	onImageSizeResolved: (width: Int, height: Int) -> Unit,
 	colorFilter: ColorFilter?,
 	pageKey: Long,
@@ -1890,7 +1862,6 @@ private fun WebtoonImage(
 		modifier = Modifier
 			.fillMaxWidth()
 			.wrapContentHeight(unbounded = true)
-			.graphicsLayer { translationY = -internalOffsetPx.toFloat() },
 	)
 }
 

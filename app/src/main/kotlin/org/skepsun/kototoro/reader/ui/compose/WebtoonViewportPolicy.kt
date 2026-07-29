@@ -11,12 +11,6 @@ import kotlin.math.roundToInt
  */
 data class WebtoonViewportMeasurement(
 	val itemHeightPx: Int,
-	val internalScrollRangePx: Int,
-)
-
-data class WebtoonInternalScrollConsumption(
-	val offsetPx: Int,
-	val consumedPx: Int,
 )
 
 data class WebtoonCanvasOffsetBounds(
@@ -58,10 +52,7 @@ fun resolveWebtoonCanvasOffsetBounds(
 	)
 }
 
-/**
- * A zoomed-out webtoon container must reserve the inverse-scaled viewport. Otherwise a page
- * capped at the normal viewport is rendered shorter than the visible container and leaves a gap.
- */
+/** Keeps the zoomed-out canvas large enough to fill the viewport while its content is scaled. */
 fun resolveWebtoonLayoutViewportHeight(viewportHeightPx: Int, scale: Float): Int {
 	val viewport = viewportHeightPx.coerceAtLeast(1)
 	val safeScale = scale.coerceIn(0.5f, 1f)
@@ -88,31 +79,8 @@ fun measureWebtoonViewport(
 	if (availableWidthPx <= 0 || imageWidthPx == null || imageHeightPx == null ||
 		imageWidthPx <= 0 || imageHeightPx <= 0
 	) {
-		return WebtoonViewportMeasurement(itemHeightPx = viewport, internalScrollRangePx = 0)
+		return WebtoonViewportMeasurement(itemHeightPx = viewport)
 	}
 	val sourceHeight = (imageHeightPx.toFloat() * availableWidthPx / imageWidthPx).roundToInt().coerceAtLeast(1)
-	return WebtoonViewportMeasurement(
-		itemHeightPx = sourceHeight.coerceAtMost(viewport),
-		internalScrollRangePx = (sourceHeight - viewport).coerceAtLeast(0),
-	)
-}
-
-/**
- * Consumes a list-scroll delta inside one long image before the LazyColumn moves to another item.
- * Positive deltas move toward the image bottom; negative deltas move toward its top.
- */
-fun consumeWebtoonInternalScroll(
-	offsetPx: Int,
-	scrollRangePx: Int,
-	deltaPx: Int,
-): WebtoonInternalScrollConsumption {
-	val newOffset = (offsetPx + deltaPx).coerceIn(0, scrollRangePx.coerceAtLeast(0))
-	return WebtoonInternalScrollConsumption(
-		offsetPx = newOffset,
-		consumedPx = newOffset - offsetPx,
-	)
-}
-
-fun restoreWebtoonInternalScroll(savedOffsetPx: Int, scrollRangePx: Int): Int {
-	return savedOffsetPx.coerceIn(0, scrollRangePx.coerceAtLeast(0))
+	return WebtoonViewportMeasurement(itemHeightPx = sourceHeight)
 }

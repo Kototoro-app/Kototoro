@@ -21,7 +21,6 @@ import org.skepsun.kototoro.core.util.ext.isLowRamDevice
 @Composable
 internal fun ComposeWebtoonSubsamplingImage(
 	uri: Uri,
-	internalOffsetPx: Int,
 	bitmapConfig: Bitmap.Config,
 	colorFilter: androidx.compose.ui.graphics.ColorFilter?,
 	onImageSizeResolved: (width: Int, height: Int) -> Unit,
@@ -34,7 +33,6 @@ internal fun ComposeWebtoonSubsamplingImage(
 		update = { view ->
 			view.bind(
 				uri = uri,
-				internalOffsetPx = internalOffsetPx,
 				bitmapConfig = bitmapConfig,
 				colorFilter = androidColorFilter,
 				onImageSizeResolved = onImageSizeResolved,
@@ -175,7 +173,6 @@ private class ComposeWebtoonSubsamplingImageView(context: Context) : Subsampling
 
 	private var boundUri: Uri? = null
 	private var boundBitmapConfig: Bitmap.Config? = null
-	private var internalOffsetPx = 0
 	private var onImageSizeResolved: ((Int, Int) -> Unit)? = null
 	private var onImageError: ((Throwable) -> Unit)? = null
 
@@ -187,7 +184,7 @@ private class ComposeWebtoonSubsamplingImageView(context: Context) : Subsampling
 		isQuickScaleEnabled = false
 		addOnImageEventListener(object : DefaultOnImageEventListener {
 			override fun onReady() {
-				applyInternalScroll()
+				applyScale()
 				onImageSizeResolved?.invoke(sWidth, sHeight)
 			}
 
@@ -209,13 +206,11 @@ private class ComposeWebtoonSubsamplingImageView(context: Context) : Subsampling
 
 	fun bind(
 		uri: Uri,
-		internalOffsetPx: Int,
 		bitmapConfig: Bitmap.Config,
 		colorFilter: ColorFilter?,
 		onImageSizeResolved: (Int, Int) -> Unit,
 		onImageError: (Throwable) -> Unit,
 	) {
-		this.internalOffsetPx = internalOffsetPx
 		this.colorFilter = colorFilter
 		this.onImageSizeResolved = onImageSizeResolved
 		this.onImageError = onImageError
@@ -232,29 +227,22 @@ private class ComposeWebtoonSubsamplingImageView(context: Context) : Subsampling
 			minimumScaleType = SCALE_TYPE_CUSTOM
 			panLimit = PAN_LIMIT_INSIDE
 			setImage(ImageSource.uri(uri))
-		} else if (isReady) {
-			applyInternalScroll()
 		}
 	}
 
 	override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
 		super.onSizeChanged(w, h, oldw, oldh)
-		if (isReady) applyInternalScroll()
+		if (isReady) applyScale()
 	}
 
-	private fun applyInternalScroll() {
+	private fun applyScale() {
 		if (!isReady || width <= 0 || height <= 0 || sWidth <= 0 || sHeight <= 0) return
 		val scale = width.toFloat() / sWidth.toFloat()
 		minScale = scale
 		maxScale = scale
-		val maxScroll = (sHeight * scale - height).coerceAtLeast(0f).toInt()
-		val scroll = internalOffsetPx.coerceIn(0, maxScroll)
 		setScaleAndCenter(
 			scale,
-			PointF(
-				sWidth / 2f,
-				(height / 2f + scroll) / scale,
-			),
+			PointF(sWidth / 2f, sHeight / 2f),
 		)
 	}
 }
