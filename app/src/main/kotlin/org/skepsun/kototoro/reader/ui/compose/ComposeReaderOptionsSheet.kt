@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,10 +39,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -200,39 +208,25 @@ private fun ReaderModeOptionsPage(
 	OptionsPageList {
 		item {
 			Column {
-				SectionTitle(stringResource(R.string.reader_page_turning_mode))
-				FlowRow(
-					maxItemsInEachRow = 2,
-					horizontalArrangement = Arrangement.spacedBy(12.dp),
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
-				) {
-					SelectRow(
-						title = stringResource(R.string.reader_page_turning_mode),
-						selected = state.mode.label(),
-						options = ReaderMode.entries.map { it.label() },
-						onSelected = { callbacks.onModeChanged(ReaderMode.entries[it]) },
-						modifier = Modifier.weight(1f),
-					)
-					SelectRow(
-						title = stringResource(R.string.pages_animation),
-						selected = animationLabels.getOrElse(state.animation.ordinal) { state.animation.name },
-						options = animationLabels.toList(),
-						onSelected = { callbacks.onAnimationChanged(ReaderAnimation.entries[it]) },
-						modifier = Modifier.weight(1f),
-					)
-					SelectRow(
-						title = stringResource(R.string.background),
-						selected = backgroundLabels.getOrElse(state.background.ordinal) { state.background.name },
-						options = backgroundLabels.toList(),
-						onSelected = { callbacks.onBackgroundChanged(ReaderBackground.entries[it]) },
-						modifier = Modifier.weight(1f),
-					)
+				OptionButtonGrid {
+					ReaderMode.entries.forEach { mode ->
+						OptionButton(
+							label = mode.label(),
+							selected = state.mode == mode,
+							onClick = { callbacks.onModeChanged(mode) },
+							icon = {
+								Icon(
+									painter = painterResource(mode.iconResId()),
+									contentDescription = null,
+								)
+							},
+						)
+					}
 				}
 			}
 		}
 		item {
 			Column {
-				SectionTitle(stringResource(R.string.double_page_mode))
 				OptionSwitch(
 					text = stringResource(R.string.double_page_landscape),
 					checked = state.doublePage,
@@ -278,6 +272,36 @@ private fun ReaderModeOptionsPage(
 							value = state.doublePageSensitivity,
 							onValueChange = callbacks.onDoublePageSensitivityChanged,
 							valueRange = 0f..1f,
+						)
+					}
+				}
+			}
+		}
+		item {
+			Column {
+				SectionTitle(stringResource(R.string.pages_animation))
+				OptionButtonGrid {
+					ReaderAnimation.entries.forEachIndexed { index, animation ->
+						OptionButton(
+							label = animationLabels.getOrElse(index) { animation.name },
+							selected = state.animation == animation,
+							onClick = { callbacks.onAnimationChanged(animation) },
+							icon = { ReaderAnimationIcon(animation) },
+						)
+					}
+				}
+			}
+		}
+		item {
+			Column {
+				SectionTitle(stringResource(R.string.background))
+				OptionButtonGrid {
+					ReaderBackground.entries.forEachIndexed { index, background ->
+						OptionButton(
+							label = backgroundLabels.getOrElse(index) { background.name },
+							selected = state.background == background,
+							onClick = { callbacks.onBackgroundChanged(background) },
+							icon = { ReaderBackgroundIcon(background) },
 						)
 					}
 				}
@@ -415,6 +439,64 @@ private fun OptionsActionGrid(
 	)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OptionButtonGrid(
+	content: @Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit,
+) {
+	FlowRow(
+		maxItemsInEachRow = 2,
+		horizontalArrangement = Arrangement.spacedBy(8.dp),
+		verticalArrangement = Arrangement.spacedBy(8.dp),
+		modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+		content = content,
+	)
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.FlowRowScope.OptionButton(
+	label: String,
+	selected: Boolean,
+	onClick: () -> Unit,
+	icon: @Composable () -> Unit,
+) {
+	Surface(
+		onClick = onClick,
+		shape = MaterialTheme.shapes.medium,
+		color = if (selected) {
+			MaterialTheme.colorScheme.primaryContainer
+		} else {
+			MaterialTheme.colorScheme.surfaceContainerLow
+		},
+		contentColor = if (selected) {
+			MaterialTheme.colorScheme.onPrimaryContainer
+		} else {
+			MaterialTheme.colorScheme.onSurface
+		},
+		modifier = Modifier.weight(1f).height(64.dp),
+	) {
+		Row(
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier.padding(horizontal = 12.dp),
+		) {
+			Box(
+				contentAlignment = Alignment.Center,
+				modifier = Modifier.size(24.dp),
+			) {
+				icon()
+			}
+			Text(
+				text = label,
+				style = MaterialTheme.typography.titleMedium,
+				fontWeight = FontWeight.SemiBold,
+				maxLines = 2,
+				overflow = TextOverflow.Ellipsis,
+				modifier = Modifier.padding(start = 10.dp),
+			)
+		}
+	}
+}
+
 @Composable
 private fun androidx.compose.foundation.layout.FlowRowScope.OptionAction(
 	icon: Int,
@@ -441,7 +523,8 @@ private fun androidx.compose.foundation.layout.FlowRowScope.OptionAction(
 			)
 			Text(
 				stringResource(label),
-				style = MaterialTheme.typography.bodyMedium,
+				style = MaterialTheme.typography.titleMedium,
+				fontWeight = FontWeight.SemiBold,
 				maxLines = 2,
 				overflow = TextOverflow.Ellipsis,
 				modifier = Modifier.padding(start = 10.dp),
@@ -462,14 +545,24 @@ private fun OptionSwitch(
 		verticalAlignment = Alignment.CenterVertically,
 		modifier = modifier.fillMaxWidth(),
 	) {
-		Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+		Text(
+			text = text,
+			style = MaterialTheme.typography.titleMedium,
+			fontWeight = FontWeight.SemiBold,
+			modifier = Modifier.weight(1f),
+		)
 		Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
 	}
 }
 
 @Composable
 private fun SectionTitle(text: String) {
-	Text(text = text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp))
+	Text(
+		text = text,
+		style = MaterialTheme.typography.titleMedium,
+		fontWeight = FontWeight.SemiBold,
+		modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+	)
 }
 
 @Composable
@@ -490,8 +583,21 @@ private fun SelectRow(
 				.padding(horizontal = 12.dp, vertical = 7.dp),
 		) {
 			Column(modifier = Modifier.weight(1f)) {
-				Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-				Text(selected, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+				Text(
+					text = title,
+					style = MaterialTheme.typography.titleMedium,
+					fontWeight = FontWeight.SemiBold,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				Text(
+					text = selected,
+					style = MaterialTheme.typography.titleMedium,
+					fontWeight = FontWeight.SemiBold,
+					color = MaterialTheme.colorScheme.primary,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
 			}
 			Text(">", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 		}
@@ -512,3 +618,143 @@ private fun ReaderMode.label(): String = stringResource(
 		ReaderMode.WEBTOON -> R.string.webtoon
 	},
 )
+
+private fun ReaderMode.iconResId(): Int = when (this) {
+	ReaderMode.STANDARD -> R.drawable.ic_reader_ltr
+	ReaderMode.REVERSED -> R.drawable.ic_reader_rtl
+	ReaderMode.VERTICAL -> R.drawable.ic_reader_vertical
+	ReaderMode.WEBTOON -> R.drawable.ic_gesture_vertical
+}
+
+@Composable
+private fun ReaderAnimationIcon(animation: ReaderAnimation) {
+	val color = androidx.compose.material3.LocalContentColor.current
+	Canvas(modifier = Modifier.size(24.dp)) {
+		val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+		val left = size.width * 0.18f
+		val top = size.height * 0.16f
+		val right = size.width * 0.82f
+		val bottom = size.height * 0.84f
+		when (animation) {
+			ReaderAnimation.NONE -> {
+				drawRoundRect(
+					color = color,
+					topLeft = Offset(left, top),
+					size = Size(right - left, bottom - top),
+					cornerRadius = CornerRadius(2.dp.toPx()),
+					style = stroke,
+				)
+				drawLine(
+					color = color,
+					start = Offset(left, bottom),
+					end = Offset(right, top),
+					strokeWidth = stroke.width,
+					cap = StrokeCap.Round,
+				)
+			}
+			ReaderAnimation.DEFAULT -> {
+				drawRoundRect(
+					color = color,
+					topLeft = Offset(left, top),
+					size = Size(size.width * 0.46f, bottom - top),
+					cornerRadius = CornerRadius(2.dp.toPx()),
+					style = stroke,
+				)
+				val arrowEnd = Offset(right, size.height * 0.5f)
+				drawLine(
+					color,
+					Offset(size.width * 0.62f, size.height * 0.5f),
+					arrowEnd,
+					stroke.width,
+					StrokeCap.Round,
+				)
+				drawLine(
+					color,
+					Offset(size.width * 0.72f, size.height * 0.4f),
+					arrowEnd,
+					stroke.width,
+					StrokeCap.Round,
+				)
+				drawLine(
+					color,
+					Offset(size.width * 0.72f, size.height * 0.6f),
+					arrowEnd,
+					stroke.width,
+					StrokeCap.Round,
+				)
+			}
+			ReaderAnimation.ADVANCED -> {
+				repeat(3) { index ->
+					val offset = index * size.width * 0.12f
+					drawRoundRect(
+						color = color,
+						topLeft = Offset(left + offset, top + offset * 0.35f),
+						size = Size(size.width * 0.44f, size.height * 0.58f),
+						cornerRadius = CornerRadius(2.dp.toPx()),
+						style = stroke,
+					)
+				}
+			}
+			ReaderAnimation.SIMULATION -> {
+				val path = Path().apply {
+					moveTo(left, top)
+					lineTo(size.width * 0.56f, top)
+					cubicTo(right, size.height * 0.28f, right, size.height * 0.7f, size.width * 0.58f, bottom)
+					lineTo(left, bottom)
+					close()
+				}
+				drawPath(path, color, style = stroke)
+				drawLine(
+					color = color,
+					start = Offset(size.width * 0.58f, bottom),
+					end = Offset(right, size.height * 0.68f),
+					strokeWidth = stroke.width,
+					cap = StrokeCap.Round,
+				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun ReaderBackgroundIcon(background: ReaderBackground) {
+	val colors = MaterialTheme.colorScheme
+	val outline = androidx.compose.material3.LocalContentColor.current
+	Canvas(modifier = Modifier.size(24.dp)) {
+		val radius = size.minDimension * 0.38f
+		val glyphTopLeft = Offset(
+			x = center.x - radius,
+			y = center.y - radius,
+		)
+		val glyphSize = Size(radius * 2f, radius * 2f)
+		when (background) {
+			ReaderBackground.DEFAULT -> {
+				drawArc(
+					color = colors.surface,
+					startAngle = -90f,
+					sweepAngle = 180f,
+					useCenter = true,
+					topLeft = glyphTopLeft,
+					size = glyphSize,
+				)
+				drawArc(
+					color = colors.onSurface,
+					startAngle = 90f,
+					sweepAngle = 180f,
+					useCenter = true,
+					topLeft = glyphTopLeft,
+					size = glyphSize,
+				)
+			}
+			ReaderBackground.LIGHT -> drawCircle(colors.surfaceBright, radius)
+			ReaderBackground.DARK -> drawCircle(colors.surfaceDim, radius)
+			ReaderBackground.WHITE -> drawCircle(Color.White, radius)
+			ReaderBackground.BLACK -> drawCircle(Color.Black, radius)
+			ReaderBackground.AUTO -> {
+				drawCircle(colors.primaryContainer, radius)
+				drawCircle(colors.primary, radius * 0.42f)
+			}
+		}
+		drawCircle(outline, radius, center, style = Stroke(width = 1.5.dp.toPx()))
+	}
+}

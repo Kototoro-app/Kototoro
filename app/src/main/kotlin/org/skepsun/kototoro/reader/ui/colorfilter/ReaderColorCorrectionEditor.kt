@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
@@ -48,22 +49,29 @@ internal fun ReaderColorCorrectionEditor(
             colorFilter = colorFilter,
             isLoading = isLoading,
         )
-        ColorFilterToggle(
-            label = stringResource(R.string.invert_colors),
-            checked = colorFilter?.isInverted == true,
-            enabled = !isLoading,
-            onCheckedChange = {
-                onColorFilterChange(colorFilter.update { copy(isInverted = it) })
-            },
-        )
-        ColorFilterToggle(
-            label = stringResource(R.string.grayscale),
-            checked = colorFilter?.isGrayscale == true,
-            enabled = !isLoading,
-            onCheckedChange = {
-                onColorFilterChange(colorFilter.update { copy(isGrayscale = it) })
-            },
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            ColorFilterToggle(
+                label = stringResource(R.string.invert_colors),
+                checked = colorFilter?.isInverted == true,
+                enabled = !isLoading,
+                onCheckedChange = {
+                    onColorFilterChange(colorFilter.update { copy(isInverted = it) })
+                },
+                modifier = Modifier.weight(1f),
+            )
+            ColorFilterToggle(
+                label = stringResource(R.string.grayscale),
+                checked = colorFilter?.isGrayscale == true,
+                enabled = !isLoading,
+                onCheckedChange = {
+                    onColorFilterChange(colorFilter.update { copy(isGrayscale = it) })
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
         ColorFilterSlider(
             label = stringResource(R.string.brightness),
             value = colorFilter?.brightness ?: 0f,
@@ -156,13 +164,19 @@ private fun ColorFilterToggle(
     checked: Boolean,
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
@@ -178,6 +192,7 @@ private fun ColorFilterSlider(
         Text(
             text = "$label: ${((value + 1f) * 100).toInt()}%",
             style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
         )
         Slider(
             value = value.coerceIn(-1f, 1f),

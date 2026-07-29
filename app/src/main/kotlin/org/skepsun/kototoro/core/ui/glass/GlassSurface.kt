@@ -259,14 +259,12 @@ fun Modifier.glassContainerShadow(
     elevation: Dp = GlassDefaults.navigationShadowElevation,
 ): Modifier {
     if (elevation <= 0.dp) return this
-    val colors = MaterialTheme.colorScheme
-    val isDark = colors.background.luminance() < 0.5f
     return shadow(
         elevation = elevation,
         shape = shape,
         clip = false,
-        ambientColor = Color.Black.copy(alpha = if (isDark) 0.28f else 0.14f),
-        spotColor = Color.Black.copy(alpha = if (isDark) 0.34f else 0.20f),
+        ambientColor = Color.Black.copy(alpha = 0.18f),
+        spotColor = Color.Black.copy(alpha = 0.28f),
     )
 }
 
