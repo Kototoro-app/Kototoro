@@ -191,6 +191,11 @@ private fun DetailsOrigin?.detailsTraceSummary(): String = when (this) {
 	is DetailsOrigin.TrackingItem -> "TrackingItem(service=$serviceId, remote=$remoteId)"
 }
 
+internal fun List<EntityRelationSection>.deduplicateRelationItems(): List<EntityRelationSection> =
+	map { section ->
+		section.copy(items = section.items.distinctBy(EntityRelationItem::stableKey))
+	}
+
 internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (this) {
 	is DetailsOrigin.EntityGraph -> initialProjectionLocalMangaId
 	is DetailsOrigin.LocalMangaId -> mangaId
@@ -2928,7 +2933,7 @@ class DetailsViewModel @Inject constructor(
 					),
 				)
 			}
-		}
+		}.deduplicateRelationItems()
 	}
 
 	private fun buildTrackingCharacterVoiceActorsText(
