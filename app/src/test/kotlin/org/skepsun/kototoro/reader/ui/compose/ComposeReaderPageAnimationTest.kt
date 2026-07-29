@@ -2,9 +2,11 @@ package org.skepsun.kototoro.reader.ui.compose
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.IntSize
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 
 class ComposeReaderPageAnimationTest {
@@ -19,17 +21,53 @@ class ComposeReaderPageAnimationTest {
 	}
 
 	@Test
-	fun `advanced horizontal animation rotates outgoing page around reading edge`() {
-		val standard = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.5f)
-		val reversed = resolve(ReaderAnimation.ADVANCED, pageOffset = 0.5f, isReversed = true)
+	fun `advanced horizontal animation moves only turning page over fixed revealed page`() {
+		val standardTurning = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.64f)
+		val standardRevealed = resolve(ReaderAnimation.ADVANCED, pageOffset = 0.5f)
+		val reversedTurning = resolve(ReaderAnimation.ADVANCED, pageOffset = 0.64f, isReversed = true)
+		val reversedRevealed = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.5f, isReversed = true)
 
-		assertEquals(-10f, standard.rotationY)
-		assertEquals(0.97f, standard.scaleX)
-		assertEquals(0f, standard.translationFactor)
-		assertEquals(1f, standard.bendProgress)
-		assertEquals(0f, standard.transformOrigin.pivotFractionX)
-		assertEquals(10f, reversed.rotationY)
-		assertEquals(1f, reversed.transformOrigin.pivotFractionX)
+		assertEquals(-12f, standardTurning.rotationY)
+		assertEquals(0.96f, standardTurning.scaleX)
+		assertEquals(1.025f, standardTurning.scaleY)
+		assertEquals(0f, standardTurning.translationFactor)
+		assertEquals(1f, standardTurning.bendProgress)
+		assertEquals(0.46f, standardTurning.bendPosition)
+		assertEquals(1.12f, standardTurning.bendWidth)
+		assertEquals(1f, standardTurning.transformOrigin.pivotFractionX)
+		assertEquals(-0.5f, standardRevealed.translationFactor)
+		assertEquals(-1f, standardRevealed.zIndex)
+		assertEquals(0.06f, standardRevealed.revealedPageShade)
+		assertEquals(12f, reversedTurning.rotationY)
+		assertEquals(0f, reversedTurning.transformOrigin.pivotFractionX)
+		assertEquals(0.5f, reversedRevealed.translationFactor)
+		assertEquals(-1f, reversedRevealed.zIndex)
+	}
+
+	@Test
+	fun `advanced effect uses fitted image edges instead of viewport edges`() {
+		val bounds = resolveAdvancedImageHorizontalBounds(
+			viewport = Size(1000f, 1600f),
+			imageSize = IntSize(800, 1600),
+			zoomMode = ZoomMode.FIT_CENTER,
+		)
+
+		assertEquals(100f, bounds.start)
+		assertEquals(900f, bounds.endInclusive)
+	}
+
+	@Test
+	fun `advanced bend propagates left and then holds while page keeps moving`() {
+		val halfway = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.32f)
+		val propagationEnd = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.64f)
+		val leaving = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.9f)
+
+		assertEquals(0.5f, halfway.bendProgress)
+		assertEquals(0.69f, halfway.bendPosition, 0.0001f)
+		assertEquals(0.7f, halfway.bendWidth, 0.0001f)
+		assertEquals(propagationEnd.bendProgress, leaving.bendProgress)
+		assertEquals(propagationEnd.bendPosition, leaving.bendPosition)
+		assertEquals(propagationEnd.bendWidth, leaving.bendWidth)
 	}
 
 	@Test
@@ -126,44 +164,6 @@ class ComposeReaderPageAnimationTest {
 				curlFromStart = true,
 			),
 		)
-	}
-
-	@Test
-	fun `backward gesture depends on reading direction`() {
-		assertEquals(
-			false,
-			isBackwardPageCurlGesture(
-				isVertical = false,
-				isReadingReversed = false,
-				horizontalDragFraction = -0.2f,
-			),
-		)
-		assertEquals(
-			true,
-			isBackwardPageCurlGesture(
-				isVertical = false,
-				isReadingReversed = false,
-				horizontalDragFraction = 0.2f,
-			),
-		)
-		assertEquals(
-			false,
-			isBackwardPageCurlGesture(
-				isVertical = false,
-				isReadingReversed = true,
-				horizontalDragFraction = 0.2f,
-			),
-		)
-		assertEquals(
-			true,
-			isBackwardPageCurlGesture(
-				isVertical = false,
-				isReadingReversed = true,
-				horizontalDragFraction = -0.2f,
-			),
-		)
-		assertEquals(0.25f, resolvePageCurlGeometryProgress(0.75f, isBackwardGesture = true))
-		assertEquals(0.75f, resolvePageCurlGeometryProgress(0.75f, isBackwardGesture = false))
 	}
 
 	@Test

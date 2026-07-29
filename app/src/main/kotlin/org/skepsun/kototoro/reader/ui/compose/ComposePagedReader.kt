@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -235,11 +236,6 @@ fun ComposePagedReader(
 					alpha = transform.alpha
 					translationX = if (isVertical) 0f else transform.translationFactor * size.width
 					translationY = if (isVertical) transform.translationFactor * size.height else 0f
-					rotationX = transform.rotationX
-					rotationY = transform.rotationY
-					scaleX = transform.scaleX
-					transformOrigin = transform.transformOrigin
-					cameraDistance = READER_PAGE_CAMERA_DISTANCE
 				}
 				.composeReaderPageCurl(transform, isVertical, reverseLayout, pageCurlState),
 		) {
@@ -260,10 +256,11 @@ fun ComposePagedReader(
 				zoomMode = zoomMode,
 				isCropEnabled = isCropEnabled,
 				isPageVisible = pagerState.settledPage == position,
+				advancedTransform = transform.takeIf { pageAnimation == ReaderAnimation.ADVANCED },
+				isAdvancedReversed = reverseLayout,
 				modifier = Modifier.fillMaxSize(),
 			)
 			when (pageAnimation) {
-				ReaderAnimation.ADVANCED -> ComposeReaderAdvancedPageEffect(transform, reverseLayout)
 				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
 				else -> Unit
 			}
@@ -1212,13 +1209,10 @@ fun ComposeDoublePageReader(
 				.zIndex(transform.zIndex)
 				.graphicsLayer {
 					alpha = transform.alpha
-					scaleX = currentTransform.scale * transform.scaleX
+					scaleX = currentTransform.scale
 					scaleY = currentTransform.scale
 					translationX = currentTransform.offsetX + transform.translationFactor * size.width
 					translationY = currentTransform.offsetY
-					rotationY = transform.rotationY
-					transformOrigin = transform.transformOrigin
-					cameraDistance = READER_PAGE_CAMERA_DISTANCE
 				}
 				.background(Color(spreadBackground))
 				.composeReaderPageCurl(
@@ -1355,6 +1349,8 @@ fun ComposeDoublePageReader(
 					onImageSizeResolved = { width, height ->
 						pageDisplaySizes[page.readerKey] = PageDisplaySize(width, height)
 					},
+					advancedTransform = transform.takeIf { pageAnimation == ReaderAnimation.ADVANCED },
+					isAdvancedReversed = reverseLayout,
 					modifier = Modifier
 						.weight(1f)
 						.fillMaxSize()
@@ -1386,7 +1382,6 @@ fun ComposeDoublePageReader(
 				}
 			}
 			when (pageAnimation) {
-				ReaderAnimation.ADVANCED -> ComposeReaderAdvancedPageEffect(transform, reverseLayout)
 				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
 				else -> Unit
 			}
@@ -1395,7 +1390,7 @@ fun ComposeDoublePageReader(
 }
 
 @Composable
-fun ComposeReaderPage(
+internal fun ComposeReaderPage(
 	page: ReaderPage,
 	imageLoader: ImageLoader,
 	imagePipeline: ComposeReaderImagePipeline,
@@ -1418,11 +1413,14 @@ fun ComposeReaderPage(
 	isPageVisible: Boolean = true,
 	applyPageBackground: Boolean = true,
 	onAutoBackgroundResolved: (Int) -> Unit = {},
+	advancedTransform: ComposeReaderPageTransform? = null,
+	isAdvancedReversed: Boolean = false,
 	modifier: Modifier = Modifier,
 ) {
 	var retryKey by remember(page.readerKey) { mutableIntStateOf(0) }
 	var renderError by remember(page.readerKey) { mutableStateOf<Throwable?>(null) }
 	var forceCoil by remember(page.readerKey) { mutableStateOf(false) }
+	var resolvedImageSize by remember(page.readerKey) { mutableStateOf<IntSize?>(null) }
 	val state by produceState<ComposeReaderImageState>(
 		initialValue = ComposeReaderImageState.LoadingOriginal,
 		key1 = page.readerKey,
@@ -1480,7 +1478,22 @@ fun ComposeReaderPage(
 			.background(if (applyPageBackground) Color(pageBackgroundColor) else Color.Transparent),
 		contentAlignment = Alignment.Center,
 	) {
-		if (renderError != null) {
+		Box(
+			modifier = Modifier
+				.fillMaxSize()
+				.then(
+					advancedTransform?.let {
+						Modifier.composeReaderAdvancedPageEffect(
+							transform = it,
+							isReversed = isAdvancedReversed,
+							imageSize = resolvedImageSize,
+							zoomMode = zoomMode,
+						)
+					} ?: Modifier,
+				),
+			contentAlignment = Alignment.Center,
+		) {
+			if (renderError != null) {
 			ReaderPageError(
 				cause = renderError!!,
 				onRetry = { onRetryError(renderError!!) { retryKey++ } },
@@ -1503,6 +1516,7 @@ fun ComposeReaderPage(
 				uri = value.original,
 				imageLoader = imageLoader,
 				onImageSizeResolved = { width, height ->
+					resolvedImageSize = IntSize(width, height)
 					imagePipeline.onImageDecoded(page, width, height)
 					onImageSizeResolved(width, height)
 				},
@@ -1526,6 +1540,7 @@ fun ComposeReaderPage(
 				uri = value.original,
 				imageLoader = imageLoader,
 				onImageSizeResolved = { width, height ->
+					resolvedImageSize = IntSize(width, height)
 					imagePipeline.onImageDecoded(page, width, height)
 					onImageSizeResolved(width, height)
 				},
@@ -1548,7 +1563,10 @@ fun ComposeReaderPage(
 			is ComposeReaderImageState.EnhancedReady -> PagedReaderImage(
 				uri = value.enhanced,
 				imageLoader = imageLoader,
-				onImageSizeResolved = onImageSizeResolved,
+				onImageSizeResolved = { width, height ->
+					resolvedImageSize = IntSize(width, height)
+					onImageSizeResolved(width, height)
+				},
 				pageKey = page.readerKey,
 				split = page.split,
 				zoomCommand = zoomCommand,
@@ -1571,6 +1589,7 @@ fun ComposeReaderPage(
 				resolveStringId = resolveErrorStringId(value.cause),
 				onShowDetails = { onShowErrorDetails(value.cause, page.url) },
 			)
+		}
 		}
 	}
 }

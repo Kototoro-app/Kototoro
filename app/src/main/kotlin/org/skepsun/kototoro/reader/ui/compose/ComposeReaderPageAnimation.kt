@@ -14,15 +14,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntSize
+import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import kotlin.math.abs
 import kotlin.math.sin
@@ -33,11 +38,14 @@ internal data class ComposeReaderPageTransform(
 	val rotationX: Float = 0f,
 	val rotationY: Float = 0f,
 	val scaleX: Float = 1f,
+	val scaleY: Float = 1f,
 	val transformOrigin: TransformOrigin = TransformOrigin.Center,
 	val zIndex: Float = 0f,
 	val foldProgress: Float = 0f,
 	val revealedPageShade: Float = 0f,
 	val bendProgress: Float = 0f,
+	val bendPosition: Float = 1f,
+	val bendWidth: Float = 0f,
 )
 
 internal fun resolveComposeReaderPageTransform(
@@ -101,15 +109,24 @@ private fun resolveAdvancedPageTransform(
 		)
 	}
 	val isTurningPage = if (isReversed) pageOffset >= 0f else pageOffset <= 0f
-	if (!isTurningPage) return ComposeReaderPageTransform(zIndex = -abs(pageOffset))
+	if (!isTurningPage) {
+		return ComposeReaderPageTransform(
+			translationFactor = -pageOffset,
+			zIndex = -1f,
+			revealedPageShade = abs(pageOffset) * 0.12f,
+		)
+	}
 	val progress = abs(pageOffset).coerceIn(0f, 1f)
-	val bendProgress = sin(progress * kotlin.math.PI).toFloat()
+	val propagation = smoothStep((progress / ADVANCED_BEND_PROPAGATION_END).coerceIn(0f, 1f))
 	return ComposeReaderPageTransform(
-		rotationY = (if (isReversed) 10f else -10f) * bendProgress,
-		scaleX = 1f - 0.03f * bendProgress,
-		transformOrigin = TransformOrigin(if (isReversed) 1f else 0f, 0.5f),
+		rotationY = (if (isReversed) 12f else -12f) * propagation,
+		scaleX = 1f - 0.04f * propagation,
+		scaleY = 1f + 0.025f * propagation,
+		transformOrigin = TransformOrigin(if (isReversed) 0f else 1f, 0.5f),
 		zIndex = 1f,
-		bendProgress = bendProgress,
+		bendProgress = propagation,
+		bendPosition = lerp(0.92f, 0.46f, propagation),
+		bendWidth = lerp(0.28f, 1.12f, propagation),
 	)
 }
 
@@ -188,21 +205,13 @@ internal fun Modifier.composeReaderPageCurl(
 		isReadingReversed = isReadingReversed,
 		horizontalDragFraction = state.horizontalDragFraction,
 	)
-	val isBackwardGesture = isBackwardPageCurlGesture(
-		isVertical = isVertical,
-		isReadingReversed = isReadingReversed,
-		horizontalDragFraction = state.horizontalDragFraction,
-	)
 	val touchFraction = resolvePageCurlStartFraction(
 		downFraction = state.downFraction,
 		isVertical = isVertical,
 		curlFromStart = curlFromStart,
 	)
 	return drawWithCache {
-		val progress = resolvePageCurlGeometryProgress(
-			foldProgress = transform.foldProgress,
-			isBackwardGesture = isBackwardGesture,
-		)
+		val progress = transform.foldProgress.coerceIn(0f, 1f)
 		val geometry = calculatePageCurlGeometry(
 			size = size,
 			progress = progress,
@@ -306,27 +315,6 @@ internal fun resolvePageCurlFromStart(
 	horizontalDragFraction > PAGE_CURL_DIRECTION_SLOP -> true
 	horizontalDragFraction < -PAGE_CURL_DIRECTION_SLOP -> false
 	else -> isReadingReversed
-}
-
-internal fun isBackwardPageCurlGesture(
-	isVertical: Boolean,
-	isReadingReversed: Boolean,
-	horizontalDragFraction: Float,
-): Boolean {
-	if (isVertical || abs(horizontalDragFraction) <= PAGE_CURL_DIRECTION_SLOP) return false
-	return if (isReadingReversed) {
-		horizontalDragFraction < 0f
-	} else {
-		horizontalDragFraction > 0f
-	}
-}
-
-internal fun resolvePageCurlGeometryProgress(
-	foldProgress: Float,
-	isBackwardGesture: Boolean,
-): Float {
-	val progress = foldProgress.coerceIn(0f, 1f)
-	return if (isBackwardGesture) 1f - progress else progress
 }
 
 internal fun resolvePageCurlStartFraction(
@@ -476,8 +464,11 @@ private fun safePageCurlDenominator(value: Float): Float = when {
 }
 
 private const val PAGE_CURL_DIRECTION_SLOP = 0.002f
+private const val ADVANCED_BEND_PROPAGATION_END = 0.64f
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float = start + (stop - start) * fraction
+
+private fun smoothStep(value: Float): Float = value * value * (3f - 2f * value)
 
 @Composable
 internal fun ComposeReaderSimulationPageShadow(
@@ -490,53 +481,125 @@ internal fun ComposeReaderSimulationPageShadow(
 	}
 }
 
-@Composable
-internal fun ComposeReaderAdvancedPageEffect(
+internal fun Modifier.composeReaderAdvancedPageEffect(
 	transform: ComposeReaderPageTransform,
 	isReversed: Boolean,
-) {
-	Canvas(modifier = Modifier.fillMaxSize()) {
-		val bend = transform.bendProgress.coerceIn(0f, 1f)
-		if (bend <= 0f) return@Canvas
-		drawRect(
-			brush = Brush.horizontalGradient(
-				colorStops = if (isReversed) {
-					arrayOf(
-						0f to Color.Black.copy(alpha = 0.14f * bend),
-						0.12f to Color.White.copy(alpha = 0.07f * bend),
-						0.34f to Color.Black.copy(alpha = 0.08f * bend),
-						1f to Color.Transparent,
-					)
-				} else {
-					arrayOf(
-						0f to Color.Transparent,
-						0.66f to Color.Black.copy(alpha = 0.08f * bend),
-						0.88f to Color.White.copy(alpha = 0.07f * bend),
-						1f to Color.Black.copy(alpha = 0.14f * bend),
-					)
-				},
-				startX = 0f,
-				endX = size.width,
-			),
+	imageSize: IntSize?,
+	zoomMode: ZoomMode,
+): Modifier {
+	val hasTransform = transform.rotationX != 0f || transform.rotationY != 0f ||
+		transform.scaleX != 1f || transform.scaleY != 1f
+	if (!hasTransform && transform.bendProgress <= 0f && transform.revealedPageShade <= 0f) return this
+	return graphicsLayer {
+		val horizontalBounds = resolveAdvancedImageHorizontalBounds(
+			viewport = Size(size.width.toFloat(), size.height.toFloat()),
+			imageSize = imageSize,
+			zoomMode = zoomMode,
 		)
-		drawRect(
-			brush = Brush.horizontalGradient(
-				colorStops = if (isReversed) {
-					arrayOf(
-						0f to Color.Black.copy(alpha = 0.24f * bend),
-						0.035f to Color.Black.copy(alpha = 0.12f * bend),
-						0.1f to Color.Transparent,
-					)
-				} else {
-					arrayOf(
-						0.9f to Color.Transparent,
-						0.965f to Color.Black.copy(alpha = 0.12f * bend),
-						1f to Color.Black.copy(alpha = 0.24f * bend),
-					)
-				},
-				startX = 0f,
-				endX = size.width,
-			),
+		alpha = transform.alpha
+		rotationX = transform.rotationX
+		rotationY = transform.rotationY
+		scaleX = transform.scaleX
+		scaleY = transform.scaleY
+		transformOrigin = TransformOrigin(
+			pivotFractionX = if (size.width > 0) {
+				(if (isReversed) horizontalBounds.start else horizontalBounds.endInclusive) / size.width
+			} else {
+				transform.transformOrigin.pivotFractionX
+			},
+			pivotFractionY = transform.transformOrigin.pivotFractionY,
 		)
+		cameraDistance = READER_PAGE_CAMERA_DISTANCE
+		compositingStrategy = CompositingStrategy.Offscreen
+	}.drawWithCache {
+		val horizontalBounds = resolveAdvancedImageHorizontalBounds(
+			viewport = size,
+			imageSize = imageSize,
+			zoomMode = zoomMode,
+		)
+		val imageStart = horizontalBounds.start
+		val imageEnd = horizontalBounds.endInclusive
+		val imageWidth = imageEnd - imageStart
+		onDrawWithContent {
+			drawContent()
+			if (transform.revealedPageShade > 0f) {
+				drawRect(
+					color = Color.Black.copy(alpha = transform.revealedPageShade),
+					blendMode = BlendMode.SrcAtop,
+				)
+			}
+			val bend = transform.bendProgress.coerceIn(0f, 1f)
+			if (bend <= 0f) return@onDrawWithContent
+			val bendCenterFraction = if (isReversed) 1f - transform.bendPosition else transform.bendPosition
+			val bendStart = imageStart + imageWidth * (bendCenterFraction - transform.bendWidth / 2f)
+			val bendEnd = imageStart + imageWidth * (bendCenterFraction + transform.bendWidth / 2f)
+			drawRect(
+				brush = Brush.horizontalGradient(
+					colorStops = if (isReversed) {
+						arrayOf(
+							0f to Color.Transparent,
+							0.24f to Color.Black.copy(alpha = 0.1f * bend),
+							0.48f to Color.White.copy(alpha = 0.1f * bend),
+							0.7f to Color.Black.copy(alpha = 0.13f * bend),
+							1f to Color.Transparent,
+						)
+					} else {
+						arrayOf(
+							0f to Color.Transparent,
+							0.3f to Color.Black.copy(alpha = 0.13f * bend),
+							0.52f to Color.White.copy(alpha = 0.1f * bend),
+							0.76f to Color.Black.copy(alpha = 0.1f * bend),
+							1f to Color.Transparent,
+						)
+					},
+					startX = bendStart,
+					endX = bendEnd,
+				),
+				blendMode = BlendMode.SrcAtop,
+			)
+			drawRect(
+				brush = Brush.horizontalGradient(
+					colorStops = if (isReversed) {
+						arrayOf(
+							0f to Color.Black.copy(alpha = 0.2f * bend),
+							0.08f to Color.Black.copy(alpha = 0.08f * bend),
+							0.18f to Color.Transparent,
+						)
+					} else {
+						arrayOf(
+							0.82f to Color.Transparent,
+							0.92f to Color.Black.copy(alpha = 0.08f * bend),
+							1f to Color.Black.copy(alpha = 0.2f * bend),
+						)
+					},
+					startX = imageStart,
+					endX = imageEnd,
+				),
+				blendMode = BlendMode.SrcAtop,
+			)
+		}
 	}
+}
+
+internal fun resolveAdvancedImageHorizontalBounds(
+	viewport: Size,
+	imageSize: IntSize?,
+	zoomMode: ZoomMode,
+): ClosedFloatingPointRange<Float> {
+	if (viewport.width <= 0f || viewport.height <= 0f || imageSize == null ||
+		imageSize.width <= 0 || imageSize.height <= 0
+	) {
+		return 0f..viewport.width
+	}
+	val imageWidth = imageSize.width.toFloat()
+	val imageHeight = imageSize.height.toFloat()
+	val scale = when (zoomMode) {
+		ZoomMode.FIT_HEIGHT -> viewport.height / imageHeight
+		ZoomMode.FIT_WIDTH -> viewport.width / imageWidth
+		ZoomMode.FIT_CENTER,
+		ZoomMode.KEEP_START -> minOf(viewport.width / imageWidth, viewport.height / imageHeight)
+	}
+	val displayedWidth = imageWidth * scale
+	val start = (viewport.width - displayedWidth) / 2f
+	return start..(start + displayedWidth)
 }
