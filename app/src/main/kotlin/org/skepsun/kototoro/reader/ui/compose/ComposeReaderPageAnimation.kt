@@ -118,6 +118,8 @@ internal class ComposeReaderPageCurlState internal constructor() {
 		private set
 	var touchFraction by mutableStateOf(Offset(0.75f, 0.85f))
 		private set
+	var horizontalDragDirection by mutableStateOf(0f)
+		private set
 	var isGestureInProgress by mutableStateOf(false)
 		private set
 
@@ -128,11 +130,18 @@ internal class ComposeReaderPageCurlState internal constructor() {
 		val fraction = position.toTouchFraction(viewport) ?: return
 		downFraction = fraction
 		touchFraction = fraction
+		horizontalDragDirection = 0f
 		isGestureInProgress = true
 	}
 
 	internal fun updateTouch(position: Offset, viewport: Size) {
 		touchFraction = position.toTouchFraction(viewport) ?: return
+		if (horizontalDragDirection == 0f) {
+			val dragFraction = horizontalDragFraction
+			if (abs(dragFraction) >= PAGE_CURL_DIRECTION_SLOP) {
+				horizontalDragDirection = if (dragFraction > 0f) 1f else -1f
+			}
+		}
 	}
 
 	internal fun endTouch() {
@@ -189,9 +198,18 @@ internal fun Modifier.composeReaderPageCurl(
 	followTouchDuringGesture: Boolean? = null,
 ): Modifier {
 	if (transform.foldProgress <= 0f) return this
-	val followTouch = !isVertical &&
-		state.isGestureInProgress &&
-		(followTouchDuringGesture ?: true)
+	val curlFromStart = resolvePageCurlFromStart(
+		isVertical = isVertical,
+		isReversed = isReversed,
+		horizontalDragDirection = state.horizontalDragDirection,
+	)
+	val followTouch = shouldFollowPageCurlTouch(
+		isVertical = isVertical,
+		isReversed = isReversed,
+		isGestureInProgress = state.isGestureInProgress,
+		horizontalDragDirection = state.horizontalDragDirection,
+		followTouchDuringGesture = followTouchDuringGesture,
+	)
 	val trackedTouchFraction = if (followTouch) state.touchFraction else state.downFraction
 	val touchRangeWidth = horizontalTouchRange.endInclusive - horizontalTouchRange.start
 	val touchFraction = Offset(
@@ -209,7 +227,7 @@ internal fun Modifier.composeReaderPageCurl(
 			progress = progress,
 			touchFraction = touchFraction,
 			isVertical = isVertical,
-			isReversed = isReversed,
+			isReversed = curlFromStart,
 			followTouch = followTouch,
 		)
 		val foldPath = Path().apply {
@@ -283,6 +301,34 @@ internal fun Modifier.composeReaderPageCurl(
 			)
 		}
 	}
+}
+
+internal fun resolvePageCurlFromStart(
+	isVertical: Boolean,
+	isReversed: Boolean,
+	horizontalDragDirection: Float,
+): Boolean = when {
+	isVertical -> isReversed
+	horizontalDragDirection > 0f -> true
+	horizontalDragDirection < 0f -> false
+	else -> isReversed
+}
+
+internal fun shouldFollowPageCurlTouch(
+	isVertical: Boolean,
+	isReversed: Boolean,
+	isGestureInProgress: Boolean,
+	horizontalDragDirection: Float,
+	followTouchDuringGesture: Boolean?,
+): Boolean {
+	if (isVertical || !isGestureInProgress || horizontalDragDirection == 0f) return false
+	followTouchDuringGesture?.let { return it }
+	val isBackwardGesture = if (isReversed) {
+		horizontalDragDirection < 0f
+	} else {
+		horizontalDragDirection > 0f
+	}
+	return !isBackwardGesture
 }
 
 internal data class ComposeReaderPageCurlGeometry(
@@ -418,6 +464,8 @@ private fun safePageCurlDenominator(value: Float): Float = when {
 	value < 0f -> -0.1f
 	else -> 0.1f
 }
+
+private const val PAGE_CURL_DIRECTION_SLOP = 0.002f
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float = start + (stop - start) * fraction
 

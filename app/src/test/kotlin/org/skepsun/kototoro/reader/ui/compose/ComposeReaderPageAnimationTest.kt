@@ -86,6 +86,62 @@ class ComposeReaderPageAnimationTest {
 	}
 
 	@Test
+	fun `backward drag curls previous page from start without following touch`() {
+		assertTrue(
+			resolvePageCurlFromStart(
+				isVertical = false,
+				isReversed = false,
+				horizontalDragDirection = 1f,
+			),
+		)
+		assertEquals(
+			false,
+			shouldFollowPageCurlTouch(
+				isVertical = false,
+				isReversed = false,
+				isGestureInProgress = true,
+				horizontalDragDirection = 1f,
+				followTouchDuringGesture = null,
+			),
+		)
+	}
+
+	@Test
+	fun `page curl waits for drag direction before following touch`() {
+		assertEquals(
+			false,
+			shouldFollowPageCurlTouch(
+				isVertical = false,
+				isReversed = false,
+				isGestureInProgress = true,
+				horizontalDragDirection = 0f,
+				followTouchDuringGesture = null,
+			),
+		)
+	}
+
+	@Test
+	fun `forward drag still follows touch from end edge`() {
+		assertEquals(
+			false,
+			resolvePageCurlFromStart(
+				isVertical = false,
+				isReversed = false,
+				horizontalDragDirection = -1f,
+			),
+		)
+		assertTrue(
+			shouldFollowPageCurlTouch(
+				isVertical = false,
+				isReversed = false,
+				isGestureInProgress = true,
+				horizontalDragDirection = -1f,
+				followTouchDuringGesture = null,
+			),
+		)
+	}
+
+	@Test
 	fun `page curl geometry stays finite throughout turn`() {
 		listOf(0.001f, 0.25f, 0.5f, 0.75f, 1f).forEach { progress ->
 			val geometry = curl(touch = Offset(0.76f, 0.84f), progress = progress)
