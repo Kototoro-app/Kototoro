@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.core.ui.glass
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -16,7 +15,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -24,12 +22,15 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -200,24 +201,19 @@ fun LiquidGlassSurface(
     val exportedBackdrop = rememberLayerBackdrop()
     val colors = MaterialTheme.colorScheme
     val isDark = colors.background.luminance() < 0.5f
+    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
+        componentRole == GlassComponentRole.BottomBar
+    val surfaceAlpha = style.backdropSurfaceAlpha(isNavigationChrome)
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
-        -> if (isDark) Color.Black.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.20f)
-        else -> colors.surfaceContainer.copy(alpha = 0.18f)
+        -> colors.surfaceContainerHigh.copy(alpha = surfaceAlpha)
+        else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
     }
-    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
-        componentRole == GlassComponentRole.BottomBar
 
     CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
-        val navigationShadowElevation = if (isNavigationChrome) style.shadowElevation else 0.dp
         Box(
             modifier = modifier
-                .glassContainerShadow(
-                    shape = shape,
-                    elevation = navigationShadowElevation,
-                )
-                .clip(shape)
                 .drawBackdrop(
                     backdrop = backdrop,
                     exportedBackdrop = exportedBackdrop,
@@ -231,8 +227,24 @@ fun LiquidGlassSurface(
                             chromaticAberration = false,
                         )
                     },
+                    highlight = { Highlight.Default },
+                    shadow = if (style.shadowElevation > 0.dp) {
+                        {
+                            Shadow(
+                                radius = style.shadowElevation * 3f,
+                                offset = DpOffset(0.dp, style.shadowElevation / 2f),
+                                color = Color.Black.copy(
+                                    alpha = if (isNavigationChrome) 0.14f else 0.10f,
+                                ),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    onDrawSurface = {
+                        drawRect(tint)
+                    },
                 )
-                .background(tint, shape)
                 .then(
                     if (isNavigationChrome) {
                         Modifier
@@ -250,6 +262,15 @@ fun LiquidGlassSurface(
                 ),
             content = content,
         )
+    }
+}
+
+private fun GlassStyle.backdropSurfaceAlpha(isNavigationChrome: Boolean): Float {
+    val materialDensity = containerAlpha.coerceIn(minimumContainerAlpha, 1f)
+    return if (isNavigationChrome) {
+        (materialDensity * 0.48f).coerceIn(0.30f, 0.46f)
+    } else {
+        (materialDensity * 0.25f).coerceIn(0.14f, 0.28f)
     }
 }
 

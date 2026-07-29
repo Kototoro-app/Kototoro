@@ -25,6 +25,15 @@ Useful effects include `vibrancy()`, `blur(radius, edgeTreatment)`, `lens(refrac
 
 Backdrop effects do not define the component's semantic surface color. Draw a theme-aware surface tint as part of the destination surface, after the backdrop effect, when a control needs reliable contrast.
 
+## Surface, highlight, and shadow
+
+- `drawBackdrop` defaults `highlight` to `Highlight.Default` and `shadow` to `Shadow.Default`; `innerShadow` defaults to `null`.
+- In Backdrop `2.0.0-alpha03`, `Shadow.Default` uses a `24.dp` blur radius, a vertical offset of `radius / 6`, and black at `0.1` alpha.
+- In Backdrop `2.0.0-alpha03`, `Highlight.Default` is a directional white highlight with `0.5.dp` width and white at `0.5` alpha.
+- Prefer `onDrawSurface` for the semantic surface tint. The upstream Glass Bottom Bar tutorial adds a translucent surface explicitly to improve readability.
+- `drawBackdrop` already clips its recorded glass layer to the supplied shape. A same-shape `Modifier.clip` outside it can clip the native expanding shadow.
+- Configure Backdrop `Shadow` explicitly when a component role needs a different depth. Do not add a Compose elevation shadow around the same Backdrop surface.
+
 ## Platform constraints
 
 The upstream documentation states that Backdrop render effects require Android 12 or newer, with some RuntimeShader-based effects requiring Android 13 or newer. Treat unsupported or separate-window content as a fallback path rather than assuming the root Backdrop is available.

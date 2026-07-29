@@ -52,6 +52,10 @@ Clear Glass 仅在背景是丰富媒体、内容不会因变暗而受损、前�
 - 标准控制前景使用 `onSurface`；主动作才使用强调色。
 - 深色模式的主文字与关键图标必须接近高对比前景，不能为了“柔和”降为难辨的灰色。
 - 背景采样之后再绘制主题表面染色，确保文字对比稳定。
+- 纯白、纯黑和大面积低纹理背景不能只依赖模糊、折射或外部阴影。均匀颜色经过这些效果后仍接近原色，
+  Regular Glass 必须通过语义 Surface 产生克制但可见的内部明度差。
+- Shadow 是辅助深度线索，不是容器轮廓的唯一来源。浅色背景上看不清时，优先校正 Surface tint 和
+  滚动边缘材质，不通过无限提高 elevation 补偿。
 - 边框只用于增强轮廓，不承担主要对比度；高对比模式下应提高表面不透明度而非无限加亮边框。
 - 不从背景媒体实时提取高饱和色作为整组控件染色。
 
@@ -115,7 +119,14 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - 源与目标必须处于同一窗口；Popup、Dialog 优先走已有 Overlay 宿主或稳定表面降级。
 - 效果顺序固定为 `color filter -> blur -> lens`。
 - `lens` 只用于 `CornerBasedShape`，尺寸不足或轮廓不适合时直接省略。
-- 表面染色必须在 `drawBackdrop` 之后绘制，防止效果覆盖语义颜色。
+- 表面染色使用 `drawBackdrop(onDrawSurface = ...)` 绘制；只有无法使用该回调时才在
+  `drawBackdrop` 之后追加主题背景，防止效果覆盖语义颜色。
+- `drawBackdrop` 默认提供 `Highlight.Default` 与 `Shadow.Default`。需要不同层级时显式传入
+  Backdrop `Highlight`/`Shadow`；禁止再套一层 Compose elevation shadow，避免重复阴影。
+- 不在 `drawBackdrop` 外层添加同形状 `clip`。Backdrop 已按 `shape` 裁切玻璃内容，外层裁切会截断
+  Backdrop 自带的外扩阴影与高光。
+- `containerAlpha` 表达材质密度意图，必须参与 Surface tint 计算，但不等同于把同一 alpha 原样覆盖到
+  `onDrawSurface`；应映射到适合玻璃合成的克制范围。
 - 避免嵌套 Backdrop；相邻控件共享容器或导出的 Backdrop。
 - Android 12 以下以及效果能力不足的设备必须保持完整功能和正确对比度。
 
@@ -132,7 +143,9 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - 去掉 Backdrop 后，页面层级是否仍成立？
 - Glass 是否只出现在导航和控制层？
 - 深色模式关键文字是否清晰，而非中灰？
-- 背景最亮、最暗和高纹理情况下是否都可读？
+- 背景最亮、最暗和高纹理情况下是否都可读？必须包含纯白阅读页与纯黑媒体画面。
+- 纯白背景上是否仍能通过 Surface 明度差识别完整容器，而不是只看到局部阴影？
+- 是否误将 Backdrop 自带阴影裁切，或同时叠加了 Backdrop 与 Compose 两套阴影？
 - Popup/Dialog 是否使用了正确的跨窗口降级？
 - 首帧、展开态和收起态的容器宽度是否一致合理？
 - 减少透明度、增强对比度和减少动态效果是否真正改变渲染策略？
@@ -145,3 +158,5 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - [Apple Typography](https://developer.apple.com/design/human-interface-guidelines/typography)
 - [Apple Motion](https://developer.apple.com/design/human-interface-guidelines/motion)
 - [Apple Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+- [Backdrop Glass Bottom Bar](https://kyant.gitbook.io/backdrop/tutorials/glass-bottom-bar)
+- [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)
