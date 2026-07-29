@@ -494,10 +494,11 @@ internal fun ComposeReaderActivityScaffold(
 			}
 		}
 
-			AnimatedVisibility(
-				visible = state.controlsVisible,
-			enter = slideInVertically { -it } + fadeIn(),
-			exit = slideOutVertically { -it } + fadeOut(),
+		AnimatedVisibility(
+			visible = state.controlsVisible,
+			// Alpha animations create an offscreen layer that clips Backdrop shadows to these bounds.
+			enter = slideInVertically { -it },
+			exit = slideOutVertically { -it },
 			modifier = Modifier.align(Alignment.TopCenter),
 		) {
 			ReaderComposeTopBar(

@@ -16,7 +16,10 @@ Use this skill for Kototoro's `io.github.kyant0:backdrop` integration. The app u
 5. Preserve content color separately from the surface tint. Use `MaterialTheme.colorScheme.onSurface` for standard iOS glass controls unless the component has a stronger semantic role.
 6. Remember that `drawBackdrop` enables `Highlight.Default` and `Shadow.Default` unless explicitly overridden. Prefer those Backdrop-native layers over wrapping the same glass shape in a Compose elevation shadow.
 7. Do not place a same-shape `clip` outside `drawBackdrop`; the modifier already clips the glass content to `shape`, while an outer clip can cut off Backdrop's expanding shadow and highlight.
-8. Validate with `./gradlew :app:compileDebugKotlin --no-daemon`. Add or update a focused unit test when extracting pure color or modifier-policy logic.
+8. Do not animate alpha on a parent that contains an out-of-bounds Backdrop shadow. Compose uses an offscreen
+   layer while alpha is below `1f`, clipping the expanded shadow to the parent's bounds. Prefer translation-only
+   entrance and exit animations for glass chrome.
+9. Validate with `./gradlew :app:compileDebugKotlin --no-daemon`. Add or update a focused unit test when extracting pure color or modifier-policy logic.
 
 ## Kototoro conventions
 
@@ -38,6 +41,7 @@ Use this skill for Kototoro's `io.github.kyant0:backdrop` integration. The app u
 - Is `onDrawSurface` already drawing a tint, causing an overly opaque double layer?
 - Is a `.background(...)` duplicating a tint already drawn by `onDrawSurface`?
 - Is an outer `clip` cutting off Backdrop's native shadow or highlight?
+- Is a parent fade temporarily clipping the expanding shadow in an alpha offscreen layer?
 - Are Backdrop `Shadow` and Compose `Modifier.shadow` both active for the same glass container?
 - On a pure-white test background, does the surface itself differ in luminance, or is only the shadow visible?
 - Does the selected icon/text color match the polarity of the theme surface?

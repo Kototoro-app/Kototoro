@@ -33,6 +33,9 @@ Backdrop effects do not define the component's semantic surface color. Draw a th
 - Prefer `onDrawSurface` for the semantic surface tint. The upstream Glass Bottom Bar tutorial adds a translucent surface explicitly to improve readability.
 - `drawBackdrop` already clips its recorded glass layer to the supplied shape. A same-shape `Modifier.clip` outside it can clip the native expanding shadow.
 - Configure Backdrop `Shadow` explicitly when a component role needs a different depth. Do not add a Compose elevation shadow around the same Backdrop surface.
+- A parent with alpha below `1f` is rendered into a Compose offscreen layer, which implicitly clips drawing outside
+  the layer bounds. This can truncate an entering Backdrop shadow until a fade reaches full opacity. Prefer
+  translation-only animation for glass chrome, or explicit layer outsets when the project Compose version supports them.
 
 ## Platform constraints
 

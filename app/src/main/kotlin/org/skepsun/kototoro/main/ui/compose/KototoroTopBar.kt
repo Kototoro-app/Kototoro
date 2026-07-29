@@ -86,11 +86,6 @@ import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -539,30 +534,14 @@ internal fun TopBarControlSurface(
     val useBackdrop = allowBackdrop &&
         LocalInterfaceStyle.current == InterfaceStyle.IOS &&
         backdrop != null
-    val exportedBackdrop = if (useBackdrop) rememberLayerBackdrop() else null
     if (useBackdrop) {
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-            Box(
-                modifier = modifier
-                    .glassContainerShadow(shape, shadowElevation)
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        exportedBackdrop = exportedBackdrop!!,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            blur(4.dp.toPx())
-                            lens(
-                                refractionHeight = 10.dp.toPx(),
-                                refractionAmount = 12.dp.toPx(),
-                                chromaticAberration = true,
-                            )
-                        },
-                    )
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape),
-                content = content,
-            )
-        }
+        GlassSurface(
+            modifier = modifier,
+            shape = shape,
+            style = style,
+            componentRole = GlassComponentRole.TopBar,
+            content = content,
+        )
     } else if (fallbackContainerColor != null) {
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Box(
