@@ -23,9 +23,12 @@ class ComposeReaderPageAnimationTest {
 		val standard = resolve(ReaderAnimation.ADVANCED, pageOffset = -0.5f)
 		val reversed = resolve(ReaderAnimation.ADVANCED, pageOffset = 0.5f, isReversed = true)
 
-		assertEquals(-60f, standard.rotationY)
+		assertEquals(-10f, standard.rotationY)
+		assertEquals(0.97f, standard.scaleX)
+		assertEquals(0f, standard.translationFactor)
+		assertEquals(1f, standard.bendProgress)
 		assertEquals(0f, standard.transformOrigin.pivotFractionX)
-		assertEquals(60f, reversed.rotationY)
+		assertEquals(10f, reversed.rotationY)
 		assertEquals(1f, reversed.transformOrigin.pivotFractionX)
 	}
 
@@ -86,59 +89,81 @@ class ComposeReaderPageAnimationTest {
 	}
 
 	@Test
-	fun `backward drag curls previous page from start without following touch`() {
-		assertTrue(
+	fun `horizontal curl edge follows physical drag direction`() {
+		assertEquals(
+			false,
 			resolvePageCurlFromStart(
 				isVertical = false,
-				isReversed = false,
-				horizontalDragDirection = 1f,
+				isReadingReversed = false,
+				horizontalDragFraction = -0.2f,
 			),
 		)
 		assertEquals(
-			false,
-			shouldFollowPageCurlTouch(
+			true,
+			resolvePageCurlFromStart(
 				isVertical = false,
-				isReversed = false,
-				isGestureInProgress = true,
-				horizontalDragDirection = 1f,
-				followTouchDuringGesture = null,
+				isReadingReversed = false,
+				horizontalDragFraction = 0.2f,
 			),
 		)
 	}
 
 	@Test
-	fun `page curl waits for drag direction before following touch`() {
+	fun `horizontal curl starts from selected page corner instead of touch x`() {
 		assertEquals(
-			false,
-			shouldFollowPageCurlTouch(
+			Offset(1f, 1f),
+			resolvePageCurlStartFraction(
+				downFraction = Offset(0.62f, 0.85f),
 				isVertical = false,
-				isReversed = false,
-				isGestureInProgress = true,
-				horizontalDragDirection = 0f,
-				followTouchDuringGesture = null,
+				curlFromStart = false,
+			),
+		)
+		assertEquals(
+			Offset(0f, 0f),
+			resolvePageCurlStartFraction(
+				downFraction = Offset(0.88f, 0.15f),
+				isVertical = false,
+				curlFromStart = true,
 			),
 		)
 	}
 
 	@Test
-	fun `forward drag still follows touch from end edge`() {
+	fun `backward gesture depends on reading direction`() {
 		assertEquals(
 			false,
-			resolvePageCurlFromStart(
+			isBackwardPageCurlGesture(
 				isVertical = false,
-				isReversed = false,
-				horizontalDragDirection = -1f,
+				isReadingReversed = false,
+				horizontalDragFraction = -0.2f,
 			),
 		)
-		assertTrue(
-			shouldFollowPageCurlTouch(
+		assertEquals(
+			true,
+			isBackwardPageCurlGesture(
 				isVertical = false,
-				isReversed = false,
-				isGestureInProgress = true,
-				horizontalDragDirection = -1f,
-				followTouchDuringGesture = null,
+				isReadingReversed = false,
+				horizontalDragFraction = 0.2f,
 			),
 		)
+		assertEquals(
+			false,
+			isBackwardPageCurlGesture(
+				isVertical = false,
+				isReadingReversed = true,
+				horizontalDragFraction = 0.2f,
+			),
+		)
+		assertEquals(
+			true,
+			isBackwardPageCurlGesture(
+				isVertical = false,
+				isReadingReversed = true,
+				horizontalDragFraction = -0.2f,
+			),
+		)
+		assertEquals(0.25f, resolvePageCurlGeometryProgress(0.75f, isBackwardGesture = true))
+		assertEquals(0.75f, resolvePageCurlGeometryProgress(0.75f, isBackwardGesture = false))
 	}
 
 	@Test

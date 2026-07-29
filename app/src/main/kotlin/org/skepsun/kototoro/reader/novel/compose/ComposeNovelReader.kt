@@ -974,6 +974,9 @@ private fun ComposeNovelPagedChapter(
 		}
 		val dualPage = settings.enableDualPage && maxWidth >= 600.dp
 		val pageCurlState = rememberComposeReaderPageCurlState()
+		LaunchedEffect(pagerState.isScrollInProgress) {
+			if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
+		}
 		Box(
 			modifier = Modifier
 				.align(Alignment.TopEnd)
@@ -1082,14 +1085,8 @@ private fun ComposeNovelPagedChapter(
 							Modifier.composeReaderPageCurl(
 								transform = simulationTransform,
 								isVertical = false,
-								isReversed = !curlOnEnd,
+								isReadingReversed = false,
 								state = pageCurlState,
-								horizontalTouchRange = if (dualPage) {
-									if (curlOnEnd) 0.5f..1f else 0f..0.5f
-								} else {
-									0f..1f
-								},
-								followTouchDuringGesture = if (dualPage) curlOnEnd else null,
 							)
 						} else {
 							Modifier

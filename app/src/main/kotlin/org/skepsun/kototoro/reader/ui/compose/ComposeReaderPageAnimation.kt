@@ -25,16 +25,19 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import kotlin.math.abs
+import kotlin.math.sin
 
 internal data class ComposeReaderPageTransform(
 	val translationFactor: Float = 0f,
 	val alpha: Float = 1f,
 	val rotationX: Float = 0f,
 	val rotationY: Float = 0f,
+	val scaleX: Float = 1f,
 	val transformOrigin: TransformOrigin = TransformOrigin.Center,
 	val zIndex: Float = 0f,
 	val foldProgress: Float = 0f,
 	val revealedPageShade: Float = 0f,
+	val bendProgress: Float = 0f,
 )
 
 internal fun resolveComposeReaderPageTransform(
@@ -88,25 +91,25 @@ private fun resolveAdvancedPageTransform(
 ): ComposeReaderPageTransform {
 	if (pageOffset !in -1f..1f) {
 		return ComposeReaderPageTransform(
-			translationFactor = -pageOffset,
 			alpha = 0f,
 		)
 	}
 	if (isVertical) {
 		return ComposeReaderPageTransform(
-			translationFactor = -pageOffset,
 			rotationX = if (pageOffset <= 0f) -120f * pageOffset else 0f,
 			transformOrigin = TransformOrigin(0.5f, 0.2f),
 		)
 	}
+	val isTurningPage = if (isReversed) pageOffset >= 0f else pageOffset <= 0f
+	if (!isTurningPage) return ComposeReaderPageTransform(zIndex = -abs(pageOffset))
+	val progress = abs(pageOffset).coerceIn(0f, 1f)
+	val bendProgress = sin(progress * kotlin.math.PI).toFloat()
 	return ComposeReaderPageTransform(
-		translationFactor = -pageOffset,
-		rotationY = when {
-			isReversed && pageOffset > 0f -> 120f * pageOffset
-			!isReversed && pageOffset <= 0f -> 120f * pageOffset
-			else -> 0f
-		},
+		rotationY = (if (isReversed) 10f else -10f) * bendProgress,
+		scaleX = 1f - 0.03f * bendProgress,
 		transformOrigin = TransformOrigin(if (isReversed) 1f else 0f, 0.5f),
+		zIndex = 1f,
+		bendProgress = bendProgress,
 	)
 }
 
@@ -118,10 +121,6 @@ internal class ComposeReaderPageCurlState internal constructor() {
 		private set
 	var touchFraction by mutableStateOf(Offset(0.75f, 0.85f))
 		private set
-	var horizontalDragDirection by mutableStateOf(0f)
-		private set
-	var isGestureInProgress by mutableStateOf(false)
-		private set
 
 	val horizontalDragFraction: Float
 		get() = touchFraction.x - downFraction.x
@@ -130,22 +129,14 @@ internal class ComposeReaderPageCurlState internal constructor() {
 		val fraction = position.toTouchFraction(viewport) ?: return
 		downFraction = fraction
 		touchFraction = fraction
-		horizontalDragDirection = 0f
-		isGestureInProgress = true
 	}
 
 	internal fun updateTouch(position: Offset, viewport: Size) {
 		touchFraction = position.toTouchFraction(viewport) ?: return
-		if (horizontalDragDirection == 0f) {
-			val dragFraction = horizontalDragFraction
-			if (abs(dragFraction) >= PAGE_CURL_DIRECTION_SLOP) {
-				horizontalDragDirection = if (dragFraction > 0f) 1f else -1f
-			}
-		}
 	}
 
-	internal fun endTouch() {
-		isGestureInProgress = false
+	internal fun resetDrag() {
+		touchFraction = downFraction
 	}
 
 	private fun Offset.toTouchFraction(viewport: Size): Offset? {
@@ -176,59 +167,49 @@ internal fun Modifier.trackComposeReaderPageCurl(
 			position = down.position,
 			viewport = viewport,
 		)
-		try {
-			do {
-				val event = awaitPointerEvent(PointerEventPass.Initial)
-				event.changes.firstOrNull { it.pressed }?.let { change ->
-					state.updateTouch(change.position, viewport)
-				}
-			} while (event.changes.any { it.pressed })
-		} finally {
-			state.endTouch()
-		}
+		do {
+			val event = awaitPointerEvent(PointerEventPass.Initial)
+			event.changes.firstOrNull { it.pressed }?.let { change ->
+				state.updateTouch(change.position, viewport)
+			}
+		} while (event.changes.any { it.pressed })
 	}
 }
 
 internal fun Modifier.composeReaderPageCurl(
 	transform: ComposeReaderPageTransform,
 	isVertical: Boolean,
-	isReversed: Boolean,
+	isReadingReversed: Boolean,
 	state: ComposeReaderPageCurlState,
-	horizontalTouchRange: ClosedFloatingPointRange<Float> = 0f..1f,
-	followTouchDuringGesture: Boolean? = null,
 ): Modifier {
 	if (transform.foldProgress <= 0f) return this
 	val curlFromStart = resolvePageCurlFromStart(
 		isVertical = isVertical,
-		isReversed = isReversed,
-		horizontalDragDirection = state.horizontalDragDirection,
+		isReadingReversed = isReadingReversed,
+		horizontalDragFraction = state.horizontalDragFraction,
 	)
-	val followTouch = shouldFollowPageCurlTouch(
+	val isBackwardGesture = isBackwardPageCurlGesture(
 		isVertical = isVertical,
-		isReversed = isReversed,
-		isGestureInProgress = state.isGestureInProgress,
-		horizontalDragDirection = state.horizontalDragDirection,
-		followTouchDuringGesture = followTouchDuringGesture,
+		isReadingReversed = isReadingReversed,
+		horizontalDragFraction = state.horizontalDragFraction,
 	)
-	val trackedTouchFraction = if (followTouch) state.touchFraction else state.downFraction
-	val touchRangeWidth = horizontalTouchRange.endInclusive - horizontalTouchRange.start
-	val touchFraction = Offset(
-		x = if (touchRangeWidth > 0f) {
-			((trackedTouchFraction.x - horizontalTouchRange.start) / touchRangeWidth).coerceIn(0f, 1f)
-		} else {
-			trackedTouchFraction.x
-		},
-		y = trackedTouchFraction.y,
+	val touchFraction = resolvePageCurlStartFraction(
+		downFraction = state.downFraction,
+		isVertical = isVertical,
+		curlFromStart = curlFromStart,
 	)
 	return drawWithCache {
-		val progress = transform.foldProgress.coerceIn(0f, 1f)
+		val progress = resolvePageCurlGeometryProgress(
+			foldProgress = transform.foldProgress,
+			isBackwardGesture = isBackwardGesture,
+		)
 		val geometry = calculatePageCurlGeometry(
 			size = size,
 			progress = progress,
 			touchFraction = touchFraction,
 			isVertical = isVertical,
 			isReversed = curlFromStart,
-			followTouch = followTouch,
+			followTouch = false,
 		)
 		val foldPath = Path().apply {
 			moveTo(geometry.start1.x, geometry.start1.y)
@@ -278,6 +259,7 @@ internal fun Modifier.composeReaderPageCurl(
 			x = (geometry.vertex1.x + geometry.vertex2.x) / 2f,
 			y = (geometry.vertex1.y + geometry.vertex2.y) / 2f,
 		)
+		val edgeShadowProgress = sin(progress * kotlin.math.PI).toFloat().coerceIn(0f, 1f)
 
 		onDrawWithContent drawContent@{
 			clipPath(foldPath, clipOp = ClipOp.Difference) { this@drawContent.drawContent() }
@@ -294,6 +276,18 @@ internal fun Modifier.composeReaderPageCurl(
 					),
 				)
 			}
+			if (edgeShadowProgress > 0f) {
+				drawPath(
+					path = foldLine,
+					color = Color.Black.copy(alpha = 0.08f * edgeShadowProgress),
+					style = Stroke(width = 18f + 10f * edgeShadowProgress),
+				)
+				drawPath(
+					path = foldLine,
+					color = Color.Black.copy(alpha = 0.12f * edgeShadowProgress),
+					style = Stroke(width = 7f + 5f * edgeShadowProgress),
+				)
+			}
 			drawPath(
 				path = foldLine,
 				color = Color.Black.copy(alpha = 0.12f + progress * 0.18f),
@@ -305,30 +299,46 @@ internal fun Modifier.composeReaderPageCurl(
 
 internal fun resolvePageCurlFromStart(
 	isVertical: Boolean,
-	isReversed: Boolean,
-	horizontalDragDirection: Float,
+	isReadingReversed: Boolean,
+	horizontalDragFraction: Float,
 ): Boolean = when {
-	isVertical -> isReversed
-	horizontalDragDirection > 0f -> true
-	horizontalDragDirection < 0f -> false
-	else -> isReversed
+	isVertical -> isReadingReversed
+	horizontalDragFraction > PAGE_CURL_DIRECTION_SLOP -> true
+	horizontalDragFraction < -PAGE_CURL_DIRECTION_SLOP -> false
+	else -> isReadingReversed
 }
 
-internal fun shouldFollowPageCurlTouch(
+internal fun isBackwardPageCurlGesture(
 	isVertical: Boolean,
-	isReversed: Boolean,
-	isGestureInProgress: Boolean,
-	horizontalDragDirection: Float,
-	followTouchDuringGesture: Boolean?,
+	isReadingReversed: Boolean,
+	horizontalDragFraction: Float,
 ): Boolean {
-	if (isVertical || !isGestureInProgress || horizontalDragDirection == 0f) return false
-	followTouchDuringGesture?.let { return it }
-	val isBackwardGesture = if (isReversed) {
-		horizontalDragDirection < 0f
+	if (isVertical || abs(horizontalDragFraction) <= PAGE_CURL_DIRECTION_SLOP) return false
+	return if (isReadingReversed) {
+		horizontalDragFraction < 0f
 	} else {
-		horizontalDragDirection > 0f
+		horizontalDragFraction > 0f
 	}
-	return !isBackwardGesture
+}
+
+internal fun resolvePageCurlGeometryProgress(
+	foldProgress: Float,
+	isBackwardGesture: Boolean,
+): Float {
+	val progress = foldProgress.coerceIn(0f, 1f)
+	return if (isBackwardGesture) 1f - progress else progress
+}
+
+internal fun resolvePageCurlStartFraction(
+	downFraction: Offset,
+	isVertical: Boolean,
+	curlFromStart: Boolean,
+): Offset {
+	if (isVertical) return downFraction
+	return Offset(
+		x = if (curlFromStart) 0f else 1f,
+		y = if (downFraction.y < 0.5f) 0f else 1f,
+	)
 }
 
 internal data class ComposeReaderPageCurlGeometry(
@@ -477,5 +487,56 @@ internal fun ComposeReaderSimulationPageShadow(
 		if (transform.revealedPageShade > 0f) {
 			drawRect(Color.Black.copy(alpha = transform.revealedPageShade))
 		}
+	}
+}
+
+@Composable
+internal fun ComposeReaderAdvancedPageEffect(
+	transform: ComposeReaderPageTransform,
+	isReversed: Boolean,
+) {
+	Canvas(modifier = Modifier.fillMaxSize()) {
+		val bend = transform.bendProgress.coerceIn(0f, 1f)
+		if (bend <= 0f) return@Canvas
+		drawRect(
+			brush = Brush.horizontalGradient(
+				colorStops = if (isReversed) {
+					arrayOf(
+						0f to Color.Black.copy(alpha = 0.14f * bend),
+						0.12f to Color.White.copy(alpha = 0.07f * bend),
+						0.34f to Color.Black.copy(alpha = 0.08f * bend),
+						1f to Color.Transparent,
+					)
+				} else {
+					arrayOf(
+						0f to Color.Transparent,
+						0.66f to Color.Black.copy(alpha = 0.08f * bend),
+						0.88f to Color.White.copy(alpha = 0.07f * bend),
+						1f to Color.Black.copy(alpha = 0.14f * bend),
+					)
+				},
+				startX = 0f,
+				endX = size.width,
+			),
+		)
+		drawRect(
+			brush = Brush.horizontalGradient(
+				colorStops = if (isReversed) {
+					arrayOf(
+						0f to Color.Black.copy(alpha = 0.24f * bend),
+						0.035f to Color.Black.copy(alpha = 0.12f * bend),
+						0.1f to Color.Transparent,
+					)
+				} else {
+					arrayOf(
+						0.9f to Color.Transparent,
+						0.965f to Color.Black.copy(alpha = 0.12f * bend),
+						1f to Color.Black.copy(alpha = 0.24f * bend),
+					)
+				},
+				startX = 0f,
+				endX = size.width,
+			),
+		)
 	}
 }

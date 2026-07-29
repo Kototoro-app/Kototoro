@@ -214,6 +214,9 @@ fun ComposePagedReader(
 		}
 	}
 	val pageCurlState = rememberComposeReaderPageCurlState()
+	LaunchedEffect(pagerState.isScrollInProgress) {
+		if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
+	}
 
 	val pageContent: @Composable PagerScope.(Int) -> Unit = { position ->
 		val page = displayedPages[position]
@@ -234,6 +237,7 @@ fun ComposePagedReader(
 					translationY = if (isVertical) transform.translationFactor * size.height else 0f
 					rotationX = transform.rotationX
 					rotationY = transform.rotationY
+					scaleX = transform.scaleX
 					transformOrigin = transform.transformOrigin
 					cameraDistance = READER_PAGE_CAMERA_DISTANCE
 				}
@@ -258,8 +262,10 @@ fun ComposePagedReader(
 				isPageVisible = pagerState.settledPage == position,
 				modifier = Modifier.fillMaxSize(),
 			)
-			if (pageAnimation == ReaderAnimation.SIMULATION) {
-				ComposeReaderSimulationPageShadow(transform)
+			when (pageAnimation) {
+				ReaderAnimation.ADVANCED -> ComposeReaderAdvancedPageEffect(transform, reverseLayout)
+				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
+				else -> Unit
 			}
 		}
 	}
@@ -1059,6 +1065,9 @@ fun ComposeDoublePageReader(
 	val autoBackgroundColors = remember { mutableStateMapOf<Long, Int>() }
 	val pageDisplaySizes = remember { mutableStateMapOf<Long, PageDisplaySize>() }
 	val pageCurlState = rememberComposeReaderPageCurlState()
+	LaunchedEffect(pagerState.isScrollInProgress) {
+		if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
+	}
 
 	LaunchedEffect(pageKeys, requestedPage) {
 		if (requestedPage == null) {
@@ -1203,7 +1212,7 @@ fun ComposeDoublePageReader(
 				.zIndex(transform.zIndex)
 				.graphicsLayer {
 					alpha = transform.alpha
-					scaleX = currentTransform.scale
+					scaleX = currentTransform.scale * transform.scaleX
 					scaleY = currentTransform.scale
 					translationX = currentTransform.offsetX + transform.translationFactor * size.width
 					translationY = currentTransform.offsetY
@@ -1215,7 +1224,7 @@ fun ComposeDoublePageReader(
 				.composeReaderPageCurl(
 					transform = transform,
 					isVertical = false,
-					isReversed = reverseLayout,
+					isReadingReversed = reverseLayout,
 					state = pageCurlState,
 				),
 		) {
@@ -1376,8 +1385,10 @@ fun ComposeDoublePageReader(
 					Box(modifier = Modifier.weight(1f).fillMaxSize())
 				}
 			}
-			if (pageAnimation == ReaderAnimation.SIMULATION) {
-				ComposeReaderSimulationPageShadow(transform)
+			when (pageAnimation) {
+				ReaderAnimation.ADVANCED -> ComposeReaderAdvancedPageEffect(transform, reverseLayout)
+				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
+				else -> Unit
 			}
 		}
 	}
