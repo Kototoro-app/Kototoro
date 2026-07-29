@@ -58,6 +58,7 @@ data class AppearanceSettingsUiState(
     val isDescriptionExpanded: Boolean,
     val isPanoramaCoverEnabled: Boolean,
     val panoramaCoverBlur: Int,
+    val panoramaTransitionIntensity: Int,
     val isPanoramaCoverAnimationEnabled: Boolean,
     val isPanoramaCoverAnimationSettingsEnabled: Boolean,
     val panoramaAnimationSpeed: Int,
@@ -146,6 +147,7 @@ fun AppearanceSettingsScreen(
     onDescriptionExpandedChange: (Boolean) -> Unit,
     onPanoramaCoverEnabledChange: (Boolean) -> Unit,
     onPanoramaBlurChange: (Int) -> Unit,
+    onPanoramaTransitionIntensityChange: (Int) -> Unit,
     onPanoramaAnimationEnabledChange: (Boolean) -> Unit,
     onPanoramaAnimationSpeedChange: (Int) -> Unit,
     onPanoramaExtraHeightChange: (Int) -> Unit,
@@ -416,6 +418,16 @@ fun AppearanceSettingsScreen(
                         summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
                         enabled = state.isDetailsPanoramaLimitedToInfoCardMidpoint,
                         onCheckedChange = onDetailsPanoramaScrollLinkedChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.pref_panorama_transition_intensity),
+                        value = state.panoramaTransitionIntensity,
+                        valueRange = 0..100,
+                        step = 5,
+                        summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
+                        valueText = { "$it%" },
+                        onValueChange = onPanoramaTransitionIntensityChange,
                     )
                     SettingsSectionDivider()
                     SettingsSliderPreference(

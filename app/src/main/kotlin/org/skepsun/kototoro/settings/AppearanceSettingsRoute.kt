@@ -119,6 +119,8 @@ private class AppearanceSettingsCoordinator(
         val isDescriptionExpanded = settings.observeAsState(AppSettings.KEY_COLLAPSE_DESCRIPTION) { isDescriptionExpanded }.value
         val isPanoramaCoverEnabled = settings.observeAsState(AppSettings.KEY_PANORAMA_ENABLED) { isPanoramaCoverEnabled }.value
         val panoramaCoverBlur = settings.observeAsState(AppSettings.KEY_PANORAMA_BLUR) { panoramaCoverBlur }.value
+        val panoramaTransitionIntensity =
+            settings.observeAsState(AppSettings.KEY_PANORAMA_TRANSITION_INTENSITY) { panoramaTransitionIntensity }.value
         val isPanoramaCoverAnimationEnabled =
             settings.observeAsState(AppSettings.KEY_PANORAMA_ANIMATION_ENABLED) { isPanoramaCoverAnimationEnabled }.value
         val panoramaAnimationSpeed =
@@ -247,6 +249,7 @@ private class AppearanceSettingsCoordinator(
             isDescriptionExpanded = isDescriptionExpanded,
             isPanoramaCoverEnabled = isPanoramaCoverEnabled,
             panoramaCoverBlur = panoramaCoverBlur,
+            panoramaTransitionIntensity = panoramaTransitionIntensity,
             isPanoramaCoverAnimationEnabled = effectivePanoramaCoverAnimationEnabled,
             isPanoramaCoverAnimationSettingsEnabled = !isReducedVisualEffectsEnabled,
             panoramaAnimationSpeed = panoramaAnimationSpeed,
@@ -315,6 +318,7 @@ private class AppearanceSettingsCoordinator(
             onDescriptionExpandedChange = { settings.isDescriptionExpanded = it },
             onPanoramaCoverEnabledChange = { settings.isPanoramaCoverEnabled = it },
             onPanoramaBlurChange = { settings.panoramaCoverBlur = it },
+            onPanoramaTransitionIntensityChange = { settings.panoramaTransitionIntensity = it },
             onPanoramaAnimationEnabledChange = { settings.isPanoramaCoverAnimationEnabled = it },
             onPanoramaAnimationSpeedChange = { settings.panoramaAnimationSpeed = it },
             onPanoramaExtraHeightChange = { settings.panoramaCoverExtraHeight = it },

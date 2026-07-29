@@ -76,6 +76,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -85,6 +86,7 @@ import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.parsers.model.ContentType
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val REPO_KOTOTORO =
 	"https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json"
@@ -144,6 +146,7 @@ private fun WelcomeContent(
 	val interfaceStyle by viewModel.interfaceStyle.collectAsStateWithLifecycle()
 	val heroTransitionsEnabled by viewModel.heroTransitionsEnabled.collectAsStateWithLifecycle()
 	val panoramaAnimationEnabled by viewModel.panoramaAnimationEnabled.collectAsStateWithLifecycle()
+	val panoramaTransitionIntensity by viewModel.panoramaTransitionIntensity.collectAsStateWithLifecycle()
 	val detailsPanoramaHalfScreenEnabled by viewModel.detailsPanoramaHalfScreenEnabled.collectAsStateWithLifecycle()
 	val spaceSwitcherPosition by viewModel.spaceSwitcherPosition.collectAsStateWithLifecycle()
 	val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
@@ -200,10 +203,12 @@ private fun WelcomeContent(
 						interfaceStyle = interfaceStyle,
 						heroTransitionsEnabled = heroTransitionsEnabled,
 						panoramaAnimationEnabled = panoramaAnimationEnabled,
+						panoramaTransitionIntensity = panoramaTransitionIntensity,
 						detailsPanoramaHalfScreenEnabled = detailsPanoramaHalfScreenEnabled,
 						onInterfaceStyleChange = viewModel::setInterfaceStyle,
 						onHeroTransitionsChange = viewModel::setHeroTransitionsEnabled,
 						onPanoramaAnimationChange = viewModel::setPanoramaAnimationEnabled,
+						onPanoramaTransitionIntensityChange = viewModel::setPanoramaTransitionIntensity,
 						onDetailsPanoramaHalfScreenChange = viewModel::setDetailsPanoramaHalfScreenEnabled,
 					)
 
@@ -472,10 +477,12 @@ private fun WelcomeAppearanceStep(
 	interfaceStyle: InterfaceStyle,
 	heroTransitionsEnabled: Boolean,
 	panoramaAnimationEnabled: Boolean,
+	panoramaTransitionIntensity: Int,
 	detailsPanoramaHalfScreenEnabled: Boolean,
 	onInterfaceStyleChange: (InterfaceStyle) -> Unit,
 	onHeroTransitionsChange: (Boolean) -> Unit,
 	onPanoramaAnimationChange: (Boolean) -> Unit,
+	onPanoramaTransitionIntensityChange: (Int) -> Unit,
 	onDetailsPanoramaHalfScreenChange: (Boolean) -> Unit,
 ) {
 	SectionHeader(
@@ -508,12 +515,52 @@ private fun WelcomeAppearanceStep(
 		checked = panoramaAnimationEnabled,
 		onCheckedChange = onPanoramaAnimationChange,
 	)
+	WelcomeSliderRow(
+		title = stringResource(R.string.pref_panorama_transition_intensity),
+		summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
+		value = panoramaTransitionIntensity,
+		onValueChange = onPanoramaTransitionIntensityChange,
+	)
 	WelcomeSwitchRow(
 		title = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint),
 		summary = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint_summary),
 		checked = detailsPanoramaHalfScreenEnabled,
 		onCheckedChange = onDetailsPanoramaHalfScreenChange,
 	)
+}
+
+@Composable
+private fun WelcomeSliderRow(
+	title: String,
+	summary: String,
+	value: Int,
+	onValueChange: (Int) -> Unit,
+) {
+	Column(
+		modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+		verticalArrangement = Arrangement.spacedBy(4.dp),
+	) {
+		Row(
+			modifier = Modifier.fillMaxWidth(),
+			verticalAlignment = Alignment.CenterVertically,
+			horizontalArrangement = Arrangement.spacedBy(16.dp),
+		) {
+			Text(text = title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+			Text(
+				text = "$value%",
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+		Text(text = summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+		KototoroSlider(
+			value = value.toFloat(),
+			onValueChange = { onValueChange(it.roundToInt().coerceIn(0, 100)) },
+			modifier = Modifier.fillMaxWidth(),
+			valueRange = 0f..100f,
+			steps = 19,
+		)
+	}
 }
 
 @Composable

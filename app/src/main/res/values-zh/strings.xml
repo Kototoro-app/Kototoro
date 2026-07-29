@@ -1519,6 +1519,8 @@
     <string name="font_preset_system">系统默认</string>
     <string name="pref_panorama_animation_speed">全景动画速度</string>
     <string name="pref_panorama_blur">封面模糊度</string>
+    <string name="pref_panorama_transition_intensity">全景封面过渡强度</string>
+    <string name="pref_panorama_transition_intensity_summary">控制全景封面底部向页面背景色过渡的强度</string>
     <string name="pref_panorama_cover">全景封面</string>
     <string name="pref_panorama_cover_summary">在详情页顶部标题后方显示横幅式的封面背景图</string>
     <string name="pref_panorama_downsample">降低全景封面分辨率</string>

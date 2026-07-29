@@ -52,6 +52,7 @@ import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 data class PanoramaBackdropPrefs(
     val isEnabled: Boolean,
     val blurPercent: Int,
+    val transitionIntensityPercent: Int,
     val bottomGradientAlphaPercent: Int,
     val isAnimationEnabled: Boolean,
     val isScrollLinkedEnabled: Boolean,
@@ -67,6 +68,7 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
     val prefs by settings.observeAsState(
         AppSettings.KEY_PANORAMA_ENABLED,
         AppSettings.KEY_PANORAMA_BLUR,
+        AppSettings.KEY_PANORAMA_TRANSITION_INTENSITY,
         AppSettings.KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA,
         AppSettings.KEY_PANORAMA_ANIMATION_ENABLED,
         AppSettings.KEY_PANORAMA_ANIMATION_SPEED,
@@ -80,6 +82,7 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
         PanoramaBackdropPrefs(
             isEnabled = isPanoramaCoverEnabled,
             blurPercent = panoramaCoverBlur,
+            transitionIntensityPercent = panoramaTransitionIntensity,
             bottomGradientAlphaPercent = panoramaBottomGradientAlpha,
             isAnimationEnabled = supportsRealtimeEffects &&
                 isPanoramaCoverAnimationEnabled &&
@@ -115,6 +118,7 @@ fun AnimatedPanoramaBackdrop(
     val normalizedModel = (model as? String)?.takeIfUsableImageUri() ?: model.takeUnless { it is String }
 
     val panoramaGradientAlphaFactor = (prefs.bottomGradientAlphaPercent / 100f).coerceIn(0f, 1f)
+    val panoramaTransitionIntensityFactor = (prefs.transitionIntensityPercent / 100f).coerceIn(0f, 1f)
     val animationDurations = panoramaAnimationDurations(prefs.animationSpeedPercent)
     val animationMotion = panoramaAnimationMotion()
     val density = LocalDensity.current
@@ -293,9 +297,15 @@ fun AnimatedPanoramaBackdrop(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
                             0f to Color.Transparent,
-                            0.55f to backgroundColor.copy(alpha = (panoramaGradientAlphaFactor * 0.45f).coerceIn(0f, 1f)),
-                            0.82f to backgroundColor.copy(alpha = (0.72f + (panoramaGradientAlphaFactor * 0.28f)).coerceIn(0f, 1f)),
-                            1f to backgroundColor,
+                            0.55f to backgroundColor.copy(
+                                alpha = (panoramaGradientAlphaFactor * 0.45f * panoramaTransitionIntensityFactor)
+                                    .coerceIn(0f, 1f),
+                            ),
+                            0.82f to backgroundColor.copy(
+                                alpha = ((0.72f + (panoramaGradientAlphaFactor * 0.28f)) * panoramaTransitionIntensityFactor)
+                                    .coerceIn(0f, 1f),
+                            ),
+                            1f to backgroundColor.copy(alpha = panoramaTransitionIntensityFactor),
                         ),
                         startY = (fullOpacityAtY - fullOpacityFadeDistancePx).coerceAtLeast(0f),
                         endY = fullOpacityAtY.coerceAtLeast(0f),
@@ -304,7 +314,7 @@ fun AnimatedPanoramaBackdrop(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            backgroundColor.copy(alpha = panoramaGradientAlphaFactor),
+                            backgroundColor.copy(alpha = panoramaGradientAlphaFactor * panoramaTransitionIntensityFactor),
                         ),
                     )
                 },

@@ -2827,6 +2827,8 @@
     <string name="pref_details_panorama_limit_to_info_card_midpoint">Stop details panorama at info card midpoint</string>
     <string name="pref_details_panorama_limit_to_info_card_midpoint_summary">Fade the details panorama out so it fully settles by the middle of the basic info panel</string>
     <string name="pref_panorama_blur">Cover blur intensity</string>
+    <string name="pref_panorama_transition_intensity">Panorama cover transition intensity</string>
+    <string name="pref_panorama_transition_intensity_summary">Control how strongly the bottom of the panorama cover transitions to the page background</string>
     <string name="pref_panorama_animation">Panorama cover animation</string>
     <string name="pref_panorama_animation_summary">Enable subtle motion for animated panorama cover backgrounds</string>
     <string name="pref_panorama_animation_speed">Panorama animation speed</string>

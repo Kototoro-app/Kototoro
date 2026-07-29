@@ -344,6 +344,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeInt(KEY_PANORAMA_BLUR, 35).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_PANORAMA_BLUR, value.coerceIn(0, 100)) }
 
+	var panoramaTransitionIntensity: Int
+		get() = prefs.getSafeInt(KEY_PANORAMA_TRANSITION_INTENSITY, 100).coerceIn(0, 100)
+		set(value) = prefs.edit { putInt(KEY_PANORAMA_TRANSITION_INTENSITY, value.coerceIn(0, 100)) }
+
 	var isPanoramaCoverAnimationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_PANORAMA_ANIMATION_ENABLED, true)
 		set(value) = prefs.edit { putBoolean(KEY_PANORAMA_ANIMATION_ENABLED, value) }
@@ -1942,6 +1946,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putInt(KEY_GRID_SIZE_PAGES, gridSizePages)
 			putFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, pageThumbnailAspectRatio)
 			putInt(KEY_PANORAMA_BLUR, panoramaCoverBlur)
+			putInt(KEY_PANORAMA_TRANSITION_INTENSITY, panoramaTransitionIntensity)
 			putInt(KEY_PANORAMA_ANIMATION_SPEED, panoramaAnimationSpeed)
 			putInt(KEY_PANORAMA_EXTRA_HEIGHT, panoramaCoverExtraHeight)
 			putInt(KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA, panoramaBottomGradientAlpha)
@@ -2482,6 +2487,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_COLLAPSE_DESCRIPTION = "description_collapse"
 		const val KEY_PANORAMA_ENABLED = "panorama_enabled"
 		const val KEY_PANORAMA_BLUR = "panorama_blur"
+		const val KEY_PANORAMA_TRANSITION_INTENSITY = "panorama_transition_intensity"
 		const val KEY_PANORAMA_ANIMATION_ENABLED = "panorama_animation_enabled"
 		const val KEY_PANORAMA_ANIMATION_SPEED = "panorama_animation_speed"
 		const val KEY_PANORAMA_EXTRA_HEIGHT = "panorama_extra_height"

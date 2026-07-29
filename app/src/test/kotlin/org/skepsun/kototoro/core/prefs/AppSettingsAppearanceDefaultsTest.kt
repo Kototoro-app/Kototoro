@@ -29,6 +29,7 @@ class AppSettingsAppearanceDefaultsTest {
 		}
 		every { preferences.contains(any()) } returns false
 		every { preferences.getBoolean(any(), any()) } answers { secondArg() }
+		every { preferences.getInt(any(), any()) } answers { secondArg() }
 	}
 
 	@AfterEach
@@ -41,5 +42,12 @@ class AppSettingsAppearanceDefaultsTest {
 		val settings = AppSettings(context)
 
 		settings.isModernDetailsDockEnabled shouldBe true
+	}
+
+	@Test
+	fun `panorama transition intensity is full strength by default`() {
+		val settings = AppSettings(context)
+
+		settings.panoramaTransitionIntensity shouldBe 100
 	}
 }

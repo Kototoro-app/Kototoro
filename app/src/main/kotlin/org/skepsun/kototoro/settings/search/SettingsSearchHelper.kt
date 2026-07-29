@@ -37,6 +37,7 @@ class SettingsSearchHelper @Inject constructor(
 			"description_collapse" to R.string.collapse_long_description,
 			"panorama_enabled" to R.string.pref_panorama_cover,
 			"panorama_blur" to R.string.pref_panorama_blur,
+			"panorama_transition_intensity" to R.string.pref_panorama_transition_intensity,
 			"panorama_extra_height" to R.string.pref_panorama_extra_height,
 			"panorama_bottom_gradient_alpha" to R.string.pref_panorama_gradient_alpha,
 			"panorama_downsample" to R.string.pref_panorama_downsample,
