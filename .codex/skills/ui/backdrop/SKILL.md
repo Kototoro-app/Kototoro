@@ -31,6 +31,9 @@ Use this skill for Kototoro's `io.github.kyant0:backdrop` integration. The app u
 - A uniform white or black backdrop remains nearly uniform after blur and lens. Regular navigation glass must establish a subtle internal luminance difference with a semantic surface tint; shadow is only a secondary depth cue.
 - Treat `GlassStyle.containerAlpha` as a material-density input. It must influence the final surface tint, but it does not need to be copied one-to-one because Backdrop surface compositing becomes nearly opaque at the values used by stable Material surfaces.
 - If `drawBackdrop` uses its default or an explicit Backdrop `shadow`, do not also call `glassContainerShadow` or `Modifier.shadow` for the same shape.
+- Place top-bar controls inside the shared `mainTopBarHeight` slot and size them with `topBarButtonSize`; the
+  difference is required shadow breathing room. If a tag rail follows the bar, clip only the collapsing slot while
+  it is actually collapsed, not the fully expanded chrome column.
 - Popup windows have a different coordinate space. Do not assume the root Backdrop is valid inside a Popup; use the existing root overlay route or fallback surface pattern.
 
 ## Diagnosis checklist

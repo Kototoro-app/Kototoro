@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
@@ -130,11 +130,8 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarCompactButtonSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarIconSize
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
-import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
@@ -163,6 +160,7 @@ import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
@@ -190,10 +188,6 @@ import org.skepsun.kototoro.parsers.model.SortOrder
 import java.util.Locale
 import java.util.TreeSet
 
-private val SearchTopActionsHeight = CompactTopBarPillHeight
-private val SearchTopPrimaryActionButtonSize = CompactTopBarPillHeight
-private val SearchTopCompactActionButtonSize = CompactTopBarCompactButtonSize
-private val SearchTopActionIconSize = CompactTopBarIconSize
 private val SearchPinnedChipHeight = 32.dp
 private val SearchPinnedRowVisualHeight = SearchPinnedChipHeight + 8.dp
 private val SearchFilterSheetLightMinAlpha = 0.88f
@@ -346,7 +340,7 @@ private fun SearchInputDialogSurface(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AppSearchContentListRoute(
     appRouter: AppRouter,
@@ -511,10 +505,12 @@ fun AppSearchContentListRoute(
         }
     }
 
+    val interfaceTokens = LocalInterfaceStyleTokens.current
+    val topActionsHeight = interfaceTokens.mainTopBarHeight
     val topActionsHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-        SearchTopActionsHeight.toPx()
+        topActionsHeight.toPx()
     }
-    val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val maxCollapsePx = topActionsHeightPx
     val isWideSplitLayout = isWideAdaptiveLayout && showFilterPanel
     val showSelectionTopBar = selectedItemsIds.isNotEmpty()
@@ -526,7 +522,8 @@ fun AppSearchContentListRoute(
         )
     }
     val showPinnedRow = !searchMode && (quickFilter != null || extractedPinnedTags.isNotEmpty() || !filterSnapshot.listFilter.query.isNullOrBlank())
-    val topOverlayHeight = statusBarTopPadding + SearchTopActionsHeight + if (showPinnedRow) SearchPinnedRowVisualHeight else 0.dp
+    val topOverlayHeight = statusBarTopPadding + topActionsHeight +
+        if (showPinnedRow) SearchPinnedRowVisualHeight else 0.dp
     val wideGridState = remember { LazyGridState() }
     val wideListState = remember { LazyListState() }
     val wideDetailedListState = remember { LazyListState() }
@@ -642,7 +639,7 @@ fun AppSearchContentListRoute(
                 availableTags = tagsProperty.availableItems.flatMap { it.tags },
                 listMode = listMode,
                 gridSize = gridSize,
-                topActionsHeight = SearchTopActionsHeight,
+                topActionsHeight = topActionsHeight,
                 collapseOffsetPx = collapseOffsetPx,
                 isRandomLoading = isRandomLoading,
                 activeSpaceId = activeSpaceId,
@@ -1157,6 +1154,7 @@ private fun SearchPreviewPane(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SearchContentTopBar(
     searchMode: Boolean,
@@ -1210,7 +1208,7 @@ private fun SearchContentTopBar(
         contentScrollAlpha = (1f - compactTopBarAlpha).coerceIn(0f, 1f),
         chromeAlpha = compactTopBarAlpha,
     )
-    val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
+    val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues()
     val statusBarTopPadding = statusBarPadding.calculateTopPadding()
     val glassPrefs = rememberGlassPrefsOrFallback()
     val immersiveStrength = (glassPrefs.immersiveStrengthPercent.coerceIn(0, 100)) / 100f
@@ -1247,9 +1245,7 @@ private fun SearchContentTopBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clipToBounds()
-                .padding(top = statusBarTopPadding)
-                .alpha(0.998f),
+                .padding(top = statusBarTopPadding),
         ) {
             if (searchMode) {
                 SearchInputRow(
@@ -1455,6 +1451,9 @@ private fun SourceListTopActionsRow(
     onGridSizeChange: (Int) -> Unit,
     onShowDisplayOptionsSheet: () -> Unit,
 ) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val controlSize = tokens.topBarButtonSize
+    val iconSize = tokens.topBarIconSize
     BoxWithConstraints(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -1467,7 +1466,7 @@ private fun SourceListTopActionsRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(SearchTopActionsHeight)
+                .height(tokens.mainTopBarHeight)
                 .padding(horizontal = CompactTopBarHorizontalPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
@@ -1477,12 +1476,12 @@ private fun SourceListTopActionsRow(
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.size(SearchTopPrimaryActionButtonSize),
+                    modifier = Modifier.size(controlSize),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.back),
-                        modifier = Modifier.size(SearchTopActionIconSize),
+                        modifier = Modifier.size(iconSize),
                     )
                 }
             }
@@ -1493,17 +1492,17 @@ private fun SourceListTopActionsRow(
                     .alpha(topBarAlpha),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
             TopBarControlSurface(
                 modifier = Modifier.wrapContentWidth(),
             ) {
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides SearchTopPrimaryActionButtonSize) {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides controlSize) {
                     Row(
                         modifier = Modifier
-                            .height(SearchTopPrimaryActionButtonSize)
+                            .height(controlSize)
                             .padding(horizontal = 2.dp)
                             .alpha(topBarAlpha),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1511,11 +1510,11 @@ private fun SourceListTopActionsRow(
                         activeSpaceId?.let { spaceId ->
                             IconButton(
                                 onClick = onSpaceSwitcherClick,
-                                modifier = Modifier.size(SearchTopCompactActionButtonSize),
+                                modifier = Modifier.size(controlSize),
                             ) {
                                 SpaceSwitcherIcon(
                                     activeSpaceId = spaceId,
-                                    modifier = Modifier.size(SearchTopActionIconSize),
+                                    modifier = Modifier.size(iconSize),
                                 )
                             }
                         }
@@ -1526,21 +1525,21 @@ private fun SourceListTopActionsRow(
                                 }
                             },
                         ) {
-                            IconButton(onClick = onFilterClick, modifier = Modifier.size(SearchTopCompactActionButtonSize)) {
+                            IconButton(onClick = onFilterClick, modifier = Modifier.size(controlSize)) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_filter_menu),
                                     contentDescription = currentSortLabel,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(SearchTopActionIconSize),
+                                    modifier = Modifier.size(iconSize),
                                 )
                             }
                         }
 
-                        IconButton(onClick = onSearchClick, modifier = Modifier.size(SearchTopCompactActionButtonSize)) {
+                        IconButton(onClick = onSearchClick, modifier = Modifier.size(controlSize)) {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = stringResource(R.string.search),
-                                modifier = Modifier.size(SearchTopActionIconSize),
+                                modifier = Modifier.size(iconSize),
                             )
                         }
 
@@ -1548,12 +1547,12 @@ private fun SourceListTopActionsRow(
                             IconButton(
                                 onClick = onRandomClick,
                                 enabled = !isRandomLoading,
-                                modifier = Modifier.size(SearchTopCompactActionButtonSize),
+                                modifier = Modifier.size(controlSize),
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_dice),
                                     contentDescription = stringResource(R.string.random),
-                                    modifier = Modifier.size(SearchTopActionIconSize),
+                                    modifier = Modifier.size(iconSize),
                                 )
                             }
                         }
@@ -1561,22 +1560,22 @@ private fun SourceListTopActionsRow(
                         if (showDisplayDirect) {
                             IconButton(
                                 onClick = onShowDisplayOptionsSheet,
-                                modifier = Modifier.size(SearchTopCompactActionButtonSize),
+                                modifier = Modifier.size(controlSize),
                             ) {
                                 Icon(
                                     painter = painterResource(listMode.iconRes()),
                                     contentDescription = stringResource(R.string.list_options),
-                                    modifier = Modifier.size(SearchTopActionIconSize),
+                                    modifier = Modifier.size(iconSize),
                                 )
                             }
                         }
 
                         if (showSettingsDirect) {
-                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(SearchTopCompactActionButtonSize)) {
+                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(controlSize)) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_settings),
                                     contentDescription = stringResource(R.string.settings),
-                                    modifier = Modifier.size(SearchTopActionIconSize),
+                                    modifier = Modifier.size(iconSize),
                                 )
                             }
                         }
@@ -1620,15 +1619,16 @@ private fun MoreActionsButton(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+    val tokens = LocalInterfaceStyleTokens.current
 
     Box(
         modifier = Modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() },
     ) {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(SearchTopPrimaryActionButtonSize)) {
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(tokens.topBarButtonSize)) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = stringResource(R.string.more),
-                modifier = Modifier.size(SearchTopActionIconSize),
+                modifier = Modifier.size(tokens.topBarIconSize),
             )
         }
         GlassDropdownMenu(
@@ -1720,7 +1720,14 @@ private fun CollapsingBarSlot(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(visibleHeight),
+            .height(visibleHeight)
+            .then(
+                if (visibleHeight < fullHeight) {
+                    Modifier.clipToBounds()
+                } else {
+                    Modifier
+                },
+            ),
         contentAlignment = Alignment.BottomStart,
     ) {
         Box(

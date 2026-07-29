@@ -127,6 +127,9 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
   Backdrop 自带的外扩阴影与高光。
 - 包含 Backdrop 外扩阴影的父容器不使用 `alpha`/淡入淡出动画。透明度低于 `1f` 时，Compose 会将
   内容绘制到离屏图层并按图层边界裁切阴影；玻璃导航控件的进出场优先只使用位移动画。
+- 顶栏使用 `mainTopBarHeight` 作为布局槽位，并在其中居中放置 `topBarButtonSize` 控件，为原生阴影
+  保留上下外扩空间。下方存在标签 rail 时，只在顶栏实际折叠期间裁切折叠槽位，完全展开时不裁切
+  顶栏或 rail。
 - `containerAlpha` 表达材质密度意图，必须参与 Surface tint 计算，但不等同于把同一 alpha 原样覆盖到
   `onDrawSurface`；应映射到适合玻璃合成的克制范围。
 - 避免嵌套 Backdrop；相邻控件共享容器或导出的 Backdrop。
