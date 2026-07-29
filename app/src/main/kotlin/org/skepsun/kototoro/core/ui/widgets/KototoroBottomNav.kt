@@ -60,6 +60,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
+import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 import com.kyant.backdrop.drawBackdrop
@@ -199,13 +200,11 @@ fun KototoroBottomNav(
         GlassDefaults.bottomBarChromeStyle().copy(
             containerAlpha = targetAlpha,
             borderAlpha = 0.10f,
-            shadowElevation = 0.dp,
         )
     } else {
         GlassDefaults.bottomBarChromeStyle().copy(
             containerAlpha = (targetAlpha - 0.06f).coerceAtLeast(0.70f),
             borderAlpha = 0f,
-            shadowElevation = 0.dp,
         )
     }
     val navBackdrop = LocalLiquidGlassBackdrop.current
@@ -450,12 +449,8 @@ private fun MainNavBottomContainer(
     if (useBackdrop) {
         Box(
             modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape)
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.56f),
-                    shape = shape,
-                ),
+                .glassContainerShadow(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape),
         ) {
             content()
         }
@@ -480,12 +475,8 @@ private fun MainNavSurface(
     if (useBackdrop) {
         Box(
             modifier = modifier
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape)
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.56f),
-                    shape = shape,
-                ),
+                .glassContainerShadow(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape),
         ) {
             content()
         }

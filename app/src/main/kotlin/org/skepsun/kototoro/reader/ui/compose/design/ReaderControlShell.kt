@@ -86,6 +86,7 @@ object ReaderControlTokens {
 	val SheetMaxWidth = 760.dp
 	val DockMaxWidth = 360.dp
 	val DockShape = RoundedCornerShape(28.dp)
+	val ChromeShadowElevation = 6.dp
 }
 
 @Composable
@@ -215,7 +216,7 @@ fun ReaderControlDock(
 			shape = ReaderControlTokens.DockShape,
 			style = GlassDefaults.bottomBarChromeStyle().copy(
 				containerAlpha = 0.86f,
-				borderAlpha = 0.18f,
+				shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 			),
 			componentRole = GlassComponentRole.BottomBar,
 		) {
@@ -228,6 +229,7 @@ fun ReaderControlDock(
 			color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
 			contentColor = MaterialTheme.colorScheme.onSurface,
 			tonalElevation = 2.dp,
+			shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 		) {
 			ReaderControlDockContent(content)
 		}
@@ -269,7 +271,7 @@ fun ReaderProgressDock(
 			shape = RoundedCornerShape(22.dp),
 			style = GlassDefaults.bottomBarChromeStyle().copy(
 				containerAlpha = 0.86f,
-				borderAlpha = 0.18f,
+				shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 			),
 			componentRole = GlassComponentRole.BottomBar,
 		) {
@@ -284,6 +286,7 @@ fun ReaderProgressDock(
 			color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
 			contentColor = MaterialTheme.colorScheme.onSurface,
 			tonalElevation = 2.dp,
+			shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 		) {
 			CompositionLocalProvider(LocalContentColor provides readerControlContentColor()) {
 				content()

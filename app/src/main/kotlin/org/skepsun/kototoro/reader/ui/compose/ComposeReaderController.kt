@@ -8,6 +8,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.reader.ui.ReaderErrorHost
 import org.skepsun.kototoro.reader.ui.ReaderNavigator
@@ -25,7 +28,7 @@ internal class ComposeReaderController(
 	private val imagePipeline: DefaultComposeReaderImagePipeline,
 	private val errorHost: ReaderErrorHost,
 	private val chromeCallbacks: ComposeReaderChromeCallbacks,
-	private val chaptersPanelContent: @Composable (Int) -> Unit = {},
+	private val chaptersPanelContent: @Composable (Int, ReaderChapterPanelUiState) -> Unit = { _, _ -> },
 ) : ReaderNavigator {
 
 	private var currentPageKey: Long? = null
@@ -56,7 +59,10 @@ internal class ComposeReaderController(
 		ComposeReaderActivityScaffold(
 					state = chromeState,
 					showControlLabels = showControlLabels,
-					chaptersPanelContent = { chaptersPanelContent(chaptersTabId) },
+					chapterPanelTabId = chaptersTabId,
+					chaptersPanelContent = { selectedTabId, panelState ->
+						chaptersPanelContent(selectedTabId, panelState)
+					},
 					translationTaskPanelContent = {
 						if (chromeState.translationTaskPanelVisible) {
 							ComposeTranslationTaskPanel(viewModel = viewModel, onDismiss = ::hideTranslationTaskPanel)
@@ -258,14 +264,59 @@ internal class ComposeReaderController(
 		chromeState = chromeState.copy(actions = chromeState.actions.transform())
 	}
 
+	fun updateChapterPanel(transform: ReaderChapterPanelUiState.() -> ReaderChapterPanelUiState) {
+		chromeState = chromeState.copy(chapterPanel = chromeState.chapterPanel.transform())
+	}
+
+	fun toggleChapterSearch() {
+		val nextVisible = !chromeState.chapterPanel.searchVisible
+		updateChapterPanel { copy(searchVisible = nextVisible) }
+		if (!nextVisible) viewModel.performChapterSearch(null)
+	}
+
+	fun selectChaptersTab(tabId: Int) {
+		chaptersTabId = tabId
+		if (tabId != DETAILS_TAB_CHAPTERS) {
+			updateChapterPanel { copy(searchVisible = false) }
+			viewModel.performChapterSearch(null)
+		}
+	}
+
 	fun showOptions(state: ComposeReaderOptionsState) {
+		val cachedPreview = imagePipeline.cachedDisplay(currentPageKey)?.toString()
 		chromeState = chromeState.copy(
-			options = state.copy(visible = true),
+			options = state.copy(
+				visible = true,
+				appearancePreviewOriginalUri = cachedPreview,
+				appearancePreviewProcessedUri = cachedPreview,
+			),
 			autoScroll = chromeState.autoScroll.copy(visible = false),
 			toolsVisible = false,
 			chaptersVisible = false,
 			translationTaskPanelVisible = false,
 		)
+	}
+
+	fun refreshAppearancePreview() {
+		val page = viewModel.content.value.pages.firstOrNull { it.readerKey == currentPageKey } ?: return
+		updateOptions { copy(appearancePreviewLoading = true) }
+		lifecycleOwner.lifecycleScope.launch {
+			val result = imagePipeline.observe(page, force = true).first {
+				it is ComposeReaderImageState.OriginalReady || it is ComposeReaderImageState.Failed
+			}
+			updateOptions {
+				val resultUri = when (result) {
+					is ComposeReaderImageState.OriginalReady -> result.original.toString()
+					is ComposeReaderImageState.Failed -> result.original?.toString()
+					else -> null
+				}
+				copy(
+					appearancePreviewOriginalUri = appearancePreviewOriginalUri ?: resultUri,
+					appearancePreviewProcessedUri = resultUri ?: appearancePreviewProcessedUri,
+					appearancePreviewLoading = false,
+				)
+			}
+		}
 	}
 
 	fun showTools() {

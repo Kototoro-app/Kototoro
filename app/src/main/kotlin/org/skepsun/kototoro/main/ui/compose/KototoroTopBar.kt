@@ -8,7 +8,6 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
@@ -83,6 +82,7 @@ import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -520,6 +520,7 @@ fun KototoroTopBar(
 internal fun TopBarControlSurface(
     allowBackdrop: Boolean = true,
     fallbackContainerColor: Color? = null,
+    shadowElevation: Dp = GlassDefaults.navigationShadowElevation,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -529,9 +530,10 @@ internal fun TopBarControlSurface(
             GlassDefaults.topBarChromeStyle().copy(
                 containerAlpha = 0.90f,
                 borderAlpha = 0.24f,
+                shadowElevation = shadowElevation,
             )
         } else {
-            GlassDefaults.topBarChromeStyle()
+            GlassDefaults.topBarChromeStyle().copy(shadowElevation = shadowElevation)
     }
     val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = allowBackdrop &&
@@ -542,6 +544,7 @@ internal fun TopBarControlSurface(
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Box(
                 modifier = modifier
+                    .glassContainerShadow(shape, shadowElevation)
                     .drawBackdrop(
                         backdrop = backdrop,
                         exportedBackdrop = exportedBackdrop!!,
@@ -556,12 +559,7 @@ internal fun TopBarControlSurface(
                             )
                         },
                     )
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.56f),
-                        shape = shape,
-                    ),
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape),
                 content = content,
             )
         }
@@ -569,12 +567,8 @@ internal fun TopBarControlSurface(
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Box(
                 modifier = modifier
-                    .background(fallbackContainerColor, shape)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
-                        shape = shape,
-                    ),
+                    .glassContainerShadow(shape, shadowElevation)
+                    .background(fallbackContainerColor, shape),
                 content = content,
             )
         }

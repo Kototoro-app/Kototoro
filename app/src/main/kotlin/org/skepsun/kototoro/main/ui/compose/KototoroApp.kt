@@ -12,7 +12,6 @@ import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -64,8 +63,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
+import org.skepsun.kototoro.core.ui.compose.ImmersiveBottomGradientStops
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
+import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
+import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -87,6 +90,7 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
+import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -1226,7 +1230,7 @@ fun KototoroApp(
             } else {
                 Color.White
             }
-            val immersiveTransparent = Color.Transparent
+            val immersiveTransparent = immersiveBaseColor.toTransparentImmersiveColor()
             val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
             val topImmersiveHeight = with(density) {
                 (statusBarHeightPx + (topBarHeightPx - statusBarHeightPx) + topImmersiveOverflowPx)
@@ -1305,7 +1309,7 @@ fun KototoroApp(
                                         chromeAlpha = chromeAlpha,
                                     )
                                 },
-                            height = topImmersiveHeight,
+                            height = topImmersiveHeight + ImmersiveEdgeFeatherExtension,
                             colors = listOf(
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
@@ -1313,21 +1317,21 @@ fun KototoroApp(
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
                                 immersiveTransparent,
                             ),
-                            stops = listOf(0f, 0.38f, 0.72f, 0.92f, 1f),
+                            stops = ImmersiveTopGradientStops,
                         )
 
                         ImmersiveEdgeGradient(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth(),
-                            height = bottomImmersiveHeight,
+                            height = bottomImmersiveHeight + ImmersiveEdgeFeatherExtension,
                             colors = listOf(
                                 immersiveTransparent,
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.14f, 0.24f, immersiveStrength)),
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.34f, 0.54f, immersiveStrength)),
                                 immersiveBaseColor.copy(alpha = lerpFloat(0.60f, 0.90f, immersiveStrength)),
                             ),
-                            stops = listOf(0f, 0.22f, 0.62f, 1f),
+                            stops = ImmersiveBottomGradientStops,
                         )
                     }
 
@@ -2108,6 +2112,7 @@ private fun ContinueReadingFab(
         Box(
                 modifier = modifier
                     .size(56.dp)
+                    .glassContainerShadow(CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -2121,8 +2126,7 @@ private fun ContinueReadingFab(
                         vibrancy()
                         blur(4.dp.toPx())
                     },
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

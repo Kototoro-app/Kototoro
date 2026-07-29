@@ -97,6 +97,7 @@ import org.skepsun.kototoro.reader.ui.config.ImageServerDelegate
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderController
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderChromeCallbacks
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderOptionsCallbacks
+import org.skepsun.kototoro.reader.ui.compose.ReaderChapterPanelCallbacks
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderOptionsState
 import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks
 import org.skepsun.kototoro.reader.ui.compose.DefaultComposeReaderImagePipeline
@@ -272,18 +273,23 @@ class ReaderActivity :
             viewModel = viewModel,
             imagePipeline = composeReaderImagePipeline,
             errorHost = this,
-            chaptersPanelContent = { selectedTabId ->
-                ChaptersPagesTabsContent(
+			chaptersPanelContent = { selectedTabId, panelState ->
+				ChaptersPagesTabsContent(
                     viewModel = viewModel,
                     pagesViewModel = pagesViewModel,
                     bookmarksViewModel = bookmarksViewModel,
                     settings = settings,
-                    appRouter = router,
-                    pageSaveHelper = pageSaveHelper,
-                    selectedTabId = selectedTabId,
-                    isSheetFullyExpanded = true,
-                    isChapterListScrollEnabled = true,
-                )
+					appRouter = router,
+					pageSaveHelper = pageSaveHelper,
+					selectedTabId = selectedTabId,
+					showTabStrip = false,
+					isSheetFullyExpanded = true,
+					isChapterListScrollEnabled = true,
+					chapterQuery = panelState.searchQuery,
+					isChapterSearchVisible = panelState.searchVisible,
+					onChapterQueryChange = { query -> viewModel.performChapterSearch(query) },
+					onSelectedTabIdChange = composeReaderController::selectChaptersTab,
+				)
             },
             chromeCallbacks = ComposeReaderChromeCallbacks(
                 onNavigateBack = { dispatchNavigateUp() },
@@ -381,6 +387,7 @@ class ReaderActivity :
 						settings.isReaderSuperResolutionEnabled = enabled
 						composeReaderController.updateOptions { copy(superResolution = enabled) }
 						viewModel.reload()
+						composeReaderController.refreshAppearancePreview()
 					},
 					onBackgroundChanged = { background ->
 						settings.readerBackground = background
@@ -398,10 +405,24 @@ class ReaderActivity :
 					onTranslation = ::onTranslateClick,
 					onTranslationTools = { composeReaderController.showTools() },
 					onOpenSettings = router::openReaderSettings,
-					onColorFilter = {
+					onColorFilterChanged = { colorFilter ->
+						composeReaderController.updateOptions { copy(colorFilter = colorFilter) }
+					},
+					onSaveColorFilterForManga = { colorFilter ->
 						val manga = viewModel.getContentOrNull()
-						val page = viewModel.getCurrentPage()
-						if (manga != null && page != null) router.openColorFilterConfig(manga, page)
+						if (manga != null) {
+							lifecycleScope.launch {
+								contentDataRepository.saveColorFilter(manga, colorFilter)
+								viewModel.reload()
+							}
+						}
+					},
+					onSaveColorFilterGlobally = { colorFilter ->
+						lifecycleScope.launch {
+							settings.readerColorFilter = colorFilter
+							contentDataRepository.resetColorFilters()
+							viewModel.reload()
+						}
 					},
 					onOpenBrowser = ::openCurrentChapterInBrowser,
 					onTranslationSettings = router::openTranslationSettings,
@@ -409,6 +430,26 @@ class ReaderActivity :
 					onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
 					onRetranslateChapter = viewModel::retranslateCurrentChapter,
 					onTranslationLog = { composeReaderController.showTranslationTaskPanel() },
+				),
+				chapterPanel = ReaderChapterPanelCallbacks(
+					onTabSelected = { tabId -> composeReaderController.selectChaptersTab(tabId) },
+					onSearchToggle = { composeReaderController.toggleChapterSearch() },
+					onSearchQueryChange = { query -> viewModel.performChapterSearch(query) },
+					onToggleChaptersReversed = {
+					viewModel.setChaptersReversed(!viewModel.isChaptersReversed.value)
+				},
+					onToggleChaptersGrid = {
+					viewModel.setChaptersInGridView(!viewModel.isChaptersInGridView.value)
+				},
+					onToggleHideReadChapters = {
+					viewModel.setHideReadChapters(!viewModel.isHideReadChapters.value)
+				},
+					onToggleMergeRepeatedChapters = {
+					viewModel.setMergeRepeatedChapters(!viewModel.isMergeRepeatedChapters.value)
+				},
+					onToggleDownloadedOnly = {
+					viewModel.isDownloadedOnly.value = !viewModel.isDownloadedOnly.value
+					},
 				),
 				onReaderInteraction = { scrollTimer.onUserInteraction() },
 				onGridTap = { area ->
@@ -450,6 +491,37 @@ class ReaderActivity :
         }
 		viewModel.readerControls
 			.onEach { controls -> composeReaderController.updateActions { copy(controls = controls) } }
+			.launchIn(lifecycleScope)
+		viewModel.chapterQuery
+			.onEach { query -> composeReaderController.updateChapterPanel { copy(searchQuery = query) } }
+			.launchIn(lifecycleScope)
+		viewModel.emptyReason
+			.onEach { reason -> composeReaderController.updateChapterPanel { copy(searchEnabled = reason == null) } }
+			.launchIn(lifecycleScope)
+		viewModel.isChaptersReversed
+			.onEach { value -> composeReaderController.updateChapterPanel { copy(chaptersReversed = value) } }
+			.launchIn(lifecycleScope)
+		viewModel.isChaptersInGridView
+			.onEach { value -> composeReaderController.updateChapterPanel { copy(chaptersInGridView = value) } }
+			.launchIn(lifecycleScope)
+		viewModel.isHideReadChapters
+			.onEach { value -> composeReaderController.updateChapterPanel { copy(hideReadChapters = value) } }
+			.launchIn(lifecycleScope)
+		viewModel.isMergeRepeatedChapters
+			.onEach { value -> composeReaderController.updateChapterPanel { copy(mergeRepeatedChapters = value) } }
+			.launchIn(lifecycleScope)
+		viewModel.showMergeRepeatedChapters
+			.onEach { value -> composeReaderController.updateChapterPanel { copy(showMergeRepeatedChapters = value) } }
+			.launchIn(lifecycleScope)
+		viewModel.isDownloadedOnly
+			.onEach { value -> composeReaderController.updateChapterPanel { copy(downloadedOnly = value) } }
+			.launchIn(lifecycleScope)
+		viewModel.mangaDetails
+			.onEach { details ->
+				composeReaderController.updateChapterPanel {
+					copy(downloadedFilterVisible = details?.local != null)
+				}
+			}
 			.launchIn(lifecycleScope)
 		composeReaderController.updateAutoScroll {
 			copy(
@@ -659,6 +731,10 @@ class ReaderActivity :
         translationShortcutVisibleForSession = true
         settings.isReaderTranslationEnabled = true
         settings.isReaderTranslationShowTranslated = true
+        composeReaderController.updateActions {
+            copy(translateContextualVisible = true)
+        }
+        updateTranslationToggleButton()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -867,6 +943,7 @@ class ReaderActivity :
                 "viewModelState=${viewModel.getCurrentState()}, composeState=${composeReaderController.getCurrentState()}",
         )
         applyDoubleModeAuto()
+        updateTranslationToggleButton()
     }
 
 
@@ -917,6 +994,7 @@ class ReaderActivity :
 				doublePageSensitivity = settings.readerDoublePagesSensitivity,
 				superResolution = settings.isReaderSuperResolutionEnabled,
 				background = settings.readerBackground,
+				colorFilter = viewModel.readerSettingsProducer.value.colorFilter,
 			),
 		)
 		loadImageServerOptions()
@@ -1044,6 +1122,7 @@ class ReaderActivity :
         val (previous: ReaderUiState?, uiState: ReaderUiState?) = pair
         title = uiState?.mangaName ?: getString(R.string.loading_)
         updateReaderInfoBar(uiState)
+        updateTranslationToggleButton()
         if (uiState == null) {
             composeReaderController.setTitle(title.toString(), "")
             composeReaderController.updateActions {

@@ -64,6 +64,10 @@ class ColorFilterConfigViewModel @Inject constructor(
 		colorFilter.value = null
 	}
 
+	fun setColorFilter(value: ReaderColorFilter?) {
+		colorFilter.value = value
+	}
+
 	fun save() {
 		launchLoadingJob(Dispatchers.Default) {
 			mangaDataRepository.saveColorFilter(manga, colorFilter.value)

@@ -85,6 +85,7 @@ abstract class ChaptersPagesViewModel(
 	val onContentRemoved = MutableEventFlow<Content>()
 
 	private val chaptersQuery = MutableStateFlow("")
+	val chapterQuery: StateFlow<String> = chaptersQuery
 	val selectedBranch = MutableStateFlow<String?>(null)
 
 	val manga = mangaDetails.map { x -> x?.toContent() }

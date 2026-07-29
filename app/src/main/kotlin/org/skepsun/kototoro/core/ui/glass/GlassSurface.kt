@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
@@ -82,6 +83,7 @@ enum class GlassComponentRole {
 
 object GlassDefaults {
     val shape: Shape = RoundedCornerShape(28.dp)
+    val navigationShadowElevation: Dp = 4.dp
 
     @Composable
     fun subtleStyle() = GlassStyle(0.72f, 0.18f, 0.dp, 0.dp)
@@ -93,10 +95,10 @@ object GlassDefaults {
     fun prominentStyle() = GlassStyle(0.88f, 0.30f, 0.dp, 10.dp)
 
     @Composable
-    fun topBarChromeStyle() = GlassStyle(0.88f, 0.20f, 0.dp, 0.dp)
+    fun topBarChromeStyle() = GlassStyle(0.88f, 0.20f, 0.dp, navigationShadowElevation)
 
     @Composable
-    fun bottomBarChromeStyle() = GlassStyle(0.84f, 0.10f, 0.dp, 0.dp)
+    fun bottomBarChromeStyle() = GlassStyle(0.84f, 0.10f, 0.dp, navigationShadowElevation)
 
     @Composable
     fun nestedCardColor(): Color {
@@ -153,12 +155,20 @@ fun GlassSurface(
     } else {
         colors.surfaceContainer
     }
+    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
+        componentRole == GlassComponentRole.BottomBar
+    val fallbackBorder = if (!dialogSurface && !isNavigationChrome && style.borderAlpha > 0f) {
+        BorderStroke(1.dp, colors.outlineVariant.copy(alpha = style.borderAlpha))
+    } else {
+        null
+    }
     CompositionLocalProvider(LocalAbsoluteTonalElevation provides 0.dp) {
         Surface(
             modifier = modifier,
             shape = shape,
             color = fallbackColor,
             contentColor = colors.onSurface,
+            border = fallbackBorder,
             tonalElevation = if (dialogSurface) 0.dp else style.tonalElevation,
             shadowElevation = if (dialogSurface) 0.dp else style.shadowElevation,
         ) {
@@ -196,15 +206,17 @@ fun LiquidGlassSurface(
         -> if (isDark) Color.Black.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.20f)
         else -> colors.surfaceContainer.copy(alpha = 0.18f)
     }
-    val borderColor = if (isDark) {
-        Color.White.copy(alpha = 0.18f)
-    } else {
-        colors.outlineVariant.copy(alpha = 0.28f)
-    }
+    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
+        componentRole == GlassComponentRole.BottomBar
 
     CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
+        val navigationShadowElevation = if (isNavigationChrome) style.shadowElevation else 0.dp
         Box(
             modifier = modifier
+                .glassContainerShadow(
+                    shape = shape,
+                    elevation = navigationShadowElevation,
+                )
                 .clip(shape)
                 .drawBackdrop(
                     backdrop = backdrop,
@@ -221,10 +233,41 @@ fun LiquidGlassSurface(
                     },
                 )
                 .background(tint, shape)
-                .border(1.dp, borderColor, shape),
+                .then(
+                    if (isNavigationChrome) {
+                        Modifier
+                    } else {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = if (isDark) {
+                                Color.White.copy(alpha = style.borderAlpha)
+                            } else {
+                                colors.outlineVariant.copy(alpha = style.borderAlpha)
+                            },
+                            shape = shape,
+                        )
+                    },
+                ),
             content = content,
         )
     }
+}
+
+@Composable
+fun Modifier.glassContainerShadow(
+    shape: Shape,
+    elevation: Dp = GlassDefaults.navigationShadowElevation,
+): Modifier {
+    if (elevation <= 0.dp) return this
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.background.luminance() < 0.5f
+    return shadow(
+        elevation = elevation,
+        shape = shape,
+        clip = false,
+        ambientColor = Color.Black.copy(alpha = if (isDark) 0.28f else 0.14f),
+        spotColor = Color.Black.copy(alpha = if (isDark) 0.34f else 0.20f),
+    )
 }
 
 @Composable

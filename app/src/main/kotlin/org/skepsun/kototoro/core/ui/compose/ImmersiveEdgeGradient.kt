@@ -10,6 +10,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+val ImmersiveEdgeFeatherExtension = 24.dp
+val ImmersiveTopGradientStops = listOf(0f, 0.30f, 0.58f, 0.78f, 1f)
+val ImmersiveBottomGradientStops = listOf(0f, 0.34f, 0.70f, 1f)
 
 internal fun resolveTopImmersiveAlpha(
     contentScrollAlpha: Float,
@@ -49,3 +54,5 @@ fun BoxScope.ImmersiveEdgeGradient(
             },
     )
 }
+
+fun Color.toTransparentImmersiveColor(): Color = copy(alpha = 0f)

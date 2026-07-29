@@ -85,6 +85,9 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 
 	val imageLoader get() = pageLoader.imageLoader
 	private val metadataCache = ReaderImageMetadataCache()
+	private val displayCache = ConcurrentHashMap<Long, Uri>()
+
+	fun cachedDisplay(pageKey: Long?): Uri? = pageKey?.let(displayCache::get)
 
 	override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = channelFlow {
 		send(ComposeReaderImageState.LoadingOriginal)
@@ -101,6 +104,7 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 			val isAnimated = display.isFileUri() && metadataCache.isAnimated(display.toString(), refresh = force) {
 				withContext(Dispatchers.IO) { BitmapDecoderCompat.isAnimated(display.toFile()) }
 			}
+			displayCache[page.readerKey] = display
 			send(ComposeReaderImageState.OriginalReady(display, isAnimated))
 		} finally {
 			progressJob.cancel()

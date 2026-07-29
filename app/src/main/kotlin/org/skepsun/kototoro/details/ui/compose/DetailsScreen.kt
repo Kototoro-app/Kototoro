@@ -176,10 +176,14 @@ import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeFeatherExtension
+import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
+import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
@@ -241,7 +245,6 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-private val DetailsTopBarHeight = 44.dp
 private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
     return copy(alpha = alpha.coerceAtLeast(minAlpha))
 }
@@ -252,9 +255,7 @@ private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70
 private fun rememberDetailsBottomBarGlassPrefs() =
     rememberGlassPrefsOrFallback()
 
-private val DetailsTopPrimaryActionButtonSize = 44.dp
-private val DetailsTopCompactActionButtonSize = 44.dp
-private val DetailsTopActionIconSize = 21.dp
+private val DetailsTopChromeShadowElevation = 6.dp
 private val ModernDetailsDockHeight = 86.dp
 private val ModernDetailsDockBottomClearance = 16.dp
 private val DetailsDockContentHorizontalPadding = 8.dp
@@ -336,6 +337,7 @@ private fun DetailsScreenContent(
     onActionClick: (DetailsAction) -> Unit = {},
     isTemporaryReadOnly: Boolean = false,
 ) {
+    val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
     val readingRecordSnapshot by viewModel.readingRecordSnapshot.collectAsStateWithLifecycle()
     val translationUiState by viewModel.translationUiState.collectAsStateWithLifecycle()
@@ -716,17 +718,24 @@ private fun DetailsScreenContent(
             stableStatusBarTopPadding = statusBarTopPadding
         }
     }
-    val overlayTopBarInset = remember(isWideAdaptiveLayout, stableStatusBarTopPadding) {
+    val overlayTopBarInset = remember(
+        isWideAdaptiveLayout,
+        stableStatusBarTopPadding,
+        interfaceStyleTokens.mainTopBarHeight,
+    ) {
         if (isWideAdaptiveLayout) {
             0.dp
         } else {
             // Keep the content start position stable when returning from fullscreen surfaces that briefly report zero insets.
-            stableStatusBarTopPadding + DetailsTopBarHeight + 8.dp
+            stableStatusBarTopPadding + interfaceStyleTokens.mainTopBarHeight + 8.dp
         }
     }
     val panoramaExtraHeightDp = panoramaPrefs.extraHeight.coerceAtLeast(0).dp
-    val compactPanoramaTopBarInset = remember(stableStatusBarTopPadding) {
-        stableStatusBarTopPadding + DetailsTopBarHeight
+    val compactPanoramaTopBarInset = remember(
+        stableStatusBarTopPadding,
+        interfaceStyleTokens.mainTopBarHeight,
+    ) {
+        stableStatusBarTopPadding + interfaceStyleTokens.mainTopBarHeight
     }
     val detailsHeaderTopSpacing = if (panoramaPrefs.isEnabled) {
         compactPanoramaTopBarInset + panoramaExtraHeightDp
@@ -1135,25 +1144,26 @@ private fun DetailsScreenContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .height(DetailsTopBarHeight)
+                            .height(interfaceStyleTokens.mainTopBarHeight)
                             .padding(horizontal = CompactTopBarHorizontalPadding),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     ) {
                         TopBarControlSurface(
                             fallbackContainerColor = panoramaTopBarContainerColor,
+                            shadowElevation = DetailsTopChromeShadowElevation,
                         ) {
                             CompositionLocalProvider(
-                                LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
+                                LocalMinimumInteractiveComponentSize provides interfaceStyleTokens.topBarButtonSize,
                             ) {
                                 DetailsChromeButton(
                                     onClick = handleBackPress,
-                                    modifier = Modifier.size(DetailsTopPrimaryActionButtonSize),
+                                    modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = stringResource(R.string.back),
-                                        modifier = Modifier.size(DetailsTopActionIconSize),
+                                        modifier = Modifier.size(interfaceStyleTokens.topBarIconSize),
                                     )
                                 }
                             }
@@ -1179,24 +1189,25 @@ private fun DetailsScreenContent(
 
                         TopBarControlSurface(
                             fallbackContainerColor = panoramaTopBarContainerColor,
+                            shadowElevation = DetailsTopChromeShadowElevation,
                         ) {
                             CompositionLocalProvider(
-                                LocalMinimumInteractiveComponentSize provides DetailsTopPrimaryActionButtonSize,
+                                LocalMinimumInteractiveComponentSize provides interfaceStyleTokens.topBarButtonSize,
                             ) {
                                 Row(
                                     modifier = Modifier
-                                        .height(DetailsTopPrimaryActionButtonSize)
+                                        .height(interfaceStyleTokens.topBarButtonSize)
                                         .padding(horizontal = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     activeSpaceId?.let { spaceId ->
                                         DetailsChromeButton(
                                             onClick = onSpaceSwitcherClick,
-                                            modifier = Modifier.size(DetailsTopCompactActionButtonSize),
+                                            modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
                                         ) {
                                             SpaceSwitcherIcon(
                                                 activeSpaceId = spaceId,
-                                                modifier = Modifier.size(DetailsTopActionIconSize),
+                                                modifier = Modifier.size(interfaceStyleTokens.topBarIconSize),
                                             )
                                         }
                                     }
@@ -1204,12 +1215,12 @@ private fun DetailsScreenContent(
                                         onClick = {
                                             showShareOptions = true
                                         },
-                                        modifier = Modifier.size(DetailsTopCompactActionButtonSize),
+                                        modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Share,
                                             contentDescription = stringResource(R.string.share),
-                                            modifier = Modifier.size(DetailsTopActionIconSize),
+                                            modifier = Modifier.size(interfaceStyleTokens.topBarIconSize),
                                         )
                                     }
                                     if (isWorkActionEnabled) {
@@ -1217,12 +1228,12 @@ private fun DetailsScreenContent(
                                             onClick = {
                                                 handleActionClick(DetailsAction.Download)
                                             },
-                                            modifier = Modifier.size(DetailsTopCompactActionButtonSize),
+                                            modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
                                         ) {
                                             Icon(
                                                 painter = rememberSafePainter(R.drawable.ic_download),
                                                 contentDescription = stringResource(R.string.download),
-                                                modifier = Modifier.size(DetailsTopActionIconSize),
+                                                modifier = Modifier.size(interfaceStyleTokens.topBarIconSize),
                                             )
                                         }
                                     }
@@ -1669,7 +1680,7 @@ private fun DetailsScreenContent(
             }
             val detailsTopImmersiveHeight = with(density) {
                 val sbPx = statusBarTopPadding.roundToPx()
-                val tbPx = DetailsTopBarHeight.roundToPx()
+                val tbPx = interfaceStyleTokens.mainTopBarHeight.roundToPx()
                 val overflowPx = 6.dp.roundToPx()
                 (sbPx + tbPx + overflowPx).coerceAtLeast(sbPx + overflowPx).toDp()
             }
@@ -1679,15 +1690,15 @@ private fun DetailsScreenContent(
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .graphicsLayer { alpha = detailsTopImmersiveAlpha },
-                    height = detailsTopImmersiveHeight,
+                    height = detailsTopImmersiveHeight + ImmersiveEdgeFeatherExtension,
                     colors = listOf(
                         detailsImmersiveBase.copy(alpha = (0.72f + (0.98f - 0.72f) * detailsImmersiveStrength)),
                         detailsImmersiveBase.copy(alpha = (0.56f + (0.82f - 0.56f) * detailsImmersiveStrength)),
                         detailsImmersiveBase.copy(alpha = (0.32f + (0.52f - 0.32f) * detailsImmersiveStrength)),
                         detailsImmersiveBase.copy(alpha = (0.12f + (0.22f - 0.12f) * detailsImmersiveStrength)),
-                        Color.Transparent,
+                        detailsImmersiveBase.toTransparentImmersiveColor(),
                     ),
-                    stops = listOf(0f, 0.38f, 0.72f, 0.92f, 1f),
+                    stops = ImmersiveTopGradientStops,
                 )
             }
                 if (compactTopBarAlpha > 0.01f) {
@@ -4834,6 +4845,7 @@ private fun DetailsOverflowMenu(
     onDeleteLocalRequest: () -> Unit,
     onActionClick: (DetailsAction) -> Unit,
 ) {
+    val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     var expanded by remember { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
 
@@ -4842,12 +4854,12 @@ private fun DetailsOverflowMenu(
     ) {
         DetailsChromeButton(
             onClick = { expanded = true },
-            modifier = Modifier.size(DetailsTopPrimaryActionButtonSize),
+            modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = stringResource(R.string.more),
-                modifier = Modifier.size(DetailsTopActionIconSize),
+                modifier = Modifier.size(interfaceStyleTokens.topBarIconSize),
             )
         }
         GlassDropdownMenu(
