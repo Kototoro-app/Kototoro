@@ -1782,10 +1782,18 @@ private fun ReaderPageLoading(progress: Float?) {
 	Column(horizontalAlignment = Alignment.CenterHorizontally) {
 		if (progress == null) {
 			CircularProgressIndicator()
-			Text(stringResource(R.string.loading_), modifier = Modifier.padding(top = 8.dp))
+			Text(
+				text = stringResource(R.string.loading_),
+				color = MaterialTheme.colorScheme.onSurface,
+				modifier = Modifier.padding(top = 8.dp),
+			)
 		} else {
 			CircularProgressIndicator(progress = { progress })
-			Text("${(progress * 100).toInt()}%", modifier = Modifier.padding(top = 8.dp))
+			Text(
+				text = "${(progress * 100).toInt()}%",
+				color = MaterialTheme.colorScheme.onSurface,
+				modifier = Modifier.padding(top = 8.dp),
+			)
 		}
 	}
 }
