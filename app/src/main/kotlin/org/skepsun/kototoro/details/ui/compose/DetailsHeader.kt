@@ -2080,7 +2080,9 @@ fun ReadingSourceSheet(
                                 GlassDropdownMenu(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false },
-                                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                    // ReadingSourceSheet is rendered in its own Dialog window. The
+                                    // app-level root overlay would be behind that window.
+                                    useRootOverlay = false,
                                     anchorBounds = menuAnchorBounds,
                                 ) {
                                     CompactDropdownMenuItem(
