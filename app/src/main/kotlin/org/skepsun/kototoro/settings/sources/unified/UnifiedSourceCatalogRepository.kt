@@ -491,6 +491,12 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		val kind = type.toUnifiedKind()
 		val repositoryUrl = when (type) {
 			ExternalExtensionType.CLOUDSTREAM -> baseUrl
+			ExternalExtensionType.MIHON,
+			ExternalExtensionType.ANIYOMI -> if (baseUrl.endsWith("/index.pb", ignoreCase = true)) {
+				baseUrl
+			} else {
+				"$baseUrl/index.min.json"
+			}
 			else -> "$baseUrl/index.min.json"
 		}
 		return UnifiedSourceRepositoryItem(
@@ -533,15 +539,19 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 	}
 
 	private fun List<UnifiedSourceRepositoryItem>.withPresetRepositories(): List<UnifiedSourceRepositoryItem> {
-		val configuredByKindAndUrl = associateBy { it.kind to normalizeRepositoryUrl(it.url) }
 		val configuredWithPresetFlag = map { item ->
-			val matchedPreset = UnifiedRecommendedRepositories.all.any { preset ->
+			val matchedPreset = UnifiedRecommendedRepositories.all.firstOrNull { preset ->
 				preset.kind == item.kind && normalizeRepositoryUrl(preset.url) == normalizeRepositoryUrl(item.url)
 			}
-			if (matchedPreset) item.copy(isPreset = true) else item
-		}
+			if (matchedPreset != null) {
+				item.copy(isPreset = true, url = matchedPreset.url)
+			} else {
+				item
+			}
+		}.distinctBy { it.id }
+		val configuredIds = configuredWithPresetFlag.mapTo(mutableSetOf()) { it.id }
 		val missingPresets = UnifiedRecommendedRepositories.all
-			.filter { preset -> (preset.kind to normalizeRepositoryUrl(preset.url)) !in configuredByKindAndUrl }
+			.filter { preset -> repositoryId(preset.kind, preset.url) !in configuredIds }
 			.map { preset ->
 				UnifiedSourceRepositoryItem(
 					id = repositoryId(preset.kind, preset.url),
