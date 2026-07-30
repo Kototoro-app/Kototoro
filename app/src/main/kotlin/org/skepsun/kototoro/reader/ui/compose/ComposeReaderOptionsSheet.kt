@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -27,7 +26,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,6 +58,11 @@ import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.ui.config.ImageServerOptions
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderColorCorrectionEditor
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionDivider
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionGroup
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionSwitchRow
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderOptionValueRow
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderSegmentedChoice
 
 @Immutable
 internal data class ComposeReaderOptionsState(
@@ -207,55 +210,52 @@ private fun ReaderModeOptionsPage(
 	val animationLabels = stringArrayResource(R.array.reader_animation)
 	OptionsPageList {
 		item {
-			Column {
-				OptionButtonGrid {
-					ReaderMode.entries.forEach { mode ->
-						OptionButton(
-							label = mode.label(),
-							selected = state.mode == mode,
-							onClick = { callbacks.onModeChanged(mode) },
-							icon = {
-								Icon(
-									painter = painterResource(mode.iconResId()),
-									contentDescription = null,
-								)
-							},
-						)
-					}
+			ReaderSegmentedChoice(
+				title = stringResource(R.string.reader_page_turning_mode),
+				options = ReaderMode.entries.map { it.label() },
+				selectedIndex = ReaderMode.entries.indexOf(state.mode),
+				onSelected = { callbacks.onModeChanged(ReaderMode.entries[it]) },
+				iconOnly = true,
+				icon = { index ->
+					Icon(
+						painter = painterResource(ReaderMode.entries[index].iconResId()),
+						contentDescription = null,
+						modifier = Modifier.size(20.dp),
+					)
 				}
-			}
+			)
 		}
 		item {
-			Column {
-				OptionSwitch(
-					text = stringResource(R.string.double_page_landscape),
+			ReaderOptionGroup {
+				ReaderOptionSwitchRow(
+					label = stringResource(R.string.double_page_landscape),
 					checked = state.doublePage,
 					enabled = state.mode == ReaderMode.STANDARD || state.mode == ReaderMode.REVERSED,
 					onCheckedChange = callbacks.onDoublePageChanged,
-					modifier = Modifier.padding(horizontal = 12.dp),
 				)
-				OptionSwitch(
-					text = stringResource(R.string.double_page_foldable),
+				ReaderOptionDivider()
+				ReaderOptionSwitchRow(
+					label = stringResource(R.string.double_page_foldable),
 					checked = state.doublePageFoldable,
 					enabled = state.doublePage,
 					onCheckedChange = callbacks.onDoublePageFoldableChanged,
-					modifier = Modifier.padding(horizontal = 12.dp),
 				)
-				OptionSwitch(
-					text = stringResource(R.string.double_page_cover_page),
+				ReaderOptionDivider()
+				ReaderOptionSwitchRow(
+					label = stringResource(R.string.double_page_cover_page),
 					checked = state.doublePageCover,
 					enabled = state.doublePage,
 					onCheckedChange = callbacks.onDoublePageCoverChanged,
-					modifier = Modifier.padding(horizontal = 12.dp),
 				)
-				OptionSwitch(
-					text = stringResource(R.string.split_double_pages),
+				ReaderOptionDivider()
+				ReaderOptionSwitchRow(
+					label = stringResource(R.string.split_double_pages),
 					checked = state.splitPages,
 					onCheckedChange = callbacks.onSplitPagesChanged,
-					modifier = Modifier.padding(horizontal = 12.dp),
 				)
 				if (state.doublePage) {
-					Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+					ReaderOptionDivider()
+					Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
 						Row(verticalAlignment = Alignment.CenterVertically) {
 							Text(
 								text = stringResource(R.string.two_page_scroll_sensitivity),
@@ -278,34 +278,28 @@ private fun ReaderModeOptionsPage(
 			}
 		}
 		item {
-			Column {
-				SectionTitle(stringResource(R.string.pages_animation))
-				OptionButtonGrid {
-					ReaderAnimation.entries.forEachIndexed { index, animation ->
-						OptionButton(
-							label = animationLabels.getOrElse(index) { animation.name },
-							selected = state.animation == animation,
-							onClick = { callbacks.onAnimationChanged(animation) },
-							icon = { ReaderAnimationIcon(animation) },
-						)
-					}
-				}
-			}
+			ReaderSegmentedChoice(
+				title = stringResource(R.string.pages_animation),
+				options = ReaderAnimation.entries.mapIndexed { index, animation ->
+					animationLabels.getOrElse(index) { animation.name }
+				},
+				selectedIndex = ReaderAnimation.entries.indexOf(state.animation),
+				onSelected = { callbacks.onAnimationChanged(ReaderAnimation.entries[it]) },
+				iconOnly = true,
+				icon = { ReaderAnimationIcon(ReaderAnimation.entries[it]) },
+			)
 		}
 		item {
-			Column {
-				SectionTitle(stringResource(R.string.background))
-				OptionButtonGrid {
-					ReaderBackground.entries.forEachIndexed { index, background ->
-						OptionButton(
-							label = backgroundLabels.getOrElse(index) { background.name },
-							selected = state.background == background,
-							onClick = { callbacks.onBackgroundChanged(background) },
-							icon = { ReaderBackgroundIcon(background) },
-						)
-					}
-				}
-			}
+			ReaderSegmentedChoice(
+				title = stringResource(R.string.background),
+				options = ReaderBackground.entries.mapIndexed { index, background ->
+					backgroundLabels.getOrElse(index) { background.name }
+				},
+				selectedIndex = ReaderBackground.entries.indexOf(state.background),
+				onSelected = { callbacks.onBackgroundChanged(ReaderBackground.entries[it]) },
+				iconOnly = true,
+				icon = { ReaderBackgroundIcon(ReaderBackground.entries[it]) },
+			)
 		}
 	}
 }
@@ -350,11 +344,13 @@ private fun ReaderAppearanceOptionsPage(
 					onColorFilterChange = callbacks.onColorFilterChanged,
 					onReset = { callbacks.onColorFilterChanged(null) },
 				)
-				OptionSwitch(
-					text = stringResource(R.string.reader_super_resolution),
+				ReaderOptionGroup(modifier = Modifier.padding(top = 8.dp)) {
+					ReaderOptionSwitchRow(
+					label = stringResource(R.string.reader_super_resolution),
 					checked = state.superResolution,
 					onCheckedChange = callbacks.onSuperResolutionChanged,
-				)
+					)
+				}
 				Row(
 					horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
 					modifier = Modifier.fillMaxWidth(),
@@ -439,64 +435,6 @@ private fun OptionsActionGrid(
 	)
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun OptionButtonGrid(
-	content: @Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit,
-) {
-	FlowRow(
-		maxItemsInEachRow = 2,
-		horizontalArrangement = Arrangement.spacedBy(8.dp),
-		verticalArrangement = Arrangement.spacedBy(8.dp),
-		modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-		content = content,
-	)
-}
-
-@Composable
-private fun androidx.compose.foundation.layout.FlowRowScope.OptionButton(
-	label: String,
-	selected: Boolean,
-	onClick: () -> Unit,
-	icon: @Composable () -> Unit,
-) {
-	Surface(
-		onClick = onClick,
-		shape = MaterialTheme.shapes.medium,
-		color = if (selected) {
-			MaterialTheme.colorScheme.primaryContainer
-		} else {
-			MaterialTheme.colorScheme.surfaceContainerLow
-		},
-		contentColor = if (selected) {
-			MaterialTheme.colorScheme.onPrimaryContainer
-		} else {
-			MaterialTheme.colorScheme.onSurface
-		},
-		modifier = Modifier.weight(1f).height(64.dp),
-	) {
-		Row(
-			verticalAlignment = Alignment.CenterVertically,
-			modifier = Modifier.padding(horizontal = 12.dp),
-		) {
-			Box(
-				contentAlignment = Alignment.Center,
-				modifier = Modifier.size(24.dp),
-			) {
-				icon()
-			}
-			Text(
-				text = label,
-				style = MaterialTheme.typography.titleMedium,
-				fontWeight = FontWeight.SemiBold,
-				maxLines = 2,
-				overflow = TextOverflow.Ellipsis,
-				modifier = Modifier.padding(start = 10.dp),
-			)
-		}
-	}
-}
-
 @Composable
 private fun androidx.compose.foundation.layout.FlowRowScope.OptionAction(
 	icon: Int,
@@ -509,7 +447,7 @@ private fun androidx.compose.foundation.layout.FlowRowScope.OptionAction(
 		color = MaterialTheme.colorScheme.surfaceContainerLow,
 		modifier = Modifier
 			.weight(1f)
-			.height(64.dp),
+			.height(52.dp),
 	) {
 		Row(
 			modifier = Modifier.padding(horizontal = 12.dp),
@@ -523,46 +461,14 @@ private fun androidx.compose.foundation.layout.FlowRowScope.OptionAction(
 			)
 			Text(
 				stringResource(label),
-				style = MaterialTheme.typography.titleMedium,
-				fontWeight = FontWeight.SemiBold,
+				style = MaterialTheme.typography.bodyMedium,
+				fontWeight = FontWeight.Medium,
 				maxLines = 2,
 				overflow = TextOverflow.Ellipsis,
 				modifier = Modifier.padding(start = 10.dp),
 			)
 		}
 	}
-}
-
-@Composable
-private fun OptionSwitch(
-	text: String,
-	checked: Boolean,
-	enabled: Boolean = true,
-	onCheckedChange: (Boolean) -> Unit,
-	modifier: Modifier = Modifier,
-) {
-	Row(
-		verticalAlignment = Alignment.CenterVertically,
-		modifier = modifier.fillMaxWidth(),
-	) {
-		Text(
-			text = text,
-			style = MaterialTheme.typography.titleMedium,
-			fontWeight = FontWeight.SemiBold,
-			modifier = Modifier.weight(1f),
-		)
-		Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-	}
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-	Text(
-		text = text,
-		style = MaterialTheme.typography.titleMedium,
-		fontWeight = FontWeight.SemiBold,
-		modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
-	)
 }
 
 @Composable
@@ -575,32 +481,11 @@ private fun SelectRow(
 ) {
 	var expanded by remember { mutableStateOf(false) }
 	Box(modifier = modifier) {
-		Row(
-			verticalAlignment = Alignment.CenterVertically,
-			modifier = Modifier
-				.fillMaxWidth()
-				.clickable { expanded = true }
-				.padding(horizontal = 12.dp, vertical = 7.dp),
-		) {
-			Column(modifier = Modifier.weight(1f)) {
-				Text(
-					text = title,
-					style = MaterialTheme.typography.titleMedium,
-					fontWeight = FontWeight.SemiBold,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-				)
-				Text(
-					text = selected,
-					style = MaterialTheme.typography.titleMedium,
-					fontWeight = FontWeight.SemiBold,
-					color = MaterialTheme.colorScheme.primary,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-				)
-			}
-			Text(">", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-		}
+		ReaderOptionValueRow(
+			label = title,
+			value = selected,
+			onClick = { expanded = true },
+		)
 		DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
 			options.forEachIndexed { index, option ->
 				DropdownMenuItem(text = { Text(option) }, onClick = { expanded = false; onSelected(index) })
@@ -627,9 +512,9 @@ private fun ReaderMode.iconResId(): Int = when (this) {
 }
 
 @Composable
-private fun ReaderAnimationIcon(animation: ReaderAnimation) {
+internal fun ReaderAnimationIcon(animation: ReaderAnimation) {
 	val color = androidx.compose.material3.LocalContentColor.current
-	Canvas(modifier = Modifier.size(24.dp)) {
+	Canvas(modifier = Modifier.size(20.dp)) {
 		val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
 		val left = size.width * 0.18f
 		val top = size.height * 0.16f

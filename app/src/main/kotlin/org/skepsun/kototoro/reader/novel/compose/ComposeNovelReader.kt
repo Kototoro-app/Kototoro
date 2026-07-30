@@ -13,10 +13,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -788,12 +791,13 @@ private fun ComposeNovelPagedChapter(
 			.background(Color(palette.backgroundColor))
 			.then(tapModifier),
 	) {
+		val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 		val contentWidthPx = with(density) {
 			(maxWidth - settings.marginHorizontal.dp * 2).coerceAtLeast(1.dp).roundToPx()
 		}
 		val contentHeightPx = with(density) {
 			(
-				maxHeight - settings.marginVertical.dp * 2 -
+				maxHeight - statusBarInset - settings.marginVertical.dp * 2 -
 					if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp
 				).coerceAtLeast(1.dp).roundToPx()
 		}
@@ -1070,7 +1074,7 @@ private fun ComposeNovelPagedChapter(
 							.fillMaxSize()
 							.padding(
 								start = settings.marginHorizontal.dp,
-								top = settings.marginVertical.dp,
+								top = statusBarInset + settings.marginVertical.dp,
 								end = settings.marginHorizontal.dp,
 								bottom = settings.marginVertical.dp +
 									if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp,
@@ -1089,7 +1093,7 @@ private fun ComposeNovelPagedChapter(
 							.fillMaxSize()
 							.padding(
 								start = settings.marginHorizontal.dp,
-								top = settings.marginVertical.dp,
+								top = statusBarInset + settings.marginVertical.dp,
 								end = settings.marginHorizontal.dp,
 								bottom = settings.marginVertical.dp +
 									if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp,
