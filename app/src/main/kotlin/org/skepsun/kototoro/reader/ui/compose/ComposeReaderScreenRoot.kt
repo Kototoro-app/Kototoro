@@ -164,7 +164,21 @@ fun ComposeReaderScreenRoot(
 			initialScroll = restoredState?.scroll ?: 0,
 			imageLoader = imageLoader,
 			imagePipeline = imagePipeline,
-			onPageChanged = pageChanged,
+			onPagesChanged = { lower, upper ->
+				val selectedPosition = resolveVisiblePageSelection(
+					pages = content.pages,
+					lowerPos = lower,
+					upperPos = upper,
+					currentChapterId = viewModel.getCurrentState()?.chapterId,
+					boundsPageOffset = 2,
+				)
+				if (selectedPosition >= 0 && shouldAcceptReaderPosition(selectedPosition)) {
+					viewModel.onCurrentPageChanged(lower, upper)
+					onReaderPositionChanged(selectedPosition, 0)
+				} else if (selectedPosition >= 0) {
+					Log.d("ReaderDebug", "Ignore webtoon pagesChanged before ViewModel update position=$selectedPosition")
+				}
+			},
 			onInternalScrollChanged = { page, scroll ->
 				onReaderInternalScrollChanged(page.readerKey, scroll)
 			},

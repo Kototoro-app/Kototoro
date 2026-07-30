@@ -81,6 +81,27 @@ class ReaderPageSelectionResolverTest {
 	}
 
 	@Test
+	fun `selects last visible page from current chapter when viewport spans multiple short pages`() {
+		val pages = listOf(
+			page(chapterId = 1L, index = 0),
+			page(chapterId = 1L, index = 1),
+			page(chapterId = 1L, index = 2),
+			page(chapterId = 2L, index = 0),
+			page(chapterId = 2L, index = 1),
+		)
+
+		val selected = resolveVisiblePageSelection(
+			pages = pages,
+			lowerPos = 0,
+			upperPos = 4,
+			currentChapterId = 1L,
+			boundsPageOffset = 2,
+		)
+
+		assertEquals(2, selected)
+	}
+
+	@Test
 	fun `keeps existing same chapter near end behavior when viewport does not cross chapter`() {
 		val pages = listOf(
 			page(chapterId = 1L, index = 0),
@@ -88,6 +109,29 @@ class ReaderPageSelectionResolverTest {
 			page(chapterId = 1L, index = 2),
 			page(chapterId = 1L, index = 3),
 			page(chapterId = 1L, index = 4),
+		)
+
+		val selected = resolveVisiblePageSelection(
+			pages = pages,
+			lowerPos = 3,
+			upperPos = 4,
+			currentChapterId = 1L,
+			boundsPageOffset = 2,
+		)
+
+		assertEquals(4, selected)
+	}
+
+	@Test
+	fun `selects current chapter last visible page when next chapter is preloaded`() {
+		val pages = listOf(
+			page(chapterId = 1L, index = 0),
+			page(chapterId = 1L, index = 1),
+			page(chapterId = 1L, index = 2),
+			page(chapterId = 1L, index = 3),
+			page(chapterId = 1L, index = 4),
+			page(chapterId = 2L, index = 0),
+			page(chapterId = 2L, index = 1),
 		)
 
 		val selected = resolveVisiblePageSelection(

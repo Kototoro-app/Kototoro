@@ -24,11 +24,9 @@ internal fun resolveVisiblePageSelection(
 	val lowerPage = pages[safeLower]
 	val upperPage = pages[safeUpper]
 	if (lowerPage.chapterId != upperPage.chapterId) {
-		val selected = when (currentChapterId) {
-			lowerPage.chapterId -> safeLower
-			upperPage.chapterId -> safeUpper
-			else -> safeLower
-		}
+		val selected = currentChapterId?.let { chapterId ->
+			(safeUpper downTo safeLower).firstOrNull { pages[it].chapterId == chapterId }
+		} ?: safeLower
 		Log.d(
 			LOG_TAG,
 			"resolveVisiblePageSelection: crossChapter lower=$safeLower(${lowerPage.chapterId}:${lowerPage.index}) " +
@@ -36,9 +34,11 @@ internal fun resolveVisiblePageSelection(
 		)
 		return selected
 	}
+	val chapterStart = pages.indexOfFirst { it.chapterId == lowerPage.chapterId }
+	val chapterEnd = pages.indexOfLast { it.chapterId == upperPage.chapterId }
 	val selected = when {
-		safeUpper >= lastIndex - boundsPageOffset -> safeUpper
-		safeLower <= boundsPageOffset -> safeLower
+		chapterEnd >= 0 && safeUpper >= chapterEnd - boundsPageOffset -> safeUpper
+		chapterStart >= 0 && safeLower <= chapterStart + boundsPageOffset -> safeLower
 		else -> (safeLower + safeUpper) / 2
 	}
 	Log.d(
