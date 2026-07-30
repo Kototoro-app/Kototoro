@@ -13,6 +13,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -419,6 +420,7 @@ internal fun ComposeReaderActivityScaffold(
 	state: ComposeReaderChromeState,
 	callbacks: ComposeReaderChromeCallbacks,
 	showControlLabels: Boolean,
+	infoBarEmbedded: Boolean = false,
 	modifier: Modifier = Modifier,
 	chapterPanelTabId: Int = DETAILS_TAB_CHAPTERS,
 	chaptersPanelContent: @Composable (Int, ReaderChapterPanelUiState) -> Unit = { _, _ -> },
@@ -510,7 +512,7 @@ internal fun ComposeReaderActivityScaffold(
 		}
 
 		AnimatedVisibility(
-			visible = state.infoBar.visible && !state.controlsVisible,
+			visible = state.infoBar.visible && !state.controlsVisible && !infoBarEmbedded,
 			enter = fadeIn(
 				animationSpec = tween(
 					durationMillis = 140,
@@ -757,8 +759,10 @@ private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: Rea
 }
 
 @Composable
-private fun ReaderComposeInfoBar(state: ReaderInfoBarState) {
-	val systemStatus = rememberReaderSystemStatus()
+internal fun ReaderComposeInfoBar(
+	state: ReaderInfoBarState,
+	systemStatus: ReaderSystemStatus = rememberReaderSystemStatus(),
+) {
 	val contentColor = if (state.darkContent) Color.Black.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.78f)
 	val backgroundColor = if (state.darkContent) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.7f)
 	val textStyle = TextStyle(
@@ -791,10 +795,10 @@ private fun ReaderComposeInfoBar(state: ReaderInfoBarState) {
 }
 
 @Immutable
-private data class ReaderSystemStatus(val time: String = "", val battery: String = "")
+internal data class ReaderSystemStatus(val time: String = "", val battery: String = "")
 
 @Composable
-private fun rememberReaderSystemStatus(): ReaderSystemStatus {
+internal fun rememberReaderSystemStatus(): ReaderSystemStatus {
 	val context = LocalContext.current
 	var status by remember { mutableStateOf(ReaderSystemStatus()) }
 	DisposableEffect(context) {
@@ -822,12 +826,32 @@ private fun rememberReaderSystemStatus(): ReaderSystemStatus {
 }
 
 @Composable
+internal fun BoxScope.ReaderPageInfoBar(
+	state: ReaderInfoBarState,
+	controlsVisible: Boolean,
+	systemStatus: ReaderSystemStatus,
+) {
+	AnimatedVisibility(
+		visible = state.visible && !controlsVisible,
+		enter = fadeIn(animationSpec = tween(durationMillis = 140, delayMillis = 160)),
+		exit = fadeOut(animationSpec = tween(durationMillis = 80)),
+		modifier = Modifier.align(Alignment.TopCenter),
+	) {
+		ReaderComposeInfoBar(state, systemStatus)
+	}
+}
+
+@Composable
 private fun ReaderMessageHost(
 	message: ReaderMessage?,
 	onExpired: (Long) -> Unit,
 	onAction: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
+	var displayedMessage by remember { mutableStateOf(message) }
+	LaunchedEffect(message) {
+		if (message != null) displayedMessage = message
+	}
 	LaunchedEffect(message?.id) {
 		val current = message ?: return@LaunchedEffect
 		delay(current.durationMillis ?: return@LaunchedEffect)
@@ -837,11 +861,11 @@ private fun ReaderMessageHost(
 		Surface(shape = MaterialTheme.shapes.small, color = Color.Black.copy(alpha = 0.78f), contentColor = Color.White) {
 			Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
 				Text(
-					text = message?.text.orEmpty(),
+					text = displayedMessage?.text.orEmpty(),
 					style = MaterialTheme.typography.bodySmall,
 					modifier = Modifier.padding(vertical = 10.dp),
 				)
-				message?.actionLabel?.let { label ->
+				displayedMessage?.actionLabel?.let { label ->
 					TextButton(onClick = onAction) { Text(label) }
 				}
 			}

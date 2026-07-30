@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -30,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,8 +38,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.LocalNovelSource
-import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
-import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.parsers.model.ContentChapter
 
 internal sealed interface NovelChapterListItem {
@@ -70,17 +68,9 @@ internal fun ComposeNovelChaptersSheet(
 	}
 	ModalBottomSheet(
 		onDismissRequest = onDismiss,
-		containerColor = Color.Transparent,
-		tonalElevation = 0.dp,
-		shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
-		dragHandle = null,
+		modifier = Modifier.fillMaxHeight(),
 	) {
-		KototoroSheetSurface(
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(horizontal = 12.dp, vertical = 8.dp),
-		) {
-			BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
 				val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
 				Column(
 					verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -89,8 +79,7 @@ internal fun ComposeNovelChaptersSheet(
 						.align(Alignment.TopCenter)
 						.padding(horizontal = 16.dp),
 				) {
-					SheetDragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
-					Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+						Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
 						Column(modifier = Modifier.weight(1f)) {
 							Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleLarge)
 							Text(
@@ -159,7 +148,6 @@ internal fun ComposeNovelChaptersSheet(
 						}
 					}
 				}
-			}
 		}
 	}
 }

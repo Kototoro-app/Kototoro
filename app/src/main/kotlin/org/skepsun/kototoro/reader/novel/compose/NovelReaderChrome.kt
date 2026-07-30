@@ -6,24 +6,37 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -39,17 +52,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
+import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
+import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.tts.TtsState
-import org.skepsun.kototoro.reader.ui.ReaderToolbarChrome
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDock
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlItem
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderPrimaryControlBar
-import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
+
+private val NovelTopGradientExtension = 72.dp
+private val NovelBottomGradientExtension = 48.dp
+private val NovelTopGradientStops = listOf(0f, 0.24f, 0.50f, 0.70f, 0.86f, 1f)
+private val NovelBottomGradientStops = listOf(0f, 0.18f, 0.38f, 0.70f, 1f)
 
 internal data class NovelReaderChromeCallbacks(
 	val onNavigateBack: () -> Unit = {},
@@ -63,7 +83,6 @@ internal data class NovelReaderChromeCallbacks(
 	val onDismissTools: () -> Unit = {},
 	val onShowSettings: () -> Unit = {},
 	val onShowChapters: () -> Unit = {},
-	val onShowTools: () -> Unit = {},
 	val onToggleTranslation: () -> Unit = {},
 	val onBookmark: () -> Unit = {},
 	val onTts: () -> Unit = {},
@@ -81,43 +100,88 @@ internal fun NovelReaderTopChrome(
 	callbacks: NovelReaderChromeCallbacks,
 ) {
 	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+	val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
+	val topHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp
 	AnimatedVisibility(
 		visible = state.controlsVisible,
-		enter = slideInVertically { -it } + fadeIn(),
-		exit = slideOutVertically { -it } + fadeOut(),
+		enter = slideInVertically { -it },
+		exit = slideOutVertically { -it },
 	) {
-		androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
-			ReaderToolbarChrome()
-			Row(
-				verticalAlignment = Alignment.CenterVertically,
+		Box(
+			modifier = Modifier
+				.fillMaxWidth()
+				.height(topHeight + NovelTopGradientExtension),
+		) {
+			ImmersiveEdgeGradient(
+				height = topHeight + NovelTopGradientExtension,
+				colors = listOf(
+					immersiveBaseColor.copy(alpha = 0.86f),
+					immersiveBaseColor.copy(alpha = 0.62f),
+					immersiveBaseColor.copy(alpha = 0.32f),
+					immersiveBaseColor.copy(alpha = 0.12f),
+					immersiveBaseColor.copy(alpha = 0.035f),
+					immersiveBaseColor.toTransparentImmersiveColor(),
+				),
+				stops = NovelTopGradientStops,
+				modifier = Modifier.fillMaxWidth(),
+			)
+			Box(
 				modifier = Modifier
 					.fillMaxWidth()
 					.statusBarsPadding()
-					.padding(horizontal = 18.dp, vertical = 4.dp),
+					.padding(horizontal = 14.dp, vertical = 6.dp),
 			) {
-				IconButton(onClick = callbacks.onNavigateBack, modifier = Modifier.size(44.dp)) {
-					Icon(
-						imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-						contentDescription = stringResource(R.string.back),
-						modifier = Modifier.size(21.dp),
-						tint = contentColor,
-					)
+				NovelTopControlSurface(
+					shape = CircleShape,
+					modifier = Modifier.align(Alignment.CenterStart).size(48.dp),
+				) {
+					IconButton(onClick = callbacks.onNavigateBack) {
+						Icon(
+							imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+							contentDescription = stringResource(R.string.back),
+							tint = contentColor,
+						)
+					}
 				}
-				Column(modifier = Modifier.weight(1f)) {
-					Text(
-						text = state.workTitle,
-						color = contentColor,
-						style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
-						maxLines = 1,
-						overflow = TextOverflow.Ellipsis,
-					)
-					if (state.chapterTitle.isNotBlank()) {
+				NovelTopControlSurface(
+					shape = RoundedCornerShape(24.dp),
+					modifier = Modifier
+						.align(Alignment.Center)
+						.widthIn(min = 148.dp, max = 176.dp)
+						.height(48.dp)
+						.clickable(onClick = callbacks.onShowChapters),
+				) {
+					Column(
+						horizontalAlignment = Alignment.CenterHorizontally,
+						modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
+					) {
 						Text(
-							text = state.chapterTitle,
-							color = contentColor.copy(alpha = 0.78f),
-							style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 14.sp),
+							text = state.workTitle,
+							color = contentColor,
+							style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
 							maxLines = 1,
 							overflow = TextOverflow.Ellipsis,
+						)
+						if (state.chapterTitle.isNotBlank()) {
+							Text(
+								text = state.chapterTitle,
+								color = contentColor.copy(alpha = 0.78f),
+								style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+								maxLines = 1,
+								overflow = TextOverflow.Ellipsis,
+							)
+						}
+					}
+				}
+				NovelTopControlSurface(
+					shape = CircleShape,
+					modifier = Modifier.align(Alignment.CenterEnd).size(48.dp),
+				) {
+					IconButton(onClick = callbacks.onShowSettings) {
+						Icon(
+							imageVector = Icons.Default.MoreVert,
+							contentDescription = stringResource(R.string.options),
+							tint = contentColor,
 						)
 					}
 				}
@@ -126,175 +190,154 @@ internal fun NovelReaderTopChrome(
 	}
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NovelReaderBottomChrome(
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
-	showControlLabels: Boolean,
 ) {
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-	val visible = state.controlsVisible || state.ttsControlsVisible
 	val toolsPanelVisible = state.toolsSheetVisible || state.ttsControlsVisible
-	val dismissiblePanelVisible =
-		state.settingsSheetVisible ||
-			state.chaptersSheetVisible ||
-			toolsPanelVisible
+	val dismissiblePanelVisible = state.settingsSheetVisible || state.chaptersSheetVisible || toolsPanelVisible
 	BackHandler(enabled = dismissiblePanelVisible) {
 		when {
 			state.settingsSheetVisible -> callbacks.onDismissSettings()
 			state.chaptersSheetVisible -> callbacks.onDismissChapters()
-			toolsPanelVisible -> {
-				callbacks.onDismissTools()
-			}
+			toolsPanelVisible -> callbacks.onDismissTools()
 		}
 	}
-	AnimatedVisibility(
-		visible = visible,
-		enter = slideInVertically { it } + fadeIn(),
-		exit = slideOutVertically { it } + fadeOut(),
+
+	Box(
+		contentAlignment = Alignment.BottomCenter,
+		modifier = Modifier.fillMaxWidth().height(84.dp + NovelBottomGradientExtension),
 	) {
-		androidx.compose.foundation.layout.Box(
-			contentAlignment = Alignment.BottomCenter,
-			modifier = Modifier.fillMaxWidth(),
+		AnimatedVisibility(
+			visible = state.controlsVisible && state.progressMax > 0f,
+			enter = slideInVertically { it } + fadeIn(),
+			exit = slideOutVertically { it } + fadeOut(),
+			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
-				verticalArrangement = Arrangement.spacedBy(6.dp),
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = 12.dp, vertical = 4.dp),
+			val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
+			Box(
+				contentAlignment = Alignment.BottomCenter,
+				modifier = Modifier.fillMaxWidth().height(84.dp + NovelBottomGradientExtension),
 			) {
-				if (state.controlsVisible && state.progressMax > 0f) {
-					ReaderProgressDock(isIosStyle = isIosStyle) {
-						NovelProgressPanel(
-							state = state,
-							callbacks = callbacks,
-							isIosStyle = isIosStyle,
-						)
-					}
-				}
-				ReaderControlDock(
-					isIosStyle = isIosStyle,
-					expanded = dismissiblePanelVisible,
-				) {
-					when {
-						state.chaptersSheetVisible -> {
-							ComposeNovelChaptersPanel(
-								chapters = state.chapters,
-								currentIndex = state.currentChapterIndex,
-								onChapterSelected = callbacks.onChapterSelected,
-							)
-							NovelChromeDivider()
-						}
-						state.settingsSheetVisible && state.settings != null -> {
-							ComposeNovelReaderOptionsPanel(
-								settings = state.settings,
-								onSettingsChanged = callbacks.onSettingsChanged,
-							)
-							NovelChromeDivider()
-						}
-						toolsPanelVisible -> {
-							NovelToolsPanel(state, callbacks)
-							NovelChromeDivider()
-						}
-					}
-					if (state.controlsVisible) {
-						ReaderPrimaryControlBar(
-							items = listOf(
-								ReaderControlItem(
-									ReaderControlDestination.NAVIGATION,
-									stringResource(R.string.chapters),
-									R.drawable.ic_grid,
-									active = state.chaptersSheetVisible,
-								),
-								ReaderControlItem(
-									ReaderControlDestination.DISPLAY,
-									stringResource(R.string.appearance),
-									R.drawable.ic_appearance,
-									active = state.settingsSheetVisible,
-								),
-								ReaderControlItem(
-									ReaderControlDestination.TOOLS,
-									stringResource(R.string.reader_actions),
-									R.drawable.ic_more_vert,
-									active = toolsPanelVisible,
-								),
-							),
-							onDestinationSelected = { destination ->
-								when (destination) {
-									ReaderControlDestination.NAVIGATION -> {
-										callbacks.onDismissSettings()
-										callbacks.onDismissTools()
-										if (state.chaptersSheetVisible) callbacks.onDismissChapters() else callbacks.onShowChapters()
-									}
-									ReaderControlDestination.DISPLAY -> {
-										callbacks.onDismissChapters()
-										callbacks.onDismissTools()
-										if (state.settingsSheetVisible) callbacks.onDismissSettings() else callbacks.onShowSettings()
-									}
-									ReaderControlDestination.TOOLS -> {
-										callbacks.onDismissSettings()
-										callbacks.onDismissChapters()
-										if (toolsPanelVisible) {
-											callbacks.onDismissTools()
-										} else {
-											callbacks.onShowTools()
-										}
-									}
-									else -> Unit
-								}
-							},
-							transparentContainer = true,
-							showLabels = showControlLabels,
-						)
-					}
-				}
-			}
-		}
-	}
-	val statusSettings = state.settings
-	AnimatedVisibility(
-		visible = !state.controlsVisible && statusSettings?.showReadingStatus == true,
-		enter = fadeIn(),
-		exit = fadeOut(),
-	) {
-		val palette = novelReaderPalette(
-			statusSettings?.themePreset ?: return@AnimatedVisibility,
-			isSystemInDarkTheme(),
-		)
-		val statusTextColor = Color(palette.chromeTextColor).copy(alpha = 0.78f)
-		val statusBackground = if (statusSettings.isReadingStatusTransparent) {
-			Color.Transparent
-		} else {
-			Color(palette.chromeBackgroundColor).copy(alpha = 0.72f)
-		}
-		Surface(
-			color = statusBackground,
-			contentColor = statusTextColor,
-			modifier = Modifier.fillMaxWidth(),
-		) {
-			Row(
-				horizontalArrangement = Arrangement.SpaceBetween,
-				verticalAlignment = Alignment.CenterVertically,
-				modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-			) {
-				Text(
-					text = state.chapterTitle,
-					color = statusTextColor,
-					style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-					modifier = Modifier.weight(1f),
+				ImmersiveEdgeGradient(
+					height = 84.dp + NovelBottomGradientExtension,
+					colors = listOf(
+						immersiveBaseColor.toTransparentImmersiveColor(),
+						immersiveBaseColor.copy(alpha = 0.035f),
+						immersiveBaseColor.copy(alpha = 0.16f),
+						immersiveBaseColor.copy(alpha = 0.42f),
+						immersiveBaseColor.copy(alpha = 0.78f),
+					),
+					stops = NovelBottomGradientStops,
+					modifier = Modifier.fillMaxWidth(),
 				)
-				if (state.progressLabel.isNotBlank()) {
+				ReaderProgressDock(
+					isIosStyle = isIosStyle,
+					modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+				) {
+					NovelProgressPanel(state, callbacks, isIosStyle)
+				}
+			}
+		}
+
+		val statusSettings = state.settings
+		AnimatedVisibility(
+			visible = !state.controlsVisible &&
+				statusSettings?.showReadingStatus == true &&
+				statusSettings.readingMode != ReadingMode.PAGED,
+			enter = fadeIn(),
+			exit = fadeOut(),
+			modifier = Modifier.align(Alignment.BottomCenter),
+		) {
+			val palette = novelReaderPalette(
+				statusSettings?.themePreset ?: return@AnimatedVisibility,
+				isSystemInDarkTheme(),
+			)
+			val statusTextColor = Color(palette.chromeTextColor).copy(alpha = 0.78f)
+			val statusBackground = if (statusSettings.isReadingStatusTransparent) {
+				Color.Transparent
+			} else {
+				Color(palette.chromeBackgroundColor).copy(alpha = 0.72f)
+			}
+			Surface(
+				color = statusBackground,
+				contentColor = statusTextColor,
+				modifier = Modifier.fillMaxWidth(),
+			) {
+				Row(
+					horizontalArrangement = Arrangement.SpaceBetween,
+					verticalAlignment = Alignment.CenterVertically,
+					modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+				) {
 					Text(
-						text = state.progressLabel,
+						text = state.chapterTitle,
 						color = statusTextColor,
 						style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-						modifier = Modifier.padding(start = 10.dp),
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						modifier = Modifier.weight(1f),
 					)
+					if (state.progressLabel.isNotBlank()) {
+						Text(
+							text = state.progressLabel,
+							color = statusTextColor,
+							style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+							modifier = Modifier.padding(start = 10.dp),
+						)
+					}
 				}
 			}
+		}
+	}
+
+	if (state.chaptersSheetVisible) {
+		ComposeNovelChaptersSheet(
+			chapters = state.chapters,
+			currentIndex = state.currentChapterIndex,
+			onDismiss = callbacks.onDismissChapters,
+			onChapterSelected = callbacks.onChapterSelected,
+		)
+	}
+	state.settings?.let { settings ->
+		if (state.settingsSheetVisible) {
+			ComposeNovelReaderOptionsSheet(
+				settings = settings,
+				onDismiss = callbacks.onDismissSettings,
+				onSettingsChanged = callbacks.onSettingsChanged,
+				onToggleTranslation = callbacks.onToggleTranslation,
+				onBookmark = callbacks.onBookmark,
+				onTts = callbacks.onTts,
+				onClearTranslationCache = callbacks.onClearTranslationCache,
+			)
+		}
+	}
+	if (toolsPanelVisible) {
+		ModalBottomSheet(onDismissRequest = callbacks.onDismissTools) {
+			NovelToolsPanel(state, callbacks)
+		}
+	}
+}
+
+@Composable
+private fun NovelTopControlSurface(
+	shape: androidx.compose.ui.graphics.Shape,
+	modifier: Modifier = Modifier,
+	content: @Composable () -> Unit,
+) {
+	GlassSurface(
+		modifier = modifier,
+		shape = shape,
+		style = GlassDefaults.topBarChromeStyle().copy(
+			containerAlpha = 0.84f,
+			shadowElevation = ReaderControlTokens.ChromeShadowElevation,
+		),
+		componentRole = GlassComponentRole.TopBar,
+	) {
+		Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+			content()
 		}
 	}
 }
@@ -373,12 +416,4 @@ private fun RowScope.NovelToolButton(icon: Int, label: Int, onClick: () -> Unit)
 	) {
 		Icon(painterResource(icon), contentDescription = stringResource(label), modifier = Modifier.size(18.dp))
 	}
-}
-
-@Composable
-private fun NovelChromeDivider() {
-	HorizontalDivider(
-		modifier = Modifier.padding(horizontal = 12.dp),
-		color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f),
-	)
 }

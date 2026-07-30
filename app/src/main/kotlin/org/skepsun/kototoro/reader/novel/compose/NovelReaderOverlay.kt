@@ -18,6 +18,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,6 +36,7 @@ import org.skepsun.kototoro.reader.novel.tts.TtsState
 internal fun NovelReaderOverlay(
 	loading: Boolean,
 	message: NovelReaderMessage?,
+	controlsVisible: Boolean,
 	onMessageExpired: (Long) -> Unit,
 	ttsVisible: Boolean,
 	ttsState: TtsState,
@@ -41,6 +46,10 @@ internal fun NovelReaderOverlay(
 	onTtsVoice: () -> Unit,
 	onTtsClose: () -> Unit,
 ) {
+	var displayedMessage by remember { mutableStateOf(message) }
+	LaunchedEffect(message) {
+		if (message != null) displayedMessage = message
+	}
 	Box(modifier = Modifier.fillMaxSize()) {
 		AnimatedVisibility(loading, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
 			Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -63,14 +72,18 @@ internal fun NovelReaderOverlay(
 			visible = message != null,
 			enter = fadeIn(),
 			exit = fadeOut(),
-			modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(20.dp),
+			modifier = Modifier
+				.align(Alignment.BottomCenter)
+				.navigationBarsPadding()
+				.padding(horizontal = 20.dp)
+				.padding(bottom = if (controlsVisible) 76.dp else 20.dp),
 		) {
 			Surface(
 				shape = MaterialTheme.shapes.small,
 				color = Color.Black.copy(alpha = 0.82f),
 				contentColor = Color.White,
 			) {
-				Text(message?.text.orEmpty(), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+				Text(displayedMessage?.text.orEmpty(), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
 			}
 		}
 		AnimatedVisibility(

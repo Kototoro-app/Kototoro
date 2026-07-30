@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.reader.novel.compose
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.reader.novel.NovelChapterTranslation
 import org.skepsun.kototoro.reader.novel.NovelParagraph
@@ -122,6 +124,19 @@ class NovelComposeReaderViewModelTest {
 		assertEquals(120, state.currentPageStart)
 		assertEquals(180, state.currentPageEnd)
 		assertEquals("4 / 10", state.progressLabel)
+	}
+
+	@Test
+	fun `paged position resets bookmark state until the current page observation updates it`() {
+		val viewModel = NovelComposeReaderViewModel()
+		viewModel.publishCurrentPageBookmarked(true)
+		assertTrue(viewModel.uiState.value.isCurrentPageBookmarked)
+
+		viewModel.publishPagedPosition(2, 5, 20, 40, "Page")
+		assertFalse(viewModel.uiState.value.isCurrentPageBookmarked)
+
+		viewModel.publishCurrentPageBookmarked(true)
+		assertTrue(viewModel.uiState.value.isCurrentPageBookmarked)
 	}
 
 	@Test

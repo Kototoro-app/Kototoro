@@ -53,7 +53,6 @@ import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
-import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -156,6 +155,7 @@ class NovelReaderActivity :
     private var currentChapterIndex: Int = 0
     private var chapterLoadJob: Job? = null
     private var preloadJob: Job? = null
+    private var bookmarkObservationJob: Job? = null
     private var isUiVisible: Boolean = false
     private var currentPageIndex: Int = 0
     private var desiredProgressRatio: Float? = null
@@ -435,7 +435,6 @@ class NovelReaderActivity :
             onDismissSettings = composeReaderViewModel::dismissSettings,
             onDismissChapters = composeReaderViewModel::dismissChapters,
             onDismissTools = composeReaderViewModel::dismissTools,
-            onShowTools = composeReaderViewModel::showTools,
             onShowSettings = { composeReaderViewModel.showSettings(readerSettings) },
             onShowChapters = ::showChaptersSheet,
             onToggleTranslation = ::toggleTranslation,
@@ -458,9 +457,6 @@ class NovelReaderActivity :
         setContent {
             KototoroTheme {
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
-                val showControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
-                    isReaderControlLabelsEnabled
-                }
                 val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
                     rememberLayerBackdrop { drawContent() }
                 } else {
@@ -481,6 +477,7 @@ class NovelReaderActivity :
                             viewModel = composeReaderViewModel,
                             imageModel = { it },
                             onSettingsChanged = ::applyNovelReaderSettings,
+                            onToggleTranslation = ::toggleTranslation,
                             onBookmark = ::onBookmarkClick,
                             onTts = ::onTtsClick,
                             onClearTranslationCache = ::onClearTranslationCacheClick,
@@ -500,6 +497,8 @@ class NovelReaderActivity :
                             onPagedPositionChanged = { page, pageCount ->
                                 currentPageIndex = page
                                 updateReadingStatus(page, pageCount)
+                                val chapterId = composeReaderViewModel.uiState.value.chapterId
+                                observeCurrentPageBookmark(chapterId, page)
                             },
                             renderContent = true,
                             onImageClick = { path ->
@@ -548,7 +547,6 @@ class NovelReaderActivity :
                             NovelReaderBottomChrome(
                                 state = state,
                                 callbacks = callbacks,
-                                showControlLabels = showControlLabels,
                             )
                         }
                         if (!state.settingsSheetVisible && !state.chaptersSheetVisible) {
@@ -895,6 +893,16 @@ class NovelReaderActivity :
                 android.util.Log.e("NovelReaderActivity", "Failed to toggle bookmark", e)
                 showReaderMessage(getString(R.string.novel_bookmark_failed, e.message ?: ""), 2000L)
             }
+        }
+    }
+
+    private fun observeCurrentPageBookmark(chapterId: Long, page: Int) {
+        bookmarkObservationJob?.cancel()
+        bookmarkObservationJob = lifecycleScope.launch {
+            bookmarksRepository.observeBookmark(manga, chapterId, page)
+                .map { it != null }
+                .distinctUntilChanged()
+                .collect(composeReaderViewModel::publishCurrentPageBookmarked)
         }
     }
 

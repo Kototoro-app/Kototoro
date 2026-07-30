@@ -2,14 +2,12 @@ package org.skepsun.kototoro.reader.ui.compose
 
 import android.util.Log
 import android.view.ViewConfiguration
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.toArgb
@@ -41,6 +39,7 @@ fun ComposeReaderScreenRoot(
 	webtoonZoomCommand: ComposeWebtoonZoomCommand? = null,
 	isDoublePage: Boolean = false,
 	layoutGeneration: Int = 0,
+	pageOverlay: @Composable BoxScope.() -> Unit = {},
 	shouldAcceptReaderPosition: (Int) -> Boolean = { true },
 	onShowErrorDetails: (Throwable, String?) -> Unit = { _, _ -> },
 	onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
@@ -91,9 +90,6 @@ fun ComposeReaderScreenRoot(
 	)
 
 	if (mode == null || content.pages.isEmpty()) {
-		Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-			CircularProgressIndicator()
-		}
 		return
 	}
 
@@ -158,7 +154,8 @@ fun ComposeReaderScreenRoot(
 			imageColorFilter = readerImageColorFilter,
 			bitmapConfig = readerSettings.bitmapConfig,
 			isCropEnabled = readerSettings.isPagesCropEnabledStandard,
-				modifier = readerModifier,
+			pageOverlay = pageOverlay,
+			modifier = readerModifier,
 		)
 	} else if (mode == ReaderMode.WEBTOON) {
 		ComposeWebtoonReader(
@@ -216,6 +213,7 @@ fun ComposeReaderScreenRoot(
 		bitmapConfig = readerSettings.bitmapConfig,
 		zoomMode = readerSettings.zoomMode,
 		isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+		pageOverlay = pageOverlay,
 	)
 	}
 }

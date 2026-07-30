@@ -56,9 +56,12 @@ internal class ComposeReaderController(
 
 	@Composable
 	fun Content(showControlLabels: Boolean) {
+		val infoBarEmbedded = readerMode != ReaderMode.WEBTOON
+		val systemStatus = if (infoBarEmbedded) rememberReaderSystemStatus() else null
 		ComposeReaderActivityScaffold(
 					state = chromeState,
 					showControlLabels = showControlLabels,
+					infoBarEmbedded = infoBarEmbedded,
 					chapterPanelTabId = chaptersTabId,
 					chaptersPanelContent = { selectedTabId, panelState ->
 						chaptersPanelContent(selectedTabId, panelState)
@@ -96,6 +99,15 @@ internal class ComposeReaderController(
 						webtoonZoomCommand = webtoonZoomCommand,
 						isDoublePage = isDoublePage,
 						layoutGeneration = readerLayoutGeneration,
+						pageOverlay = {
+							systemStatus?.let {
+									ReaderPageInfoBar(
+										state = chromeState.infoBar,
+										controlsVisible = chromeState.controlsVisible,
+										systemStatus = it,
+									)
+								}
+							},
 						shouldAcceptReaderPosition = { position -> shouldAcceptPosition(position) },
 						onShowErrorDetails = errorHost::showReaderErrorDetails,
 						onRetryError = errorHost::resolveReaderError,

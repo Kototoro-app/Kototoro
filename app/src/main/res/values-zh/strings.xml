@@ -1379,6 +1379,8 @@
     <string name="novel_show_reading_status">显示阅读状态</string>
     <string name="novel_pull_to_bookmark">下拉添加书签</string>
     <string name="novel_release_to_bookmark">松手添加书签</string>
+    <string name="novel_pull_to_remove_bookmark">下拉删除书签</string>
+    <string name="novel_release_to_remove_bookmark">松手删除书签</string>
     <string name="novel_theme_moss">苔绿</string>
     <string name="novel_theme_paper">纸张</string>
     <string name="novel_theme_preset">阅读主题</string>

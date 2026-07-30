@@ -899,6 +899,8 @@
     <string name="novel_show_reading_status">显示阅读状态</string>
     <string name="novel_pull_to_bookmark">下拉添加书签</string>
     <string name="novel_release_to_bookmark">松手添加书签</string>
+    <string name="novel_pull_to_remove_bookmark">下拉删除书签</string>
+    <string name="novel_release_to_remove_bookmark">松手删除书签</string>
     <string name="novel_transparent_status_bar">透明阅读状态栏</string>
     <string name="novel_reset">重置</string>
     <string name="novel_chapters_count">共 %1$d 章</string>

@@ -571,6 +571,8 @@
     <string name="novel_show_reading_status">Show Reading Status</string>
     <string name="novel_pull_to_bookmark">Pull down to add bookmark</string>
     <string name="novel_release_to_bookmark">Release to add bookmark</string>
+    <string name="novel_pull_to_remove_bookmark">Pull down to remove bookmark</string>
+    <string name="novel_release_to_remove_bookmark">Release to remove bookmark</string>
     <string name="novel_transparent_status_bar">Subtle Reading Status Bar</string>
     <string name="novel_translation_display_mode">Translation Display Mode</string>
     <string name="novel_translation_only">Translation Only</string>

@@ -41,6 +41,7 @@ data class NovelComposeReaderUiState(
 	val currentPageText: String = "",
 	val currentPageStart: Int = 0,
 	val currentPageEnd: Int = 0,
+	val isCurrentPageBookmarked: Boolean = false,
 	val pageRequest: NovelPageRequest? = null,
 	val scrollRequest: NovelScrollRequest? = null,
 	val continuousChapters: List<NovelComposeChapterContent> = emptyList(),
@@ -238,7 +239,12 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 			currentPageText = text,
 			currentPageStart = charStart.coerceAtLeast(0),
 			currentPageEnd = charEnd.coerceAtLeast(charStart),
+			isCurrentPageBookmarked = false,
 		)
+	}
+
+	fun publishCurrentPageBookmarked(bookmarked: Boolean) {
+		_uiState.value = _uiState.value.copy(isCurrentPageBookmarked = bookmarked)
 	}
 
 	fun publishImageContext(imageContext: NovelComposeImageContext) {

@@ -5,20 +5,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -26,14 +28,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +57,7 @@ import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -58,6 +65,7 @@ internal fun ComposeNovelReaderOptionsSheet(
 	settings: NovelReaderSettings,
 	onDismiss: () -> Unit,
 	onSettingsChanged: (NovelReaderSettings) -> Unit,
+	onToggleTranslation: () -> Unit,
 	onBookmark: () -> Unit,
 	onTts: () -> Unit,
 	onClearTranslationCache: () -> Unit,
@@ -66,76 +74,167 @@ internal fun ComposeNovelReaderOptionsSheet(
 	fun update(transform: NovelReaderSettings.() -> NovelReaderSettings) {
 		onSettingsChanged(settings.transform().normalized())
 	}
-	ModalBottomSheet(onDismissRequest = onDismiss) {
-		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-			val contentWidth = if (maxWidth >= 800.dp) 760.dp else maxWidth
-			LazyColumn(
-				verticalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier
-					.widthIn(max = contentWidth)
-					.align(Alignment.TopCenter)
-					.padding(horizontal = 16.dp),
-			) {
-			item { NovelPreview(settings) }
-			item { SectionTitle(stringResource(R.string.novel_reading_mode)) }
-			item {
-				CompactGrid {
-					SelectRow(stringResource(R.string.novel_reading_mode), if (settings.readingMode == ReadingMode.PAGED) stringResource(R.string.novel_mode_paged) else stringResource(R.string.novel_mode_scroll), listOf(stringResource(R.string.novel_mode_paged), stringResource(R.string.novel_mode_scroll)), modifier = Modifier.weight(1f)) { index -> update { copy(readingMode = if (index == 0) ReadingMode.PAGED else ReadingMode.SCROLL) } }
-					SelectRow(stringResource(R.string.novel_theme_preset), stringResource(settings.themePreset.label), NovelReaderThemePreset.entries.map { stringResource(it.label) }, modifier = Modifier.weight(1f)) { index -> update { copy(themePreset = NovelReaderThemePreset.entries[index]) } }
+	val pages = listOf(
+		NovelOptionsPage(R.drawable.ic_book_page, R.string.novel_reading_mode),
+		NovelOptionsPage(R.drawable.ic_appearance, R.string.appearance),
+		NovelOptionsPage(R.drawable.ic_translate, R.string.novel_translation_display_mode),
+		NovelOptionsPage(R.drawable.ic_more_vert, R.string.reader_actions),
+	)
+	val pagerState = rememberPagerState(pageCount = pages::size)
+	val scope = rememberCoroutineScope()
+	ModalBottomSheet(onDismissRequest = onDismiss, modifier = Modifier.fillMaxHeight()) {
+		Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
+			Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+				pages.forEachIndexed { index, page ->
+					NovelOptionsTab(
+						page = page,
+						selected = pagerState.currentPage == index,
+						onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+					)
 				}
 			}
-			item { SectionTitle(stringResource(R.string.novel_margins)) }
-			item {
-				CompactGrid {
-					SliderRow(R.string.novel_font_size, "%.1fsp".format(settings.fontSizeSp), Modifier.weight(1f)) { sliderEditor = SliderEditor(R.string.novel_font_size, settings.fontSizeSp, NovelReaderSettings.FONT_SIZE_RANGE) { update { copy(fontSizeSp = it) } } }
-					SliderRow(R.string.novel_line_spacing, "%.1f".format(settings.lineSpacing), Modifier.weight(1f)) { sliderEditor = SliderEditor(R.string.novel_line_spacing, settings.lineSpacing, NovelReaderSettings.LINE_SPACING_RANGE) { update { copy(lineSpacing = it) } } }
-					SliderRow(R.string.novel_paragraph_spacing, "%.0fdp".format(settings.paragraphSpacing), Modifier.weight(1f)) { sliderEditor = SliderEditor(R.string.novel_paragraph_spacing, settings.paragraphSpacing, NovelReaderSettings.PARAGRAPH_SPACING_RANGE) { update { copy(paragraphSpacing = it) } } }
-					SliderRow(R.string.novel_margin_horizontal, "${settings.marginHorizontal}dp", Modifier.weight(1f)) { sliderEditor = SliderEditor(R.string.novel_margin_horizontal, settings.marginHorizontal.toFloat(), NovelReaderSettings.MARGIN_RANGE.asFloatRange()) { update { copy(marginHorizontal = it.toInt()) } } }
-					SliderRow(R.string.novel_margin_vertical, "${settings.marginVertical}dp", Modifier.weight(1f)) { sliderEditor = SliderEditor(R.string.novel_margin_vertical, settings.marginVertical.toFloat(), NovelReaderSettings.MARGIN_RANGE.asFloatRange()) { update { copy(marginVertical = it.toInt()) } } }
+			HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth().weight(1f)) { page ->
+				when (page) {
+					0 -> NovelReadingOptionsPage(settings, ::update)
+					1 -> NovelAppearanceOptionsPage(settings, ::update, onEditSlider = { sliderEditor = it })
+					2 -> NovelTranslationOptionsPage(
+						settings = settings,
+						update = ::update,
+						onToggleTranslation = { onToggleTranslation(); onDismiss() },
+						onClearTranslationCache = onClearTranslationCache,
+					)
+					else -> NovelMiscOptionsPage(
+						onBookmark = { onBookmark(); onDismiss() },
+						onTts = { onTts(); onDismiss() },
+						onReset = { onSettingsChanged(NovelReaderSettings()) },
+					)
 				}
-			}
-			item { HorizontalDivider() }
-			item {
-				Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
-				FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-					OptionSwitch(R.string.novel_dual_page_mode, settings.enableDualPage, Modifier.weight(1f)) { update { copy(enableDualPage = it) } }
-					OptionSwitch(R.string.novel_fullscreen_mode, settings.enableFullscreen, Modifier.weight(1f)) { update { copy(enableFullscreen = it) } }
-					OptionSwitch(R.string.novel_show_reading_status, settings.showReadingStatus, Modifier.weight(1f)) { update { copy(showReadingStatus = it) } }
-					OptionSwitch(R.string.novel_transparent_status_bar, settings.isReadingStatusTransparent, Modifier.weight(1f)) { update { copy(isReadingStatusTransparent = it) } }
-					OptionSwitch(R.string.novel_first_line_indent, settings.enableParagraphIndent, Modifier.weight(1f)) { update { copy(enableParagraphIndent = it) } }
-				}
-				}
-			}
-			if (settings.readingMode == ReadingMode.PAGED) {
-				item { SectionTitle(stringResource(R.string.novel_page_turn_animation)) }
-				item {
-					CompactGrid {
-						SelectRow(stringResource(R.string.novel_page_turn_animation), stringResource(settings.pageTurnAnimation.label), NovelPageTurnAnimation.entries.map { stringResource(it.label) }, modifier = Modifier.weight(1f)) { index -> update { copy(pageTurnAnimation = NovelPageTurnAnimation.entries[index]) } }
-					}
-				}
-			}
-			item { SectionTitle(stringResource(R.string.novel_translation_display_mode)) }
-			item {
-				CompactGrid {
-					SelectRow(stringResource(R.string.novel_translation_display_mode), stringResource(if (settings.translationDisplayMode == NovelTranslationDisplayMode.BILINGUAL) R.string.novel_translation_bilingual else R.string.novel_translation_only), listOf(stringResource(R.string.novel_translation_only), stringResource(R.string.novel_translation_bilingual)), modifier = Modifier.weight(1f)) { index -> update { copy(translationDisplayMode = if (index == 0) NovelTranslationDisplayMode.TRANSLATION_ONLY else NovelTranslationDisplayMode.BILINGUAL) } }
-				}
-			}
-			item {
-				FlowRow(
-					horizontalArrangement = Arrangement.spacedBy(8.dp),
-					verticalArrangement = Arrangement.spacedBy(8.dp),
-					modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-				) {
-					Action(R.drawable.ic_bookmark, R.string.bookmark_add) { onBookmark(); onDismiss() }
-					Action(R.drawable.ic_voice_input, R.string.tts_settings_title) { onTts(); onDismiss() }
-					Action(R.drawable.ic_delete, R.string.clear_translation_cache, onClearTranslationCache)
-					Action(R.drawable.ic_backup_restore, R.string.novel_reset) { onSettingsChanged(NovelReaderSettings()) }
-				}
-			}
 			}
 		}
 		SliderEditorDialog(sliderEditor) { sliderEditor = null }
 	}
+}
+
+@Immutable
+private data class NovelOptionsPage(val icon: Int, val label: Int)
+
+@Composable
+private fun RowScope.NovelOptionsTab(page: NovelOptionsPage, selected: Boolean, onClick: () -> Unit) {
+	Surface(
+		shape = RoundedCornerShape(18.dp),
+		color = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+	) {
+		IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+			Icon(
+				painter = painterResource(page.icon),
+				contentDescription = stringResource(page.label),
+				tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+	}
+}
+
+@Composable
+private fun NovelReadingOptionsPage(
+	settings: NovelReaderSettings,
+	update: (NovelReaderSettings.() -> NovelReaderSettings) -> Unit,
+) = NovelOptionsPageList {
+	item {
+		CompactGrid {
+			SelectRow(
+				stringResource(R.string.novel_reading_mode),
+				stringResource(if (settings.readingMode == ReadingMode.PAGED) R.string.novel_mode_paged else R.string.novel_mode_scroll),
+				listOf(stringResource(R.string.novel_mode_paged), stringResource(R.string.novel_mode_scroll)),
+				Modifier.weight(1f),
+			) { update { copy(readingMode = if (it == 0) ReadingMode.PAGED else ReadingMode.SCROLL) } }
+			if (settings.readingMode == ReadingMode.PAGED) {
+				SelectRow(
+					stringResource(R.string.novel_page_turn_animation),
+					stringResource(settings.pageTurnAnimation.label),
+					NovelPageTurnAnimation.entries.map { stringResource(it.label) },
+					Modifier.weight(1f),
+				) { update { copy(pageTurnAnimation = NovelPageTurnAnimation.entries[it]) } }
+			}
+		}
+	}
+	item {
+		FlowRow(maxItemsInEachRow = 2, modifier = Modifier.fillMaxWidth()) {
+			OptionSwitch(R.string.novel_dual_page_mode, settings.enableDualPage, Modifier.weight(1f)) { update { copy(enableDualPage = it) } }
+			OptionSwitch(R.string.novel_fullscreen_mode, settings.enableFullscreen, Modifier.weight(1f)) { update { copy(enableFullscreen = it) } }
+			OptionSwitch(R.string.novel_show_reading_status, settings.showReadingStatus, Modifier.weight(1f)) { update { copy(showReadingStatus = it) } }
+			OptionSwitch(R.string.novel_transparent_status_bar, settings.isReadingStatusTransparent, Modifier.weight(1f)) { update { copy(isReadingStatusTransparent = it) } }
+			OptionSwitch(R.string.novel_first_line_indent, settings.enableParagraphIndent, Modifier.weight(1f)) { update { copy(enableParagraphIndent = it) } }
+		}
+	}
+}
+
+@Composable
+private fun NovelAppearanceOptionsPage(
+	settings: NovelReaderSettings,
+	update: (NovelReaderSettings.() -> NovelReaderSettings) -> Unit,
+	onEditSlider: (SliderEditor) -> Unit,
+) = NovelOptionsPageList {
+	item { NovelPreview(settings) }
+	item {
+		SelectRow(
+			stringResource(R.string.novel_theme_preset),
+			stringResource(settings.themePreset.label),
+			NovelReaderThemePreset.entries.map { stringResource(it.label) },
+		) { update { copy(themePreset = NovelReaderThemePreset.entries[it]) } }
+	}
+	item {
+		CompactGrid {
+			SliderRow(R.string.novel_font_size, "%.1fsp".format(settings.fontSizeSp), Modifier.weight(1f)) { onEditSlider(SliderEditor(R.string.novel_font_size, settings.fontSizeSp, NovelReaderSettings.FONT_SIZE_RANGE) { update { copy(fontSizeSp = it) } }) }
+			SliderRow(R.string.novel_line_spacing, "%.1f".format(settings.lineSpacing), Modifier.weight(1f)) { onEditSlider(SliderEditor(R.string.novel_line_spacing, settings.lineSpacing, NovelReaderSettings.LINE_SPACING_RANGE) { update { copy(lineSpacing = it) } }) }
+			SliderRow(R.string.novel_paragraph_spacing, "%.0fdp".format(settings.paragraphSpacing), Modifier.weight(1f)) { onEditSlider(SliderEditor(R.string.novel_paragraph_spacing, settings.paragraphSpacing, NovelReaderSettings.PARAGRAPH_SPACING_RANGE) { update { copy(paragraphSpacing = it) } }) }
+			SliderRow(R.string.novel_margin_horizontal, "${settings.marginHorizontal}dp", Modifier.weight(1f)) { onEditSlider(SliderEditor(R.string.novel_margin_horizontal, settings.marginHorizontal.toFloat(), NovelReaderSettings.MARGIN_RANGE.asFloatRange()) { update { copy(marginHorizontal = it.toInt()) } }) }
+			SliderRow(R.string.novel_margin_vertical, "${settings.marginVertical}dp", Modifier.weight(1f)) { onEditSlider(SliderEditor(R.string.novel_margin_vertical, settings.marginVertical.toFloat(), NovelReaderSettings.MARGIN_RANGE.asFloatRange()) { update { copy(marginVertical = it.toInt()) } }) }
+		}
+	}
+}
+
+@Composable
+private fun NovelTranslationOptionsPage(
+	settings: NovelReaderSettings,
+	update: (NovelReaderSettings.() -> NovelReaderSettings) -> Unit,
+	onToggleTranslation: () -> Unit,
+	onClearTranslationCache: () -> Unit,
+) = NovelOptionsPageList {
+	item {
+		SelectRow(
+			stringResource(R.string.novel_translation_display_mode),
+			stringResource(if (settings.translationDisplayMode == NovelTranslationDisplayMode.BILINGUAL) R.string.novel_translation_bilingual else R.string.novel_translation_only),
+			listOf(stringResource(R.string.novel_translation_only), stringResource(R.string.novel_translation_bilingual)),
+		) { update { copy(translationDisplayMode = if (it == 0) NovelTranslationDisplayMode.TRANSLATION_ONLY else NovelTranslationDisplayMode.BILINGUAL) } }
+	}
+	item {
+		FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+			Action(R.drawable.ic_translate, R.string.reader_translation_action, onToggleTranslation)
+			Action(R.drawable.ic_delete, R.string.clear_translation_cache, onClearTranslationCache)
+		}
+	}
+}
+
+@Composable
+private fun NovelMiscOptionsPage(onBookmark: () -> Unit, onTts: () -> Unit, onReset: () -> Unit) =
+	NovelOptionsPageList {
+		item {
+			FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+				Action(R.drawable.ic_bookmark, R.string.bookmark_add, onBookmark)
+				Action(R.drawable.ic_voice_input, R.string.tts_settings_title, onTts)
+				Action(R.drawable.ic_backup_restore, R.string.novel_reset, onReset)
+			}
+		}
+	}
+
+@Composable
+private fun NovelOptionsPageList(content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+	LazyColumn(
+		verticalArrangement = Arrangement.spacedBy(10.dp),
+		contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+		modifier = Modifier.fillMaxSize(),
+		content = content,
+	)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.res.painterResource
@@ -329,39 +330,50 @@ fun ReaderProgressBar(
 	modifier: Modifier = Modifier,
 ) {
 	var dragValue by remember { mutableStateOf<Float?>(null) }
+	var containerPosition by remember { mutableStateOf(IntOffset.Zero) }
 	var trackPosition by remember { mutableStateOf(IntOffset.Zero) }
 	var trackWidthPx by remember { mutableStateOf(0) }
+	val density = LocalDensity.current
+	val popupOffsetPx = with(density) { 48.dp.roundToPx() }
+	val popupHalfWidthPx = with(density) { 28.dp.roundToPx() }
 	val effectiveMax = max.coerceAtLeast(1f)
 	val displayedValue = (dragValue ?: value).coerceIn(0f, effectiveMax)
-	if (dragValue != null) {
-		val fraction = displayedValue / effectiveMax
-		Popup(
-			alignment = Alignment.TopStart,
-			offset = IntOffset(
-				trackPosition.x + (trackWidthPx * fraction).roundToInt() - 32,
-				trackPosition.y - 52,
-			),
-			properties = PopupProperties(focusable = false),
-		) {
-			Surface(
-				shape = MaterialTheme.shapes.small,
-				color = MaterialTheme.colorScheme.inverseSurface,
-				contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+	Box(
+		modifier = modifier
+			.fillMaxWidth()
+			.onGloballyPositioned { coordinates ->
+				val position = coordinates.positionInWindow()
+				containerPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
+			},
+	) {
+		if (dragValue != null) {
+			val fraction = displayedValue / effectiveMax
+			Popup(
+				alignment = Alignment.TopStart,
+				offset = IntOffset(
+					trackPosition.x - containerPosition.x +
+						(trackWidthPx * fraction).roundToInt() - popupHalfWidthPx,
+					-popupOffsetPx,
+				),
+				properties = PopupProperties(focusable = false),
 			) {
-				Text(
-					text = "${displayedValue.toInt() + 1}/${max.toInt() + 1}",
-					style = MaterialTheme.typography.labelMedium,
-					modifier = Modifier.padding(8.dp),
-				)
+				Surface(
+					shape = MaterialTheme.shapes.small,
+					color = MaterialTheme.colorScheme.inverseSurface,
+					contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+				) {
+					Text(
+						text = "${displayedValue.toInt() + 1}/${max.toInt() + 1}",
+						style = MaterialTheme.typography.labelMedium,
+						modifier = Modifier.padding(8.dp),
+					)
+				}
 			}
 		}
-	}
-	CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
-		BoxWithConstraints(
-			modifier = modifier
-				.fillMaxWidth()
-				.padding(horizontal = 6.dp, vertical = 1.dp),
-		) {
+		CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+			BoxWithConstraints(
+				modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 1.dp),
+			) {
 			Row(verticalAlignment = Alignment.CenterVertically) {
 				IconButton(
 					onClick = onPreviousChapter,
@@ -421,6 +433,7 @@ fun ReaderProgressBar(
 						tint = LocalContentColor.current,
 					)
 				}
+			}
 			}
 		}
 	}

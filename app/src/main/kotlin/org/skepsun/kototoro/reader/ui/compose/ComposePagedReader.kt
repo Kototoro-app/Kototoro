@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -183,6 +184,7 @@ fun ComposePagedReader(
 	bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
 	zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
 	isCropEnabled: Boolean = false,
+	pageOverlay: @Composable BoxScope.() -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	if (pages.isEmpty()) {
@@ -342,6 +344,7 @@ fun ComposePagedReader(
 				isPageCurlEnabled = pageAnimation == ReaderAnimation.SIMULATION,
 				modifier = Modifier.fillMaxSize(),
 			)
+			pageOverlay()
 			when (pageAnimation) {
 				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
 				else -> Unit
@@ -1035,6 +1038,7 @@ fun ComposeDoublePageReader(
 	bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
 	zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
 	isCropEnabled: Boolean = false,
+	pageOverlay: @Composable BoxScope.() -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	var displayedPages by remember { mutableStateOf(pages) }
@@ -1750,6 +1754,7 @@ fun ComposeDoublePageReader(
 					Box(modifier = Modifier.weight(1f).fillMaxSize())
 				}
 			}
+			pageOverlay()
 			when (pageAnimation) {
 				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
 				else -> Unit

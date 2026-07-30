@@ -1,15 +1,18 @@
 package org.skepsun.kototoro.reader.novel.compose
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,7 +25,12 @@ import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
@@ -37,10 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
@@ -49,12 +54,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.SpanStyle
@@ -62,6 +70,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +102,9 @@ import org.skepsun.kototoro.reader.ui.compose.resolveComposeReaderPageTransform
 import org.skepsun.kototoro.reader.ui.compose.trackComposeReaderPageCurl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
+
+private val NovelReadingStatusReservedHeight = 28.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -198,7 +210,7 @@ fun ComposeNovelChapter(
 	val tapModifier = if (onTap == null) Modifier else Modifier
 		.onSizeChanged { viewport = it }
 		.pointerInput(onTap) {
-			detectTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
+			detectUnconsumedTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
 		}
 	LazyColumn(
 		state = listState ?: rememberLazyListState(),
@@ -316,7 +328,7 @@ private fun ComposeNovelChapterWindow(
 	val tapModifier = if (onTap == null) Modifier else Modifier
 		.onSizeChanged { viewport = it }
 		.pointerInput(onTap) {
-			detectTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
+			detectUnconsumedTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
 		}
 	LazyColumn(
 		state = listState,
@@ -431,6 +443,7 @@ fun ComposeNovelReaderRoute(
 	viewModel: NovelComposeReaderViewModel,
 	imageModel: (String) -> Any?,
 	onSettingsChanged: (NovelReaderSettings) -> Unit = {},
+	onToggleTranslation: () -> Unit = {},
 	onBookmark: () -> Unit = {},
 	onTts: () -> Unit = {},
 	onClearTranslationCache: () -> Unit = {},
@@ -546,6 +559,7 @@ fun ComposeNovelReaderRoute(
 	NovelReaderOverlay(
 		loading = state.loading,
 		message = state.message,
+		controlsVisible = state.controlsVisible,
 		onMessageExpired = viewModel::dismissMessage,
 		ttsVisible = state.ttsControlsVisible && !state.chromeEnabled,
 		ttsState = state.ttsState,
@@ -566,6 +580,7 @@ fun ComposeNovelReaderRoute(
 				viewModel.publishSettings(it)
 				onSettingsChanged(it)
 			},
+			onToggleTranslation = onToggleTranslation,
 			onBookmark = onBookmark,
 			onTts = onTts,
 			onClearTranslationCache = onClearTranslationCache,
@@ -733,8 +748,8 @@ private fun ComposeNovelPagedChapter(
 	val maximumPullPx = with(density) { 138.dp.toPx() }
 	val pullLabelEdgeOffsetPx = with(density) { 34.dp.toPx() }
 	val bookmarkArmed = pullOffsetPx >= bookmarkThresholdPx
-	fun settlePull(addBookmark: Boolean) {
-		if (addBookmark) onBookmark()
+	fun settlePull(toggleBookmark: Boolean) {
+		if (toggleBookmark) onBookmark()
 		val startOffset = pullOffsetPx
 		coroutineScope.launch {
 			Animatable(startOffset).animateTo(
@@ -749,15 +764,12 @@ private fun ComposeNovelPagedChapter(
 		}
 	}
 	val pullToBookmarkModifier = Modifier.pointerInput(state.chapterId, bookmarkThresholdPx) {
-		detectVerticalDragGestures(
-			onVerticalDrag = { change, dragAmount ->
-				if (dragAmount > 0f || pullOffsetPx > 0f) {
-					change.consume()
-					pullOffsetPx = (pullOffsetPx + dragAmount).coerceIn(0f, maximumPullPx)
-				}
+		detectDownwardPullGestures(
+			onPull = { dragAmount ->
+				pullOffsetPx = (pullOffsetPx + dragAmount).coerceIn(0f, maximumPullPx)
 			},
-			onDragEnd = { settlePull(pullOffsetPx >= bookmarkThresholdPx) },
-			onDragCancel = { settlePull(addBookmark = false) },
+			onRelease = { settlePull(pullOffsetPx >= bookmarkThresholdPx) },
+			onCancel = { settlePull(toggleBookmark = false) },
 		)
 	}
 	var viewport by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(IntSize.Zero) }
@@ -767,7 +779,7 @@ private fun ComposeNovelPagedChapter(
 		Modifier
 			.onSizeChanged { viewport = it }
 			.pointerInput(onTap) {
-				detectTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
+				detectUnconsumedTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
 			}
 	}
 	BoxWithConstraints(
@@ -780,7 +792,10 @@ private fun ComposeNovelPagedChapter(
 			(maxWidth - settings.marginHorizontal.dp * 2).coerceAtLeast(1.dp).roundToPx()
 		}
 		val contentHeightPx = with(density) {
-			(maxHeight - settings.marginVertical.dp * 2).coerceAtLeast(1.dp).roundToPx()
+			(
+				maxHeight - settings.marginVertical.dp * 2 -
+					if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp
+				).coerceAtLeast(1.dp).roundToPx()
 		}
 		val paginationChapters = androidx.compose.runtime.remember(chapters, state.chapterId, state.content, state.translation) {
 			chapters.map { chapter ->
@@ -845,10 +860,12 @@ private fun ComposeNovelPagedChapter(
 				}
 		}
 		val displayedResult = exactResult ?: compatibleResult
-		val pages = displayedResult?.pages
-		if (pages == null) {
-			CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-			return@BoxWithConstraints
+			val pages = displayedResult?.pages
+			if (pages == null) {
+				if (!state.loading) {
+					CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+				}
+				return@BoxWithConstraints
 		}
 		if (pages.isEmpty()) return@BoxWithConstraints
 		val pagerState = rememberPagerState(
@@ -977,55 +994,7 @@ private fun ComposeNovelPagedChapter(
 		LaunchedEffect(pagerState.isScrollInProgress) {
 			if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
 		}
-		Box(
-			modifier = Modifier
-				.align(Alignment.TopEnd)
-				.padding(end = 22.dp),
-		) {
-			Text(
-				text = stringResource(
-					if (bookmarkArmed) {
-						R.string.novel_release_to_bookmark
-					} else {
-						R.string.novel_pull_to_bookmark
-					},
-				),
-				style = MaterialTheme.typography.labelMedium,
-				color = if (bookmarkArmed) {
-					MaterialTheme.colorScheme.primary
-				} else {
-					Color(palette.secondaryTextColor)
-				},
-				modifier = Modifier
-					.align(Alignment.TopEnd)
-					.padding(end = 42.dp)
-					.graphicsLayer {
-						translationY = pullOffsetPx - pullLabelEdgeOffsetPx
-					},
-			)
-			val bookmarkColor = if (bookmarkArmed) {
-				MaterialTheme.colorScheme.primary
-			} else {
-				Color(palette.secondaryTextColor).copy(alpha = 0.72f)
-			}
-			Canvas(
-				modifier = Modifier
-					.align(Alignment.TopEnd)
-					.size(width = 30.dp, height = 88.dp),
-			) {
-				val notchDepth = 14.dp.toPx()
-				val bookmarkPath = Path().apply {
-					moveTo(0f, 0f)
-					lineTo(size.width, 0f)
-					lineTo(size.width, size.height)
-					lineTo(size.width / 2f, size.height - notchDepth)
-					lineTo(0f, size.height)
-					close()
-				}
-				drawPath(bookmarkPath, bookmarkColor)
-			}
-		}
-		HorizontalPager(
+			HorizontalPager(
 			state = pagerState,
 			pageSize = if (dualPage) PageSize.Fixed(maxWidth / 2) else PageSize.Fill,
 			beyondViewportPageCount = 1,
@@ -1039,6 +1008,7 @@ private fun ComposeNovelPagedChapter(
 				.trackComposeReaderPageCurl(pageCurlState, settings.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION)
 				.graphicsLayer { translationY = pullOffsetPx },
 		) { index ->
+			val page = pages[index]
 			val isSimulation = settings.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION
 			val pageOffset = (index - pagerState.currentPage) - pagerState.currentPageOffsetFraction
 			val curlOnEnd = !dualPage || novelDualPageCurlOnEnd(
@@ -1094,13 +1064,16 @@ private fun ComposeNovelPagedChapter(
 					)
 					.background(Color(palette.backgroundColor)),
 			) {
-				when (val page = pages[index]) {
+				when (page) {
 					is NovelComposePage.Text -> Box(
 						modifier = Modifier
 							.fillMaxSize()
 							.padding(
-								horizontal = settings.marginHorizontal.dp,
-								vertical = settings.marginVertical.dp,
+								start = settings.marginHorizontal.dp,
+								top = settings.marginVertical.dp,
+								end = settings.marginHorizontal.dp,
+								bottom = settings.marginVertical.dp +
+									if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp,
 							),
 					) {
 						Text(
@@ -1115,8 +1088,11 @@ private fun ComposeNovelPagedChapter(
 						modifier = Modifier
 							.fillMaxSize()
 							.padding(
-								horizontal = settings.marginHorizontal.dp,
-								vertical = settings.marginVertical.dp,
+								start = settings.marginHorizontal.dp,
+								top = settings.marginVertical.dp,
+								end = settings.marginHorizontal.dp,
+								bottom = settings.marginVertical.dp +
+									if (settings.showReadingStatus) NovelReadingStatusReservedHeight else 0.dp,
 							),
 					) {
 						NovelComposeImage(
@@ -1129,12 +1105,122 @@ private fun ComposeNovelPagedChapter(
 						)
 					}
 				}
+				if (settings.showReadingStatus) {
+					val chapterStart = pages.indexOfFirst { it.chapterId == page.chapterId }
+					val chapterEnd = pages.indexOfLast { it.chapterId == page.chapterId }
+					val localPage = (index - chapterStart).coerceAtLeast(0)
+					val localPageCount = (chapterEnd - chapterStart + 1).coerceAtLeast(1)
+					val chapterTitle = chapters.firstOrNull {
+						it.chapterId == page.chapterId && it.chapterIndex == page.chapterIndex
+					}?.chapterTitle.orEmpty().ifBlank {
+						state.chapterTitle.takeIf { page.chapterId == state.chapterId }.orEmpty()
+					}
+					AnimatedVisibility(
+						visible = !state.controlsVisible,
+						enter = fadeIn(),
+						exit = fadeOut(),
+						modifier = Modifier.align(Alignment.BottomCenter),
+					) {
+						NovelPageReadingStatus(
+							chapterTitle = chapterTitle,
+							progressLabel = "${localPage + 1} / $localPageCount",
+							settings = settings,
+						)
+					}
+				}
 				if (simulationTransform != null) {
 					ComposeReaderSimulationPageShadow(
 						transform = simulationTransform,
 					)
+					}
 				}
 			}
+			if (pullOffsetPx > 0f) {
+				NovelPullBookmarkIndicator(
+					bookmarked = state.isCurrentPageBookmarked,
+					armed = bookmarkArmed,
+					contentColor = Color(palette.secondaryTextColor),
+					modifier = Modifier
+						.align(Alignment.TopCenter)
+						.graphicsLayer {
+							translationY = pullOffsetPx - pullLabelEdgeOffsetPx
+						},
+				)
+			}
+		}
+	}
+
+@Composable
+private fun NovelPullBookmarkIndicator(
+	bookmarked: Boolean,
+	armed: Boolean,
+	contentColor: Color,
+	modifier: Modifier = Modifier,
+) {
+	val resultingBookmarkState = bookmarked.xor(armed)
+	val label = when {
+		bookmarked && armed -> R.string.novel_release_to_remove_bookmark
+		bookmarked -> R.string.novel_pull_to_remove_bookmark
+		armed -> R.string.novel_release_to_bookmark
+		else -> R.string.novel_pull_to_bookmark
+	}
+	val color = if (armed) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.78f)
+	Row(
+		horizontalArrangement = Arrangement.spacedBy(8.dp),
+		verticalAlignment = Alignment.CenterVertically,
+		modifier = modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+	) {
+		Icon(
+			painter = painterResource(
+				if (resultingBookmarkState) R.drawable.ic_bookmark_checked else R.drawable.ic_bookmark,
+			),
+			contentDescription = null,
+			tint = color,
+			modifier = Modifier.size(24.dp),
+		)
+		Text(
+			text = stringResource(label),
+			style = MaterialTheme.typography.labelMedium,
+			color = color,
+		)
+	}
+}
+
+@Composable
+private fun NovelPageReadingStatus(
+	chapterTitle: String,
+	progressLabel: String,
+	settings: NovelReaderSettings,
+) {
+	val palette = novelReaderPalette(settings.themePreset, isSystemInDarkTheme())
+	val contentColor = Color(palette.chromeTextColor).copy(alpha = 0.78f)
+	val backgroundColor = if (settings.isReadingStatusTransparent) {
+		Color.Transparent
+	} else {
+		Color(palette.chromeBackgroundColor).copy(alpha = 0.72f)
+	}
+	Surface(
+		color = backgroundColor,
+		contentColor = contentColor,
+		modifier = Modifier.fillMaxWidth(),
+	) {
+		Row(
+			horizontalArrangement = Arrangement.SpaceBetween,
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+		) {
+			Text(
+				text = chapterTitle,
+				style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+				maxLines = 1,
+				overflow = TextOverflow.Ellipsis,
+				modifier = Modifier.weight(1f),
+			)
+			Text(
+				text = progressLabel,
+				style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+				modifier = Modifier.padding(start = 10.dp),
+			)
 		}
 	}
 }
@@ -1350,7 +1436,13 @@ private fun NovelComposeImage(
 			}.getOrNull()
 		}
 	}
-	val clickModifier = if (onClick == null) Modifier else Modifier.clickable { onClick(path) }
+	val clickModifier = if (onClick == null) {
+		Modifier
+	} else {
+		Modifier.pointerInput(path, onClick) {
+			detectImageLongPress { onClick(path) }
+		}
+	}
 	if (bitmap != null) {
 		androidx.compose.foundation.Image(
 			bitmap = bitmap!!.asImageBitmap(),
@@ -1363,6 +1455,78 @@ private fun NovelComposeImage(
 			contentDescription = null,
 			modifier = clickModifier.fillMaxWidth(),
 		)
+	}
+}
+
+private suspend fun PointerInputScope.detectUnconsumedTapGestures(onTap: (Offset) -> Unit) {
+	awaitEachGesture {
+		val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
+		if (down.isConsumed) return@awaitEachGesture
+		val up = waitForUpOrCancellation(pass = PointerEventPass.Final)
+		if (up != null && !up.isConsumed) onTap(up.position)
+	}
+}
+
+private suspend fun PointerInputScope.detectDownwardPullGestures(
+	onPull: (Float) -> Unit,
+	onRelease: () -> Unit,
+	onCancel: () -> Unit,
+) {
+	awaitEachGesture {
+		val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+		var pullLocked = false
+		var released = false
+		var previousY = down.position.y
+		do {
+			val event = awaitPointerEvent(PointerEventPass.Initial)
+			val change = event.changes.firstOrNull { it.id == down.id } ?: break
+			if (!change.pressed) {
+				if (pullLocked) {
+					change.consume()
+					onRelease()
+					released = true
+				}
+				break
+			}
+			if (event.changes.count { it.pressed } > 1) {
+				if (pullLocked) event.changes.forEach { it.consume() }
+				break
+			}
+			if (pullLocked) {
+				val dragAmount = change.position.y - previousY
+				previousY = change.position.y
+				change.consume()
+				onPull(dragAmount)
+				continue
+			}
+
+			val totalX = change.position.x - down.position.x
+			val totalY = change.position.y - down.position.y
+			if (abs(totalX) <= viewConfiguration.touchSlop && abs(totalY) <= viewConfiguration.touchSlop) {
+				continue
+			}
+			if (totalY > viewConfiguration.touchSlop && totalY > abs(totalX)) {
+				pullLocked = true
+				previousY = change.position.y
+				change.consume()
+				onPull(totalY)
+			} else {
+				break
+			}
+		} while (true)
+		if (pullLocked && !released) onCancel()
+	}
+}
+
+private suspend fun PointerInputScope.detectImageLongPress(onLongPress: () -> Unit) {
+	awaitEachGesture {
+		val down = awaitFirstDown(requireUnconsumed = false)
+		if (awaitLongPressOrCancellation(down.id) == null) return@awaitEachGesture
+		onLongPress()
+		do {
+			val event = awaitPointerEvent(PointerEventPass.Main)
+			event.changes.forEach { it.consume() }
+		} while (event.changes.any { it.pressed })
 	}
 }
 
