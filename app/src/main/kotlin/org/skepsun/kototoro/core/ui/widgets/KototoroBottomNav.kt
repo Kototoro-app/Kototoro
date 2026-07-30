@@ -48,12 +48,14 @@ import com.google.android.material.navigation.NavigationBarView
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -491,18 +493,24 @@ private fun MainNavSurface(
     }
 }
 
+@Composable
 private fun Modifier.mainNavBackdrop(
     shape: Shape,
     enabled: Boolean,
     backdrop: com.kyant.backdrop.Backdrop?,
-): Modifier = then(
-    if (enabled && backdrop != null) {
+): Modifier {
+    val blurRadius = if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+        8.dp
+    } else {
+        4.dp
+    }
+    return then(if (enabled && backdrop != null) {
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
                 vibrancy()
-                blur(4.dp.toPx())
+                blur(blurRadius.toPx())
                 lens(
                     refractionHeight = 10.dp.toPx(),
                     refractionAmount = 12.dp.toPx(),
@@ -512,8 +520,8 @@ private fun Modifier.mainNavBackdrop(
         )
     } else {
         Modifier
-    },
-)
+    })
+}
 
 @Composable
 private fun ContinueReadingRailButton(

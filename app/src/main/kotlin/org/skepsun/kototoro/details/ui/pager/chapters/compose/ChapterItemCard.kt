@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.ui.graphics.luminance
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -39,7 +39,7 @@ fun ChapterListCard(
 	val alphaFactor = if (item.isUnread || item.isCurrent) 1.0f else 0.6f
 	val titleWeight = if (item.isCurrent) androidx.compose.ui.text.font.FontWeight.Bold else null
 	
-	val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+	val isDark = MaterialTheme.colorScheme.isDarkTheme()
 	val containerColor = when {
 		isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.5f else 0.7f)
 		else -> if (isDark) {

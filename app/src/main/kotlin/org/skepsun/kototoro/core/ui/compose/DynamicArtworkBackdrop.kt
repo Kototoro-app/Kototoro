@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
@@ -18,6 +19,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.artworkOverlayColor
 import org.skepsun.kototoro.parsers.model.Content
 
 internal val DynamicArtworkRequestSize = Size(width = 1280, height = 1280)
@@ -34,7 +36,7 @@ fun DynamicArtworkBackdrop(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isArtworkBackground) Color(0xFF08080C) else Color.Transparent),
+            .background(if (isArtworkBackground) MaterialTheme.colorScheme.background else Color.Transparent),
     ) {
         if (isArtworkBackground && !cover.isNullOrEmpty()) {
             Image(
@@ -56,7 +58,7 @@ fun DynamicArtworkBackdrop(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.74f)),
+                    .background(MaterialTheme.colorScheme.artworkOverlayColor()),
             )
         }
         children()

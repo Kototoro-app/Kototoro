@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -90,7 +91,6 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
-import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -150,6 +150,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.artworkOverlayColor
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -1223,9 +1224,7 @@ fun KototoroApp(
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val isDarkTheme = isSystemInDarkTheme()
-            val immersiveBaseColor = if (
-                isDarkTheme || LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
-            ) {
+            val immersiveBaseColor = if (isDarkTheme) {
                 Color.Black
             } else {
                 Color.White
@@ -1463,13 +1462,7 @@ fun KototoroApp(
             }
             Box(modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
-                        Color(0xFF08080C)
-                    } else {
-                        MaterialTheme.colorScheme.background
-                    }
-                )
+                .background(MaterialTheme.colorScheme.background)
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
                 .nestedScroll(nestedScrollConnection)
                 .onGloballyPositioned { coordinates ->
@@ -1507,7 +1500,7 @@ fun KototoroApp(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.74f))
+                                    .background(MaterialTheme.colorScheme.artworkOverlayColor())
                             )
                         }
                     }
@@ -2112,7 +2105,6 @@ private fun ContinueReadingFab(
         Box(
                 modifier = modifier
                     .size(56.dp)
-                    .glassContainerShadow(CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -2126,7 +2118,8 @@ private fun ContinueReadingFab(
                         vibrancy()
                         blur(4.dp.toPx())
                     },
-                ),
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

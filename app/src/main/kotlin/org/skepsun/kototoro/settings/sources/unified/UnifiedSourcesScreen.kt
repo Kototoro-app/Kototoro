@@ -85,9 +85,11 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.titleResId
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
@@ -128,6 +130,7 @@ private data class UnifiedSourcesVisualStyle(
 @Composable
 private fun rememberUnifiedSourcesVisualStyle(): UnifiedSourcesVisualStyle {
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	return UnifiedSourcesVisualStyle(
 		chipShape = RoundedCornerShape(if (expressive) 16.dp else 8.dp),
 		cardShape = RoundedCornerShape(if (expressive) 22.dp else 12.dp),
@@ -135,7 +138,7 @@ private fun rememberUnifiedSourcesVisualStyle(): UnifiedSourcesVisualStyle {
 		rowHorizontalPadding = if (expressive) 8.dp else 0.dp,
 		rowVerticalPadding = if (expressive) 3.dp else 0.dp,
 		iconShape = RoundedCornerShape(if (expressive) 12.dp else 8.dp),
-		cardElevation = if (expressive) 0.dp else 1.dp,
+		cardElevation = if (expressive || isIosStyle) 0.dp else 1.dp,
 	)
 }
 

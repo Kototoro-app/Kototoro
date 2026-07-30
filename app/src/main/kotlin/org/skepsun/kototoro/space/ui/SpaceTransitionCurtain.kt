@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +33,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -199,7 +199,7 @@ fun SpaceTransitionCurtain(
 	val targetLabel = state.targetSpaceId?.let { spaceDisplayLabel(it, target) }.orEmpty()
 	val description = "$fromLabel → $targetLabel"
 	val colorScheme = MaterialTheme.colorScheme
-	val isDarkTheme = colorScheme.background.luminance() < 0.5f
+	val isDarkTheme = colorScheme.isDarkTheme()
 	val curtainContentColor = if (isDarkTheme) Color.White else colorScheme.onSurface
 	Box(
 		modifier = modifier

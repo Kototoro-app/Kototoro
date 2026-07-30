@@ -70,7 +70,6 @@ fun KototoroTheme(
     }
     val backgroundStyle = selectedBackgroundStyle.takeIf {
         effectiveInterfaceStyle == InterfaceStyle.IOS ||
-            it != BackgroundStyle.DYNAMIC_ARTWORK_BLUR &&
             it != BackgroundStyle.DYNAMIC_TONAL_GLASS
     } ?: BackgroundStyle.DEFAULT
     val selectedColorScheme by settings.observeAsState(AppSettings.KEY_COLOR_THEME) {
@@ -292,7 +291,7 @@ private fun android.content.Context.resolveComposeColorScheme(
     val common = baseCommon
 
     val isArtworkBlur = backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
-    return if (darkTheme || isArtworkBlur) {
+    return if (darkTheme) {
         val onBackground = if (isArtworkBlur) Color.White else common.onBackground
         val onSurface = if (isArtworkBlur) Color.White else common.onSurface
         val onSurfaceVariant = if (isArtworkBlur) Color(0xFFE4E1E9) else common.onSurfaceVariant
@@ -320,7 +319,7 @@ private fun android.content.Context.resolveComposeColorScheme(
         val liftedSurfaceContainerLow = when (backgroundStyle) {
             BackgroundStyle.SYSTEM_DYNAMIC_TINT -> lerp(common.surfaceContainerLow.liftForDarkContrast(0.14f), common.primary, 0.08f)
             BackgroundStyle.ELEVATED_CONTAINERS -> Color(0xFF161616)
-            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF16161A).copy(alpha = 0.46f)
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> Color(0xFF16161A)
             BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFF1B1C21)
             else -> common.surfaceContainerLow.liftForDarkContrast(0.14f)
         }
@@ -430,7 +429,7 @@ private fun android.content.Context.resolveComposeColorScheme(
             else -> common.surfaceContainerLowest
         }
         val lightSurfaceContainerLow = when (backgroundStyle) {
-            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainerLow.copy(alpha = 0.50f)
+            BackgroundStyle.DYNAMIC_ARTWORK_BLUR -> common.surfaceContainerLow.copy(alpha = 1f)
             BackgroundStyle.DYNAMIC_TONAL_GLASS -> Color(0xFFEFEFF3)
             else -> common.surfaceContainerLow
         }

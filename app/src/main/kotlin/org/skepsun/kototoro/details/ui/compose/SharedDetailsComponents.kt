@@ -33,7 +33,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +50,7 @@ import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -265,7 +265,7 @@ fun DetailsCoverFrame(
                 }
             }
             if (!topBadgeText.isNullOrBlank()) {
-                val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+                val isDarkTheme = MaterialTheme.colorScheme.isDarkTheme()
                 val badgeContainerColor = if (isDarkTheme) {
                     MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
                 } else {

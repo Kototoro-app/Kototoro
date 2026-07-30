@@ -19,7 +19,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -34,10 +33,13 @@ import com.kyant.backdrop.shadow.Shadow
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 
 @Immutable
 data class GlassSurfaceColors(
@@ -104,7 +106,7 @@ object GlassDefaults {
     @Composable
     fun nestedCardColor(): Color {
         val colors = MaterialTheme.colorScheme
-        return if (colors.background.luminance() < 0.5f) {
+        return if (colors.isDarkTheme()) {
             colors.surfaceContainerHigh.copy(alpha = 0.78f)
         } else {
             colors.surface
@@ -114,7 +116,7 @@ object GlassDefaults {
     @Composable
     fun nestedCardBorderColor(): Color {
         val colors = MaterialTheme.colorScheme
-        val alpha = if (colors.background.luminance() < 0.5f) 0.28f else 0.18f
+        val alpha = if (colors.isDarkTheme()) 0.28f else 0.18f
         return colors.outlineVariant.copy(alpha = alpha)
     }
 }
@@ -151,13 +153,18 @@ fun GlassSurface(
     }
 
     val colors = MaterialTheme.colorScheme
-    val fallbackColor = if (isIosStyle) {
+    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
+        componentRole == GlassComponentRole.BottomBar
+    val fallbackColor = if (dialogSurface && isArtworkBackground) {
+        colors.surfaceContainer.copy(alpha = 1f)
+    } else if (!isIosStyle && isArtworkBackground) {
+        colors.surfaceContainer.copy(alpha = 1f)
+    } else if (isIosStyle) {
         colors.surfaceContainer.copy(alpha = if (dialogSurface) 0.98f else 0.94f)
     } else {
         colors.surfaceContainer
     }
-    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
-        componentRole == GlassComponentRole.BottomBar
     val fallbackBorder = if (!dialogSurface && !isNavigationChrome && style.borderAlpha > 0f) {
         BorderStroke(1.dp, colors.outlineVariant.copy(alpha = style.borderAlpha))
     } else {
@@ -200,7 +207,7 @@ fun LiquidGlassSurface(
 
     val exportedBackdrop = rememberLayerBackdrop()
     val colors = MaterialTheme.colorScheme
-    val isDark = colors.background.luminance() < 0.5f
+    val isDark = colors.isDarkTheme()
     val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
         componentRole == GlassComponentRole.BottomBar
     val surfaceAlpha = style.backdropSurfaceAlpha(isNavigationChrome)
@@ -324,7 +331,7 @@ fun rememberGlassSurfaceColors(
     glassPrefs: GlassPrefs = rememberGlassPrefsOrFallback(),
 ): GlassSurfaceColors {
     val colors = MaterialTheme.colorScheme
-    val isDark = colors.background.luminance() < 0.5f
+    val isDark = colors.isDarkTheme()
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     return remember(style, glassPrefs, colors, isDark, isIosStyle) {
         val base = when {

@@ -422,16 +422,16 @@ private class AppearanceSettingsCoordinator(
     private fun buildBackgroundStyleOptions(
         interfaceStyle: InterfaceStyle,
     ): List<SettingsChoiceOption<BackgroundStyle>> {
-        val materialStyles = listOf(
+        val commonStyles = listOf(
             SettingsChoiceOption(BackgroundStyle.DEFAULT, context.getString(R.string.bg_style_default)),
             SettingsChoiceOption(BackgroundStyle.SYSTEM_DYNAMIC_TINT, context.getString(R.string.bg_style_system_tint)),
             SettingsChoiceOption(BackgroundStyle.ELEVATED_CONTAINERS, context.getString(R.string.bg_style_elevated_containers)),
+            SettingsChoiceOption(BackgroundStyle.DYNAMIC_ARTWORK_BLUR, context.getString(R.string.bg_style_artwork_blur)),
         )
         if (interfaceStyle.normalized() != InterfaceStyle.IOS) {
-            return materialStyles
+            return commonStyles
         }
-        return materialStyles + listOf(
-            SettingsChoiceOption(BackgroundStyle.DYNAMIC_ARTWORK_BLUR, context.getString(R.string.bg_style_artwork_blur)),
+        return commonStyles + listOf(
             SettingsChoiceOption(BackgroundStyle.DYNAMIC_TONAL_GLASS, context.getString(R.string.bg_style_tonal_glass)),
         )
     }

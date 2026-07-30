@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import kotlinx.coroutines.delay
@@ -83,6 +84,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -531,8 +533,10 @@ internal fun TopBarControlSurface(
             GlassDefaults.topBarChromeStyle().copy(shadowElevation = shadowElevation)
     }
     val backdrop = LocalLiquidGlassBackdrop.current
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
     val useBackdrop = allowBackdrop &&
-        LocalInterfaceStyle.current == InterfaceStyle.IOS &&
+        isIosStyle &&
         backdrop != null
     if (useBackdrop) {
         GlassSurface(
@@ -543,11 +547,16 @@ internal fun TopBarControlSurface(
             content = content,
         )
     } else if (fallbackContainerColor != null) {
+        val effectiveFallbackContainerColor = if (!isIosStyle && isArtworkBackground) {
+            fallbackContainerColor.copy(alpha = 1f)
+        } else {
+            fallbackContainerColor
+        }
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Box(
                 modifier = modifier
                     .glassContainerShadow(shape, shadowElevation)
-                    .background(fallbackContainerColor, shape),
+                    .background(effectiveFallbackContainerColor, shape),
                 content = content,
             )
         }
