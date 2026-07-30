@@ -245,14 +245,146 @@ class ComposeReaderPageAnimationTest {
 	}
 
 	@Test
-	fun `page curl uses touched corner for horizontal reading`() {
-		val topRight = curl(progress = 0.5f)
-		val topLeft = curl(progress = 0.5f, isReversed = true)
+	fun `simulation keeps unfolding direction on the turning page`() {
+		val turning = resolve(
+			ReaderAnimation.SIMULATION,
+			pageOffset = -0.5f,
+			isCurlUnfolding = true,
+		)
+		val revealed = resolve(
+			ReaderAnimation.SIMULATION,
+			pageOffset = 0.5f,
+			isCurlUnfolding = true,
+		)
 
-		assertTrue(topRight.topCurlOffset.x >= 0f)
-		assertTrue(topRight.bottomCurlOffset.x >= 0f)
-		assertTrue(topLeft.topCurlOffset.x <= 1000f)
-		assertTrue(topLeft.bottomCurlOffset.x <= 1000f)
+		assertTrue(turning.isCurlUnfolding)
+		assertEquals(false, revealed.isCurlUnfolding)
+	}
+
+	@Test
+	fun `horizontal page curl follows vertical drag origin`() {
+		val top = curl(progress = 0.5f, touchFraction = Offset(0.75f, 0.15f))
+		val middle = curl(progress = 0.5f, touchFraction = Offset(0.75f, 0.5f))
+		val bottom = curl(progress = 0.5f, touchFraction = Offset(0.75f, 0.85f))
+
+		assertTrue(top.topCurlOffset.x < top.bottomCurlOffset.x)
+		assertEquals(middle.topCurlOffset.x, middle.bottomCurlOffset.x, 0.001f)
+		assertTrue(bottom.topCurlOffset.x > bottom.bottomCurlOffset.x)
+	}
+
+	@Test
+	fun `backward page curl mirrors vertical drag origin`() {
+		val top = curl(progress = 0.5f, touchFraction = Offset(0.25f, 0.15f), isReversed = true)
+		val middle = curl(progress = 0.5f, touchFraction = Offset(0.25f, 0.5f), isReversed = true)
+		val bottom = curl(progress = 0.5f, touchFraction = Offset(0.25f, 0.85f), isReversed = true)
+
+		assertTrue(top.topCurlOffset.x > top.bottomCurlOffset.x)
+		assertEquals(middle.topCurlOffset.x, middle.bottomCurlOffset.x, 0.001f)
+		assertTrue(bottom.topCurlOffset.x < bottom.bottomCurlOffset.x)
+	}
+
+	@Test
+	fun `unfolding page curl aligns the entering edge with drag origin`() {
+		val foldingBottom = curl(progress = 0.5f, touchFraction = Offset(0.75f, 0.85f))
+		val unfoldingBottom = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.75f, 0.85f),
+			isCurlUnfolding = true,
+		)
+		val reversedUnfoldingBottom = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.25f, 0.85f),
+			isReversed = true,
+			isCurlUnfolding = true,
+		)
+
+		assertTrue(foldingBottom.topCurlOffset.x > foldingBottom.bottomCurlOffset.x)
+		assertTrue(unfoldingBottom.topCurlOffset.x < unfoldingBottom.bottomCurlOffset.x)
+		assertTrue(reversedUnfoldingBottom.topCurlOffset.x > reversedUnfoldingBottom.bottomCurlOffset.x)
+	}
+
+	@Test
+	fun `vertical page curl follows horizontal drag origin`() {
+		val left = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.15f, 0.75f),
+			isVertical = true,
+		)
+		val middle = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.5f, 0.75f),
+			isVertical = true,
+		)
+		val right = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.85f, 0.75f),
+			isVertical = true,
+		)
+
+		assertTrue(left.topCurlOffset.y < left.bottomCurlOffset.y)
+		assertEquals(middle.topCurlOffset.y, middle.bottomCurlOffset.y, 0.001f)
+		assertTrue(right.topCurlOffset.y > right.bottomCurlOffset.y)
+	}
+
+	@Test
+	fun `vertical unfolding curl reverses horizontal corner bias`() {
+		val foldingLeft = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.15f, 0.75f),
+			isVertical = true,
+		)
+		val unfoldingLeft = curl(
+			progress = 0.5f,
+			touchFraction = Offset(0.15f, 0.75f),
+			isVertical = true,
+			isCurlUnfolding = true,
+		)
+
+		assertTrue(foldingLeft.topCurlOffset.y < foldingLeft.bottomCurlOffset.y)
+		assertTrue(unfoldingLeft.topCurlOffset.y > unfoldingLeft.bottomCurlOffset.y)
+	}
+
+	@Test
+	fun `horizontal page curl center moves monotonically in both directions`() {
+		listOf(0.15f, 0.5f, 0.85f).forEach { startY ->
+			listOf(false, true).forEach { isReversed ->
+				val centers = (0..100).map { step ->
+					val geometry = curl(
+						progress = step / 100f,
+						touchFraction = Offset(0.75f, startY),
+						isReversed = isReversed,
+					)
+					(geometry.topCurlOffset.x + geometry.bottomCurlOffset.x) / 2f
+				}
+				centers.zipWithNext().forEach { (current, next) ->
+					val movesForward = if (isReversed) next >= current - 0.001f else next <= current + 0.001f
+					assertTrue(
+						movesForward,
+						"startY=$startY reversed=$isReversed current=$current next=$next",
+					)
+				}
+			}
+		}
+	}
+
+	@Test
+	fun `vertical page curl center moves monotonically for every drag origin`() {
+		listOf(0.15f, 0.5f, 0.85f).forEach { startX ->
+			val centers = (0..100).map { step ->
+				val geometry = curl(
+					progress = step / 100f,
+					touchFraction = Offset(startX, 0.75f),
+					isVertical = true,
+				)
+				(geometry.topCurlOffset.y + geometry.bottomCurlOffset.y) / 2f
+			}
+			centers.zipWithNext().forEach { (current, next) ->
+				assertTrue(
+					next <= current + 0.001f,
+					"startX=$startX current=$current next=$next",
+				)
+			}
+		}
 	}
 
 	@Test
@@ -307,9 +439,56 @@ class ComposeReaderPageAnimationTest {
 	}
 
 	@Test
+	fun `page curl unfolding follows target page with drag fallback`() {
+		assertTrue(
+			resolvePageCurlUnfolding(
+				settledPage = 4,
+				targetPage = 3,
+				horizontalDragFraction = 0f,
+				isReadingReversed = false,
+			),
+		)
+		assertEquals(
+			false,
+			resolvePageCurlUnfolding(
+				settledPage = 4,
+				targetPage = 5,
+				horizontalDragFraction = 0f,
+				isReadingReversed = false,
+			),
+		)
+		assertTrue(
+			resolvePageCurlUnfolding(
+				settledPage = 4,
+				targetPage = 4,
+				horizontalDragFraction = 0.1f,
+				isReadingReversed = false,
+			),
+		)
+		assertTrue(
+			resolvePageCurlUnfolding(
+				settledPage = 4,
+				targetPage = 4,
+				horizontalDragFraction = -0.1f,
+				isReadingReversed = true,
+			),
+		)
+		assertTrue(
+			resolvePageCurlUnfolding(
+				settledPage = 4,
+				targetPage = 4,
+				horizontalDragFraction = 0f,
+				isReadingReversed = false,
+				verticalDragFraction = 0.1f,
+				isVertical = true,
+			),
+		)
+	}
+
+	@Test
 	fun `horizontal curl starts from selected page edge`() {
 		assertEquals(
-			Offset(1f, 1f),
+			Offset(1f, 0.85f),
 			resolvePageCurlStartFraction(
 				downFraction = Offset(0.62f, 0.85f),
 				isVertical = false,
@@ -317,7 +496,7 @@ class ComposeReaderPageAnimationTest {
 			),
 		)
 		assertEquals(
-			Offset(0f, 0f),
+			Offset(0f, 0.15f),
 			resolvePageCurlStartFraction(
 				downFraction = Offset(0.88f, 0.15f),
 				isVertical = false,
@@ -334,25 +513,30 @@ class ComposeReaderPageAnimationTest {
 		navigationProgress: Float = 0f,
 		isSettledPage: Boolean = false,
 		isIncomingPage: Boolean = false,
+		isCurlUnfolding: Boolean = false,
 	) = resolveComposeReaderPageTransform(
-		animation,
-		pageOffset,
-		isVertical,
-		isReversed,
-		navigationProgress,
-		isSettledPage,
-		isIncomingPage,
+		animation = animation,
+		pageOffset = pageOffset,
+		isVertical = isVertical,
+		isReversed = isReversed,
+		navigationProgress = navigationProgress,
+		isSettledPage = isSettledPage,
+		isIncomingPage = isIncomingPage,
+		isCurlUnfolding = isCurlUnfolding,
 	)
 
 	private fun curl(
 		progress: Float,
+		touchFraction: Offset = Offset(0.75f, 0.85f),
 		isVertical: Boolean = false,
 		isReversed: Boolean = false,
+		isCurlUnfolding: Boolean = false,
 	) = calculatePageCurlGeometry(
 		size = Size(1000f, 1600f),
 		progress = progress,
-		touchFraction = Offset(0.75f, 0.85f),
+		touchFraction = touchFraction,
 		isVertical = isVertical,
 		isReversed = isReversed,
+		isCurlUnfolding = isCurlUnfolding,
 	)
 }

@@ -272,6 +272,14 @@ fun ComposePagedReader(
 	LaunchedEffect(pagerState.isScrollInProgress) {
 		if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
 	}
+	val isSimulationCurlUnfolding = resolvePageCurlUnfolding(
+		settledPage = pagerState.settledPage,
+		targetPage = pagerState.targetPage,
+		horizontalDragFraction = pageCurlState.horizontalDragFraction,
+		isReadingReversed = reverseLayout && !isVertical,
+		verticalDragFraction = pageCurlState.verticalDragFraction,
+		isVertical = isVertical,
+	)
 
 	val pageContent: @Composable PagerScope.(Int) -> Unit = { position ->
 		val page = displayedPages[position]
@@ -318,6 +326,7 @@ fun ComposePagedReader(
 					effectiveAdvancedAnchorPage == position,
 				isIncomingPage = pageAnimation == ReaderAnimation.ADVANCED &&
 					advancedIncomingPage == position,
+				isCurlUnfolding = isSimulationCurlUnfolding,
 			)
 		}
 		Box(
@@ -1199,6 +1208,12 @@ fun ComposeDoublePageReader(
 	LaunchedEffect(pagerState.isScrollInProgress) {
 		if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
 	}
+	val isSimulationCurlUnfolding = resolvePageCurlUnfolding(
+		settledPage = pagerState.settledPage,
+		targetPage = pagerState.targetPage,
+		horizontalDragFraction = pageCurlState.horizontalDragFraction,
+		isReadingReversed = reverseLayout,
+	)
 
 	LaunchedEffect(pageKeys, requestedPage) {
 		if (requestedPage == null) {
@@ -1545,6 +1560,7 @@ fun ComposeDoublePageReader(
 					effectiveAdvancedAnchorSpread == spreadIndex,
 				isIncomingPage = pageAnimation == ReaderAnimation.ADVANCED &&
 					advancedIncomingSpread == spreadIndex,
+				isCurlUnfolding = isSimulationCurlUnfolding,
 			)
 			}
 			val spreadBackground = resolveSpreadBackground(spreadIndex)

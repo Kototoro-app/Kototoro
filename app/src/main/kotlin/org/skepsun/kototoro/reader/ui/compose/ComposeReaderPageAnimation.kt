@@ -36,6 +36,7 @@ internal data class ComposeReaderPageTransform(
 	val transformOrigin: TransformOrigin = TransformOrigin.Center,
 	val zIndex: Float = 0f,
 	val foldProgress: Float = 0f,
+	val isCurlUnfolding: Boolean = false,
 	val revealedPageShade: Float = 0f,
 )
 
@@ -47,6 +48,7 @@ internal fun resolveComposeReaderPageTransform(
 	navigationProgress: Float = 0f,
 	isSettledPage: Boolean = false,
 	isIncomingPage: Boolean = false,
+	isCurlUnfolding: Boolean = false,
 ): ComposeReaderPageTransform = when (animation) {
 	ReaderAnimation.DEFAULT -> ComposeReaderPageTransform()
 	ReaderAnimation.NONE -> ComposeReaderPageTransform(
@@ -63,7 +65,12 @@ internal fun resolveComposeReaderPageTransform(
 		isIncomingPage = isIncomingPage,
 		isReversed = isReversed,
 	)
-	ReaderAnimation.SIMULATION -> resolveSimulationPageTransform(pageOffset, isVertical, isReversed)
+	ReaderAnimation.SIMULATION -> resolveSimulationPageTransform(
+		pageOffset = pageOffset,
+		isVertical = isVertical,
+		isReversed = isReversed,
+		isCurlUnfolding = isCurlUnfolding,
+	)
 }
 
 private fun resolveCoverPageTransform(
@@ -134,6 +141,7 @@ private fun resolveSimulationPageTransform(
 	pageOffset: Float,
 	isVertical: Boolean,
 	isReversed: Boolean,
+	isCurlUnfolding: Boolean,
 ): ComposeReaderPageTransform {
 	val reversed = isReversed && !isVertical
 	val isTurningPage = if (reversed) pageOffset >= 0f else pageOffset <= 0f
@@ -154,6 +162,7 @@ private fun resolveSimulationPageTransform(
 		// pager's own background so its image content remains drawable.
 		zIndex = if (isTurningPage) 1f else 0f,
 		foldProgress = foldProgress,
+		isCurlUnfolding = isTurningPage && isCurlUnfolding,
 		revealedPageShade = revealedPageShade,
 	)
 }
@@ -167,6 +176,8 @@ internal class ComposeReaderPageCurlState internal constructor() {
 
 	val horizontalDragFraction: Float
 		get() = touchFraction.x - downFraction.x
+	val verticalDragFraction: Float
+		get() = touchFraction.y - downFraction.y
 
 	internal fun beginTouch(position: Offset, viewport: Size) {
 		val fraction = position.toTouchFraction(viewport) ?: return
@@ -233,9 +244,14 @@ internal fun Modifier.composeReaderPageCurl(
 		val geometry = calculatePageCurlGeometry(
 			size = size,
 			progress = transform.foldProgress,
-			touchFraction = state.touchFraction,
+			touchFraction = resolvePageCurlStartFraction(
+				downFraction = state.downFraction,
+				isVertical = isVertical,
+				curlFromStart = curlFromStart,
+			),
 			isVertical = isVertical,
 			isReversed = curlFromStart,
+			isCurlUnfolding = transform.isCurlUnfolding,
 		)
 		val frontPath = geometry.frontPath.toPath()
 		val backPath = geometry.backPath.toPath()
@@ -276,6 +292,21 @@ internal fun resolvePageCurlFromStart(
 	horizontalDragFraction: Float,
 ): Boolean = isReadingReversed
 
+internal fun resolvePageCurlUnfolding(
+	settledPage: Int,
+	targetPage: Int,
+	horizontalDragFraction: Float,
+	isReadingReversed: Boolean,
+	verticalDragFraction: Float = 0f,
+	isVertical: Boolean = false,
+): Boolean = when {
+	targetPage < settledPage -> true
+	targetPage > settledPage -> false
+	isVertical -> verticalDragFraction > PAGE_CURL_DRAG_EPSILON
+	isReadingReversed -> horizontalDragFraction < -PAGE_CURL_DRAG_EPSILON
+	else -> horizontalDragFraction > PAGE_CURL_DRAG_EPSILON
+}
+
 internal fun resolvePageCurlStartFraction(
 	downFraction: Offset,
 	isVertical: Boolean,
@@ -284,7 +315,7 @@ internal fun resolvePageCurlStartFraction(
 	if (isVertical) return downFraction
 	return Offset(
 		x = if (curlFromStart) 0f else 1f,
-		y = if (downFraction.y < 0.5f) 0f else 1f,
+		y = downFraction.y,
 	)
 }
 
@@ -303,7 +334,7 @@ internal fun calculatePageCurlGeometry(
 	touchFraction: Offset,
 	isVertical: Boolean,
 	isReversed: Boolean,
-	followTouch: Boolean = false,
+	isCurlUnfolding: Boolean = false,
 ): ComposeReaderPageCurlGeometry {
 	val canonicalWidth = if (isVertical) size.height else size.width
 	val canonicalHeight = if (isVertical) size.width else size.height
@@ -317,7 +348,15 @@ internal fun calculatePageCurlGeometry(
 			curlLineVector = Offset.Zero,
 		)
 	}
-	val edge = calculatePageCurlEdge(canonicalWidth, canonicalHeight, progress, isReversed)
+	val edge = calculatePageCurlEdge(
+		width = canonicalWidth,
+		height = canonicalHeight,
+		progress = progress,
+		startFraction = (if (isVertical) touchFraction.x else touchFraction.y).let { dragOrigin ->
+			if (isCurlUnfolding) 1f - dragOrigin else dragOrigin
+		},
+		isReversed = isReversed,
+	)
 	val topIntersection = lineLineIntersection(
 		Offset(0f, 0f), Offset(canonicalWidth, 0f), edge.top, edge.bottom,
 	) ?: edge.top
@@ -378,17 +417,37 @@ private fun calculatePageCurlEdge(
 	width: Float,
 	height: Float,
 	progress: Float,
+	startFraction: Float,
 	isReversed: Boolean,
 ): PageCurlEdge {
 	val start = PageCurlEdge(Offset(width, 0f), Offset(width, height))
 	val middle = PageCurlEdge(Offset(width, height / 2f), Offset(width / 2f, height))
 	val end = PageCurlEdge(Offset(0f, 0f), Offset(0f, height))
 	val normalized = progress.coerceIn(0f, 1f)
-	val edge = if (normalized <= 1f / 3f) {
+	val bottomEdge = if (normalized <= 1f / 3f) {
 		lerpEdge(start, middle, normalized * 3f)
 	} else {
 		lerpEdge(middle, end, (normalized - 1f / 3f) * 1.5f)
 	}
+	val topIntersection = lineLineIntersection(
+		Offset.Zero,
+		Offset(width, 0f),
+		bottomEdge.top,
+		bottomEdge.bottom,
+	) ?: bottomEdge.top
+	val bottomIntersection = lineLineIntersection(
+		Offset(0f, height),
+		Offset(width, height),
+		bottomEdge.top,
+		bottomEdge.bottom,
+	) ?: bottomEdge.bottom
+	val centerX = lerp(width, 0f, normalized)
+	val cornerBias = startFraction.coerceIn(0f, 1f) * 2f - 1f
+	val halfSlope = (topIntersection.x - bottomIntersection.x) / 2f * cornerBias
+	val edge = PageCurlEdge(
+		top = Offset(centerX + halfSlope, 0f),
+		bottom = Offset(centerX - halfSlope, height),
+	)
 	return if (isReversed) {
 		PageCurlEdge(
 			top = Offset(width - edge.top.x, edge.top.y),
@@ -501,6 +560,8 @@ private fun List<Offset>.toPath(): Path = Path().apply {
 }
 
 internal const val READER_PAGE_CAMERA_DISTANCE = 20_000f
+
+private const val PAGE_CURL_DRAG_EPSILON = 0.001f
 
 private fun lerp(start: Float, stop: Float, fraction: Float): Float = start + (stop - start) * fraction
 

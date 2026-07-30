@@ -102,6 +102,7 @@ import org.skepsun.kototoro.reader.ui.compose.ComposeReaderSimulationPageShadow
 import org.skepsun.kototoro.reader.ui.compose.composeReaderPageCurl
 import org.skepsun.kototoro.reader.ui.compose.rememberComposeReaderPageCurlState
 import org.skepsun.kototoro.reader.ui.compose.resolveComposeReaderPageTransform
+import org.skepsun.kototoro.reader.ui.compose.resolvePageCurlUnfolding
 import org.skepsun.kototoro.reader.ui.compose.trackComposeReaderPageCurl
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -998,6 +999,12 @@ private fun ComposeNovelPagedChapter(
 		LaunchedEffect(pagerState.isScrollInProgress) {
 			if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
 		}
+		val isSimulationCurlUnfolding = resolvePageCurlUnfolding(
+			settledPage = pagerState.settledPage,
+			targetPage = pagerState.targetPage,
+			horizontalDragFraction = pageCurlState.horizontalDragFraction,
+			isReadingReversed = false,
+		)
 			HorizontalPager(
 			state = pagerState,
 			pageSize = if (dualPage) PageSize.Fixed(maxWidth / 2) else PageSize.Fill,
@@ -1036,6 +1043,7 @@ private fun ComposeNovelPagedChapter(
 					pageOffset = offset,
 					isVertical = false,
 					isReversed = dualPage && !curlOnEnd,
+					isCurlUnfolding = isSimulationCurlUnfolding,
 				)
 			}
 			val pageModifier = if (simulationTransform != null) {
