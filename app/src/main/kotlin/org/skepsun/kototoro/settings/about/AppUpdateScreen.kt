@@ -103,6 +103,7 @@ fun AppUpdateScreen(
 			Text(
 				text = stringResource(R.string.app_update_available),
 				style = MaterialTheme.typography.headlineSmall,
+				color = MaterialTheme.colorScheme.onBackground,
 				textAlign = TextAlign.Center,
 				modifier = Modifier.padding(top = 16.dp),
 			)
