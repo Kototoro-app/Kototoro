@@ -9,14 +9,19 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okio.BufferedSource
+import okio.buffer
+import okio.gzip
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.mihon.MihonExtensionLoader
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionLoader
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 
 @Singleton
 class ExtensionRepoService @Inject constructor(
@@ -127,14 +132,47 @@ class ExtensionRepoService @Inject constructor(
 			)
 		}
 
+		if (isProtobufIndexUrl(baseUrl)) {
+			val index = withTimeout(REPO_DETAILS_TIMEOUT_MS) {
+				fetchMihonExtensionStoreIndex(baseUrl)
+			}
+			val now = System.currentTimeMillis()
+			return ExternalExtensionRepo(
+				type = type,
+				baseUrl = baseUrl,
+				name = index.name,
+				shortName = index.badgeLabel,
+				website = index.contact.website,
+				signingKeyFingerprint = index.signingKey,
+				createdAt = now,
+				updatedAt = now,
+				lastSuccessAt = now,
+				lastError = null,
+			)
+		}
+
 		val repoJsonUrl = applyMirror("$baseUrl/repo.json")
 		val startedAt = System.currentTimeMillis()
 		Log.d(TAG, "fetchRepoDetails:start type=$type url=$repoJsonUrl")
 		return withTimeout(REPO_DETAILS_TIMEOUT_MS) {
-			val body = httpClient.newCall(GET(repoJsonUrl)).awaitSuccess().use { response ->
-				response.body.string()
+			val body = runCatching {
+				httpClient.newCall(GET(repoJsonUrl)).awaitSuccess().use { response ->
+					response.body.string()
+				}
+			}.getOrElse { error ->
+				if (type == ExternalExtensionType.MIHON || type == ExternalExtensionType.ANIYOMI) {
+					return@withTimeout fetchRepoDetails("$baseUrl/index.pb", type)
+				}
+				throw error
 			}
 			val dto = json.decodeFromString<RepoMetaWrapperDto>(body)
+			dto.indexV2?.let { indexV2 ->
+				val resolvedIndexUrl = repoJsonUrl.toHttpUrlOrNull()
+					?.resolve(indexV2)
+					?.toString()
+					?: indexV2
+				return@withTimeout fetchRepoDetails(resolvedIndexUrl, type)
+			}
 			val now = System.currentTimeMillis()
 			ExternalExtensionRepo(
 				type = type,
@@ -162,6 +200,9 @@ class ExtensionRepoService @Inject constructor(
 	}
 
 	suspend fun fetchAvailableExtensionsOrThrow(repo: ExternalExtensionRepo): List<RepoAvailableExtension> {
+		if (isProtobufIndexUrl(repo.baseUrl)) {
+			return fetchProtobufExtensions(repo)
+		}
 		val indexUrls = if (repo.type == ExternalExtensionType.CLOUDSTREAM) {
 			fetchCloudstreamPluginListUrls(repo)
 		} else {
@@ -204,11 +245,18 @@ class ExtensionRepoService @Inject constructor(
 			)
 			extensions
 		} catch (error: Throwable) {
+			if (error is CancellationException) throw error
 			Log.e(
 				TAG,
 				"fetchAvailableExtensions:failed type=${repo.type} baseUrl=${repo.baseUrl} elapsedMs=${System.currentTimeMillis() - startedAt} message=${error.message}",
 				error,
 			)
+			if (repo.type == ExternalExtensionType.MIHON || repo.type == ExternalExtensionType.ANIYOMI) {
+				return fetchProtobufExtensions(
+					repo = repo,
+					indexUrl = "${repo.baseUrl}/index.pb",
+				)
+			}
 			throw error
 		}
 	}
@@ -231,7 +279,7 @@ class ExtensionRepoService @Inject constructor(
 			.filter { it.isNotEmpty() }
 			.toMutableList()
 		val lastSegment = normalizedSegments.lastOrNull()
-		if (lastSegment != "index.min.json" && lastSegment != "plugins.json") {
+		if (lastSegment != "index.min.json" && lastSegment != "index.pb" && lastSegment != "plugins.json") {
 			normalizedSegments += "index.min.json"
 		}
 		val normalizedPath = "/" + normalizedSegments.joinToString("/")
@@ -245,6 +293,13 @@ class ExtensionRepoService @Inject constructor(
 
 	fun baseUrlFromIndexUrl(indexUrl: String): String {
 		val url = indexUrl.toHttpUrlOrNull()
+		if (url != null && isProtobufIndexUrl(url.toString())) {
+			return url.newBuilder()
+				.fragment(null)
+				.query(null)
+				.build()
+				.toString()
+		}
 		if (url != null && looksLikeCloudstreamRepoUrl(url)) {
 			return url.newBuilder()
 				.fragment(null)
@@ -299,6 +354,100 @@ class ExtensionRepoService @Inject constructor(
 			signatureHash = if (repo.type == ExternalExtensionType.JAR) "" else repo.signingKeyFingerprint,
 			isCompatible = supported,
 		)
+	}
+
+	private suspend fun fetchProtobufExtensions(
+		repo: ExternalExtensionRepo,
+		indexUrl: String = repo.baseUrl,
+	): List<RepoAvailableExtension> {
+		val startedAt = System.currentTimeMillis()
+		Log.d(TAG, "fetchAvailableExtensions:start type=${repo.type} urls=[$indexUrl]")
+		return try {
+			val extensions = withTimeout(CATALOG_TIMEOUT_MS) {
+				val index = fetchMihonExtensionStoreIndex(indexUrl)
+				val extensionList = index.extensionList ?: index.extensionListUrl?.let { listUrl ->
+					fetchMihonExtensionList(pluginUrlFrom(indexUrl, listUrl))
+				} ?: error("Mihon extension store does not contain an extension list")
+				extensionList.extensions.mapNotNull { extension ->
+					extension.toAvailableExtension(repo)
+				}
+			}
+			Log.d(
+				TAG,
+				"fetchAvailableExtensions:success type=${repo.type} baseUrl=${repo.baseUrl} " +
+					"count=${extensions.size} elapsedMs=${System.currentTimeMillis() - startedAt}",
+			)
+			extensions
+		} catch (error: Throwable) {
+			Log.e(
+				TAG,
+				"fetchAvailableExtensions:failed type=${repo.type} baseUrl=${repo.baseUrl} " +
+					"elapsedMs=${System.currentTimeMillis() - startedAt} message=${error.message}",
+				error,
+			)
+			throw error
+		}
+	}
+
+	private suspend fun fetchMihonExtensionStoreIndex(indexUrl: String): MihonExtensionStoreIndex {
+		val bytes = httpClient.newCall(GET(applyMirror(indexUrl))).awaitSuccess().use { response ->
+			response.body.source().decompressIfGzipped().use { source -> source.readByteArray() }
+		}
+		return ProtoBuf.decodeFromByteArray(MihonExtensionStoreIndex.serializer(), bytes)
+	}
+
+	private suspend fun fetchMihonExtensionList(listUrl: String): MihonExtensionStoreIndex.ExtensionList {
+		val bytes = httpClient.newCall(GET(applyMirror(listUrl))).awaitSuccess().use { response ->
+			response.body.source().decompressIfGzipped().use { source -> source.readByteArray() }
+		}
+		return ProtoBuf.decodeFromByteArray(MihonExtensionStoreIndex.ExtensionList.serializer(), bytes)
+	}
+
+	private fun MihonExtensionStoreIndex.Extension.toAvailableExtension(
+		repo: ExternalExtensionRepo,
+	): RepoAvailableExtension? {
+		val libVersion = extensionLib.toDoubleOrNull() ?: return null
+		val supported = when (repo.type) {
+			ExternalExtensionType.MIHON ->
+				libVersion in MihonExtensionLoader.LIB_VERSION_MIN..MihonExtensionLoader.LIB_VERSION_MAX
+			ExternalExtensionType.ANIYOMI ->
+				libVersion in AniyomiExtensionLoader.LIB_VERSION_MIN..AniyomiExtensionLoader.LIB_VERSION_MAX
+			else -> true
+		}
+		val languages = sources.map { it.language }.toSet()
+		val archiveUrl = applyMirror(resources.apkUrl)
+		return RepoAvailableExtension(
+			type = repo.type,
+			name = name,
+			pkgName = packageName,
+			versionName = versionName,
+			versionCode = versionCode,
+			libVersion = libVersion,
+			lang = languages.singleOrNull() ?: "all",
+			isNsfw = contentWarning >= MihonExtensionStoreIndex.ContentWarning.MIXED,
+			sourceNames = sources.map { it.name },
+			archiveName = archiveUrl.substringAfterLast('/').substringBefore('?').ifBlank { "$packageName.apk" },
+			archiveUrl = archiveUrl,
+			iconUrl = applyMirror(resources.iconUrl),
+			repoUrl = repo.baseUrl,
+			repoName = repo.displayName,
+			signatureHash = repo.signingKeyFingerprint,
+			isCompatible = supported,
+		)
+	}
+
+	private fun BufferedSource.decompressIfGzipped(): BufferedSource {
+		val isGzip = peek().use { peeked ->
+			runCatching { peeked.readShort().toInt() == GZIP_MAGIC }.getOrDefault(false)
+		}
+		return if (isGzip) gzip().buffer() else this
+	}
+
+	private fun isProtobufIndexUrl(url: String): Boolean {
+		return url.toHttpUrlOrNull()
+			?.pathSegments
+			?.lastOrNull()
+			?.equals("index.pb", ignoreCase = true) == true
 	}
 
 	private fun IReaderExtensionIndexDto.toAvailableExtension(repo: ExternalExtensionRepo): RepoAvailableExtension {
@@ -533,6 +682,8 @@ class ExtensionRepoService @Inject constructor(
 	@Keep
 	@Serializable
 	private data class RepoMetaWrapperDto(
+		@SerialName("index_v2")
+		val indexV2: String? = null,
 		val meta: RepoMetaDto,
 	)
 
@@ -625,6 +776,7 @@ class ExtensionRepoService @Inject constructor(
 
 	private companion object {
 		const val TAG = "ExtensionRepo"
+		const val GZIP_MAGIC = 0x1f8b
 		const val REPO_DETAILS_TIMEOUT_MS = 15_000L
 		const val CATALOG_TIMEOUT_MS = 20_000L
 	}

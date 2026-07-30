@@ -78,6 +78,6 @@ features:
 
 These repositories matter because they are the most common entry points for real device setups.
 
-- Mihon: [Keiyoushi Extensions](https://github.com/keiyoushi/extensions), [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions), [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
+- Mihon: [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source), [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions), [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
 - Aniyomi: [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source), [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
 - Legado: [XIU2 Yuedu](https://github.com/XIU2/Yuedu)

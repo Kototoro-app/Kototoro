@@ -195,7 +195,7 @@ object UnifiedRecommendedRepositories {
 		UnifiedRecommendedRepository(
 			kind = UnifiedSourceKind.MIHON,
 			name = "Keiyoushi",
-			url = "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json",
+			url = "https://github.com/keiyoushi/extensions/raw/repo/index.pb",
 			locationType = UnifiedRepositoryLocationType.REMOTE_URL,
 			capabilities = extensionRepoCapabilities,
 		),

@@ -58,7 +58,7 @@ This is the highly recommended way to start using Kototoro, ensuring you have th
 
 Common Mihon extension repositories:
 
-- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions)
+- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source)
 - [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions)
 - [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
 

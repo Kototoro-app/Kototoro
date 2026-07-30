@@ -16,6 +16,8 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.ResponseBody.Companion.toResponseBody
 import io.mockk.mockk
 import org.skepsun.kototoro.core.prefs.AppSettings
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 
 class ExtensionRepoServiceTest : FunSpec({
 
@@ -50,6 +52,16 @@ class ExtensionRepoServiceTest : FunSpec({
 	test("baseUrlFromIndexUrl strips standard index file for non cloudstream repositories") {
 		service.baseUrlFromIndexUrl("https://example.org/extensions/index.min.json") shouldBe
 			"https://example.org/extensions"
+	}
+
+	test("normalizeIndexUrl preserves protobuf index url") {
+		service.normalizeIndexUrl(" https://example.org/extensions/index.pb?foo=1#bar ") shouldBe
+			"https://example.org/extensions/index.pb"
+	}
+
+	test("baseUrlFromIndexUrl preserves protobuf index url") {
+		service.baseUrlFromIndexUrl("https://example.org/extensions/index.pb") shouldBe
+			"https://example.org/extensions/index.pb"
 	}
 
 	test("normalizeIndexUrl keeps cloudstream root urls when type is cloudstream") {
@@ -194,6 +206,171 @@ class ExtensionRepoServiceTest : FunSpec({
 
 			extensions[1].name shouldBe "Legacy"
 			extensions[1].isCompatible.shouldBeFalse()
+		}
+	}
+
+	test("fetchRepoDetails follows legacy index_v2 protobuf url") {
+		runBlocking {
+			val index = MihonExtensionStoreIndex(
+				name = "Keiyoushi",
+				badgeLabel = "KEI",
+				signingKey = "AA:BB:CC",
+				contact = MihonExtensionStoreIndex.Contact(
+					website = "https://keiyoushi.github.io",
+				),
+				extensionList = MihonExtensionStoreIndex.ExtensionList(emptyList()),
+			)
+			val encoded = kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(
+				MihonExtensionStoreIndex.serializer(),
+				index,
+			).gzip()
+			val indexUrl = server.url("/mihon/index.pb").toString()
+			server.enqueue(
+				MockResponse().setBody(
+					"""
+					{
+					  "index_v2": "$indexUrl",
+					  "meta": {
+					    "name": "Legacy",
+					    "website": "https://legacy.example",
+					    "signingKeyFingerprint": "legacy"
+					  }
+					}
+					""".trimIndent(),
+				),
+			)
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded)))
+
+			val repo = service.fetchRepoDetails(
+				baseUrl = server.url("/mihon").toString().removeSuffix("/"),
+				type = ExternalExtensionType.MIHON,
+			)
+
+			repo.baseUrl shouldBe indexUrl
+			repo.name shouldBe "Keiyoushi"
+			repo.shortName shouldBe "KEI"
+			server.takeRequest().path shouldBe "/mihon/repo.json"
+			server.takeRequest().path shouldBe "/mihon/index.pb"
+		}
+	}
+
+	test("fetchRepoDetails and extensions parse gzipped protobuf index") {
+		runBlocking {
+			val index = MihonExtensionStoreIndex(
+				name = "Keiyoushi",
+				badgeLabel = "KEI",
+				signingKey = "AA:BB:CC",
+				contact = MihonExtensionStoreIndex.Contact(
+					website = "https://keiyoushi.github.io",
+					discord = "https://discord.example",
+				),
+				extensionList = MihonExtensionStoreIndex.ExtensionList(
+					extensions = listOf(
+						MihonExtensionStoreIndex.Extension(
+							name = "Asura Scans",
+							packageName = "ext.asura",
+							resources = MihonExtensionStoreIndex.Resources(
+								apkUrl = "https://cdn.example/asura.apk",
+								iconUrl = "https://cdn.example/asura.png",
+							),
+							extensionLib = "1.9",
+							versionCode = 2,
+							versionName = "1.9.0",
+							contentWarning = MihonExtensionStoreIndex.ContentWarning.MIXED,
+							sources = listOf(
+								MihonExtensionStoreIndex.Source(
+									id = 1,
+									name = "Asura Scans",
+									language = "en",
+									homeUrl = "https://asura.example",
+								),
+							),
+						),
+					),
+				),
+			)
+			val encoded = kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(
+				MihonExtensionStoreIndex.serializer(),
+				index,
+			).gzip()
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded)))
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded)))
+			val indexUrl = server.url("/mihon/index.pb").toString()
+
+			val repo = service.fetchRepoDetails(indexUrl, ExternalExtensionType.MIHON)
+			val extensions = service.fetchAvailableExtensionsOrThrow(repo)
+
+			repo.baseUrl shouldBe indexUrl
+			repo.name shouldBe "Keiyoushi"
+			repo.shortName shouldBe "KEI"
+			repo.website shouldBe "https://keiyoushi.github.io"
+			repo.signingKeyFingerprint shouldBe "AA:BB:CC"
+			extensions shouldHaveSize 1
+			extensions.first().name shouldBe "Asura Scans"
+			extensions.first().archiveName shouldBe "asura.apk"
+			extensions.first().archiveUrl shouldBe "https://cdn.example/asura.apk"
+			extensions.first().iconUrl shouldBe "https://cdn.example/asura.png"
+			extensions.first().isNsfw.shouldBeTrue()
+			extensions.first().sourceNames shouldBe listOf("Asura Scans")
+			server.takeRequest().path shouldBe "/mihon/index.pb"
+			server.takeRequest().path shouldBe "/mihon/index.pb"
+		}
+	}
+
+	test("fetchAvailableExtensions falls back from legacy json to protobuf index") {
+		runBlocking {
+			val index = MihonExtensionStoreIndex(
+				name = "Keiyoushi",
+				badgeLabel = "KEI",
+				signingKey = "AA:BB:CC",
+				contact = MihonExtensionStoreIndex.Contact("https://keiyoushi.github.io"),
+				extensionList = MihonExtensionStoreIndex.ExtensionList(
+					listOf(
+						MihonExtensionStoreIndex.Extension(
+							name = "Asura Scans",
+							packageName = "ext.asura",
+							resources = MihonExtensionStoreIndex.Resources(
+								apkUrl = "https://cdn.example/asura.apk",
+								iconUrl = "https://cdn.example/asura.png",
+							),
+							extensionLib = "1.9",
+							versionCode = 2,
+							versionName = "1.9.0",
+							contentWarning = MihonExtensionStoreIndex.ContentWarning.SAFE,
+							sources = listOf(
+								MihonExtensionStoreIndex.Source(1, "Asura Scans", "en"),
+							),
+						),
+					),
+				),
+			)
+			val encoded = kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(
+				MihonExtensionStoreIndex.serializer(),
+				index,
+			).gzip()
+			server.enqueue(MockResponse().setResponseCode(404))
+			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded)))
+			val baseUrl = server.url("/mihon").toString().removeSuffix("/")
+			val repo = ExternalExtensionRepo(
+				type = ExternalExtensionType.MIHON,
+				baseUrl = baseUrl,
+				name = "Keiyoushi",
+				shortName = "KEI",
+				website = "https://keiyoushi.github.io",
+				signingKeyFingerprint = "AA:BB:CC",
+				createdAt = 1,
+				updatedAt = 1,
+				lastSuccessAt = 1,
+				lastError = null,
+			)
+
+			val extensions = service.fetchAvailableExtensionsOrThrow(repo)
+
+			extensions shouldHaveSize 1
+			extensions.first().archiveUrl shouldBe "https://cdn.example/asura.apk"
+			extensions.first().repoUrl shouldBe baseUrl
+			server.takeRequest().path shouldBe "/mihon/index.min.json"
+			server.takeRequest().path shouldBe "/mihon/index.pb"
 		}
 	}
 
@@ -409,3 +586,10 @@ class ExtensionRepoServiceTest : FunSpec({
 		}
 	}
 })
+
+private fun ByteArray.gzip(): ByteArray {
+	return ByteArrayOutputStream().use { output ->
+		GZIPOutputStream(output).use { gzip -> gzip.write(this) }
+		output.toByteArray()
+	}
+}

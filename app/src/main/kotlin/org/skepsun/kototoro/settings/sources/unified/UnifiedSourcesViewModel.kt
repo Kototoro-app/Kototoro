@@ -1623,6 +1623,7 @@ private fun normalizeRepositoryUrlForAction(url: String): String {
 	}
 	return trimmed
 		.trimEnd('/')
+		.removeSuffix("/index.pb")
 		.removeSuffix("/index.min.json")
 		.removeSuffix("/plugins.json")
 		.removeSuffix("/repo.json")

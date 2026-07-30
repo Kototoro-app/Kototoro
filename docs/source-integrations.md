@@ -27,7 +27,7 @@ These repositories are the common entry point for real-world external-source set
 
 ### Mihon / Tachiyomi-style manga repositories
 
-- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions)
+- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source)
 - [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions)
 - [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20) for Chinese-site coverage
 

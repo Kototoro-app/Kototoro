@@ -56,9 +56,8 @@ class ExtensionInstallService @Inject constructor(
 		extension: RepoAvailableExtension,
 		mode: ExtensionInstallMode = ExtensionInstallMode.LOCAL_APK,
 	): ExtensionInstallResult {
-		val archiveUrl = when (extension.type) {
-			ExternalExtensionType.CLOUDSTREAM -> extension.archiveUrl?.let(::applyMirror)
-				?: applyMirror("${extension.repoUrl}/${extension.archiveName}")
+		val archiveUrl = extension.archiveUrl?.let(::applyMirror) ?: when (extension.type) {
+			ExternalExtensionType.CLOUDSTREAM -> applyMirror("${extension.repoUrl}/${extension.archiveName}")
 			else -> applyMirror("${extension.repoUrl}/apk/${extension.archiveName}")
 		}
 		val outputDir = File(context.cacheDir, "extension-installs").apply { mkdirs() }

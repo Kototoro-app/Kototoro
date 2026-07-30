@@ -45,7 +45,7 @@ Yes. The built-in player supports subtitle and audio track selection for sources
 
 For many users, these are the most important starting points:
 
-- Mihon: [Keiyoushi Extensions](https://github.com/keiyoushi/extensions), [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions), [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
+- Mihon: [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source), [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions), [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
 - Aniyomi: [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source), [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
 - Legado: [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
 
