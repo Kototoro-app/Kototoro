@@ -199,7 +199,7 @@ fun ComposePagedReader(
 	val isVertical = mode == ReaderMode.VERTICAL
 	val pagerState = rememberPagerState(
 		initialPage = initialPage.coerceIn(displayedPages.indices),
-		pageCount = displayedPages::size,
+		pageCount = { displayedPages.size },
 	)
 	var advancedAnchorPage by remember(pagerState) { mutableIntStateOf(pagerState.currentPage) }
 	LaunchedEffect(pagerState, pageAnimation) {
