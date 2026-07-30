@@ -467,7 +467,6 @@ internal class ComposeReaderController(
 
 	override fun switchPageBy(delta: Int) {
 		val pageStep = if (isDoublePage) 2 else 1
-		val direction = if (readerMode == ReaderMode.REVERSED) -1 else 1
 		val pages = viewModel.content.value.pages
 		val basePosition = resolvePageNavigationBasePosition(
 			pageKeys = pages.map { it.readerKey },
@@ -475,7 +474,7 @@ internal class ComposeReaderController(
 			settledPosition = resolveCurrentPosition(),
 		)
 		switchPageTo(
-			position = resolvePageNavigationTarget(basePosition, delta, pageStep, direction),
+			position = resolvePageNavigationTarget(basePosition, delta, pageStep),
 			smooth = true,
 		)
 	}

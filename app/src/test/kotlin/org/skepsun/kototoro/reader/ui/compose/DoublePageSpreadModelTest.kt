@@ -110,7 +110,7 @@ class DoublePageSpreadModelTest {
 	fun `standard navigation advances one content page`() {
 		assertEquals(
 			4,
-			resolvePageNavigationTarget(currentPosition = 3, delta = 1, pageStep = 1, navigationDirection = 1),
+			resolvePageNavigationTarget(currentPosition = 3, delta = 1, pageStep = 1),
 		)
 	}
 
@@ -118,15 +118,15 @@ class DoublePageSpreadModelTest {
 	fun `double page navigation advances one complete spread`() {
 		assertEquals(
 			4,
-			resolvePageNavigationTarget(currentPosition = 2, delta = 1, pageStep = 2, navigationDirection = 1),
+			resolvePageNavigationTarget(currentPosition = 2, delta = 1, pageStep = 2),
 		)
 	}
 
 	@Test
-	fun `reversed double page navigation maps commands toward lower content indexes`() {
+	fun `reversed layout navigation still advances through content indexes`() {
 		assertEquals(
-			2,
-			resolvePageNavigationTarget(currentPosition = 4, delta = 1, pageStep = 2, navigationDirection = -1),
+			6,
+			resolvePageNavigationTarget(currentPosition = 4, delta = 1, pageStep = 2),
 		)
 	}
 

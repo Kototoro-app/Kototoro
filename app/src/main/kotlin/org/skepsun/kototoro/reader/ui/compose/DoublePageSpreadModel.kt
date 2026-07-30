@@ -73,8 +73,7 @@ internal fun resolvePageNavigationTarget(
 	currentPosition: Int,
 	delta: Int,
 	pageStep: Int,
-	navigationDirection: Int,
-): Int = currentPosition + delta * pageStep * navigationDirection
+): Int = currentPosition + delta * pageStep
 
 internal fun shouldAnimatePageNavigation(
 	currentPosition: Int,

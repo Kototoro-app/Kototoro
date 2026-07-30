@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -52,6 +51,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.delay
@@ -240,7 +240,7 @@ fun ReaderControlDock(
 @Composable
 internal fun readerControlContentColor(): Color {
 	val colors = MaterialTheme.colorScheme
-	return if (colors.background.luminance() < 0.5f) Color.White else colors.onSurface
+	return if (colors.isDarkTheme()) Color.White else colors.onSurface
 }
 
 @Composable

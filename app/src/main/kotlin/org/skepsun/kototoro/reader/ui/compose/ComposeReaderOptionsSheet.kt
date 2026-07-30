@@ -226,6 +226,30 @@ private fun ReaderModeOptionsPage(
 			)
 		}
 		item {
+			ReaderSegmentedChoice(
+				title = stringResource(R.string.pages_animation),
+				options = ReaderAnimation.entries.mapIndexed { index, animation ->
+					animationLabels.getOrElse(index) { animation.name }
+				},
+				selectedIndex = ReaderAnimation.entries.indexOf(state.animation),
+				onSelected = { callbacks.onAnimationChanged(ReaderAnimation.entries[it]) },
+				iconOnly = true,
+				icon = { ReaderAnimationIcon(ReaderAnimation.entries[it]) },
+			)
+		}
+		item {
+			ReaderSegmentedChoice(
+				title = stringResource(R.string.background),
+				options = ReaderBackground.entries.mapIndexed { index, background ->
+					backgroundLabels.getOrElse(index) { background.name }
+				},
+				selectedIndex = ReaderBackground.entries.indexOf(state.background),
+				onSelected = { callbacks.onBackgroundChanged(ReaderBackground.entries[it]) },
+				iconOnly = true,
+				icon = { ReaderBackgroundIcon(ReaderBackground.entries[it]) },
+			)
+		}
+		item {
 			ReaderOptionGroup {
 				ReaderOptionSwitchRow(
 					label = stringResource(R.string.double_page_landscape),
@@ -276,30 +300,6 @@ private fun ReaderModeOptionsPage(
 					}
 				}
 			}
-		}
-		item {
-			ReaderSegmentedChoice(
-				title = stringResource(R.string.pages_animation),
-				options = ReaderAnimation.entries.mapIndexed { index, animation ->
-					animationLabels.getOrElse(index) { animation.name }
-				},
-				selectedIndex = ReaderAnimation.entries.indexOf(state.animation),
-				onSelected = { callbacks.onAnimationChanged(ReaderAnimation.entries[it]) },
-				iconOnly = true,
-				icon = { ReaderAnimationIcon(ReaderAnimation.entries[it]) },
-			)
-		}
-		item {
-			ReaderSegmentedChoice(
-				title = stringResource(R.string.background),
-				options = ReaderBackground.entries.mapIndexed { index, background ->
-					backgroundLabels.getOrElse(index) { background.name }
-				},
-				selectedIndex = ReaderBackground.entries.indexOf(state.background),
-				onSelected = { callbacks.onBackgroundChanged(ReaderBackground.entries[it]) },
-				iconOnly = true,
-				icon = { ReaderBackgroundIcon(ReaderBackground.entries[it]) },
-			)
 		}
 	}
 }

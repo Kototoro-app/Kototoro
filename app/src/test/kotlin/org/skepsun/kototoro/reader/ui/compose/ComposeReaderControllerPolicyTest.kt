@@ -56,7 +56,7 @@ class ComposeReaderControllerPolicyTest {
 
 		repeat(20) {
 			val base = resolvePageNavigationBasePosition(pageKeys, requestedPageKey, settledPosition)
-			val target = resolvePageNavigationTarget(base, delta = 1, pageStep = 1, navigationDirection = 1)
+			val target = resolvePageNavigationTarget(base, delta = 1, pageStep = 1)
 			requestedPageKey = pageKeys[target]
 		}
 
