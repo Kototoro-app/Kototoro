@@ -34,6 +34,7 @@ import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.video.data.VideoDownloadIndex
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.details.ui.model.ChapterListItem.Companion.FLAG_DOWNLOADED
+import org.skepsun.kototoro.parsers.model.ContentChapter
 import kotlin.experimental.or
 
 @HiltViewModel
@@ -105,9 +106,12 @@ class VideoChaptersViewModel @Inject constructor(
         loadingJob = doLoad(force)
     }
 
-    fun setCurrentChapter(chapterId: Long) {
-        readingState.value = ReaderState(chapterId, 0, 0)
+    fun setCurrentChapter(chapter: ContentChapter) {
+        selectedBranch.value = chapter.branch
+        readingState.value = ReaderState(chapter.id, 0, 0)
     }
+
+    fun getAllChapters(): List<ContentChapter> = mangaDetails.value?.allChapters.orEmpty()
 
     private fun doLoad(force: Boolean): Job = launchLoadingJob(Dispatchers.Default) {
         detailsLoadUseCase.invoke(intent, force).collect { details ->

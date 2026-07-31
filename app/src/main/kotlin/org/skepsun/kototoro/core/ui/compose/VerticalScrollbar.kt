@@ -63,14 +63,20 @@ fun BoxScope.VerticalScrollbar(
 	modifier: Modifier = Modifier,
 	width: Dp = dimensionResource(R.dimen.fastscroll_handle_width),
 	color: Color = Color.Unspecified,
+	trackColor: Color = Color.Transparent,
 	draggable: Boolean = true,
+	alwaysVisible: Boolean = false,
+	endInset: Dp = FastScrollInsetEnd,
 	labelProvider: ((Int) -> String)? = null,
 ) {
 	FastScrollbar(
 		modifier = modifier,
 		width = width,
 		color = color,
+		trackColor = trackColor,
 		draggable = draggable,
+		alwaysVisible = alwaysVisible,
+		endInset = endInset,
 		labelProvider = labelProvider,
 		totalItemsCount = { state.layoutInfo.totalItemsCount },
 		visibleItemsCount = { state.layoutInfo.visibleItemsInfo.size },
@@ -86,14 +92,20 @@ fun BoxScope.VerticalScrollbar(
 	modifier: Modifier = Modifier,
 	width: Dp = dimensionResource(R.dimen.fastscroll_handle_width),
 	color: Color = Color.Unspecified,
+	trackColor: Color = Color.Transparent,
 	draggable: Boolean = true,
+	alwaysVisible: Boolean = false,
+	endInset: Dp = FastScrollInsetEnd,
 	labelProvider: ((Int) -> String)? = null,
 ) {
 	FastScrollbar(
 		modifier = modifier,
 		width = width,
 		color = color,
+		trackColor = trackColor,
 		draggable = draggable,
+		alwaysVisible = alwaysVisible,
+		endInset = endInset,
 		labelProvider = labelProvider,
 		totalItemsCount = { state.layoutInfo.totalItemsCount },
 		visibleItemsCount = { state.layoutInfo.visibleItemsInfo.size },
@@ -108,7 +120,10 @@ private fun BoxScope.FastScrollbar(
 	modifier: Modifier,
 	width: Dp,
 	color: Color,
+	trackColor: Color,
 	draggable: Boolean,
+	alwaysVisible: Boolean,
+	endInset: Dp,
 	labelProvider: ((Int) -> String)?,
 	totalItemsCount: () -> Int,
 	visibleItemsCount: () -> Int,
@@ -161,7 +176,7 @@ private fun BoxScope.FastScrollbar(
 		}
 	}
 
-	val alpha = if (keepVisible && showScrollbar) 1f else 0f
+	val alpha = if (showScrollbar && (alwaysVisible || keepVisible)) 1f else 0f
 	val density = LocalDensity.current
 	val handleColor = remember(context, color) {
 		if (color == Color.Unspecified) {
@@ -185,7 +200,7 @@ private fun BoxScope.FastScrollbar(
 			.fillMaxHeight()
 			.padding(
 				top = scrollbarMarginTop,
-				end = FastScrollInsetEnd,
+				end = endInset,
 				bottom = scrollbarMarginBottom,
 			)
 			.width(FastScrollTouchWidth)
@@ -240,6 +255,16 @@ private fun BoxScope.FastScrollbar(
 				}
 
 				val barLeft = size.width - handleEndPaddingPx - handleWidthPx
+				val trackWidthPx = (handleWidthPx / 3f).coerceAtLeast(1f)
+				drawRoundRect(
+					color = trackColor.copy(alpha = trackColor.alpha * alpha),
+					topLeft = Offset(
+						x = barLeft + (handleWidthPx - trackWidthPx) / 2f,
+						y = 0f,
+					),
+					size = Size(trackWidthPx, size.height),
+					cornerRadius = CornerRadius(trackWidthPx / 2f),
+				)
 				drawRoundRect(
 					color = handleColor.copy(alpha = handleColor.alpha * alpha),
 					topLeft = Offset(barLeft, barTopPx),
@@ -255,6 +280,7 @@ private fun BoxScope.FastScrollbar(
 					barHeightPx = barHeightPx,
 					trackHeightPx = trackHeightPx,
 					color = handleColor,
+					endInset = endInset,
 					modifier = Modifier.align(Alignment.TopEnd),
 				)
 			}
@@ -269,6 +295,7 @@ private fun FastScrollBubble(
 	barHeightPx: Float,
 	trackHeightPx: Float,
 	color: Color,
+	endInset: Dp,
 	modifier: Modifier = Modifier,
 ) {
 	val density = LocalDensity.current
@@ -280,7 +307,7 @@ private fun FastScrollBubble(
 	Box(
 		modifier = modifier
 			.wrapContentSize(unbounded = true, align = Alignment.TopEnd)
-			.padding(end = FastScrollInsetEnd + FastScrollTouchWidth)
+			.padding(end = endInset + FastScrollTouchWidth)
 			.padding(top = with(density) { bubbleTopPx.toDp() })
 			.requiredSizeIn(minWidth = bubbleSize, minHeight = bubbleSize)
 			.heightIn(min = bubbleSize)

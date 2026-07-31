@@ -11,6 +11,7 @@
     <string name="network_error">Network error</string>
     <string name="details">Details</string>
     <string name="chapters">Chapters</string>
+    <string name="video_chapter_group_ungrouped">Ungrouped</string>
     <string name="list">List</string>
     <string name="detailed_list">Detailed list</string>
     <string name="grid">Grid</string>

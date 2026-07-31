@@ -49,6 +49,8 @@ import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import android.net.Uri
 import java.net.URLDecoder
 import android.media.AudioManager
@@ -133,6 +135,8 @@ import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedbackState
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialog
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialogItem
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialogState
+import org.skepsun.kototoro.video.ui.compose.VideoChapterDialog
+import org.skepsun.kototoro.video.ui.compose.VideoChapterDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControls
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerInfoDialog
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerNativeInitErrorDialog
@@ -229,6 +233,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var unlockButtonVisible by mutableStateOf(false)
     private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
+    private var chapterDialogState by mutableStateOf<VideoChapterDialogState?>(null)
     private var submenuAnchorBounds = IntRect.Zero
     private var submenuPlacement = PlayerMenuPlacement.BesideAnchor
     private var lastSettingsAnchorBounds = IntRect.Zero
@@ -602,6 +607,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             },
                         )
                     }
+                    chapterDialogState?.let { state ->
+                        VideoChapterDialog(
+                            state = state,
+                            onDismissRequest = { chapterDialogState = null },
+                            onChapterSelected = { chapter ->
+                                chapterDialogState = null
+                                onChapterSelected(chapter)
+                            },
+                            onGridViewChanged = chaptersViewModel::setChaptersInGridView,
+                        )
+                    }
                     videoInfoDialogText?.let { details ->
                         VideoPlayerInfoDialog(
                             details = details,
@@ -744,6 +760,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         val currentId = readerState?.chapterId
         val currentIndex = chapters.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: 0
+        val currentChapter = playerChapterList().find { it.id == currentId }
+            ?: chapters.getOrNull(currentIndex)
         val (title, subtitle) = extractChapterInfo()
         val player = mpvPlayer
         composeControlState = VideoPlayerControlState(
@@ -757,6 +775,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             canSeek = (player?.durationMs ?: 0L) > 0L,
             hasPreviousChapter = currentIndex > 0,
             hasNextChapter = currentIndex >= 0 && currentIndex < chapters.lastIndex,
+            chapterGroupLabel = currentChapter?.branch?.trim()?.takeIf(String::isNotEmpty),
             playbackSpeedLabel = "%.2fx".format(appSettings.videoPlaybackSpeed),
             qualityLabel = availableVideos.takeIf { it.isNotEmpty() }?.let { buildQualityButtonLabel() },
             showChapterMarkers = isLandscapeOrientation(),
@@ -861,6 +880,26 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             var initialTouchX = 0f
             var lastScrubPosition = 0L
 
+            fun isAdjustmentGestureStartAllowed(startY: Float): Boolean {
+                val density = pv.resources.displayMetrics.density
+                val minimumSystemBarInset = (24f * density).roundToInt()
+                val touchMargin = (12f * density).roundToInt()
+                val insets = ViewCompat.getRootWindowInsets(pv)
+                    ?.getInsetsIgnoringVisibility(
+                        WindowInsetsCompat.Type.statusBars() or
+                            WindowInsetsCompat.Type.navigationBars() or
+                            WindowInsetsCompat.Type.displayCutout(),
+                    )
+                val topExclusion = maxOf(insets?.top ?: 0, minimumSystemBarInset) + touchMargin
+                val bottomExclusion = maxOf(insets?.bottom ?: 0, minimumSystemBarInset) + touchMargin
+                return isPlayerAdjustmentGestureStartAllowed(
+                    startY = startY,
+                    viewHeight = pv.height,
+                    topExclusion = topExclusion,
+                    bottomExclusion = bottomExclusion,
+                )
+            }
+
             val detector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDown(e: MotionEvent): Boolean {
                     isHorizontalScrubbing = false
@@ -936,6 +975,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
                     // 首次判定：竖向位移显著大于横向位移时进入垂直调整模式，反之进入水平进度调整模?
                     if (verticalAdjustMode == 0 && !isHorizontalScrubbing) {
+                        val startY = e1?.y ?: e2.y
+                        if (!isAdjustmentGestureStartAllowed(startY)) return false
                         if (kotlin.math.abs(distanceX) > kotlin.math.abs(distanceY)) {
                             isHorizontalScrubbing = true
                             isUserScrubbing = true
@@ -2156,23 +2197,21 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (chapters.isEmpty()) return
 
         val currentId = readerState?.chapterId
-        actionDialogState = VideoActionDialogState(
+        val groups = groupPlayerChapters(chapters)
+        actionDialogState = null
+        chapterDialogState = VideoChapterDialogState(
             title = getString(R.string.chapters),
-            items = chapters.mapIndexed { index, chapter ->
-                VideoActionDialogItem(
-                    title = chapter.title?.takeIf { it.isNotBlank() } ?: chapter.url,
-                    subtitle = chapter.branch,
-                    leadingText = (index + 1).toString(),
-                    checked = chapter.id == currentId,
-                    onClick = { onChapterSelected(chapter) },
-                )
-            },
+            groups = groups,
+            currentChapterId = currentId,
+            initialPage = findPlayerChapterGroupIndex(groups, currentId),
+            initialGridView = chaptersViewModel.isChaptersInGridView.value,
+            ungroupedTitle = getString(R.string.video_chapter_group_ungrouped),
             anchorBounds = anchorBounds,
         )
     }
 
     private fun playerChapterList(): List<ContentChapter> {
-        return chaptersViewModel.chapters.value.map { it.chapter }.ifEmpty {
+        return chaptersViewModel.getAllChapters().ifEmpty {
             currentMangaContent()?.chapters.orEmpty()
         }
     }
@@ -3665,7 +3704,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     finishReadingSession(allowShort = true, continueFromEnd = false)
                     readerState = ReaderState(chapter.id, 0, 0)
                     recordVideoJumpPoint(previousState, ReaderState(chapter.id, 0, 0), "chapter_list", force = true)
-                    chaptersViewModel.setCurrentChapter(chapter.id)
+                    chaptersViewModel.setCurrentChapter(chapter)
                     hasSkippedIntro = false
                     hasTriggeredOutro = false
                     hasRestoredProgress = false
@@ -3893,4 +3932,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             dlnaDialogState = null
         }
     }
+}
+
+internal fun isPlayerAdjustmentGestureStartAllowed(
+    startY: Float,
+    viewHeight: Int,
+    topExclusion: Int,
+    bottomExclusion: Int,
+): Boolean {
+    if (viewHeight <= 0) return false
+    val top = topExclusion.coerceAtLeast(0)
+    val bottom = viewHeight - bottomExclusion.coerceAtLeast(0)
+    if (bottom <= top) return false
+    return startY >= top && startY <= bottom
 }

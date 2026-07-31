@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
@@ -71,6 +72,7 @@ data class VideoPlayerControlState(
     val canSeek: Boolean = false,
     val hasPreviousChapter: Boolean = false,
     val hasNextChapter: Boolean = false,
+    val chapterGroupLabel: String? = null,
     val playbackSpeedLabel: String = "1.00x",
     val qualityLabel: String? = null,
     val showChapterMarkers: Boolean = false,
@@ -285,9 +287,8 @@ fun VideoPlayerBottomControls(
                     enabled = state.hasNextChapter,
                     onClick = { onAction(VideoPlayerAction.NextChapter) },
                 )
-                PlayerIconButton(
-                    icon = { Icon(Icons.Filled.GridView, contentDescription = null) },
-                    contentDescription = "Chapters",
+                PlayerChapterButton(
+                    groupLabel = state.chapterGroupLabel,
                     onClick = { onAction(VideoPlayerAction.OpenChapterSelection(chaptersAnchorBounds)) },
                     modifier = Modifier.onGloballyPositioned {
                         chaptersAnchorBounds = it.boundsInWindowIntRect()
@@ -349,6 +350,42 @@ private fun PlayerIconButton(
         modifier = modifier.size(36.dp).semantics { this.contentDescription = contentDescription },
         content = icon,
     )
+}
+
+@Composable
+private fun PlayerChapterButton(
+    groupLabel: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = groupLabel?.takeIf(String::isNotBlank)
+    TextButton(
+        onClick = onClick,
+        modifier = modifier
+            .height(40.dp)
+            .widthIn(max = 120.dp)
+            .semantics {
+                contentDescription = if (label == null) "Chapters" else "Chapters, $label"
+            },
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.GridView,
+            contentDescription = null,
+            tint = PlayerControlsForeground,
+            modifier = Modifier.size(20.dp),
+        )
+        label?.let {
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = it,
+                color = PlayerControlsForeground,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 private fun LayoutCoordinates.boundsInWindowIntRect(): IntRect {
