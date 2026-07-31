@@ -81,6 +81,36 @@ class ReaderPageSelectionResolverTest {
 	}
 
 	@Test
+	fun `webtoon keeps current chapter until it leaves the viewport`() {
+		val pages = listOf(
+			page(chapterId = 1L, index = 130),
+			page(chapterId = 1L, index = 131),
+			page(chapterId = 2L, index = 0),
+			page(chapterId = 2L, index = 1),
+		)
+
+		val selectedAtBoundary = resolveWebtoonVisiblePageSelection(
+			pages = pages,
+			lowerPos = 0,
+			upperPos = 3,
+			currentChapterId = 1L,
+			activePageKey = pages[2].readerKey,
+			boundsPageOffset = 2,
+		)
+		val selectedAfterBoundary = resolveWebtoonVisiblePageSelection(
+			pages = pages,
+			lowerPos = 2,
+			upperPos = 3,
+			currentChapterId = 1L,
+			activePageKey = pages[2].readerKey,
+			boundsPageOffset = 2,
+		)
+
+		assertEquals(1, selectedAtBoundary)
+		assertEquals(2, selectedAfterBoundary)
+	}
+
+	@Test
 	fun `selects last visible page from current chapter when viewport spans multiple short pages`() {
 		val pages = listOf(
 			page(chapterId = 1L, index = 0),

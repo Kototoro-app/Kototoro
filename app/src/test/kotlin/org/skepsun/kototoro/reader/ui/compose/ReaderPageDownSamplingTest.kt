@@ -18,8 +18,8 @@ class ReaderMemoryOptimizationPolicyTest {
 	}
 
 	@Test
-	fun `webtoon preloads three viewports unless reduction is enabled`() {
-		assertEquals(5f, resolveWebtoonAheadCacheFraction(false))
+	fun `webtoon preloads two viewports unless reduction is enabled`() {
+		assertEquals(2f, resolveWebtoonAheadCacheFraction(false))
 		assertEquals(0f, resolveWebtoonAheadCacheFraction(true))
 	}
 

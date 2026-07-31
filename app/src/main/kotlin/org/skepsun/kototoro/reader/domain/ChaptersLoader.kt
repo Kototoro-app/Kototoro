@@ -79,43 +79,21 @@ class ChaptersLoader @Inject constructor(
 		if (currentIndex == -1) return false
 		val targetIndex = if (isNext) currentIndex + 1 else currentIndex - 1
 		val targetChapter = chaptersList.getOrNull(targetIndex) ?: return false
-		val targetPages = if (hasPages(targetChapter.id)) {
-			null
-		} else {
-			loadChapter(targetChapter.id)
-		}
-		val loadedChapterIds = snapshot().map(ReaderPage::chapterId).distinct()
-		val desiredChapterIds = (currentIndex - 1..currentIndex + 1)
-			.mapNotNull { index ->
-				val chapter = chaptersList.getOrNull(index) ?: return@mapNotNull null
-				when {
-					index == currentIndex -> currentId
-					chapter.id == targetChapter.id -> targetChapter.id
-					else -> loadedChapterIds.firstOrNull { loadedId ->
-						chapters[loadedId]?.getMergeKey() == chapter.getMergeKey()
-					} ?: chapter.id
-				}
-			}
-		Log.d(
-			READER_WINDOW_LOG_TAG,
-			"loader current=$currentId next=$isNext target=${targetChapter.id} targetCached=${targetPages == null} " +
-				"retained=$desiredChapterIds cached=$loadedChapterIds",
-		)
-		if (targetPages == null && loadedChapterIds == desiredChapterIds) {
-			return true
-		}
+		if (hasPages(targetChapter.id)) return true
+
+		val targetPages = loadChapter(targetChapter.id)
 		mutex.withLock {
-			val pagesByChapter = desiredChapterIds.associateWith { chapterId ->
-				when (chapterId) {
-					targetChapter.id -> targetPages ?: chapterPages.subList(chapterId).toList()
-					else -> chapterPages.subList(chapterId).toList()
+			if (targetChapter.id !in chapterPages) {
+				if (isNext) {
+					chapterPages.addLast(targetChapter.id, targetPages)
+				} else {
+					chapterPages.addFirst(targetChapter.id, targetPages)
 				}
-			}
-			chapterPages.clear()
-			desiredChapterIds.forEach { chapterId ->
-				pagesByChapter.getValue(chapterId).takeIf { it.isNotEmpty() }?.let { pages ->
-					chapterPages.addLast(chapterId, pages)
-				}
+				Log.d(
+					READER_WINDOW_LOG_TAG,
+					"loader append current=$currentId next=$isNext target=${targetChapter.id} " +
+						"pages=${targetPages.size} loadedChapters=${chapterPages.chaptersSize}",
+				)
 			}
 		}
 		return true

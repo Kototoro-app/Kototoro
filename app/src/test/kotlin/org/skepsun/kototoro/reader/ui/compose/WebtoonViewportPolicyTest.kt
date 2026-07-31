@@ -16,6 +16,29 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
+	fun `expanding promoted chapter requires stable anchor restoration`() {
+		val previousChapterEnd = 105L
+		val promotedChapterStart = 201L
+		val previousWindow = listOf(101L, 102L, 103L, 104L, previousChapterEnd, promotedChapterStart, 202L)
+		val promotedWindow = listOf(104L, previousChapterEnd, promotedChapterStart) + (202L..230L)
+
+		assertTrue(
+			requiresWebtoonAnchorRestore(
+				previousPageKeys = previousWindow,
+				pageKeys = promotedWindow,
+				anchorPageKey = previousChapterEnd,
+			),
+		)
+		assertFalse(
+			requiresWebtoonAnchorRestore(
+				previousPageKeys = promotedWindow,
+				pageKeys = promotedWindow + 231L,
+				anchorPageKey = previousChapterEnd,
+			),
+		)
+	}
+
+	@Test
 	fun `resolves visible pages by stable keys after leading chapter is trimmed`() {
 		val visibleLowerKey = 201L
 		val visibleUpperKey = 203L
@@ -78,13 +101,49 @@ class WebtoonViewportPolicyTest {
 		assertFalse(
 			shouldTrackWebtoonViewport(
 				isAnchorRestorePending = false,
+				isPageWindowAnchorShifted = false,
 				viewportConfigurationChanged = true,
+				isViewportLayoutReady = true,
+			),
+		)
+		assertFalse(
+			shouldTrackWebtoonViewport(
+				isAnchorRestorePending = false,
+				isPageWindowAnchorShifted = true,
+				viewportConfigurationChanged = false,
+				isViewportLayoutReady = true,
+			),
+		)
+		assertFalse(
+			shouldTrackWebtoonViewport(
+				isAnchorRestorePending = false,
+				isPageWindowAnchorShifted = false,
+				viewportConfigurationChanged = false,
+				isViewportLayoutReady = false,
 			),
 		)
 		assertTrue(
 			shouldTrackWebtoonViewport(
 				isAnchorRestorePending = false,
+				isPageWindowAnchorShifted = false,
 				viewportConfigurationChanged = false,
+				isViewportLayoutReady = true,
+			),
+		)
+	}
+
+	@Test
+	fun `one pixel placeholder layout cannot expand the chapter window`() {
+		assertFalse(
+			isWebtoonViewportLayoutReady(
+				visibleItemSizesPx = List(132) { 1 },
+				viewportHeightPx = 2528,
+			),
+		)
+		assertTrue(
+			isWebtoonViewportLayoutReady(
+				visibleItemSizesPx = listOf(2528, 900),
+				viewportHeightPx = 2528,
 			),
 		)
 	}

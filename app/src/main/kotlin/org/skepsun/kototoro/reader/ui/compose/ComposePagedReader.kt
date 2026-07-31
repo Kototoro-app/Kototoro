@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -467,6 +468,13 @@ fun ComposeWebtoonReader(
 	}
 	var hasAppliedInitialPosition by remember { mutableStateOf(false) }
 	var isAnchorRestorePending by remember { mutableStateOf(true) }
+	var appliedPageKeys by remember { mutableStateOf(pageKeys) }
+	val isPageWindowAnchorShifted = requiresWebtoonAnchorRestore(
+		previousPageKeys = appliedPageKeys,
+		pageKeys = pageKeys,
+		anchorPageKey = stableViewportAnchor.pageKey,
+	)
+	val isPageWindowAnchorShiftedState = rememberUpdatedState(isPageWindowAnchorShifted)
 	// Keep dimensions outside individual lazy items. When an item is recycled and later returns
 	// from Coil's cache, its height is known before the bitmap is drawn, preventing scroll jumps.
 	val imageSizes = remember { mutableStateMapOf<Long, WebtoonImageSize>() }
@@ -489,6 +497,29 @@ fun ComposeWebtoonReader(
 	var webtoonFlingJob by remember { mutableStateOf<Job?>(null) }
 	var wasZoomEnabled by remember { mutableStateOf(isZoomEnabled) }
 	var hasAppliedInitialScroll by remember { mutableStateOf(initialScroll <= 0) }
+	val shiftedAnchorPosition = if (isPageWindowAnchorShifted) {
+		resolveWebtoonAnchorPosition(pageKeys, stableViewportAnchor.pageKey)
+	} else {
+		-1
+	}
+	SideEffect {
+		val canRequestShiftedAnchor =
+			shiftedAnchorPosition >= 0 &&
+			hasAppliedInitialPosition &&
+			hasAppliedInitialScroll &&
+			viewportWidthPx > 0 &&
+			viewportHeightPx > 0
+		if (canRequestShiftedAnchor) {
+			Log.d(
+				READER_WINDOW_LOG_TAG,
+				"request anchor key=${stableViewportAnchor.pageKey} " +
+					"from=${appliedPageKeys.indexOf(stableViewportAnchor.pageKey)} to=$shiftedAnchorPosition " +
+					"offset=${stableViewportAnchor.offsetPx} windowSize=${pageKeys.size}",
+			)
+			listState.requestScrollToItem(shiftedAnchorPosition, stableViewportAnchor.offsetPx)
+		}
+		if (!isPageWindowAnchorShifted || canRequestShiftedAnchor) appliedPageKeys = pageKeys
+	}
 	fun measurementFor(position: Int): WebtoonViewportMeasurement {
 		val size = pages.getOrNull(position)?.let { page -> imageSizes[page.readerKey] }
 		return measureWebtoonViewport(
@@ -669,7 +700,17 @@ fun ComposeWebtoonReader(
 		val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, stableViewportAnchor.pageKey)
 		if ((isAnchorRestorePending || viewportConfigurationChanged) && anchorPosition >= 0) {
 			isAnchorRestorePending = true
+			Log.d(
+				READER_WINDOW_LOG_TAG,
+				"restore anchor key=${stableViewportAnchor.pageKey} " +
+					"to=$anchorPosition offset=${stableViewportAnchor.offsetPx} windowSize=${pageKeys.size}",
+			)
 			listState.scrollToItem(anchorPosition, stableViewportAnchor.offsetPx)
+			Log.d(
+				READER_WINDOW_LOG_TAG,
+				"restored anchor key=${stableViewportAnchor.pageKey} position=${listState.firstVisibleItemIndex} " +
+					"actualKey=${listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key}",
+			)
 		}
 		appliedViewportConfiguration = viewportConfiguration
 		isAnchorRestorePending = false
@@ -679,6 +720,10 @@ fun ComposeWebtoonReader(
 		snapshotFlow {
 			val layoutInfo = listState.layoutInfo
 			val visibleItems = layoutInfo.visibleItemsInfo
+			val isViewportLayoutReady = isWebtoonViewportLayoutReady(
+				visibleItemSizesPx = visibleItems.map { it.size },
+				viewportHeightPx = viewportHeightPx,
+			)
 			val activePageKey = resolveLastEndVisibleWebtoonPageKey(
 				items = visibleItems.mapNotNull { item ->
 					(item.key as? Long)?.let { key -> WebtoonVisibleItem(key, item.offset, item.size) }
@@ -693,7 +738,9 @@ fun ComposeWebtoonReader(
 				firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
 				shouldTrackViewport = shouldTrackWebtoonViewport(
 					isAnchorRestorePending = isAnchorRestorePending,
+					isPageWindowAnchorShifted = isPageWindowAnchorShiftedState.value,
 					viewportConfigurationChanged = viewportConfigurationChangedState.value,
+					isViewportLayoutReady = isViewportLayoutReady,
 				),
 			)
 		}
@@ -717,16 +764,6 @@ fun ComposeWebtoonReader(
 				val visiblePageKeys = Triple(lowerPageKey, upperPageKey, activePageKey)
 				if (reportedPageKeys != visiblePageKeys) {
 					reportedPageKeys = visiblePageKeys
-					val activePage = pagesSnapshot.firstOrNull { it.readerKey == activePageKey }
-					Log.d(
-						READER_WINDOW_LOG_TAG,
-						"viewport lower=${pagesSnapshot[visibleRange.first].chapterId}:" +
-							"${pagesSnapshot[visibleRange.first].index} " +
-							"upper=${pagesSnapshot[visibleRange.last].chapterId}:" +
-							"${pagesSnapshot[visibleRange.last].index} " +
-							"active=${activePage?.chapterId}:${activePage?.index} offset=" +
-							viewport.firstVisibleItemScrollOffset,
-					)
 					currentOnPagesChanged(lowerPageKey, upperPageKey, activePageKey)
 				}
 				currentOnInternalScrollChanged(page, viewport.firstVisibleItemScrollOffset)
@@ -787,7 +824,7 @@ fun ComposeWebtoonReader(
 				viewportWidthPx = size.width
 				viewportHeightPx = size.height
 			}
-			.pointerInput(isZoomEnabled) {
+				.pointerInput(isZoomEnabled) {
 				if (isZoomEnabled) {
 					awaitEachGesture {
 						awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -892,10 +929,11 @@ fun ComposeWebtoonReader(
 							lastTapUpAt = eventTime
 						}
 					}
-				}
-			},
-	) {
-		val pullThresholdPx = viewportHeightPx * WEBTOON_PULL_THRESHOLD
+					}
+				},
+		) {
+			if (viewportWidthPx <= 0 || viewportHeightPx <= 0) return@BoxWithConstraints
+			val pullThresholdPx = viewportHeightPx * WEBTOON_PULL_THRESHOLD
 		val nestedScrollConnection = remember(
 			listState,
 			pages,
@@ -2109,14 +2147,16 @@ private fun ComposeWebtoonPage(
 					},
 					onImageError = { forceCoil = true },
 					placeholder = {
-						WebtoonTelephotoPlaceholder(
-							uri = value.original,
-							pageKey = page.readerKey,
-							decodeWidthPx = decodeWidthPx,
-							decodeHeightPx = decodeHeightPx,
-							imageLoader = imageLoader,
-							colorFilter = imageColorFilter,
-						)
+						if (isPageVisible) {
+							WebtoonTelephotoPlaceholder(
+								uri = value.original,
+								pageKey = page.readerKey,
+								decodeWidthPx = decodeWidthPx,
+								decodeHeightPx = decodeHeightPx,
+								imageLoader = imageLoader,
+								colorFilter = imageColorFilter,
+							)
+						}
 					},
 					modifier = Modifier.fillMaxSize(),
 				)
@@ -2149,14 +2189,16 @@ private fun ComposeWebtoonPage(
 					},
 					onImageError = { forceCoil = true },
 					placeholder = {
-						WebtoonTelephotoPlaceholder(
-							uri = value.original,
-							pageKey = page.readerKey,
-							decodeWidthPx = decodeWidthPx,
-							decodeHeightPx = decodeHeightPx,
-							imageLoader = imageLoader,
-							colorFilter = imageColorFilter,
-						)
+						if (isPageVisible) {
+							WebtoonTelephotoPlaceholder(
+								uri = value.original,
+								pageKey = page.readerKey,
+								decodeWidthPx = decodeWidthPx,
+								decodeHeightPx = decodeHeightPx,
+								imageLoader = imageLoader,
+								colorFilter = imageColorFilter,
+							)
+						}
 					},
 					modifier = Modifier.fillMaxSize(),
 				)
@@ -2186,14 +2228,16 @@ private fun ComposeWebtoonPage(
 					onImageSizeResolved = onImageSizeResolved,
 					onImageError = { forceCoil = true },
 					placeholder = {
-						WebtoonTelephotoPlaceholder(
-							uri = value.enhanced,
-							pageKey = page.readerKey,
-							decodeWidthPx = decodeWidthPx,
-							decodeHeightPx = decodeHeightPx,
-							imageLoader = imageLoader,
-							colorFilter = imageColorFilter,
-						)
+						if (isPageVisible) {
+							WebtoonTelephotoPlaceholder(
+								uri = value.enhanced,
+								pageKey = page.readerKey,
+								decodeWidthPx = decodeWidthPx,
+								decodeHeightPx = decodeHeightPx,
+								imageLoader = imageLoader,
+								colorFilter = imageColorFilter,
+							)
+						}
 					},
 					modifier = Modifier.fillMaxSize(),
 				)
@@ -2644,7 +2688,7 @@ private const val DOUBLE_PAGE_WIDE_RATIO = 1.3f
 private const val ADVANCED_PAGE_EPSILON = 0.001f
 private const val SIMULATION_PAGE_EPSILON = 0.001f
 private const val READER_ANIMATION_DEBUG_TAG = "ReaderPageAnimation"
-private const val WEBTOON_AHEAD_CACHE_FRACTION = 5f
+private const val WEBTOON_AHEAD_CACHE_FRACTION = 2f
 private const val WEBTOON_PAGE_CONTENT_TYPE = "webtoon_page"
 private const val WEBTOON_PULL_THRESHOLD = 0.3f
 private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
