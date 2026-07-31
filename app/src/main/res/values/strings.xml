@@ -1519,6 +1519,7 @@
     <string name="available_d">Available: %1$d</string>
     <string name="disable_nsfw_summary">Disable NSFW sources and hide adult manga from list if possible</string>
     <string name="adult_content_filtering">Adult content filtering</string>
+    <string name="disable_sources_and_browse_nsfw">Hide from sources and browse content</string>
     <string name="disable_history_nsfw">Hide from History</string>
     <string name="disable_history_nsfw_summary">Hide adult contents from History</string>
     <string name="disable_favourites_nsfw">Hide from Favourites</string>

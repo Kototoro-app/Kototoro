@@ -21,6 +21,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.settings.SettingsActivity
+import org.skepsun.kototoro.settings.compose.AdultContentFilterTarget
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SourcesSettingsScreen
 import org.skepsun.kototoro.settings.compose.SourcesSettingsUiState
@@ -81,12 +82,14 @@ fun SourcesSettingsRoute(
         isSourcesGroupedByLanguage = isSourcesGroupedByLanguage,
         jarPriorityOrder = resolvedJarPriorityOrder,
         isShowBrokenSources = isShowBrokenSources,
-        isNsfwContentDisabled = isNsfwContentDisabled,
-        isHistoryExcludeNsfw = isHistoryExcludeNsfw,
-        isFavouritesExcludeNsfw = isFavouritesExcludeNsfw,
-        isFeedExcludeNsfw = isFeedExcludeNsfw,
-        isTrackerNsfwDisabled = isTrackerNsfwDisabled,
-        isSuggestionsExcludeNsfw = isSuggestionsExcludeNsfw,
+        adultContentFilterTargets = buildSet {
+            if (isNsfwContentDisabled) add(AdultContentFilterTarget.SOURCES_AND_BROWSE)
+            if (isHistoryExcludeNsfw) add(AdultContentFilterTarget.HISTORY)
+            if (isFavouritesExcludeNsfw) add(AdultContentFilterTarget.FAVOURITES)
+            if (isFeedExcludeNsfw) add(AdultContentFilterTarget.FEED)
+            if (isTrackerNsfwDisabled) add(AdultContentFilterTarget.UPDATES)
+            if (isSuggestionsExcludeNsfw) add(AdultContentFilterTarget.SUGGESTIONS)
+        },
         incognitoModeForNsfw = incognitoModeForNsfw,
         isTagsWarningsEnabled = isTagsWarningsEnabled,
         isMirrorSwitchingEnabled = isMirrorSwitchingEnabled,
@@ -108,12 +111,32 @@ fun SourcesSettingsRoute(
         onSetupWizardClick = onSetupWizardClick,
         onJarPriorityOrderChange = viewModel::persistJarPriorityOrder,
         onShowBrokenSourcesChange = { settings.isShowBrokenSources = it },
-        onNsfwContentDisabledChange = { settings.isNsfwContentDisabled = it },
-        onHistoryExcludeNsfwChange = { settings.isHistoryExcludeNsfw = it },
-        onFavouritesExcludeNsfwChange = { settings.isFavouritesExcludeNsfw = it },
-        onFeedExcludeNsfwChange = { settings.isFeedExcludeNsfw = it },
-        onTrackerNsfwDisabledChange = { settings.isTrackerNsfwDisabled = it },
-        onSuggestionsExcludeNsfwChange = { settings.isSuggestionsExcludeNsfw = it },
+        onAdultContentFilterTargetsChange = { targets ->
+            val hideFromSourcesAndBrowse = AdultContentFilterTarget.SOURCES_AND_BROWSE in targets
+            val hideFromHistory = AdultContentFilterTarget.HISTORY in targets
+            val hideFromFavourites = AdultContentFilterTarget.FAVOURITES in targets
+            val hideFromFeed = AdultContentFilterTarget.FEED in targets
+            val hideFromUpdates = AdultContentFilterTarget.UPDATES in targets
+            val hideFromSuggestions = AdultContentFilterTarget.SUGGESTIONS in targets
+            if (hideFromSourcesAndBrowse != isNsfwContentDisabled) {
+                settings.isNsfwContentDisabled = hideFromSourcesAndBrowse
+            }
+            if (hideFromHistory != isHistoryExcludeNsfw) {
+                settings.isHistoryExcludeNsfw = hideFromHistory
+            }
+            if (hideFromFavourites != isFavouritesExcludeNsfw) {
+                settings.isFavouritesExcludeNsfw = hideFromFavourites
+            }
+            if (hideFromFeed != isFeedExcludeNsfw) {
+                settings.isFeedExcludeNsfw = hideFromFeed
+            }
+            if (hideFromUpdates != isTrackerNsfwDisabled) {
+                settings.isTrackerNsfwDisabled = hideFromUpdates
+            }
+            if (hideFromSuggestions != isSuggestionsExcludeNsfw) {
+                settings.isSuggestionsExcludeNsfw = hideFromSuggestions
+            }
+        },
         onIncognitoModeForNsfwChange = { settings.incognitoModeForNsfw = it },
         onTagsWarningsEnabledChange = { settings.isTagsWarningsEnabled = it },
         onMirrorSwitchingChange = { settings.isMirrorSwitchingEnabled = it },

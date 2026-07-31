@@ -326,6 +326,7 @@
     <string name="additional_action_required">需要额外操作</string>
     <string name="address">地址</string>
     <string name="adult_content_filtering">成人内容过滤</string>
+    <string name="disable_sources_and_browse_nsfw">从内容源与浏览内容中隐藏</string>
     <string name="advanced">高级</string>
     <string name="advanced_search">高级搜索</string>
     <string name="ai_api_open_settings_hint">API 尚未完整配置，进入下一页后可填写 endpoint 和 key。</string>

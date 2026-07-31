@@ -27,17 +27,21 @@ data class SourcesSettingsUiState(
     val isSourcesGroupedByLanguage: Boolean,
     val jarPriorityOrder: List<String>,
     val isShowBrokenSources: Boolean,
-    val isNsfwContentDisabled: Boolean,
-    val isHistoryExcludeNsfw: Boolean,
-    val isFavouritesExcludeNsfw: Boolean,
-    val isFeedExcludeNsfw: Boolean,
-    val isTrackerNsfwDisabled: Boolean,
-    val isSuggestionsExcludeNsfw: Boolean,
+    val adultContentFilterTargets: Set<AdultContentFilterTarget>,
     val incognitoModeForNsfw: TriStateOption,
     val isTagsWarningsEnabled: Boolean,
     val isMirrorSwitchingEnabled: Boolean,
     val isHandleLinksEnabled: Boolean,
 )
+
+enum class AdultContentFilterTarget {
+    SOURCES_AND_BROWSE,
+    HISTORY,
+    FAVOURITES,
+    FEED,
+    UPDATES,
+    SUGGESTIONS,
+}
 
 @Composable
 fun SourcesSettingsScreen(
@@ -55,17 +59,23 @@ fun SourcesSettingsScreen(
     onSetupWizardClick: () -> Unit,
     onJarPriorityOrderChange: (List<String>) -> Unit,
     onShowBrokenSourcesChange: (Boolean) -> Unit,
-    onNsfwContentDisabledChange: (Boolean) -> Unit,
-    onHistoryExcludeNsfwChange: (Boolean) -> Unit,
-    onFavouritesExcludeNsfwChange: (Boolean) -> Unit,
-    onFeedExcludeNsfwChange: (Boolean) -> Unit,
-    onTrackerNsfwDisabledChange: (Boolean) -> Unit,
-    onSuggestionsExcludeNsfwChange: (Boolean) -> Unit,
+    onAdultContentFilterTargetsChange: (Set<AdultContentFilterTarget>) -> Unit,
     onIncognitoModeForNsfwChange: (TriStateOption) -> Unit,
     onTagsWarningsEnabledChange: (Boolean) -> Unit,
     onMirrorSwitchingChange: (Boolean) -> Unit,
     onHandleLinksEnabledChange: (Boolean) -> Unit,
 ) {
+    val adultContentFilterOptions = listOf(
+        SettingsChoiceOption(
+            AdultContentFilterTarget.SOURCES_AND_BROWSE,
+            stringResource(R.string.disable_sources_and_browse_nsfw),
+        ),
+        SettingsChoiceOption(AdultContentFilterTarget.HISTORY, stringResource(R.string.disable_history_nsfw)),
+        SettingsChoiceOption(AdultContentFilterTarget.FAVOURITES, stringResource(R.string.disable_favourites_nsfw)),
+        SettingsChoiceOption(AdultContentFilterTarget.FEED, stringResource(R.string.disable_feed_nsfw)),
+        SettingsChoiceOption(AdultContentFilterTarget.UPDATES, stringResource(R.string.disable_updates_nsfw)),
+        SettingsChoiceOption(AdultContentFilterTarget.SUGGESTIONS, stringResource(R.string.disable_suggestions_nsfw)),
+    )
     Scaffold(
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
@@ -135,46 +145,12 @@ fun SourcesSettingsScreen(
             }
             item(key = "adult_filtering") {
                 SettingsPreferenceSection(title = adultFilteringTitle) {
-                    SettingsSwitchPreference(
+                    SettingsMultiChoicePreference(
                         title = stringResource(R.string.disable_nsfw),
-                        checked = state.isNsfwContentDisabled,
-                        summary = stringResource(R.string.disable_nsfw_summary),
-                        onCheckedChange = onNsfwContentDisabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.disable_history_nsfw),
-                        checked = state.isHistoryExcludeNsfw,
-                        summary = stringResource(R.string.disable_history_nsfw_summary),
-                        onCheckedChange = onHistoryExcludeNsfwChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.disable_favourites_nsfw),
-                        checked = state.isFavouritesExcludeNsfw,
-                        summary = stringResource(R.string.disable_favourites_nsfw_summary),
-                        onCheckedChange = onFavouritesExcludeNsfwChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.disable_feed_nsfw),
-                        checked = state.isFeedExcludeNsfw,
-                        summary = stringResource(R.string.disable_feed_nsfw_summary),
-                        onCheckedChange = onFeedExcludeNsfwChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.disable_updates_nsfw),
-                        checked = state.isTrackerNsfwDisabled,
-                        summary = stringResource(R.string.disable_updates_nsfw_summary),
-                        onCheckedChange = onTrackerNsfwDisabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.disable_suggestions_nsfw),
-                        checked = state.isSuggestionsExcludeNsfw,
-                        summary = stringResource(R.string.disable_suggestions_nsfw_summary),
-                        onCheckedChange = onSuggestionsExcludeNsfwChange,
+                        values = state.adultContentFilterTargets,
+                        options = adultContentFilterOptions,
+                        emptySelectionText = stringResource(R.string.none),
+                        onValueChange = onAdultContentFilterTargetsChange,
                     )
                     SettingsSectionDivider()
                     SettingsChoicePreference(

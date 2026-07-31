@@ -2257,6 +2257,7 @@
     <string name="add_repository_prompt">添加 URL、文件或粘贴仓库内容</string>
     <string name="add_repository_with_kind">添加 %1$s</string>
     <string name="adult_content_filtering">成人内容过滤</string>
+    <string name="disable_sources_and_browse_nsfw">从内容源与浏览内容中隐藏</string>
     <string name="advanced_search">高级搜索</string>
     <string name="al_category_anime_airing">播出时间表</string>
     <string name="al_category_anime_favourites">最受喜爱系列</string>
