@@ -108,11 +108,12 @@ internal class ComposeReaderController(
 									)
 								}
 							},
-						shouldAcceptReaderPosition = { position -> shouldAcceptPosition(position) },
+							shouldAcceptReaderPosition = { position -> shouldAcceptPosition(position) },
+							shouldAcceptReaderPageKey = { pageKey -> shouldAcceptPageKey(pageKey) },
 						onShowErrorDetails = errorHost::showReaderErrorDetails,
 						onRetryError = errorHost::resolveReaderError,
 						resolveErrorStringId = errorHost::getReaderErrorActionStringId,
-						onReaderPositionChanged = positionChanged@ { position, internalScroll ->
+							onReaderPositionChanged = positionChanged@ { position, internalScroll ->
 							val pendingPosition = resolveRequestedPosition()
 							val statePosition = resolveReaderInitialPagePosition(
 								viewModel.content.value.pages,
@@ -144,7 +145,15 @@ internal class ComposeReaderController(
 							if (pendingPosition != null && kotlin.math.abs(position - pendingPosition) <= 1) {
 								requestedPageKey = null
 							}
-						},
+							},
+							onReaderPageKeyChanged = { pageKey, internalScroll ->
+								currentPageKey = pageKey
+								currentInternalScroll = internalScroll
+								val pendingPageKey = requestedPageKey
+								if (pendingPageKey != null && areReaderPageKeysAdjacent(pageKey, pendingPageKey)) {
+									requestedPageKey = null
+								}
+							},
 						onReaderInternalScrollChanged = { pageKey, internalScroll ->
 							if (pageKey == currentPageKey) {
 								currentInternalScroll = internalScroll
@@ -513,6 +522,28 @@ internal class ComposeReaderController(
 		return true
 	}
 
+	private fun shouldAcceptPageKey(pageKey: Long): Boolean {
+		val pages = viewModel.content.value.pages
+		val initialPageKey = viewModel.getCurrentState()?.let { state ->
+			pages.firstOrNull { it.chapterId == state.chapterId && it.index == state.page }?.readerKey
+		}
+		return shouldAcceptReaderPageKey(
+			pageKeys = pages.map { it.readerKey },
+			pageKey = pageKey,
+			requestedPageKey = requestedPageKey,
+			currentPageKey = currentPageKey,
+			initialPageKey = initialPageKey,
+		)
+	}
+
+	private fun areReaderPageKeysAdjacent(firstPageKey: Long, secondPageKey: Long): Boolean {
+		val pageKeys = viewModel.content.value.pages.map { it.readerKey }
+		val firstPosition = pageKeys.indexOf(firstPageKey)
+		val secondPosition = pageKeys.indexOf(secondPageKey)
+		return firstPosition >= 0 && secondPosition >= 0 &&
+			kotlin.math.abs(firstPosition - secondPosition) <= 1
+	}
+
 	private fun resolveRequestedPosition(): Int? {
 		return resolvePageKeyPosition(
 			pageKeys = viewModel.content.value.pages.map { it.readerKey },
@@ -550,6 +581,22 @@ internal fun shouldAcceptReaderPosition(position: Int, requestedPosition: Int?):
 	// page). Accept that callback so the transition request cannot remain
 	// pending forever and block all later page callbacks.
 	return requestedPosition == null || kotlin.math.abs(position - requestedPosition) <= 1
+}
+
+internal fun shouldAcceptReaderPageKey(
+	pageKeys: List<Long>,
+	pageKey: Long,
+	requestedPageKey: Long?,
+	currentPageKey: Long?,
+	initialPageKey: Long?,
+): Boolean {
+	val position = pageKeys.indexOf(pageKey)
+	if (position < 0) return false
+	if (requestedPageKey != null) {
+		val requestedPosition = pageKeys.indexOf(requestedPageKey)
+		return requestedPosition >= 0 && kotlin.math.abs(position - requestedPosition) <= 1
+	}
+	return currentPageKey != null || pageKey == initialPageKey
 }
 
 internal fun resolvePageKeyPosition(pageKeys: List<Long>, pageKey: Long?): Int? {

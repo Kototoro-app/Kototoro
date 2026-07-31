@@ -16,17 +16,60 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
-	fun `prepending pages requires an anchor restore but appending does not`() {
-		val currentPageKey = 18301L
-		val original = listOf(currentPageKey, 18302L)
+	fun `resolves visible pages by stable keys after leading chapter is trimmed`() {
+		val visibleLowerKey = 201L
+		val visibleUpperKey = 203L
+		val trimmedPageKeys = listOf(200L, visibleLowerKey, 202L, visibleUpperKey, 300L)
 
 		assertEquals(
-			true,
-			hasWebtoonAnchorShifted(original, listOf(18201L, 18202L) + original, currentPageKey),
+			1..3,
+			resolveWebtoonVisiblePageRange(
+				pageKeys = trimmedPageKeys,
+				lowerPageKey = visibleLowerKey,
+				upperPageKey = visibleUpperKey,
+			),
 		)
+	}
+
+	@Test
+	fun `ignores stale visible keys removed from current page window`() {
 		assertEquals(
-			false,
-			hasWebtoonAnchorShifted(original, original + 18401L, currentPageKey),
+			null,
+			resolveWebtoonVisiblePageRange(
+				pageKeys = listOf(200L, 201L, 202L),
+				lowerPageKey = 101L,
+				upperPageKey = 102L,
+			),
+		)
+	}
+
+	@Test
+	fun `selects last page whose end is visible across chapter boundary`() {
+		assertEquals(
+			201L,
+			resolveLastEndVisibleWebtoonPageKey(
+				items = listOf(
+					WebtoonVisibleItem(pageKey = 105L, offsetPx = -200, sizePx = 400),
+					WebtoonVisibleItem(pageKey = 201L, offsetPx = 200, sizePx = 800),
+				),
+				viewportStartPx = 0,
+				viewportEndPx = 1000,
+			),
+		)
+	}
+
+	@Test
+	fun `keeps current page while adjacent page end is outside viewport`() {
+		assertEquals(
+			105L,
+			resolveLastEndVisibleWebtoonPageKey(
+				items = listOf(
+					WebtoonVisibleItem(pageKey = 105L, offsetPx = -100, sizePx = 900),
+					WebtoonVisibleItem(pageKey = 201L, offsetPx = 800, sizePx = 900),
+				),
+				viewportStartPx = 0,
+				viewportEndPx = 1000,
+			),
 		)
 	}
 
@@ -35,14 +78,12 @@ class WebtoonViewportPolicyTest {
 		assertFalse(
 			shouldTrackWebtoonViewport(
 				isAnchorRestorePending = false,
-				anchorShiftPending = false,
 				viewportConfigurationChanged = true,
 			),
 		)
 		assertTrue(
 			shouldTrackWebtoonViewport(
 				isAnchorRestorePending = false,
-				anchorShiftPending = false,
 				viewportConfigurationChanged = false,
 			),
 		)

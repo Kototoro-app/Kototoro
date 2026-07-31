@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.domain
 
 import android.util.LongSparseArray
+import android.util.Log
 import androidx.core.net.toUri
 import androidx.annotation.CheckResult
 import dagger.hilt.android.scopes.ViewModelScoped
@@ -22,6 +23,7 @@ import org.skepsun.kototoro.core.model.getContentType
 import javax.inject.Inject
 
 private const val PAGES_TRIM_THRESHOLD = 120
+private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
 
 @ViewModelScoped
 class ChaptersLoader @Inject constructor(
@@ -44,30 +46,7 @@ class ChaptersLoader @Inject constructor(
 	}
 
 	suspend fun loadPrevNextChapter(manga: ContentDetails, currentId: Long, isNext: Boolean): Boolean {
-		val contentType = manga.toContent().source.getContentType()
-		val useMerge = settings.isMergeRepeatedChapters && contentType.isManga()
-		val chaptersList = if (useMerge) {
-			val allBranches = manga.chapters.keys.toList()
-			val rawChapters = allBranches.flatMap { manga.chapters[it].orEmpty() }
-			rawChapters.mergeRepeated()
-		} else {
-			manga.allChapters
-		}
-
-		val currentChapter = peekChapter(currentId) ?: manga.allChapters.find { it.id == currentId }
-		val index = if (currentChapter != null) {
-			val currentKey = if (useMerge) currentChapter.getMergeKey() else null
-			if (useMerge) {
-				chaptersList.indexOfFirst { it.getMergeKey() == currentKey }
-			} else {
-				val predicate: (ContentChapter) -> Boolean = { it.id == currentId }
-				if (isNext) chaptersList.indexOfFirst(predicate) else chaptersList.indexOfLast(predicate)
-			}
-		} else {
-			val predicate: (ContentChapter) -> Boolean = { it.id == currentId }
-			if (isNext) chaptersList.indexOfFirst(predicate) else chaptersList.indexOfLast(predicate)
-		}
-
+		val (chaptersList, index) = resolveChapterPosition(manga, currentId, isNext)
 		if (index == -1) return false
 		val newChapter = chaptersList.getOrNull(if (isNext) index + 1 else index - 1) ?: return false
 		val newPages = loadChapter(newChapter.id)
@@ -86,6 +65,57 @@ class ChaptersLoader @Inject constructor(
 				chapterPages.addLast(newChapter.id, newPages)
 			} else {
 				chapterPages.addFirst(newChapter.id, newPages)
+			}
+		}
+		return true
+	}
+
+	suspend fun loadReaderAdjacentChapter(
+		manga: ContentDetails,
+		currentId: Long,
+		isNext: Boolean,
+	): Boolean {
+		val (chaptersList, currentIndex) = resolveChapterPosition(manga, currentId, isNext)
+		if (currentIndex == -1) return false
+		val targetIndex = if (isNext) currentIndex + 1 else currentIndex - 1
+		val targetChapter = chaptersList.getOrNull(targetIndex) ?: return false
+		val targetPages = if (hasPages(targetChapter.id)) {
+			null
+		} else {
+			loadChapter(targetChapter.id)
+		}
+		val loadedChapterIds = snapshot().map(ReaderPage::chapterId).distinct()
+		val desiredChapterIds = (currentIndex - 1..currentIndex + 1)
+			.mapNotNull { index ->
+				val chapter = chaptersList.getOrNull(index) ?: return@mapNotNull null
+				when {
+					index == currentIndex -> currentId
+					chapter.id == targetChapter.id -> targetChapter.id
+					else -> loadedChapterIds.firstOrNull { loadedId ->
+						chapters[loadedId]?.getMergeKey() == chapter.getMergeKey()
+					} ?: chapter.id
+				}
+			}
+		Log.d(
+			READER_WINDOW_LOG_TAG,
+			"loader current=$currentId next=$isNext target=${targetChapter.id} targetCached=${targetPages == null} " +
+				"retained=$desiredChapterIds cached=$loadedChapterIds",
+		)
+		if (targetPages == null && loadedChapterIds == desiredChapterIds) {
+			return true
+		}
+		mutex.withLock {
+			val pagesByChapter = desiredChapterIds.associateWith { chapterId ->
+				when (chapterId) {
+					targetChapter.id -> targetPages ?: chapterPages.subList(chapterId).toList()
+					else -> chapterPages.subList(chapterId).toList()
+				}
+			}
+			chapterPages.clear()
+			desiredChapterIds.forEach { chapterId ->
+				pagesByChapter.getValue(chapterId).takeIf { it.isNotEmpty() }?.let { pages ->
+					chapterPages.addLast(chapterId, pages)
+				}
 			}
 		}
 		return true
@@ -160,7 +190,34 @@ class ChaptersLoader @Inject constructor(
 
 	fun first() = chapterPages.first()
 
-	fun snapshot() = chapterPages.toList()
+	fun snapshot() = synchronized(chapterPages) { chapterPages.toList() }
+
+	fun snapshotReaderWindow(currentChapterId: Long, adjacentPageCount: Int): List<ReaderPage> {
+		return chapterPages.readerWindow(currentChapterId, adjacentPageCount)
+	}
+
+	private fun resolveChapterPosition(
+		manga: ContentDetails,
+		currentId: Long,
+		isNext: Boolean,
+	): Pair<List<ContentChapter>, Int> {
+		val contentType = manga.toContent().source.getContentType()
+		val useMerge = settings.isMergeRepeatedChapters && contentType.isManga()
+		val chaptersList = if (useMerge) {
+			manga.chapters.keys.flatMap { manga.chapters[it].orEmpty() }.mergeRepeated()
+		} else {
+			manga.allChapters
+		}
+		val currentChapter = peekChapter(currentId) ?: manga.allChapters.find { it.id == currentId }
+		val index = if (currentChapter != null && useMerge) {
+			val currentKey = currentChapter.getMergeKey()
+			chaptersList.indexOfFirst { it.getMergeKey() == currentKey }
+		} else {
+			val predicate: (ContentChapter) -> Boolean = { it.id == currentId }
+			if (isNext) chaptersList.indexOfFirst(predicate) else chaptersList.indexOfLast(predicate)
+		}
+		return chaptersList to index
+	}
 
 	private suspend fun loadChapter(chapterId: Long): List<ReaderPage> {
 		val chapter = checkNotNull(chapters[chapterId]) { "Requested chapter not found" }

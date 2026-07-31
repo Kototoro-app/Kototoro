@@ -67,13 +67,41 @@ class ChapterPagesTest {
 		assertEquals(subList.size, pages.size(2L))
 	}
 
-	private fun page(chapterId: Long) = ReaderPage(
+	@Test
+	fun readerWindowKeepsCurrentChapterAndBoundedAdjacentPages() {
+		val pages = ChapterPages()
+		pages.addLast(1L, List(5) { page(1L, it) })
+		pages.addLast(2L, List(4) { page(2L, it) })
+		pages.addLast(3L, List(6) { page(3L, it) })
+
+		val window = pages.readerWindow(currentChapterId = 2L, adjacentPageCount = 2)
+
+		assertEquals(listOf(3, 4), window.filter { it.chapterId == 1L }.map { it.index })
+		assertEquals(listOf(0, 1, 2, 3), window.filter { it.chapterId == 2L }.map { it.index })
+		assertEquals(listOf(0, 1), window.filter { it.chapterId == 3L }.map { it.index })
+	}
+
+	@Test
+	fun readerWindowCanPromoteBackToPreviousChapter() {
+		val pages = ChapterPages()
+		pages.addLast(1L, List(5) { page(1L, it) })
+		pages.addLast(2L, List(4) { page(2L, it) })
+		pages.addLast(3L, List(6) { page(3L, it) })
+
+		val window = pages.readerWindow(currentChapterId = 1L, adjacentPageCount = 2)
+
+		assertEquals(listOf(0, 1, 2, 3, 4), window.filter { it.chapterId == 1L }.map { it.index })
+		assertEquals(listOf(0, 1), window.filter { it.chapterId == 2L }.map { it.index })
+		assertTrue(window.none { it.chapterId == 3L })
+	}
+
+	private fun page(chapterId: Long, index: Int = Random.nextInt()) = ReaderPage(
 		id = Random.nextLong(),
 		url = "http://localhost",
 		preview = null,
 		headers = null,
 		chapterId = chapterId,
-		index = Random.nextInt(),
+		index = index,
 		source = TestContentSource,
 	)
 }

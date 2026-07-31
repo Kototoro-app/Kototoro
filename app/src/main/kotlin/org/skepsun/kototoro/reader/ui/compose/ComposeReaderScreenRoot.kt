@@ -41,10 +41,12 @@ fun ComposeReaderScreenRoot(
 	layoutGeneration: Int = 0,
 	pageOverlay: @Composable BoxScope.() -> Unit = {},
 	shouldAcceptReaderPosition: (Int) -> Boolean = { true },
+	shouldAcceptReaderPageKey: (Long) -> Boolean = { true },
 	onShowErrorDetails: (Throwable, String?) -> Unit = { _, _ -> },
 	onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
 	resolveErrorStringId: (Throwable) -> Int = ExceptionResolver::getResolveStringId,
 	onReaderPositionChanged: (position: Int, internalScroll: Int) -> Unit = { _, _ -> },
+	onReaderPageKeyChanged: (pageKey: Long, internalScroll: Int) -> Unit = { _, _ -> },
 	onReaderInternalScrollChanged: (pageKey: Long, internalScroll: Int) -> Unit = { _, _ -> },
 	onReaderInteraction: () -> Unit = {},
 	onGridTap: (TapGridArea) -> Unit = {},
@@ -164,21 +166,19 @@ fun ComposeReaderScreenRoot(
 			initialScroll = restoredState?.scroll ?: 0,
 			imageLoader = imageLoader,
 			imagePipeline = imagePipeline,
-			onPagesChanged = { lower, upper ->
-				val selectedPosition = resolveVisiblePageSelection(
-					pages = content.pages,
-					lowerPos = lower,
-					upperPos = upper,
-					currentChapterId = viewModel.getCurrentState()?.chapterId,
-					boundsPageOffset = 2,
-				)
-				if (selectedPosition >= 0 && shouldAcceptReaderPosition(selectedPosition)) {
-					viewModel.onCurrentPageChanged(lower, upper)
-					onReaderPositionChanged(selectedPosition, 0)
-				} else if (selectedPosition >= 0) {
-					Log.d("ReaderDebug", "Ignore webtoon pagesChanged before ViewModel update position=$selectedPosition")
-				}
-			},
+				onPagesChanged = { lowerPageKey, upperPageKey, activePageKey ->
+					val selectedPosition = content.pages.indexOfFirst { it.readerKey == activePageKey }
+					if (selectedPosition >= 0) {
+						// Stable viewport identity is authoritative for reading progress and chapter loading.
+						// Controller transition gating only protects its own navigation anchor.
+						viewModel.onWebtoonPageChanged(lowerPageKey, upperPageKey, activePageKey)
+					}
+					if (selectedPosition >= 0 && shouldAcceptReaderPageKey(activePageKey)) {
+						onReaderPageKeyChanged(activePageKey, 0)
+					} else if (selectedPosition >= 0) {
+						Log.d("ReaderDebug", "Ignore transitional webtoon controller key=$activePageKey")
+					}
+				},
 			onInternalScrollChanged = { page, scroll ->
 				onReaderInternalScrollChanged(page.readerKey, scroll)
 			},

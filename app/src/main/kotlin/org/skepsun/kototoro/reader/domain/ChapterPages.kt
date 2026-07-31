@@ -71,6 +71,22 @@ class ChapterPages private constructor(private val pages: ArrayDeque<ReaderPage>
 		return pages.subList(range.first, range.last + 1)
 	}
 
+	@Synchronized
+	fun readerWindow(currentChapterId: Long, adjacentPageCount: Int): List<ReaderPage> {
+		val currentRange = indices[currentChapterId] ?: return emptyList()
+		val previousChapterId = pages.getOrNull(currentRange.first - 1)?.chapterId
+		val nextChapterId = pages.getOrNull(currentRange.last + 1)?.chapterId
+		return buildList {
+			if (previousChapterId != null) {
+				addAll(subList(previousChapterId).takeLast(adjacentPageCount))
+			}
+			addAll(pages.subList(currentRange.first, currentRange.last + 1))
+			if (nextChapterId != null) {
+				addAll(subList(nextChapterId).take(adjacentPageCount))
+			}
+		}
+	}
+
 	operator fun contains(chapterId: Long) = chapterId in indices
 
 	private fun shiftIndices(delta: Int) {

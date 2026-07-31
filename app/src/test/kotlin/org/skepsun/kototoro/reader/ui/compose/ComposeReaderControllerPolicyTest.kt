@@ -35,6 +35,36 @@ class ComposeReaderControllerPolicyTest {
 	}
 
 	@Test
+	fun `settled webtoon key remains accepted after chapter window expands`() {
+		val expandedWindow = listOf(101L, 102L) + (200L..230L)
+
+		assertTrue(
+			shouldAcceptReaderPageKey(
+				pageKeys = expandedWindow,
+				pageKey = 220L,
+				requestedPageKey = null,
+				currentPageKey = 202L,
+				initialPageKey = 200L,
+			),
+		)
+	}
+
+	@Test
+	fun `stale webtoon key cannot override pending stable target after prepend`() {
+		val pagesAfterPrepend = listOf(1L, 2L, 101L, 102L, 103L, 104L)
+
+		assertFalse(
+			shouldAcceptReaderPageKey(
+				pageKeys = pagesAfterPrepend,
+				pageKey = 101L,
+				requestedPageKey = 103L,
+				currentPageKey = 101L,
+				initialPageKey = 101L,
+			),
+		)
+	}
+
+	@Test
 	fun `repeated navigation continues from the pending target`() {
 		val pageKeys = listOf(101L, 102L, 103L, 104L)
 

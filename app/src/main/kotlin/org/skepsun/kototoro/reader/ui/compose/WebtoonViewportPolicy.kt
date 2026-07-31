@@ -24,11 +24,41 @@ internal fun resolveWebtoonAnchorPosition(pageKeys: List<Long>, anchorPageKey: L
 	return pageKeys.indexOf(anchorPageKey)
 }
 
+internal fun resolveWebtoonVisiblePageRange(
+	pageKeys: List<Long>,
+	lowerPageKey: Long,
+	upperPageKey: Long,
+): IntRange? {
+	val lowerPosition = pageKeys.indexOf(lowerPageKey)
+	val upperPosition = pageKeys.indexOf(upperPageKey)
+	return if (lowerPosition >= 0 && upperPosition >= lowerPosition) {
+		lowerPosition..upperPosition
+	} else {
+		null
+	}
+}
+
+internal data class WebtoonVisibleItem(
+	val pageKey: Long,
+	val offsetPx: Int,
+	val sizePx: Int,
+)
+
+internal fun resolveLastEndVisibleWebtoonPageKey(
+	items: List<WebtoonVisibleItem>,
+	viewportStartPx: Int,
+	viewportEndPx: Int,
+): Long? {
+	return items.lastOrNull { item ->
+		val itemEnd = item.offsetPx + item.sizePx
+		itemEnd > viewportStartPx && itemEnd <= viewportEndPx
+	}?.pageKey
+}
+
 internal fun shouldTrackWebtoonViewport(
 	isAnchorRestorePending: Boolean,
-	anchorShiftPending: Boolean,
 	viewportConfigurationChanged: Boolean,
-): Boolean = !isAnchorRestorePending && !anchorShiftPending && !viewportConfigurationChanged
+): Boolean = !isAnchorRestorePending && !viewportConfigurationChanged
 
 /** Matches WebtoonScalingFrame's translation bounds for the zoomed webtoon canvas. */
 fun resolveWebtoonCanvasOffsetBounds(

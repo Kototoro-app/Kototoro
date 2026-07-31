@@ -94,8 +94,10 @@ import java.time.Instant
 import javax.inject.Inject
 
 private const val BOUNDS_PAGE_OFFSET = 2
+private const val WEBTOON_ADJACENT_PAGE_COUNT = 2
 private const val PREFETCH_LIMIT = 10
 private const val LOG_TAG = "ReaderViewModel"
+private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
 
 @HiltViewModel
 class ReaderViewModel @Inject constructor(
@@ -162,6 +164,10 @@ class ReaderViewModel @Inject constructor(
     private var pageSaveJob: Job? = null
     private var bookmarkJob: Job? = null
     private var stateChangeJob: Job? = null
+    @Volatile
+    private var readerWindowGeneration = 0L
+    @Volatile
+    private var readerAdjacentPageCount = WEBTOON_ADJACENT_PAGE_COUNT
 
     val readerMode = MutableStateFlow<ReaderMode?>(null)
     val onPageSaved = MutableEventFlow<Collection<Uri>>()
@@ -279,6 +285,7 @@ class ReaderViewModel @Inject constructor(
         observeTranslationDebugLogs()
         listenToDoublePageEvents()
         observeMergeRepeatedChapters()
+        observeWebtoonBoundaryMode()
         loadImpl()
 		launchJob(Dispatchers.Default) {
 			val mangaId = manga.filterNotNull().first().id
@@ -310,8 +317,15 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private fun getSplitPagesSnapshot(): List<org.skepsun.kototoro.reader.ui.pager.ReaderPage> {
-        val originalPages = chaptersLoader.snapshot()
+    private fun getSplitPagesSnapshot(
+        currentChapterId: Long? = readingState.value?.chapterId,
+    ): List<org.skepsun.kototoro.reader.ui.pager.ReaderPage> {
+        val useReaderWindow = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
+        val originalPages = if (useReaderWindow && currentChapterId != null) {
+            chaptersLoader.snapshotReaderWindow(currentChapterId, readerAdjacentPageCount)
+        } else {
+            chaptersLoader.snapshot()
+        }
         if (!settings.isReaderSplitPagesEnabled) return originalPages.map { it.withReloadNonce() }
         val newPages = mutableListOf<org.skepsun.kototoro.reader.ui.pager.ReaderPage>()
         val mode = readerMode.value
@@ -494,7 +508,7 @@ class ReaderViewModel @Inject constructor(
             )
             readerMode.value = newMode
             content.update {
-                it.copy(state = getCurrentState())
+                it.copy(pages = getSplitPagesSnapshot(), state = getCurrentState())
             }
         }
     }
@@ -605,9 +619,11 @@ class ReaderViewModel @Inject constructor(
                 "switchChapter: targetChapterId=$id, targetPage=$page, previousState=${readingState.value}",
             )
             content.value = ReaderContent(emptyList(), null)
+            readerWindowGeneration++
+            readerAdjacentPageCount = WEBTOON_ADJACENT_PAGE_COUNT
             chaptersLoader.loadSingleChapter(id)
             val newState = ReaderState(id, page, 0)
-            content.value = ReaderContent(getSplitPagesSnapshot(), newState)
+            content.value = ReaderContent(getSplitPagesSnapshot(id), newState)
             Log.d(
                 LOG_TAG,
                 "switchChapter: loaded targetChapterId=$id, pages=${content.value.pages.size}, newState=$newState",
@@ -644,6 +660,8 @@ class ReaderViewModel @Inject constructor(
                 "switchChapterBy: delta=$delta, prevState=$prevState, newChapterId=$newChapterId",
             )
             content.value = ReaderContent(emptyList(), null)
+            readerWindowGeneration++
+            readerAdjacentPageCount = WEBTOON_ADJACENT_PAGE_COUNT
             chaptersLoader.loadSingleChapter(newChapterId)
             val newState = ReaderState(
                 chapterId = newChapterId,
@@ -651,7 +669,7 @@ class ReaderViewModel @Inject constructor(
                 scroll = if (delta == 0) prevState.scroll else 0,
             )
             skipBoundaryLoadOnce.set(true)
-            content.value = ReaderContent(getSplitPagesSnapshot(), newState)
+            content.value = ReaderContent(getSplitPagesSnapshot(newChapterId), newState)
             Log.d(
                 LOG_TAG,
                 "switchChapterBy: applied newState=$newState, pages=${content.value.pages.size}",
@@ -662,18 +680,59 @@ class ReaderViewModel @Inject constructor(
 
     @MainThread
     fun onCurrentPageChanged(lowerPos: Int, upperPos: Int) {
+        onCurrentPageChanged(content.value.pages, lowerPos, upperPos, selectedPageKey = null)
+    }
+
+    @MainThread
+    fun onWebtoonPageChanged(lowerPageKey: Long, upperPageKey: Long, activePageKey: Long) {
+        val pages = content.value.pages
+        val lowerPos = pages.indexOfFirst { it.readerKey == lowerPageKey }
+        val upperPos = pages.indexOfFirst { it.readerKey == upperPageKey }
+        val activePage = pages.firstOrNull { it.readerKey == activePageKey }
+        if (lowerPos < 0 || upperPos < lowerPos || activePage == null) {
+            Log.d(
+                READER_WINDOW_LOG_TAG,
+                "drop stale viewport lowerKey=$lowerPageKey upperKey=$upperPageKey activeKey=$activePageKey " +
+                    "windowSize=${pages.size} generation=$readerWindowGeneration",
+            )
+            return
+        }
+        val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
+        if (continuousWebtoon && suppressTransientCrossChapterUpdates.get()) {
+            Log.d(
+                READER_WINDOW_LOG_TAG,
+                "clear legacy suppression for stable viewport anchor=$transientRestoreAnchorState " +
+                    "active=${activePage.chapterId}:${activePage.index}",
+            )
+            clearTransientCrossChapterSuppression()
+        }
+        readerAdjacentPageCount = maxOf(WEBTOON_ADJACENT_PAGE_COUNT, upperPos - lowerPos + 1)
+        Log.d(
+            READER_WINDOW_LOG_TAG,
+            "accept viewport lower=$lowerPos upper=$upperPos active=${activePage.chapterId}:${activePage.index} " +
+                "state=${readingState.value} adjacentCount=$readerAdjacentPageCount generation=$readerWindowGeneration",
+        )
+        onCurrentPageChanged(pages, lowerPos, upperPos, selectedPageKey = activePageKey)
+    }
+
+    private fun onCurrentPageChanged(
+        pages: List<org.skepsun.kototoro.reader.ui.pager.ReaderPage>,
+        lowerPos: Int,
+        upperPos: Int,
+        selectedPageKey: Long?,
+    ) {
         val prevJob = stateChangeJob
-        val pages = content.value.pages // capture immediately
         targetPagePosition.value = null
         stateChangeJob = launchJob(Dispatchers.Default) {
             prevJob?.cancelAndJoin()
-            val selectedPos = resolveVisiblePageSelection(
-                pages = pages,
-                lowerPos = lowerPos,
-                upperPos = upperPos,
-                currentChapterId = readingState.value?.chapterId,
-                boundsPageOffset = BOUNDS_PAGE_OFFSET,
-            )
+            val selectedPos = selectedPageKey?.let { key -> pages.indexOfFirst { it.readerKey == key } }
+                ?: resolveVisiblePageSelection(
+                    pages = pages,
+                    lowerPos = lowerPos,
+                    upperPos = upperPos,
+                    currentChapterId = readingState.value?.chapterId,
+                    boundsPageOffset = BOUNDS_PAGE_OFFSET,
+                )
             val selectedPage = pages.getOrNull(selectedPos)
             Log.d(
                 LOG_TAG,
@@ -703,10 +762,19 @@ class ReaderViewModel @Inject constructor(
                 )
                 return@launchJob
             }
+            val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
+            val promotedChapter = selectedPage?.chapterId?.takeIf { activeChapterId ->
+                continuousWebtoon && currentState != null && activeChapterId != currentState.chapterId
+            }
             selectedPage?.let { page ->
                 readingState.update { cs ->
                     cs?.copy(chapterId = page.chapterId, page = page.index)
                 }
+                Log.d(
+                    READER_WINDOW_LOG_TAG,
+                    "apply active page=${page.chapterId}:${page.index} previous=$currentState " +
+                        "promote=${promotedChapter != null} generation=$readerWindowGeneration",
+                )
                 updateTranslationStateForCurrentPage(page.id)
                 if (
                     suppressTransientCrossChapterUpdates.get() &&
@@ -718,8 +786,22 @@ class ReaderViewModel @Inject constructor(
                 }
             }
             notifyStateChanged()
+            if (promotedChapter != null) {
+                readerWindowGeneration++
+                val promotedPages = getSplitPagesSnapshot(promotedChapter)
+                content.value = ReaderContent(promotedPages, null)
+                val promotedForward = pages.indexOfFirst { it.chapterId == promotedChapter } >
+                    pages.indexOfFirst { it.chapterId == currentState?.chapterId }
+                Log.d(
+                    READER_WINDOW_LOG_TAG,
+                    "promote chapter=$promotedChapter forward=$promotedForward generation=$readerWindowGeneration " +
+                        "window=${promotedPages.windowSummary()}",
+                )
+                loadReaderAdjacentChapter(promotedChapter, isNext = promotedForward)
+                return@launchJob
+            }
             val currentLoadingJob = loadingJob
-            if (currentLoadingJob?.isActive == true) {
+            if (currentLoadingJob?.isActive == true && !continuousWebtoon) {
                 Log.d(LOG_TAG, "onCurrentPageChanged: loading active, skip boundary check")
                 return@launchJob
             }
@@ -730,27 +812,38 @@ class ReaderViewModel @Inject constructor(
             if (pages.isEmpty() || loadingJob?.isActive == true) {
                 return@launchJob
             }
-            if (skipBoundaryLoadOnce.getAndSet(false)) {
+            if (skipBoundaryLoadOnce.getAndSet(false) && !continuousWebtoon) {
                 return@launchJob
             }
             ensureActive()
             val autoLoadAllowed = readerMode.value != ReaderMode.WEBTOON || !isWebtoonPullGestureEnabled.value
             if (autoLoadAllowed) {
-                if (upperPos >= pages.lastIndex - BOUNDS_PAGE_OFFSET) {
+                val currentChapterId = readingState.value?.chapterId
+                val chapterStart = pages.indexOfFirst { it.chapterId == currentChapterId }
+                val chapterEnd = pages.indexOfLast { it.chapterId == currentChapterId }
+                if (chapterEnd >= 0 && upperPos >= chapterEnd - BOUNDS_PAGE_OFFSET) {
                     Log.d(
                         LOG_TAG,
                         "preload: trigger next, chapterId=${pages.last().chapterId}, " +
                             "upper=$upperPos, lastIndex=${pages.lastIndex}",
                     )
-                    loadPrevNextChapter(pages.last().chapterId, isNext = true)
+                    if (continuousWebtoon && currentChapterId != null) {
+                        loadReaderAdjacentChapter(currentChapterId, isNext = true)
+                    } else {
+                        loadPrevNextChapter(pages.last().chapterId, isNext = true)
+                    }
                 }
-                if (lowerPos <= BOUNDS_PAGE_OFFSET) {
+                if (chapterStart >= 0 && lowerPos <= chapterStart + BOUNDS_PAGE_OFFSET) {
                     Log.d(
                         LOG_TAG,
                         "preload: trigger prev, chapterId=${pages.first().chapterId}, " +
                             "lower=$lowerPos",
                     )
-                    loadPrevNextChapter(pages.first().chapterId, isNext = false)
+                    if (continuousWebtoon && currentChapterId != null) {
+                        loadReaderAdjacentChapter(currentChapterId, isNext = false)
+                    } else {
+                        loadPrevNextChapter(pages.first().chapterId, isNext = false)
+                    }
                 }
             }
             if (pageLoader.isPrefetchApplicable()) {
@@ -954,6 +1047,53 @@ class ReaderViewModel @Inject constructor(
                 "loadPrevNextChapter: completed currentId=$currentId, isNext=$isNext, " +
                     "snapshotSize=${content.value.pages.size}, currentState=${readingState.value}",
             )
+        }
+    }
+
+    @AnyThread
+    private fun loadReaderAdjacentChapter(currentId: Long, isNext: Boolean) {
+        val generation = readerWindowGeneration
+        val prevJob = loadingJob
+        loadingJob = launchLoadingJob(Dispatchers.Default) {
+            prevJob?.join()
+            if (generation != readerWindowGeneration || readingState.value?.chapterId != currentId) {
+                Log.d(
+                    READER_WINDOW_LOG_TAG,
+                    "skip adjacent load chapter=$currentId next=$isNext generation=$generation " +
+                        "currentGeneration=$readerWindowGeneration state=${readingState.value}",
+                )
+                return@launchLoadingJob
+            }
+            Log.d(READER_WINDOW_LOG_TAG, "load adjacent chapter=$currentId next=$isNext generation=$generation")
+            val loaded = chaptersLoader.loadReaderAdjacentChapter(mangaDetails.requireValue(), currentId, isNext)
+            if (generation != readerWindowGeneration || readingState.value?.chapterId != currentId) {
+                Log.d(
+                    READER_WINDOW_LOG_TAG,
+                    "drop adjacent result chapter=$currentId next=$isNext loaded=$loaded generation=$generation " +
+                        "currentGeneration=$readerWindowGeneration state=${readingState.value}",
+                )
+                return@launchLoadingJob
+            }
+            val updatedPages = getSplitPagesSnapshot(currentId)
+            if (updatedPages != content.value.pages) {
+                content.value = ReaderContent(updatedPages, null)
+                Log.d(
+                    READER_WINDOW_LOG_TAG,
+                    "publish adjacent chapter=$currentId next=$isNext loaded=$loaded generation=$generation " +
+                        "window=${updatedPages.windowSummary()}",
+                )
+            } else {
+                Log.d(
+                    READER_WINDOW_LOG_TAG,
+                    "keep adjacent window chapter=$currentId next=$isNext generation=$generation unchanged",
+                )
+            }
+        }
+    }
+
+    private fun List<org.skepsun.kototoro.reader.ui.pager.ReaderPage>.windowSummary(): String {
+        return groupBy { it.chapterId }.entries.joinToString(prefix = "[", postfix = "]") { (chapterId, pages) ->
+            "$chapterId:${pages.first().index}-${pages.last().index}(${pages.size})"
         }
     }
 
@@ -1265,6 +1405,21 @@ class ReaderViewModel @Inject constructor(
                     content.value = ReaderContent(getSplitPagesSnapshot(), currentState)
                     notifyStateChanged()
                 }
+        }
+    }
+
+    private fun observeWebtoonBoundaryMode() {
+        launchJob(Dispatchers.Default) {
+            isWebtoonPullGestureEnabled.collect { isPullEnabled ->
+                val currentState = readingState.value ?: return@collect
+                if (readerMode.value != ReaderMode.WEBTOON) return@collect
+                readerWindowGeneration++
+                readerAdjacentPageCount = WEBTOON_ADJACENT_PAGE_COUNT
+                if (isPullEnabled) {
+                    chaptersLoader.keepOnlyChapter(currentState.chapterId)
+                }
+                content.value = ReaderContent(getSplitPagesSnapshot(currentState.chapterId), currentState)
+            }
         }
     }
 

@@ -161,8 +161,9 @@ private data class WebtoonViewportConfiguration(
 )
 
 private data class WebtoonViewportUpdate(
-	val lowerPosition: Int,
-	val upperPosition: Int,
+	val lowerPageKey: Long?,
+	val upperPageKey: Long?,
+	val activePageKey: Long?,
 	val firstVisibleItemScrollOffset: Int,
 	val shouldTrackViewport: Boolean,
 )
@@ -400,7 +401,7 @@ fun ComposeWebtoonReader(
 	initialScroll: Int,
 	imageLoader: ImageLoader,
 	imagePipeline: ComposeReaderImagePipeline,
-	onPagesChanged: (lowerPosition: Int, upperPosition: Int) -> Unit,
+	onPagesChanged: (lowerPageKey: Long, upperPageKey: Long, activePageKey: Long) -> Unit,
 	onInternalScrollChanged: (ReaderPage, Int) -> Unit,
 	requestedPage: Int? = null,
 	requestedPageSmooth: Boolean = false,
@@ -449,11 +450,9 @@ fun ComposeWebtoonReader(
 	val viewportConfigurationChanged = appliedViewportConfiguration != viewportConfiguration
 	val viewportConfigurationChangedState = rememberUpdatedState(viewportConfigurationChanged)
 	val currentPages by rememberUpdatedState(pages)
+	val currentPageKeys by rememberUpdatedState(pageKeys)
 	val currentOnPagesChanged by rememberUpdatedState(onPagesChanged)
 	val currentOnInternalScrollChanged by rememberUpdatedState(onInternalScrollChanged)
-	var anchorPageKey by remember {
-		mutableStateOf(pageKeys[initialPosition])
-	}
 	val stableViewportAnchor = remember {
 		WebtoonViewportAnchorState(
 			pageKey = pageKeys[initialPosition],
@@ -462,9 +461,6 @@ fun ComposeWebtoonReader(
 	}
 	var hasAppliedInitialPosition by remember { mutableStateOf(false) }
 	var isAnchorRestorePending by remember { mutableStateOf(true) }
-	var previousPageKeys by remember { mutableStateOf(pageKeys) }
-	val anchorShiftPending = hasWebtoonAnchorShifted(previousPageKeys, pageKeys, anchorPageKey)
-	val anchorShiftPendingState = rememberUpdatedState(anchorShiftPending)
 	// Keep dimensions outside individual lazy items. When an item is recycled and later returns
 	// from Coil's cache, its height is known before the bitmap is drawn, preventing scroll jumps.
 	val imageSizes = remember { mutableStateMapOf<Long, WebtoonImageSize>() }
@@ -635,11 +631,9 @@ fun ComposeWebtoonReader(
 			pendingAnchor = null
 			stableViewportAnchor.pageKey = targetPage.readerKey
 			stableViewportAnchor.offsetPx = 0
-			anchorPageKey = targetPage.readerKey
 			listState.scrollToItem(initialPosition)
 			snapshotFlow { listState.firstVisibleItemIndex }
 				.first { actualPosition -> actualPosition == initialPosition }
-			previousPageKeys = pageKeys
 			appliedViewportConfiguration = viewportConfiguration
 			hasAppliedInitialPosition = true
 			isAnchorRestorePending = !hasAppliedInitialScroll
@@ -658,7 +652,6 @@ fun ComposeWebtoonReader(
 		pendingAnchor = null
 		stableViewportAnchor.pageKey = initialPageKey
 		stableViewportAnchor.offsetPx = restoredOffset
-		anchorPageKey = initialPageKey
 		listState.scrollToItem(initialPosition, restoredOffset)
 		hasAppliedInitialScroll = true
 		isAnchorRestorePending = false
@@ -668,45 +661,69 @@ fun ComposeWebtoonReader(
 		if (viewportWidthPx <= 0 || viewportHeightPx <= 0) return@LaunchedEffect
 		if (!hasAppliedInitialPosition || !hasAppliedInitialScroll) return@LaunchedEffect
 		val anchorPosition = resolveWebtoonAnchorPosition(pageKeys, stableViewportAnchor.pageKey)
-		if ((isAnchorRestorePending || anchorShiftPending || viewportConfigurationChanged) && anchorPosition >= 0) {
+		if ((isAnchorRestorePending || viewportConfigurationChanged) && anchorPosition >= 0) {
 			isAnchorRestorePending = true
 			listState.scrollToItem(anchorPosition, stableViewportAnchor.offsetPx)
 		}
-		previousPageKeys = pageKeys
 		appliedViewportConfiguration = viewportConfiguration
 		isAnchorRestorePending = false
 	}
 	LaunchedEffect(listState) {
-		var reportedRange: IntRange? = null
+		var reportedPageKeys: Triple<Long, Long, Long>? = null
 		snapshotFlow {
-			val visibleItems = listState.layoutInfo.visibleItemsInfo
+			val layoutInfo = listState.layoutInfo
+			val visibleItems = layoutInfo.visibleItemsInfo
+			val activePageKey = resolveLastEndVisibleWebtoonPageKey(
+				items = visibleItems.mapNotNull { item ->
+					(item.key as? Long)?.let { key -> WebtoonVisibleItem(key, item.offset, item.size) }
+				},
+				viewportStartPx = layoutInfo.viewportStartOffset,
+				viewportEndPx = layoutInfo.viewportEndOffset,
+			)
 			WebtoonViewportUpdate(
-				lowerPosition = visibleItems.firstOrNull()?.index ?: -1,
-				upperPosition = visibleItems.lastOrNull()?.index ?: -1,
+				lowerPageKey = visibleItems.firstOrNull()?.key as? Long,
+				upperPageKey = visibleItems.lastOrNull()?.key as? Long,
+				activePageKey = activePageKey,
 				firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
 				shouldTrackViewport = shouldTrackWebtoonViewport(
 					isAnchorRestorePending = isAnchorRestorePending,
-					anchorShiftPending = anchorShiftPendingState.value,
 					viewportConfigurationChanged = viewportConfigurationChangedState.value,
 				),
 			)
 		}
 			.distinctUntilChanged()
 			.collect { viewport ->
-				if (!viewport.shouldTrackViewport || viewport.lowerPosition < 0 || viewport.upperPosition < 0) {
+				if (!viewport.shouldTrackViewport) {
 					return@collect
 				}
-				currentPages.getOrNull(viewport.lowerPosition)?.let { page ->
-					stableViewportAnchor.pageKey = page.readerKey
-					stableViewportAnchor.offsetPx = viewport.firstVisibleItemScrollOffset
-					val visibleRange = viewport.lowerPosition..viewport.upperPosition
-					if (reportedRange != visibleRange) {
-						reportedRange = visibleRange
-						anchorPageKey = page.readerKey
-						currentOnPagesChanged(viewport.lowerPosition, viewport.upperPosition)
-					}
-					currentOnInternalScrollChanged(page, viewport.firstVisibleItemScrollOffset)
+				val lowerPageKey = viewport.lowerPageKey ?: return@collect
+				val upperPageKey = viewport.upperPageKey ?: return@collect
+				val activePageKey = viewport.activePageKey ?: return@collect
+				val pagesSnapshot = currentPages
+				val visibleRange = resolveWebtoonVisiblePageRange(
+					pageKeys = currentPageKeys,
+					lowerPageKey = lowerPageKey,
+					upperPageKey = upperPageKey,
+				) ?: return@collect
+				val page = pagesSnapshot[visibleRange.first]
+				stableViewportAnchor.pageKey = lowerPageKey
+				stableViewportAnchor.offsetPx = viewport.firstVisibleItemScrollOffset
+				val visiblePageKeys = Triple(lowerPageKey, upperPageKey, activePageKey)
+				if (reportedPageKeys != visiblePageKeys) {
+					reportedPageKeys = visiblePageKeys
+					val activePage = pagesSnapshot.firstOrNull { it.readerKey == activePageKey }
+					Log.d(
+						READER_WINDOW_LOG_TAG,
+						"viewport lower=${pagesSnapshot[visibleRange.first].chapterId}:" +
+							"${pagesSnapshot[visibleRange.first].index} " +
+							"upper=${pagesSnapshot[visibleRange.last].chapterId}:" +
+							"${pagesSnapshot[visibleRange.last].index} " +
+							"active=${activePage?.chapterId}:${activePage?.index} offset=" +
+							viewport.firstVisibleItemScrollOffset,
+					)
+					currentOnPagesChanged(lowerPageKey, upperPageKey, activePageKey)
 				}
+				currentOnInternalScrollChanged(page, viewport.firstVisibleItemScrollOffset)
 			}
 	}
 	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, isAnchorRestorePending) {
@@ -979,12 +996,13 @@ fun ComposeWebtoonReader(
 								if (imageSizes[pageKey] != newSize) {
 									if (hasAppliedInitialPosition && !listState.isScrollInProgress) {
 										val visiblePosition = listState.firstVisibleItemIndex
-										pendingAnchor = WebtoonListAnchor(
-											pageKey = if (isAnchorRestorePending) {
-												anchorPageKey
-											} else {
-												pages.getOrNull(visiblePosition)?.readerKey ?: anchorPageKey
-											},
+									pendingAnchor = WebtoonListAnchor(
+										pageKey = if (isAnchorRestorePending) {
+											stableViewportAnchor.pageKey
+										} else {
+											pages.getOrNull(visiblePosition)?.readerKey
+												?: stableViewportAnchor.pageKey
+										},
 											offsetPx = if (isAnchorRestorePending) {
 												0
 											} else {
@@ -2529,4 +2547,5 @@ private const val READER_ANIMATION_DEBUG_TAG = "ReaderPageAnimation"
 private const val WEBTOON_AHEAD_CACHE_FRACTION = 0.5f
 private const val WEBTOON_PAGE_CONTENT_TYPE = "webtoon_page"
 private const val WEBTOON_PULL_THRESHOLD = 0.3f
+private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
 private const val AUTO_BACKGROUND_SAMPLE_SIZE = 64
