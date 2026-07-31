@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -75,6 +77,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -97,6 +100,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.LiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkRequestSize
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
@@ -133,7 +137,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -147,6 +150,10 @@ import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroReturnTransitionInProgress
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
+import org.skepsun.kototoro.core.util.ext.mangaExtra
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -158,6 +165,7 @@ import androidx.compose.material3.Surface
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Size
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.heroTransitionTimestampMs
@@ -188,6 +196,7 @@ import org.skepsun.kototoro.main.ui.navigation3.restoreFromSpaceSession
 import org.skepsun.kototoro.main.ui.navigation3.toSpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceKind
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
@@ -206,6 +215,7 @@ import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
 
 private const val SpaceFabTraceTag = "SpaceFabTrace"
 private const val SpaceChromeTraceTag = "SpaceChromeTrace"
+private val MainResumeCoverRequestSize = Size(width = 128, height = 128)
 
 @OptIn(ExperimentalMaterial3Api::class)
 private class SpaceChromeScrollState {
@@ -231,6 +241,28 @@ private inline fun traceSpaceFab(message: () -> String) {
 private inline fun traceSpaceChrome(message: () -> String) {
     if (BuildConfig.DEBUG) {
         Log.d(SpaceChromeTraceTag, message())
+    }
+}
+
+@Composable
+private fun rememberMainResumeCoverRequest(content: Content?): ImageRequest? {
+    val context = LocalContext.current
+    val coverUrl = content?.coverUrl?.takeIfUsableImageUri()
+        ?: content?.largeCoverUrl?.takeIfUsableImageUri()
+    return remember(context, content?.id, content?.source?.name, content?.url, coverUrl) {
+        if (content == null || coverUrl == null) {
+            null
+        } else {
+            val cacheKey = contentCoverCacheKey(content, coverUrl)
+            ImageRequest.Builder(context)
+                .data(coverUrl)
+                .size(MainResumeCoverRequestSize)
+                .memoryCacheKey(cacheKey)
+                .diskCacheKey(cacheKey)
+                .crossfade(true)
+                .mangaExtra(content)
+                .build()
+        }
     }
 }
 
@@ -867,6 +899,26 @@ fun KototoroApp(
         }
     }
     val activeSpaceResumeItem = spaceResumeUiState.items[spaceUiState.activeSpaceId]
+    val effectiveResumeContent = if (spaceUiState.switcherEnabled) {
+        activeSpaceResumeItem?.content
+    } else {
+        lastReadContent
+    }
+    val effectiveResumeContentType = if (spaceUiState.switcherEnabled) {
+        when (spaceUiState.spaces.firstOrNull { it.id == spaceUiState.activeSpaceId }?.kind) {
+            SpaceKind.MANGA -> ContentType.MANGA
+            SpaceKind.NOVEL -> ContentType.NOVEL
+            SpaceKind.ANIME -> ContentType.VIDEO
+            null -> effectiveResumeContent?.source?.getContentType()
+        }
+    } else {
+        effectiveResumeContent?.source?.getContentType()
+    }
+    val effectiveResumeAction = resolveMainResumeAction(
+        contentType = effectiveResumeContentType,
+        looksLikeVideoContent = effectiveResumeContent?.looksLikeLocalVideoContent() == true,
+    )
+    val effectiveResumeCoverModel = rememberMainResumeCoverRequest(effectiveResumeContent)
     val effectiveResumeEnabled = if (spaceUiState.switcherEnabled) {
         activeSpaceResumeItem?.canResume == true
     } else {
@@ -1448,11 +1500,15 @@ fun KototoroApp(
                         onItemReselected = bottomNavDispatcher,
                         isResumeEnabled = effectiveResumeEnabled,
                         onResumeClick = effectiveResumeClick,
+                        resumeAction = effectiveResumeAction,
+                        resumeCoverModel = effectiveResumeCoverModel,
                         railHeaderContent = null,
-                        adjacentAction = if (!isLandscapeNavigation && isResumeEnabled) {
+                        adjacentAction = if (!isLandscapeNavigation && effectiveResumeEnabled) {
                             {
                                 ContinueReadingFab(
-                                    onClick = onResumeClick,
+                                    onClick = effectiveResumeClick,
+                                    action = effectiveResumeAction,
+                                    coverModel = effectiveResumeCoverModel,
                                     modifier = Modifier.size(56.dp),
                                 )
                             }
@@ -2097,19 +2153,22 @@ private fun MainSelectionTopChrome(
 @Composable
 private fun ContinueReadingFab(
     onClick: () -> Unit,
+    action: MainResumeAction,
+    coverModel: Any?,
     modifier: Modifier = Modifier,
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
     if (useBackdrop) {
         Box(
-                modifier = modifier
-                    .size(56.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClick,
-                    )
+            modifier = modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
+                )
                 .background(Color.White.copy(alpha = 0.08f), CircleShape)
                 .drawBackdrop(
                     backdrop = backdrop,
@@ -2122,28 +2181,58 @@ private fun ContinueReadingFab(
                 .border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_read),
-                contentDescription = stringResource(R.string._continue),
-                tint = MaterialTheme.colorScheme.onSurface,
+            ResumeActionArtwork(
+                action = action,
+                coverModel = coverModel,
+                fallbackIconTint = MaterialTheme.colorScheme.onSurface,
             )
         }
     } else {
-        ExtendedFloatingActionButton(
+        Surface(
             onClick = onClick,
-            modifier = modifier,
-            expanded = false,
-            icon = {
-                Icon(
-                    painter = painterResource(R.drawable.ic_read),
-                    contentDescription = stringResource(R.string._continue),
-                )
-            },
-            text = { Text(stringResource(R.string._continue)) },
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            modifier = modifier.size(56.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            shadowElevation = 6.dp,
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                ResumeActionArtwork(
+                    action = action,
+                    coverModel = coverModel,
+                    fallbackIconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.ResumeActionArtwork(
+    action: MainResumeAction,
+    coverModel: Any?,
+    fallbackIconTint: Color,
+) {
+    val hasCover = coverModel != null
+    if (hasCover) {
+        Image(
+            painter = rememberAsyncImagePainter(coverModel),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(Color.Black.copy(alpha = 0.38f)),
         )
     }
+    Icon(
+        painter = painterResource(action.iconRes),
+        contentDescription = stringResource(action.contentDescriptionRes),
+        tint = if (hasCover) Color.White else fallbackIconTint,
+        modifier = Modifier.align(Alignment.Center),
+    )
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -2161,6 +2250,8 @@ private fun BoxScope.MainBottomChrome(
     onItemReselected: (Int) -> Unit,
     isResumeEnabled: Boolean,
     onResumeClick: () -> Unit,
+    resumeAction: MainResumeAction,
+    resumeCoverModel: Any?,
     railHeaderContent: (@Composable () -> Unit)?,
     adjacentAction: (@Composable () -> Unit)?,
 ) {
@@ -2209,6 +2300,9 @@ private fun BoxScope.MainBottomChrome(
                 adjacentAction = adjacentAction,
                 showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
                 onContinueReadingClick = onResumeClick,
+                continueReadingIconRes = resumeAction.iconRes,
+                continueReadingContentDescriptionRes = resumeAction.contentDescriptionRes,
+                continueReadingCoverModel = resumeCoverModel,
             )
         }
         if (LocalBackgroundStyle.current == BackgroundStyle.ELEVATED_CONTAINERS) {

@@ -11,6 +11,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.Color
@@ -69,6 +71,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import coil3.compose.rememberAsyncImagePainter
 
 data class BadgeInfo(val number: Int = 0, val isVisible: Boolean = false)
 
@@ -98,6 +101,9 @@ fun KototoroBottomNav(
     adjacentAction: (@Composable () -> Unit)? = null,
     showContinueReadingButton: Boolean = false,
     onContinueReadingClick: () -> Unit = {},
+    continueReadingIconRes: Int = R.drawable.ic_read,
+    continueReadingContentDescriptionRes: Int = R.string._continue,
+    continueReadingCoverModel: Any? = null,
 ) {
     val navState by state.collectAsState()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
@@ -252,6 +258,9 @@ fun KototoroBottomNav(
                         item {
                             ContinueReadingRailButton(
                                 onClick = onContinueReadingClick,
+                                iconRes = continueReadingIconRes,
+                                contentDescriptionRes = continueReadingContentDescriptionRes,
+                                coverModel = continueReadingCoverModel,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -526,6 +535,9 @@ private fun Modifier.mainNavBackdrop(
 @Composable
 private fun ContinueReadingRailButton(
     onClick: () -> Unit,
+    iconRes: Int,
+    contentDescriptionRes: Int,
+    coverModel: Any?,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -543,9 +555,23 @@ private fun ContinueReadingRailButton(
                 .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
+            if (coverModel != null) {
+                Image(
+                    painter = rememberAsyncImagePainter(coverModel),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.38f)),
+                )
+            }
             Icon(
-                painter = painterResource(R.drawable.ic_read),
-                contentDescription = null,
+                painter = painterResource(iconRes),
+                contentDescription = stringResource(contentDescriptionRes),
+                tint = if (coverModel != null) Color.White else LocalContentColor.current,
                 modifier = Modifier.size(22.dp),
             )
         }
