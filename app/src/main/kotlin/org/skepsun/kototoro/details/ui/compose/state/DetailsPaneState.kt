@@ -1,12 +1,17 @@
 package org.skepsun.kototoro.details.ui.compose.state
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateTo as animateAnimationStateTo
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.AnchoredDraggableState as createAnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -27,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 enum class CompactDetailsPaneAnchor {
     Collapsed,
@@ -51,15 +57,12 @@ class DetailsPaneState internal constructor(
 
     val anchoredState = createAnchoredDraggableState(
         initialValue = initialAnchor,
-        positionalThreshold = { distance -> distance * 0.35f },
-        velocityThreshold = { Float.POSITIVE_INFINITY },
-        snapAnimationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
-        decayAnimationSpec = exponentialDecay(),
-        confirmValueChange = { true },
     )
 
     var anchor by mutableStateOf(initialAnchor)
         private set
+
+    private var settlementAnchor by mutableStateOf(initialAnchor)
 
     var isGridSizeControlsVisible by mutableStateOf(false)
         private set
@@ -277,13 +280,17 @@ class DetailsPaneState internal constructor(
         return when {
             isGridSizeControlsVisible -> DetailsPaneTopBarMode.GridSizeControls
             chapterSelectionState != null && selectedTabId == chaptersTabId -> DetailsPaneTopBarMode.ChapterSelection
-            selectedTabId == chaptersTabId && (anchor == CompactDetailsPaneAnchor.Full || !isCompactLayout) -> DetailsPaneTopBarMode.ExpandedChapterTools
-            anchor == CompactDetailsPaneAnchor.Full || !isCompactLayout -> DetailsPaneTopBarMode.ExpandedGridTools
+            selectedTabId == chaptersTabId &&
+                (settlementAnchor == CompactDetailsPaneAnchor.Full || !isCompactLayout) ->
+                DetailsPaneTopBarMode.ExpandedChapterTools
+            settlementAnchor == CompactDetailsPaneAnchor.Full || !isCompactLayout ->
+                DetailsPaneTopBarMode.ExpandedGridTools
             else -> DetailsPaneTopBarMode.CollapsedReadDock
         }
     }
 
     fun animateTo(targetAnchor: CompactDetailsPaneAnchor) {
+        settlementAnchor = targetAnchor
         coroutineScope.launch {
             updateAnchors(targetAnchor)
             anchoredState.animateTo(
@@ -293,6 +300,7 @@ class DetailsPaneState internal constructor(
                     easing = FastOutSlowInEasing,
                 ),
             )
+            anchor = targetAnchor
         }
     }
 
@@ -345,10 +353,106 @@ class DetailsPaneState internal constructor(
 
     fun hasNestedPaneDragInProgress(): Boolean = isNestedPaneDragInProgress
 
-    suspend fun settleAfterNestedDrag(velocityY: Float = 0f) {
+    suspend fun settleAfterNestedDrag(velocityY: Float) {
         if (!isNestedPaneDragInProgress) return
         isNestedPaneDragInProgress = false
-        anchoredState.settle(velocityY)
+        val targetAnchor = settleTargetAnchor(velocityY)
+        settlementAnchor = targetAnchor
+        anchoredState.anchoredDrag(targetValue = targetAnchor) { anchors, latestTarget ->
+            val targetOffset = anchors.positionOf(latestTarget)
+            animateToOffset(targetOffset, velocityY) { offset, velocity ->
+                dragTo(offset, velocity)
+            }
+        }
+        anchor = targetAnchor
+    }
+
+    internal suspend fun performFling(
+        velocityY: Float,
+        scrollBy: (Float) -> Float,
+    ) {
+        val targetAnchor = settleTargetAnchor(velocityY)
+        settlementAnchor = targetAnchor
+        val targetOffset = compactPaneOffsetForAnchor(
+            anchor = targetAnchor,
+            fullOffset = fullOffsetPx,
+            hoveredOffset = hoveredOffsetPx,
+            collapsedOffset = collapsedOffsetPx,
+        )
+        animateToOffset(targetOffset, velocityY) { offset, _ ->
+            scrollBy(offset - anchoredState.requireOffset())
+        }
+        anchor = targetAnchor
+    }
+
+    private suspend fun animateToOffset(
+        targetOffset: Float,
+        initialVelocity: Float,
+        dragToOffset: (Float, Float) -> Unit,
+    ) {
+        val initialOffset = anchoredState.requireOffset()
+        if (!targetOffset.isFinite() || initialOffset == targetOffset) return
+
+        AnimationState(
+            initialValue = initialOffset,
+            initialVelocity = initialVelocity,
+        ).animateAnimationStateTo(
+            targetValue = targetOffset,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        ) {
+            val reachedTarget = if (targetOffset < initialOffset) {
+                value <= targetOffset
+            } else {
+                value >= targetOffset
+            }
+            if (reachedTarget) {
+                dragToOffset(targetOffset, velocity)
+                cancelAnimation()
+            } else {
+                dragToOffset(value, velocity)
+            }
+        }
+    }
+
+    private fun settleTargetAnchor(velocityY: Float): CompactDetailsPaneAnchor {
+        val currentAnchor = settlementAnchor
+        val currentOffset = anchoredState.requireOffset()
+        val currentAnchorOffset = compactPaneOffsetForAnchor(
+            anchor = currentAnchor,
+            fullOffset = fullOffsetPx,
+            hoveredOffset = hoveredOffsetPx,
+            collapsedOffset = collapsedOffsetPx,
+        )
+        val orderedAnchors = listOf(
+            CompactDetailsPaneAnchor.Full,
+            CompactDetailsPaneAnchor.Hovered,
+            CompactDetailsPaneAnchor.Collapsed,
+        )
+        val currentIndex = orderedAnchors.indexOf(currentAnchor)
+        val velocityThresholdPx = with(density) { 125.dp.toPx() }
+        val direction = when {
+            abs(velocityY) >= velocityThresholdPx -> if (velocityY < 0f) -1 else 1
+            currentOffset < currentAnchorOffset -> -1
+            currentOffset > currentAnchorOffset -> 1
+            else -> 0
+        }
+        if (direction == 0) return currentAnchor
+
+        val adjacentAnchor = orderedAnchors.getOrNull(currentIndex + direction) ?: return currentAnchor
+        if (abs(velocityY) >= velocityThresholdPx) return adjacentAnchor
+
+        val adjacentOffset = compactPaneOffsetForAnchor(
+            anchor = adjacentAnchor,
+            fullOffset = fullOffsetPx,
+            hoveredOffset = hoveredOffsetPx,
+            collapsedOffset = collapsedOffsetPx,
+        )
+        val traveled = abs(currentOffset - currentAnchorOffset)
+        val distance = abs(adjacentOffset - currentAnchorOffset)
+        return if (traveled >= distance * 0.35f) adjacentAnchor else currentAnchor
     }
 
     private fun updateAnchors(targetAnchor: CompactDetailsPaneAnchor = anchor) {
@@ -361,6 +465,20 @@ class DetailsPaneState internal constructor(
             targetAnchor,
         )
     }
+}
+
+class DetailsPaneFlingBehavior internal constructor(
+    private val state: DetailsPaneState,
+) : FlingBehavior {
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        state.performFling(initialVelocity, ::scrollBy)
+        return 0f
+    }
+}
+
+@Composable
+fun rememberDetailsPaneFlingBehavior(state: DetailsPaneState): DetailsPaneFlingBehavior {
+    return remember(state) { DetailsPaneFlingBehavior(state) }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -440,7 +558,7 @@ fun rememberDetailsPaneNestedScrollConnection(
                 if (!state.hasNestedPaneDragInProgress()) {
                     return Velocity.Zero
                 }
-                state.settleAfterNestedDrag(velocityY = available.y)
+                state.settleAfterNestedDrag(available.y)
                 return Velocity(x = 0f, y = available.y)
             }
 
@@ -449,7 +567,7 @@ fun rememberDetailsPaneNestedScrollConnection(
                     return Velocity.Zero
                 }
                 val settleVelocity = if (available.y != 0f) available.y else consumed.y
-                state.settleAfterNestedDrag(velocityY = settleVelocity)
+                state.settleAfterNestedDrag(settleVelocity)
                 return Velocity(x = 0f, y = settleVelocity)
             }
         }

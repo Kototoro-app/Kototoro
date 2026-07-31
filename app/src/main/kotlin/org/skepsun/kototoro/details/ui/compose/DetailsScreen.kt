@@ -200,6 +200,7 @@ import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
+import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneFlingBehavior
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneTopBarMode
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
@@ -681,10 +682,11 @@ private fun DetailsScreenContent(
         }
     }
     val compactSheetExpansionProgress = detailsPaneState.expansionProgress
+    val reportedBottomPanelExpansion = if (compactPaneAnchor == CompactDetailsPaneAnchor.Collapsed) 0f else 1f
     val currentBottomPanelStateChanged by rememberUpdatedState(onBottomPanelStateChanged)
-    LaunchedEffect(compactSheetExpansionProgress, compactPaneCollapsedHeight, isWideAdaptiveLayout) {
+    LaunchedEffect(reportedBottomPanelExpansion, compactPaneCollapsedHeight, isWideAdaptiveLayout) {
         currentBottomPanelStateChanged(
-            if (isWideAdaptiveLayout) 0f else compactSheetExpansionProgress,
+            if (isWideAdaptiveLayout) 0f else reportedBottomPanelExpansion,
             if (isWideAdaptiveLayout) 0.dp else compactPaneCollapsedHeight,
         )
     }
@@ -747,11 +749,11 @@ private fun DetailsScreenContent(
     } else {
         0.dp
     }
-    val compactTopBarAlpha by animateFloatAsState(
-        targetValue = if (isWideAdaptiveLayout) 1f else (1f - compactSheetExpansionProgress).coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 180),
-        label = "details_compact_top_bar_alpha",
-    )
+    val compactTopBarAlpha = if (isWideAdaptiveLayout) {
+        1f
+    } else {
+        (1f - compactSheetExpansionProgress).coerceIn(0f, 1f)
+    }
     val animatedHeaderCoverVisualAlpha by animateFloatAsState(
         targetValue = if (isWideAdaptiveLayout) {
             1f
@@ -2958,7 +2960,7 @@ private fun DetailsPaneContent(
                 shape = paneShape,
                 style = paneGlassStyle,
                 dialogSurface = LocalInterfaceStyle.current != InterfaceStyle.IOS,
-                componentRole = GlassComponentRole.Dialog,
+                componentRole = GlassComponentRole.Sheet,
             ) {
                 Box(
                     modifier = Modifier
@@ -3107,6 +3109,7 @@ private fun DetailsPaneActionsRow(
         isModernDockEnabled = isModernDockEnabled,
         paneOpacityProgress = paneOpacityProgress,
     )
+    val paneFlingBehavior = rememberDetailsPaneFlingBehavior(detailsPaneState)
     val shouldShowPaneDragHandle = showCollapsedHandle && modernDragHandleRevealProgress > 0.01f
     val dragHandleAlpha by animateFloatAsState(
         targetValue = if (
@@ -3132,6 +3135,7 @@ private fun DetailsPaneActionsRow(
             state = detailsPaneState.anchoredState,
             orientation = Orientation.Vertical,
             enabled = !detailsPaneState.isGridSizeControlsVisible,
+            flingBehavior = paneFlingBehavior,
         )
     } else {
         Modifier
@@ -3163,6 +3167,7 @@ private fun DetailsPaneActionsRow(
                         orientation = Orientation.Vertical,
                         enabled = detailsPaneState.anchor == CompactDetailsPaneAnchor.Full &&
                             !detailsPaneState.isGridSizeControlsVisible,
+                        flingBehavior = paneFlingBehavior,
                     )
                 },
             )
@@ -3220,6 +3225,7 @@ private fun DetailsPaneActionsRow(
                                     orientation = Orientation.Vertical,
                                     enabled = detailsPaneState.anchor != CompactDetailsPaneAnchor.Collapsed &&
                                         !detailsPaneState.isGridSizeControlsVisible,
+                                    flingBehavior = paneFlingBehavior,
                                 )
                         } else {
                             Modifier.fillMaxWidth()

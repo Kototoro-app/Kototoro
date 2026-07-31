@@ -210,7 +210,7 @@ fun LiquidGlassSurface(
     val isDark = colors.isDarkTheme()
     val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
         componentRole == GlassComponentRole.BottomBar
-    val surfaceAlpha = style.backdropSurfaceAlpha(isNavigationChrome)
+    val surfaceAlpha = style.backdropSurfaceAlpha(componentRole)
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
@@ -272,12 +272,14 @@ fun LiquidGlassSurface(
     }
 }
 
-private fun GlassStyle.backdropSurfaceAlpha(isNavigationChrome: Boolean): Float {
+private fun GlassStyle.backdropSurfaceAlpha(componentRole: GlassComponentRole): Float {
     val materialDensity = containerAlpha.coerceIn(minimumContainerAlpha, 1f)
-    return if (isNavigationChrome) {
-        (materialDensity * 0.48f).coerceIn(0.30f, 0.46f)
-    } else {
-        (materialDensity * 0.25f).coerceIn(0.14f, 0.28f)
+    return when (componentRole) {
+        GlassComponentRole.TopBar,
+        GlassComponentRole.BottomBar,
+        -> (materialDensity * 0.48f).coerceIn(0.30f, 0.46f)
+        GlassComponentRole.Sheet -> (materialDensity * 0.50f).coerceIn(0.42f, 0.48f)
+        else -> (materialDensity * 0.25f).coerceIn(0.14f, 0.28f)
     }
 }
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
+import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneFlingBehavior
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -19,6 +20,7 @@ fun DetailsPaneHost(
     dragEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val flingBehavior = rememberDetailsPaneFlingBehavior(state)
     Box(
         modifier = modifier
             .graphicsLayer {
@@ -31,6 +33,7 @@ fun DetailsPaneHost(
                         orientation = Orientation.Vertical,
                         enabled = state.anchor != CompactDetailsPaneAnchor.Full &&
                             !state.isGridSizeControlsVisible,
+                        flingBehavior = flingBehavior,
                     )
                 } else {
                     Modifier
