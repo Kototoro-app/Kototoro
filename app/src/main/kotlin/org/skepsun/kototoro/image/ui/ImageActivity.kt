@@ -1,11 +1,9 @@
 package org.skepsun.kototoro.image.ui
 
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import androidx.activity.viewModels
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -15,9 +13,6 @@ import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.lifecycle
-import coil3.target.GenericViewTarget
-import com.davemorrissey.labs.subscaleview.ImageSource
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
@@ -31,7 +26,6 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.PopupMenuMediator
 import org.skepsun.kototoro.core.util.ShareHelper
-import org.skepsun.kototoro.core.util.ext.enqueueWith
 import org.skepsun.kototoro.core.util.ext.getDisplayIcon
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
@@ -48,10 +42,9 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 
 	private val viewModel: ImageViewModel by viewModels()
 	private lateinit var menuMediator: PopupMenuMediator
-	private var imageView: SubsamplingScaleImageView? = null
 	private var menuAnchor: View? = null
 	private var inlineImageJob: Job? = null
-	private var hasStartedImageLoad = false
+	private var imageModel by androidx.compose.runtime.mutableStateOf<Any?>(null)
 	private var isImageLoading by androidx.compose.runtime.mutableStateOf(false)
 	private var imageError by androidx.compose.runtime.mutableStateOf<ImageErrorState?>(null)
 	private var isSaving by androidx.compose.runtime.mutableStateOf(false)
@@ -75,23 +68,19 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 
 		setComposeContent {
 			ImageViewerScreen(
+				imageModel = imageModel,
+				imageLoader = coil,
 				showMenu = inlineImagePath == null,
 				isSaving = isSaving,
 				isLoading = isImageLoading,
 				error = imageError,
 				onBack = ::navigateUp,
 				onMenu = { menuAnchor?.let(menuMediator::onLongClick) },
-				onRetry = { loadImage() },
-				onImageViewCreated = { view ->
-					imageView = view
-					if (!hasStartedImageLoad) {
-						hasStartedImageLoad = true
-						loadImage(view)
-					}
-				},
+				onRetry = ::loadImage,
 				onMenuAnchorCreated = { menuAnchor = it },
 			)
 		}
+		loadImage()
 	}
 
 	override fun onError(request: ImageRequest, result: ErrorResult) {
@@ -112,26 +101,24 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 		imageError = null
 	}
 
-	private fun loadImage(view: SubsamplingScaleImageView? = imageView) {
-		val targetView = view ?: return
+	private fun loadImage() {
 		isImageLoading = true
 		imageError = null
 		inlineImagePath?.let {
-			loadInlineImage(targetView, it)
+			loadInlineImage(it)
 			return
 		}
-		ImageRequest.Builder(this)
+		imageModel = ImageRequest.Builder(this)
 			.data(intent.data)
 			.memoryCacheKey(intent.getParcelableExtraCompat<CoilMemoryCacheKey>(AppRouter.KEY_PREVIEW)?.data)
 			.memoryCachePolicy(CachePolicy.READ_ONLY)
 			.lifecycle(this)
 			.listener(this)
 			.mangaSourceExtra(ContentSource(intent.getStringExtra(AppRouter.KEY_SOURCE)))
-			.target(SsivTarget(targetView))
-			.enqueueWith(coil)
+			.build()
 	}
 
-	private fun loadInlineImage(view: SubsamplingScaleImageView, imagePath: String) {
+	private fun loadInlineImage(imagePath: String) {
 		inlineImageJob?.cancel()
 		inlineImageJob = lifecycleScope.launch {
 			try {
@@ -148,7 +135,7 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 				) ?: error("Image decode returned null")
 				isImageLoading = false
 				imageError = null
-				view.setImage(ImageSource.bitmap(bitmap))
+				imageModel = bitmap
 			} catch (error: CancellationException) {
 				throw error
 			} catch (error: Throwable) {
@@ -176,33 +163,6 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 			}
 		} else {
 			finishAfterTransition()
-		}
-	}
-
-	private class SsivTarget(
-		override val view: SubsamplingScaleImageView,
-	) : GenericViewTarget<SubsamplingScaleImageView>() {
-
-		override var drawable: Drawable? = null
-			set(value) {
-				field = value
-				setImageDrawable(value)
-			}
-
-		override fun equals(other: Any?): Boolean {
-			return (this === other) || (other is SsivTarget && view == other.view)
-		}
-
-		override fun hashCode() = view.hashCode()
-
-		override fun toString() = "SsivTarget(view=$view)"
-
-		private fun setImageDrawable(drawable: Drawable?) {
-			if (drawable != null) {
-				view.setImage(ImageSource.bitmap(drawable.toBitmap()))
-			} else {
-				view.recycle()
-			}
 		}
 	}
 }

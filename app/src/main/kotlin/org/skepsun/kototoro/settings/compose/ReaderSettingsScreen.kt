@@ -218,6 +218,17 @@ fun ReaderSettingsScreen(
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_OPTIMIZE, it) } }
             )
 
+            SettingsSwitchPreference(
+                title = stringResource(R.string.reader_reduce_page_preloading),
+                summary = stringResource(R.string.reader_reduce_page_preloading_summary),
+                checked = settings.observeAsState(AppSettings.KEY_READER_REDUCE_PRELOAD) {
+                    prefs.getBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, false)
+                }.value,
+                onCheckedChange = {
+                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, it) }
+                }
+            )
+
             SettingsMultiChoicePreference(
                 title = stringResource(R.string.crop_pages),
                 options = stringArrayResource(R.array.reader_crop).mapIndexed { index, label ->

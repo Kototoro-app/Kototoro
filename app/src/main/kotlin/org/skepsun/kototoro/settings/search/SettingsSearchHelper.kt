@@ -237,6 +237,7 @@ class SettingsSearchHelper @Inject constructor(
 			"webtoon_pull_gesture" to R.string.enable_pull_gesture_title,
 			"enhanced_colors" to R.string.enhanced_colors,
 			"reader_optimize" to R.string.reader_optimize,
+			"reader_reduce_page_preloading" to R.string.reader_reduce_page_preloading,
 			"reader_crop" to R.string.crop_pages,
 			"reader_fullscreen" to R.string.fullscreen_mode,
 			"reader_orientation" to R.string.screen_orientation,

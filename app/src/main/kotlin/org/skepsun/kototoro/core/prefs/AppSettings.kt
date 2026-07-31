@@ -566,6 +566,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	val isReaderOptimizationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_OPTIMIZE, false)
 
+	val isReaderPreloadReductionEnabled: Boolean
+		get() = prefs.getBoolean(KEY_READER_REDUCE_PRELOAD, false)
+
 	val readerControls: Set<ReaderControl>
 		get() = prefs.getStringSet(KEY_READER_CONTROLS, null)
 			?.mapNotNullTo(EnumSet.noneOf(ReaderControl::class.java)) { value ->
@@ -2392,6 +2395,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_SHORTCUTS = "dynamic_shortcuts"
 		const val KEY_READER_TAP_ACTIONS = "reader_tap_actions"
 		const val KEY_READER_OPTIMIZE = "reader_optimize"
+		const val KEY_READER_REDUCE_PRELOAD = "reader_reduce_offscreen_quality"
 		const val KEY_LOCAL_LIST_ORDER = "local_order"
 		const val KEY_HISTORY_ORDER = "history_order"
 		const val KEY_FAVORITES_ORDER = "fav_order"

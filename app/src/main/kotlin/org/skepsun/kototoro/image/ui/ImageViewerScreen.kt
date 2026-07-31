@@ -39,7 +39,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import coil3.ImageLoader
+import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
 import org.skepsun.kototoro.R
 
 data class ImageErrorState(
@@ -47,12 +48,10 @@ data class ImageErrorState(
     val iconRes: Int,
 )
 
-/**
- * Compose replacement for activity_image.xml. The scale image view remains in AndroidView because
- * its tiled decoding and gesture implementation have no equivalent in the existing Compose layer.
- */
 @Composable
 fun ImageViewerScreen(
+    imageModel: Any?,
+    imageLoader: ImageLoader,
     showMenu: Boolean,
     isSaving: Boolean,
     isLoading: Boolean,
@@ -60,15 +59,14 @@ fun ImageViewerScreen(
     onBack: () -> Unit,
     onMenu: () -> Unit,
     onRetry: () -> Unit,
-    onImageViewCreated: (SubsamplingScaleImageView) -> Unit,
     onMenuAnchorCreated: (View) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        AndroidView(
-            factory = { context ->
-                SubsamplingScaleImageView(context).also(onImageViewCreated)
-            },
+        ZoomableAsyncImage(
+            model = imageModel,
+            imageLoader = imageLoader,
+            contentDescription = null,
             modifier = Modifier.fillMaxSize(),
         )
 

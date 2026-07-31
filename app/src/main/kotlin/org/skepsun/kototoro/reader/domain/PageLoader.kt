@@ -10,14 +10,8 @@ import androidx.collection.LongSparseArray
 import androidx.collection.set
 import androidx.core.net.toFile
 import androidx.core.net.toUri
-import coil3.BitmapImage
-import coil3.Image
 import coil3.ImageLoader
-import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
-import coil3.request.transformations
-import coil3.toBitmap
-import com.davemorrissey.labs.subscaleview.ImageSource
 import dagger.hilt.android.ActivityRetainedLifecycle
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -47,7 +41,6 @@ import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.logUnavailable
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.ui.image.TrimTransformation
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.URI_SCHEME_ZIP
@@ -155,43 +148,6 @@ class PageLoader @Inject constructor(
 		if (counter.get() == 0) {
 			onIdle()
 		}
-	}
-
-	suspend fun loadPreview(page: ContentPage): ImageSource? {
-		// JS/JSON 源缺少通用 Referer，预览请求容易带不上头导致 400，直接跳过
-		if (page.source.name.startsWith("JSON_")) return null
-		val preview = page.preview
-		if (preview.isNullOrEmpty()) {
-			return null
-		}
-		val request = ImageRequest.Builder(context)
-			.data(preview)
-			.mangaSourceExtra(page.source)
-			.transformations(TrimTransformation())
-			.build()
-		return imageLoader.execute(request).image?.toImageSource()
-	}
-
-	fun peekPreviewSource(preview: String?): ImageSource? {
-		if (preview.isNullOrEmpty()) {
-			return null
-		}
-		imageLoader.memoryCache?.let { cache ->
-			val key = MemoryCache.Key(preview)
-			cache[key]?.image?.let {
-				return if (it is BitmapImage) {
-					ImageSource.cachedBitmap(it.toBitmap())
-				} else {
-					ImageSource.bitmap(it.toBitmap())
-				}
-			}
-		}
-		imageLoader.diskCache?.let { cache ->
-			cache.openSnapshot(preview)?.use { snapshot ->
-				return ImageSource.file(snapshot.data.toFile())
-			}
-		}
-		return null
 	}
 
 	fun loadPageAsync(
@@ -326,7 +282,7 @@ class PageLoader @Inject constructor(
 	).toBitmapOrNull() ?: error("Failed to decode svg image")
 
 	suspend fun getTrimmedBounds(uri: Uri): Rect? = runCatchingCancellable {
-		edgeDetector.getBounds(ImageSource.uri(uri))
+		edgeDetector.getBounds(uri)
 	}.onFailure { error ->
 		error.printStackTraceDebug()
 	}.getOrNull()
@@ -564,12 +520,6 @@ class PageLoader @Inject constructor(
 
 	private fun ContentPage.taskKey(): Long {
 		return "${source.name}#$id#$url".longHashCode()
-	}
-
-	private fun Image.toImageSource(): ImageSource = if (this is BitmapImage) {
-		ImageSource.cachedBitmap(toBitmap())
-	} else {
-		ImageSource.bitmap(toBitmap())
 	}
 
 	private fun Deferred<Uri>.isValid(): Boolean {

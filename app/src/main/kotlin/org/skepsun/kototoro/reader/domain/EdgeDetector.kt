@@ -5,13 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Point
 import android.graphics.Rect
+import android.net.Uri
 import androidx.annotation.ColorInt
 import androidx.core.graphics.alpha
 import androidx.core.graphics.blue
 import androidx.core.graphics.green
 import androidx.core.graphics.red
-import com.davemorrissey.labs.subscaleview.ImageSource
-import com.davemorrissey.labs.subscaleview.decoder.SkiaPooledImageRegionDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -21,6 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.util.SynchronizedSieveCache
+import org.skepsun.kototoro.core.image.LocalImageRegionDecoder
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -28,19 +28,19 @@ import kotlin.math.min
 class EdgeDetector(private val context: Context) {
 
 	private val mutex = Mutex()
-	private val cache = SynchronizedSieveCache<ImageSource, Rect>(CACHE_SIZE)
+	private val cache = SynchronizedSieveCache<Uri, Rect>(CACHE_SIZE)
 
-	suspend fun getBounds(imageSource: ImageSource): Rect? {
-		cache[imageSource]?.let { rect ->
+	suspend fun getBounds(uri: Uri): Rect? {
+		cache[uri]?.let { rect ->
 			return rect
 		}
 		val bounds = mutex.withLock {
 			withContext(Dispatchers.IO) {
-				val decoder = SkiaPooledImageRegionDecoder(Bitmap.Config.RGB_565)
-				try {
-					val size = runInterruptible {
-						decoder.init(context, imageSource)
-					}
+				val decoder = runInterruptible {
+					LocalImageRegionDecoder.open(context.contentResolver, uri, Bitmap.Config.RGB_565)
+				}
+				decoder.use {
+					val size = decoder.size
 					val scaleFactor = calculateScaleFactor(size)
 					val sampleSize = (1f / scaleFactor).toInt().coerceAtLeast(1)
 
@@ -74,13 +74,11 @@ class EdgeDetector(private val context: Context) {
 					} finally {
 						fullBitmap.recycle()
 					}
-				} finally {
-					decoder.recycle()
 				}
 			}
 		}
 		if (bounds != null) {
-			cache.put(imageSource, bounds)
+			cache.put(uri, bounds)
 		}
 		return bounds
 	}

@@ -491,7 +491,8 @@
     <string name="manual">手動</string>
     <string name="available_d">可ˋ用： %1$d</string>
     <string name="state_paused">已暫停</string>
-    <string name="reader_optimize">減少記憶體消耗（beta）</string>
+    <string name="reader_optimize">限制圖片記憶體快取（測試）</string>
+    <string name="reader_reduce_page_preloading">減少頁面預載（測試）</string>
     <string name="mark_as_completed">標記為已完成</string>
     <string name="by_relevance">關聯</string>
     <string name="list_options">清單選項</string>
@@ -536,7 +537,8 @@
     <string name="error_filter_states_genre_not_supported">此圖源不支援同時按分類和狀態過濾</string>
     <string name="error_filter_locale_genre_not_supported">此圖源不支援同時按分類和區域過濾</string>
     <string name="genres_search_hint">開始輸入分類名稱</string>
-    <string name="reader_optimize_summary">降低當前畫面外的頁面質量以減少記憶體佔用</string>
+    <string name="reader_optimize_summary">關閉動圖、裁切、拆頁等回退圖片的記憶體快取；Telephoto 圖塊載入始終生效，不受此選項控制</string>
+    <string name="reader_reduce_page_preloading_summary">減少視口外保留的頁面，不降低可見圖片品質，但相鄰頁面首次顯示可能稍慢</string>
     <string name="mark_as_completed_prompt">是否將已選定的漫畫標記為閱畢？
 \n
 \n警告: 當前的閱讀進度將會丟失。</string>

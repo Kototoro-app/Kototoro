@@ -1530,8 +1530,10 @@
     <string name="disable_suggestions_nsfw">Hide from Suggestions</string>
     <string name="disable_suggestions_nsfw_summary">Hide adult contents from Suggestions</string>
     <string name="state_paused">Paused</string>
-    <string name="reader_optimize">Reduce memory consumption (beta)</string>
-    <string name="reader_optimize_summary">Reduce offscreen pages quality to use less memory</string>
+    <string name="reader_optimize">Limit image memory cache (beta)</string>
+    <string name="reader_optimize_summary">Disable memory caching for animated, cropped, split, and other fallback images. Telephoto tile loading is always active and is not controlled by this option</string>
+    <string name="reader_reduce_page_preloading">Reduce page preloading (beta)</string>
+    <string name="reader_reduce_page_preloading_summary">Keep fewer pages outside the viewport. This does not reduce visible image quality, but adjacent pages may take longer to appear</string>
     <string name="reader_translation_enabled">Auto translate pages</string>
     <string name="reader_translation_enabled_summary">Use on-device OCR and translation, with optional API fallback</string>
     <string name="reader_translation_action">Manga translation</string>

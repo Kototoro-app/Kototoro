@@ -770,8 +770,10 @@
     <string name="error_filter_states_genre_not_supported">此图源不支持同时按类别和状态筛选</string>
     <string name="genres_search_hint">请输入类别名称</string>
     <string name="state_paused">休刊中</string>
-    <string name="reader_optimize">降低内存占用 (测试)</string>
-    <string name="reader_optimize_summary">降低当前画面外的页面质量以减少内存占用</string>
+    <string name="reader_optimize">限制图片内存缓存（测试）</string>
+    <string name="reader_optimize_summary">关闭动图、裁剪、拆页等回退图片的内存缓存；Telephoto 图块加载始终生效，不受此选项控制</string>
+    <string name="reader_reduce_page_preloading">减少页面预加载（测试）</string>
+    <string name="reader_reduce_page_preloading_summary">减少视口外保留的页面，不降低可见图片质量，但相邻页面首次显示可能稍慢</string>
     <string name="disable_battery_optimization_summary_downloads">也许能帮助解决下载过程中的相关问题</string>
     <string name="error_search_not_supported">此图源不支持搜索</string>
     <string name="state">状态</string>

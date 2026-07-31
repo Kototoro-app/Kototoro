@@ -5,7 +5,6 @@ import android.content.res.Resources
 import android.database.sqlite.SQLiteFullException
 import androidx.annotation.DrawableRes
 import coil3.network.HttpException
-import com.davemorrissey.labs.subscaleview.decoder.ImageDecodeException
 import kotlinx.coroutines.CancellationException
 import okhttp3.Response
 import okhttp3.internal.http2.StreamResetException
@@ -35,6 +34,7 @@ import org.skepsun.kototoro.core.exceptions.UnsupportedFileException
 import org.skepsun.kototoro.core.exceptions.UnsupportedSourceException
 import org.skepsun.kototoro.core.exceptions.WrapperIOException
 import org.skepsun.kototoro.core.exceptions.WrongPasswordException
+import org.skepsun.kototoro.core.image.ImageDecodeException
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getUnsupportedSourceTitleResId

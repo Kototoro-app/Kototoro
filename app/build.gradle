@@ -416,7 +416,8 @@ configurations.all {
 	implementation libs.coil.gif
 	implementation libs.coil.svg
 	implementation libs.avif.decoder
-	implementation libs.ssiv
+	implementation libs.telephoto.subsampling
+	implementation libs.telephoto.zoomable.image.coil3
 	implementation libs.disk.lru.cache
 	implementation libs.markwon
 	implementation libs.kizzyrpc

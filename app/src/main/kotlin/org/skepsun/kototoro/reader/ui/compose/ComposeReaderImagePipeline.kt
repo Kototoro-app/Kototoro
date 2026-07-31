@@ -26,6 +26,8 @@ interface ComposeReaderImagePipeline {
 
 	fun observe(page: ReaderPage, force: Boolean = false): Flow<ComposeReaderImageState>
 
+	fun cachedState(pageKey: Long): ComposeReaderImageState? = null
+
 	/** Reports decoded dimensions so shared reader state can create wide-page splits. */
 	fun onImageDecoded(page: ReaderPage, width: Int, height: Int) = Unit
 }
@@ -86,17 +88,26 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 	val imageLoader get() = pageLoader.imageLoader
 	private val metadataCache = ReaderImageMetadataCache()
 	private val displayCache = ConcurrentHashMap<Long, Uri>()
+	private val stateCache = ConcurrentHashMap<Long, ComposeReaderImageState>()
 
 	fun cachedDisplay(pageKey: Long?): Uri? = pageKey?.let(displayCache::get)
+	override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateCache[pageKey]
 
 	override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = channelFlow {
-		send(ComposeReaderImageState.LoadingOriginal)
-		resolveReaderPreviewUrl(page.preview, page.source.name)
-			?.let { send(ComposeReaderImageState.PreviewReady(it)) }
+		val cachedState = stateCache[page.readerKey].takeUnless { force }
+		if (cachedState != null) {
+			send(cachedState)
+		} else {
+			send(ComposeReaderImageState.LoadingOriginal)
+			resolveReaderPreviewUrl(page.preview, page.source.name)
+				?.let { send(ComposeReaderImageState.PreviewReady(it)) }
+		}
 		val task = pageLoader.loadPageAsync(page.toContentPage(), force)
 		val progressJob = launch {
 			task.progressAsFlow().collect { progress ->
-				send(ComposeReaderImageState.Downloading(progress.takeIf { it in 0f..1f }))
+				if (cachedState == null) {
+					send(ComposeReaderImageState.Downloading(progress.takeIf { it in 0f..1f }))
+				}
 			}
 		}
 		try {
@@ -104,8 +115,10 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 			val isAnimated = display.isFileUri() && metadataCache.isAnimated(display.toString(), refresh = force) {
 				withContext(Dispatchers.IO) { BitmapDecoderCompat.isAnimated(display.toFile()) }
 			}
+			val ready = ComposeReaderImageState.OriginalReady(display, isAnimated)
 			displayCache[page.readerKey] = display
-			send(ComposeReaderImageState.OriginalReady(display, isAnimated))
+			stateCache[page.readerKey] = ready
+			send(ready)
 		} finally {
 			progressJob.cancel()
 			pageLoader.releasePageTask(page.toContentPage(), task)

@@ -2,12 +2,7 @@ package org.skepsun.kototoro.reader.ui.config
 
 import android.graphics.Bitmap
 import android.view.View
-import androidx.annotation.CheckResult
 import androidx.collection.scatterSetOf
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
-import com.davemorrissey.labs.subscaleview.decoder.SkiaImageDecoder
-import com.davemorrissey.labs.subscaleview.decoder.SkiaImageRegionDecoder
-import com.davemorrissey.labs.subscaleview.decoder.SkiaPooledImageRegionDecoder
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -27,7 +22,6 @@ import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderOcrEngine
 import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
 import org.skepsun.kototoro.core.util.MediatorStateFlow
-import org.skepsun.kototoro.core.util.ext.isLowRamDevice
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 
@@ -36,6 +30,7 @@ data class ReaderSettings(
 	val background: ReaderBackground,
 	val colorFilter: ReaderColorFilter?,
 	val isReaderOptimizationEnabled: Boolean,
+	val isReaderPreloadReductionEnabled: Boolean,
 	val bitmapConfig: Bitmap.Config,
 	val isPagesNumbersEnabled: Boolean,
 	val isPagesCropEnabledStandard: Boolean,
@@ -89,6 +84,7 @@ data class ReaderSettings(
 		background = settings.readerBackground,
 		colorFilter = colorFilterOverride?.takeUnless { it.isEmpty } ?: settings.readerColorFilter,
 		isReaderOptimizationEnabled = settings.isReaderOptimizationEnabled,
+		isReaderPreloadReductionEnabled = settings.isReaderPreloadReductionEnabled,
 		bitmapConfig = if (settings.is32BitColorsEnabled) {
 			Bitmap.Config.ARGB_8888
 		} else {
@@ -302,22 +298,6 @@ data class ReaderSettings(
 		append(translationOnnxModelId)
 	}
 
-	@CheckResult
-	fun applyBitmapConfig(ssiv: SubsamplingScaleImageView): Boolean {
-		val config = bitmapConfig
-		return if (ssiv.regionDecoderFactory.bitmapConfig != config) {
-			ssiv.regionDecoderFactory = if (ssiv.context.isLowRamDevice()) {
-				SkiaImageRegionDecoder.Factory(config)
-			} else {
-				SkiaPooledImageRegionDecoder.Factory(config)
-			}
-			ssiv.bitmapDecoderFactory = SkiaImageDecoder.Factory(config)
-			true
-		} else {
-			false
-		}
-	}
-
 	class Producer @AssistedInject constructor(
 		@Assisted private val mangaId: Flow<Long>,
 		private val settings: AppSettings,
@@ -330,6 +310,7 @@ data class ReaderSettings(
 			AppSettings.KEY_READER_BACKGROUND,
 			AppSettings.KEY_32BIT_COLOR,
 			AppSettings.KEY_READER_OPTIMIZE,
+			AppSettings.KEY_READER_REDUCE_PRELOAD,
 			AppSettings.KEY_CF_CONTRAST,
 			AppSettings.KEY_CF_BRIGHTNESS,
 			AppSettings.KEY_CF_INVERTED,
