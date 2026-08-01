@@ -213,8 +213,9 @@ internal fun NovelReaderBottomChrome(
 	) {
 		AnimatedVisibility(
 			visible = state.controlsVisible && state.progressMax > 0f,
-			enter = slideInVertically { it } + fadeIn(),
-			exit = slideOutVertically { it } + fadeOut(),
+			// Alpha transitions clip the rounded Backdrop shadow to a rectangular layer.
+			enter = slideInVertically { it },
+			exit = slideOutVertically { it },
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
 			val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White

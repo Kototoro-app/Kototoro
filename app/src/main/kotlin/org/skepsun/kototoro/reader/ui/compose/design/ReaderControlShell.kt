@@ -227,7 +227,7 @@ fun ReaderControlDock(
 		Surface(
 			modifier = dockModifier,
 			shape = ReaderControlTokens.DockShape,
-			color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f),
+			color = MaterialTheme.colorScheme.surfaceContainerHigh,
 			contentColor = MaterialTheme.colorScheme.onSurface,
 			tonalElevation = 2.dp,
 			shadowElevation = ReaderControlTokens.ChromeShadowElevation,
@@ -284,7 +284,7 @@ fun ReaderProgressDock(
 		Surface(
 			modifier = dockModifier,
 			shape = MaterialTheme.shapes.large,
-			color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
+			color = MaterialTheme.colorScheme.surfaceContainer,
 			contentColor = MaterialTheme.colorScheme.onSurface,
 			tonalElevation = 2.dp,
 			shadowElevation = ReaderControlTokens.ChromeShadowElevation,

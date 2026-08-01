@@ -2159,6 +2159,7 @@ private fun ContinueReadingFab(
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val hasCover = coverModel != null
     if (useBackdrop) {
         Box(
             modifier = modifier
@@ -2192,7 +2193,7 @@ private fun ContinueReadingFab(
             onClick = onClick,
             modifier = modifier.size(56.dp),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
+            color = if (hasCover) Color.Transparent else MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             shadowElevation = 6.dp,
         ) {

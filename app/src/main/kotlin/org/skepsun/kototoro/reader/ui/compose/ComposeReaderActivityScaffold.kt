@@ -9,7 +9,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -66,11 +68,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -530,8 +534,9 @@ internal fun ComposeReaderActivityScaffold(
 
 		AnimatedVisibility(
 			visible = state.controlsVisible && state.actions.sliderEnabled,
-			enter = slideInVertically { it } + fadeIn(),
-			exit = slideOutVertically { it } + fadeOut(),
+			// Alpha transitions clip the rounded Backdrop shadow to a rectangular layer.
+			enter = slideInVertically { it },
+			exit = slideOutVertically { it },
 			modifier = Modifier
 				.align(Alignment.BottomCenter)
 				.navigationBarsPadding()
@@ -551,10 +556,12 @@ internal fun ComposeReaderActivityScaffold(
 			translationAvailable = state.actions.translateRequestedVisible,
 			translationContextualVisible = state.actions.translateContextualVisible,
 		)
+		val floatingControlExitOffset = with(LocalDensity.current) { 32.dp.roundToPx() }
 		AnimatedVisibility(
 			visible = state.controlsVisible && !state.chaptersVisible && floatingControls.isNotEmpty(),
-			enter = fadeIn(),
-			exit = fadeOut(),
+			// Keep Backdrop shadows out of the alpha layer used by fade transitions.
+			enter = slideInHorizontally { it + floatingControlExitOffset },
+			exit = slideOutHorizontally { it + floatingControlExitOffset },
 			modifier = Modifier
 				.align(Alignment.BottomEnd)
 				.navigationBarsPadding()
@@ -877,6 +884,7 @@ private fun ReaderComposeTopBar(
 	onOptions: () -> Unit,
 ) {
 	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+	val chapterControlShape = RoundedCornerShape(24.dp)
 	Box(
 		modifier = Modifier
 			.fillMaxWidth()
@@ -898,11 +906,13 @@ private fun ReaderComposeTopBar(
 			}
 		}
 		ReaderTopControlSurface(
-			shape = RoundedCornerShape(24.dp),
+			shape = chapterControlShape,
 			modifier = Modifier
 				.align(Alignment.Center)
 				.widthIn(min = 148.dp, max = 176.dp)
-				.height(48.dp)
+				.height(48.dp),
+			contentModifier = Modifier
+				.clip(chapterControlShape)
 				.clickable(onClick = onChapters),
 		) {
 			Column(
@@ -1015,8 +1025,9 @@ private fun ReaderFloatingControlButton(
 	}
 	ReaderTopControlSurface(
 		shape = CircleShape,
-		modifier = Modifier
-			.size(44.dp)
+		modifier = Modifier.size(44.dp),
+		contentModifier = Modifier
+			.clip(CircleShape)
 			.combinedClickable(
 				role = Role.Button,
 				onClickLabel = contentDescription,
@@ -1037,6 +1048,7 @@ private fun ReaderFloatingControlButton(
 private fun ReaderTopControlSurface(
 	shape: Shape,
 	modifier: Modifier = Modifier,
+	contentModifier: Modifier = Modifier,
 	content: @Composable () -> Unit,
 ) {
 	GlassSurface(
@@ -1048,7 +1060,10 @@ private fun ReaderTopControlSurface(
 		),
 		componentRole = GlassComponentRole.TopBar,
 	) {
-		Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+		Box(
+			contentAlignment = Alignment.Center,
+			modifier = Modifier.fillMaxSize().then(contentModifier),
+		) {
 			content()
 		}
 	}
