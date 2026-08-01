@@ -324,8 +324,9 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private fun getSplitPagesSnapshot(): List<org.skepsun.kototoro.reader.ui.pager.ReaderPage> {
-        val currentChapterId = readingState.value?.chapterId
+    private fun getSplitPagesSnapshot(
+        currentChapterId: Long? = readingState.value?.chapterId,
+    ): List<org.skepsun.kototoro.reader.ui.pager.ReaderPage> {
         val originalPages = if (readerMode.value != ReaderMode.WEBTOON && currentChapterId != null) {
             chaptersLoader.snapshotReaderWindow(currentChapterId, BOUNDS_PAGE_OFFSET)
         } else {
@@ -639,7 +640,7 @@ class ReaderViewModel @Inject constructor(
             readerWindowGeneration++
             chaptersLoader.loadSingleChapter(id)
             val newState = ReaderState(id, page, 0)
-            content.value = ReaderContent(getSplitPagesSnapshot(), newState)
+            content.value = ReaderContent(getSplitPagesSnapshot(id), newState)
             Log.d(
                 LOG_TAG,
                 "switchChapter: loaded targetChapterId=$id, pages=${content.value.pages.size}, newState=$newState",
@@ -684,7 +685,7 @@ class ReaderViewModel @Inject constructor(
                 scroll = if (delta == 0) prevState.scroll else 0,
             )
             skipBoundaryLoadOnce.set(true)
-            content.value = ReaderContent(getSplitPagesSnapshot(), newState)
+            content.value = ReaderContent(getSplitPagesSnapshot(newChapterId), newState)
             Log.d(
                 LOG_TAG,
                 "switchChapterBy: applied newState=$newState, pages=${content.value.pages.size}",
