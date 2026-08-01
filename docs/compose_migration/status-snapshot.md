@@ -32,7 +32,7 @@
 
 ### ViewBinding / Fragment 详细清单（2026-07-21 更新）
 
-#### Activity（24 个 BaseActivity<ViewBinding> 宿主）
+#### Activity（24 个 `BaseActivity` + `ViewBinding` 宿主）
 
 | 类别 | 文件 | 状态 |
 |------|------|------|
@@ -47,7 +47,7 @@
 | OAuth | `KitsuAuthActivity`、`MangaUpdatesAuthActivity` | 低优先 |
 | 其他 | `TrackerDebugActivity`、`StatsActivity`、`AppUpdateActivity`、`ProtectActivity`、`ShelfWidgetConfigActivity`、`RecentWidgetConfigActivity` | 低优先 |
 
-#### Sheet（5 个 `BaseAdaptiveSheet<B>` 子类，较上轮减少 14 个）
+#### Sheet（5 个 `BaseAdaptiveSheet` 子类，较上轮减少 14 个）
 
 | 类别 | 文件 | 状态 |
 |------|------|------|
@@ -96,7 +96,7 @@
 
 | 方面 | 当前状态 |
 |------|------|
-| Activity 宿主 | `MainActivity` 仍继承 `BaseActivity<ActivityMainBinding>`，通过 `setContentViewWebViewSafe { ActivityMainBinding.inflate(...) }` 托管根视图 |
+| Activity 宿主 | `MainActivity` 仍继承 `BaseActivity`，类型参数为 `ActivityMainBinding`，通过 `setContentViewWebViewSafe { ActivityMainBinding.inflate(...) }` 托管根视图 |
 | 主内容入口 | `viewBinding.composeRoot.setContent { KototoroApp(...) }` |
 | 导航 | `KototoroApp.kt` + `AppNavGraph.kt` 使用 Compose `NavHost`，路由已全面 typed（`@Serializable` data class） |
 | 搜索链路 | `onQueryChanged` / `onSearch` / `suggestions` 已完整接回 |
@@ -127,7 +127,7 @@
 
 | 方面 | 当前状态 |
 |------|------|
-| Activity 宿主 | `DetailsActivity` 仍继承 `BaseActivity<ActivityDetailsBinding>` |
+| Activity 宿主 | `DetailsActivity` 仍继承 `BaseActivity`，类型参数为 `ActivityDetailsBinding` |
 | Compose 接入 | 通过 `viewBinding.composeView.setContent { DetailsScreen(...) }` |
 | Pane 主入口 | 普通详情页里的章节 / 页面 / 书签入口已在 `DetailsScreen` 内使用 Compose `ModalBottomSheet` |
 | EntityGraph + Tracking 统一 | `DetailsScreen` 已统一接入 EntityGraph 和 Tracking origins，`DetailsHeader` 已接入 `DetailsBindingCard` |
@@ -188,7 +188,7 @@
 
 - `MainActivity` 仍依赖 `ActivityMainBinding` 作为 Compose 根宿主，尚未直接 `setContent {}`
 - `DetailsActivity` 仍依赖 `ActivityDetailsBinding`
-- 24 个 Activity 仍继承 `BaseActivity<ViewBinding>`
+- 24 个 Activity 仍继承以 `ViewBinding` 为类型参数的 `BaseActivity`
 - 28 个设置页 Fragment 壳（ComposeView 宿主）仍保留
 - 5 个 `BaseAdaptiveSheet` 子类（ScrobblingInfoSheet、ScrobblingSelectorSheet、WelcomeSheet、TrackerCategoriesConfigSheet）
 - 49 个 AdapterDelegate 文件仍使用 ViewBinding 渲染列表项
