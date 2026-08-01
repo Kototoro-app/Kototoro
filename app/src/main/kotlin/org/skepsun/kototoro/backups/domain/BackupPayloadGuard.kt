@@ -10,10 +10,21 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.decodeFromString
+import org.skepsun.kototoro.backups.data.model.BackupIndex
 import java.io.File
 import java.util.zip.ZipInputStream
 
 object BackupPayloadGuard {
+
+	class UnexpectedBackupFormatException(
+		val expected: BackupRestoreFormat,
+		val actualAppId: String? = null,
+		val actualSemanticSchemaVersion: Int? = null,
+	) : IllegalArgumentException(
+		"The selected backup does not match the requested restore format: expected=$expected, " +
+			"appId=$actualAppId, semanticSchemaVersion=$actualSemanticSchemaVersion",
+	)
 
 	class MissingProjectionAnchorsException(
 		val operation: String,
@@ -75,6 +86,46 @@ object BackupPayloadGuard {
 			}
 			validateWorkSnapshotSemantics(file, operation)
 		}
+	}
+
+	fun requireRestoreFormat(file: File, expected: BackupRestoreFormat): BackupIndex {
+		val index = readBackupIndex(file) ?: throw UnexpectedBackupFormatException(expected)
+		val matches = when (expected) {
+			BackupRestoreFormat.KOTOTORO_CURRENT ->
+				index.appId.isKototoroApplicationId() &&
+					index.semanticSchemaVersion == BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+
+			BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO ->
+				index.semanticSchemaVersion < BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+		}
+		if (!matches) {
+			throw UnexpectedBackupFormatException(
+				expected = expected,
+				actualAppId = index.appId,
+				actualSemanticSchemaVersion = index.semanticSchemaVersion,
+			)
+		}
+		return index
+	}
+
+	private fun String.isKototoroApplicationId(): Boolean {
+		return this in KOTOTORO_APPLICATION_IDS
+	}
+
+	private fun readBackupIndex(file: File): BackupIndex? {
+		ZipInputStream(file.inputStream()).use { input ->
+			var entry = input.nextEntry
+			while (entry != null) {
+				if (BackupSection.of(entry) == BackupSection.INDEX) {
+					return runCatching {
+						json.decodeFromString<List<BackupIndex>>(input.readBytes().decodeToString()).single()
+					}.getOrNull()
+				}
+				input.closeEntry()
+				entry = input.nextEntry
+			}
+		}
+		return null
 	}
 
 	private fun validateWorkSnapshotSemantics(file: File, operation: String) {
@@ -246,6 +297,11 @@ object BackupPayloadGuard {
 
 	private const val EMPTY_JSON_ARRAY_BYTES = 2
 	private const val MAX_REPORTED_IDS = 8
+	private val KOTOTORO_APPLICATION_IDS = setOf(
+		"org.skepsun.kototoro",
+		"org.skepsun.kototoro.debug",
+		"org.skepsun.kototoro.nightly",
+	)
 	private val json = Json {
 		ignoreUnknownKeys = true
 		coerceInputValues = true

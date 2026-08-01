@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.HistoryWithContent
+import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 
 @Serializable
@@ -34,6 +35,19 @@ class HistoryBackup(
 		chaptersCount = entity.history.chaptersCount,
 		deletedAt = entity.history.deletedAt,
 		manga = ContentBackup(MangaWithTags(entity.manga, entity.tags)),
+	)
+
+	constructor(entity: WorkHistoryEntity, manga: MangaWithTags) : this(
+		mangaId = manga.manga.id,
+		createdAt = entity.createdAt,
+		updatedAt = entity.updatedAt,
+		chapterId = entity.chapterId,
+		page = entity.page,
+		scroll = entity.scroll,
+		percent = entity.percent,
+		chaptersCount = entity.chaptersCount,
+		deletedAt = entity.deletedAt,
+		manga = ContentBackup(manga),
 	)
 
 	fun toEntity() = HistoryEntity(

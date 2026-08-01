@@ -1295,11 +1295,16 @@
     <string name="image_caches">圖像與閱讀器緩存</string>
     <string name="image_server">圖片質量</string>
     <string name="import_backup_choose_source_app">選擇來源應用</string>
+    <string name="external_backup_section_title">匯出/匯入其他應用備份</string>
     <string name="import_backup_from_other_apps">從其他應用導入備份</string>
     <string name="import_backup_from_other_apps_summary">從 Mihon 系或 Aniyomi 系應用的備份文件導入收藏和歷史記錄。</string>
     <string name="import_backup_scope_summary">當前版本會恢復收藏、歷史記錄，以及導入得到的閱讀進度信息。</string>
     <string name="import_backup_started_background">將在後臺導入外部備份</string>
     <string name="import_backup_supported_apps_summary">Mihon、Komikku、Aniyomi、Anikku、Animiru</string>
+    <string name="export_usagi_backup">匯出 Usagi 備份</string>
+    <string name="export_usagi_backup_summary">為 Usagi 匯出漫畫收藏、分類、歷史記錄、追蹤資訊、書籤和統計資料。</string>
+    <string name="export_usagi_backup_saved">Usagi 備份已儲存（%1$d 條）</string>
+    <string name="export_usagi_backup_empty">沒有可匯出的相容漫畫收藏或歷史記錄</string>
     <string name="import_button">導入</string>
     <string name="import_completed_with_count">已導入 %1$d 部漫畫</string>
     <string name="import_content_type">內容類型</string>

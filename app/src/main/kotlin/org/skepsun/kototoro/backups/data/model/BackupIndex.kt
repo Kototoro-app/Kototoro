@@ -37,5 +37,16 @@ class BackupIndex(
 		const val WRITER_GENERATION_V1 = 1
 		const val WRITER_GENERATION_V2 = 2
 		const val WRITER_GENERATION_V3 = 3
+
+		fun forKotatsuCompatibility(exportedAt: Long): BackupIndex = BackupIndex(
+			appId = BuildConfig.APPLICATION_ID,
+			appVersion = BuildConfig.VERSION_CODE,
+			transportGeneration = WRITER_GENERATION_V1,
+			semanticSchemaVersion = 1,
+			deviceId = "",
+			dataVersion = 0,
+			createdAt = exportedAt,
+			exportedAt = exportedAt,
+		)
 	}
 }

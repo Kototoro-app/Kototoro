@@ -60,4 +60,11 @@ object BackupUtils {
 		append(dateTimeFormat.format(Date()))
 		append(".bk.zip")
 	}
+
+	fun generateKotatsuBackupFileName(context: Context) = buildString {
+		append(context.getString(R.string.app_name).replace(' ', '_').lowercase(Locale.ROOT))
+		append("_kotatsu_")
+		append(dateTimeFormat.format(Date()))
+		append(".bk.zip")
+	}
 }

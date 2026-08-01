@@ -1062,6 +1062,7 @@
     <string name="images_procy_description">尽可能使用 wsrv.nl 代理服务减少流量使用并加快图片加载</string>
     <string name="images_proxy_title">图像加载优化代理</string>
     <string name="import_backup_choose_source_app">选择来源应用</string>
+    <string name="external_backup_section_title">导出/导入其他应用备份</string>
     <string name="import_backup_from_other_apps">从其他应用导入备份</string>
     <string name="import_backup_from_other_apps_summary">从 Mihon 系、Aniyomi 系或 Venera 备份文件导入收藏和历史记录。</string>
     <string name="export_mihon_backup">导出 Mihon 备份</string>
@@ -1072,6 +1073,10 @@
     <string name="export_aniyomi_backup_summary">导出 Mihon 漫画源与 Aniyomi 动画源的收藏、分类和阅读进度。</string>
     <string name="export_aniyomi_backup_saved">Aniyomi 备份已保存（%1$d 条）</string>
     <string name="export_aniyomi_backup_empty">没有可导出的 Mihon 或 Aniyomi 兼容源收藏或历史记录</string>
+    <string name="export_usagi_backup">导出 Usagi 备份</string>
+    <string name="export_usagi_backup_summary">为 Usagi 导出漫画收藏、分类、历史记录、追踪信息、书签和统计数据。</string>
+    <string name="export_usagi_backup_saved">Usagi 备份已保存（%1$d 条）</string>
+    <string name="export_usagi_backup_empty">没有可导出的兼容漫画收藏或历史记录</string>
     <string name="import_backup_scope_summary">当前版本会恢复收藏、历史记录，以及导入得到的阅读进度信息。</string>
     <string name="import_backup_started_background">将在后台导入外部备份</string>
     <string name="import_backup_supported_apps_summary">Mihon、Komikku、Aniyomi、Anikku、Animiru、Venera</string>

@@ -917,8 +917,13 @@
     <string name="find_similar">Find similar</string>
     <string name="sync_settings">Synchronization settings</string>
     <string name="sync_settings_summary">Merge favorites, history, subscriptions, and update records across devices.</string>
+    <string name="external_backup_section_title">Export/import backups for other apps</string>
     <string name="import_backup_from_other_apps">Import backup from other apps</string>
     <string name="import_backup_from_other_apps_summary">Import favorites and history from Mihon-family, Aniyomi-family, or Venera backup files.</string>
+    <string name="import_backup_from_other_apps_combined_summary">%1$s\n%2$s: %3$s</string>
+    <string name="export_kotatsu_backup">Export Kotatsu backup</string>
+    <string name="export_kotatsu_backup_summary">Create a separate legacy backup for Kotatsu-family apps without Kototoro-specific sections.</string>
+    <string name="export_kotatsu_backup_saved">Kotatsu backup saved</string>
     <string name="export_mihon_backup">Export Mihon backup</string>
     <string name="export_mihon_backup_summary">Export favorites, categories, and reading progress for Mihon-source entries only.</string>
     <string name="export_mihon_backup_saved">Mihon backup saved (%1$d entries)</string>
@@ -985,6 +990,10 @@
     <string name="network">Network</string>
     <string name="data_and_privacy">Data and privacy</string>
     <string name="restore_summary">Restore previously created backup</string>
+    <string name="restore_kototoro_backup">Restore current Kototoro backup</string>
+    <string name="restore_kototoro_backup_summary">Restore a Kototoro backup using the current semantic schema v3. Kotatsu and legacy backups are rejected here.</string>
+    <string name="import_kotatsu_or_legacy_backup">Import Kotatsu or legacy Kototoro backup</string>
+    <string name="import_kotatsu_or_legacy_backup_summary">Import a Kotatsu-family backup or a Kototoro backup using semantic schema v1/v2. Source and app settings are always ignored.</string>
     <string name="webtoon_zoom_summary">Allow zoom in gesture in webtoon mode</string>
     <string name="pull_to_prev_chapter">Release to open previous chapter</string>
     <string name="pull_to_next_chapter">Release to open next chapter</string>

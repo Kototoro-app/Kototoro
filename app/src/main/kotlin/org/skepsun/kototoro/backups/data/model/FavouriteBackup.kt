@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.favourites.data.FavouriteContent
+import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 
 @Serializable
 class FavouriteBackup(
@@ -31,6 +32,17 @@ class FavouriteBackup(
 		manga = ContentBackup(MangaWithTags(entity.manga, entity.tags)),
 	)
 
+	constructor(entity: WorkFavouriteEntity, manga: MangaWithTags) : this(
+		mangaId = manga.manga.id,
+		categoryId = entity.categoryId,
+		sortKey = entity.sortKey,
+		isPinned = entity.isPinned,
+		createdAt = entity.createdAt,
+		deletedAt = entity.deletedAt,
+		updatedAt = entity.updatedAt,
+		manga = ContentBackup(manga),
+	)
+
 	fun toEntity() = FavouriteEntity(
 		mangaId = mangaId,
 		categoryId = categoryId,
@@ -38,6 +50,6 @@ class FavouriteBackup(
 		isPinned = isPinned,
 		createdAt = createdAt,
 		deletedAt = deletedAt,
-		updatedAt = updatedAt,
+		updatedAt = maxOf(updatedAt, createdAt),
 	)
 }

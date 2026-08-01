@@ -62,6 +62,7 @@ import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.UsagiBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
+import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.getTitle
@@ -310,6 +311,14 @@ class SettingsActivity :
 		}
 	}
 
+	private val legacyBackupSelectCall = registerForActivityResult(
+		ActivityResultContracts.OpenDocument(),
+	) { uri ->
+		if (uri != null) {
+			router.showBackupRestoreDialog(uri, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
+		}
+	}
+
 	private val externalBackupSelectCall = registerForActivityResult(
 		ActivityResultContracts.OpenDocument(),
 	) { uri ->
@@ -336,6 +345,14 @@ class SettingsActivity :
 		ActivityResultContracts.CreateDocument("application/octet-stream"),
 	) { uri ->
 		if (uri != null && !MihonBackupExportService.start(this, uri)) {
+			Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+		}
+	}
+
+	private val kotatsuBackupExportCall = registerForActivityResult(
+		ActivityResultContracts.CreateDocument("application/zip"),
+	) { uri ->
+		if (uri != null && !BackupService.startKotatsuExport(this, uri)) {
 			Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
 		}
 	}
@@ -1053,6 +1070,11 @@ class SettingsActivity :
 							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
 						}
 					},
+					onExportKotatsuBackupClick = {
+						if (!kotatsuBackupExportCall.tryLaunch(BackupUtils.generateKotatsuBackupFileName(this))) {
+							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+						}
+					},
 					onExportAniyomiBackupClick = {
 						if (!aniyomiBackupExportCall.tryLaunch(BackupUtils.generateAniyomiBackupFileName(this))) {
 							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
@@ -1065,6 +1087,11 @@ class SettingsActivity :
 					},
 					onRestoreBackupClick = {
 						if (!backupSelectCall.tryLaunch(arrayOf("*/*"))) {
+							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
+						}
+					},
+					onImportKotatsuOrLegacyBackupClick = {
+						if (!legacyBackupSelectCall.tryLaunch(arrayOf("*/*"))) {
 							Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
 						}
 					},

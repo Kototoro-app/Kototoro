@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
+import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.backups.ui.BaseBackupRestoreService
@@ -62,8 +63,12 @@ class RestoreService : BaseBackupRestoreService() {
 			ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
 		)
 		val source = intent.getStringExtra(AppRouter.KEY_DATA)?.toUriOrNull() ?: throw FileNotFoundException()
-		val sections =
+		val requestedSections =
 			requireNotNull(intent.getSerializableExtraCompat<Array<BackupSection>>(AppRouter.KEY_ENTRIES)?.toSet())
+		val restoreFormat = intent.getStringExtra(EXTRA_RESTORE_FORMAT)
+			?.let(BackupRestoreFormat::valueOf)
+			?: throw IllegalArgumentException("Missing restore format")
+		val sections = restoreFormat.sanitize(requestedSections)
 		powerManager.withPartialWakeLock(TAG) {
 			val wasGoogleDriveSyncEnabled = googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.isSyncEnabled
 			val progress = MutableStateFlow(Progress.INDETERMINATE)
@@ -85,12 +90,16 @@ class RestoreService : BaseBackupRestoreService() {
 					file = tempFile,
 					operation = "manual backup restore",
 				)
+				BackupPayloadGuard.requireRestoreFormat(tempFile, restoreFormat)
 				ZipInputStream(FileInputStream(tempFile)).use { input ->
 					repository.restoreBackup(
 						input = input,
 						sections = sections,
 						progress = progress,
-						restoreMode = BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+						restoreMode = when (restoreFormat) {
+							BackupRestoreFormat.KOTOTORO_CURRENT -> BackupRepository.RestoreMode.SNAPSHOT_REPLACE
+							BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO -> BackupRepository.RestoreMode.MERGE
+						},
 					)
 				}
 			} finally {
@@ -158,12 +167,19 @@ class RestoreService : BaseBackupRestoreService() {
 
 		private const val TAG = "RESTORE"
 		private const val FOREGROUND_NOTIFICATION_ID = 39
+		private const val EXTRA_RESTORE_FORMAT = "restore_format"
 
 		@CheckResult
-		fun start(context: Context, uri: Uri, sections: Set<BackupSection>): Boolean = try {
+		fun start(
+			context: Context,
+			uri: Uri,
+			sections: Set<BackupSection>,
+			restoreFormat: BackupRestoreFormat,
+		): Boolean = try {
 			val intent = Intent(context, RestoreService::class.java)
 			intent.putExtra(AppRouter.KEY_DATA, uri.toString())
 			intent.putExtra(AppRouter.KEY_ENTRIES, sections.toTypedArray())
+			intent.putExtra(EXTRA_RESTORE_FORMAT, restoreFormat.name)
 			intent.setData(uri)
 			intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 			ContextCompat.startForegroundService(context, intent)

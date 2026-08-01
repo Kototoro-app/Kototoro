@@ -23,22 +23,42 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 
 @Composable
 fun RestoreDialogRoute(
     uri: Uri,
+    restoreFormat: BackupRestoreFormat,
     onRestoreStarted: () -> Unit,
     onUnsupported: () -> Unit,
     onDismiss: () -> Unit,
-    viewModel: RestoreViewModel = hiltViewModel(key = "restore-${uri.hashCode()}"),
+    viewModel: RestoreViewModel = hiltViewModel(key = "restore-${restoreFormat.name}-${uri.hashCode()}"),
 ) {
-    LaunchedEffect(uri) { viewModel.initialize(uri) }
+    LaunchedEffect(uri, restoreFormat) { viewModel.initialize(uri, restoreFormat) }
+    LaunchedEffect(viewModel.onError) {
+        viewModel.onError.collect { event ->
+            event?.consume {
+                onDismiss()
+                onUnsupported()
+            }
+        }
+    }
     val loading by viewModel.isLoading.collectAsStateWithLifecycle()
     val entries by viewModel.availableEntries.collectAsStateWithLifecycle()
     val context = LocalContext.current
     AlertDialog(
         onDismissRequest = {},
-        title = { Text(stringResource(R.string.restore_backup)) },
+        title = {
+            Text(
+                stringResource(
+                    when (restoreFormat) {
+                        BackupRestoreFormat.KOTOTORO_CURRENT -> R.string.restore_kototoro_backup
+                        BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO ->
+                            R.string.import_kotatsu_or_legacy_backup
+                    },
+                ),
+            )
+        },
         text = {
             if (loading) {
                 CircularProgressIndicator()
@@ -67,7 +87,7 @@ fun RestoreDialogRoute(
             TextButton(
                 enabled = !loading && entries.any { it.isChecked },
                 onClick = {
-                    if (RestoreService.start(context, uri, viewModel.getCheckedSections())) onRestoreStarted()
+                    if (RestoreService.start(context, uri, viewModel.getCheckedSections(), restoreFormat)) onRestoreStarted()
                     else onUnsupported()
                 },
             ) { Text(stringResource(R.string.restore)) }

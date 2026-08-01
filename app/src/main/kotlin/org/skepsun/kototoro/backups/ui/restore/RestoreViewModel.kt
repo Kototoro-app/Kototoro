@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
+import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -41,15 +42,15 @@ class RestoreViewModel @Inject constructor(
 	val availableEntries = MutableStateFlow<List<BackupSectionModel>>(emptyList())
 	val backupDate = MutableStateFlow<Date?>(null)
 
-	fun initialize(uri: Uri) {
+	fun initialize(uri: Uri, restoreFormat: BackupRestoreFormat) {
 		if (this.uri != null) return
 		this.uri = uri
 		launchLoadingJob(Dispatchers.Default) {
-			loadBackupInfo()
+			loadBackupInfo(restoreFormat)
 		}
 	}
 
-	private suspend fun loadBackupInfo() {
+	private suspend fun loadBackupInfo(restoreFormat: BackupRestoreFormat) {
 		val sourceUri = uri ?: throw FileNotFoundException()
 		val sections = runInterruptible(Dispatchers.IO) {
 			val tempFile = File.createTempFile("manual_backup_restore_inspect", ".bk.zip", cacheDir)
@@ -61,6 +62,7 @@ class RestoreViewModel @Inject constructor(
 					file = tempFile,
 					operation = "manual backup restore inspection",
 				)
+				BackupPayloadGuard.requireRestoreFormat(tempFile, restoreFormat)
 			} finally {
 				if (tempFile.exists()) tempFile.delete()
 			}
@@ -82,7 +84,7 @@ class RestoreViewModel @Inject constructor(
 			}
 		}
 		availableEntries.value = BackupSection.entries.mapNotNull { entry ->
-			if (entry == BackupSection.INDEX) {
+			if (entry == BackupSection.INDEX || !restoreFormat.supports(entry)) {
 				return@mapNotNull null
 			}
 			val present = entry in sections

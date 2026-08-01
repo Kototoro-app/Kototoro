@@ -48,7 +48,10 @@ class BackupService : BaseBackupRestoreService() {
 	lateinit var repository: BackupRepository
 
 	override suspend fun IntentJobContext.processIntent(intent: Intent) {
-		val notification = buildNotification(Progress.INDETERMINATE)
+		val format = intent.getStringExtra(EXTRA_EXPORT_FORMAT)
+			?.let { runCatching { BackupRepository.ExportFormat.valueOf(it) }.getOrNull() }
+			?: BackupRepository.ExportFormat.KOTOTORO
+		val notification = buildNotification(Progress.INDETERMINATE, format)
 		setForeground(
 			FOREGROUND_NOTIFICATION_ID,
 			notification,
@@ -60,7 +63,7 @@ class BackupService : BaseBackupRestoreService() {
 			val progressUpdateJob = if (checkNotificationPermission(CHANNEL_ID)) {
 				launch {
 					progress.collect {
-						notificationManager.notify(FOREGROUND_NOTIFICATION_ID, buildNotification(it))
+						notificationManager.notify(FOREGROUND_NOTIFICATION_ID, buildNotification(it, format))
 					}
 				}
 			} else {
@@ -69,12 +72,14 @@ class BackupService : BaseBackupRestoreService() {
 			val tempFile = File.createTempFile("manual_backup_", ".bk.zip", cacheDir)
 			try {
 				ZipOutputStream(tempFile.outputStream()).use { output ->
-					repository.createBackup(output, progress)
+					repository.createBackup(output, progress, format)
 				}
-				BackupPayloadGuard.requireRestorableWorkSnapshot(
-					file = tempFile,
-					operation = "manual backup creation",
-				)
+				if (format == BackupRepository.ExportFormat.KOTOTORO) {
+					BackupPayloadGuard.requireRestorableWorkSnapshot(
+						file = tempFile,
+						operation = "manual backup creation",
+					)
+				}
 				val expectedBytes = tempFile.length()
 				FileInputStream(tempFile).use { input ->
 					contentResolver.openOutputStream(destination, "wt")?.use { output ->
@@ -106,14 +111,30 @@ class BackupService : BaseBackupRestoreService() {
 			contentResolver.notifyChange(destination, null)
 			showResultNotification(destination, CompositeResult.success())
 			withContext(Dispatchers.Main) {
-				Toast.makeText(this@BackupService, R.string.backup_saved, Toast.LENGTH_SHORT).show()
+				val message = if (format == BackupRepository.ExportFormat.KOTATSU) {
+					R.string.export_kotatsu_backup_saved
+				} else {
+					R.string.backup_saved
+				}
+				Toast.makeText(this@BackupService, message, Toast.LENGTH_SHORT).show()
 			}
 		}
 	}
 
-	private fun IntentJobContext.buildNotification(progress: Progress): Notification {
+	private fun IntentJobContext.buildNotification(
+		progress: Progress,
+		format: BackupRepository.ExportFormat,
+	): Notification {
 		return NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-			.setContentTitle(getString(R.string.creating_backup))
+			.setContentTitle(
+				getString(
+					if (format == BackupRepository.ExportFormat.KOTATSU) {
+						R.string.export_kotatsu_backup
+					} else {
+						R.string.creating_backup
+					},
+				),
+			)
 			.setPriority(NotificationCompat.PRIORITY_HIGH)
 			.setDefaults(0)
 			.setSilent(true)
@@ -144,11 +165,25 @@ class BackupService : BaseBackupRestoreService() {
 
 		private const val TAG = "BACKUP"
 		private const val FOREGROUND_NOTIFICATION_ID = 33
+		private const val EXTRA_EXPORT_FORMAT = "export_format"
 
 		@CheckResult
 		fun start(context: Context, uri: Uri): Boolean = try {
 			val intent = Intent(context, BackupService::class.java)
 			intent.putExtra(AppRouter.KEY_DATA, uri.toString())
+			intent.putExtra(EXTRA_EXPORT_FORMAT, BackupRepository.ExportFormat.KOTOTORO.name)
+			ContextCompat.startForegroundService(context, intent)
+			true
+		} catch (e: Exception) {
+			e.printStackTraceDebug()
+			false
+		}
+
+		@CheckResult
+		fun startKotatsuExport(context: Context, uri: Uri): Boolean = try {
+			val intent = Intent(context, BackupService::class.java)
+			intent.putExtra(AppRouter.KEY_DATA, uri.toString())
+			intent.putExtra(EXTRA_EXPORT_FORMAT, BackupRepository.ExportFormat.KOTATSU.name)
 			ContextCompat.startForegroundService(context, intent)
 			true
 		} catch (e: Exception) {

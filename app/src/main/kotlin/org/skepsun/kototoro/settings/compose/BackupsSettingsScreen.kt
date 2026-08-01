@@ -75,6 +75,8 @@ fun BackupsSettingsScreen(
     onPeriodicalBackupCountChange: (Int) -> Unit,
     onCreateBackupClick: () -> Unit,
     onRestoreBackupClick: () -> Unit,
+    onImportKotatsuOrLegacyBackupClick: () -> Unit,
+    onExportKotatsuBackupClick: () -> Unit,
     onExportMihonBackupClick: () -> Unit,
     onExportAniyomiBackupClick: () -> Unit,
     onExportUsagiBackupClick: () -> Unit,
@@ -170,14 +172,26 @@ fun BackupsSettingsScreen(
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
-                        title = stringResource(R.string.restore_backup),
-                        summary = stringResource(R.string.restore_summary),
+                        title = stringResource(R.string.restore_kototoro_backup),
+                        summary = stringResource(R.string.restore_kototoro_backup_summary),
                         onClick = onRestoreBackupClick,
                     )
                 }
             }
             item(key = "external_backup_import") {
-                SettingsPreferenceSection(title = stringResource(R.string.import_backup_from_other_apps)) {
+                SettingsPreferenceSection(title = stringResource(R.string.external_backup_section_title)) {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.import_kotatsu_or_legacy_backup),
+                        summary = stringResource(R.string.import_kotatsu_or_legacy_backup_summary),
+                        onClick = onImportKotatsuOrLegacyBackupClick,
+                    )
+                    SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.export_kotatsu_backup),
+                        summary = stringResource(R.string.export_kotatsu_backup_summary),
+                        onClick = onExportKotatsuBackupClick,
+                    )
+                    SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.export_mihon_backup),
                         summary = stringResource(R.string.export_mihon_backup_summary),
@@ -198,20 +212,13 @@ fun BackupsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.import_backup_from_other_apps),
-                        summary = stringResource(R.string.import_backup_from_other_apps_summary),
+                        summary = stringResource(
+                            R.string.import_backup_from_other_apps_combined_summary,
+                            stringResource(R.string.import_backup_from_other_apps_summary),
+                            stringResource(R.string.supported_apps),
+                            stringResource(R.string.import_backup_supported_apps_summary),
+                        ),
                         onClick = onImportExternalBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsInfoPreference(
-                        title = stringResource(R.string.supported_apps),
-                        summary = stringResource(R.string.import_backup_supported_apps_summary),
-                        iconRes = R.drawable.ic_info_outline,
-                    )
-                    SettingsSectionDivider()
-                    SettingsInfoPreference(
-                        title = stringResource(R.string.read_more),
-                        summary = stringResource(R.string.import_backup_scope_summary),
-                        iconRes = R.drawable.ic_info_outline,
                     )
                 }
             }

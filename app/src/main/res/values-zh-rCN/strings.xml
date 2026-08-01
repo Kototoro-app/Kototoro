@@ -589,8 +589,12 @@
     <string name="no_thanks">不了谢谢</string>
     <string name="sync_settings">同步设定</string>
     <string name="sync_settings_summary">在多设备间合并收藏、历史、订阅和更新记录</string>
+    <string name="external_backup_section_title">导出/导入其他应用备份</string>
     <string name="import_backup_from_other_apps">从其他应用导入备份</string>
     <string name="import_backup_from_other_apps_summary">从 Mihon 系、Aniyomi 系或 Venera 备份文件导入收藏和历史记录。</string>
+    <string name="export_kotatsu_backup">导出 Kotatsu 备份</string>
+    <string name="export_kotatsu_backup_summary">创建供 Kotatsu 系应用恢复的独立旧格式备份，不包含 Kototoro 专用分段。</string>
+    <string name="export_kotatsu_backup_saved">Kotatsu 备份已保存</string>
     <string name="export_mihon_backup">导出 Mihon 备份</string>
     <string name="export_mihon_backup_summary">仅导出 Mihon 图源条目的收藏、分类和阅读进度。</string>
     <string name="export_mihon_backup_saved">Mihon 备份已保存（%1$d 条）</string>
@@ -599,6 +603,10 @@
     <string name="export_aniyomi_backup_summary">导出 Mihon 漫画源与 Aniyomi 动画源的收藏、分类和阅读进度。</string>
     <string name="export_aniyomi_backup_saved">Aniyomi 备份已保存（%1$d 条）</string>
     <string name="export_aniyomi_backup_empty">没有可导出的 Mihon 或 Aniyomi 兼容源收藏或历史记录</string>
+    <string name="export_usagi_backup">导出 Usagi 备份</string>
+    <string name="export_usagi_backup_summary">为 Usagi 导出漫画收藏、分类、历史记录、追踪信息、书签和统计数据。</string>
+    <string name="export_usagi_backup_saved">Usagi 备份已保存（%1$d 条）</string>
+    <string name="export_usagi_backup_empty">没有可导出的兼容漫画收藏或历史记录</string>
     <string name="import_backup_choose_source_app">选择来源应用</string>
     <string name="supported_apps">支持的应用</string>
     <string name="import_backup_supported_apps_summary">Mihon、Komikku、Aniyomi、Anikku、Animiru、Venera</string>
@@ -629,6 +637,10 @@
     <string name="invalid_value_message">无效值</string>
     <string name="network">网络</string>
     <string name="restore_summary">从以前创建的备份恢复</string>
+    <string name="restore_kototoro_backup">恢复当前 Kototoro 备份</string>
+    <string name="restore_kototoro_backup_summary">仅恢复使用当前语义架构 v3 的 Kototoro 备份；不接受 Kotatsu 或旧版备份。</string>
+    <string name="import_kotatsu_or_legacy_backup">导入 Kotatsu 或旧版 Kototoro 备份</string>
+    <string name="import_kotatsu_or_legacy_backup_summary">仅导入 Kotatsu 系备份或语义架构 v1/v2 的 Kototoro 旧版备份；始终忽略内容源和应用设置。</string>
     <string name="show_pages_numbers_summary">在屏幕右下角显示页码</string>
     <string name="clear_source_cookies_summary">仅清除特定域名的 Cookies，大多数情况下会使网站授权失效</string>
     <string name="data_and_privacy">数据与隐私</string>
