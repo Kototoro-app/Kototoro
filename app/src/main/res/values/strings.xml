@@ -2171,6 +2171,8 @@
     <string name="restoring_backup">Restoring backup</string>
     <string name="restore_auth_restart_hint">Login credentials restored. Please restart the app to apply.</string>
     <string name="reader_controls_in_bottom_bar">Reader controls in bottom bar</string>
+    <string name="reader_floating_controls">Reader floating buttons</string>
+    <string name="reader_floating_controls_summary">Select up to %1$d floating buttons</string>
     <string name="reader_control_labels">Show reader control labels</string>
     <string name="reader_control_labels_summary">Show text labels below buttons in the manga and novel reader control bars</string>
     <string name="chapters_and_pages">Chapters and pages</string>

@@ -1568,12 +1568,15 @@ class SettingsActivity :
 		translationApiFetchModelsJob?.cancel()
 		translationApiFetchModelsJob = lifecycleScope.launch {
 			try {
-				val endpoint = kototoroAppSettings.readerTranslationApiEndpoint.trim()
+				val providerId = kototoroAppSettings.readerTranslationApiProviderPreset
+				val endpoint = TranslationApiProviderCatalog.resolveChatEndpoint(
+					providerId,
+					kototoroAppSettings.readerTranslationApiEndpoint,
+				)
 				if (endpoint.isBlank()) {
 					Toast.makeText(this@SettingsActivity, R.string.reader_translation_api_endpoint_missing, Toast.LENGTH_SHORT).show()
 					return@launch
 				}
-				val providerId = kototoroAppSettings.readerTranslationApiProviderPreset
 				val modelsUrl = TranslationApiSettingsSupport.buildModelsUrl(endpoint, providerId)
 				val key = kototoroAppSettings.readerTranslationApiKey.trim()
 				val models = withContext(Dispatchers.IO) {

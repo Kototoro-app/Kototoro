@@ -1,11 +1,20 @@
 package org.skepsun.kototoro.reader.ui
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 
 class ReaderPageSelectionResolverTest {
+
+	@Test
+	fun `reload nonce invalidates compose page key`() {
+		val page = page(chapterId = 183L, index = 1)
+
+		assertEquals(page.readerKey, page.copy().readerKey)
+		assertNotEquals(page.readerKey, page.copy(reloadNonce = 1L).readerKey)
+	}
 
 	@Test
 	fun `restores current chapter page when previous chapter is preloaded`() {

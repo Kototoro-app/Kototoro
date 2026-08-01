@@ -1,11 +1,13 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import android.util.Log
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -67,9 +69,7 @@ internal class ComposeReaderController(
 						chaptersPanelContent(selectedTabId, panelState)
 					},
 					translationTaskPanelContent = {
-						if (chromeState.translationTaskPanelVisible) {
-							ComposeTranslationTaskPanel(viewModel = viewModel, onDismiss = ::hideTranslationTaskPanel)
-						}
+						ComposeTranslationTaskPanelContent(viewModel = viewModel, modifier = Modifier.fillMaxSize())
 					},
 					callbacks = chromeCallbacks.copy(
 						onZoomIn = ::onZoomIn,
@@ -269,7 +269,6 @@ internal class ComposeReaderController(
 			options = chromeState.options.copy(visible = false),
 			toolsVisible = false,
 			chaptersVisible = false,
-			translationTaskPanelVisible = false,
 		)
 	}
 
@@ -314,7 +313,6 @@ internal class ComposeReaderController(
 			autoScroll = chromeState.autoScroll.copy(visible = false),
 			toolsVisible = false,
 			chaptersVisible = false,
-			translationTaskPanelVisible = false,
 		)
 	}
 
@@ -346,17 +344,6 @@ internal class ComposeReaderController(
 			autoScroll = chromeState.autoScroll.copy(visible = false),
 			toolsVisible = true,
 			chaptersVisible = false,
-			translationTaskPanelVisible = false,
-		)
-	}
-
-	fun showTranslationTaskPanel() {
-		chromeState = chromeState.copy(
-			options = chromeState.options.copy(visible = false),
-			autoScroll = chromeState.autoScroll.copy(visible = false),
-			toolsVisible = false,
-			chaptersVisible = false,
-			translationTaskPanelVisible = true,
 		)
 	}
 
@@ -381,16 +368,8 @@ internal class ComposeReaderController(
 		selectionDialog = null
 	}
 
-	private fun hideTranslationTaskPanel() {
-		chromeState = chromeState.copy(translationTaskPanelVisible = false)
-	}
-
 	fun closeExpandedPanel(): Boolean {
 		return when {
-			chromeState.translationTaskPanelVisible -> {
-				hideTranslationTaskPanel()
-				true
-			}
 			chromeState.options.visible -> {
 				hideOptions()
 				true
@@ -413,7 +392,6 @@ internal class ComposeReaderController(
 
 	fun closeChrome(): Boolean {
 		val isVisible = chromeState.controlsVisible ||
-			chromeState.translationTaskPanelVisible ||
 			chromeState.options.visible ||
 			chromeState.toolsVisible ||
 			chromeState.chaptersVisible ||
@@ -422,7 +400,6 @@ internal class ComposeReaderController(
 		areControlsVisible = false
 		chromeState = chromeState.copy(
 			controlsVisible = false,
-			translationTaskPanelVisible = false,
 			options = chromeState.options.copy(visible = false),
 			toolsVisible = false,
 			chaptersVisible = false,
@@ -444,7 +421,6 @@ internal class ComposeReaderController(
 				options = chromeState.options.copy(visible = false),
 				autoScroll = chromeState.autoScroll.copy(visible = false),
 				toolsVisible = false,
-				translationTaskPanelVisible = false,
 			)
 		}
 	}

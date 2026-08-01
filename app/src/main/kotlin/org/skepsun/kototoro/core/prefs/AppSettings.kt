@@ -574,8 +574,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			?.mapNotNullTo(EnumSet.noneOf(ReaderControl::class.java)) { value ->
 				ReaderControl.entries.find { it.name == value }
 			}
-			?.apply { retainAll(ReaderControl.BOTTOM_BAR) }
-			?: ReaderControl.BOTTOM_BAR_DEFAULT
+			?.let(ReaderControl::limitFloatingControls)
+			?: ReaderControl.FLOATING_DEFAULT
 
 	var isOfflineCheckDisabled: Boolean
 		get() = prefs.getBoolean(KEY_OFFLINE_DISABLED, false)
@@ -1200,7 +1200,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_READER_TRANSLATION_API_PROVIDER_PRESET, "CUSTOM")
 			?.trim()
 			?.uppercase()
-			?.takeIf { it in READER_TRANSLATION_API_PROVIDER_PRESETS }
+			?.takeIf { it.isNotBlank() }
 			?: "CUSTOM"
 
 	val readerTranslationApiCustomHeaders: String
@@ -2101,18 +2101,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	}
 
 	companion object {
-		private val READER_TRANSLATION_API_PROVIDER_PRESETS = setOf(
-			"CUSTOM",
-			"OPENAI",
-			"DEEPSEEK",
-			"ZHIPU",
-			"ALIBABA",
-			"MOONSHOT",
-			"ANTHROPIC",
-			"GEMINI",
-			"OPENROUTER",
-		)
-
 		private val CORNER_RADIUS_ALLOWED_VALUES = setOf(-1, 12, 16, 20, 24)
 
 

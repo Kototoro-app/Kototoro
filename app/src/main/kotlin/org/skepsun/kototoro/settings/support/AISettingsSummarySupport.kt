@@ -5,6 +5,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
+import org.skepsun.kototoro.reader.translate.domain.TranslationApiProviderCatalog
 
 object AISettingsSummarySupport {
 
@@ -16,18 +17,9 @@ object AISettingsSummarySupport {
 		},
 	)
 
-	fun getApiProviderLabel(context: Context, preset: String): String = when (preset.uppercase()) {
-		"OPENAI" -> "OpenAI"
-		"DEEPSEEK" -> "DeepSeek"
-		"ZHIPU" -> "Zhipu"
-		"ALIBABA" -> "Alibaba"
-		"MOONSHOT" -> "Moonshot"
-		"MINIMAX" -> "MiniMax"
-		"BAIDU" -> "Baidu"
-		"ANTHROPIC" -> "Anthropic"
-		"GEMINI" -> "Gemini"
-		"OPENROUTER" -> "OpenRouter"
-		else -> context.getString(R.string.ai_api_provider_custom)
+	fun getApiProviderLabel(context: Context, preset: String): String {
+		return TranslationApiProviderCatalog.find(preset)?.name
+			?: context.getString(R.string.ai_api_provider_custom)
 	}
 
 	fun getVideoModeLabel(context: Context, mode: VideoSuperResolutionMode): String = context.getString(

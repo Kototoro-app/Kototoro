@@ -403,7 +403,6 @@ class ReaderActivity :
 					onRotate = ::toggleScreenOrientation,
 					onAutoScroll = { onScrollTimerClick(false) },
 					onTranslation = ::onTranslateClick,
-					onTranslationTools = { composeReaderController.showTools() },
 					onOpenSettings = router::openReaderSettings,
 					onColorFilterChanged = { colorFilter ->
 						composeReaderController.updateOptions { copy(colorFilter = colorFilter) }
@@ -429,7 +428,6 @@ class ReaderActivity :
 					onRetranslatePage = viewModel::retranslateCurrent,
 					onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
 					onRetranslateChapter = viewModel::retranslateCurrentChapter,
-					onTranslationLog = { composeReaderController.showTranslationTaskPanel() },
 				),
 				chapterPanel = ReaderChapterPanelCallbacks(
 					onTabSelected = { tabId -> composeReaderController.selectChaptersTab(tabId) },
@@ -476,7 +474,7 @@ class ReaderActivity :
 				},
 				onPrimaryDestinationLongPress = { destination ->
 					if (destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION) {
-						composeReaderController.showTools()
+						onTranslateLongClick()
 					}
 				},
             ),
@@ -689,13 +687,13 @@ class ReaderActivity :
             }
             updateTranslationToggleButton()
             invalidateOptionsMenu()
-            viewModel.reload()
+            viewModel.refreshTranslationDisplay()
         }.launchIn(lifecycleScope)
         settings.observeAsFlow(AppSettings.KEY_READER_TRANSLATION_SHOW_TRANSLATED) {
             isReaderTranslationShowTranslated
         }.onEach {
             updateTranslationToggleButton()
-            viewModel.reload()
+            viewModel.refreshTranslationDisplay()
         }.launchIn(lifecycleScope)
         viewModel.translationLayerState.onEach {
             currentTranslationLayerState = it
@@ -1211,12 +1209,14 @@ class ReaderActivity :
 			composeReaderController.showMessage(hint, 2000L)
 			return
 		}
-		val wasEnabled = settings.isReaderTranslationEnabled
 		translationShortcutVisibleForSession = true
-		settings.isReaderTranslationEnabled = true
-		settings.isReaderTranslationShowTranslated = true
-		if (wasEnabled) viewModel.retranslateCurrent() else viewModel.reload()
-		composeReaderController.showMessage(getString(R.string.reader_translation_long_press_hint), 2500L)
+		if (settings.isReaderTranslationEnabled) {
+			settings.isReaderTranslationShowTranslated = !settings.isReaderTranslationShowTranslated
+		} else {
+			settings.isReaderTranslationShowTranslated = true
+			settings.isReaderTranslationEnabled = true
+			composeReaderController.showMessage(getString(R.string.reader_translation_long_press_hint), 2500L)
+		}
     }
 
     private fun onChapterTranslationProgressChanged(progress: ReaderViewModel.ChapterTranslationProgress?) {

@@ -360,6 +360,18 @@ class ReaderViewModel @Inject constructor(
         loadImpl()
     }
 
+    fun refreshTranslationDisplay() {
+        launchJob(Dispatchers.Default) {
+            content.value.pages
+                .distinctBy { it.id }
+                .forEach { page ->
+                    pageLoader.invalidateTask(page.toContentPage())
+                    markPageForReload(page.id)
+                }
+            rebuildPages()
+        }
+    }
+
     fun retranslateCurrent() {
         launchJob(Dispatchers.Default) {
             val page = getCurrentPage() ?: return@launchJob
@@ -1122,13 +1134,13 @@ class ReaderViewModel @Inject constructor(
                 translationStateUpdatedAtByPageId[event.pageId] = System.currentTimeMillis()
                 translationTaskPanelVersion.update { it + 1 }
                 updateCurrentChapterTranslationProgress()
+                if (event.state == TranslationLayerState.READY) {
+                    markPageForReload(event.pageId)
+                    rebuildPages()
+                }
                 val currentPageId = getCurrentPage()?.id
                 if (currentPageId == event.pageId) {
                     translationLayerState.value = event.state
-					if (event.state == TranslationLayerState.READY) {
-						markPageForReload(event.pageId)
-						rebuildPages()
-					}
                 }
             }
         }

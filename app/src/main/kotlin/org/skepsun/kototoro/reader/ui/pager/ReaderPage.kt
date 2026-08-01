@@ -28,7 +28,7 @@ data class ReaderPage(
 ) : Parcelable {
 
 	val readerKey: Long
-		get() = "$chapterId#$index#$url#${split.name}".longHashCode()
+		get() = "$chapterId#$index#$url#${split.name}#$reloadNonce".longHashCode()
 
 	constructor(page: ContentPage, index: Int, chapterId: Long) : this(
 		id = page.id,

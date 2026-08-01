@@ -12,10 +12,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -69,6 +71,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -90,6 +93,7 @@ import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
@@ -130,7 +134,6 @@ internal data class ComposeReaderChromeState(
 	val toolsVisible: Boolean = false,
 	val chaptersVisible: Boolean = false,
 	val chapterPanel: ReaderChapterPanelUiState = ReaderChapterPanelUiState(),
-	val translationTaskPanelVisible: Boolean = false,
 )
 
 @Immutable
@@ -414,7 +417,7 @@ private fun ReaderChapterPanelMenuItem(
 	)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeReaderActivityScaffold(
 	state: ComposeReaderChromeState,
@@ -543,11 +546,13 @@ internal fun ComposeReaderActivityScaffold(
 			}
 		}
 
+		val floatingControls = resolveReaderFloatingControls(
+			configured = state.actions.controls,
+			translationAvailable = state.actions.translateRequestedVisible,
+			translationContextualVisible = state.actions.translateContextualVisible,
+		)
 		AnimatedVisibility(
-			visible = state.controlsVisible &&
-				!state.chaptersVisible &&
-				state.actions.translateRequestedVisible &&
-				state.actions.translateContextualVisible,
+			visible = state.controlsVisible && !state.chaptersVisible && floatingControls.isNotEmpty(),
 			enter = fadeIn(),
 			exit = fadeOut(),
 			modifier = Modifier
@@ -555,21 +560,12 @@ internal fun ComposeReaderActivityScaffold(
 				.navigationBarsPadding()
 				.padding(end = 16.dp, bottom = 62.dp),
 		) {
-			ReaderTopControlSurface(
-				shape = CircleShape,
-				modifier = Modifier.size(44.dp),
-			) {
-				IconButton(onClick = callbacks.actions.onTranslate) {
-					Icon(
-						painter = painterResource(R.drawable.ic_translate),
-						contentDescription = state.actions.translateContentDescription.ifEmpty {
-							stringResource(R.string.novel_translate)
-						},
-						tint = if (state.actions.translateActive) {
-							MaterialTheme.colorScheme.primary
-						} else {
-							readerControlContentColor()
-						},
+			Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+				floatingControls.forEach { control ->
+					ReaderFloatingControlButton(
+						control = control,
+						state = state.actions,
+						callbacks = callbacks.actions,
 					)
 				}
 			}
@@ -609,6 +605,7 @@ internal fun ComposeReaderActivityScaffold(
 						state = state.options,
 						callbacks = callbacks.options,
 						embedded = true,
+						translationTaskPanelContent = translationTaskPanelContent,
 						modifier = Modifier
 							.fillMaxWidth()
 							.weight(1f),
@@ -701,7 +698,6 @@ internal fun ComposeReaderActivityScaffold(
 			}
 		}
 
-		translationTaskPanelContent()
 	}
 	}
 }
@@ -943,6 +939,97 @@ private fun ReaderComposeTopBar(
 				)
 			}
 		}
+	}
+}
+
+internal fun resolveReaderFloatingControls(
+	configured: Set<ReaderControl>,
+	translationAvailable: Boolean,
+	translationContextualVisible: Boolean,
+): List<ReaderControl> {
+	val configuredControls = ReaderControl.FLOATING
+		.filter { control -> control in configured && (control != ReaderControl.TRANSLATE || translationAvailable) }
+	if (!translationAvailable || !translationContextualVisible || ReaderControl.TRANSLATE in configuredControls) {
+		return configuredControls.take(ReaderControl.MAX_FLOATING_CONTROLS)
+	}
+	return configuredControls
+		.take(ReaderControl.MAX_FLOATING_CONTROLS - 1)
+		.plus(ReaderControl.TRANSLATE)
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ReaderFloatingControlButton(
+	control: ReaderControl,
+	state: ReaderActionsUiState,
+	callbacks: ReaderActionsCallbacks,
+) {
+	val icon = when (control) {
+		ReaderControl.SCREEN_ROTATION -> if (state.autoRotationEnabled) {
+			R.drawable.ic_screen_rotation_lock
+		} else {
+			R.drawable.ic_screen_rotation
+		}
+		ReaderControl.SAVE_PAGE -> R.drawable.ic_save
+		ReaderControl.TIMER -> if (state.timerActive) R.drawable.ic_timer_run else R.drawable.ic_timer
+		ReaderControl.BOOKMARK -> if (state.bookmarkAdded) R.drawable.ic_bookmark_added else R.drawable.ic_bookmark
+		ReaderControl.TRANSLATE -> R.drawable.ic_translate
+		ReaderControl.DOWNLOAD -> R.drawable.ic_download
+		else -> return
+	}
+	val contentDescription = when (control) {
+		ReaderControl.SCREEN_ROTATION -> stringResource(
+			if (state.autoRotationEnabled) R.string.lock_screen_rotation else R.string.rotate_screen,
+		)
+		ReaderControl.SAVE_PAGE -> stringResource(R.string.save_page)
+		ReaderControl.TIMER -> stringResource(R.string.automatic_scroll)
+		ReaderControl.BOOKMARK -> stringResource(
+			if (state.bookmarkAdded) R.string.bookmark_remove else R.string.bookmark_add,
+		)
+		ReaderControl.TRANSLATE -> state.translateContentDescription.ifEmpty {
+			stringResource(R.string.novel_translate)
+		}
+		ReaderControl.DOWNLOAD -> stringResource(R.string.download)
+		else -> return
+	}
+	val onClick: () -> Unit = when (control) {
+		ReaderControl.SCREEN_ROTATION -> callbacks.onScreenRotation
+		ReaderControl.SAVE_PAGE -> callbacks.onSavePage
+		ReaderControl.TIMER -> { { callbacks.onTimer(false) } }
+		ReaderControl.BOOKMARK -> callbacks.onBookmark
+		ReaderControl.TRANSLATE -> callbacks.onTranslate
+		ReaderControl.DOWNLOAD -> callbacks.onDownload
+		else -> return
+	}
+	val onLongClick: (() -> Unit)? = when (control) {
+		ReaderControl.TIMER -> { { callbacks.onTimer(true) } }
+		ReaderControl.BOOKMARK -> callbacks.onBookmarkLongClick
+		ReaderControl.TRANSLATE -> callbacks.onTranslateLongClick
+		else -> null
+	}
+	val active = when (control) {
+		ReaderControl.TIMER -> state.timerActive
+		ReaderControl.BOOKMARK -> state.bookmarkAdded
+		ReaderControl.TRANSLATE -> state.translateActive
+		else -> false
+	}
+	ReaderTopControlSurface(
+		shape = CircleShape,
+		modifier = Modifier
+			.size(44.dp)
+			.combinedClickable(
+				role = Role.Button,
+				onClickLabel = contentDescription,
+				onLongClickLabel = if (onLongClick != null) contentDescription else null,
+				onClick = onClick,
+				onLongClick = onLongClick,
+			),
+	) {
+		Icon(
+			painter = painterResource(icon),
+			contentDescription = contentDescription,
+			tint = if (active) MaterialTheme.colorScheme.primary else readerControlContentColor(),
+		)
 	}
 }
 

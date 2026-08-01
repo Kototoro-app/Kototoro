@@ -58,7 +58,6 @@ internal fun ComposeReaderToolsSheet(
 					Tool(R.drawable.ic_retry, R.string.reader_translation_retry_failed_pages, false, callbacks.onRetryFailedTranslations)
 					Tool(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_chapter, false, callbacks.onRetranslateChapter)
 					Tool(R.drawable.ic_settings, R.string.reader_translation_action_settings, false, callbacks.onTranslationSettings)
-					Tool(R.drawable.ic_info_outline, R.string.reader_translation_task_panel_title, false, callbacks.onTranslationLog)
 				}
 			}
 		}

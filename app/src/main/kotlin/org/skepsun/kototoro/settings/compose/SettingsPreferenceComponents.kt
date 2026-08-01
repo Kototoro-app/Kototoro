@@ -506,6 +506,7 @@ fun <T> SettingsMultiChoicePreference(
     options: List<SettingsChoiceOption<T>>,
     emptySelectionText: String,
     summary: String? = null,
+    maxSelections: Int? = null,
     enabled: Boolean = true,
     onValueChange: (Set<T>) -> Unit,
 ) {
@@ -571,12 +572,14 @@ fun <T> SettingsMultiChoicePreference(
                 ) {
                     itemsIndexed(options, contentType = { _, _ -> "checkbox_option" }) { index, option ->
                         val checked = option.value in pendingValues
+                        val optionEnabled = checked || maxSelections == null || pendingValues.size < maxSelections
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
                                 .toggleable(
                                     value = checked,
+                                    enabled = optionEnabled,
                                     onValueChange = { checked ->
                                         pendingValues = if (checked) {
                                             pendingValues + option.value
@@ -592,6 +595,7 @@ fun <T> SettingsMultiChoicePreference(
                                 Checkbox(
                                     checked = checked,
                                     onCheckedChange = null,
+                                    enabled = optionEnabled,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                             }
@@ -599,7 +603,11 @@ fun <T> SettingsMultiChoicePreference(
                                 text = option.label,
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (optionEnabled) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                },
                             )
                             if (isIosStyle && checked) {
                                 Icon(

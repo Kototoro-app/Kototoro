@@ -46,7 +46,6 @@ fun ReaderSettingsScreen(
     val readerAnimationNames = ReaderAnimation.entries.map { it.name }
     val pagesPreloadNames = listOf("1", "2", "0")
     val readerControlOptions = listOf(
-        SettingsChoiceOption(ReaderControl.PAGES_SHEET, stringResource(R.string.chapters_and_pages)),
         SettingsChoiceOption(ReaderControl.SCREEN_ROTATION, stringResource(R.string.screen_orientation)),
         SettingsChoiceOption(ReaderControl.SAVE_PAGE, stringResource(R.string.save_page)),
         SettingsChoiceOption(ReaderControl.TIMER, stringResource(R.string.automatic_scroll)),
@@ -144,14 +143,17 @@ fun ReaderSettingsScreen(
             )
 
             SettingsMultiChoicePreference(
-                title = stringResource(R.string.reader_controls_in_bottom_bar),
+                title = stringResource(R.string.reader_floating_controls),
                 values = settings.observeAsState(AppSettings.KEY_READER_CONTROLS) {
                     readerControls
                 }.value,
                 options = readerControlOptions,
                 emptySelectionText = stringResource(R.string.none),
+                summary = stringResource(R.string.reader_floating_controls_summary, ReaderControl.MAX_FLOATING_CONTROLS),
+                maxSelections = ReaderControl.MAX_FLOATING_CONTROLS,
                 onValueChange = { controls ->
-                    prefs.edit { putStringSet(AppSettings.KEY_READER_CONTROLS, controls.map { it.name }.toSet()) }
+                    val limitedControls = ReaderControl.limitFloatingControls(controls)
+                    prefs.edit { putStringSet(AppSettings.KEY_READER_CONTROLS, limitedControls.map { it.name }.toSet()) }
                 },
             )
 

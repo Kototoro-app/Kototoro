@@ -104,7 +104,6 @@ internal data class ComposeReaderOptionsCallbacks(
 	val onRotate: () -> Unit = {},
 	val onAutoScroll: () -> Unit = {},
 	val onTranslation: () -> Unit = {},
-	val onTranslationTools: () -> Unit = {},
 	val onOpenSettings: () -> Unit = {},
 	val onColorFilterChanged: (ReaderColorFilter?) -> Unit = {},
 	val onSaveColorFilterForManga: (ReaderColorFilter?) -> Unit = {},
@@ -114,7 +113,6 @@ internal data class ComposeReaderOptionsCallbacks(
 	val onRetranslatePage: () -> Unit = {},
 	val onRetryFailedTranslations: () -> Unit = {},
 	val onRetranslateChapter: () -> Unit = {},
-	val onTranslationLog: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -123,6 +121,7 @@ internal fun ComposeReaderOptionsSheet(
 	state: ComposeReaderOptionsState,
 	callbacks: ComposeReaderOptionsCallbacks,
 	embedded: Boolean = false,
+	translationTaskPanelContent: @Composable () -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	if (!state.visible) return
@@ -165,7 +164,7 @@ internal fun ComposeReaderOptionsSheet(
 			) { page ->
 				when (page) {
 					0 -> ReaderModeOptionsPage(state, callbacks)
-					1 -> ReaderTranslationOptionsPage(callbacks)
+					1 -> ReaderTranslationOptionsPage(callbacks, translationTaskPanelContent)
 					2 -> ReaderAppearanceOptionsPage(state, callbacks)
 					else -> ReaderMiscOptionsPage(state, callbacks)
 				}
@@ -308,22 +307,26 @@ private fun ReaderModeOptionsPage(
 @Composable
 private fun ReaderTranslationOptionsPage(
 	callbacks: ComposeReaderOptionsCallbacks,
+	translationTaskPanelContent: @Composable () -> Unit,
 ) {
 	fun dismissThen(action: () -> Unit): () -> Unit = {
 		callbacks.onDismiss()
 		action()
 	}
-	OptionsPageList {
-		item {
-			OptionsActionGrid {
-				OptionAction(R.drawable.ic_translate, R.string.reader_translation_action, dismissThen(callbacks.onTranslation))
-				OptionAction(R.drawable.ic_translate, R.string.reader_translation_tools, dismissThen(callbacks.onTranslationTools))
-				OptionAction(R.drawable.ic_settings, R.string.reader_translation_action_settings, dismissThen(callbacks.onTranslationSettings))
-				OptionAction(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_page, dismissThen(callbacks.onRetranslatePage))
-				OptionAction(R.drawable.ic_retry, R.string.reader_translation_retry_failed_pages, dismissThen(callbacks.onRetryFailedTranslations))
-				OptionAction(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_chapter, dismissThen(callbacks.onRetranslateChapter))
-				OptionAction(R.drawable.ic_info_outline, R.string.reader_translation_task_panel_title, dismissThen(callbacks.onTranslationLog))
-			}
+	Column(
+		modifier = Modifier
+			.fillMaxSize()
+			.padding(horizontal = 12.dp, vertical = 4.dp),
+	) {
+		OptionsActionGrid {
+			OptionAction(R.drawable.ic_translate, R.string.reader_translation_action, dismissThen(callbacks.onTranslation))
+			OptionAction(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_page, callbacks.onRetranslatePage)
+			OptionAction(R.drawable.ic_retry, R.string.reader_translation_retranslate_current_chapter, callbacks.onRetranslateChapter)
+			OptionAction(R.drawable.ic_settings, R.string.reader_translation_action_settings, dismissThen(callbacks.onTranslationSettings))
+		}
+		ReaderOptionDivider()
+		Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+			translationTaskPanelContent()
 		}
 	}
 }

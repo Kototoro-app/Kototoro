@@ -12,8 +12,7 @@ enum class ReaderControl {
 			PREV_CHAPTER, NEXT_CHAPTER, SLIDER, PAGES_SHEET,
 		)
 
-		val BOTTOM_BAR: Set<ReaderControl> = EnumSet.of(
-			PAGES_SHEET,
+		val FLOATING: Set<ReaderControl> = EnumSet.of(
 			SCREEN_ROTATION,
 			SAVE_PAGE,
 			TIMER,
@@ -22,9 +21,18 @@ enum class ReaderControl {
 			DOWNLOAD,
 		)
 
-		val BOTTOM_BAR_DEFAULT: Set<ReaderControl> = EnumSet.of(
-			PAGES_SHEET,
+		val FLOATING_DEFAULT: Set<ReaderControl> = EnumSet.of(
 			TRANSLATE,
 		)
+
+		const val MAX_FLOATING_CONTROLS = 4
+
+		fun limitFloatingControls(controls: Set<ReaderControl>): Set<ReaderControl> {
+			return FLOATING
+				.asSequence()
+				.filter(controls::contains)
+				.take(MAX_FLOATING_CONTROLS)
+				.toCollection(EnumSet.noneOf(ReaderControl::class.java))
+		}
 	}
 }

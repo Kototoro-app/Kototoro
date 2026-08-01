@@ -18,7 +18,19 @@ class TranslationApiProviderCatalogTest {
 
 		assertEquals(providers.size, providers.map { it.id }.toSet().size)
 		assertEquals(providers.size, providers.map { it.modelsDevId }.toSet().size)
-		assertFalse(providers.any { it.id == "MINIMAX" || it.id == "BAIDU" })
+		assertTrue(providers.size >= 30)
+	}
+
+	@Test
+	fun `preset endpoint is resolved without relying on persisted endpoint`() {
+		assertEquals(
+			"https://api.groq.com/openai/v1/chat/completions",
+			TranslationApiProviderCatalog.resolveChatEndpoint("GROQ", ""),
+		)
+		assertEquals(
+			"https://example.com/v1/chat/completions",
+			TranslationApiProviderCatalog.resolveChatEndpoint("CUSTOM", " https://example.com/v1/chat/completions "),
+		)
 	}
 
 	@Test

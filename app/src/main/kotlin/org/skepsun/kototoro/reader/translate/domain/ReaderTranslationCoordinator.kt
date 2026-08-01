@@ -682,21 +682,10 @@ internal class ReaderTranslationCoordinator(
 	}
 
 	private fun resolveTranslationApiEndpoint(): String {
-		val endpoint = settings.readerTranslationApiEndpoint.trim()
-		val preset = settings.readerTranslationApiProviderPreset.trim().uppercase()
-		return when {
-			preset == "DEEPSEEK" && isDeepSeekBaseEndpoint(endpoint) -> "https://api.deepseek.com/chat/completions"
-			preset == "OPENAI" && endpoint.trimEnd('/').equals("https://api.openai.com", ignoreCase = true) -> {
-				"https://api.openai.com/v1/chat/completions"
-			}
-			else -> endpoint
-		}
-	}
-
-	private fun isDeepSeekBaseEndpoint(endpoint: String): Boolean {
-		val normalized = endpoint.trim().trimEnd('/').lowercase()
-		return normalized == "https://api.deepseek.com" ||
-			normalized == "https://api.deepseek.com/v1"
+		return TranslationApiProviderCatalog.resolveChatEndpoint(
+			settings.readerTranslationApiProviderPreset,
+			settings.readerTranslationApiEndpoint,
+		)
 	}
 
 	private fun isDeepSeekEndpoint(endpoint: String): Boolean {

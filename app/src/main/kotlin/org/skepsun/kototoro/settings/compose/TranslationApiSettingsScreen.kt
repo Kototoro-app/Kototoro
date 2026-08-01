@@ -11,7 +11,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
@@ -29,7 +28,6 @@ fun TranslationApiSettingsScreen(
     val prefs = settings.prefs
 	val uriHandler = LocalUriHandler.current
 
-    val presetNames = stringArrayResource(R.array.values_reader_translation_api_provider_presets).toList()
 	val currentPreset = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET) {
 		settings.readerTranslationApiProviderPreset
 	}.value
@@ -51,9 +49,11 @@ fun TranslationApiSettingsScreen(
             ) {
                 SettingsChoicePreference(
                     title = stringResource(R.string.reader_translation_api_provider_preset),
-                    options = stringArrayResource(R.array.reader_translation_api_provider_presets).mapIndexed { index, label ->
-                        SettingsChoiceOption(presetNames[index], label)
-                    },
+                    options = listOf(
+						SettingsChoiceOption("CUSTOM", stringResource(R.string.reader_translation_api_provider_custom)),
+					) + TranslationApiProviderCatalog.providers.map { preset ->
+						SettingsChoiceOption(preset.id, preset.name)
+					},
                     value = currentPreset,
                     onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET, it) } },
                 )

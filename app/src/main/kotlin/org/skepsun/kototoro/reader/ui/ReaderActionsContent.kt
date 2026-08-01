@@ -39,7 +39,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.readerControlContentColor
 
 @Immutable
 internal data class ReaderActionsUiState(
-	val controls: Set<ReaderControl> = ReaderControl.BOTTOM_BAR_DEFAULT,
+	val controls: Set<ReaderControl> = ReaderControl.FLOATING_DEFAULT,
 	val sliderValue: Float = 0f,
 	val sliderMax: Int = 1,
 	val sliderEnabled: Boolean = false,

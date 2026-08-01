@@ -191,17 +191,6 @@
 		<item>@string/reader_translation_ocr_pipeline_bubble_detector_first</item>
 		<item>@string/reader_translation_ocr_pipeline_hybrid</item>
 	</string-array>
-	<string-array name="reader_translation_api_provider_presets" translatable="false">
-		<item>@string/reader_translation_api_provider_custom</item>
-		<item>@string/reader_translation_api_provider_openai</item>
-		<item>@string/reader_translation_api_provider_deepseek</item>
-		<item>@string/reader_translation_api_provider_zhipu</item>
-		<item>@string/reader_translation_api_provider_alibaba</item>
-		<item>@string/reader_translation_api_provider_moonshot</item>
-		<item>@string/reader_translation_api_provider_anthropic</item>
-		<item>@string/reader_translation_api_provider_gemini</item>
-		<item>@string/reader_translation_api_provider_openrouter</item>
-	</string-array>
 	<string-array name="reader_translation_tuning_levels" translatable="false">
 		<item>@string/reader_translation_tuning_strict</item>
 		<item>@string/reader_translation_tuning_balanced</item>
@@ -223,17 +212,6 @@
 		<item>PAGE_TEXT_FIRST</item>
 		<item>BUBBLE_DETECTOR_FIRST</item>
 		<item>HYBRID</item>
-	</string-array>
-	<string-array name="values_reader_translation_api_provider_presets" translatable="false">
-		<item>CUSTOM</item>
-		<item>OPENAI</item>
-		<item>DEEPSEEK</item>
-		<item>ZHIPU</item>
-		<item>ALIBABA</item>
-		<item>MOONSHOT</item>
-		<item>ANTHROPIC</item>
-		<item>GEMINI</item>
-		<item>OPENROUTER</item>
 	</string-array>
 	<string-array name="values_reader_translation_tuning_levels" translatable="false">
 		<item>STRICT</item>
