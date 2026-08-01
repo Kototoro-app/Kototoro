@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.ext.sanitize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
@@ -267,7 +268,7 @@ private fun ScrobblingHeader(
 			modifier = Modifier
 			.weight(0.36f)
 			.aspectRatio(13f / 18f)
-			.clip(MaterialTheme.shapes.small),
+			.clip(ContentCoverShape),
 		) {
 			AsyncImage(
 				model = ImageRequest.Builder(context)
@@ -280,7 +281,7 @@ private fun ScrobblingHeader(
 				error = rememberSafePainter(R.drawable.ic_placeholder),
 				modifier = Modifier
 					.fillMaxSize()
-					.clip(MaterialTheme.shapes.small),
+					.clip(ContentCoverShape),
 			)
 			IconButton(
 				onClick = onOpenCover,

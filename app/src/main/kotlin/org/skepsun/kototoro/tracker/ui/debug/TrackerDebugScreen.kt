@@ -38,6 +38,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.tracker.data.TrackEntity
 import androidx.appcompat.R as appcompatR
@@ -119,7 +120,7 @@ private fun TrackerDebugRow(item: TrackDebugItem, onClick: () -> Unit) {
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .size(40.dp)
-                .clip(MaterialTheme.shapes.small),
+                .clip(CompactContentCoverShape),
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {

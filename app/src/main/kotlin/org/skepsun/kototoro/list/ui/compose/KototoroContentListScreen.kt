@@ -83,11 +83,9 @@ import org.skepsun.kototoro.list.ui.model.QuickFilter
 
 private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
-private const val GridCardStretchLimit = 1.50f
-private const val GridCardExtraSpaceFillRatio = 0.38f
 private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
-private val GridCardVisualHorizontalInset = 4.dp
+private val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
 
 private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,
@@ -249,12 +247,11 @@ fun KototoroContentListScreen(
                             onLoadMore = onLoadMore,
                         )
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val gridSpacing = 3.dp
+                            val gridSpacing = 6.dp
                             val innerHorizontalPadding = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) +
                                 innerPadding.calculateRightPadding(LayoutDirection.Ltr)
-                            val gridOuterWidth = (maxWidth - innerHorizontalPadding).coerceAtLeast(posterStyle.itemWidth)
-                            val horizontalPadding = innerHorizontalPadding + gridSpacing * 2
-                            val availableWidth = (maxWidth - horizontalPadding).coerceAtLeast(posterStyle.itemWidth)
+                            val horizontalPadding = innerHorizontalPadding + GridHorizontalPadding * 2
+                            val availableWidth = (maxWidth - horizontalPadding).coerceAtLeast(1.dp)
                             val gridColumns = remember(availableWidth, posterStyle.itemWidth, gridSpacing) {
                                 resolveGridColumnCount(
                                     availableWidth = availableWidth,
@@ -270,19 +267,10 @@ fun KototoroContentListScreen(
                                     spacing = gridSpacing,
                                 )
                             }
-                            val sideGridPadding = remember(gridOuterWidth, gridColumns, gridSpacing, effectivePosterStyle) {
-                                resolveGridSidePadding(
-                                    outerWidth = gridOuterWidth,
-                                    columns = gridColumns,
-                                    cardWidth = effectivePosterStyle.itemWidth,
-                                    spacing = gridSpacing,
-                                    visualCardInset = GridCardVisualHorizontalInset,
-                                )
-                            }
                             val gridContentPadding = PaddingValues(
-                                start = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) + sideGridPadding,
+                                start = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) + GridHorizontalPadding,
                                 top = innerPadding.calculateTopPadding(),
-                                end = innerPadding.calculateRightPadding(LayoutDirection.Ltr) + sideGridPadding,
+                                end = innerPadding.calculateRightPadding(LayoutDirection.Ltr) + GridHorizontalPadding,
                                 bottom = innerPadding.calculateBottomPadding(),
                             )
 
@@ -291,6 +279,7 @@ fun KototoroContentListScreen(
                                 state = actualGridState,
                                 contentPadding = gridContentPadding,
                                 horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 if (listHeader != null) {
@@ -298,7 +287,7 @@ fun KototoroContentListScreen(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .horizontalBleed(sideGridPadding),
+                                                .horizontalBleed(GridHorizontalPadding),
                                         ) {
                                             listHeader()
                                         }
@@ -337,8 +326,10 @@ fun KototoroContentListScreen(
                                                 sharedTransitionEnabled = sharedTransitionEnabled,
                                                 sharedElementInstanceKey = sharedElementInstanceKey,
                                                 showSourceInfo = showSourceOnCards,
+                                                gridScale = gridScale,
                                                 cardStyle = effectivePosterStyle,
                                                 compactOverlay = listMode == ListMode.COMPACT_GRID,
+                                                cellContentPadding = PaddingValues(0.dp),
                                                 uiPrefs = cardUiPrefs,
                                                 modifier = Modifier.width(effectivePosterStyle.itemWidth),
                                             )
@@ -348,7 +339,7 @@ fun KototoroContentListScreen(
                                             item = listModel,
                                             listMode = listMode,
                                             gridScale = gridScale,
-                                            horizontalBleed = sideGridPadding,
+                                            horizontalBleed = GridHorizontalPadding,
                                             onQuickFilterOptionClick = onQuickFilterOptionClick,
                                             showQuickFilterInline = showQuickFilterInline,
                                             onEmptyActionClick = onEmptyActionClick,
@@ -512,7 +503,7 @@ fun KototoroContentListScreen(
     }
 }
 
-private fun resolveGridPosterCardStyle(
+internal fun resolveGridPosterCardStyle(
     baseStyle: CompactPosterCardStyle,
     availableWidth: androidx.compose.ui.unit.Dp,
     columns: Int,
@@ -523,17 +514,7 @@ private fun resolveGridPosterCardStyle(
         availableWidth.value -
             spacing.value * (safeColumns - 1)
         ).coerceAtLeast(1f) / safeColumns
-    val targetWidth = baseStyle.itemWidth.value
-    val resolvedWidth = if (cellWidth <= targetWidth) {
-        cellWidth
-    } else {
-        targetWidth + (cellWidth - targetWidth) * GridCardExtraSpaceFillRatio
-    }
-        .coerceAtMost(targetWidth * GridCardStretchLimit)
-        .coerceAtMost(cellWidth)
-        .coerceAtLeast(1f)
-    val stretchedWidth = resolvedWidth
-        .dp
+    val stretchedWidth = cellWidth.dp
     if (stretchedWidth == baseStyle.itemWidth) {
         return baseStyle
     }
@@ -544,7 +525,7 @@ private fun resolveGridPosterCardStyle(
     )
 }
 
-private fun resolveGridColumnCount(
+internal fun resolveGridColumnCount(
     availableWidth: androidx.compose.ui.unit.Dp,
     targetItemWidth: androidx.compose.ui.unit.Dp,
     spacing: androidx.compose.ui.unit.Dp,
@@ -553,25 +534,6 @@ private fun resolveGridColumnCount(
     return floor(
         ((availableWidth.value + spacing.value) / (minCellWidth + spacing.value)).toDouble(),
     ).toInt().coerceAtLeast(1)
-}
-
-private fun resolveGridSidePadding(
-    outerWidth: androidx.compose.ui.unit.Dp,
-    columns: Int,
-    cardWidth: androidx.compose.ui.unit.Dp,
-    spacing: androidx.compose.ui.unit.Dp,
-    visualCardInset: androidx.compose.ui.unit.Dp,
-): androidx.compose.ui.unit.Dp {
-    val safeColumns = columns.coerceAtLeast(1)
-    val solvedPadding = (
-        outerWidth.value +
-            spacing.value * (safeColumns + 1) -
-            cardWidth.value * safeColumns +
-            visualCardInset.value * 2f * safeColumns
-        ) / (2f * (safeColumns + 1))
-    return solvedPadding
-        .coerceAtLeast(spacing.value)
-        .dp
 }
 
 private fun Modifier.horizontalBleed(horizontal: androidx.compose.ui.unit.Dp): Modifier {

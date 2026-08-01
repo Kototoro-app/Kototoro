@@ -5,8 +5,8 @@ import androidx.compose.ui.unit.dp
 
 /** Shared application layout tokens. Reader/player page content has its own geometry. */
 object AppLayoutTokens {
-    val screenHorizontalPadding = 16.dp
-    val sectionHorizontalPadding = 16.dp
+    val screenHorizontalPadding = 12.dp
+    val sectionHorizontalPadding = 12.dp
     val sectionVerticalSpacing = 16.dp
     val compactItemHorizontalPadding = 12.dp
 }

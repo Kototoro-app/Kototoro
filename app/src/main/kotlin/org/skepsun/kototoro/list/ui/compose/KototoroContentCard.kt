@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +45,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.StrokeCap
@@ -57,6 +59,10 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
+import org.skepsun.kototoro.core.ui.compose.CompactContentCoverCornerRadius
+import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
+import org.skepsun.kototoro.core.ui.compose.ContentCoverCornerRadius
+import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
@@ -224,6 +230,7 @@ fun KototoroContentCardGrid(
     sharedElementInstanceKey: String? = null,
     cardStyle: CompactPosterCardStyle? = null,
     compactOverlay: Boolean = false,
+    cellContentPadding: PaddingValues = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
     uiPrefs: ContentCardUiPrefs? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
@@ -255,6 +262,7 @@ fun KototoroContentCardGrid(
     val compactTitleTextClearance = remember(posterStyle.itemWidth) {
         (posterStyle.itemWidth.value * 0.34f).dp.coerceIn(36.dp, 48.dp)
     }
+    val titleFontSize = resolveGridTitleFontSize(gridScale)
     val bottomBadgeLift = if (compactOverlay) compactTitleTextClearance else 0.dp
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -265,22 +273,18 @@ fun KototoroContentCardGrid(
         contentCoverSharedKey(manga.source.name, sharedIdentity, sharedElementInstanceKey)
     }
     
-    val cardShape = MaterialTheme.shapes.medium
-    val cardRadius = (cardShape as? RoundedCornerShape)?.topStart?.toPx(
-        androidx.compose.ui.geometry.Size.Unspecified,
-        androidx.compose.ui.platform.LocalDensity.current
-    )?.let { with(androidx.compose.ui.platform.LocalDensity.current) { it.toDp() } } ?: 12.dp
+    val cardShape = RoundedCornerShape(posterStyle.cornerRadius)
+    val cardRadius = posterStyle.cornerRadius
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 1.dp, vertical = 4.dp)
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
             .combinedClickable(
                 onClick = { onClick(coverBounds) },
                 onLongClick = onLongClick,
             )
-            .padding(horizontal = 3.dp, vertical = 4.dp),
+            .padding(cellContentPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -413,6 +417,7 @@ fun KototoroContentCardGrid(
                 CompactGridTitleOverlay(
                     title = item.title,
                     height = compactTitleHeight,
+                    fontSize = titleFontSize,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -421,7 +426,10 @@ fun KototoroContentCardGrid(
         if (!compactOverlay) {
             Text(
                 text = item.title,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = titleFontSize,
+                    lineHeight = (titleFontSize.value + 3f).sp,
+                ),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -467,6 +475,7 @@ fun KototoroContentCardGrid(
 private fun CompactGridTitleOverlay(
     title: String,
     height: androidx.compose.ui.unit.Dp,
+    fontSize: TextUnit,
     modifier: Modifier = Modifier,
 ) {
     val overlayBrush = remember {
@@ -488,13 +497,21 @@ private fun CompactGridTitleOverlay(
         Text(
             modifier = Modifier.fillMaxWidth(),
             text = title,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = fontSize,
+                lineHeight = (fontSize.value + 3f).sp,
+            ),
             color = Color.White,
             softWrap = true,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+internal fun resolveGridTitleFontSize(gridScale: Float): TextUnit {
+    val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
+    return (10f + 4f * normalized).sp
 }
 
 @Composable
@@ -642,7 +659,7 @@ fun KototoroContentCardList(
                         }
                     } else Modifier,
                 )
-                .clip(MaterialTheme.shapes.small)
+                .clip(CompactContentCoverShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             ContentCardCoverImage(
@@ -654,7 +671,7 @@ fun KototoroContentCardList(
                 badges = resolvedUiPrefs.badgesTopLeft,
                 item = badgeModel,
                 corner = Alignment.TopStart,
-                cardRadius = 8.dp,
+                cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.TopStart),
             )
@@ -662,7 +679,7 @@ fun KototoroContentCardList(
                 badges = effectiveTopRightBadges,
                 item = badgeModel,
                 corner = Alignment.TopEnd,
-                cardRadius = 8.dp,
+                cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.TopEnd),
             )
@@ -670,7 +687,7 @@ fun KototoroContentCardList(
                 badges = resolvedUiPrefs.badgesBottomLeft,
                 item = badgeModel,
                 corner = Alignment.BottomStart,
-                cardRadius = 8.dp,
+                cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomStart),
             )
@@ -678,7 +695,7 @@ fun KototoroContentCardList(
                 badges = resolvedUiPrefs.badgesBottomRight,
                 item = badgeModel,
                 corner = Alignment.BottomEnd,
-                cardRadius = 8.dp,
+                cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
             )
@@ -1025,7 +1042,7 @@ fun KototoroContentCardDetailedList(
                         }
                     } else Modifier,
                 )
-                .clip(MaterialTheme.shapes.medium)
+                .clip(ContentCoverShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             ContentCardCoverImage(
@@ -1037,7 +1054,7 @@ fun KototoroContentCardDetailedList(
                 badges = resolvedUiPrefs.badgesTopLeft,
                 item = badgeModel,
                 corner = Alignment.TopStart,
-                cardRadius = 12.dp,
+                cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.TopStart),
             )
@@ -1045,7 +1062,7 @@ fun KototoroContentCardDetailedList(
                 badges = effectiveTopRightBadges,
                 item = badgeModel,
                 corner = Alignment.TopEnd,
-                cardRadius = 12.dp,
+                cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.TopEnd),
             )
@@ -1053,7 +1070,7 @@ fun KototoroContentCardDetailedList(
                 badges = resolvedUiPrefs.badgesBottomLeft,
                 item = badgeModel,
                 corner = Alignment.BottomStart,
-                cardRadius = 12.dp,
+                cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomStart),
             )
@@ -1061,7 +1078,7 @@ fun KototoroContentCardDetailedList(
                 badges = resolvedUiPrefs.badgesBottomRight,
                 item = badgeModel,
                 corner = Alignment.BottomEnd,
-                cardRadius = 12.dp,
+                cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
             )

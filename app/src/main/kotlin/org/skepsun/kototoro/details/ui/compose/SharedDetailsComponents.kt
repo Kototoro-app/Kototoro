@@ -47,6 +47,7 @@ import org.skepsun.kototoro.R
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
+import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
@@ -77,6 +78,7 @@ fun DetailsCoverFrame(
     modifier: Modifier = Modifier,
     onState: ((coil3.compose.AsyncImagePainter.State) -> Unit)? = null,
 ) {
+    val frameShape = remember { RoundedCornerShape(16.dp) }
     val context = LocalContext.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -123,19 +125,19 @@ fun DetailsCoverFrame(
             .width(120.dp)
             .shadow(
                 elevation = 18.dp,
-                shape = MaterialTheme.shapes.large,
+                shape = frameShape,
                 ambientColor = Color.Black.copy(alpha = 0.22f),
                 spotColor = Color.Black.copy(alpha = 0.28f),
             )
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .background(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f),
-                shape = MaterialTheme.shapes.large,
+                shape = frameShape,
             )
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                shape = MaterialTheme.shapes.large,
+                shape = frameShape,
             )
             .padding(4.dp),
     ) {
@@ -149,7 +151,7 @@ fun DetailsCoverFrame(
                     .aspectRatio(13f / 18f)
                     .background(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
-                        shape = MaterialTheme.shapes.medium,
+                        shape = ContentCoverShape,
                     ),
             )
             if (coverModel == null) {
@@ -171,10 +173,10 @@ fun DetailsCoverFrame(
                                     }
                                 } else Modifier
                             )
-                            .clip(MaterialTheme.shapes.medium)
+                            .clip(ContentCoverShape)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                                shape = MaterialTheme.shapes.medium,
+                                shape = ContentCoverShape,
                             ),
                     )
                 } else {
@@ -182,10 +184,10 @@ fun DetailsCoverFrame(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(13f / 18f)
-                            .clip(MaterialTheme.shapes.medium)
+                            .clip(ContentCoverShape)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                                shape = MaterialTheme.shapes.medium,
+                                shape = ContentCoverShape,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -216,10 +218,10 @@ fun DetailsCoverFrame(
                             } else Modifier
                         )
                         .alpha(if (shouldShowStableForeground) 0f else 1f)
-                        .clip(MaterialTheme.shapes.medium)
+                        .clip(ContentCoverShape)
                         .background(
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                            shape = MaterialTheme.shapes.medium,
+                            shape = ContentCoverShape,
                         ),
                     contentScale = ContentScale.Crop,
                     placeholder = cachedPainter,
@@ -256,10 +258,10 @@ fun DetailsCoverFrame(
                                     }
                                 } else Modifier
                             )
-                            .clip(MaterialTheme.shapes.medium)
+                            .clip(ContentCoverShape)
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-                                shape = MaterialTheme.shapes.medium,
+                                shape = ContentCoverShape,
                             ),
                     )
                 }

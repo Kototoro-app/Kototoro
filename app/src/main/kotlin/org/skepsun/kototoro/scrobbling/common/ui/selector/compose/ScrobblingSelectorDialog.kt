@@ -61,6 +61,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.list.ui.model.ListModel
@@ -340,7 +341,7 @@ private fun ScrobblerContentItem(
 				error = rememberSafePainter(R.drawable.ic_placeholder),
 				modifier = Modifier
 					.size(40.dp)
-					.clip(MaterialTheme.shapes.extraSmall),
+					.clip(CompactContentCoverShape),
 			)
 			Column(
 				modifier = Modifier

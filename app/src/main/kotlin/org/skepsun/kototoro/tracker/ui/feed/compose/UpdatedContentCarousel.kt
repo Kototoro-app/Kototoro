@@ -42,6 +42,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
+import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
@@ -194,7 +195,7 @@ private fun FeedUpdatedPosterCard(
 						}
 					} else Modifier
 				)
-				.clip(MaterialTheme.shapes.medium)
+				.clip(ContentCoverShape)
 				.background(MaterialTheme.colorScheme.surfaceVariant),
 		) {
 			AsyncImage(

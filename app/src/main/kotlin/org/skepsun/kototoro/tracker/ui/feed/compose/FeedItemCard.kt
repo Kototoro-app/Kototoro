@@ -37,6 +37,7 @@ import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
+import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
@@ -98,7 +99,7 @@ fun FeedItemCard(
 						}
 					} else Modifier
 				)
-				.clip(MaterialTheme.shapes.medium)
+				.clip(CompactContentCoverShape)
 		) {
 			AsyncImage(
 				model = imageRequest,

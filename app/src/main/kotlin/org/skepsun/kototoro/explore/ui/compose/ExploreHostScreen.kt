@@ -72,6 +72,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
@@ -100,6 +101,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
@@ -141,16 +143,18 @@ import java.util.Locale
 
 private const val BrowseLoadMoreBuffer = 4
 private val BrowseHeroContentOverlap = 56.dp
+private val SourceGridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
 
 private inline fun traceExploreRoute(message: () -> String) = Unit
 
-private data class SourceQuickAccessMetrics(
+internal data class SourceQuickAccessMetrics(
     val preferredColumns: Int,
     val minCardWidth: androidx.compose.ui.unit.Dp,
     val cardHeight: androidx.compose.ui.unit.Dp,
     val gridSpacing: androidx.compose.ui.unit.Dp,
     val iconContainerSize: androidx.compose.ui.unit.Dp,
     val iconSize: androidx.compose.ui.unit.Dp,
+    val titleTextSize: TextUnit,
 )
 
 @Immutable
@@ -251,17 +255,42 @@ private fun prepareBrowseDiscoverItems(items: List<ListModel>): BrowseDiscoverIt
     )
 }
 
-private fun sourceQuickAccessMetrics(gridScale: Float): SourceQuickAccessMetrics {
-    val normalized = ((gridScale.coerceIn(0.75f, 1.4f) - 0.75f) / (1.4f - 0.75f)).coerceIn(0f, 1f)
-    val interpolatedColumns = 5f + ((3f - 5f) * normalized)
-    return SourceQuickAccessMetrics(
-        preferredColumns = interpolatedColumns.toInt().coerceIn(3, 5),
-        minCardWidth = lerp(108.dp, 176.dp, normalized),
-        cardHeight = lerp(92.dp, 134.dp, normalized),
-        gridSpacing = lerp(2.dp, 0.dp, normalized),
-        iconContainerSize = lerp(56.dp, 88.dp, normalized),
-        iconSize = lerp(46.dp, 72.dp, normalized),
-    )
+internal fun sourceQuickAccessMetrics(gridScale: Float): SourceQuickAccessMetrics {
+    val titleTextSize = resolveSourceQuickAccessTitleTextSize(gridScale)
+    return when {
+        gridScale <= 0.8f -> SourceQuickAccessMetrics(
+            preferredColumns = 5,
+            minCardWidth = 64.dp,
+            cardHeight = 92.dp,
+            gridSpacing = 4.dp,
+            iconContainerSize = 56.dp,
+            iconSize = 46.dp,
+            titleTextSize = titleTextSize,
+        )
+        gridScale < 1.15f -> SourceQuickAccessMetrics(
+            preferredColumns = 4,
+            minCardWidth = 80.dp,
+            cardHeight = 108.dp,
+            gridSpacing = 5.dp,
+            iconContainerSize = 68.dp,
+            iconSize = 56.dp,
+            titleTextSize = titleTextSize,
+        )
+        else -> SourceQuickAccessMetrics(
+            preferredColumns = 3,
+            minCardWidth = 108.dp,
+            cardHeight = 134.dp,
+            gridSpacing = 6.dp,
+            iconContainerSize = 88.dp,
+            iconSize = 72.dp,
+            titleTextSize = titleTextSize,
+        )
+    }
+}
+
+internal fun resolveSourceQuickAccessTitleTextSize(gridScale: Float): TextUnit {
+    val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
+    return (10f + 4f * normalized).sp
 }
 
 private fun calculateSourceGridColumns(
@@ -415,7 +444,7 @@ fun KototoroExploreHostRoute(
         configuration.screenWidthDp.dp -
             contentPadding.calculateStartPadding(layoutDirection) -
             contentPadding.calculateEndPadding(layoutDirection) -
-            32.dp
+            SourceGridHorizontalPadding * 2
     }
     val sourceColumns = remember(sourceContentWidth, sourceMetrics, browseListMode) {
         calculateSourceGridColumns(
@@ -1217,7 +1246,12 @@ private fun LazyListScope.sourceQuickAccessItems(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 4.dp),
+                        .padding(
+                            start = SourceGridHorizontalPadding,
+                            end = SourceGridHorizontalPadding,
+                            top = 4.dp,
+                            bottom = 4.dp,
+                        ),
                 )
             }
         }
@@ -1242,8 +1276,8 @@ private fun LazyListScope.sourceQuickAccessItems(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background)
                     .padding(
-                        start = CompactTopBarHorizontalPadding,
-                        end = CompactTopBarHorizontalPadding,
+                        start = SourceGridHorizontalPadding,
+                        end = SourceGridHorizontalPadding,
                         bottom = if (rowIndex == rows.lastIndex) 0.dp else metrics.gridSpacing,
                     ),
             )
@@ -1390,8 +1424,7 @@ private fun SourceQuickAccessCard(
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
-                )
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top,
         ) {
@@ -1436,7 +1469,10 @@ private fun SourceQuickAccessCard(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = metrics.titleTextSize,
+                    lineHeight = (metrics.titleTextSize.value + 2f).sp,
+                ),
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.onSecondaryContainer
                 } else {

@@ -1,7 +1,14 @@
 package org.skepsun.kototoro.core.ui.compose
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+val ContentCoverCornerRadius = 12.dp
+val CompactContentCoverCornerRadius = 8.dp
+val ContentCoverShape: Shape = RoundedCornerShape(ContentCoverCornerRadius)
+val CompactContentCoverShape: Shape = RoundedCornerShape(CompactContentCoverCornerRadius)
 
 data class CompactPosterCardStyle(
     val itemWidth: Dp,
@@ -16,7 +23,7 @@ fun compactPosterCardStyle(gridScale: Float): CompactPosterCardStyle {
     return CompactPosterCardStyle(
         itemWidth = width,
         posterHeight = height,
-        cornerRadius = 18.dp,
+        cornerRadius = ContentCoverCornerRadius,
     )
 }
 
