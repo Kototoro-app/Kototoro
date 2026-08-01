@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -93,6 +94,8 @@ fun SettingsSearchTopAppBar(
 	onNavigateUp: () -> Unit,
 	onQueryChange: (String) -> Unit,
 ) {
+	BackHandler(onBack = onNavigateUp)
+
 	val colorScheme = MaterialTheme.colorScheme
 	val tokens = LocalInterfaceStyleTokens.current
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
@@ -116,7 +119,7 @@ fun SettingsSearchTopAppBar(
 				onValueChange = onQueryChange,
 				modifier = Modifier
 					.weight(1f)
-					.height(tokens.topBarButtonSize)
+					.height(tokens.secondaryTopBarHeight)
 					.then(
 						if (isIosStyle) {
 							Modifier.border(
