@@ -14,16 +14,30 @@ internal fun buildDoublePageDisplayItems(
 	if (pages.isEmpty()) return emptyList()
 	return buildList {
 		var currentChapterId = pages.first().chapterId
-		if (coverPage) add(DoublePageDisplayItem(page = null, originalPosition = -1))
+		addDoublePageChapterLeadingSpacer(pages.first(), coverPage)
 		pages.forEachIndexed { position, page ->
 			if (page.chapterId != currentChapterId) {
 				if (size % 2 != 0) add(DoublePageDisplayItem(page = null, originalPosition = -1))
 				currentChapterId = page.chapterId
-				if (coverPage) add(DoublePageDisplayItem(page = null, originalPosition = -1))
+				addDoublePageChapterLeadingSpacer(page, coverPage)
 			}
 			add(DoublePageDisplayItem(page = page, originalPosition = position))
 		}
 	}
+}
+
+private fun MutableList<DoublePageDisplayItem>.addDoublePageChapterLeadingSpacer(
+	firstPage: ReaderPage,
+	coverPage: Boolean,
+) {
+	val coverOffset = if (coverPage) 1 else 0
+	val startsAtFullChapterBoundary = firstPage.index == 0
+	val needsSpacer = if (startsAtFullChapterBoundary) {
+		coverPage
+	} else {
+		(firstPage.index + coverOffset) % 2 != 0
+	}
+	if (needsSpacer) add(DoublePageDisplayItem(page = null, originalPosition = -1))
 }
 
 internal data class DoublePageSpread(

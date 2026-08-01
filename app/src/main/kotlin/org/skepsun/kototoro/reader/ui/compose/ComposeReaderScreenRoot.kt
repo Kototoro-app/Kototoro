@@ -114,7 +114,17 @@ fun ComposeReaderScreenRoot(
 			coverPage = readerSettings.isReaderDoubleCoverPage,
 			imageLoader = imageLoader,
 			imagePipeline = imagePipeline,
-			onPagesChanged = { lower, upper ->
+			onPagesChanged = pagesChanged@ { lowerPage, upperPage ->
+				val lower = content.pages.indexOfFirst { it.readerKey == lowerPage.readerKey }
+				val upper = content.pages.indexOfFirst { it.readerKey == upperPage.readerKey }
+				if (lower < 0 || upper < lower) {
+					Log.d(
+						"ReaderDebug",
+						"Ignore stale double page callback lowerKey=${lowerPage.readerKey} " +
+							"upperKey=${upperPage.readerKey} contentPages=${content.pages.size}",
+					)
+					return@pagesChanged
+				}
 				val stateBefore = viewModel.getCurrentState()
 				Log.d(
 					"ReaderDebug",

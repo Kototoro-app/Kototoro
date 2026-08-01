@@ -325,7 +325,12 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun getSplitPagesSnapshot(): List<org.skepsun.kototoro.reader.ui.pager.ReaderPage> {
-        val originalPages = chaptersLoader.snapshot()
+        val currentChapterId = readingState.value?.chapterId
+        val originalPages = if (readerMode.value != ReaderMode.WEBTOON && currentChapterId != null) {
+            chaptersLoader.snapshotReaderWindow(currentChapterId, BOUNDS_PAGE_OFFSET)
+        } else {
+            chaptersLoader.snapshot()
+        }
         if (!settings.isReaderSplitPagesEnabled) return originalPages.map { it.withReloadNonce() }
         val newPages = mutableListOf<org.skepsun.kototoro.reader.ui.pager.ReaderPage>()
         val mode = readerMode.value
@@ -729,6 +734,19 @@ class ReaderViewModel @Inject constructor(
         targetPagePosition.value = null
         stateChangeJob = launchJob(Dispatchers.Default) {
             prevJob?.cancelAndJoin()
+            val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
+            if (!continuousWebtoon) {
+                loadingJob?.join()
+                ensureActive()
+                if (pages !== content.value.pages) {
+                    Log.d(
+                        READER_WINDOW_LOG_TAG,
+                        "drop stale paged callback captured=${pages.windowSummary()} " +
+                            "current=${content.value.pages.windowSummary()} generation=$readerWindowGeneration",
+                    )
+                    return@launchJob
+                }
+            }
             val selectedPos = if (selectedPageKey != null) {
                 resolveWebtoonVisiblePageSelection(
                     pages = pages,
@@ -778,9 +796,10 @@ class ReaderViewModel @Inject constructor(
                 )
                 return@launchJob
             }
-            val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
             val promotedChapter = selectedPage?.chapterId?.takeIf { activeChapterId ->
-                continuousWebtoon && currentState != null && activeChapterId != currentState.chapterId
+                currentState != null &&
+                    activeChapterId != currentState.chapterId &&
+                    (continuousWebtoon || readerMode.value != ReaderMode.WEBTOON)
             }
             selectedPage?.let { page ->
                 readingState.update { cs ->
@@ -810,15 +829,8 @@ class ReaderViewModel @Inject constructor(
                 )
                 return@launchJob
             }
-            val currentLoadingJob = loadingJob
-            if (currentLoadingJob?.isActive == true && !continuousWebtoon) {
-                Log.d(LOG_TAG, "onCurrentPageChanged: loading active, skip boundary check")
-                return@launchJob
-            }
-            currentLoadingJob?.join()
-            if (pages.size != content.value.pages.size) {
-                return@launchJob // TODO
-            }
+            loadingJob?.join()
+            if (pages !== content.value.pages) return@launchJob
             if (pages.isEmpty() || loadingJob?.isActive == true) {
                 return@launchJob
             }
@@ -837,17 +849,13 @@ class ReaderViewModel @Inject constructor(
                     BOUNDS_PAGE_OFFSET
                 }
                 if (chapterEnd >= 0 && upperPos >= chapterEnd - chapterPreloadOffset) {
-                    if (continuousWebtoon && currentChapterId != null) {
+                    if (currentChapterId != null) {
                         loadReaderAdjacentChapter(currentChapterId, isNext = true)
-                    } else {
-                        loadPrevNextChapter(pages.last().chapterId, isNext = true)
                     }
                 }
                 if (chapterStart >= 0 && lowerPos <= chapterStart + chapterPreloadOffset) {
-                    if (continuousWebtoon && currentChapterId != null) {
+                    if (currentChapterId != null) {
                         loadReaderAdjacentChapter(currentChapterId, isNext = false)
-                    } else {
-                        loadPrevNextChapter(pages.first().chapterId, isNext = false)
                     }
                 }
             }
@@ -1036,22 +1044,6 @@ class ReaderViewModel @Inject constructor(
                 // manga has been loaded but error occurred
                 errorEvent.call(e)
             }
-        }
-    }
-
-    @AnyThread
-    private fun loadPrevNextChapter(currentId: Long, isNext: Boolean) {
-        val prevJob = loadingJob
-        loadingJob = launchLoadingJob(Dispatchers.Default) {
-            prevJob?.join()
-            Log.d(LOG_TAG, "loadPrevNextChapter: currentId=$currentId, isNext=$isNext")
-            chaptersLoader.loadPrevNextChapter(mangaDetails.requireValue(), currentId, isNext)
-            content.value = ReaderContent(getSplitPagesSnapshot(), null)
-            Log.d(
-                LOG_TAG,
-                "loadPrevNextChapter: completed currentId=$currentId, isNext=$isNext, " +
-                    "snapshotSize=${content.value.pages.size}, currentState=${readingState.value}",
-            )
         }
     }
 

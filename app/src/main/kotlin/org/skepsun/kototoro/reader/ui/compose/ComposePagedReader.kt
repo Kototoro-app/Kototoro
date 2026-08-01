@@ -59,6 +59,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -117,16 +118,12 @@ import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.image.AvifAnimatedDrawable
+import org.skepsun.kototoro.reader.ui.resolvePagedReaderAnchorPosition
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 
 private data class WebtoonImageSize(
-	val width: Int,
-	val height: Int,
-)
-
-private data class PageDisplaySize(
 	val width: Int,
 	val height: Int,
 )
@@ -213,6 +210,7 @@ fun ComposePagedReader(
 		initialPage = initialPage.coerceIn(displayedPages.indices),
 		pageCount = { displayedPages.size },
 	)
+	var isRestoringPageAnchor by remember { mutableStateOf(false) }
 	var advancedAnchorPage by remember(pagerState) { mutableIntStateOf(pagerState.currentPage) }
 	LaunchedEffect(pagerState, pageAnimation) {
 		snapshotFlow {
@@ -256,12 +254,31 @@ fun ComposePagedReader(
 		}
 	}
 	LaunchedEffect(pages, pagerState.isScrollInProgress) {
-		if (!pagerState.isScrollInProgress) displayedPages = pages
+		if (!pagerState.isScrollInProgress && displayedPages !== pages) {
+			val anchorPageKey = displayedPages.getOrNull(pagerState.settledPage)?.readerKey
+			val anchorPosition = resolvePagedReaderAnchorPosition(
+				pageKeys = pages.map(ReaderPage::readerKey),
+				anchorPageKey = anchorPageKey,
+				fallbackPosition = pagerState.settledPage,
+			) ?: return@LaunchedEffect
+			isRestoringPageAnchor = true
+			try {
+				displayedPages = pages
+				withFrameNanos { }
+				if (pagerState.currentPage != anchorPosition) {
+					pagerState.scrollToPage(anchorPosition)
+				}
+			} finally {
+				isRestoringPageAnchor = false
+			}
+		}
 	}
-	LaunchedEffect(pagerState, displayedPages) {
-		snapshotFlow { pagerState.settledPage }
+	LaunchedEffect(pagerState, displayedPages, isRestoringPageAnchor) {
+		snapshotFlow { pagerState.currentPage to isRestoringPageAnchor }
 			.distinctUntilChanged()
-			.collect { position -> displayedPages.getOrNull(position)?.let(onPageChanged) }
+			.collect { (position, restoringAnchor) ->
+				if (!restoringAnchor) displayedPages.getOrNull(position)?.let(onPageChanged)
+			}
 	}
 
 	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, displayedPages) {
@@ -1106,7 +1123,7 @@ fun ComposeDoublePageReader(
 	coverPage: Boolean = false,
 	imageLoader: ImageLoader,
 	imagePipeline: ComposeReaderImagePipeline,
-	onPagesChanged: (Int, Int) -> Unit,
+	onPagesChanged: (ReaderPage, ReaderPage) -> Unit,
 	requestedPage: Int? = null,
 	requestedPageSmooth: Boolean = false,
 	zoomCommand: ComposeReaderZoomCommand? = null,
@@ -1268,7 +1285,6 @@ fun ComposeDoublePageReader(
 		}
 	}
 	val autoBackgroundColors = remember { mutableStateMapOf<Long, Int>() }
-	val pageDisplaySizes = remember { mutableStateMapOf<Long, PageDisplaySize>() }
 	val pageCurlState = rememberComposeReaderPageCurlState()
 	LaunchedEffect(pagerState.isScrollInProgress) {
 		if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
@@ -1279,9 +1295,38 @@ fun ComposeDoublePageReader(
 		horizontalDragFraction = pageCurlState.horizontalDragFraction,
 		isReadingReversed = reverseLayout,
 	)
+	LaunchedEffect(pages, pagerState.isScrollInProgress) {
+		if (!pagerState.isScrollInProgress && displayedPages !== pages) {
+			val currentSpread = spreads.getOrNull(pagerState.settledPage)
+			val visibleAnchorPageKey = currentSpread?.positions
+				?.firstNotNullOfOrNull { displayItems[it].page?.readerKey }
+				?: retainedAnchorPageKey
+			val updatedDisplayItems = buildDoublePageDisplayItems(pages, coverPage = coverPage)
+			val updatedPageKeys = updatedDisplayItems.map {
+				it.page?.readerKey ?: DoublePageSpreadModel.SPACER_KEY
+			}
+			val updatedSpreadModel = DoublePageSpreadModel.create(updatedDisplayItems.size)
+			val anchorSpreadIndex = updatedSpreadModel.resolveAnchorSpreadIndex(
+				pageKeys = updatedPageKeys,
+				anchorPageKey = visibleAnchorPageKey,
+				fallbackPosition = pagerState.settledPage * 2,
+			)
+			isRestoringAnchor = true
+			try {
+				anchorPageKey = visibleAnchorPageKey
+				displayedPages = pages
+				withFrameNanos { }
+				if (pagerState.currentPage != anchorSpreadIndex) {
+					pagerState.scrollToPage(anchorSpreadIndex)
+				}
+			} finally {
+				isRestoringAnchor = false
+			}
+		}
+	}
 
 	LaunchedEffect(pageKeys, requestedPage) {
-		if (requestedPage == null) {
+		if (requestedPage == null && !isRestoringAnchor) {
 			val anchorSpreadIndex = spreadModel.resolveAnchorSpreadIndex(
 				pageKeys = pageKeys,
 				anchorPageKey = retainedAnchorPageKey,
@@ -1298,17 +1343,17 @@ fun ComposeDoublePageReader(
 		}
 	}
 	LaunchedEffect(pagerState, spreads, isRestoringAnchor) {
-		snapshotFlow { pagerState.settledPage to isRestoringAnchor }
+		snapshotFlow { pagerState.currentPage to isRestoringAnchor }
 			.distinctUntilChanged()
 			.collect { (spreadIndex, restoringAnchor) ->
 				if (restoringAnchor) return@collect
 				val spread = spreads[spreadIndex]
-				val originalPositions = spread.positions.mapNotNull {
-					displayItems[it].originalPosition.takeIf { position -> position >= 0 }
+				val visiblePages = spread.positions.mapNotNull {
+					displayItems[it].page
 				}
-				if (originalPositions.isNotEmpty()) {
-					anchorPageKey = displayItems[spread.lowerPosition].page?.readerKey ?: anchorPageKey
-					onPagesChanged(originalPositions.first(), originalPositions.last())
+				if (visiblePages.isNotEmpty()) {
+					anchorPageKey = visiblePages.first().readerKey
+					onPagesChanged(visiblePages.first(), visiblePages.last())
 				}
 			}
 	}
@@ -1405,13 +1450,11 @@ fun ComposeDoublePageReader(
 		Row(
 			modifier = modifier.background(Color(spreadBackground)),
 		) {
-			orderedPositions.forEachIndexed { visualIndex, position ->
+			orderedPositions.forEach { position ->
 				val page = displayItems[position].page
 				if (page == null) {
 					Box(modifier = Modifier.weight(1f).fillMaxSize())
 				} else {
-					val imageSize = pageDisplaySizes[page.readerKey]
-					val isWide = imageSize?.let { it.width.toFloat() > it.height * DOUBLE_PAGE_WIDE_RATIO } == true
 					ComposeReaderPage(
 						page = page,
 						imageLoader = imageLoader,
@@ -1437,38 +1480,9 @@ fun ComposeDoublePageReader(
 						onAutoBackgroundResolved = { color ->
 							autoBackgroundColors[page.readerKey] = color
 						},
-						onImageSizeResolved = { width, height ->
-							pageDisplaySizes[page.readerKey] = PageDisplaySize(width, height)
-						},
 						modifier = Modifier
 							.weight(1f)
-							.fillMaxSize()
-							.then(
-								if (isWide) {
-									Modifier
-										.zIndex(1f)
-										.graphicsLayer {
-											val halfFit = minOf(
-												size.width / imageSize!!.width.toFloat(),
-												size.height / imageSize.height.toFloat(),
-											)
-											val spreadFit = minOf(
-												size.width * 2f / imageSize.width,
-												size.height / imageSize.height,
-											)
-											val ratio = if (halfFit > 0f) spreadFit / halfFit else 1f
-											scaleX = ratio
-											scaleY = ratio
-											translationX = if (visualIndex == 0) {
-												size.width / 2f
-											} else {
-												-size.width / 2f
-											}
-										}
-								} else {
-									Modifier
-								},
-							),
+							.fillMaxSize(),
 					)
 				}
 			}
@@ -1783,69 +1797,44 @@ fun ComposeDoublePageReader(
 						}
 					}
 				},
-			) {
-				orderedPositions.forEachIndexed { visualIndex, position ->
-				val page = displayItems[position].page
-				if (page == null) {
-					Box(modifier = Modifier.weight(1f).fillMaxSize())
-				} else {
-					val imageSize = pageDisplaySizes[page.readerKey]
-					val isWide = imageSize?.let { it.width.toFloat() > it.height * DOUBLE_PAGE_WIDE_RATIO } == true
-					ComposeReaderPage(
-					page = page,
-					imageLoader = imageLoader,
-					imagePipeline = imagePipeline,
-					zoomCommand = null,
-					isZoomEnabled = false,
-					onShowErrorDetails = onShowErrorDetails,
-					onRetryError = onRetryError,
-					resolveErrorStringId = resolveErrorStringId,
-					isAnimationEnabled = isAnimationEnabled,
-					readerBackground = readerBackground,
-					readerBackgroundColor = readerBackgroundColor,
-					bookBackgroundTint = bookBackgroundTint,
-					imageColorFilter = imageColorFilter,
-					bitmapConfig = bitmapConfig,
-					isReaderOptimizationEnabled = isReaderOptimizationEnabled,
-					zoomMode = zoomMode,
-					isCropEnabled = isCropEnabled,
-					isPageVisible = pagerState.settledPage == spreadIndex,
-					isPageCurlEnabled = pageAnimation == ReaderAnimation.SIMULATION,
-					applyPageBackground = false,
-					pageBackgroundColorOverride = spreadBackground,
-					onAutoBackgroundResolved = { color ->
-						autoBackgroundColors[page.readerKey] = color
-					},
-					onImageSizeResolved = { width, height ->
-						pageDisplaySizes[page.readerKey] = PageDisplaySize(width, height)
-					},
-					modifier = Modifier
-						.weight(1f)
-						.fillMaxSize()
-						.then(
-							if (isWide) {
-								Modifier
-									.zIndex(1f)
-									.graphicsLayer {
-										val halfFit = minOf(
-											size.width / imageSize!!.width.toFloat(),
-											size.height / imageSize.height.toFloat(),
-										)
-										val spreadFit = minOf(
-											size.width * 2f / imageSize.width,
-											size.height / imageSize.height,
-										)
-										val ratio = if (halfFit > 0f) spreadFit / halfFit else 1f
-										scaleX = ratio
-										scaleY = ratio
-										translationX = if (visualIndex == 0) size.width / 2f else -size.width / 2f
-									}
-							} else Modifier,
-						),
-				)
-				}
-			}
-				if (spread.lowerPosition == spread.upperPosition) {
+				) {
+					orderedPositions.forEach { position ->
+						val page = displayItems[position].page
+						if (page == null) {
+							Box(modifier = Modifier.weight(1f).fillMaxSize())
+						} else {
+							ComposeReaderPage(
+								page = page,
+								imageLoader = imageLoader,
+								imagePipeline = imagePipeline,
+								zoomCommand = null,
+								isZoomEnabled = false,
+								onShowErrorDetails = onShowErrorDetails,
+								onRetryError = onRetryError,
+								resolveErrorStringId = resolveErrorStringId,
+								isAnimationEnabled = isAnimationEnabled,
+								readerBackground = readerBackground,
+								readerBackgroundColor = readerBackgroundColor,
+								bookBackgroundTint = bookBackgroundTint,
+								imageColorFilter = imageColorFilter,
+								bitmapConfig = bitmapConfig,
+								isReaderOptimizationEnabled = isReaderOptimizationEnabled,
+								zoomMode = zoomMode,
+								isCropEnabled = isCropEnabled,
+								isPageVisible = pagerState.settledPage == spreadIndex,
+								isPageCurlEnabled = pageAnimation == ReaderAnimation.SIMULATION,
+								applyPageBackground = false,
+								pageBackgroundColorOverride = spreadBackground,
+								onAutoBackgroundResolved = { color ->
+									autoBackgroundColors[page.readerKey] = color
+								},
+								modifier = Modifier
+									.weight(1f)
+									.fillMaxSize(),
+							)
+						}
+					}
+					if (spread.lowerPosition == spread.upperPosition) {
 					Box(modifier = Modifier.weight(1f).fillMaxSize())
 				}
 			}
@@ -2684,7 +2673,6 @@ internal fun resolveWebtoonAheadCacheFraction(isPreloadReductionEnabled: Boolean
 	if (isPreloadReductionEnabled) 0f else WEBTOON_AHEAD_CACHE_FRACTION
 
 private const val ZOOM_ANIMATION_DURATION_MS = 220
-private const val DOUBLE_PAGE_WIDE_RATIO = 1.3f
 private const val ADVANCED_PAGE_EPSILON = 0.001f
 private const val SIMULATION_PAGE_EPSILON = 0.001f
 private const val READER_ANIMATION_DEBUG_TAG = "ReaderPageAnimation"

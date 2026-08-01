@@ -85,4 +85,16 @@ internal fun resolveReaderCurrentPagePosition(
 	return resolveReaderInitialPagePosition(pages, fallbackState)
 }
 
+internal fun resolvePagedReaderAnchorPosition(
+	pageKeys: List<Long>,
+	anchorPageKey: Long?,
+	fallbackPosition: Int,
+): Int? {
+	if (pageKeys.isEmpty()) return null
+	anchorPageKey?.let { key ->
+		pageKeys.indexOf(key).takeIf { it >= 0 }?.let { return it }
+	}
+	return fallbackPosition.coerceIn(pageKeys.indices)
+}
+
 private const val LOG_TAG = "ReaderDebug"

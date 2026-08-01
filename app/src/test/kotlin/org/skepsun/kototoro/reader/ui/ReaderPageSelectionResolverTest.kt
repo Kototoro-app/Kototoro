@@ -9,6 +9,39 @@ import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 class ReaderPageSelectionResolverTest {
 
 	@Test
+	fun `paged reader preserves page identity when previous pages are inserted`() {
+		val position = resolvePagedReaderAnchorPosition(
+			pageKeys = listOf(10L, 11L, 20L, 21L, 22L),
+			anchorPageKey = 21L,
+			fallbackPosition = 1,
+		)
+
+		assertEquals(3, position)
+	}
+
+	@Test
+	fun `paged reader uses bounded fallback when anchor page disappears`() {
+		val position = resolvePagedReaderAnchorPosition(
+			pageKeys = listOf(20L, 21L),
+			anchorPageKey = 10L,
+			fallbackPosition = 8,
+		)
+
+		assertEquals(1, position)
+	}
+
+	@Test
+	fun `paged reader has no anchor for an empty window`() {
+		val position = resolvePagedReaderAnchorPosition(
+			pageKeys = emptyList(),
+			anchorPageKey = 10L,
+			fallbackPosition = 0,
+		)
+
+		assertEquals(null, position)
+	}
+
+	@Test
 	fun `reload nonce invalidates compose page key`() {
 		val page = page(chapterId = 183L, index = 1)
 
