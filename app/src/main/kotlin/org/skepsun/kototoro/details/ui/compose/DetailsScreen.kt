@@ -1126,7 +1126,7 @@ private fun DetailsScreenContent(
             val commonTopBar: @Composable () -> Unit = {
                 val titleAlpha = ((toolbarTitleProgressProvider() - 0.82f) / 0.18f).coerceIn(0f, 1f)
                 val panoramaTopBarContainerColor = if (panoramaPrefs.isEnabled) {
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.68f)
+                    MaterialTheme.colorScheme.surfaceContainer
                 } else {
                     null
                 }
@@ -3660,7 +3660,7 @@ private fun PageGridSizeControlsRow(
         Surface(
             modifier = Modifier.padding(start = 4.dp, end = 6.dp),
             shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.96f),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
             contentColor = MaterialTheme.colorScheme.onSurface,
             border = BorderStroke(
                 width = 1.dp,
