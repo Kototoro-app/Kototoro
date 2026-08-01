@@ -60,6 +60,7 @@ private const val REDIRECT_URI = "kototoro://bangumi-auth"
 private const val OFFICIAL_WEB_URL = "https://bangumi.tv/"
 private const val OFFICIAL_API_URL = "https://api.bgm.tv/"
 private const val BANGUMI_LOL_WEB_URL = "https://bangumi.lol/"
+private const val BANGUMI_LOL_API_URL = "https://api.bangumi.lol/"
 
 @Singleton
 class BangumiRepository @Inject constructor(
@@ -79,7 +80,7 @@ class BangumiRepository @Inject constructor(
 		get() = when (settings.bangumiMirror) {
 			AppSettings.BangumiMirror.BANGUMI_LOL -> BangumiEndpointUrls(
 				webBaseUrl = BANGUMI_LOL_WEB_URL,
-				apiBaseUrl = BANGUMI_LOL_WEB_URL,
+				apiBaseUrl = BANGUMI_LOL_API_URL,
 			)
 			AppSettings.BangumiMirror.NATIVE -> BangumiEndpointUrls(
 				webBaseUrl = OFFICIAL_WEB_URL,
@@ -191,7 +192,7 @@ class BangumiRepository @Inject constructor(
 			.url(bangumiApiUrl("v0/search/subjects?limit=10&offset=$offset"))
 			.post(requestBody)
 
-		val response = okHttp.newCall(request.build()).await().parseJson()
+		val response = okHttp.newCall(request.build()).await().ensureSuccess().parseJson()
 		val data = response.getJSONArray("data")
 		return data.mapJSON { json ->
 			ScrobblerContent(
@@ -612,7 +613,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 			.url(bangumiApiUrl("v0/search/$endpoint"))
 			.post(body)
 			.build()
-		val data = okHttp.newCall(request).await().parseJson()
+		val data = okHttp.newCall(request).await().ensureSuccess().parseJson()
 			.optJSONArray("data")
 			?: return emptyList()
 		return data.mapJSON { json ->
@@ -636,7 +637,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		val request = Request.Builder()
 			.url(bangumiApiUrl("v0/subjects/$id"))
 			.get()
-		val json = okHttp.newCall(request.build()).await().parseJson()
+		val json = okHttp.newCall(request.build()).await().ensureSuccess().parseJson()
 		val platformType = json.optString("platform").takeIf { it.isNotBlank() }
 		val subjectType = json.optInt("type").takeIf { it > 0 }
 		val infoboxProperties = json.optJSONArray("infobox").toBangumiInfoboxProperties().let { list ->
@@ -1341,7 +1342,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
 		val host = uri.host?.takeIf { it.isNotBlank() } ?: return OFFICIAL_API_URL
 		when (host) {
 			"bgmmi.anibt.net" -> return OFFICIAL_API_URL
-			"bangumi.lol" -> return "$scheme://$host/"
+			"bangumi.lol" -> return BANGUMI_LOL_API_URL
 		}
 		val apiHost = if (host.startsWith("api.")) host else "api.$host"
 		return "$scheme://$apiHost/"
