@@ -1231,13 +1231,40 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		)
 	}
 
+	private fun expandRectToMinimumHeight(rect: Rect, minimumHeight: Int, bitmapHeight: Int): Rect {
+		val targetHeight = minimumHeight.coerceAtMost(bitmapHeight)
+		if (rect.height() >= targetHeight) return rect
+		val top = (rect.centerY() - targetHeight / 2).coerceIn(0, bitmapHeight - targetHeight)
+		return Rect(rect.left, top, rect.right, top + targetHeight)
+	}
+
+	private fun expandRectToMinimumWidth(rect: Rect, minimumWidth: Int, bitmapWidth: Int): Rect {
+		val targetWidth = minimumWidth.coerceAtMost(bitmapWidth)
+		if (rect.width() >= targetWidth) return rect
+		val left = (rect.centerX() - targetWidth / 2).coerceIn(0, bitmapWidth - targetWidth)
+		return Rect(left, rect.top, left + targetWidth, rect.bottom)
+	}
+
+	private fun compactOverlayMinimumHeight(padding: Int): Int {
+		val measurePaint = TextPaint(textPaintTemplate).apply {
+			textSize = dp(MIN_RENDER_TEXT_SIZE_DP).toFloat()
+		}
+		val metrics = measurePaint.fontMetricsInt
+		return (metrics.bottom - metrics.top).coerceAtLeast(1) + padding * 2
+	}
+
+	private fun compactOverlayMinimumWidth(text: String, padding: Int): Int {
+		val glyphs = textToGlyphs(text).ifEmpty { listOf("…") }
+		val cellSize = resolveVerticalCellSize(glyphs, dp(MIN_RENDER_TEXT_SIZE_DP).toFloat())
+		return cellSize + padding * 2
+	}
+
 	private fun prepareTranslatedBubble(
 		input: BubbleInput,
 		text: String,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
 		bubbleLikeRegion: Boolean,
-		allSourceRects: List<Rect>,
 	): PreparedBubble? {
 		if (bitmapWidth <= 1 || bitmapHeight <= 1) {
 			return null
@@ -1246,7 +1273,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val verticalPreferred = input.verticalPreferred
 		val detectorAnchored = input.detectorAnchored
 		val sourceContentRect = input.sourceContentRect
-		val compactOverlay = true
+		val compactOverlay = readerTranslationRenderStyle() == ReaderTranslationRenderStyle.COMPACT_OVERLAY
 		val padding = if (compactOverlay) dp(2f) else dp(4f)
 		val normalizedRect = Rect(
 			rect.left.coerceIn(0, bitmapWidth - 1),
@@ -1273,11 +1300,25 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		}
 		if (compactOverlay) {
 			val anchorRect = normalizedContentRect ?: normalizedRect
-			val compactRect = clampRect(
+			val compactAnchorRect = clampRect(
 				rect = expandRect(anchorRect, dp(1f)),
 				bitmapWidth = bitmapWidth,
 				bitmapHeight = bitmapHeight,
 			)
+			val compactHeightRect = expandRectToMinimumHeight(
+				rect = compactAnchorRect,
+				minimumHeight = compactOverlayMinimumHeight(padding),
+				bitmapHeight = bitmapHeight,
+			)
+			val compactRect = if (verticalPreferred) {
+				expandRectToMinimumWidth(
+					rect = compactHeightRect,
+					minimumWidth = compactOverlayMinimumWidth(text, padding),
+					bitmapWidth = bitmapWidth,
+				)
+			} else {
+				compactHeightRect
+			}
 			return solveCompactOverlayBubble(
 				input = input.copy(
 					sourceContentRect = anchorRect,
@@ -1289,7 +1330,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				verticalPreferred = verticalPreferred,
 				bitmapWidth = bitmapWidth,
 				bitmapHeight = bitmapHeight,
-				allSourceRects = allSourceRects,
 			)
 		}
 		val rawRect = if (detectorAnchored && normalizedContentRect != null) {
@@ -1627,15 +1667,30 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		return brightRatio >= 0.62f
 	}
 
+	private fun readerTranslationRenderStyle(): ReaderTranslationRenderStyle {
+		return ReaderTranslationRenderStyle.fromPreference(settings.readerTranslationRenderStyle)
+	}
+
+	private fun renderTextColor(): Int {
+		return when (readerTranslationRenderStyle()) {
+			ReaderTranslationRenderStyle.REPLACE -> Color.BLACK
+			ReaderTranslationRenderStyle.COMPACT_OVERLAY -> Color.WHITE
+		}
+	}
+
 	private fun drawBubbleBackground(canvas: Canvas, bubble: PreparedBubble) {
 		val roundRadius = dp(6f).toFloat()
+		val paint = when (readerTranslationRenderStyle()) {
+			ReaderTranslationRenderStyle.REPLACE -> bubblePaint
+			ReaderTranslationRenderStyle.COMPACT_OVERLAY -> compactOverlayPaint
+		}
 		if (bubble.segments.isNotEmpty()) {
 			for (segment in bubble.segments) {
-				canvas.drawRoundRect(RectF(segment.backgroundRect), roundRadius, roundRadius, compactOverlayPaint)
+				canvas.drawRoundRect(RectF(segment.backgroundRect), roundRadius, roundRadius, paint)
 			}
 			return
 		}
-		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, compactOverlayPaint)
+		canvas.drawRoundRect(RectF(bubble.rect), roundRadius, roundRadius, paint)
 	}
 
 	private fun drawBubbleText(canvas: Canvas, bubble: PreparedBubble) {
@@ -1811,6 +1866,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		contentHeight: Int,
 	) {
 		val drawPaint = TextPaint(textPaintTemplate).apply {
+			color = renderTextColor()
 			textSize = plan.textSize
 			textAlign = Paint.Align.CENTER
 		}
@@ -1992,7 +2048,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		ellipsize: TextUtils.TruncateAt? = null,
 	): StaticLayout {
 		val layoutPaint = TextPaint(textPaintTemplate).apply {
-			color = Color.WHITE
+			color = renderTextColor()
 			this.textSize = textSize
 			textAlign = Paint.Align.LEFT
 		}
@@ -2074,7 +2130,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		verticalPreferred: Boolean,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
-		allSourceRects: List<Rect>,
 	): PreparedBubble? {
 		val preferred = if (verticalPreferred) {
 			buildVisibleFirstVerticalBubble(
@@ -2084,7 +2139,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				padding = padding,
 				bitmapWidth = bitmapWidth,
 				bitmapHeight = bitmapHeight,
-				allSourceRects = allSourceRects,
 			) ?: buildVisibleFirstHorizontalBubble(
 				input = input,
 				text = text,
@@ -2092,7 +2146,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				padding = padding,
 				bitmapWidth = bitmapWidth,
 				bitmapHeight = bitmapHeight,
-				allSourceRects = allSourceRects,
 			)
 		} else {
 			buildVisibleFirstHorizontalBubble(
@@ -2102,7 +2155,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				padding = padding,
 				bitmapWidth = bitmapWidth,
 				bitmapHeight = bitmapHeight,
-				allSourceRects = allSourceRects,
 			) ?: buildVisibleFirstVerticalBubble(
 				input = input,
 				text = text,
@@ -2110,91 +2162,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				padding = padding,
 				bitmapWidth = bitmapWidth,
 				bitmapHeight = bitmapHeight,
-				allSourceRects = allSourceRects,
 			)
 		}
-		return preferred ?: buildFullTextFallbackBubble(
-			input = input,
-			text = text,
-			anchorRect = anchorRect,
-			bitmapWidth = bitmapWidth,
-			bitmapHeight = bitmapHeight,
-		)
-	}
-
-	private fun buildFullTextFallbackBubble(
-		input: BubbleInput,
-		text: String,
-		anchorRect: Rect,
-		bitmapWidth: Int,
-		bitmapHeight: Int,
-	): PreparedBubble? {
-		val pageMargin = min(dp(FULL_TEXT_FALLBACK_PAGE_MARGIN_DP), min(bitmapWidth, bitmapHeight) / 20)
-		val padding = dp(FULL_TEXT_FALLBACK_PADDING_DP)
-		val availableWidth = bitmapWidth - pageMargin * 2
-		val availableHeight = bitmapHeight - pageMargin * 2
-		if (availableWidth <= padding * 2 || availableHeight <= padding * 2) return null
-		val contentHeight = availableHeight - padding * 2
-		var selectedWidth = 0
-		var selectedFit: HorizontalLayoutFit? = null
-		for (widthRatio in FULL_TEXT_FALLBACK_WIDTH_RATIOS) {
-			val candidateWidth = max(
-				anchorRect.width(),
-				(bitmapWidth * widthRatio).roundToInt(),
-			).coerceAtMost(availableWidth)
-			val candidateContentWidth = candidateWidth - padding * 2
-			if (candidateContentWidth <= 0) continue
-			val candidateFit = fitHorizontalLayout(
-				text = text,
-				width = candidateContentWidth,
-				height = contentHeight,
-				initialTextSize = dp(FULL_TEXT_FALLBACK_MAX_TEXT_SIZE_DP).toFloat(),
-				allowEllipsize = false,
-			)
-			if (candidateFit.overflow > 0 || candidateFit.truncated) continue
-			val currentFit = selectedFit
-			if (
-				currentFit == null ||
-				candidateFit.textSize > currentFit.textSize ||
-				(candidateFit.textSize == currentFit.textSize && candidateWidth < selectedWidth)
-			) {
-				selectedWidth = candidateWidth
-				selectedFit = candidateFit
-			}
-		}
-		val fit = selectedFit ?: run {
-			log {
-				"bubble render fallback_full_text_failed source=${anchorRect} " +
-					"available=${availableWidth}x$availableHeight chars=${text.length}"
-			}
-			return null
-		}
-		val contentWidth = selectedWidth - padding * 2
-		val rectHeight = (fit.usedHeight + padding * 2).coerceAtMost(availableHeight)
-		val maxLeft = bitmapWidth - pageMargin - selectedWidth
-		val maxTop = bitmapHeight - pageMargin - rectHeight
-		val left = (anchorRect.centerX() - selectedWidth / 2).coerceIn(pageMargin, maxLeft)
-		val top = (anchorRect.centerY() - rectHeight / 2).coerceIn(pageMargin, maxTop)
-		val rect = Rect(left, top, left + selectedWidth, top + rectHeight)
-		log {
-			"bubble render fallback_full_text source=${anchorRect} prepared=$rect " +
-				"textSize=${fit.textSize} chars=${text.length}"
-		}
-		return PreparedBubble(
-			rect = rect,
-			padding = padding,
-			contentWidth = contentWidth,
-			contentHeight = fit.usedHeight.coerceAtLeast(1),
-			layout = fit.layout,
-			verticalPlan = null,
-			debugOverlay = buildBubbleDebugOverlay(
-				input = input,
-				preparedRect = rect,
-				padding = padding,
-				contentWidth = contentWidth,
-				contentHeight = fit.usedHeight.coerceAtLeast(1),
-			),
-		)
+		return preferred
 	}
 
 	private fun buildVisibleFirstHorizontalBubble(
@@ -2204,39 +2174,35 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		padding: Int,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
-		allSourceRects: List<Rect>,
 	): PreparedBubble? {
 		for (rect in buildVisibleScaledRects(anchorRect, bitmapWidth, bitmapHeight)) {
 			val contentWidth = max(1, rect.width() - padding * 2)
 			val contentHeight = max(1, rect.height() - padding * 2)
-			for (textSize in buildVisibleTextSizeCandidates(MAX_RENDER_TEXT_SIZE_DP)) {
-				val finalRect = rect
-				val resolvedContentWidth = max(1, finalRect.width() - padding * 2)
-				val resolvedContentHeight = max(1, finalRect.height() - padding * 2)
-				val finalFit = fitHorizontalLayout(
-					text = text,
-					width = resolvedContentWidth,
-					height = resolvedContentHeight,
-					initialTextSize = textSize,
-					allowEllipsize = false,
-				)
-				if (finalFit.overflow > 0 || finalFit.truncated) continue
-				return PreparedBubble(
-					rect = finalRect,
-					padding = padding,
-					contentWidth = resolvedContentWidth,
-					contentHeight = resolvedContentHeight,
-					layout = finalFit.layout,
-					verticalPlan = null,
-					debugOverlay = buildBubbleDebugOverlay(
-						input = input,
-						preparedRect = finalRect,
-						padding = padding,
-						contentWidth = resolvedContentWidth,
-						contentHeight = resolvedContentHeight,
-					),
-				)
+			val fit = fitHorizontalLayout(
+				text = text,
+				width = contentWidth,
+				height = contentHeight,
+				initialTextSize = dp(MAX_RENDER_TEXT_SIZE_DP).toFloat(),
+				allowEllipsize = true,
+			)
+			if (fit.usedHeight > contentHeight || hasHorizontalClipOverflow(computeLayoutBounds(fit.layout), contentWidth)) {
+				continue
 			}
+			return PreparedBubble(
+				rect = rect,
+				padding = padding,
+				contentWidth = contentWidth,
+				contentHeight = contentHeight,
+				layout = fit.layout,
+				verticalPlan = null,
+				debugOverlay = buildBubbleDebugOverlay(
+					input = input,
+					preparedRect = rect,
+					padding = padding,
+					contentWidth = contentWidth,
+					contentHeight = contentHeight,
+				),
+			)
 		}
 		return null
 	}
@@ -2248,64 +2214,60 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		padding: Int,
 		bitmapWidth: Int,
 		bitmapHeight: Int,
-		allSourceRects: List<Rect>,
 	): PreparedBubble? {
 		val glyphs = textToGlyphs(text)
 		if (glyphs.isEmpty()) return null
 		for (rect in buildVisibleScaledRects(anchorRect, bitmapWidth, bitmapHeight)) {
 			val contentWidth = max(1, rect.width() - padding * 2)
 			val contentHeight = max(1, rect.height() - padding * 2)
-			for (textSize in buildVisibleTextSizeCandidates(MAX_VERTICAL_RENDER_TEXT_SIZE_DP)) {
-				val cellSize = resolveVerticalCellSize(glyphs, textSize)
-				val rowCapacity = max(1, contentHeight / cellSize)
-				val requiredColumns = ceil(glyphs.size / rowCapacity.toDouble()).toInt().coerceAtLeast(1)
-				val requiredWidth = requiredColumns * cellSize
-				val usedHeight = min(rowCapacity, glyphs.size).coerceAtLeast(1) * cellSize
-				val minReadableWidth = max(
-					dp(MIN_VERTICAL_READABLE_WIDTH_DP),
-					ceil((cellSize * MIN_VERTICAL_READABLE_WIDTH_COLUMNS).toDouble()).toInt(),
-				)
-				if (max(requiredWidth, minReadableWidth) > contentWidth || usedHeight > contentHeight) continue
-				val finalRect = rect
-				val resolvedContentWidth = max(1, finalRect.width() - padding * 2)
-				val resolvedContentHeight = max(1, finalRect.height() - padding * 2)
-				val plan = VerticalLayoutPlan(
-					glyphs = glyphs,
-					textSize = textSize,
-					cellSize = cellSize,
-					rowCapacity = rowCapacity,
-				)
-				return PreparedBubble(
-					rect = finalRect,
-					padding = padding,
-					contentWidth = resolvedContentWidth,
-					contentHeight = resolvedContentHeight,
-					layout = null,
-					verticalPlan = plan,
-					debugOverlay = buildBubbleDebugOverlay(
-						input = input,
-						preparedRect = finalRect,
-						padding = padding,
-						contentWidth = resolvedContentWidth,
-						contentHeight = resolvedContentHeight,
-					),
-				)
+			val fit = fitVerticalPlan(
+				text = text,
+				width = contentWidth,
+				height = contentHeight,
+				initialTextSize = dp(MAX_VERTICAL_RENDER_TEXT_SIZE_DP).toFloat(),
+			) ?: continue
+			val plan = if (fit.truncated) {
+				ellipsizeVerticalPlan(fit.plan, contentWidth, contentHeight)
+			} else {
+				fit.plan
 			}
+			if (computeVerticalUsedWidth(plan) > contentWidth || computeVerticalUsedHeight(plan) > contentHeight) continue
+			return PreparedBubble(
+				rect = rect,
+				padding = padding,
+				contentWidth = contentWidth,
+				contentHeight = contentHeight,
+				layout = null,
+				verticalPlan = plan,
+				debugOverlay = buildBubbleDebugOverlay(
+					input = input,
+					preparedRect = rect,
+					padding = padding,
+					contentWidth = contentWidth,
+					contentHeight = contentHeight,
+				),
+			)
 		}
 		return null
 	}
 
-	private fun buildVisibleTextSizeCandidates(maxTextSizeDp: Float): List<Float> {
-		val maxSize = dp(maxTextSizeDp).toFloat()
-		val minSize = dp(MIN_RENDER_TEXT_SIZE_DP).toFloat()
-		val candidates = ArrayList<Float>()
-		var size = maxSize
-		while (size >= minSize) {
-			candidates += size
-			if (size == minSize) break
-			size = max(minSize, size - 1f)
+	private fun ellipsizeVerticalPlan(
+		plan: VerticalLayoutPlan,
+		width: Int,
+		height: Int,
+	): VerticalLayoutPlan {
+		val rows = max(1, height / plan.cellSize)
+		val columns = max(1, width / plan.cellSize)
+		val capacity = rows * columns
+		val visibleGlyphs = when {
+			plan.glyphs.size <= capacity -> plan.glyphs
+			capacity == 1 -> listOf("…")
+			else -> plan.glyphs.take(capacity - 1) + "…"
 		}
-		return candidates
+		return plan.copy(
+			glyphs = visibleGlyphs,
+			rowCapacity = rows,
+		)
 	}
 
 	private fun buildVisibleScaledRects(
@@ -3651,7 +3613,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 		const val DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 		const val MAX_OPENAI_BATCH_SIZE = 3
-		const val TRANSLATION_PIPELINE_VERSION = "2026-07-11-ocr-rec-v7"
+		const val TRANSLATION_PIPELINE_VERSION = "2026-08-01-overlay-fit-v8"
 		const val OPENAI_TRANSLATION_SYSTEM_PROMPT = """
 		You translate manga OCR text.
 		Output only the translation.
@@ -3667,10 +3629,6 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		const val VERTICAL_TEXT_SIZE_WIDTH_RATIO = 0.78f
 		const val MAX_RENDER_TEXT_SIZE_DP = 24f
 		const val MAX_VERTICAL_RENDER_TEXT_SIZE_DP = 10f
-		const val FULL_TEXT_FALLBACK_MAX_TEXT_SIZE_DP = 10f
-		const val FULL_TEXT_FALLBACK_PAGE_MARGIN_DP = 6f
-		const val FULL_TEXT_FALLBACK_PADDING_DP = 4f
-		val FULL_TEXT_FALLBACK_WIDTH_RATIOS = floatArrayOf(0.45f, 0.65f, 0.90f, 1f)
 		const val MIN_INITIAL_TEXT_SIZE_DP = 6f
 		const val MIN_RENDER_TEXT_SIZE_DP = 2f
 		const val HORIZONTAL_LAYOUT_WIDTH_OVERFLOW_TOLERANCE_DP = 2f

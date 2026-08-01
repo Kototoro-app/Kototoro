@@ -33,6 +33,7 @@ fun TranslationSettingsScreen(
 	val modeNames = stringArrayResource(R.array.values_reader_translation_modes).toList()
 	val sourceLangNames = stringArrayResource(R.array.values_reader_translation_source_languages).toList()
 	val targetLangNames = stringArrayResource(R.array.values_reader_translation_target_languages).toList()
+	val renderStyleNames = stringArrayResource(R.array.values_reader_translation_render_styles).toList()
 	val currentMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_MODE) {
 		settings.readerTranslationMode
 	}.value
@@ -75,6 +76,19 @@ fun TranslationSettingsScreen(
 					onSettingsClick = onOpenOcrModels.takeIf { currentOcrMode == ReaderOcrMode.ADVANCED },
 					settingsContentDescription = stringResource(R.string.reader_translation_ocr_advanced_settings),
 					onValueChange = onOcrModeChange,
+				)
+
+				SettingsChoicePreference(
+					title = stringResource(R.string.reader_translation_render_style),
+					options = stringArrayResource(R.array.reader_translation_render_styles).mapIndexed { index, label ->
+						SettingsChoiceOption(renderStyleNames[index], label)
+					},
+					value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) {
+						settings.readerTranslationRenderStyle
+					}.value,
+					onValueChange = {
+						prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, it) }
+					},
 				)
 
 				SettingsChoicePreference(

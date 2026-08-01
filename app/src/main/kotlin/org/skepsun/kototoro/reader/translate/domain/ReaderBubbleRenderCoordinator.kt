@@ -9,7 +9,7 @@ internal class ReaderBubbleRenderCoordinator(
 	private val isLikelyGarbledText: (String) -> Boolean,
 	private val shouldSuppressRenderedBubble: (String, String, String) -> Boolean,
 	private val isLikelySpeechBubbleRegion: (Bitmap, android.graphics.Rect) -> Boolean,
-	private val prepareTranslatedBubble: (BubbleInput, String, Int, Int, Boolean, List<Rect>) -> PreparedBubble?,
+	private val prepareTranslatedBubble: (BubbleInput, String, Int, Int, Boolean) -> PreparedBubble?,
 	private val qualityFilterEnabled: () -> Boolean,
 	private val log: (() -> String) -> Unit,
 	private val oneLine: (String, Int) -> String,
@@ -23,9 +23,6 @@ internal class ReaderBubbleRenderCoordinator(
 	): BubbleRenderPreparationResult {
 		val preparedBubbles = mutableListOf<PreparedBubble>()
 		var nonEmptyTranslatedCount = 0
-		val allSourceRects = bubbleInputs.mapNotNull { bubble ->
-			(bubble.sourceContentRect ?: bubble.rect).takeIf { it.width() > 1 && it.height() > 1 }?.let { Rect(it) }
-		}
 		for (bubble in bubbleInputs) {
 			val translated = translatedMap[bubble.sourceText].orEmpty().trim()
 			log {
@@ -60,7 +57,6 @@ internal class ReaderBubbleRenderCoordinator(
 				bitmap.width,
 				bitmap.height,
 				bubbleLikeRegion,
-				allSourceRects,
 			)
 			if (prepared == null) {
 				log {
