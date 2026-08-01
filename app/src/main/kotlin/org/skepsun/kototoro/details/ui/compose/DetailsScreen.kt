@@ -139,6 +139,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -630,7 +632,15 @@ private fun DetailsScreenContent(
         viewModel.onError.observeEvent(lifecycleOwner, SnackbarErrorObserver(rootView, null))
         viewModel.onActionDone.observeEvent(lifecycleOwner, ReversibleActionObserver(rootView))
         viewModel.onDownloadStarted.observeEvent(lifecycleOwner, DownloadStartedObserver(rootView))
-        onDispose { }
+        val sourceBindingsObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshSourceBindings()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(sourceBindingsObserver)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(sourceBindingsObserver)
+        }
     }
     val compactCollapseProgressProvider = remember(
         scrollState,

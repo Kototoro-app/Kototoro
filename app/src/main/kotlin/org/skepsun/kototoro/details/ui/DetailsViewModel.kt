@@ -581,6 +581,7 @@ class DetailsViewModel @Inject constructor(
 	private var loadingJob: Job = Job()
 	private var translateAvailabilityJob: Job? = null
 	private var readingSearchJob: Job? = null
+	private var sourceBindingsRefreshJob: Job? = null
 	private var readingSearchGeneration: Int = 0
 	private var allEnabledSourcesLoaded = false
 	private var currentLoadIntentOverride: ContentIntent? = initialProjectionIntentOverride
@@ -999,11 +1000,11 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private fun org.skepsun.kototoro.parsers.model.ContentSource.resolveDetailsSource(): org.skepsun.kototoro.parsers.model.ContentSource {
-		allEnabledSourceInfos.value.firstOrNull { it.mangaSource.name == name }?.mangaSource?.let { return it }
-		val resolved = contentSourceResolutionPipeline.resolve(ContentSource(name))
-		return resolved.takeIf {
-			it.resolvedContentTypeForSnapshot() != null || it.locale.isNotBlank()
-		} ?: this
+		return selectResolvedDetailsSource(
+			original = this,
+			enabledSources = allEnabledSourceInfos.value,
+			pipelineResolved = contentSourceResolutionPipeline.resolve(ContentSource(name)),
+		)
 	}
 
 	private fun currentMetadataContentType(): ContentType? {
@@ -1741,10 +1742,12 @@ class DetailsViewModel @Inject constructor(
 
 		launchJob(Dispatchers.Default) {
 			merge(
+				org.skepsun.kototoro.core.extensions.GlobalExtensionManager.updates,
 				mihonExtensionManager.changes,
 				aniyomiExtensionManager.changes,
 				ireaderExtensionManager.changes,
 			).collect {
+				refreshActiveEntitySourceOptions()
 				updateSourceOptions()
 				refreshResolvedPresentationState()
 			}
@@ -5288,6 +5291,15 @@ class DetailsViewModel @Inject constructor(
 	fun reload() {
 		loadingJob.cancel()
 		loadingJob = doLoad(force = true)
+	}
+
+	fun refreshSourceBindings() {
+		sourceBindingsRefreshJob?.cancel()
+		sourceBindingsRefreshJob = launchJob(Dispatchers.IO) {
+			refreshActiveEntitySourceOptions()
+			updateSourceOptions()
+			refreshResolvedPresentationState()
+		}
 	}
 
 	fun updateScrobbling(scrobblerServiceId: Int, rating: Float, status: ScrobblingStatus?) {
