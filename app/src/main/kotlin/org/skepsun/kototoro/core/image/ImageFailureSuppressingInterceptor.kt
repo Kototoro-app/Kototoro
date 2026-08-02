@@ -37,24 +37,12 @@ class ImageFailureSuppressingInterceptor : Interceptor {
 			)
 		}
 
-		val trackedIdentity = identity?.takeIf { request.isCoverRequest(it) }
-		if (trackedIdentity != null && !ImageFailureRegistry.tryStart(trackedIdentity)) {
-			return ErrorResult(
-				image = request.error(),
-				request = request,
-				throwable = SuppressedImageRequestException(trackedIdentity),
-			)
+		val result = chain.proceed()
+		logResult(request, result)
+		if (identity != null && result is ErrorResult && request.shouldRememberFailure(identity, result.throwable)) {
+			ImageFailureRegistry.mark(identity)
 		}
-		return try {
-			val result = chain.proceed()
-			logResult(request, result)
-			if (identity != null && result is ErrorResult && request.shouldRememberFailure(identity, result.throwable)) {
-				ImageFailureRegistry.mark(identity)
-			}
-			result
-		} finally {
-			trackedIdentity?.let(ImageFailureRegistry::finish)
-		}
+		return result
 	}
 
 	private fun ImageRequest.shouldShortCircuit(identity: String?): Boolean {
@@ -197,8 +185,6 @@ private object ImageFailureRegistry {
 	private const val SUPPRESSION_WINDOW_MS = 10 * 60 * 1000L
 
 	private val failures = ConcurrentHashMap<String, Long>()
-	private val inFlight = ConcurrentHashMap.newKeySet<String>()
-
 	fun isSuppressed(identity: String): Boolean {
 		val failedAt = failures[identity] ?: return false
 		val isActive = System.currentTimeMillis() - failedAt < SUPPRESSION_WINDOW_MS
@@ -210,11 +196,5 @@ private object ImageFailureRegistry {
 
 	fun mark(identity: String) {
 		failures[identity] = System.currentTimeMillis()
-	}
-
-	fun tryStart(identity: String): Boolean = inFlight.add(identity)
-
-	fun finish(identity: String) {
-		inFlight.remove(identity)
 	}
 }
