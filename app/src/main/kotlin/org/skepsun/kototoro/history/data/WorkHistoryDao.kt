@@ -16,6 +16,7 @@ abstract class WorkHistoryDao {
 	@Query(
 		"""
 		SELECT wh.* FROM work_history wh
+		INNER JOIN `entity` e ON e.id = wh.entity_id
 		WHERE wh.deleted_at = 0
 			AND EXISTS (
 				SELECT 1 FROM entity_binding eb
@@ -23,7 +24,7 @@ abstract class WorkHistoryDao {
 				WHERE eb.entity_id = wh.entity_id
 					AND eb.source IN ('local_manga', '0')
 					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-					AND m.content_type IN (:allowedTypes)
+					AND COALESCE(m.content_type, e.content_type) IN (:allowedTypes)
 			)
 			AND NOT EXISTS (
 				SELECT 1 FROM entity_binding eb
@@ -31,8 +32,8 @@ abstract class WorkHistoryDao {
 				WHERE eb.entity_id = wh.entity_id
 					AND eb.source IN ('local_manga', '0')
 					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-					AND m.content_type IN (:classifiedTypes)
-					AND m.content_type NOT IN (:allowedTypes)
+					AND COALESCE(m.content_type, e.content_type) IN (:classifiedTypes)
+					AND COALESCE(m.content_type, e.content_type) NOT IN (:allowedTypes)
 			)
 		ORDER BY wh.updated_at DESC
 		LIMIT :limit
@@ -47,6 +48,7 @@ abstract class WorkHistoryDao {
 	@Query(
 		"""
 		SELECT wh.* FROM work_history wh
+		INNER JOIN `entity` e ON e.id = wh.entity_id
 		WHERE wh.deleted_at = 0
 			AND EXISTS (
 				SELECT 1 FROM entity_binding eb
@@ -54,7 +56,7 @@ abstract class WorkHistoryDao {
 				WHERE eb.entity_id = wh.entity_id
 					AND eb.source IN ('local_manga', '0')
 					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-					AND m.content_type IN (:allowedTypes)
+					AND COALESCE(m.content_type, e.content_type) IN (:allowedTypes)
 					AND m.source IN (:allowedSources)
 			)
 			AND NOT EXISTS (
@@ -63,8 +65,8 @@ abstract class WorkHistoryDao {
 				WHERE eb.entity_id = wh.entity_id
 					AND eb.source IN ('local_manga', '0')
 					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-					AND m.content_type IN (:classifiedTypes)
-					AND m.content_type NOT IN (:allowedTypes)
+					AND COALESCE(m.content_type, e.content_type) IN (:classifiedTypes)
+					AND COALESCE(m.content_type, e.content_type) NOT IN (:allowedTypes)
 			)
 		ORDER BY wh.updated_at DESC
 		LIMIT :limit

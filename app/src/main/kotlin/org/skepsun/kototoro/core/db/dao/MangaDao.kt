@@ -79,6 +79,9 @@ abstract class MangaDao {
 	@Query("UPDATE manga SET content_type = :contentType WHERE manga_id = :id AND content_type IS NULL")
 	abstract suspend fun setContentTypeIfMissing(id: Long, contentType: String): Int
 
+	@Query("SELECT content_type FROM manga WHERE manga_id = :id")
+	protected abstract suspend fun findContentType(id: Long): String?
+
 	@Query("UPDATE manga SET content_type = :contentType WHERE content_type IS NULL AND source IN (:sources)")
 	abstract suspend fun setContentTypeIfMissingForSources(
 		sources: Collection<String>,
@@ -144,7 +147,7 @@ abstract class MangaDao {
 	abstract suspend fun searchByTitle(query: String, source: String, limit: Int): List<MangaWithTags>
 
 	@Upsert
-	protected abstract suspend fun upsert(manga: MangaEntity)
+	protected abstract suspend fun upsertEntity(manga: MangaEntity)
 
 	@Update(onConflict = OnConflictStrategy.IGNORE)
 	abstract suspend fun update(manga: MangaEntity): Int
@@ -220,7 +223,12 @@ abstract class MangaDao {
 
 	@Transaction
 	open suspend fun upsert(manga: MangaEntity, tags: Iterable<TagEntity>? = null) {
-		upsert(manga)
+		val stableManga = if (manga.contentType == null) {
+			manga.copy(contentType = findContentType(manga.id))
+		} else {
+			manga
+		}
+		upsertEntity(stableManga)
 		if (tags != null) {
 			clearTagRelation(manga.id)
 			tags.map {

@@ -45,7 +45,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -96,6 +95,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_BOOKMARKS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
+import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionBar
+import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -430,16 +431,12 @@ internal fun ComposeReaderActivityScaffold(
 	infoBarEmbedded: Boolean = false,
 	modifier: Modifier = Modifier,
 	chapterPanelTabId: Int = DETAILS_TAB_CHAPTERS,
-	chaptersPanelContent: @Composable (Int, ReaderChapterPanelUiState) -> Unit = { _, _ -> },
+	chaptersPanelContent: @Composable (Int, ReaderChapterPanelUiState, (ChapterSelectionUiState?) -> Unit) -> Unit =
+		{ _, _, _ -> },
 	translationTaskPanelContent: @Composable () -> Unit = {},
 	content: @Composable () -> Unit,
 ) {
-	val chaptersSheetState = androidx.compose.material3.rememberModalBottomSheetState(
-		skipPartiallyExpanded = false,
-	)
-	val optionsSheetState = androidx.compose.material3.rememberModalBottomSheetState(
-		skipPartiallyExpanded = false,
-	)
+	var chapterSelectionState by remember { mutableStateOf<ChapterSelectionUiState?>(null) }
 	BackHandler { callbacks.onBackPressed() }
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
@@ -579,43 +576,52 @@ internal fun ComposeReaderActivityScaffold(
 		}
 
 			if (state.chaptersVisible) {
-				ModalBottomSheet(
+				ReaderAnchoredBottomSheet(
 					onDismissRequest = callbacks.onBackPressed,
-					sheetState = chaptersSheetState,
-					modifier = Modifier.fillMaxHeight(),
-				) {
+				) { sheetDragModifier ->
 					Column(
-						modifier = Modifier
-							.fillMaxWidth()
-							.weight(1f),
+						modifier = Modifier.fillMaxSize(),
 					) {
-						ReaderChapterPanelToolbar(
-							selectedTabId = chapterPanelTabId,
-							isFullyExpanded = chaptersSheetState.currentValue == SheetValue.Expanded,
-							state = state.chapterPanel,
-							callbacks = callbacks.chapterPanel,
-						)
+						val selectionState = chapterSelectionState
+						Box(modifier = sheetDragModifier.fillMaxWidth()) {
+							if (chapterPanelTabId == DETAILS_TAB_CHAPTERS && selectionState != null) {
+								ChapterSelectionBar(
+									state = selectionState,
+									modifier = Modifier.height(52.dp),
+								)
+							} else {
+								ReaderChapterPanelToolbar(
+									selectedTabId = chapterPanelTabId,
+									isFullyExpanded = true,
+									state = state.chapterPanel,
+									callbacks = callbacks.chapterPanel,
+								)
+							}
+						}
 						Box(modifier = Modifier.weight(1f)) {
-							chaptersPanelContent(chapterPanelTabId, state.chapterPanel)
+							chaptersPanelContent(
+								chapterPanelTabId,
+								state.chapterPanel,
+								{ chapterSelectionState = it },
+							)
 						}
 					}
 				}
 			}
 
 			if (state.options.visible) {
-				ModalBottomSheet(
+				ReaderAnchoredBottomSheet(
 					onDismissRequest = callbacks.options.onDismiss,
-					sheetState = optionsSheetState,
-					modifier = Modifier.fillMaxHeight(),
-				) {
+				) { sheetDragModifier ->
 					ComposeReaderOptionsSheet(
 						state = state.options,
 						callbacks = callbacks.options,
 						embedded = true,
 						translationTaskPanelContent = translationTaskPanelContent,
+						headerModifier = sheetDragModifier,
 						modifier = Modifier
 							.fillMaxWidth()
-							.weight(1f),
+							.fillMaxSize(),
 					)
 				}
 		}

@@ -216,4 +216,12 @@ class WebtoonViewportPolicyTest {
 			measureWebtoonViewport(2000, 1000, 2000, 1500),
 		)
 	}
+
+	@Test
+	fun `fractional fitted height does not expose a background pixel`() {
+		assertEquals(
+			WebtoonViewportMeasurement(itemHeightPx = 500),
+			measureWebtoonViewport(2000, 500, 1000, 1001),
+		)
+	}
 }

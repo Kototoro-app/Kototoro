@@ -1,6 +1,10 @@
 package org.skepsun.kototoro.space.domain
 
 import io.mockk.mockk
+import io.mockk.every
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -8,6 +12,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.explore.data.SourceRuleResolver
+import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
+import org.skepsun.kototoro.core.model.ContentSourceInfo
+import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 class SpaceContentPolicyTest {
@@ -92,5 +101,41 @@ class SpaceContentPolicyTest {
 
         assertEquals(emptySet<ContentType>(), policy.allowedTypes(unknown))
         assertFalse(policy.accepts(unknown, ContentType.MANGA))
+    }
+
+    @Test
+    fun `source scope refreshes when mihon extension loads`() = runTest {
+        val spaceId = SpaceId("custom:mihon")
+        val catalog = TestSpaceCatalogRepository(
+            listOf(
+                SpaceContext(
+                    id = spaceId,
+                    kind = SpaceKind.MANGA,
+                    allowedContentTypes = setOf(ContentType.MANGA),
+                    sourceLanguages = setOf("en"),
+                    sourceKinds = setOf(SourceType.MIHON),
+                    isBuiltIn = false,
+                ),
+            ),
+        )
+        val sources = MutableStateFlow(emptyList<ContentSourceInfo>())
+        val sourceRepository = mockk<ContentSourcesRepository> {
+            every { observeEnabledSources() } returns sources
+        }
+        val dynamicPolicy = DefaultSpaceContentPolicy(
+            catalog,
+            SourceRuleResolver(sourceRepository, SourceTypeIdentifier()),
+        )
+        val observed = dynamicPolicy.observeAllowedSourceNames(spaceId)
+
+        assertEquals(emptySet<String>(), observed.first())
+        val mihon = mockk<ContentSource> {
+            every { name } returns "MIHON_123"
+            every { locale } returns "en"
+            every { contentType } returns ContentType.MANGA
+        }
+        sources.value = listOf(ContentSourceInfo(mihon, isEnabled = true, isPinned = false))
+
+        assertEquals(setOf("MIHON_123"), observed.first { it?.isNotEmpty() == true })
     }
 }

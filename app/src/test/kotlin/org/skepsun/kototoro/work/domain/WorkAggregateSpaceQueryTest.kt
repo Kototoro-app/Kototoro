@@ -88,4 +88,28 @@ class WorkAggregateSpaceQueryTest {
 			)
 		}
 	}
+
+	@Test
+	fun `history query uses refreshed external source scope`() = runTest {
+		coEvery {
+			historyDao.findRecentForSpaceAndSources(any(), any(), setOf("MIHON_123"), 1)
+		} returns emptyList()
+
+		assertEquals(
+			emptyList<WorkAggregate>(),
+			repository.findRecentHistoryAggregates(
+				limit = 1,
+				spaceId = BuiltInSpaces.Manga,
+				allowedSourceNames = setOf("MIHON_123"),
+			),
+		)
+		coVerify {
+			historyDao.findRecentForSpaceAndSources(
+				allowedTypes = match { ContentType.MANGA.name in it },
+				classifiedTypes = match { ContentType.OTHER.name !in it },
+				allowedSources = setOf("MIHON_123"),
+				limit = 1,
+			)
+		}
+	}
 }

@@ -103,12 +103,18 @@ private fun ComposeTelephotoSubsamplingImage(
 	placeholder: (@Composable () -> Unit)? = null,
 	modifier: Modifier = Modifier,
 ) {
-	val imageSource = remember(uri) { SubSamplingImageSource.contentUri(uri) }
+	val currentOnImageSizeResolved by rememberUpdatedState(onImageSizeResolved)
+	val currentOnImageError by rememberUpdatedState(onImageError)
+	val imageSource = remember(uri) { SubSamplingImageSource.contentUriOrNull(uri) }
+	if (imageSource == null) {
+		LaunchedEffect(uri) {
+			currentOnImageError(IOException("URI is not supported by Telephoto: $uri"))
+		}
+		return
+	}
 	val imageOptions = remember(bitmapConfig) {
 		ImageBitmapOptions(config = bitmapConfig.toImageBitmapConfig())
 	}
-	val currentOnImageSizeResolved by rememberUpdatedState(onImageSizeResolved)
-	val currentOnImageError by rememberUpdatedState(onImageError)
 	val errorReporter = remember {
 		object : SubSamplingImageErrorReporter {
 			override fun onImageLoadingFailed(e: IOException, imageSource: SubSamplingImageSource) {

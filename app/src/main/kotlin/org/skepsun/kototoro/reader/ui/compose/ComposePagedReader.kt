@@ -274,10 +274,18 @@ fun ComposePagedReader(
 		}
 	}
 	LaunchedEffect(pagerState, displayedPages, isRestoringPageAnchor) {
-		snapshotFlow { pagerState.currentPage to isRestoringPageAnchor }
+		snapshotFlow {
+			Triple(
+				pagerState.isScrollInProgress,
+				pagerState.settledPage,
+				isRestoringPageAnchor,
+			)
+		}
 			.distinctUntilChanged()
-			.collect { (position, restoringAnchor) ->
-				if (!restoringAnchor) displayedPages.getOrNull(position)?.let(onPageChanged)
+			.collect { (isScrolling, position, restoringAnchor) ->
+				if (shouldReportReaderSettledPage(isScrolling, restoringAnchor)) {
+					displayedPages.getOrNull(position)?.let(onPageChanged)
+				}
 			}
 	}
 
@@ -505,6 +513,7 @@ fun ComposeWebtoonReader(
 	var canvasOffsetX by remember { mutableFloatStateOf(0f) }
 	var canvasOffsetY by remember { mutableFloatStateOf(0f) }
 	val zoomAnimationScope = rememberCoroutineScope()
+	val webtoonNavigationScope = rememberCoroutineScope()
 	val context = LocalContext.current
 	val doubleTapSlop = remember(context) {
 		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()
@@ -512,6 +521,7 @@ fun ComposeWebtoonReader(
 	val webtoonDecay = FloatExponentialDecaySpec()
 	var webtoonZoomAnimationJob by remember { mutableStateOf<Job?>(null) }
 	var webtoonFlingJob by remember { mutableStateOf<Job?>(null) }
+	var webtoonNavigationJob by remember { mutableStateOf<Job?>(null) }
 	var wasZoomEnabled by remember { mutableStateOf(isZoomEnabled) }
 	var hasAppliedInitialScroll by remember { mutableStateOf(initialScroll <= 0) }
 	val shiftedAnchorPosition = if (isPageWindowAnchorShifted) {
@@ -556,14 +566,21 @@ fun ComposeWebtoonReader(
 			y.coerceIn(bounds.minY, bounds.maxY),
 		)
 	}
-	fun applyCanvasPan(pan: Offset) {
+	fun applyCanvasPan(pan: Offset, isTransformGesture: Boolean) {
 		if (!pan.x.isFinite() || !pan.y.isFinite()) return
 		val desiredX = canvasOffsetX + pan.x
 		val desiredY = canvasOffsetY + pan.y
 		val bounded = clampCanvasOffset(canvasScale, desiredX, desiredY)
 		canvasOffsetX = bounded.x
 		canvasOffsetY = bounded.y
-		dispatchWebtoonScroll(resolveWebtoonBoundaryHandoff(canvasScale, desiredY, bounded.y).toFloat())
+		dispatchWebtoonScroll(
+			resolveWebtoonGestureBoundaryHandoff(
+				scale = canvasScale,
+				desiredY = desiredY,
+				boundedY = bounded.y,
+				isTransformGesture = isTransformGesture,
+			).toFloat(),
+		)
 	}
 	fun contentCoordinateAtFocus(
 		scale: Float,
@@ -575,7 +592,11 @@ fun ComposeWebtoonReader(
 		val center = layoutSize / 2f
 		return center + (focus - offset - center) / safeScale
 	}
-	fun applyCanvasScaleAtFocus(nextScale: Float, focus: Offset) {
+	fun applyCanvasScaleAtFocus(
+		nextScale: Float,
+		focus: Offset,
+		isTransformGesture: Boolean = false,
+	) {
 		if (!nextScale.isFinite() || !focus.x.isFinite() || !focus.y.isFinite()) return
 		val previousScale = canvasScale
 		val previousLayoutHeight = resolveWebtoonLayoutViewportHeight(viewportHeightPx, previousScale)
@@ -614,7 +635,7 @@ fun ComposeWebtoonReader(
 			focus = focus.y,
 			layoutSize = nextLayoutHeight,
 		)
-		dispatchWebtoonScroll(focusedContentY - newFocusedContentY)
+		if (!isTransformGesture) dispatchWebtoonScroll(focusedContentY - newFocusedContentY)
 	}
 	suspend fun flingCanvas(velocity: Velocity) {
 		if (canvasScale <= 1f || maxOf(kotlin.math.abs(velocity.x), kotlin.math.abs(velocity.y)) < 50f) return
@@ -788,13 +809,10 @@ fun ComposeWebtoonReader(
 	}
 	LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, isAnchorRestorePending) {
 		if (isAnchorRestorePending) return@LaunchedEffect
-		requestedPage?.takeIf { it in pages.indices }?.let { position ->
-			if (shouldAnimatePageNavigation(
-					listState.firstVisibleItemIndex,
-					position,
-					requestedPageSmooth,
-					isAnimationEnabled,
-				)) {
+		val position = requestedPage?.takeIf { it in pages.indices } ?: return@LaunchedEffect
+		webtoonNavigationJob?.cancel()
+		webtoonNavigationJob = webtoonNavigationScope.launch {
+			if (requestedPageSmooth && isAnimationEnabled) {
 				listState.animateScrollToItem(position)
 			} else {
 				listState.scrollToItem(position)
@@ -841,21 +859,21 @@ fun ComposeWebtoonReader(
 				viewportWidthPx = size.width
 				viewportHeightPx = size.height
 			}
-				.pointerInput(isZoomEnabled) {
+			.pointerInput(isZoomEnabled) {
 				if (isZoomEnabled) {
 					awaitEachGesture {
-						awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+						val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
 						webtoonFlingJob?.cancel()
 						val velocityTracker = VelocityTracker()
-						var transformed = false
+						velocityTracker.addPosition(down.uptimeMillis, down.position)
+						var singlePointerTransformed = false
+						var hadMultiplePointers = false
 						do {
 							val event = awaitPointerEvent(PointerEventPass.Initial)
-							if (event.changes.any { it.isConsumed }) continue
-							event.changes.filter { it.pressed }.forEach {
-								velocityTracker.addPosition(it.uptimeMillis, it.position)
-							}
 							val pressedCount = event.changes.count { it.pressed }
-							if (pressedCount > 0 && (pressedCount >= 2 || canvasScale > 1f)) {
+							if (pressedCount >= 2) {
+								hadMultiplePointers = true
+								event.changes.forEach { it.consume() }
 								webtoonZoomAnimationJob?.cancel()
 								val centroid = event.calculateCentroid(useCurrent = false)
 								val pan = event.calculatePan()
@@ -865,14 +883,22 @@ fun ComposeWebtoonReader(
 								) {
 									val previousScale = canvasScale
 									val nextScale = (previousScale * zoom).coerceIn(0.5f, 2.5f)
-									applyCanvasScaleAtFocus(nextScale, centroid)
-									applyCanvasPan(pan)
+									applyCanvasScaleAtFocus(nextScale, centroid, isTransformGesture = true)
+									applyCanvasPan(pan, isTransformGesture = true)
+								}
+							} else if (pressedCount == 1 && canvasScale > 1f) {
+								if (event.changes.any { it.isConsumed }) continue
+								val change = event.changes.first { it.pressed }
+								velocityTracker.addPosition(change.uptimeMillis, change.position)
+								val pan = event.calculatePan()
+								if (pan.x.isFinite() && pan.y.isFinite()) {
+									applyCanvasPan(pan, isTransformGesture = false)
 									event.changes.forEach { it.consume() }
-									transformed = true
+									singlePointerTransformed = true
 								}
 							}
 						} while (event.changes.any { it.pressed })
-						if (transformed) {
+						if (shouldFlingWebtoonCanvas(singlePointerTransformed, hadMultiplePointers)) {
 							webtoonFlingJob = zoomAnimationScope.launch {
 								flingCanvas(velocityTracker.calculateVelocity())
 							}
@@ -1343,10 +1369,16 @@ fun ComposeDoublePageReader(
 		}
 	}
 	LaunchedEffect(pagerState, spreads, isRestoringAnchor) {
-		snapshotFlow { pagerState.currentPage to isRestoringAnchor }
+		snapshotFlow {
+			Triple(
+				pagerState.isScrollInProgress,
+				pagerState.settledPage,
+				isRestoringAnchor,
+			)
+		}
 			.distinctUntilChanged()
-			.collect { (spreadIndex, restoringAnchor) ->
-				if (restoringAnchor) return@collect
+			.collect { (isScrolling, spreadIndex, restoringAnchor) ->
+				if (!shouldReportReaderSettledPage(isScrolling, restoringAnchor)) return@collect
 				val spread = spreads[spreadIndex]
 				val visiblePages = spread.positions.mapNotNull {
 					displayItems[it].page
@@ -2671,6 +2703,19 @@ internal fun resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled: Boo
 
 internal fun resolveWebtoonAheadCacheFraction(isPreloadReductionEnabled: Boolean): Float =
 	if (isPreloadReductionEnabled) 0f else WEBTOON_AHEAD_CACHE_FRACTION
+
+internal fun resolveWebtoonGestureBoundaryHandoff(
+	scale: Float,
+	desiredY: Float,
+	boundedY: Float,
+	isTransformGesture: Boolean,
+): Int = if (isTransformGesture) 0 else resolveWebtoonBoundaryHandoff(scale, desiredY, boundedY)
+
+internal fun shouldReportReaderSettledPage(isScrollInProgress: Boolean, isRestoringAnchor: Boolean): Boolean =
+	!isScrollInProgress && !isRestoringAnchor
+
+internal fun shouldFlingWebtoonCanvas(singlePointerTransformed: Boolean, hadMultiplePointers: Boolean): Boolean =
+	singlePointerTransformed && !hadMultiplePointers
 
 private const val ZOOM_ANIMATION_DURATION_MS = 220
 private const val ADVANCED_PAGE_EPSILON = 0.001f

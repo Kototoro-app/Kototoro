@@ -160,11 +160,12 @@ class WorkAggregateRepository @Inject constructor(
 	suspend fun findRecentHistoryAggregates(
 		limit: Int = Int.MAX_VALUE,
 		spaceId: SpaceId? = null,
+		allowedSourceNames: Set<String>? = spaceId?.let(spaceContentPolicy::allowedSourceNames),
 	): List<WorkAggregate> {
 		if (limit <= 0) {
 			return emptyList()
 		}
-		val histories = findRecentHistoryEntries(limit, spaceId)
+		val histories = findRecentHistoryEntries(limit, spaceId, allowedSourceNames)
 		return buildHistoryAggregates(histories, spaceId)
 	}
 
@@ -202,6 +203,7 @@ class WorkAggregateRepository @Inject constructor(
 				anchorId = history.anchorMangaId,
 				cachedProjectionsById = projectionSet.projectionsById,
 				persistedContentTypesById = projectionSet.contentTypesById,
+				fallbackContentType = projectionSet.contentTypesByEntityId[history.entityId],
 				allowedContentTypes = allowedTypes,
 			)
 				?: return@mapNotNull null
@@ -218,9 +220,20 @@ class WorkAggregateRepository @Inject constructor(
 	}
 
 	private suspend fun findRecentHistoryEntries(limit: Int, spaceId: SpaceId?): List<WorkHistoryEntity> {
+		return findRecentHistoryEntries(
+			limit = limit,
+			spaceId = spaceId,
+			allowedSourceNames = spaceId?.let(spaceContentPolicy::allowedSourceNames),
+		)
+	}
+
+	private suspend fun findRecentHistoryEntries(
+		limit: Int,
+		spaceId: SpaceId?,
+		allowedSourceNames: Set<String>?,
+	): List<WorkHistoryEntity> {
 		if (spaceId != null) {
-			val allowedSources = spaceContentPolicy.allowedSourceNames(spaceId)
-			return if (allowedSources == null) {
+			return if (allowedSourceNames == null) {
 				db.getWorkHistoryDao().findRecentForSpace(
 					allowedTypes = allowedTypeNames(spaceId),
 					classifiedTypes = classifiedTypeNames,
@@ -230,7 +243,7 @@ class WorkAggregateRepository @Inject constructor(
 				db.getWorkHistoryDao().findRecentForSpaceAndSources(
 					allowedTypes = allowedTypeNames(spaceId),
 					classifiedTypes = classifiedTypeNames,
-					allowedSources = allowedSources,
+					allowedSources = allowedSourceNames,
 					limit = limit,
 				)
 			}
@@ -297,6 +310,7 @@ class WorkAggregateRepository @Inject constructor(
 				anchorId = entry.anchorMangaId,
 				cachedProjectionsById = projectionSet.projectionsById,
 				persistedContentTypesById = projectionSet.contentTypesById,
+				fallbackContentType = projectionSet.contentTypesByEntityId[entry.entityId],
 				allowedContentTypes = allowedTypes,
 			)
 				?: return@mapNotNull null
@@ -477,12 +491,17 @@ class WorkAggregateRepository @Inject constructor(
 		}
 		val projectionRows = db.getMangaDao().findWithTagsByIds(projectionIds)
 		val projectionsById = projectionRows.associate { it.manga.id to it.toContent() }
+		val contentTypesByEntityId = entityIds.distinct().takeIf { it.isNotEmpty() }
+			?.let { ids -> db.getEntityGraphDao().findEntitiesByIds(ids) }
+			.orEmpty()
+			.associate { entity -> entity.id to entity.contentType?.let(::parseContentType) }
 		return WorkProjectionSet(
 			identitiesByEntityId = identitiesByEntityId,
 			projectionsById = projectionsById,
 			contentTypesById = projectionRows.associate { row ->
 				row.manga.id to row.manga.contentType?.let(::parseContentType)
 			},
+			contentTypesByEntityId = contentTypesByEntityId,
 		)
 	}
 
@@ -491,12 +510,14 @@ class WorkAggregateRepository @Inject constructor(
 		anchorId: Long?,
 		cachedProjectionsById: Map<Long, Content>,
 		persistedContentTypesById: Map<Long, ContentType?> = emptyMap(),
+		fallbackContentType: ContentType? = null,
 		allowedContentTypes: Set<ContentType>? = null,
 	): Content? {
 		val anchorProjection = anchorId?.let { mangaId ->
 			cachedProjectionsById[mangaId] ?: db.getMangaDao().find(mangaId)?.toContent()
 		}?.takeIf {
-			allowedContentTypes == null || persistedContentTypesById[anchorId] in allowedContentTypes
+			allowedContentTypes == null ||
+				(persistedContentTypesById[anchorId] ?: fallbackContentType) in allowedContentTypes
 		}
 		val candidateIds = buildList {
 			identity.preferredMangaId?.let(::add)
@@ -505,7 +526,7 @@ class WorkAggregateRepository @Inject constructor(
 		}.distinct()
 		for (mangaId in candidateIds) {
 			val candidate = cachedProjectionsById[mangaId] ?: db.getMangaDao().find(mangaId)?.toContent()
-			val contentType = persistedContentTypesById[mangaId]
+			val contentType = persistedContentTypesById[mangaId] ?: fallbackContentType
 			if (candidate != null && (allowedContentTypes == null || contentType in allowedContentTypes)) {
 				return candidate.takeUnless { it.isStaleLocalMangaProjectionFor(anchorProjection) } ?: anchorProjection
 			}
@@ -524,6 +545,7 @@ class WorkAggregateRepository @Inject constructor(
 		val identitiesByEntityId: Map<Long, WorkIdentity?>,
 		val projectionsById: Map<Long, Content>,
 		val contentTypesById: Map<Long, ContentType?>,
+		val contentTypesByEntityId: Map<Long, ContentType?>,
 	) {
 		fun projectionsFor(
 			identity: WorkIdentity,
@@ -535,8 +557,12 @@ class WorkAggregateRepository @Inject constructor(
 				anchorId?.let(::add)
 				addAll(identity.localMangaIds)
 			}.distinct()
+			val fallbackContentType = identity.entityId?.let(contentTypesByEntityId::get)
 			return projectionIds
-				.filter { id -> allowedContentTypes == null || contentTypesById[id] in allowedContentTypes }
+				.filter { id ->
+					allowedContentTypes == null ||
+						(contentTypesById[id] ?: fallbackContentType) in allowedContentTypes
+				}
 				.mapNotNull(projectionsById::get)
 				.distinctBy { content ->
 					ProjectionIdentityKeys.contentCompactKey(

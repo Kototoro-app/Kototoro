@@ -22,6 +22,7 @@ import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
 import org.skepsun.kototoro.reader.ui.resolveReaderCurrentPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
+import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
 internal class ComposeReaderController(
@@ -30,7 +31,11 @@ internal class ComposeReaderController(
 	private val imagePipeline: DefaultComposeReaderImagePipeline,
 	private val errorHost: ReaderErrorHost,
 	private val chromeCallbacks: ComposeReaderChromeCallbacks,
-	private val chaptersPanelContent: @Composable (Int, ReaderChapterPanelUiState) -> Unit = { _, _ -> },
+	private val chaptersPanelContent: @Composable (
+		Int,
+		ReaderChapterPanelUiState,
+		(ChapterSelectionUiState?) -> Unit,
+	) -> Unit = { _, _, _ -> },
 ) : ReaderNavigator {
 
 	private var currentPageKey: Long? = null
@@ -65,8 +70,8 @@ internal class ComposeReaderController(
 					showControlLabels = showControlLabels,
 					infoBarEmbedded = infoBarEmbedded,
 					chapterPanelTabId = chaptersTabId,
-					chaptersPanelContent = { selectedTabId, panelState ->
-						chaptersPanelContent(selectedTabId, panelState)
+					chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
+						chaptersPanelContent(selectedTabId, panelState, onSelectionStateChange)
 					},
 					translationTaskPanelContent = {
 						ComposeTranslationTaskPanelContent(viewModel = viewModel, modifier = Modifier.fillMaxSize())

@@ -273,7 +273,7 @@ class ReaderActivity :
             viewModel = viewModel,
             imagePipeline = composeReaderImagePipeline,
             errorHost = this,
-			chaptersPanelContent = { selectedTabId, panelState ->
+			chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
 				ChaptersPagesTabsContent(
                     viewModel = viewModel,
                     pagesViewModel = pagesViewModel,
@@ -288,6 +288,7 @@ class ReaderActivity :
 					chapterQuery = panelState.searchQuery,
 					isChapterSearchVisible = panelState.searchVisible,
 					onChapterQueryChange = { query -> viewModel.performChapterSearch(query) },
+					onChapterSelectionStateChange = onSelectionStateChange,
 					onSelectedTabIdChange = composeReaderController::selectChaptersTab,
 				)
             },

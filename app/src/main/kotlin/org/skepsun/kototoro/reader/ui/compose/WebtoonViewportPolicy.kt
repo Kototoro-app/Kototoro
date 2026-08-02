@@ -133,6 +133,6 @@ fun measureWebtoonViewport(
 	) {
 		return WebtoonViewportMeasurement(itemHeightPx = viewport)
 	}
-	val sourceHeight = (imageHeightPx.toFloat() * availableWidthPx / imageWidthPx).roundToInt().coerceAtLeast(1)
+	val sourceHeight = (imageHeightPx.toFloat() * availableWidthPx / imageWidthPx).toInt().coerceAtLeast(1)
 	return WebtoonViewportMeasurement(itemHeightPx = sourceHeight)
 }

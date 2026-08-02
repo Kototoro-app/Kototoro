@@ -3,7 +3,9 @@ package org.skepsun.kototoro.history.data
 import androidx.room.withTransaction
 import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.toList
@@ -47,6 +49,7 @@ import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -61,6 +64,7 @@ class HistoryRepository @Inject constructor(
 	private val entityGraphRepository: EntityGraphRepository,
 	private val workResolver: WorkResolver,
 	private val workAggregateRepository: WorkAggregateRepository,
+	private val spaceContentPolicy: SpaceContentPolicy,
 ) {
 
 	private data class WorkHistoryOwner(
@@ -121,7 +125,7 @@ class HistoryRepository @Inject constructor(
 	}
 
 	fun observeLast(spaceId: SpaceId? = null): Flow<Content?> {
-		return db.invalidationTracker.createFlow(
+		val invalidations = db.invalidationTracker.createFlow(
 			tables = arrayOf(
 				TABLE_WORK_HISTORY,
 				TABLE_ENTITY_GRAPH_BINDING,
@@ -129,8 +133,16 @@ class HistoryRepository @Inject constructor(
 				TABLE_MANGA,
 			),
 			emitInitialState = true,
-		).mapLatest {
-			findRecentContentsByWorkAnchor(offset = 0, limit = 1, spaceId = spaceId).firstOrNull()
+		)
+		val allowedSourceNames = spaceId?.let(spaceContentPolicy::observeAllowedSourceNames) ?: flowOf(null)
+		return combine(invalidations, allowedSourceNames) { _, sources -> sources }
+			.mapLatest { sources ->
+			findRecentContentsByWorkAnchor(
+				offset = 0,
+				limit = 1,
+				spaceId = spaceId,
+				allowedSourceNames = sources,
+			).firstOrNull()
 		}.distinctUntilChanged()
 	}
 
@@ -435,12 +447,13 @@ class HistoryRepository @Inject constructor(
 		offset: Int,
 		limit: Int?,
 		spaceId: SpaceId? = null,
+		allowedSourceNames: Set<String>? = spaceId?.let(spaceContentPolicy::allowedSourceNames),
 	): List<Content> {
 		if (limit != null && limit <= 0) {
 			return emptyList()
 		}
 		val targetSize = if (limit == null) Int.MAX_VALUE else offset + limit
-		return workAggregateRepository.findRecentHistoryAggregates(targetSize, spaceId)
+		return workAggregateRepository.findRecentHistoryAggregates(targetSize, spaceId, allowedSourceNames)
 			.drop(offset)
 			.let { list ->
 				if (limit == null) list else list.take(limit)

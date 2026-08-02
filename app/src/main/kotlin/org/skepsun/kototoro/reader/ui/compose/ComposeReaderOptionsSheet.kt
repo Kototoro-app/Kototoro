@@ -122,6 +122,7 @@ internal fun ComposeReaderOptionsSheet(
 	callbacks: ComposeReaderOptionsCallbacks,
 	embedded: Boolean = false,
 	translationTaskPanelContent: @Composable () -> Unit = {},
+	headerModifier: Modifier = Modifier,
 	modifier: Modifier = Modifier,
 ) {
 	if (!state.visible) return
@@ -145,6 +146,7 @@ internal fun ComposeReaderOptionsSheet(
 			Row(
 				modifier = Modifier
 					.fillMaxWidth()
+					.then(headerModifier)
 					.padding(horizontal = 8.dp, vertical = 4.dp),
 				verticalAlignment = Alignment.CenterVertically,
 			) {

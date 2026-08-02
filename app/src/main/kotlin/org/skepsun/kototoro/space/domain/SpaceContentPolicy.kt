@@ -1,6 +1,10 @@
 package org.skepsun.kototoro.space.domain
 
 import dagger.Reusable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.explore.data.SourceRule
 import org.skepsun.kototoro.explore.data.SourceRuleResolver
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -15,6 +19,8 @@ interface SpaceContentPolicy {
     fun accepts(spaceId: SpaceId, contentType: ContentType?): Boolean
 
     fun allowedSourceNames(spaceId: SpaceId): Set<String>?
+
+    fun observeAllowedSourceNames(spaceId: SpaceId): Flow<Set<String>?>
 }
 
 @Reusable
@@ -48,5 +54,22 @@ class DefaultSpaceContentPolicy @Inject constructor(
                 sourceTypes = context.sourceKinds,
             ),
         )
+    }
+
+    override fun observeAllowedSourceNames(spaceId: SpaceId): Flow<Set<String>?> {
+        return catalogRepository.spaces.flatMapLatest { spaces ->
+            val context = spaces.firstOrNull { it.id == spaceId } ?: return@flatMapLatest flowOf(emptySet())
+            if (context.sourceLanguages.isEmpty() && context.sourceKinds.isEmpty()) {
+                flowOf(null)
+            } else {
+                sourceRuleResolver.observeResolvedSourceNames(
+                    SourceRule(
+                        languages = context.sourceLanguages,
+                        contentTypes = context.allowedContentTypes,
+                        sourceTypes = context.sourceKinds,
+                    ),
+                )
+            }
+        }.distinctUntilChanged()
     }
 }
