@@ -6,8 +6,6 @@ import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.webkit.CookieManager
-import android.webkit.WebStorage
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1821,14 +1819,8 @@ class SettingsActivity :
 
 	private fun logoutDiscord() {
 		kototoroAppSettings.discordToken = null
-		val webStorage = WebStorage.getInstance()
-		runCatching { webStorage.deleteOrigin(DISCORD_ORIGIN) }
-		runCatching { webStorage.deleteOrigin(DISCORD_WWW_ORIGIN) }
-
-		val cookieManager = CookieManager.getInstance()
-		cookieManager.removeSessionCookies(null)
-		cookieManager.removeAllCookies(null)
-		cookieManager.flush()
+		kototoroAppSettings.discordRefreshToken = null
+		kototoroAppSettings.discordCodeVerifier = null
 	}
 
 	private fun onDownloadsPagesDirectoryPicked(uri: Uri) {
@@ -1966,8 +1958,6 @@ class SettingsActivity :
 
 		private const val HOST_ABOUT = "about"
 		private const val HOST_ADD_REPO = "add-repo"
-		private const val DISCORD_ORIGIN = "https://discord.com"
-		private const val DISCORD_WWW_ORIGIN = "https://www.discord.com"
 		const val EXTRA_USE_HORIZONTAL_ROUTE_TRANSITION = "use_horizontal_route_transition"
 		const val ARG_PREF_KEY = "pref_key"
 		private const val EXTRA_UNIFIED_SOURCES_KIND = "extra_unified_sources_kind"

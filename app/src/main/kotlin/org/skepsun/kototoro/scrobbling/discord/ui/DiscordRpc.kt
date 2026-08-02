@@ -4,11 +4,14 @@ import android.content.Context
 import android.os.SystemClock
 import androidx.annotation.AnyThread
 import androidx.collection.ArrayMap
-import com.my.kizzyrpc.KizzyRPC
-import com.my.kizzyrpc.entities.presence.Activity
-import com.my.kizzyrpc.entities.presence.Assets
-import com.my.kizzyrpc.entities.presence.Metadata
-import com.my.kizzyrpc.entities.presence.Timestamps
+import coil3.ImageLoader
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import com.discord.oauth2rpc.API
+import com.discord.oauth2rpc.DiscordAssetRegistrar
+import com.discord.oauth2rpc.GatewayClient
+import com.discord.oauth2rpc.GatewayConnectOptions
+import com.discord.oauth2rpc.structures.RichPresence
 import dagger.hilt.android.ViewModelLifecycle
 import dagger.hilt.android.lifecycle.RetainedLifecycle
 import dagger.hilt.android.scopes.ViewModelScoped
@@ -24,7 +27,6 @@ import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isNsfw
-import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.lifecycleScope
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -32,6 +34,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.ui.pager.ReaderUiState
 import org.skepsun.kototoro.scrobbling.discord.data.DiscordRepository
+import java.io.File
 import java.util.Collections
 import javax.inject.Inject
 
@@ -45,6 +48,7 @@ class DiscordRpc @Inject constructor(
 	@LocalizedAppContext private val context: Context,
 	private val settings: AppSettings,
 	private val repository: DiscordRepository,
+	private val imageLoader: ImageLoader,
 	lifecycle: ViewModelLifecycle,
 ) : RetainedLifecycle.OnClearedListener {
 
@@ -53,14 +57,15 @@ class DiscordRpc @Inject constructor(
 	private val appName = context.getString(R.string.app_name)
 	private val appIcon = context.getString(R.string.app_icon_url)
 	private val mpCache = Collections.synchronizedMap(ArrayMap<String, String>())
+	private val api = API()
 	private var lastUpdate = 0L
-
-	private var rpc: KizzyRPC? = null
-
+	private var rpc: GatewayClient? = null
 	private var rpcUpdateJob: Job? = null
+	private var assetRegistrar: DiscordAssetRegistrar? = null
+	private var registrarToken: String? = null
 
 	@Volatile
-	private var lastActivity: Activity? = null
+	private var lastPresence: RichPresence? = null
 
 	init {
 		lifecycle.addOnClearedListener(this)
@@ -68,116 +73,132 @@ class DiscordRpc @Inject constructor(
 
 	override fun onCleared() {
 		clearRpc()
+		api.close()
 	}
 
 	fun clearRpc() = synchronized(this) {
-		rpc?.closeRPC()
+		rpc?.disconnect()
 		rpc = null
 		lastUpdate = 0L
 	}
 
 	fun setIdle() {
-		lastActivity?.let { activity ->
-			getRpc()?.updateRpcAsync(activity, idle = true)
-		}
+		lastPresence?.let { updateRpcAsync(it, idle = true, isNsfw = false) }
 	}
 
 	@AnyThread
 	fun updateRpc(manga: Content, state: ReaderUiState) {
-		getRpc()?.run {
-			if (settings.isDiscordRpcSkipNsfw && manga.isNsfw()) {
-				clearRpc()
-				return
-			}
-			val coverUrl = manga.largeCoverUrl?.takeIf { it.isNotBlank() }
-				?: manga.coverUrl?.takeIf { it.isNotBlank() }
-			updateRpcAsync(
-				activity = Activity(
-					applicationId = appId,
-					name = context.getString(manga.source.contentType.titleResId),
-					details = manga.title,
-					state = context.getString(R.string.chapter_d_of_d, state.chapterNumber, state.chaptersTotal),
-					type = 3,
-					timestamps = Timestamps(
-						start = lastActivity?.timestamps?.start ?: System.currentTimeMillis(),
-					),
-					assets = Assets(
-						largeImage = coverUrl,
-						largeText = context.getString(R.string.reading_s, manga.title),
-						smallText = context.getString(R.string.discord_rpc_description),
-						smallImage = appIcon,
-					),
-					buttons = listOf(
-						context.getString(R.string.read_on_s, appName),
-						context.getString(R.string.read_on_s, manga.source.getTitle(context)),
-					),
-					metadata = Metadata(listOf(manga.appUrl.toString(), manga.publicUrl)),
-				),
-				idle = false,
+		if (settings.isDiscordRpcSkipNsfw && manga.isNsfw()) {
+			clearRpc()
+			return
+		}
+		val coverUrl = manga.largeCoverUrl?.takeIf { it.isNotBlank() }
+			?: manga.coverUrl?.takeIf { it.isNotBlank() }
+		val presence = RichPresence()
+			.setApplicationId(appId)
+			.setName(appName)
+			.setDetails(manga.title)
+			.setState(context.getString(R.string.chapter_d_of_d, state.chapterNumber, state.chaptersTotal))
+			.setType(3)
+			.setStartTimestamp(lastPresence?.timestamps?.get("start") ?: System.currentTimeMillis())
+			.setAssetsLargeImage(coverUrl)
+			.setAssetsLargeText(context.getString(R.string.reading_s, manga.title))
+			.setAssetsSmallImage(appIcon)
+			.setAssetsSmallText(context.getString(R.string.discord_rpc_description))
+
+		val appButton = context.getString(R.string.read_on_s, appName)
+		val sourceButton = context.getString(R.string.read_on_s, manga.source.getTitle(context))
+		if (appButton.utf8Size() <= BUTTON_TEXT_LIMIT && sourceButton.utf8Size() <= BUTTON_TEXT_LIMIT) {
+			presence.setButtons(
+				mapOf("name" to appButton, "url" to manga.appUrl.toString()),
+				mapOf("name" to sourceButton, "url" to manga.publicUrl),
 			)
 		}
+		updateRpcAsync(presence, idle = false, isNsfw = manga.isNsfw())
 	}
 
-	private fun KizzyRPC.updateRpcAsync(activity: Activity, idle: Boolean) {
-		val prevJob = rpcUpdateJob
+	private fun updateRpcAsync(
+		presence: RichPresence,
+		idle: Boolean,
+		isNsfw: Boolean,
+	) {
+		val previousJob = rpcUpdateJob
 		rpcUpdateJob = coroutineScope.launch {
-			prevJob?.cancelAndJoin()
+			previousJob?.cancelAndJoin()
 			val debounceTime = lastUpdate + DEBOUNCE_TIMEOUT - SystemClock.elapsedRealtime()
-			if (debounceTime > 0) {
-				delay(debounceTime)
+			if (debounceTime > 0) delay(debounceTime)
+			launch { getRpc() }
+			presence.setAssetsLargeImage(presence.assets["largeImage"]?.toMediaProxyUrl(isNsfw))
+			presence.setAssetsSmallImage(presence.assets["smallImage"]?.toMediaProxyUrl(false))
+			lastPresence = presence
+			getRpc()?.let { client ->
+				client.send(
+					3,
+					mutableMapOf<String, Any?>(
+						"activities" to listOf(presence.toJSON()),
+						"status" to if (idle) STATUS_IDLE else STATUS_ONLINE,
+						"since" to (presence.timestamps?.get("start") ?: System.currentTimeMillis()),
+						"afk" to idle,
+					),
+				)
+				lastUpdate = SystemClock.elapsedRealtime()
 			}
-			val hideButtons = activity.buttons?.any { it != null && it.utf8Size() > BUTTON_TEXT_LIMIT } ?: false
-			val mappedActivity = activity.copy(
-				assets = activity.assets?.let {
-					it.copy(
-						largeImage = it.largeImage?.toMediaProxyUrl(),
-						smallImage = it.smallImage?.toMediaProxyUrl(),
-					)
-				},
-				buttons = activity.buttons.takeUnless { hideButtons },
-				metadata = activity.metadata.takeUnless { hideButtons },
-			)
-			lastActivity = mappedActivity
-			updateRPC(
-				activity = mappedActivity,
-				status = if (idle) STATUS_IDLE else STATUS_ONLINE,
-				since = activity.timestamps?.start ?: System.currentTimeMillis(),
-			)
-			lastUpdate = SystemClock.elapsedRealtime()
 		}
 	}
 
-	suspend fun String.toMediaProxyUrl(): String? {
-		if (repository.isMediaProxyUrl(this)) {
-			return this
-		}
-		mpCache[this]?.let {
-			return it
-		}
-		return runCatchingCancellable {
-			repository.getMediaProxyUrl(this)
+	private suspend fun String.toMediaProxyUrl(isNsfw: Boolean): String? {
+		if (repository.isMediaProxyUrl(this)) return this
+		return mpCache[this] ?: runCatchingCancellable {
+			val upload = getCacheFile(this)?.let { repository.getMediaProxyUrl(it) }
+			getRegistrar()?.resolve(upload ?: this, if (isNsfw) 1 else 0)
 		}.onSuccess { url ->
-			mpCache[this] = url
+			url?.let { mpCache[this] = it }
 		}.onFailure {
 			it.printStackTraceDebug()
 		}.getOrNull()
 	}
 
-	private fun getRpc(): KizzyRPC? {
-		rpc?.let {
-			return it
+	private suspend fun getCacheFile(url: String): File? {
+		var snapshot = imageLoader.diskCache?.openSnapshot(url)
+		if (snapshot == null) {
+			val result = imageLoader.execute(ImageRequest.Builder(context).data(url).build())
+			if (result is SuccessResult) snapshot = imageLoader.diskCache?.openSnapshot(url)
 		}
-		return synchronized(this) {
-			rpc?.let {
-				return@synchronized it
+		return snapshot?.use { File(it.data.toString()) }
+	}
+
+	private fun getRpc(): GatewayClient? = rpc ?: synchronized(this) {
+		rpc ?: settings.discordToken
+			?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+			?.takeIf { settings.isDiscordRpcEnabled }
+			?.let { token ->
+				GatewayClient().apply {
+					onReady = { lastPresence?.let { updateRpcAsync(it, idle = false, isNsfw = false) } }
+					onResumed = { lastPresence?.let { updateRpcAsync(it, idle = false, isNsfw = false) } }
+					coroutineScope.launch {
+						try {
+							var currentToken = token
+							runCatching { repository.checkToken(currentToken) }.onFailure {
+								repository.refreshToken()
+								currentToken = settings.discordToken ?: token
+							}
+							connect(GatewayConnectOptions(token = currentToken))
+						} catch (e: Exception) {
+							e.printStackTraceDebug()
+							clearRpc()
+						}
+					}
+				}
 			}
-			if (settings.isDiscordRpcEnabled) {
-				settings.discordToken?.let { KizzyRPC(it) }
-			} else {
-				null
-			}.also {
-				rpc = it
-			}
+			.also { rpc = it }
+	}
+
+	private fun getRegistrar(): DiscordAssetRegistrar? {
+		val token = settings.discordToken ?: return null
+		if (assetRegistrar == null || registrarToken != token) {
+			registrarToken = token
+			assetRegistrar = DiscordAssetRegistrar(api, appId, token)
 		}
+		return assetRegistrar
 	}
 }

@@ -1,81 +1,70 @@
 package org.skepsun.kototoro.scrobbling.discord.ui
 
+import android.content.Intent
 import android.os.Bundle
-import android.view.MenuItem
-import android.webkit.CookieManager
-import android.webkit.WebStorage
+import androidx.activity.ComponentActivity
+import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
-import org.skepsun.kototoro.browser.BaseBrowserActivity
-import org.skepsun.kototoro.core.parser.ParserContentRepository
-import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.parsers.model.ContentSource
+import kotlinx.coroutines.launch
+import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.scrobbling.discord.data.DiscordRepository
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class DiscordAuthActivity : BaseBrowserActivity(), DiscordTokenWebClient.Callback {
+class DiscordAuthActivity : ComponentActivity() {
 
 	@Inject
-	lateinit var settings: AppSettings
+	lateinit var repository: DiscordRepository
 
-	override fun onCreate2(
-		savedInstanceState: Bundle?,
-		source: ContentSource,
-		repository: ParserContentRepository?
-	) {
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		browserWebView.settings.userAgentString = USER_AGENT
-		browserWebView.webViewClient = DiscordTokenWebClient(this)
-		if (savedInstanceState == null) {
-			resetDiscordWebSession()
-			browserWebView.loadUrl(BASE_URL)
+	override fun onCreate(savedInstanceState: Bundle?) {
+		super.onCreate(savedInstanceState)
+		handleIntent(intent)
+	}
+
+	override fun onNewIntent(intent: Intent) {
+		super.onNewIntent(intent)
+		setIntent(intent)
+		handleIntent(intent)
+	}
+
+	private fun handleIntent(intent: Intent) {
+		val data = intent.data
+		if (data?.scheme == REDIRECT_SCHEME && data.host == REDIRECT_HOST) {
+			val code = data.getQueryParameter("code")
+			if (code == null) {
+				finish()
+				return
+			}
+			lifecycleScope.launch {
+				runCatching { repository.authorize(code) }
+					.onSuccess {
+						setResult(RESULT_OK)
+					}
+					.onFailure { it.printStackTraceDebug() }
+				finish()
+			}
+		} else {
+			startAuth()
 		}
 	}
 
-	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-		android.R.id.home -> {
-			browserWebView.stopLoading()
-			finishAfterTransition()
-			true
+	private fun startAuth() {
+		val authIntent = Intent(Intent.ACTION_VIEW, repository.oauthUrl.toUri())
+		try {
+			startActivity(authIntent)
+		} catch (_: Exception) {
+			authIntent.data = repository.oauthFallbackUrl.toUri()
+			runCatching { startActivity(authIntent) }
+				.onFailure {
+					it.printStackTraceDebug()
+					finish()
+				}
 		}
-
-		else -> super.onOptionsItemSelected(item)
-	}
-
-	override fun onTokenObtained(token: String) {
-		settings.discordToken = token
-		setResult(RESULT_OK)
-		finish()
-	}
-
-	private fun resetDiscordWebSession() {
-		browserWebView.stopLoading()
-		browserWebView.clearHistory()
-		browserWebView.clearCache(true)
-		browserWebView.evaluateJavascript(
-			"""
-			(function() {
-				try { window.localStorage.removeItem('token'); } catch (e) {}
-				try { window.sessionStorage.removeItem('token'); } catch (e) {}
-			})();
-			""".trimIndent(),
-			null,
-		)
-
-		val webStorage = WebStorage.getInstance()
-		runCatching { webStorage.deleteOrigin(DISCORD_ORIGIN) }
-		runCatching { webStorage.deleteOrigin(DISCORD_WWW_ORIGIN) }
-
-		val cookieManager = CookieManager.getInstance()
-		cookieManager.removeSessionCookies(null)
-		cookieManager.removeAllCookies(null)
-		cookieManager.flush()
 	}
 
 	private companion object {
-
-		const val BASE_URL = "https://discord.com/login"
-		private const val DISCORD_ORIGIN = "https://discord.com"
-		private const val DISCORD_WWW_ORIGIN = "https://www.discord.com"
-		private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; SM-S921U; Build/UP1A.231005.007) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.363"
+		const val REDIRECT_SCHEME = "kototoro"
+		const val REDIRECT_HOST = "discord-auth"
 	}
 }

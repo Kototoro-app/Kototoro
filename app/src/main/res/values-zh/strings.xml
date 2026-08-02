@@ -770,14 +770,14 @@
     <string name="disabled">禁用</string>
     <string name="discard">放弃</string>
     <string name="discord">Discord</string>
-    <string name="discord_logout_summary">清除已保存的 Discord Token，并退出内置 Discord 会话。</string>
+    <string name="discord_logout_summary">清除已保存的 Discord 授权</string>
     <string name="discord_rpc">绑定 Discord 状态</string>
     <string name="discord_rpc_description">正在 Kototoro - 一个漫画阅读软件上阅读漫画</string>
     <string name="discord_rpc_summary">在 Discord 个人信息栏内显示你的阅读状态</string>
     <string name="discord_token">Discord Token</string>
     <string name="discord_token_description">输入你的 Discord Token 或者点击 %s 打开内置浏览器获取 Token</string>
     <string name="discord_token_hint">在这里复制你的 Discord Token</string>
-    <string name="discord_token_summary">在这里输入你的 Discord Token 来绑定 Discord 状态</string>
+    <string name="discord_token_summary">使用 Discord 登录以启用富状态</string>
     <string name="discover">发现</string>
     <string name="discover_empty_anilist_airing_text">AniList 没有该日期的播出条目，请尝试其他日期。</string>
     <string name="discover_empty_anilist_airing_title">AniList 当日无播出安排</string>

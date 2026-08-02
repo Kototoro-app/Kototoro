@@ -1263,7 +1263,7 @@
     <string name="error_corrupted_zip">损坏的 ZIP 文件 (%s)</string>
     <string name="discord_rpc">绑定 Discord 状态</string>
     <string name="discord_token">Discord Token</string>
-    <string name="discord_token_summary">在这里输入你的 Discord Token 来绑定 Discord 状态</string>
+    <string name="discord_token_summary">使用 Discord 登录以启用富状态</string>
     <string name="discord_token_description">输入你的 Discord Token 或者点击 %s 打开内置浏览器获取 Token</string>
     <string name="discord_token_hint">在这里复制你的 Discord Token</string>
     <string name="discord_rpc_summary">在 Discord 个人信息栏内显示你的阅读状态</string>
@@ -2096,7 +2096,7 @@
     <string name="reader_translation_languages_swapped">语言已交换：%1$s → %2$s</string>
     <string name="reader_translation_swap_auto_unsupported">交换前请先设置固定源语言</string>
     <string name="reader_translation_render_pending">正在生成翻译图层…</string>
-    <string name="discord_logout_summary">清除已保存的 Discord Token，并退出内置 Discord 会话。</string>
+    <string name="discord_logout_summary">清除已保存的 Discord 授权</string>
     <string name="webdav_integration">WebDAV 备份</string>
     <string name="send_backups_webdav">上传备份到 WebDAV</string>
     <string name="webdav_server_url">WebDAV 服务器 URL</string>

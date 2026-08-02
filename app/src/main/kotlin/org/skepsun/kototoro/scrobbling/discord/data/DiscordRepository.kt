@@ -4,22 +4,16 @@ import android.content.Context
 import dagger.Reusable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.internal.closeQuietly
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.network.CommonHeaders
@@ -27,76 +21,139 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.ensureSuccess
 import org.skepsun.kototoro.parsers.util.await
 import org.skepsun.kototoro.parsers.util.parseRaw
+import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 
 private const val SCHEME_MP = "mp:"
+private const val REDIRECT_URI = "kototoro://discord-auth"
 
 @Reusable
 class DiscordRepository @Inject constructor(
-	@ApplicationContext private val context: Context,
+	@ApplicationContext context: Context,
 	private val settings: AppSettings,
 	@BaseHttpClient private val httpClient: OkHttpClient,
 ) {
 
 	private val appId = context.getString(R.string.discord_app_id)
 
-	suspend fun getMediaProxyUrl(url: String): String? {
-		if (isMediaProxyUrl(url)) {
-			return url
-		}
-		val token = checkNotNull(settings.discordToken) {
-			"Discord token is missing"
-		}
-		val payload = buildJsonObject {
-			put("urls", buildJsonArray { add(JsonPrimitive(url)) })
-		}.toString()
-		val request = Request.Builder()
-			.url("https://discord.com/api/v10/applications/${appId}/external-assets")
-			.header(CommonHeaders.AUTHORIZATION, token)
-			.post(payload.toRequestBody("application/json".toMediaType()))
+	suspend fun getMediaProxyUrl(file: File): String? {
+		val requestBody = MultipartBody.Builder()
+			.setType(MultipartBody.FORM)
+			.addFormDataPart("reqtype", "fileupload")
+			.addFormDataPart("time", "24h")
+			.addFormDataPart(
+				"fileToUpload",
+				file.name,
+				file.asRequestBody("image/*".toMediaTypeOrNull()),
+			)
 			.build()
-		val response = httpClient.newCall(request).await()
-		response.ensureSuccess()
-		val body = response.parseRaw()
-		when (val json = Json.parseToJsonElement(body)) {
-			is JsonObject -> throw RuntimeException(json.jsonObject["message"]?.jsonPrimitive?.content)
-			is JsonArray -> {
-				val externalAssetPath = json.firstOrNull()
-					?.jsonObject
-					?.get("external_asset_path")
-					?.jsonPrimitive
-					?.contentOrNull
-				return externalAssetPath?.let { SCHEME_MP + it }
-			}
-			else -> throw RuntimeException("Unexpected response: $json")
+		val request = Request.Builder()
+			.url("https://litterbox.catbox.moe/resources/internals/api.php")
+			.post(requestBody)
+			.build()
+		var response: okhttp3.Response? = null
+		return try {
+			response = httpClient.newCall(request).await()
+			if (response.isSuccessful) response.parseRaw().trim() else null
+		} catch (_: Exception) {
+			null
+		} finally {
+			response?.closeQuietly()
 		}
 	}
 
 	fun isMediaProxyUrl(url: String) = url.startsWith(SCHEME_MP)
 
-	suspend fun checkToken(token: String) {
+	suspend fun checkToken(token: String): String {
 		val request = Request.Builder()
 			.url("https://discord.com/api/v10/users/@me")
 			.header(CommonHeaders.AUTHORIZATION, token)
 			.get()
 			.build()
-		val response = httpClient.newCall(request).await()
-		response.ensureSuccess()
-		val bodyStr = response.parseRaw()
-		val json = Json.parseToJsonElement(bodyStr)
-		if (json is JsonObject) {
-			val username = json["username"]?.jsonPrimitive?.content
-			val userId = json["id"]?.jsonPrimitive?.content
-			if (username == "hxncvxz" || userId == "1387363544768450650") {
-				androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
-					.edit()
-					.putBoolean("legacy_compat_mode_fallback", true)
-					.apply()
-				Handler(Looper.getMainLooper()).post {
-					Toast.makeText(context, "Vibecoders don't serve ungrateful users. Fix the RPC yourself.", Toast.LENGTH_LONG).show()
-				}
-				throw RuntimeException("AI cannot vibe away your issues.")
+		val response = httpClient.newCall(request).await().ensureSuccess()
+		val raw = try {
+			response.parseRaw()
+		} finally {
+			response.closeQuietly()
+		}
+		val json = Json.parseToJsonElement(raw).jsonObject
+		return json["global_name"]?.jsonPrimitive?.contentOrNull
+			?: json["username"]?.jsonPrimitive?.contentOrNull
+			.orEmpty()
+	}
+
+	val oauthUrl: String
+		get() {
+			val verifier = UUID.randomUUID().toString() + UUID.randomUUID().toString()
+			settings.discordCodeVerifier = verifier
+			return "discord://action/oauth2/authorize?client_id=$appId" +
+				"&scope=openid%20sdk.social_layer_presence" +
+				"&response_type=code" +
+				"&code_challenge=${generateDiscordCodeChallenge(verifier)}" +
+				"&code_challenge_method=S256" +
+				"&redirect_uri=$REDIRECT_URI"
+		}
+
+	val oauthFallbackUrl: String
+		get() = "https://discord.com/oauth2/authorize?client_id=$appId" +
+			"&scope=openid%20sdk.social_layer_presence" +
+			"&response_type=code" +
+			"&redirect_uri=$REDIRECT_URI" +
+			"&code_challenge=${generateDiscordCodeChallenge(settings.discordCodeVerifier.orEmpty())}" +
+			"&code_challenge_method=S256"
+
+	suspend fun authorize(code: String) {
+		val verifier = checkNotNull(settings.discordCodeVerifier) { "Discord code verifier is missing" }
+		val request = Request.Builder()
+			.url("https://discord.com/api/v10/oauth2/token")
+			.post(
+				FormBody.Builder()
+					.add("client_id", appId)
+					.add("grant_type", "authorization_code")
+					.add("code", code)
+					.add("redirect_uri", REDIRECT_URI)
+					.add("code_verifier", verifier)
+					.build(),
+			)
+			.build()
+		storeTokenResponse(executeTokenRequest(request))
+		settings.discordCodeVerifier = null
+	}
+
+	suspend fun refreshToken() {
+		val refreshToken = checkNotNull(settings.discordRefreshToken) { "Discord refresh token is missing" }
+		val request = Request.Builder()
+			.url("https://discord.com/api/v10/oauth2/token")
+			.post(
+				FormBody.Builder()
+					.add("client_id", appId)
+					.add("grant_type", "refresh_token")
+					.add("refresh_token", refreshToken)
+					.build(),
+			)
+			.build()
+		storeTokenResponse(executeTokenRequest(request), refreshToken)
+	}
+
+	private suspend fun executeTokenRequest(request: Request) =
+		httpClient.newCall(request).await().ensureSuccess().let { response ->
+			try {
+				Json.parseToJsonElement(response.parseRaw()).jsonObject
+			} finally {
+				response.closeQuietly()
 			}
 		}
+
+	private fun storeTokenResponse(
+		json: kotlinx.serialization.json.JsonObject,
+		fallbackRefreshToken: String? = null,
+	) {
+		val accessToken = checkNotNull(json["access_token"]?.jsonPrimitive?.contentOrNull) {
+			"Discord access token is missing"
+		}
+		val tokenType = json["token_type"]?.jsonPrimitive?.contentOrNull ?: "Bearer"
+		settings.discordToken = "$tokenType $accessToken"
+		settings.discordRefreshToken = json["refresh_token"]?.jsonPrimitive?.contentOrNull ?: fallbackRefreshToken
 	}
 }

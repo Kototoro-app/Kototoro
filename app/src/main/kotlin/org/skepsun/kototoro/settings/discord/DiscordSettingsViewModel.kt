@@ -41,7 +41,7 @@ class DiscordSettingsViewModel @Inject constructor(
 				if (token == null) {
 					TokenState.EMPTY to null
 				} else {
-					TokenState.VALID to token
+					TokenState.VALID to null
 				},
 			)
 			return@flow
@@ -50,18 +50,20 @@ class DiscordSettingsViewModel @Inject constructor(
 			emit(TokenState.REQUIRED to null)
 			return@flow
 		}
-		emit(TokenState.CHECKING to token)
-		if (validateToken(token)) {
-			emit(TokenState.VALID to token)
-		} else {
-			emit(TokenState.INVALID to token)
+		if (!token.startsWith("Bearer ", ignoreCase = true)) {
+			emit(TokenState.INVALID to null)
+			return@flow
 		}
+		emit(TokenState.CHECKING to null)
+		runCatchingCancellable { repository.checkToken(token) }.fold(
+			onSuccess = { username -> emit(TokenState.VALID to username) },
+			onFailure = {
+				if (it.isNetworkError()) {
+					emit(TokenState.VALID to null)
+				} else {
+					emit(TokenState.INVALID to null)
+				}
+			},
+		)
 	}
-
-	private suspend fun validateToken(token: String) = runCatchingCancellable {
-		repository.checkToken(token)
-	}.fold(
-		onSuccess = { true },
-		onFailure = { it.isNetworkError() },
-	)
 }

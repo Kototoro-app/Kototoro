@@ -1696,6 +1696,20 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getString(KEY_DISCORD_TOKEN, null)?.trim()?.nullIfEmpty()
 		set(value) = prefs.edit { putString(KEY_DISCORD_TOKEN, value?.nullIfEmpty()) }
 
+	var discordRefreshToken: String?
+		get() = prefs.getString(KEY_DISCORD_REFRESH_TOKEN, null)?.trim()?.nullIfEmpty()
+		set(value) = prefs.edit { putString(KEY_DISCORD_REFRESH_TOKEN, value?.nullIfEmpty()) }
+
+	var discordCodeVerifier: String?
+		get() = prefs.getString(KEY_DISCORD_CODE_VERIFIER, null)
+		set(value) = prefs.edit {
+			if (value == null) {
+				remove(KEY_DISCORD_CODE_VERIFIER)
+			} else {
+				putString(KEY_DISCORD_CODE_VERIFIER, value)
+			}
+		}
+
 	val isPeriodicalBackupEnabled: Boolean
 		get() = isBackupWebDavUploadEnabled
 
@@ -2538,6 +2552,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_DISCORD_RPC = "discord_rpc"
 		const val KEY_DISCORD_RPC_SKIP_NSFW = "discord_rpc_skip_nsfw"
 		const val KEY_DISCORD_TOKEN = "discord_token"
+		const val KEY_DISCORD_REFRESH_TOKEN = "discord_refresh_token"
+		const val KEY_DISCORD_CODE_VERIFIER = "discord_code_verifier"
 		const val KEY_SELECTED_GROUP_TAB = "selected_group_tab"
 		const val KEY_SELECTED_SOURCE_FILTER = "selected_source_filter"
 		const val KEY_SELECTED_SOURCE_TAGS = "selected_source_tags"

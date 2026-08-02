@@ -58,7 +58,7 @@ fun DiscordSettingsScreen(
                 )
                 SettingsSectionDivider()
                 SettingsActionPreference(
-                    title = stringResource(R.string.discord_token),
+                    title = stringResource(R.string.sign_in),
                     summary = tokenSummary ?: stringResource(R.string.discord_token_summary),
                     enabled = isEnabled,
                     onClick = onTokenClick,

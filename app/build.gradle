@@ -420,7 +420,9 @@ configurations.all {
 	implementation libs.telephoto.zoomable.image.coil3
 	implementation libs.disk.lru.cache
 	implementation libs.markwon
-	implementation libs.kizzyrpc
+	implementation(libs.usagi.rpc) {
+		exclude group: 'org.json', module: 'json'
+	}
 	implementation libs.ucrop
 
 	// EPUB support for Novelia Wenku
