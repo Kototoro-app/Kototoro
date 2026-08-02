@@ -2306,7 +2306,10 @@ private fun BoxScope.MainBottomChrome(
                 continueReadingCoverModel = resumeCoverModel,
             )
         }
-        if (LocalBackgroundStyle.current == BackgroundStyle.ELEVATED_CONTAINERS) {
+        if (
+            LocalBackgroundStyle.current == BackgroundStyle.ELEVATED_CONTAINERS &&
+            !isLandscapeNavigation
+        ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,

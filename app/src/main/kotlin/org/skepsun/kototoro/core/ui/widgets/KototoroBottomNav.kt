@@ -152,24 +152,10 @@ fun KototoroBottomNav(
     val floatingVerticalPadding by androidx.compose.animation.core.animateDpAsState(
         if (isFloating && !useNavigationRail) 16.dp else 0.dp,
     )
-    val railHorizontalPadding by androidx.compose.animation.core.animateDpAsState(
-        if (isFloating && useNavigationRail) 12.dp else 0.dp,
-    )
-    val railVerticalPadding by androidx.compose.animation.core.animateDpAsState(
-        if (isFloating && useNavigationRail) 18.dp else 0.dp,
-    )
-
     val navBarModifier = Modifier
         .then(
             if (useNavigationRail) {
-                Modifier
-                    .fillMaxHeight()
-                    .padding(
-                        start = railHorizontalPadding + railStartInset,
-                        end = railHorizontalPadding + railEndInset,
-                        top = railVerticalPadding + statusBarTopPadding,
-                        bottom = railVerticalPadding + railBottomInset,
-                    )
+                Modifier.fillMaxHeight()
             } else {
                 Modifier
                     .fillMaxWidth()
@@ -198,11 +184,7 @@ fun KototoroBottomNav(
     )
     val nonFloatingContentHorizontalPadding = 6.dp
     val nonFloatingTopPadding = 4.dp
-    val railWidth = if (isFloating) {
-        (navFloatingHeight + 4).dp.coerceIn(60.dp, 160.dp)
-    } else {
-        navHeight.dp.coerceIn(60.dp, 160.dp)
-    }
+    val railWidth = navHeight.dp.coerceIn(80.dp, 160.dp)
 
     val navContainerStyle = if (isFloating) {
         GlassDefaults.bottomBarChromeStyle().copy(
@@ -218,15 +200,11 @@ fun KototoroBottomNav(
     val navBackdrop = LocalLiquidGlassBackdrop.current
 
     if (useNavigationRail) {
-        MainNavBottomContainer(
-            modifier = navBarModifier.mainNavBackdrop(
-                shape = RoundedCornerShape(24.dp),
-                enabled = isIosStyle,
-                backdrop = navBackdrop,
-            ),
-            style = navContainerStyle,
-            shape = RoundedCornerShape(24.dp),
-            useBackdrop = isIosStyle,
+        Surface(
+            modifier = navBarModifier,
+            color = NavigationRailDefaults.ContainerColor,
+            contentColor = contentColorFor(NavigationRailDefaults.ContainerColor),
+            tonalElevation = 3.dp,
         ) {
             NavigationRail(
                 containerColor = Color.Transparent,
@@ -234,8 +212,10 @@ fun KototoroBottomNav(
                     .fillMaxHeight()
                     .width(railWidth)
                     .padding(
-                        horizontal = if (isFloating) 6.dp else 0.dp,
-                        vertical = if (isFloating) 10.dp else 0.dp,
+                        start = railStartInset,
+                        end = railEndInset,
+                        top = statusBarTopPadding,
+                        bottom = railBottomInset,
                     ),
                 windowInsets = WindowInsets(0),
             ) {
@@ -261,7 +241,7 @@ fun KototoroBottomNav(
                                 iconRes = continueReadingIconRes,
                                 contentDescriptionRes = continueReadingContentDescriptionRes,
                                 coverModel = continueReadingCoverModel,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(vertical = 4.dp),
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                         }
@@ -540,19 +520,17 @@ private fun ContinueReadingRailButton(
     coverModel: Any?,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(14.dp)
     Surface(
         onClick = onClick,
         modifier = modifier
-            .fillMaxWidth()
-            .wrapContentHeight(),
+            .size(52.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = RoundedCornerShape(18.dp),
+        shape = shape,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
             if (coverModel != null) {
