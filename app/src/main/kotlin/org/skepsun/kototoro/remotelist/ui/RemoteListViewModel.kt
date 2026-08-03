@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 import org.skepsun.kototoro.core.model.distinctById
 import org.skepsun.kototoro.core.model.isLocal
@@ -28,6 +29,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.getCauseUrl
@@ -85,7 +87,12 @@ open class RemoteListViewModel @Inject constructor(
 	private var lastRequestedPageIndex: Int = 0
 
 	override val content = combine(
-		mangaList.map { it?.skipNsfwIfNeeded() },
+		combine(
+			mangaList,
+			settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { globalTagBlacklist },
+		) { list, blacklistedTags ->
+			list?.skipNsfwIfNeeded()?.let(GlobalTagBlacklist(blacklistedTags)::filter)
+		},
 		observeListModeWithTriggers(),
 		listError,
 		hasNextPage,

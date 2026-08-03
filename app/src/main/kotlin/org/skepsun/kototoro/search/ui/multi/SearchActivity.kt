@@ -39,6 +39,7 @@ class SearchActivity : BaseComposeActivity() {
 						}
 					},
 					onManageLanguagePresets = router::openSourcePresets,
+					onOpenGlobalTagBlacklist = router::openGlobalTagBlacklist,
 					onSubmitSearch = { query, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->
 						router.openSearch(
 							query = query,

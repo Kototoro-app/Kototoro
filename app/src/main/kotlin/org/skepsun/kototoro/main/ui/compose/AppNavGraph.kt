@@ -552,6 +552,7 @@ fun AppNavGraph(
                                 }
                             },
                             onManageLanguagePresets = appRouter::openSourcePresets,
+                            onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                             onSubmitSearch = { query, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->
                                 onOpenSearch(
                                     SearchNavigationRequest(

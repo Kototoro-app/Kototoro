@@ -64,6 +64,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -483,7 +484,9 @@ class HistoryListViewModel @Inject constructor(
 		}
 
 		val hideAdult = settings.isHistoryExcludeNsfw
-		val visibleItems = if (hideAdult) filteredList.filterNot { it.manga.isNsfw() } else filteredList
+		val adultFilteredItems = if (hideAdult) filteredList.filterNot { it.manga.isNsfw() } else filteredList
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		val visibleItems = adultFilteredItems.filterNot { it.manga in globalTagBlacklist }
 
 		if (visibleItems.isEmpty()) {
 			groupedHistoryIds = emptyMap()
@@ -568,7 +571,13 @@ class HistoryListViewModel @Inject constructor(
 			val originMatches = if (sourceTags.isEmpty()) true else sourceTags.any { it.matches(contentGroup, originGroup) }
 			groupMatches && originMatches
 		}
-		val visibleItems = if (settings.isHistoryExcludeNsfw) filteredList.filterNot { it.manga.isNsfw() } else filteredList
+		val adultFilteredItems = if (settings.isHistoryExcludeNsfw) {
+			filteredList.filterNot { it.manga.isNsfw() }
+		} else {
+			filteredList
+		}
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		val visibleItems = adultFilteredItems.filterNot { it.manga in globalTagBlacklist }
 		if (visibleItems.isEmpty()) {
 			return listOf(getEmptyState(hasFilters = false))
 		}

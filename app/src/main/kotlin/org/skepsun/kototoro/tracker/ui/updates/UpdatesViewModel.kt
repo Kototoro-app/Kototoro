@@ -35,6 +35,7 @@ import org.skepsun.kototoro.tracker.domain.UpdatesListQuickFilter
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import javax.inject.Inject
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import kotlinx.coroutines.flow.SharedFlow
@@ -219,7 +220,9 @@ class UpdatesViewModel @Inject constructor(
 		}
 
 		val hideAdult = settings.isTrackerNsfwDisabled
-		val visibleList = if (hideAdult) filteredList.filterNot { it.manga.isNsfw() } else filteredList
+		val adultFilteredList = if (hideAdult) filteredList.filterNot { it.manga.isNsfw() } else filteredList
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		val visibleList = adultFilteredList.filterNot { it.manga in globalTagBlacklist }
 
 		if (visibleList.isEmpty()) {
 			groupedRemovalIds = emptyMap()

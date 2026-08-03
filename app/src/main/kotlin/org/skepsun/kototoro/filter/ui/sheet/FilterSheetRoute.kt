@@ -73,6 +73,8 @@ import org.skepsun.kototoro.parsers.model.Demographic
 import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.parsers.model.YEAR_MIN
 import org.skepsun.kototoro.parsers.model.YEAR_UNKNOWN
+import org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistActivity
+import org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistStatus
 import java.util.Locale
 import java.util.TreeSet
 
@@ -97,6 +99,7 @@ fun FilterSheetRoute(
     val demographicsProperty by filter.demographics.collectAsStateWithLifecycle()
     val yearProperty by filter.year.collectAsStateWithLifecycle()
     val yearRangeProperty by filter.yearRange.collectAsStateWithLifecycle()
+    val globalTagBlacklist by filter.globalTagBlacklist.collectAsStateWithLifecycle()
     var pendingSaveName by remember { mutableStateOf<String?>(null) }
     var pendingRenameFilter by remember { mutableStateOf<PersistableFilter?>(null) }
     var pendingOverwriteName by remember { mutableStateOf<String?>(null) }
@@ -125,6 +128,7 @@ fun FilterSheetRoute(
         demographicsProperty = demographicsProperty,
         yearProperty = yearProperty,
         yearRangeProperty = yearRangeProperty,
+        blacklistedTagCount = globalTagBlacklist.size,
         isSaveEnabled = snapshot.listFilter.isNotEmpty() && savedFiltersProperty.selectedItems.isEmpty(),
         isEmbedded = isEmbedded,
         onDismiss = onDismiss,
@@ -155,6 +159,10 @@ fun FilterSheetRoute(
         onSetSavedFilterAutoEnabled = { id, enabled -> filter.setSavedFilterAutoEnabled(id, enabled) },
         onTextInputTagClick = { pendingTextInputTag = it },
         onOpenTagCatalog = onOpenTagCatalog,
+        onOpenGlobalTagBlacklist = {
+            onDismiss()
+            context.startActivity(GlobalTagBlacklistActivity.newIntent(context))
+        },
         resolveSortOrderLabel = { sourceName, order ->
             resolveSortOrderLabel(sourceName, order, context::getString)
         },
@@ -379,6 +387,7 @@ private fun FilterSheetContent(
     demographicsProperty: FilterProperty<Demographic>,
     yearProperty: FilterProperty<Int>,
     yearRangeProperty: FilterProperty<Int>,
+    blacklistedTagCount: Int,
     isSaveEnabled: Boolean,
     isEmbedded: Boolean,
     onDismiss: () -> Unit,
@@ -401,6 +410,7 @@ private fun FilterSheetContent(
     onSetSavedFilterAutoEnabled: (Int, Boolean) -> Unit,
     onTextInputTagClick: (ContentTag) -> Unit,
     onOpenTagCatalog: (String?, Boolean) -> Unit,
+    onOpenGlobalTagBlacklist: () -> Unit,
     resolveSortOrderLabel: (String, SortOrder) -> String,
     resolveErrorMessage: (Throwable?) -> String?,
     resolveLocaleLabel: (Locale?) -> String,
@@ -432,6 +442,11 @@ private fun FilterSheetContent(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            GlobalTagBlacklistStatus(
+                blacklistedTagCount = blacklistedTagCount,
+                onClick = onOpenGlobalTagBlacklist,
+            )
+
             FilterSection(
                 title = LocalContext.current.getString(R.string.sort_order),
                 errorMessage = resolveErrorMessage(sortOrderProperty.error),
@@ -1164,20 +1179,20 @@ private fun FilterSection(
         return
     }
     Surface(
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 2.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             when {
                 errorMessage != null -> {
@@ -1205,8 +1220,8 @@ private fun CompactFilterChipFlow(
     content: @Composable () -> Unit,
 ) {
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         content()
     }
@@ -1223,9 +1238,9 @@ private fun CompactFilterChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.heightIn(min = 26.dp),
+        modifier = modifier.heightIn(min = 36.dp),
         label = {
-            androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelSmall) {
+            androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge) {
                 label()
             }
         },

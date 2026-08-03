@@ -227,6 +227,10 @@
 			</intent-filter>
 		</activity>
 		<activity
+			android:name="org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistActivity"
+			android:exported="false"
+			android:label="@string/blacklisted_tags" />
+		<activity
 			android:name="org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesActivity"
 			android:exported="true"
 			android:label="@string/extension_management">

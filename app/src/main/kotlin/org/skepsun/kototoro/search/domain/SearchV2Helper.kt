@@ -4,6 +4,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -124,6 +125,10 @@ class SearchV2Helper @AssistedInject constructor(
 	private fun MutableList<Content>.postFilter(query: String, kind: SearchKind, advanced: AdvancedSearchParams? = null) {
 		if (settings.isNsfwContentDisabled) {
 			removeAll { it.isNsfw() }
+		}
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		if (!globalTagBlacklist.isEmpty) {
+			removeAll { it in globalTagBlacklist }
 		}
 		when (kind) {
 			SearchKind.TITLE -> retainAll { m ->

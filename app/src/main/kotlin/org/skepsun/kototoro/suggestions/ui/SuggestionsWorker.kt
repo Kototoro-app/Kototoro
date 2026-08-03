@@ -43,6 +43,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.model.distinctById
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.isNsfw
@@ -185,6 +186,7 @@ class SuggestionsWorker @AssistedInject constructor(
 			return 0
 		}
 		val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
+		val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
 		val whitelistTags = appSettings.suggestionsTagsWhitelist.toList()
 		val tags = (whitelistTags + seed.flatMap { it.tags.map { x -> x.title } }.takeMostFrequent(10)).distinct()
 
@@ -194,6 +196,7 @@ class SuggestionsWorker @AssistedInject constructor(
 			},
 		) { source -> getList(source, tags, tagsBlacklist) }
 		val suggestions = rawResults
+			.filterNot { it in globalTagBlacklist }
 			.map { manga ->
 				ContentSuggestion(
 					manga = manga,
@@ -229,6 +232,9 @@ class SuggestionsWorker @AssistedInject constructor(
 						continue
 					}
 					if (details in tagsBlacklist) {
+						continue
+					}
+					if (details in globalTagBlacklist) {
 						continue
 					}
 					showNotification(details)
@@ -296,6 +302,10 @@ class SuggestionsWorker @AssistedInject constructor(
 		}
 		if (blacklist.isNotEmpty()) {
 			list.removeAll { manga -> manga in blacklist }
+		}
+		val globalTagBlacklist = GlobalTagBlacklist(appSettings.globalTagBlacklist)
+		if (!globalTagBlacklist.isEmpty) {
+			list.removeAll { manga -> manga in globalTagBlacklist }
 		}
 		list.shuffle()
 		list.take(MAX_SOURCE_RESULTS)

@@ -24,6 +24,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.lifecycleScope
 import org.skepsun.kototoro.core.util.ext.sortedByOrdinal
@@ -60,6 +62,7 @@ class FilterCoordinator @Inject constructor(
     mangaRepositoryFactory: ContentRepository.Factory,
     private val searchRepository: ContentSearchRepository,
     private val savedFiltersRepository: SavedFiltersRepository,
+    settings: AppSettings,
     lifecycle: ViewModelLifecycle,
 ) {
 
@@ -93,8 +96,12 @@ class FilterCoordinator @Inject constructor(
     val isFilterApplied: Boolean
         get() = currentListFilter.value.isNotEmpty()
 
-    val query: StateFlow<String?> = currentListFilter.map { it.query }
-        .stateIn(coroutineScope, SharingStarted.Eagerly, null)
+	val query: StateFlow<String?> = currentListFilter.map { it.query }
+		.stateIn(coroutineScope, SharingStarted.Eagerly, null)
+
+    val globalTagBlacklist: StateFlow<Set<String>> = settings
+        .observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { this.globalTagBlacklist }
+        .stateIn(coroutineScope, SharingStarted.Eagerly, settings.globalTagBlacklist)
 
     val sortOrder: StateFlow<FilterProperty<SortOrder>> = currentSortOrder.map { selected ->
         FilterProperty(

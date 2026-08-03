@@ -32,6 +32,7 @@ fun SourcesSettingsRoute(
     settings: AppSettings,
     viewModel: SourcesSettingsViewModel,
     onSetupWizardClick: () -> Unit,
+    onGlobalTagBlacklistClick: () -> Unit,
 ) {
     val isLinksEnabled = viewModel.isLinksEnabled.collectAsStateWithLifecycle().value
     val installedJarNames by viewModel.installedJarNames.collectAsStateWithLifecycle()
@@ -59,6 +60,8 @@ fun SourcesSettingsRoute(
         settings.observeAsState(AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW) { isSuggestionsExcludeNsfw }.value
     val incognitoModeForNsfw =
         settings.observeAsState(AppSettings.KEY_INCOGNITO_NSFW) { incognitoModeForNsfw }.value
+    val globalTagBlacklist =
+        settings.observeAsState(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { globalTagBlacklist }.value
     val isTagsWarningsEnabled =
         settings.observeAsState(AppSettings.KEY_TAGS_WARNINGS) { isTagsWarningsEnabled }.value
     val isMirrorSwitchingEnabled =
@@ -91,6 +94,7 @@ fun SourcesSettingsRoute(
             if (isSuggestionsExcludeNsfw) add(AdultContentFilterTarget.SUGGESTIONS)
         },
         incognitoModeForNsfw = incognitoModeForNsfw,
+        blacklistedTagCount = globalTagBlacklist.size,
         isTagsWarningsEnabled = isTagsWarningsEnabled,
         isMirrorSwitchingEnabled = isMirrorSwitchingEnabled,
         isHandleLinksEnabled = isLinksEnabled,
@@ -138,6 +142,7 @@ fun SourcesSettingsRoute(
             }
         },
         onIncognitoModeForNsfwChange = { settings.incognitoModeForNsfw = it },
+        onGlobalTagBlacklistClick = onGlobalTagBlacklistClick,
         onTagsWarningsEnabledChange = { settings.isTagsWarningsEnabled = it },
         onMirrorSwitchingChange = { settings.isMirrorSwitchingEnabled = it },
         onHandleLinksEnabledChange = { enabled ->

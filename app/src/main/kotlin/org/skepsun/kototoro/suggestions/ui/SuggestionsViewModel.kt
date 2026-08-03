@@ -44,6 +44,7 @@ import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
@@ -148,7 +149,8 @@ class SuggestionsViewModel @Inject constructor(
 		}
 
 		val hideAdult = settings.isSuggestionsExcludeNsfw
-		val visibleList = if (hideAdult) filteredList.filterNot { it.isNsfw() } else filteredList
+		val adultFilteredList = if (hideAdult) filteredList.filterNot { it.isNsfw() } else filteredList
+		val visibleList = GlobalTagBlacklist(settings.globalTagBlacklist).filter(adultFilteredList)
 
 		val resultList = ArrayList<ListModel>()
 

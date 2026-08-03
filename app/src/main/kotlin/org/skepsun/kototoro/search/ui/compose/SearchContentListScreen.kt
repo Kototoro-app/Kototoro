@@ -139,6 +139,7 @@ import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
+import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
@@ -179,6 +180,7 @@ import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
+import org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistStatus
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
@@ -378,6 +380,9 @@ fun AppSearchContentListRoute(
     val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
     val gridScale = gridSize / 100f
     val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    val globalTagBlacklist by settings.observeAsState(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) {
+        this.globalTagBlacklist
+    }
     val isWideAdaptiveLayout = remember(context, configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
         FoldableUtils.shouldUseTabletLayout(context, settings, configuration)
     }
@@ -811,6 +816,8 @@ fun AppSearchContentListRoute(
                                 selectedLocale = localeProperty.selectedItems.firstOrNull(),
                                 authors = authorsProperty.availableItems,
                                 selectedAuthor = authorsProperty.selectedItems.firstOrNull(),
+                                blacklistedTagCount = globalTagBlacklist.size,
+                                onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                                 onSortOrderChange = viewModel.filterCoordinator::setSortOrder,
                                 onToggleTag = { tag, selected, excludeMode ->
                                     if (excludeMode) {
@@ -958,6 +965,8 @@ fun AppSearchContentListRoute(
                             selectedLocale = localeProperty.selectedItems.firstOrNull(),
                             authors = authorsProperty.availableItems,
                             selectedAuthor = authorsProperty.selectedItems.firstOrNull(),
+                            blacklistedTagCount = globalTagBlacklist.size,
+                            onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
                             onSortOrderChange = viewModel.filterCoordinator::setSortOrder,
                             onToggleTag = { tag, selected, excludeMode ->
                                 if (excludeMode) {
@@ -1939,6 +1948,8 @@ private fun SearchFilterPanel(
     selectedLocale: Locale?,
     authors: List<String>,
     selectedAuthor: String?,
+    blacklistedTagCount: Int,
+    onOpenGlobalTagBlacklist: () -> Unit,
     onSortOrderChange: (SortOrder) -> Unit,
     onToggleTag: (ContentTag, Boolean, Boolean) -> Unit,
     onToggleContentType: (ContentType, Boolean) -> Unit,
@@ -1975,7 +1986,7 @@ private fun SearchFilterPanel(
             .then(if (fillAvailableHeight) Modifier.fillMaxHeight() else Modifier)
             .verticalScroll(scrollState)
             .padding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1984,8 +1995,8 @@ private fun SearchFilterPanel(
         ) {
             Text(
                 text = stringResource(R.string.filter),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2020,6 +2031,11 @@ private fun SearchFilterPanel(
                 }
             }
         }
+
+        GlobalTagBlacklistStatus(
+            blacklistedTagCount = blacklistedTagCount,
+            onClick = onOpenGlobalTagBlacklist,
+        )
 
         FilterSection(title = stringResource(R.string.sort_order)) {
             SortOrderFilterSection(
@@ -2624,16 +2640,7 @@ private fun FilterSection(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+    FilterPanelGroup(title = title) {
         content()
     }
 }
@@ -2644,8 +2651,8 @@ private fun FilterChipFlow(
     content: @Composable () -> Unit,
 ) {
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         content()
     }
@@ -2658,13 +2665,13 @@ private fun SearchPanelChip(
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 24.dp) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
         FilterChip(
             selected = selected,
             onClick = onClick,
-            modifier = modifier.heightIn(min = 24.dp),
+            modifier = modifier.heightIn(min = 36.dp),
             label = {
-                androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelSmall) {
+                androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge) {
                     label()
                 }
             },
@@ -2673,14 +2680,14 @@ private fun SearchPanelChip(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        modifier = Modifier.size(12.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             } else {
                 null
             },
             colors = FilterChipDefaults.filterChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.34f),
+                containerColor = Color.Transparent,
                 labelColor = MaterialTheme.colorScheme.onSurface,
                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.68f),
                 selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,

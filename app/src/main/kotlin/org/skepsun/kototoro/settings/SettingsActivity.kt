@@ -1272,6 +1272,14 @@ class SettingsActivity :
 					settings = kototoroAppSettings,
 					viewModel = sourcesSettingsViewModel,
 					onSetupWizardClick = { router.showWelcomeSheet() },
+					onGlobalTagBlacklistClick = {
+						startActivity(
+							Intent(
+								this,
+								org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistActivity::class.java,
+							),
+						)
+					},
 				)
 			}
 			is SettingsDestination.UnifiedSources -> {

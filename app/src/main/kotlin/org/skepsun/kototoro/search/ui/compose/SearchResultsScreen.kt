@@ -162,6 +162,7 @@ fun SearchResultsRoute(
     onPickContent: (Content) -> Unit,
     onOpenSourceResults: (SearchResultsListModel) -> Unit,
     onManageLanguagePresets: () -> Unit,
+    onOpenGlobalTagBlacklist: () -> Unit,
     onSubmitSearch: (
         query: String,
         kind: SearchKind,
@@ -179,6 +180,7 @@ fun SearchResultsRoute(
     val listModels by viewModel.list.collectAsStateWithLifecycle()
     val languagePresets by viewModel.languagePresets.collectAsStateWithLifecycle()
     val activeLanguagePresetId by viewModel.activeLanguagePresetId.collectAsStateWithLifecycle()
+    val globalTagBlacklist by viewModel.globalTagBlacklist.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs by settings.observeAsState(
@@ -381,6 +383,7 @@ fun SearchResultsRoute(
             hideEmpty = hideEmpty,
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
+            blacklistedTagCount = globalTagBlacklist.size,
             onSourceTypeToggle = { type ->
                 selectedSourceTypes = selectedSourceTypes.toggleOrAll(type, ALL_SOURCE_TYPES)
                 viewModel.setSourceTypes(selectedSourceTypes)
@@ -399,6 +402,7 @@ fun SearchResultsRoute(
             },
             onLanguagePresetSelected = viewModel::setActiveLanguagePreset,
             onManageLanguagePresets = onManageLanguagePresets,
+            onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,
             onDismissRequest = { showOptionsSheet = false },
         )
     }

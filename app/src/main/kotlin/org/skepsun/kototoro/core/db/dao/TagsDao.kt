@@ -3,6 +3,7 @@ package org.skepsun.kototoro.core.db.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
 import org.skepsun.kototoro.core.db.entity.TagEntity
 
 @Dao
@@ -10,6 +11,9 @@ abstract class TagsDao {
 
 	@Query("SELECT * FROM tags WHERE source = :source")
 	abstract suspend fun findTags(source: String): List<TagEntity>
+
+	@Query("SELECT DISTINCT title FROM tags WHERE TRIM(title) != '' ORDER BY title COLLATE NOCASE")
+	abstract fun observeAllTitles(): Flow<List<String>>
 
 	@Query("SELECT * FROM tags WHERE tag_id IN (:ids)")
 	protected abstract suspend fun findByIdsImpl(ids: Collection<Long>): List<TagEntity>

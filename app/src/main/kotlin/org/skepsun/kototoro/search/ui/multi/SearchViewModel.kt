@@ -112,6 +112,11 @@ class SearchViewModel @Inject constructor(
 		key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
 		valueProducer = { appSettings.activeSourcePresetId },
 	)
+	val globalTagBlacklist: StateFlow<Set<String>> = appSettings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.IO,
+		key = AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
+		valueProducer = { appSettings.globalTagBlacklist },
+	)
 	private val results = MutableStateFlow<List<SearchResultsListModel>>(emptyList())
 
 	private var searchJob: Job? = null

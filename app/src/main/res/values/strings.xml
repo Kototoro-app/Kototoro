@@ -779,6 +779,14 @@
     <string name="video_caches">Video caches</string>
     <string name="cache">Cache</string>
     <string name="available">Available</string>
+    <string name="blacklisted_tags">Blacklisted tags</string>
+    <string name="blacklisted_tags_summary">Exclude content containing these tags from lists and search results</string>
+	<string name="add_tag_pattern">Add “%1$s”</string>
+	<string name="global_tag_blacklist_active">Enabled · %1$d tags selected</string>
+	<string name="global_tag_blacklist_inactive">Not enabled · No tags selected</string>
+	<string name="show_aliases">Show aliases</string>
+	<string name="aliases_for_tag">Aliases · %1$s</string>
+	<string name="no_aliases">No aliases</string>
     <string name="memory_usage_pattern" translatable="false">%1$s - %2$s</string>
     <string name="removed_from_favourites">Removed from favorites</string>
     <string name="remove_from_favourites">Remove from favorites</string>

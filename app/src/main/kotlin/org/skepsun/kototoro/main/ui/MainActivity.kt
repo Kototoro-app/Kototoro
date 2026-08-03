@@ -442,6 +442,9 @@ class MainActivity : BaseComposeActivity() {
                 onManageSourcesClick = {
                     this.router.openManageSources()
                 },
+                onGlobalTagBlacklistClick = {
+                    this.router.openGlobalTagBlacklist()
+                },
                 onTrackingAccountsClick = {
                     this.router.openTrackingAccountsSettings()
                 },

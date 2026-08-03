@@ -35,6 +35,7 @@ import org.skepsun.kototoro.backups.ui.periodical.RemoteNamespace
 import org.skepsun.kototoro.backups.ui.periodical.WebDavBackupUploader
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.jsonsource.SourceGroup
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.withOverride
@@ -381,6 +382,9 @@ class HomeViewModel @Inject constructor(
     private val isSuggestionNsfwDisabledFlow = settings.observeAsFlow(AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW) { isSuggestionsExcludeNsfw }
         .onStart { emit(settings.isSuggestionsExcludeNsfw) }
         .distinctUntilChanged()
+    private val globalTagBlacklistFlow = settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { globalTagBlacklist }
+        .onStart { emit(settings.globalTagBlacklist) }
+        .distinctUntilChanged()
     private val enabledSourcesCountFlow = contentSourcesRepository.observeEnabledSourcesCount()
         .onStart { emit(0) }
         .distinctUntilChanged()
@@ -406,6 +410,7 @@ class HomeViewModel @Inject constructor(
         recommendationsFlow,
         isHistoryNsfwDisabledFlow,
         isTrackerNsfwDisabledFlow,
+        globalTagBlacklistFlow,
     ) { values ->
         val resumeState = values[0] as HomeResumeState
         val recentHistory = values[1] as List<Content>
@@ -414,6 +419,8 @@ class HomeViewModel @Inject constructor(
         val recommendations = values[4] as List<Content>
         val isHistoryNsfwDisabled = values[5] as Boolean
         val isTrackerNsfwDisabled = values[6] as Boolean
+        @Suppress("UNCHECKED_CAST")
+        val globalTagBlacklist = GlobalTagBlacklist(values[7] as Set<String>)
         val filteredHistory = if (isHistoryNsfwDisabled) recentHistory.filterNot { it.isNsfw() } else recentHistory
         val filteredHistoryWithMetadata = if (isHistoryNsfwDisabled) {
             recentHistoryWithMetadata.filterNot { it.manga.isNsfw() }
@@ -423,10 +430,10 @@ class HomeViewModel @Inject constructor(
         val filteredUpdates = if (isTrackerNsfwDisabled) recentUpdates.filterNot { it.manga.isNsfw() } else recentUpdates
         ContentDataSnapshot(
             resumeState = resumeState,
-            history = filteredHistory,
-            historyWithMetadata = filteredHistoryWithMetadata,
-            updates = filteredUpdates,
-            recommendations = recommendations,
+            history = globalTagBlacklist.filter(filteredHistory),
+            historyWithMetadata = filteredHistoryWithMetadata.filterNot { it.manga in globalTagBlacklist },
+            updates = filteredUpdates.filterNot { it.manga in globalTagBlacklist },
+            recommendations = globalTagBlacklist.filter(recommendations),
         )
     }
         .distinctUntilChanged()

@@ -522,6 +522,8 @@ class ContentDataRepository @Inject constructor(
 		return db.getTagsDao().findTags(source.name).toContentTags()
 	}
 
+	fun observeAllTagTitles(): Flow<List<String>> = db.getTagsDao().observeAllTitles()
+
 	suspend fun cleanupLocalContent() {
 		val dao = db.getMangaDao()
 		val broken = listOf(LocalMangaSource.name, org.skepsun.kototoro.core.model.LocalNovelSource.name, org.skepsun.kototoro.core.model.LocalVideoSource.name)

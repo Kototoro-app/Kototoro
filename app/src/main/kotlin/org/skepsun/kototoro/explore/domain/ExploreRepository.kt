@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.explore.domain
 
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.asArrayList
@@ -24,6 +25,7 @@ class ExploreRepository @Inject constructor(
 
 	suspend fun findRandomContent(tagsLimit: Int): Content {
 		val tagsBlacklist = TagsBlacklist(settings.suggestionsTagsBlacklist, 0.4f)
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
 		val tagsWhitelist = settings.suggestionsTagsWhitelist.toList()
 		val tags = (tagsWhitelist + historyRepository.getPopularTags(tagsLimit).mapNotNull {
 			if (it in tagsBlacklist) null else it.title
@@ -36,7 +38,11 @@ class ExploreRepository @Inject constructor(
 			val details = runCatchingCancellable {
 				mangaRepositoryFactory.create(manga.source).getDetails(manga)
 			}.getOrNull() ?: continue
-			if ((settings.isSuggestionsExcludeNsfw && details.isNsfw()) || details in tagsBlacklist) {
+			if (
+				(settings.isSuggestionsExcludeNsfw && details.isNsfw()) ||
+				details in tagsBlacklist ||
+				details in globalTagBlacklist
+			) {
 				continue
 			}
 			return details
@@ -46,6 +52,7 @@ class ExploreRepository @Inject constructor(
 
 	suspend fun findRandomContent(source: ContentSource, tagsLimit: Int): Content {
 		val tagsBlacklist = TagsBlacklist(settings.suggestionsTagsBlacklist, 0.4f)
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
 		val skipNsfw = settings.isSuggestionsExcludeNsfw && !source.isNsfw()
 		val tagsWhitelist = settings.suggestionsTagsWhitelist.toList()
 		val tags = (tagsWhitelist + historyRepository.getPopularTags(tagsLimit).mapNotNull {
@@ -57,7 +64,7 @@ class ExploreRepository @Inject constructor(
 			val details = runCatchingCancellable {
 				mangaRepositoryFactory.create(manga.source).getDetails(manga)
 			}.getOrNull() ?: continue
-			if ((skipNsfw && details.isNsfw()) || details in tagsBlacklist) {
+			if ((skipNsfw && details.isNsfw()) || details in tagsBlacklist || details in globalTagBlacklist) {
 				continue
 			}
 			return details
@@ -86,6 +93,10 @@ class ExploreRepository @Inject constructor(
 		}
 		if (blacklist.isNotEmpty()) {
 			list.removeAll { manga -> manga in blacklist }
+		}
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		if (!globalTagBlacklist.isEmpty) {
+			list.removeAll { manga -> manga in globalTagBlacklist }
 		}
 		list.shuffle()
 		list

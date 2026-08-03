@@ -439,6 +439,7 @@ fun KototoroApp(
     onSettingsClick: () -> Unit = {},
     onSourceSettingsClick: () -> Unit = {},
     onManageSourcesClick: () -> Unit = onSourceSettingsClick,
+    onGlobalTagBlacklistClick: () -> Unit = {},
     onTrackingAccountsClick: () -> Unit = {},
     isAppUpdateAvailable: Boolean = false,
     onAppUpdateClick: () -> Unit = {},
@@ -528,6 +529,11 @@ fun KototoroApp(
         AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
     ) {
         isReducedVisualEffectsEnabled
+    }
+    val globalTagBlacklist by appSettings.observeAsState(
+        AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
+    ) {
+        this.globalTagBlacklist
     }
     val suppressSpaceContentMotion = spaceTransitionState.phase == SpaceTransitionPhase.COVERED ||
         spaceTransitionState.phase == SpaceTransitionPhase.REVEALING
@@ -1745,6 +1751,7 @@ fun KototoroApp(
                         initialContentKinds = initialSearchContentKinds,
                         languagePresets = languagePresetEntries,
                         activeLanguagePresetId = activeSourcePresetId,
+                        blacklistedTagCount = globalTagBlacklist.size,
                         onQueryChanged = onQueryChanged,
                         onSearch = {
                             isSearchOverlayQueryCommitted = true
@@ -1767,6 +1774,9 @@ fun KototoroApp(
                         onDismissRequest = { isSearchOverlayVisible = false },
                         onLanguagePresetSelected = onLanguagePresetSelected,
                         onManageLanguagePresets = onManageLanguagePresets,
+                        onOpenGlobalTagBlacklist = {
+                            onGlobalTagBlacklistClick()
+                        },
                         onExitFinished = {
                             if (!isSearchOverlayVisible) {
                                 if (!isSearchOverlayQueryCommitted) {

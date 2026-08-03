@@ -427,6 +427,18 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_DISABLE_NSFW, true)
 		set(value) = prefs.edit { putBoolean(KEY_DISABLE_NSFW, value) }
 
+	var globalTagBlacklist: Set<String>
+		get() = prefs.getStringSet(KEY_GLOBAL_TAG_BLACKLIST, emptySet())
+			.orEmpty()
+			.mapToSet(String::trim)
+			.filterTo(LinkedHashSet(), String::isNotEmpty)
+		set(value) = prefs.edit {
+			putStringSet(
+				KEY_GLOBAL_TAG_BLACKLIST,
+				value.map(String::trim).filter(String::isNotEmpty).toSet(),
+			)
+		}
+
 	var isHistoryExcludeNsfw: Boolean
 		get() = prefs.getBoolean(KEY_HISTORY_EXCLUDE_NSFW, false)
 		set(value) = prefs.edit { putBoolean(KEY_HISTORY_EXCLUDE_NSFW, value) }
@@ -2446,6 +2458,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_FAVOURITES_EXCLUDE_NSFW = "favourites_exclude_nsfw"
 		const val KEY_FEED_EXCLUDE_NSFW = "feed_exclude_nsfw"
 		const val KEY_DISABLE_NSFW = "no_nsfw"
+		const val KEY_GLOBAL_TAG_BLACKLIST = "global_tag_blacklist"
 		const val KEY_RELATED_MANGA = "related_manga"
 		const val KEY_NAV_MAIN = "nav_main"
 		const val KEY_NAV_LABELS = "nav_labels"

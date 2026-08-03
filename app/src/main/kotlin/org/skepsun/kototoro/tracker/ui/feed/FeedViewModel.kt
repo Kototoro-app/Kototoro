@@ -20,6 +20,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -261,7 +262,9 @@ class FeedViewModel @Inject constructor(
 			emptyList()
 		}
 
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
 		val displayList = filteredList.ifEmpty { fallbackList }
+			.filterNot { it.manga in globalTagBlacklist }
 		val result = ArrayList<ListModel>((displayList.size * 1.4).toInt().coerceAtLeast(3))
 		quickFilter.filterItem(filters)?.let(result::add)
 		if (header != null) {
@@ -408,7 +411,11 @@ class FeedViewModel @Inject constructor(
 			quickFilter.appliedOptions.combineWithSettings().flatMapLatest {
 				repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, it)
 			}.map { mangaList ->
+				val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
 				val filteredContentList = mangaList.filter { item ->
+					if (item.manga in globalTagBlacklist) {
+						return@filter false
+					}
 					val source = item.manga.source
 					if (args.preset != null && source.name !in args.preset.sources) {
 						return@filter false

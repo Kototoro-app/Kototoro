@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.core.util
 
+import com.github.catvod.utils.Trans
+
 object ChineseConverter {
 
     private val t2sMap: Map<Char, Char> = mapOf(
@@ -51,18 +53,10 @@ object ChineseConverter {
     }
 
     fun t2s(text: String): String {
-        val sb = StringBuilder(text.length)
-        for (ch in text) {
-            sb.append(t2sMap[ch] ?: ch)
-        }
-        return sb.toString()
+        return Trans.t2s(false, text)
     }
 
     fun s2t(text: String): String {
-        val sb = StringBuilder(text.length)
-        for (ch in text) {
-            sb.append(s2tMap[ch] ?: ch)
-        }
-        return sb.toString()
+        return Trans.s2t(false, text)
     }
 }

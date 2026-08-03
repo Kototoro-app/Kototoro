@@ -131,6 +131,7 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.ui.ContentListActivity
 import org.skepsun.kototoro.search.ui.multi.SearchActivity
+import org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistActivity
 import org.skepsun.kototoro.settings.SettingsActivity
 import org.skepsun.kototoro.settings.about.AppUpdateActivity
 import org.skepsun.kototoro.settings.override.OverrideConfigActivity
@@ -875,6 +876,10 @@ class AppRouter private constructor(
             sourcesSettingsIntent(contextOrNull() ?: return),
             hostActivity?.let(::activityTransitionOptionsOf),
         )
+    }
+
+    fun openGlobalTagBlacklist() {
+        startActivity(GlobalTagBlacklistActivity.newIntent(contextOrNull() ?: return))
     }
 
     fun openDiscordSettings() {

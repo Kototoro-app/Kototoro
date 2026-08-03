@@ -29,6 +29,7 @@ data class SourcesSettingsUiState(
     val isShowBrokenSources: Boolean,
     val adultContentFilterTargets: Set<AdultContentFilterTarget>,
     val incognitoModeForNsfw: TriStateOption,
+    val blacklistedTagCount: Int,
     val isTagsWarningsEnabled: Boolean,
     val isMirrorSwitchingEnabled: Boolean,
     val isHandleLinksEnabled: Boolean,
@@ -61,6 +62,7 @@ fun SourcesSettingsScreen(
     onShowBrokenSourcesChange: (Boolean) -> Unit,
     onAdultContentFilterTargetsChange: (Set<AdultContentFilterTarget>) -> Unit,
     onIncognitoModeForNsfwChange: (TriStateOption) -> Unit,
+    onGlobalTagBlacklistClick: () -> Unit,
     onTagsWarningsEnabledChange: (Boolean) -> Unit,
     onMirrorSwitchingChange: (Boolean) -> Unit,
     onHandleLinksEnabledChange: (Boolean) -> Unit,
@@ -158,6 +160,16 @@ fun SourcesSettingsScreen(
                         value = state.incognitoModeForNsfw,
                         options = incognitoOptions,
                         onValueChange = onIncognitoModeForNsfwChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsActionPreference(
+                        title = stringResource(R.string.blacklisted_tags),
+                        summary = if (state.blacklistedTagCount == 0) {
+                            stringResource(R.string.blacklisted_tags_summary)
+                        } else {
+                            stringResource(R.string.selected_count, state.blacklistedTagCount)
+                        },
+                        onClick = onGlobalTagBlacklistClick,
                     )
                 }
             }

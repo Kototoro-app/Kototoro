@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="blacklisted_tags">标签黑名单</string>
+    <string name="blacklisted_tags_summary">从列表和搜索结果中排除包含这些标签的内容</string>
+	<string name="add_tag_pattern">添加“%1$s”</string>
+	<string name="global_tag_blacklist_active">已启用 · 已选择 %1$d 个标签</string>
+	<string name="global_tag_blacklist_inactive">未启用 · 尚未选择标签</string>
+	<string name="show_aliases">显示别名</string>
+	<string name="aliases_for_tag">别名 · %1$s</string>
+	<string name="no_aliases">暂无别名</string>
     <string name="settings">设置</string>
     <string name="local_storage">本地</string>
     <string name="favourites">收藏</string>

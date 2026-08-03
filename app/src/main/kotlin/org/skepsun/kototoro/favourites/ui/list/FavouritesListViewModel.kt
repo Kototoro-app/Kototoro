@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.FavouriteCategory.Companion.NO_ID
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -360,13 +361,18 @@ class FavouritesListViewModel @AssistedInject constructor(
             if (matchingItems.isEmpty()) {
                 return@mapNotNull null
             }
-            val visibleItems = if (hideAdult) {
+            val adultFilteredItems = if (hideAdult) {
                 matchingItems.filterNot(PreparedFavouriteItem::isNsfw)
             } else {
                 matchingItems
             }
-            if (hideAdult && visibleItems.size != matchingItems.size) {
+            if (hideAdult && adultFilteredItems.size != matchingItems.size) {
                 hasHiddenAdultItems = true
+            }
+            val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+            val visibleItems = adultFilteredItems.filterNot { it.content in globalTagBlacklist }
+            if (visibleItems.isEmpty()) {
+                return@mapNotNull null
             }
             group.toVisibleGroup(visibleItems)
         }

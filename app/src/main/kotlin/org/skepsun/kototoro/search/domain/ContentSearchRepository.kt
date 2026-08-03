@@ -19,6 +19,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toEntity
@@ -64,6 +65,8 @@ class ContentSearchRepository @Inject constructor(
 		if (settings.isNsfwContentDisabled) it.filterNot { x -> x.manga.isNsfw } else it
 	}.map {
 		it.toContent()
+	}.let { contents ->
+		GlobalTagBlacklist(settings.globalTagBlacklist).filter(contents)
 	}.sortedBy { x ->
 		x.title.levenshteinDistance(query)
 	}.aggregateByEntity(limit)

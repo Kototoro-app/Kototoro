@@ -188,6 +188,7 @@ fun KototoroSearchOverlay(
     initialContentKinds: Set<SearchContentKind>,
     languagePresets: List<SourcePreset>,
     activeLanguagePresetId: Long,
+    blacklistedTagCount: Int,
     onQueryChanged: (String) -> Unit,
     onSearch: (String) -> Unit,
     onSearchWithOptions: (
@@ -211,6 +212,7 @@ fun KototoroSearchOverlay(
     onDeleteQuery: (String) -> Unit,
     onLanguagePresetSelected: (Long) -> Unit,
     onManageLanguagePresets: () -> Unit,
+    onOpenGlobalTagBlacklist: () -> Unit,
     onVoiceInput: () -> Unit,
     onExitFinished: () -> Unit = {},
 ) {
@@ -570,6 +572,7 @@ fun KototoroSearchOverlay(
             hideEmpty = hideEmpty,
             languagePresets = languagePresets,
             activeLanguagePresetId = activeLanguagePresetId,
+            blacklistedTagCount = blacklistedTagCount,
             onSourceTypeToggle = { type ->
                 selectedSourceTypes = selectedSourceTypes.toggleOrAll(type, ALL_SOURCE_TYPES)
             },
@@ -580,6 +583,7 @@ fun KototoroSearchOverlay(
             onHideEmptyChange = { hideEmpty = it },
             onLanguagePresetSelected = onLanguagePresetSelected,
             onManageLanguagePresets = onManageLanguagePresets,
+            onOpenGlobalTagBlacklist = onOpenGlobalTagBlacklist,
             onDismissRequest = { showFilterSheet = false },
         )
     }

@@ -16,6 +16,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.ui.widgets.ChipsView
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -61,6 +62,7 @@ class ContentListMapper @Inject constructor(
 		dataRepository.observeDisplayPreferencesChanges().map { Unit },
 		favouritesRepository.observeFavouriteBadgeChanges(),
 		trackingSiteCacheRepository.observeDetailsUpdates().map { Unit },
+		settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { globalTagBlacklist }.map { Unit },
 	)
 
 	suspend fun toListModelList(

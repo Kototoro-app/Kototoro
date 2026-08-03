@@ -26,17 +26,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
 import org.skepsun.kototoro.search.domain.SEARCH_CONTENT_KIND_OPTIONS
 import org.skepsun.kototoro.search.domain.SOURCE_TYPE_OPTIONS
 import org.skepsun.kototoro.search.domain.SearchContentKind
+import org.skepsun.kototoro.settings.sources.blacklist.GlobalTagBlacklistStatus
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -47,12 +50,14 @@ fun SearchFilterSheet(
     hideEmpty: Boolean,
     languagePresets: List<SourcePreset> = emptyList(),
     activeLanguagePresetId: Long? = null,
+    blacklistedTagCount: Int = 0,
     onSourceTypeToggle: (SourceType) -> Unit,
     onContentKindToggle: (SearchContentKind) -> Unit,
     onPinnedOnlyChange: (Boolean) -> Unit,
     onHideEmptyChange: (Boolean) -> Unit,
     onLanguagePresetSelected: (Long) -> Unit = {},
     onManageLanguagePresets: (() -> Unit)? = null,
+    onOpenGlobalTagBlacklist: () -> Unit = {},
     onDismissRequest: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -71,92 +76,97 @@ fun SearchFilterSheet(
                 SheetDragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
                 Text(
                     text = stringResource(R.string.filter),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 )
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = false),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    item {
+                        GlobalTagBlacklistStatus(
+                            blacklistedTagCount = blacklistedTagCount,
+                            onClick = onOpenGlobalTagBlacklist,
+                        )
+                    }
                     if (
                         activeLanguagePresetId != null ||
                         languagePresets.isNotEmpty() ||
                         onManageLanguagePresets != null
                     ) {
                         item {
-                            Text(
-                                text = stringResource(R.string.show_language_preset_filter),
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                        }
-                        item {
-                            LanguagePresetSection(
-                                presets = languagePresets,
-                                activePresetId = activeLanguagePresetId ?: -1L,
-                                onPresetSelected = onLanguagePresetSelected,
-                                onManagePresets = onManageLanguagePresets,
-                            )
-                        }
-                        item {
-                            HorizontalDivider()
-                        }
-                    }
-                    item {
-                        Text(
-                            text = stringResource(R.string.source_type),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                    item {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            SOURCE_TYPE_OPTIONS.forEach { option ->
-                                FilterChip(
-                                    selected = option.type in sourceTypes,
-                                    onClick = { onSourceTypeToggle(option.type) },
-                                    label = { Text(stringResource(option.titleRes)) },
+                            FilterPanelGroup(title = stringResource(R.string.show_language_preset_filter)) {
+                                LanguagePresetSection(
+                                    presets = languagePresets,
+                                    activePresetId = activeLanguagePresetId ?: -1L,
+                                    onPresetSelected = onLanguagePresetSelected,
+                                    onManagePresets = onManageLanguagePresets,
                                 )
                             }
                         }
                     }
                     item {
-                        Text(
-                            text = stringResource(R.string.type),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                    item {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            SEARCH_CONTENT_KIND_OPTIONS.forEach { option ->
-                                FilterChip(
-                                    selected = option.kind in contentKinds,
-                                    onClick = { onContentKindToggle(option.kind) },
-                                    label = { Text(stringResource(option.titleRes)) },
-                                )
+                        FilterPanelGroup(title = stringResource(R.string.source_type)) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                SOURCE_TYPE_OPTIONS.forEach { option ->
+                                    FilterChip(
+                                        selected = option.type in sourceTypes,
+                                        onClick = { onSourceTypeToggle(option.type) },
+                                        label = {
+                                            Text(
+                                                text = stringResource(option.titleRes),
+                                                style = MaterialTheme.typography.labelLarge,
+                                            )
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
                     item {
-                        SearchOptionSwitchRow(
-                            title = stringResource(R.string.pinned_sources_only),
-                            checked = pinnedOnly,
-                            onCheckedChange = onPinnedOnlyChange,
-                        )
+                        FilterPanelGroup(title = stringResource(R.string.type)) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                SEARCH_CONTENT_KIND_OPTIONS.forEach { option ->
+                                    FilterChip(
+                                        selected = option.kind in contentKinds,
+                                        onClick = { onContentKindToggle(option.kind) },
+                                        label = {
+                                            Text(
+                                                text = stringResource(option.titleRes),
+                                                style = MaterialTheme.typography.labelLarge,
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                     item {
-                        SearchOptionSwitchRow(
-                            title = stringResource(R.string.hide_empty_sources),
-                            checked = hideEmpty,
-                            onCheckedChange = onHideEmptyChange,
-                        )
+                        FilterPanelGroup {
+                            SearchOptionSwitchRow(
+                                title = stringResource(R.string.pinned_sources_only),
+                                checked = pinnedOnly,
+                                onCheckedChange = onPinnedOnlyChange,
+                            )
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                            )
+                            SearchOptionSwitchRow(
+                                title = stringResource(R.string.hide_empty_sources),
+                                checked = hideEmpty,
+                                onCheckedChange = onHideEmptyChange,
+                            )
+                        }
                     }
                 }
             }
@@ -216,14 +226,15 @@ private fun SearchOptionSwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .heightIn(min = 48.dp)
-            .padding(vertical = 4.dp),
+            .heightIn(min = 52.dp)
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = title,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
         )
         Switch(
             checked = checked,
