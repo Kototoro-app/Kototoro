@@ -38,7 +38,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerScope
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -118,6 +117,7 @@ import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.image.AvifAnimatedDrawable
+import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.reader.ui.resolvePagedReaderAnchorPosition
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
@@ -198,7 +198,7 @@ fun ComposePagedReader(
 ) {
 	if (pages.isEmpty()) {
 		Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-			CircularProgressIndicator()
+			KototoroLoadingIndicator()
 		}
 		return
 	}
@@ -2315,14 +2315,14 @@ private fun ReaderPageError(
 private fun ReaderPageLoading(progress: Float?) {
 	Column(horizontalAlignment = Alignment.CenterHorizontally) {
 		if (progress == null) {
-			CircularProgressIndicator()
+			KototoroLoadingIndicator()
 			Text(
 				text = stringResource(R.string.loading_),
 				color = MaterialTheme.colorScheme.onSurface,
 				modifier = Modifier.padding(top = 8.dp),
 			)
 		} else {
-			CircularProgressIndicator(progress = { progress })
+			KototoroLoadingIndicator(progress = { progress })
 			Text(
 				text = "${(progress * 100).toInt()}%",
 				color = MaterialTheme.colorScheme.onSurface,

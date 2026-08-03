@@ -27,7 +27,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -97,6 +96,7 @@ import org.skepsun.kototoro.reader.novel.TextDirection as NovelTextDirection
 import org.skepsun.kototoro.image.ui.NovelInlineImageLoader
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
+import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.reader.ui.compose.READER_PAGE_CAMERA_DISTANCE
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderSimulationPageShadow
 import org.skepsun.kototoro.reader.ui.compose.composeReaderPageCurl
@@ -868,7 +868,7 @@ private fun ComposeNovelPagedChapter(
 			val pages = displayedResult?.pages
 			if (pages == null) {
 				if (!state.loading) {
-					CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+					KototoroLoadingIndicator(modifier = Modifier.align(Alignment.Center))
 				}
 				return@BoxWithConstraints
 		}
