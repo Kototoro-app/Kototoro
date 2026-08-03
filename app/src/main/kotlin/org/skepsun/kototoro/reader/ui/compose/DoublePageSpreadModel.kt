@@ -89,6 +89,22 @@ internal fun resolvePageNavigationTarget(
 	pageStep: Int,
 ): Int = currentPosition + delta * pageStep
 
+internal fun resolveDoublePageNavigationTarget(
+	displayItems: List<DoublePageDisplayItem>,
+	currentPosition: Int,
+	delta: Int,
+): Int? {
+	val currentDisplayPosition = displayItems.indexOfFirst { it.originalPosition == currentPosition }
+	if (currentDisplayPosition < 0) return null
+	val spreadModel = DoublePageSpreadModel.create(displayItems.size)
+	val currentSpreadIndex = spreadModel.spreadIndexForPage(currentDisplayPosition)
+	val targetSpread = spreadModel.spreads.getOrNull(currentSpreadIndex + delta) ?: return null
+	val targetPositions = targetSpread.positions.mapNotNull { position ->
+		displayItems[position].originalPosition.takeIf { it >= 0 }
+	}
+	return if (delta < 0) targetPositions.lastOrNull() else targetPositions.firstOrNull()
+}
+
 internal fun shouldAnimatePageNavigation(
 	currentPosition: Int,
 	targetPosition: Int,

@@ -15,13 +15,13 @@ class DoublePageSpreadModelTest {
 		override val contentType = ContentType.MANGA
 	}
 
-	private fun page(position: Int, chapterId: Long) = ReaderPage(
+	private fun page(position: Int, chapterId: Long, pageIndex: Int = position) = ReaderPage(
 		id = position.toLong(),
 		url = "https://example.test/$position",
 		preview = null,
 		headers = null,
 		chapterId = chapterId,
-		index = position,
+		index = pageIndex,
 		source = source,
 	)
 
@@ -144,19 +144,31 @@ class DoublePageSpreadModelTest {
 	}
 
 	@Test
-	fun `double page navigation advances one complete spread`() {
-		assertEquals(
-			4,
-			resolvePageNavigationTarget(currentPosition = 2, delta = 1, pageStep = 2),
-		)
+	fun `double page navigation includes an odd chapter tail spread`() {
+		val pages = (0 until 27).map { page(it, chapterId = 1) } +
+			(0 until 2).map { index -> page(27 + index, chapterId = 2, pageIndex = index) }
+		val items = buildDoublePageDisplayItems(pages)
+
+		assertEquals(26, resolveDoublePageNavigationTarget(items, currentPosition = 25, delta = 1))
+		assertEquals(26, resolveDoublePageNavigationTarget(items, currentPosition = 27, delta = -1))
 	}
 
 	@Test
-	fun `reversed layout navigation still advances through content indexes`() {
-		assertEquals(
-			6,
-			resolvePageNavigationTarget(currentPosition = 4, delta = 1, pageStep = 2),
-		)
+	fun `double page navigation advances from an odd chapter tail to the next chapter`() {
+		val pages = (0 until 27).map { page(it, chapterId = 1) } +
+			(0 until 2).map { index -> page(27 + index, chapterId = 2, pageIndex = index) }
+		val items = buildDoublePageDisplayItems(pages)
+
+		assertEquals(27, resolveDoublePageNavigationTarget(items, currentPosition = 26, delta = 1))
+	}
+
+	@Test
+	fun `double page navigation follows cover page spread alignment`() {
+		val pages = (0 until 4).map { page(it, chapterId = 1) }
+		val items = buildDoublePageDisplayItems(pages, coverPage = true)
+
+		assertEquals(1, resolveDoublePageNavigationTarget(items, currentPosition = 0, delta = 1))
+		assertEquals(0, resolveDoublePageNavigationTarget(items, currentPosition = 1, delta = -1))
 	}
 
 	@Test

@@ -456,15 +456,26 @@ internal class ComposeReaderController(
 		get() = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
 	override fun switchPageBy(delta: Int) {
-		val pageStep = if (isDoublePage) 2 else 1
 		val pages = viewModel.content.value.pages
 		val basePosition = resolvePageNavigationBasePosition(
 			pageKeys = pages.map { it.readerKey },
 			requestedPageKey = requestedPageKey,
 			settledPosition = resolveCurrentPosition(),
 		)
+		val targetPosition = if (isDoublePage) {
+			resolveDoublePageNavigationTarget(
+				displayItems = buildDoublePageDisplayItems(
+					pages = pages,
+					coverPage = viewModel.readerSettingsProducer.value.isReaderDoubleCoverPage,
+				),
+				currentPosition = basePosition,
+				delta = delta,
+			) ?: return
+		} else {
+			resolvePageNavigationTarget(basePosition, delta, pageStep = 1)
+		}
 		switchPageTo(
-			position = resolvePageNavigationTarget(basePosition, delta, pageStep),
+			position = targetPosition,
 			smooth = true,
 		)
 	}
