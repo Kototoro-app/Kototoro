@@ -201,7 +201,7 @@ internal fun BoxScope.SpaceSidekickHandle(
 
 	Box(
 		modifier = modifier
-			.size(width = 48.dp, height = 80.dp)
+			.size(width = 32.dp, height = 64.dp)
 			.pointerInput(onOpen) {
 				detectHorizontalDragGestures(
 					onDragStart = { dragDistance = 0f },

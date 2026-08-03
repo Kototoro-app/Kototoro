@@ -137,6 +137,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.LiquidGlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
@@ -698,55 +699,60 @@ fun DetailsHeader(
             )
         }
 
-        Column(
+        DetailsReadableSurface(
+            panoramaEnabled = panoramaEnabled,
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = stringResource(R.string.description),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            SelectionContainer {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = stringResource(R.string.description),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            enabled = canExpandDescription,
-                            role = Role.Button,
-                        ) {
-                            isDescriptionExpanded = !isDescriptionExpanded
-                        }
-                        .animateContentSize()
-                        .graphicsLayer {
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            if (canExpandDescription && !isDescriptionExpanded) {
-                                drawRect(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(Color.Black, Color.Transparent),
-                                        startY = size.height * 0.62f,
-                                        endY = size.height,
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                )
+                )
+                SelectionContainer {
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                enabled = canExpandDescription,
+                                role = Role.Button,
+                            ) {
+                                isDescriptionExpanded = !isDescriptionExpanded
+                            }
+                            .animateContentSize()
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                if (canExpandDescription && !isDescriptionExpanded) {
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startY = size.height * 0.62f,
+                                            endY = size.height,
+                                        ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                }
+                            },
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { textLayoutResult ->
+                            val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
+                                textLayoutResult.lineCount > collapsedDescriptionMaxLines
+                            if (canExpandDescription != hasCollapsedOverflow) {
+                                canExpandDescription = hasCollapsedOverflow
                             }
                         },
-                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
-                    overflow = TextOverflow.Ellipsis,
-                    onTextLayout = { textLayoutResult ->
-                        val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
-                            textLayoutResult.lineCount > collapsedDescriptionMaxLines
-                        if (canExpandDescription != hasCollapsedOverflow) {
-                            canExpandDescription = hasCollapsedOverflow
-                        }
-                    },
-                )
+                    )
+                }
             }
         }
 
@@ -807,15 +813,21 @@ private fun DetailsInfoPanelSurface(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val shape = RoundedCornerShape(
-        when {
-            expressive -> 28.dp
-            isIosStyle -> 22.dp
-            else -> 24.dp
-        },
+    DetailsReadableSurface(
+        panoramaEnabled = panoramaEnabled,
+        modifier = modifier,
+        content = content,
     )
+}
+
+@Composable
+private fun DetailsReadableSurface(
+    panoramaEnabled: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val shape = RoundedCornerShape(LocalInterfaceStyleTokens.current.groupCornerRadius)
     if (isIosStyle) {
         LiquidGlassSurface(
             modifier = modifier,
@@ -832,9 +844,7 @@ private fun DetailsInfoPanelSurface(
             modifier = modifier,
             shape = shape,
             color = if (panoramaEnabled) {
-                MaterialTheme.colorScheme.surfaceContainer.copy(
-                    alpha = if (expressive) 0.72f else 0.76f,
-                )
+                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.90f)
             } else {
                 MaterialTheme.colorScheme.surfaceContainer
             },

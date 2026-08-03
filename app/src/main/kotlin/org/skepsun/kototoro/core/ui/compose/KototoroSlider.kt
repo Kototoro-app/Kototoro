@@ -48,6 +48,7 @@ fun KototoroSlider(
     steps: Int = 0,
     onValueChangeFinished: (() -> Unit)? = null,
     colors: SliderColors = SliderDefaults.colors(),
+    compactThumb: Boolean = false,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val stylePolicy = LocalInterfaceStylePolicy.current
@@ -70,6 +71,7 @@ fun KototoroSlider(
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
                 useExpandedThumb = stylePolicy.useExpandedTouchTargets,
+                compact = compactThumb,
                 backdrop = backdrop,
             )
         },
@@ -121,6 +123,7 @@ fun KototoroRangeSlider(
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
                 useExpandedThumb = stylePolicy.useExpandedTouchTargets,
+                compact = false,
                 backdrop = backdrop,
             )
         },
@@ -130,6 +133,7 @@ fun KototoroRangeSlider(
                 color = if (enabled) colors.thumbColor else colors.disabledThumbColor,
                 isIosStyle = isIosStyle,
                 useExpandedThumb = stylePolicy.useExpandedTouchTargets,
+                compact = false,
                 backdrop = backdrop,
             )
         },
@@ -152,17 +156,27 @@ private fun KototoroSliderThumb(
     color: Color,
     isIosStyle: Boolean,
     useExpandedThumb: Boolean,
+    compact: Boolean,
     backdrop: Backdrop?,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val pressed by interactionSource.collectIsPressedAsState()
     val dragged by interactionSource.collectIsDraggedAsState()
     val active = pressed || dragged
+    val visualSize = if (compact) {
+        if (isIosStyle) 16.dp else 20.dp
+    } else {
+        tokens.sliderThumbSize
+    }
     val width by animateDpAsState(
         targetValue = if (active) {
-            tokens.sliderPressedThumbWidth
+            if (compact) {
+                if (isIosStyle) 20.dp else 24.dp
+            } else {
+                tokens.sliderPressedThumbWidth
+            }
         } else if (isIosStyle || useExpandedThumb) {
-            tokens.sliderThumbSize
+            visualSize
         } else {
             6.dp
         },
@@ -171,9 +185,13 @@ private fun KototoroSliderThumb(
     )
     val height by animateDpAsState(
         targetValue = if (active) {
-            tokens.sliderPressedThumbHeight
+            if (compact) {
+                if (isIosStyle) 20.dp else 28.dp
+            } else {
+                tokens.sliderPressedThumbHeight
+            }
         } else {
-            tokens.sliderThumbSize
+            visualSize
         },
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
         label = "sliderThumbHeight",

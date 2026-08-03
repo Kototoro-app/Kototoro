@@ -646,6 +646,12 @@ class SettingsActivity :
 	}
 
 	fun openDestination(destination: SettingsDestination, args: Bundle?, isFromRoot: Boolean) {
+		if (isFromRoot) {
+			composeNavigationStack.clear()
+			if (destination != SettingsDestination.Root) {
+				composeNavigationStack.addLast(SettingsDestination.Root)
+			}
+		}
 		when (destination) {
 			SettingsDestination.Root -> openComposeDestination(
 				destination,
@@ -686,6 +692,7 @@ class SettingsActivity :
 			is SettingsDestination.UnifiedSources -> openComposeDestination(
 				destination,
 				shouldRestoreFragment = false,
+				pushCurrentToStack = !isFromRoot,
 			)
 		}
 	}
@@ -745,14 +752,10 @@ class SettingsActivity :
 			updateUnifiedSourcesSearchActive(false)
 			unifiedSourcesActivePanel = null
 		}
-		if (isMasterDetails && destination == SettingsDestination.Root) {
-			composeNavigationStack.clear()
-			composeDestination = SettingsDestination.Root
-			setLegacyTopBarVisible(false)
-			return
-		}
 		val currentComposeDestination = composeDestination
-		if (
+		if (destination == SettingsDestination.Root) {
+			composeNavigationStack.clear()
+		} else if (
 			pushCurrentToStack &&
 			shouldKeepComposeHistory() &&
 			currentComposeDestination != null &&

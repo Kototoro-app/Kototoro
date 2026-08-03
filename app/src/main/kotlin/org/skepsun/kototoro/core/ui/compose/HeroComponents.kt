@@ -138,6 +138,12 @@ fun HeroPagerIndicator(
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
+    val showPageDots = pageCount <= HeroPagerMaxVisibleDots
+    val effectivePageCounter = if (showPageDots) {
+        pageCounter
+    } else {
+        pageCounter ?: "${currentPage.coerceIn(0, pageCount - 1) + 1} / $pageCount"
+    }
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -146,22 +152,24 @@ fun HeroPagerIndicator(
         if (leadingIcon != null) {
             leadingIcon()
         }
-        repeat(pageCount) { index ->
-            val isSelected = index == currentPage
-            Box(
-                modifier = Modifier
-                    .size(height = 8.dp, width = if (isSelected) 22.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(if (isSelected) activeColor else inactiveColor),
-            )
+        if (showPageDots) {
+            repeat(pageCount) { index ->
+                val isSelected = index == currentPage
+                Box(
+                    modifier = Modifier
+                        .size(height = 8.dp, width = if (isSelected) 22.dp else 8.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) activeColor else inactiveColor),
+                )
+            }
         }
-        if (pageCounter != null) {
+        if (effectivePageCounter != null) {
             Text(
-                text = pageCounter,
+                text = effectivePageCounter,
                 style = MaterialTheme.typography.labelSmall,
                 color = counterColor,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(start = 4.dp),
+                modifier = Modifier.padding(start = if (showPageDots) 4.dp else 0.dp),
             )
         }
         if (trailingIcon != null) {
@@ -169,3 +177,5 @@ fun HeroPagerIndicator(
         }
     }
 }
+
+private const val HeroPagerMaxVisibleDots = 7

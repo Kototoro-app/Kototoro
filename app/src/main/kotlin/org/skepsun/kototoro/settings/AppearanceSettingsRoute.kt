@@ -171,6 +171,7 @@ private class AppearanceSettingsCoordinator(
             settings.observeAsState(AppSettings.KEY_HIDDEN_SOURCE_TAG) { hiddenSourceTag }
                 .value
                 .let(::parseHiddenSourceTagSelection)
+        val isMainFabEnabled = settings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }.value
         val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
         val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
         val isNavFloating = settings.observeAsState(AppSettings.KEY_NAV_FLOATING) { isNavFloating }.value
@@ -273,6 +274,7 @@ private class AppearanceSettingsCoordinator(
             hiddenContentType = hiddenContentType,
             isShowSourceTagFilter = isShowSourceTagFilter,
             hiddenSourceTag = hiddenSourceTag,
+            isMainFabEnabled = isMainFabEnabled,
             isNavBarPinned = isNavBarPinned,
             isNavLabelsVisible = isNavLabelsVisible,
             isNavFloating = isNavFloating,
@@ -349,6 +351,7 @@ private class AppearanceSettingsCoordinator(
                     .takeIf { it.isNotEmpty() }
                     ?.joinToString(",")
             },
+            onMainFabChange = { settings.isMainFabEnabled = it },
             onNavPinnedChange = { settings.isNavBarPinned = it },
             onNavLabelsVisibleChange = { settings.isNavLabelsVisible = it },
             onNavFloatingChange = { settings.isNavFloating = it },

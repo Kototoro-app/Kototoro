@@ -218,6 +218,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, true)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, value) }
 
+	var isMainFabEnabled: Boolean
+		get() = prefs.getBoolean(KEY_MAIN_FAB, true)
+		set(value) = prefs.edit { putBoolean(KEY_MAIN_FAB, value) }
+
 	var isNavExpressivePillEnabled: Boolean
 		get() = prefs.getBoolean(
 			KEY_NAV_EXPRESSIVE_PILL,
@@ -2468,6 +2472,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NAV_EXPRESSIVE_PILL = "nav_expressive_pill"
 		const val KEY_NAV_HEIGHT = "nav_height"
 		const val KEY_NAV_FLOATING_HEIGHT = "nav_floating_height"
+		const val KEY_MAIN_FAB = "main_fab"
 
 		const val KEY_LOADING_CIRCLE_STYLE = "loading_circle_style"
 		const val KEY_POPUP_RADIUS = "popup_radius"

@@ -925,7 +925,8 @@ fun KototoroApp(
         looksLikeVideoContent = effectiveResumeContent?.looksLikeLocalVideoContent() == true,
     )
     val effectiveResumeCoverModel = rememberMainResumeCoverRequest(effectiveResumeContent)
-    val effectiveResumeEnabled = if (spaceUiState.switcherEnabled) {
+    val isMainFabEnabled by appSettings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }
+    val effectiveResumeEnabled = isMainFabEnabled && if (spaceUiState.switcherEnabled) {
         activeSpaceResumeItem?.canResume == true
     } else {
         isResumeEnabled

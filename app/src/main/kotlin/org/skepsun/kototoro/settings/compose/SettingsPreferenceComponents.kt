@@ -693,6 +693,7 @@ fun SettingsSliderPreference(
             valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
             steps = steps,
             enabled = enabled,
+            compactThumb = true,
             onValueChangeFinished = {
                 if (currentValue != committedValue) {
                     committedValue = currentValue

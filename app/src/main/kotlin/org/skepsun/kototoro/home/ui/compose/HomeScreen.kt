@@ -536,7 +536,7 @@ private fun HomeHeroSection(
         val cardWidth = (portraitViewportWidth - edgePadding * 2)
             .coerceAtLeast(0.dp)
             .coerceAtMost(HOME_HERO_PAGER_MAX_WIDTH)
-        val pageSpacing = 12.dp
+        val pageSpacing = 6.dp
         val contentPadding = if (isLandscape) {
             PaddingValues(start = edgePadding, end = 0.dp)
         } else {
