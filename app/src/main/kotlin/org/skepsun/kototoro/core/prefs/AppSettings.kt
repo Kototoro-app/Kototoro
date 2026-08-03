@@ -1528,6 +1528,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, false)
 		set(value) = prefs.edit().putBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, value).apply()
 
+	var readerImageScalingQuality: ReaderImageScalingQuality
+		get() = prefs.getEnumValue(KEY_READER_IMAGE_SCALING_QUALITY, ReaderImageScalingQuality.DEFAULT)
+		set(value) = prefs.edit { putString(KEY_READER_IMAGE_SCALING_QUALITY, value.name) }
+
 	val readerSuperResolutionEngine: String
 		get() = prefs.getString(KEY_READER_SUPER_RESOLUTION_ENGINE, "ANIME4K") ?: "ANIME4K"
 
@@ -2466,6 +2470,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_CF_INVERTED = "cf_inverted"
 		const val KEY_CF_GRAYSCALE = "cf_grayscale"
 		const val KEY_CF_BOOK = "cf_book"
+		const val KEY_READER_IMAGE_SCALING_QUALITY = "reader_image_scaling_quality"
 		const val KEY_PAGES_TAB = "pages_tab"
 		const val KEY_DETAILS_TRANSLATE_BUTTON = "details_translate_button"
 		const val KEY_MODERN_DETAILS_DOCK = "modern_details_dock"

@@ -593,6 +593,15 @@
     <string name="collapse_long_description">折叠过长简介</string>
     <string name="color_black">黑色</string>
     <string name="color_correction">颜色校正</string>
+    <string name="image_post_processing">图像后处理</string>
+    <string name="image_post_processing_original">原图</string>
+    <string name="image_post_processing_result">处理后</string>
+    <string name="reader_image_scaling_quality">图像缩放质量</string>
+    <string name="reader_image_scaling_nearest">无（最近邻）</string>
+    <string name="reader_image_scaling_bilinear">低（双线性）</string>
+    <string name="reader_image_scaling_default">中（默认）</string>
+    <string name="reader_image_scaling_bicubic">高（双三次）</string>
+    <string name="reader_image_scaling_lanczos">Lanczos 预缩放（最佳，较慢）</string>
     <string name="color_correction_apply_text">这些设置可以全局应用，也可以只应用于当前漫画。即使全局应用，也不会覆盖单独的设置。</string>
     <string name="color_dark">深色</string>
     <string name="color_light">浅色</string>

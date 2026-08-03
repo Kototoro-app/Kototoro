@@ -478,6 +478,15 @@
     <string name="history_shortcuts">显示最近阅读作品的快捷方式</string>
     <string name="reset">重置</string>
     <string name="color_correction">颜色校正</string>
+    <string name="image_post_processing">图像后处理</string>
+    <string name="image_post_processing_original">原图</string>
+    <string name="image_post_processing_result">处理后</string>
+    <string name="reader_image_scaling_quality">图像缩放质量</string>
+    <string name="reader_image_scaling_nearest">无（最近邻）</string>
+    <string name="reader_image_scaling_bilinear">低（双线性）</string>
+    <string name="reader_image_scaling_default">中（默认）</string>
+    <string name="reader_image_scaling_bicubic">高（双三次）</string>
+    <string name="reader_image_scaling_lanczos">Lanczos 预缩放（最佳，较慢）</string>
     <string name="brightness">亮度</string>
     <string name="contrast">对比度</string>
     <string name="text_unsaved_changes_prompt">保存还是放弃未保存的更改？</string>
