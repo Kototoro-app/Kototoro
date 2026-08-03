@@ -209,6 +209,50 @@ hilt {
     enableAggregatingTask = true
 }
 
+def tsukiRuntimeSource = configurations.create('tsukiRuntimeSource') {
+	canBeConsumed = false
+	canBeResolved = true
+	transitive = false
+}
+def tsukiSourceJar = tsukiRuntimeSource.elements.map { artifacts ->
+	if (artifacts.size() != 1) {
+		throw new GradleException("Expected one Tsuki runtime artifact, found ${artifacts.size()}")
+	}
+	artifacts.first().asFile
+}
+def tsukiSanitizedJarTask = tasks.register('prepareTsukiRuntimeJar', Jar) {
+	archiveBaseName.set('tsuki-runtime')
+	destinationDirectory.set(layout.buildDirectory.dir('generated/tsuki'))
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+
+	from(zipTree(tsukiSourceJar)) {
+		// parser-api owns this shared ABI. Tsuki 1.0.5 accidentally bundles another copy.
+		exclude 'org/koitharu/kotatsu/core/parser/CSSBackground*.class'
+	}
+
+	doLast {
+		def outputJar = archiveFile.get().asFile
+		ZipFile zipFile = new ZipFile(outputJar)
+		try {
+			def duplicateClass = zipFile.entries().find { entry ->
+				entry.name.startsWith('org/koitharu/kotatsu/core/parser/CSSBackground') &&
+					entry.name.endsWith('.class')
+			}
+			if (duplicateClass != null) {
+				throw new GradleException("Sanitized Tsuki jar still contains ${duplicateClass.name}")
+			}
+			if (zipFile.getEntry('tsuki/MangaParser.class') == null) {
+				throw new GradleException('Sanitized Tsuki jar is missing tsuki/MangaParser.class')
+			}
+		} finally {
+			zipFile.close()
+		}
+	}
+}
+def tsukiRuntimeJar = files(tsukiSanitizedJarTask.flatMap { it.archiveFile })
+
 def cloudstreamSourceJar = layout.projectDirectory.file('libs/cloudstream3-pre-release.jar')
 def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar', Jar) {
 	archiveBaseName.set('cloudstream3-runtime')
@@ -324,9 +368,8 @@ configurations.all {
 	dependencies {
 	implementation project(':parser-api')
 	// UMA/Usagi plugins are compiled against Tsuki. The host must provide this API at runtime.
-	implementation(libs.tsuki) {
-		transitive = false
-	}
+	add(tsukiRuntimeSource.name, libs.tsuki)
+	implementation tsukiRuntimeJar
 
 	def composeBom = platform(libs.androidx.compose.bom)
 	implementation composeBom
