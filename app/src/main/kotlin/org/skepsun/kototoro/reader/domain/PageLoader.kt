@@ -74,6 +74,7 @@ import org.skepsun.kototoro.parsers.util.requireBody
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import java.io.File
+import java.io.IOException
 import java.util.LinkedList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
@@ -504,7 +505,17 @@ class PageLoader @Inject constructor(
 							"resp code=${response.code} protocol=${response.protocol} redirected=${response.priorResponse != null} reqUrl=${response.request.url} prior=${response.priorResponse?.code} server=${response.header("server")} cf-ray=${response.header("cf-ray")} cf-mitigated=${response.header("cf-mitigated")}"
 						)
 						response.ensureSuccess().use { resp ->
-							resp.requireBody().withProgress(progress).use {
+							val body = resp.requireBody()
+							val contentType = body.contentType()
+							if (
+								contentType?.type.equals("text", ignoreCase = true) &&
+								contentType?.subtype.equals("html", ignoreCase = true)
+							) {
+								throw IOException(
+									"Expected an image but received $contentType from ${resp.request.url}",
+								)
+							}
+							body.withProgress(progress).use {
 								cache.set(pageUrl, it.source(), it.contentType()?.toMimeType())
 							}
 						}.toUri()

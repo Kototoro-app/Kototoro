@@ -16,3 +16,19 @@ fun Any.isSerializable() = runCatching {
 	oos.writeObject(this)
 	oos.flush()
 }.isSuccess
+
+fun Throwable.toSerializableThrowable(): Throwable {
+	if (isSerializable()) return this
+
+	return RuntimeException(
+		buildString {
+			append(this@toSerializableThrowable.javaClass.name)
+			this@toSerializableThrowable.message?.let {
+				append(": ")
+				append(it)
+			}
+		},
+	).also { serializableError ->
+		serializableError.stackTrace = stackTrace
+	}
+}

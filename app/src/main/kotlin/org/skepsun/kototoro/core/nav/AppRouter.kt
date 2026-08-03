@@ -78,6 +78,7 @@ import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.getThemeDrawable
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
+import org.skepsun.kototoro.core.util.ext.toSerializableThrowable
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
@@ -1176,7 +1177,7 @@ class AppRouter private constructor(
     fun showErrorDialog(error: Throwable, url: String? = null) {
         startActivitySafe(
             Intent(contextOrNull(), ErrorDetailsActivity::class.java)
-                .putExtra(KEY_ERROR, error as java.io.Serializable)
+                .putExtra(KEY_ERROR, error.toSerializableThrowable() as java.io.Serializable)
                 .putExtra(KEY_URL, url),
         )
     }
