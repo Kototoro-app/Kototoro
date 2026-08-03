@@ -323,6 +323,10 @@ configurations.all {
 
 	dependencies {
 	implementation project(':parser-api')
+	// UMA/Usagi plugins are compiled against Tsuki. The host must provide this API at runtime.
+	implementation(libs.tsuki) {
+		transitive = false
+	}
 
 	def composeBom = platform(libs.androidx.compose.bom)
 	implementation composeBom

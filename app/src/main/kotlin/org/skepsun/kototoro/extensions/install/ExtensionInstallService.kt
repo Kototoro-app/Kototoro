@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import okhttp3.Call
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
@@ -34,6 +36,20 @@ class ExtensionInstallService @Inject constructor(
 	private val settings: AppSettings,
 	private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
 ) {
+	private val githubHttpClient by lazy {
+		httpClient.newBuilder()
+			.protocols(listOf(Protocol.HTTP_1_1))
+			.build()
+	}
+
+	private fun downloadClient(url: String): OkHttpClient {
+		val host = url.toHttpUrlOrNull()?.host.orEmpty()
+		return if (host == "github.com" || host == "api.github.com" || host.endsWith(".githubusercontent.com")) {
+			githubHttpClient
+		} else {
+			httpClient
+		}
+	}
 
 	private fun applyMirror(url: String): String {
 		if (url.startsWith("https://raw.githubusercontent.com/")) {
@@ -63,7 +79,8 @@ class ExtensionInstallService @Inject constructor(
 		val outputDir = File(context.cacheDir, "extension-installs").apply { mkdirs() }
 		val archiveExtension = extension.archiveName.substringAfterLast('.', missingDelimiterValue = "apk")
 		val outputFile = File(outputDir, "${extension.pkgName}-${extension.versionCode}.$archiveExtension")
-		val call = httpClient.newCachelessCallWithProgress(GET(archiveUrl), ExtensionInstallProgressListener(extension.pkgName))
+		val call = downloadClient(archiveUrl)
+			.newCachelessCallWithProgress(GET(archiveUrl), ExtensionInstallProgressListener(extension.pkgName))
 		check(activeCalls.putIfAbsent(extension.pkgName, call) == null) {
 			"Extension install download already in progress for ${extension.pkgName}"
 		}

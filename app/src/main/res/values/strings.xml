@@ -2801,6 +2801,7 @@
     <string name="welcome_plugins_repo_kototoro">Kototoro Parsers</string>
     <string name="welcome_plugins_repo_yakateam">Yakateam Parsers</string>
     <string name="welcome_plugins_repo_redo">Redo Parsers</string>
+    <string name="welcome_plugins_repo_uma">UMA (Tsuki Parsers)</string>
     <string name="welcome_plugins_disclaimer">These extension repositories are maintained by independent online communities. The Kototoro developers have no affiliation, control, or association with these third-party repositories. I acknowledge that I am configuring these sources at my own risk.</string>
     <string name="welcome_plugins_start_btn">1-Click Initialize</string>
 

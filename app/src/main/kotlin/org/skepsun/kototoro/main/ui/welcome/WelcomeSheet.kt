@@ -84,6 +84,7 @@ import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepositories
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -369,6 +370,12 @@ private fun WelcomeSourcesStep(
 		FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 			RepoChip(R.string.welcome_plugins_repo_kototoro, REPO_KOTOTORO, selectedRepos, enabled = !isInitializing)
 			RepoChip(R.string.welcome_plugins_repo_redo, REPO_REDO, selectedRepos, enabled = !isInitializing)
+			RepoChip(
+				R.string.welcome_plugins_repo_uma,
+				UnifiedRecommendedRepositories.UMA_REPOSITORY_URL,
+				selectedRepos,
+				enabled = !isInitializing,
+			)
 		}
 		MirrorDropdown(
 			entries = mirrorEntries,

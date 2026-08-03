@@ -11,6 +11,9 @@ import org.skepsun.kototoro.parsers.ContentParser
 import org.skepsun.kototoro.parsers.model.ContentSource
 import java.io.File
 import java.lang.reflect.Method
+import org.skepsun.kototoro.core.parser.tsuki.TsukiContentParserAdapter
+import org.skepsun.kototoro.core.parser.tsuki.TsukiContentSource
+import org.skepsun.kototoro.core.parser.tsuki.TsukiLoaderContextAdapter
 
 /**
  * A custom ClassLoader that enforces parent delegation for the shared 'parser-api' classes.
@@ -30,8 +33,10 @@ class PluginClassLoader(
         // because they are unique to each jar!
         if (name == "org.skepsun.kototoro.parsers.ContentParserFactoryKt" ||
             name == "org.koitharu.kotatsu.parsers.MangaParserFactoryKt" ||
+            name == "tsuki.MangaParserFactoryKt" ||
             name == "org.skepsun.kototoro.parsers.model.ContentParserSource" ||
-            name == "org.koitharu.kotatsu.parsers.model.MangaParserSource") {
+            name == "org.koitharu.kotatsu.parsers.model.MangaParserSource" ||
+            name == "tsuki.model.MangaParserSource") {
             val c = findLoadedClass(name) ?: findClass(name)
             return c
         }
@@ -79,11 +84,17 @@ class PluginClassLoader(
 data class LoadedJarPlugin(
     val jarName: String,
     val classLoader: PluginClassLoader,
-    val isMangaParser: Boolean,
+    val architecture: ParserPluginArchitecture,
     val factoryMethod: Method,
     val sources: List<Any>, // Either List<MangaSource> or List<ContentSource>
     val brokenSourceNames: Set<String>
 )
+
+enum class ParserPluginArchitecture {
+    KOTATSU,
+    KOTOTORO,
+    TSUKI,
+}
 
 object JarExtensionLoader {
 
@@ -169,7 +180,8 @@ object JarExtensionLoader {
                 val sources = resolveFactorySources<MangaSource>(newParserMethod, fallbackSourceClass)
 
                 if (newParserMethod != null && sources.isNotEmpty()) {
-                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, true, newParserMethod, sources, brokenSourceNames))
+                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, ParserPluginArchitecture.KOTATSU, newParserMethod, sources, brokenSourceNames))
+                    android.util.Log.i("KototoroInit", "Loaded ${jarFile.name} architecture=KOTATSU sources=${sources.size}")
                     continue // Success, move to next jar
                 }
             } catch (e: Throwable) {
@@ -185,11 +197,33 @@ object JarExtensionLoader {
                 val sources = resolveFactorySources<ContentSource>(newParserMethod, fallbackSourceClass)
 
                 if (newParserMethod != null && sources.isNotEmpty()) {
-                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, false, newParserMethod, sources, brokenSourceNames))
+                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, ParserPluginArchitecture.KOTOTORO, newParserMethod, sources, brokenSourceNames))
+                    android.util.Log.i("KototoroInit", "Loaded ${jarFile.name} architecture=KOTOTORO sources=${sources.size}")
+                    continue
                 }
             } catch (e: Throwable) {
-                android.util.Log.e("KototoroInit", "Failed loading Kototoro architecture from ${jarFile.name}: ${e.message}", e)
-                e.printStackTrace()
+                // A missing factory is expected while probing a JAR that uses another supported architecture.
+                android.util.Log.d("KototoroInit", "Kototoro architecture probe skipped for ${jarFile.name}: ${e.message}")
+            }
+
+            // Try Usagi/Tsuki Parser Architecture (used by UMA)
+            try {
+                val factoryClass = dexClassLoader.loadClass("tsuki.MangaParserFactoryKt")
+                val newParserMethod = findParserFactoryMethod(factoryClass, tsuki.MangaLoaderContext::class.java)
+                val fallbackSourceClass = tryFindEnumClass(dexClassLoader, "tsuki.model.MangaParserSource")
+                val sources = resolveFactorySources<tsuki.model.MangaSource>(newParserMethod, fallbackSourceClass)
+
+                if (newParserMethod != null && sources.isNotEmpty()) {
+                    plugins.add(LoadedJarPlugin(jarFile.name, dexClassLoader, ParserPluginArchitecture.TSUKI, newParserMethod, sources, brokenSourceNames))
+                    android.util.Log.i("KototoroInit", "Loaded ${jarFile.name} architecture=TSUKI sources=${sources.size}")
+                    continue
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e(
+                    "KototoroInit",
+                    "Unsupported parser architecture in ${jarFile.name}; Kotatsu, Kototoro and Tsuki probes failed: ${e.message}",
+                    e,
+                )
             }
         }
         return plugins
@@ -212,10 +246,31 @@ object JarExtensionLoader {
     }
 
     fun instantiateContentParser(plugin: LoadedJarPlugin, source: ContentSource, context: ContentLoaderContext): ContentParser {
+        if (plugin.architecture == ParserPluginArchitecture.TSUKI) {
+            val tsukiSource = plugin.sources
+                .filterIsInstance<tsuki.model.MangaSource>()
+                .find { it.name == source.name }
+                ?: throw IllegalArgumentException("Source missing in JAR: ${source.name}")
+            val tsukiContext = TsukiLoaderContextAdapter(context, plugin)
+            val parser = instantiateTsukiParser(plugin, tsukiSource, tsukiContext)
+            return TsukiContentParserAdapter(parser, TsukiContentSource(tsukiSource), context)
+        }
         val enumClass = plugin.factoryMethod.parameterTypes[0]
         val matchingEnum = enumClass.enumConstants?.find { (it as? ContentSource)?.name == source.name }
             ?: throw IllegalArgumentException("Source missing in JAR: ${source.name}")
         plugin.factoryMethod.isAccessible = true
         return plugin.factoryMethod.invoke(null, matchingEnum, context) as ContentParser
+    }
+
+    fun instantiateTsukiParser(
+        plugin: LoadedJarPlugin,
+        source: tsuki.model.MangaSource,
+        context: tsuki.MangaLoaderContext,
+    ): tsuki.MangaParser {
+        val enumClass = plugin.factoryMethod.parameterTypes[0]
+        val matchingEnum = enumClass.enumConstants?.find { (it as? tsuki.model.MangaSource)?.name == source.name }
+            ?: throw IllegalArgumentException("Source missing in JAR: ${source.name}")
+        plugin.factoryMethod.isAccessible = true
+        return plugin.factoryMethod.invoke(null, matchingEnum, context) as tsuki.MangaParser
     }
 }

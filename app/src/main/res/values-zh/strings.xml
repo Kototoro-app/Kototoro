@@ -2676,6 +2676,7 @@ SHA-256 指纹:
     <string name="welcome_plugins_disclaimer">这些扩展仓库由独立的在线社区维护。Kototoro 开发者与这些第三方仓库没有任何控制或关联关系。我知晓并同意，配置这些来源的风险由我自己承担。</string>
     <string name="welcome_plugins_repo_kototoro">Kototoro 官方库</string>
     <string name="welcome_plugins_repo_redo">Redo 解析库</string>
+    <string name="welcome_plugins_repo_uma">UMA（Tsuki 解析库）</string>
     <string name="welcome_plugins_repo_yakateam">Yakateam 官方补存库</string>
     <string name="welcome_plugins_start_btn">一键拉取并初始化装载</string>
     <string name="welcome_plugins_summary">由于核心代码全面分离，请先勾选要加载的插件仓库并选择网络解析镜像来进行出厂初始化配置。</string>

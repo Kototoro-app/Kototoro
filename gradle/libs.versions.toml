@@ -35,6 +35,7 @@ junit = "4.13.2"
 junitKtx = "1.3.0"
 kotlin = "2.2.10"
 usagiRpc = "1.0.2"
+tsuki = "1.0.5"
 ksp = "2.2.10-2.0.2"
 leakcanary = "3.0-alpha-8"
 lifecycle = "2.9.4"
@@ -155,6 +156,7 @@ hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "dag
 json = { module = "org.json:json", version.ref = "json" }
 junit = { module = "junit:junit", version.ref = "junit" }
 usagi-rpc = { module = "com.github.UsagiApp:OAuth2-RPC", version.ref = "usagiRpc" }
+tsuki = { module = "com.github.UsagiApp:Tsuki", version.ref = "tsuki" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-guava = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-guava", version.ref = "coroutines" }

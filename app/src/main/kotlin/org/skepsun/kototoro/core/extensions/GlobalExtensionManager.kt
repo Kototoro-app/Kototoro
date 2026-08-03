@@ -69,7 +69,7 @@ object GlobalExtensionManager {
         contentPlugins.clear()
 
         for (plugin in plugins) {
-            if (plugin.isMangaParser) {
+            if (plugin.architecture == ParserPluginArchitecture.KOTATSU) {
                 mangaPlugins[plugin.jarName] = plugin
                 val wrapped = plugin.sources.map { 
                     val source = it as MangaSource
@@ -78,9 +78,15 @@ object GlobalExtensionManager {
                 allLoadedMangaSources.addAll(wrapped)
             } else {
                 contentPlugins[plugin.jarName] = plugin
-                val wrapped = plugin.sources.map { 
-                    val source = it as ContentSource
-                    PluginContentSource(source, plugin.jarName, plugin.brokenSourceNames.contains(source.name)) 
+                val wrapped = plugin.sources.map {
+                    val source = when (it) {
+                        is ContentSource -> it
+                        is tsuki.model.MangaSource -> org.skepsun.kototoro.core.parser.tsuki.TsukiContentSource(it)
+                        else -> error("Unsupported parser source type: ${it.javaClass.name}")
+                    }
+                    val isBroken = plugin.brokenSourceNames.contains(source.name) ||
+                        (it as? tsuki.model.MangaSource)?.isBroken == true
+                    PluginContentSource(source, plugin.jarName, isBroken)
                 }
                 allLoadedContentSources.addAll(wrapped)
             }

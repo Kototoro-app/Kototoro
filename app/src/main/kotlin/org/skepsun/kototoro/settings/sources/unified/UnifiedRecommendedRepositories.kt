@@ -3,6 +3,7 @@ package org.skepsun.kototoro.settings.sources.unified
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 
 object UnifiedRecommendedRepositories {
+	const val UMA_REPOSITORY_URL = "https://github.com/InvalidDavid/UMA"
 
 	private val extensionRepoCapabilities = setOf(
 		UnifiedRepositoryCapability.REFRESH,
@@ -49,6 +50,14 @@ object UnifiedRecommendedRepositories {
 				url = "https://raw.githubusercontent.com/skepsun/k-parsers-r/repo/index.min.json",
 				locationType = UnifiedRepositoryLocationType.REMOTE_URL,
 				capabilities = jarRepoCapabilities,
+			),
+			UnifiedRecommendedRepository(
+				kind = UnifiedSourceKind.JAR,
+				name = "UMA (Tsuki Parsers)",
+				url = UMA_REPOSITORY_URL,
+				locationType = UnifiedRepositoryLocationType.REMOTE_URL,
+				capabilities = jarRepoCapabilities,
+				note = "Loaded from the latest GitHub release; requires the Tsuki compatibility layer",
 			),
 			UnifiedRecommendedRepository(
 				kind = UnifiedSourceKind.CLOUDSTREAM,

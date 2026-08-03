@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okio.BufferedSource
 import okio.buffer
 import okio.gzip
@@ -29,6 +30,11 @@ class ExtensionRepoService @Inject constructor(
 	private val json: Json,
 	private val settings: AppSettings,
 ) {
+	private val githubHttpClient by lazy {
+		httpClient.newBuilder()
+			.protocols(listOf(Protocol.HTTP_1_1))
+			.build()
+	}
 
 	private fun applyMirror(url: String): String {
 		if (url.startsWith("https://raw.githubusercontent.com/")) {
@@ -64,6 +70,25 @@ class ExtensionRepoService @Inject constructor(
 	}
 
 	suspend fun fetchRepoDetails(baseUrl: String, type: ExternalExtensionType): ExternalExtensionRepo {
+		if (type == ExternalExtensionType.JAR) {
+			parseGitHubRepositoryUrl(baseUrl)?.let { githubRepo ->
+				val release = fetchLatestGitHubRelease(githubRepo)
+				val now = System.currentTimeMillis()
+				return ExternalExtensionRepo(
+					type = type,
+					baseUrl = githubRepo.webUrl,
+					name = "JAR: ${githubRepo.owner}/${githubRepo.repo}",
+					shortName = githubRepo.repo,
+					website = githubRepo.webUrl,
+					signingKeyFingerprint = githubRepo.webUrl.hashCode().toString(16),
+					createdAt = now,
+					updatedAt = now,
+					lastSuccessAt = now,
+					lastError = null,
+					version = release.tagName,
+				)
+			}
+		}
 		if (type == ExternalExtensionType.CLOUDSTREAM) {
 			val normalizedInputUrl = baseUrl.toHttpUrlOrNull() ?: error("Invalid Cloudstream repository URL: $baseUrl")
 			val (metadataUrl, body) = withTimeout(REPO_DETAILS_TIMEOUT_MS) {
@@ -200,6 +225,17 @@ class ExtensionRepoService @Inject constructor(
 	}
 
 	suspend fun fetchAvailableExtensionsOrThrow(repo: ExternalExtensionRepo): List<RepoAvailableExtension> {
+		if (repo.type == ExternalExtensionType.JAR) {
+			parseGitHubRepositoryUrl(repo.baseUrl)?.let { githubRepo ->
+				val release = fetchLatestGitHubRelease(githubRepo)
+				return release.assets
+					.asSequence()
+					.filter { it.name.endsWith(".jar", ignoreCase = true) }
+					.map { asset -> asset.toAvailableExtension(repo, release, githubRepo) }
+					.toList()
+					.ifEmpty { error("Latest GitHub release contains no JAR assets: ${githubRepo.webUrl}") }
+			}
+		}
 		if (isProtobufIndexUrl(repo.baseUrl)) {
 			return fetchProtobufExtensions(repo)
 		}
@@ -267,6 +303,9 @@ class ExtensionRepoService @Inject constructor(
 		val url = processUrl.toHttpUrlOrNull() ?: return null
 		if (url.scheme != "https") {
 			return null
+		}
+		if (type == ExternalExtensionType.JAR) {
+			parseGitHubRepositoryUrl(url.toString())?.let { return it.webUrl }
 		}
 		if (type == ExternalExtensionType.CLOUDSTREAM || looksLikeCloudstreamRepoUrl(url) || looksLikeCloudstreamRepoRootUrl(url)) {
 			return url.newBuilder()
@@ -677,6 +716,57 @@ class ExtensionRepoService @Inject constructor(
 		return applyMirror(resolved ?: "${baseUrl.trimEnd('/')}/${url.removePrefix("/")}")
 	}
 
+	private suspend fun fetchLatestGitHubRelease(repo: GitHubRepository): GitHubReleaseDto {
+		// Some user proxies accept an HTTP/2 connection but never send the SETTINGS preface.
+		// GitHub's REST API supports HTTP/1.1, so keep this request scoped to the reliable protocol.
+		val body = githubHttpClient.newCall(GET(repo.releasesApiUrl)).awaitSuccess().use { response ->
+			response.body.string()
+		}
+		return json.decodeFromString<List<GitHubReleaseDto>>(body)
+			.firstOrNull { release -> release.assets.any { it.name.endsWith(".jar", ignoreCase = true) } }
+			?: error("GitHub repository has no published JAR release: ${repo.webUrl}")
+	}
+
+	private fun parseGitHubRepositoryUrl(value: String): GitHubRepository? {
+		val url = value.toHttpUrlOrNull() ?: return null
+		if (url.host != "github.com") return null
+		val segments = url.pathSegments.filter { it.isNotEmpty() }
+		if (segments.size < 2) return null
+		val owner = segments[0]
+		val repo = segments[1].removeSuffix(".git")
+		if (owner.isBlank() || repo.isBlank()) return null
+		return GitHubRepository(owner, repo)
+	}
+
+	private fun GitHubReleaseAssetDto.toAvailableExtension(
+		repo: ExternalExtensionRepo,
+		release: GitHubReleaseDto,
+		githubRepo: GitHubRepository,
+	): RepoAvailableExtension {
+		val packageName = name.removeSuffix(".jar")
+			.lowercase()
+			.replace(Regex("[^a-z0-9._-]"), "-")
+			.ifBlank { githubRepo.repo.lowercase() }
+		return RepoAvailableExtension(
+			type = ExternalExtensionType.JAR,
+			name = githubRepo.repo,
+			pkgName = packageName,
+			versionName = release.tagName,
+			versionCode = id,
+			libVersion = 0.0,
+			lang = "all",
+			isNsfw = false,
+			sourceNames = emptyList(),
+			archiveName = name,
+			archiveUrl = downloadUrl,
+			iconUrl = "",
+			repoUrl = repo.baseUrl,
+			repoName = repo.displayName,
+			signatureHash = "",
+			isCompatible = true,
+		)
+	}
+
 
 
 	@Keep
@@ -773,6 +863,32 @@ class ExtensionRepoService @Inject constructor(
 		val repo: String,
 		val contentsApiUrl: String,
 	)
+
+	@Keep
+	@Serializable
+	private data class GitHubReleaseDto(
+		val id: Long,
+		@SerialName("tag_name")
+		val tagName: String,
+		val assets: List<GitHubReleaseAssetDto> = emptyList(),
+	)
+
+	@Keep
+	@Serializable
+	private data class GitHubReleaseAssetDto(
+		val id: Long,
+		val name: String,
+		@SerialName("browser_download_url")
+		val downloadUrl: String,
+	)
+
+	private data class GitHubRepository(
+		val owner: String,
+		val repo: String,
+	) {
+		val webUrl: String get() = "https://github.com/$owner/$repo"
+		val releasesApiUrl: String get() = "https://api.github.com/repos/$owner/$repo/releases?per_page=20"
+	}
 
 	private companion object {
 		const val TAG = "ExtensionRepo"
