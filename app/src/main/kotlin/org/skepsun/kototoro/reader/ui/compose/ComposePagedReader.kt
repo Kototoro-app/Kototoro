@@ -8,6 +8,7 @@ import android.view.ViewConfiguration
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.FloatExponentialDecaySpec
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -47,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -83,6 +85,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -99,6 +102,10 @@ import coil3.size.Size
 import coil3.request.allowHardware
 import coil3.request.transformations
 import coil3.toBitmap
+import me.saket.telephoto.zoomable.EnabledZoomGestures
+import me.saket.telephoto.zoomable.rememberZoomableImageState
+import me.saket.telephoto.zoomable.rememberZoomableState
+import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
@@ -127,6 +134,33 @@ private data class WebtoonImageSize(
 	val width: Int,
 	val height: Int,
 )
+
+private sealed interface ReaderCropBoundsState {
+	data object NotRequired : ReaderCropBoundsState
+	data object Loading : ReaderCropBoundsState
+	data class Ready(val bounds: IntRect?) : ReaderCropBoundsState
+}
+
+@Composable
+private fun rememberReaderCropBounds(
+	uri: Uri?,
+	isCropEnabled: Boolean,
+	imagePipeline: ComposeReaderImagePipeline,
+): ReaderCropBoundsState {
+	return key(uri, isCropEnabled) {
+		val initialState = if (isCropEnabled && uri != null) {
+			ReaderCropBoundsState.Loading
+		} else {
+			ReaderCropBoundsState.NotRequired
+		}
+		val state by produceState<ReaderCropBoundsState>(initialState, uri, isCropEnabled) {
+			if (isCropEnabled && uri != null) {
+				value = ReaderCropBoundsState.Ready(imagePipeline.getTrimmedBounds(uri))
+			}
+		}
+		state
+	}
+}
 
 private data class DoublePageTransform(
 	val scale: Float = 1f,
@@ -210,6 +244,10 @@ fun ComposePagedReader(
 		initialPage = initialPage.coerceIn(displayedPages.indices),
 		pageCount = { displayedPages.size },
 	)
+	val zoomedPages = remember { mutableStateMapOf<Long, Boolean>() }
+	val isCurrentPageZoomed = displayedPages.getOrNull(pagerState.currentPage)?.readerKey?.let {
+		zoomedPages[it]
+	} == true
 	var isRestoringPageAnchor by remember { mutableStateOf(false) }
 	var advancedAnchorPage by remember(pagerState) { mutableIntStateOf(pagerState.currentPage) }
 	LaunchedEffect(pagerState, pageAnimation) {
@@ -388,7 +426,9 @@ fun ComposePagedReader(
 				zoomMode = zoomMode,
 				isCropEnabled = isCropEnabled,
 				isPageVisible = pagerState.settledPage == position,
-				isPageCurlEnabled = pageAnimation == ReaderAnimation.SIMULATION,
+				onZoomedChanged = { zoomed ->
+					if (zoomed) zoomedPages[page.readerKey] = true else zoomedPages.remove(page.readerKey)
+				},
 				modifier = Modifier.fillMaxSize(),
 			)
 			pageOverlay()
@@ -407,6 +447,7 @@ fun ComposePagedReader(
 				.fillMaxSize()
 				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
 			key = { displayedPages[it].readerKey },
+			userScrollEnabled = !isCurrentPageZoomed,
 			pageContent = pageContent,
 		)
 	} else {
@@ -418,6 +459,7 @@ fun ComposePagedReader(
 				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
 			reverseLayout = reverseLayout,
 			key = { displayedPages[it].readerKey },
+			userScrollEnabled = !isCurrentPageZoomed,
 			pageContent = pageContent,
 		)
 	}
@@ -693,7 +735,9 @@ fun ComposeWebtoonReader(
 			val animationJob = currentCoroutineContext().job
 			webtoonZoomAnimationJob = animationJob
 			try {
-				animateWebtoonScaleTo((canvasScale * command.factor).coerceIn(0.5f, 2.5f))
+				animateWebtoonScaleTo(
+					(canvasScale * command.factor).coerceIn(0.5f, READER_WEBTOON_MAX_ZOOM_SCALE),
+				)
 			} finally {
 				if (webtoonZoomAnimationJob === animationJob) webtoonZoomAnimationJob = null
 			}
@@ -882,7 +926,8 @@ fun ComposeWebtoonReader(
 									pan.x.isFinite() && pan.y.isFinite() && zoom.isFinite()
 								) {
 									val previousScale = canvasScale
-									val nextScale = (previousScale * zoom).coerceIn(0.5f, 2.5f)
+									val nextScale = (previousScale * zoom)
+										.coerceIn(0.5f, READER_WEBTOON_MAX_ZOOM_SCALE)
 									applyCanvasScaleAtFocus(nextScale, centroid, isTransformGesture = true)
 									applyCanvasPan(pan, isTransformGesture = true)
 								}
@@ -898,7 +943,7 @@ fun ComposeWebtoonReader(
 								}
 							}
 						} while (event.changes.any { it.pressed })
-						if (shouldFlingWebtoonCanvas(singlePointerTransformed, hadMultiplePointers)) {
+						if (shouldFlingAfterTransform(singlePointerTransformed, hadMultiplePointers)) {
 							webtoonFlingJob = zoomAnimationScope.launch {
 								flingCanvas(velocityTracker.calculateVelocity())
 							}
@@ -1240,12 +1285,16 @@ fun ComposeDoublePageReader(
 		}
 	}
 	fun clampSpreadOffset(scale: Float, x: Float, y: Float): Offset {
-		val maxX = (pagerState.layoutInfo.viewportSize.width * (scale - 1f) / 2f).coerceAtLeast(0f)
-		val maxY = (pagerState.layoutInfo.viewportSize.height * (scale - 1f) / 2f).coerceAtLeast(0f)
-		return Offset(x.coerceIn(-maxX, maxX), y.coerceIn(-maxY, maxY))
+		val safeScale = scale.takeIf(Float::isFinite)?.coerceAtLeast(1f) ?: 1f
+		val maxX = (pagerState.layoutInfo.viewportSize.width * (safeScale - 1f) / 2f).coerceAtLeast(0f)
+		val maxY = (pagerState.layoutInfo.viewportSize.height * (safeScale - 1f) / 2f).coerceAtLeast(0f)
+		return Offset(
+			x.takeIf(Float::isFinite)?.coerceIn(-maxX, maxX) ?: 0f,
+			y.takeIf(Float::isFinite)?.coerceIn(-maxY, maxY) ?: 0f,
+		)
 	}
 	fun spreadTransform(spreadIndex: Int): DoublePageTransform =
-		spreadTransforms[spreadIndex] ?: DoublePageTransform()
+		spreadTransforms[spreadIndex]?.takeIf(DoublePageTransform::isFinite) ?: DoublePageTransform()
 
 	fun applySpreadTransform(
 		spreadIndex: Int,
@@ -1253,18 +1302,23 @@ fun ComposeDoublePageReader(
 		pan: Offset,
 		focus: Offset,
 	): DoublePageTransform {
-		val previous = spreadTransform(spreadIndex)
-		val boundedScale = nextScale.coerceIn(1f, 2.5f)
+		val stored = spreadTransform(spreadIndex)
+		val previous = stored.takeIf(DoublePageTransform::isFinite) ?: DoublePageTransform()
+		val boundedScale = nextScale.takeIf(Float::isFinite)
+			?.coerceIn(1f, READER_MAX_ZOOM_SCALE) ?: previous.scale
 		val factor = if (previous.scale > 0f) boundedScale / previous.scale else 1f
 		val center = Offset(
 			pagerState.layoutInfo.viewportSize.width / 2f,
 			pagerState.layoutInfo.viewportSize.height / 2f,
 		)
-		val focusedTranslation = (focus - center) * (1f - factor)
+		val safeFocus = focus.takeIf(Offset::isFinite) ?: center
+		val safePan = pan.takeIf(Offset::isFinite) ?: Offset.Zero
+		val focusedTranslation = (safeFocus - center) * (1f - factor)
+		val scaledPreviousOffset = Offset(previous.offsetX, previous.offsetY) * factor
 		val bounded = clampSpreadOffset(
 			boundedScale,
-			previous.offsetX + pan.x + focusedTranslation.x,
-			previous.offsetY + pan.y + focusedTranslation.y,
+			scaledPreviousOffset.x + safePan.x + focusedTranslation.x,
+			scaledPreviousOffset.y + safePan.y + focusedTranslation.y,
 		)
 		return DoublePageTransform(
 			scale = boundedScale,
@@ -1275,7 +1329,7 @@ fun ComposeDoublePageReader(
 
 	suspend fun animateSpreadScaleTo(spreadIndex: Int, targetScale: Float, focus: Offset) {
 		val initialScale = spreadTransform(spreadIndex).scale
-		val boundedTarget = targetScale.coerceIn(1f, 2.5f)
+		val boundedTarget = targetScale.coerceIn(1f, READER_MAX_ZOOM_SCALE)
 		if (!isAnimationEnabled) {
 			applySpreadTransform(spreadIndex, boundedTarget, Offset.Zero, focus)
 			return
@@ -1418,7 +1472,7 @@ fun ComposeDoublePageReader(
 		spreadZoomJob = job
 		try {
 			val current = spreadTransform(pagerState.currentPage)
-			val target = (current.scale * command.factor).coerceIn(1f, 2.5f)
+			val target = (current.scale * command.factor).coerceIn(1f, READER_MAX_ZOOM_SCALE)
 			if (!isAnimationEnabled) {
 				applySpreadTransform(
 					spreadIndex = pagerState.currentPage,
@@ -1506,7 +1560,6 @@ fun ComposeDoublePageReader(
 						zoomMode = zoomMode,
 						isCropEnabled = isCropEnabled,
 						isPageVisible = isPageVisible,
-						isPageCurlEnabled = pageAnimation == ReaderAnimation.SIMULATION,
 						applyPageBackground = false,
 						pageBackgroundColorOverride = spreadBackground,
 						onAutoBackgroundResolved = { color ->
@@ -1546,6 +1599,8 @@ fun ComposeDoublePageReader(
 				spreadFlingJob?.cancel()
 				val velocityTracker = VelocityTracker()
 				var transformed = false
+				var singlePointerTransformed = false
+				var hadMultiplePointers = false
 				var moved = false
 				var eventTime = down.uptimeMillis
 				do {
@@ -1555,14 +1610,14 @@ fun ComposeDoublePageReader(
 						continue
 					}
 					event.changes.maxByOrNull { it.uptimeMillis }?.let { eventTime = it.uptimeMillis }
-					event.changes.filter { it.pressed }.forEach {
-						velocityTracker.addPosition(it.uptimeMillis, it.position)
-					}
 					val pressedCount = event.changes.count { it.pressed }
 					if (pressedCount >= 2) {
+						hadMultiplePointers = true
 						moved = true
 					} else if (event.changes.any { it.pressed }) {
-						val currentPosition = event.changes.firstOrNull { it.pressed }?.position
+						val change = event.changes.firstOrNull { it.pressed }
+						if (change != null) velocityTracker.addPosition(change.uptimeMillis, change.position)
+						val currentPosition = change?.position
 						if (currentPosition != null && hasExceededWebtoonTapSlop(
 								start = down.position,
 								current = currentPosition,
@@ -1575,11 +1630,11 @@ fun ComposeDoublePageReader(
 					if (pressedCount >= 2 || spreadTransform(spreadIndex).scale > 1f) {
 						spreadZoomJob?.cancel()
 						val centroid = event.calculateCentroid(useCurrent = false)
-						val pan = event.calculatePan()
+						val pan = if (pressedCount >= 2) Offset.Zero else event.calculatePan()
 						val zoom = event.calculateZoom()
 						val previous = spreadTransform(spreadIndex)
 						val previousScale = previous.scale
-						val nextScale = (previousScale * zoom).coerceIn(1f, 2.5f)
+						val nextScale = (previousScale * zoom).coerceIn(1f, READER_MAX_ZOOM_SCALE)
 						val updated = applySpreadTransform(spreadIndex, nextScale, pan, centroid)
 						val consumedPanX = updated.offsetX - previous.offsetX
 						val consumedPanY = updated.offsetY - previous.offsetY
@@ -1588,12 +1643,15 @@ fun ComposeDoublePageReader(
 						if (consumed) {
 							event.changes.forEach { it.consume() }
 							transformed = true
+							if (pressedCount == 1) singlePointerTransformed = true
 						}
 					}
 				} while (event.changes.any { it.pressed })
 				if (transformed) {
-					spreadFlingJob = spreadGestureScope.launch {
-						flingSpread(spreadIndex, velocityTracker.calculateVelocity())
+					if (shouldFlingAfterTransform(singlePointerTransformed, hadMultiplePointers)) {
+						spreadFlingJob = spreadGestureScope.launch {
+							flingSpread(spreadIndex, velocityTracker.calculateVelocity())
+						}
 					}
 					lastTapPosition = null
 				} else if (!moved && eventTime - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) {
@@ -1621,6 +1679,7 @@ fun ComposeDoublePageReader(
 		state = pagerState,
 		beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
 		reverseLayout = reverseLayout,
+		userScrollEnabled = spreadTransform(pagerState.currentPage).scale <= 1f + PAGED_ZOOM_EPSILON,
 		modifier = modifier
 			.fillMaxSize()
 			.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
@@ -1705,6 +1764,7 @@ fun ComposeDoublePageReader(
 			Box(
 				modifier = Modifier
 					.fillMaxSize()
+					.doublePageSpreadGestures(spreadIndex)
 					.zIndex(transform.zIndex)
 					.graphicsLayer {
 						scaleX = currentTransform.scale
@@ -1734,101 +1794,9 @@ fun ComposeDoublePageReader(
 							isReadingReversed = reverseLayout,
 							state = pageCurlState,
 						),
-				) {
+			) {
 				Row(
-				modifier = Modifier
-					.fillMaxSize()
-				.pointerInput(isAnimationEnabled) {
-					var lastTapUpAt = 0L
-					var lastTapPosition: Offset? = null
-					awaitEachGesture {
-						val down = awaitFirstDown(
-							requireUnconsumed = false,
-							pass = PointerEventPass.Initial,
-						)
-						val isDoubleTapCandidate = isTapGridDoubleTapCandidate(
-							previousPosition = lastTapPosition,
-							previousTapAt = lastTapUpAt,
-							position = down.position,
-							now = down.uptimeMillis,
-							minTimeMillis = viewConfiguration.doubleTapMinTimeMillis,
-							timeoutMillis = viewConfiguration.doubleTapTimeoutMillis,
-								doubleTapSlop = doubleTapSlop,
-						)
-						if (isDoubleTapCandidate) down.consume()
-						spreadFlingJob?.cancel()
-						val velocityTracker = VelocityTracker()
-						var transformed = false
-						var moved = false
-						var eventTime = down.uptimeMillis
-						do {
-							val event = awaitPointerEvent(PointerEventPass.Initial)
-							if (event.changes.any { it.isConsumed }) {
-								moved = true
-								continue
-							}
-							event.changes.maxByOrNull { it.uptimeMillis }?.let { eventTime = it.uptimeMillis }
-							event.changes.filter { it.pressed }.forEach {
-								velocityTracker.addPosition(it.uptimeMillis, it.position)
-							}
-							val pressedCount = event.changes.count { it.pressed }
-							if (pressedCount >= 2) {
-								moved = true
-							} else if (event.changes.any { it.pressed }) {
-								val currentPosition = event.changes.firstOrNull { it.pressed }?.position
-								if (currentPosition != null && hasExceededWebtoonTapSlop(
-										start = down.position,
-										current = currentPosition,
-										touchSlop = viewConfiguration.touchSlop,
-									)
-								) {
-									moved = true
-								}
-							}
-							if (pressedCount >= 2 || spreadTransform(spreadIndex).scale > 1f) {
-								spreadZoomJob?.cancel()
-								val centroid = event.calculateCentroid(useCurrent = false)
-								val pan = event.calculatePan()
-								val zoom = event.calculateZoom()
-								val previous = spreadTransform(spreadIndex)
-								val previousScale = previous.scale
-								val nextScale = (previousScale * zoom).coerceIn(1f, 2.5f)
-								val updated = applySpreadTransform(spreadIndex, nextScale, pan, centroid)
-								val consumedPanX = updated.offsetX - previous.offsetX
-								val consumedPanY = updated.offsetY - previous.offsetY
-								val consumed = abs(nextScale - previousScale) > 0.001f ||
-									abs(consumedPanX) > 0.001f || abs(consumedPanY) > 0.001f
-								if (consumed) {
-									event.changes.forEach { it.consume() }
-									transformed = true
-								}
-							}
-						} while (event.changes.any { it.pressed })
-						if (transformed) {
-							spreadFlingJob = spreadGestureScope.launch {
-								flingSpread(spreadIndex, velocityTracker.calculateVelocity())
-							}
-							lastTapPosition = null
-						} else if (!moved && eventTime - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) {
-							if (isDoubleTapCandidate) {
-								lastTapPosition = null
-								spreadZoomJob?.cancel()
-								spreadZoomJob = spreadGestureScope.launch {
-									animateSpreadScaleTo(
-										spreadIndex,
-										if (spreadTransform(spreadIndex).scale > 1f) 1f else 2f,
-										down.position,
-									)
-								}
-							} else {
-								lastTapPosition = down.position
-								lastTapUpAt = eventTime
-							}
-						} else {
-							lastTapPosition = null
-						}
-					}
-				},
+					modifier = Modifier.fillMaxSize(),
 				) {
 					orderedPositions.forEach { position ->
 						val page = displayItems[position].page
@@ -1854,7 +1822,6 @@ fun ComposeDoublePageReader(
 								zoomMode = zoomMode,
 								isCropEnabled = isCropEnabled,
 								isPageVisible = pagerState.settledPage == spreadIndex,
-								isPageCurlEnabled = pageAnimation == ReaderAnimation.SIMULATION,
 								applyPageBackground = false,
 								pageBackgroundColorOverride = spreadBackground,
 								onAutoBackgroundResolved = { color ->
@@ -1903,11 +1870,11 @@ internal fun ComposeReaderPage(
 	zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
 	isPageVisible: Boolean = true,
 	isReaderOptimizationEnabled: Boolean = false,
-	isPageCurlEnabled: Boolean = false,
 	applyPageBackground: Boolean = true,
 	pageBackgroundColorOverride: Int? = null,
 	onAutoBackgroundResolved: (Int) -> Unit = {},
-		modifier: Modifier = Modifier,
+	onZoomedChanged: (Boolean) -> Unit = {},
+	modifier: Modifier = Modifier,
 ) {
 	var retryKey by remember(page.readerKey) { mutableIntStateOf(0) }
 	var renderError by remember(page.readerKey) { mutableStateOf<Throwable?>(null) }
@@ -1925,6 +1892,8 @@ internal fun ComposeReaderPage(
 		is ComposeReaderImageState.EnhancedReady -> value.enhanced
 		else -> null
 	}
+	val cropBoundsState = rememberReaderCropBounds(displayUri, isCropEnabled, imagePipeline)
+	val cropBounds = (cropBoundsState as? ReaderCropBoundsState.Ready)?.bounds
 	LaunchedEffect(displayUri) {
 		renderError = null
 	}
@@ -1981,7 +1950,9 @@ internal fun ComposeReaderPage(
 				.fillMaxSize(),
 			contentAlignment = Alignment.Center,
 		) {
-			if (renderError != null) {
+			if (cropBoundsState == ReaderCropBoundsState.Loading) {
+				ReaderPageLoading(progress = null)
+			} else if (renderError != null) {
 			ReaderPageError(
 				cause = renderError!!,
 				onRetry = { onRetryError(renderError!!) { retryKey++ } },
@@ -2004,9 +1975,9 @@ internal fun ComposeReaderPage(
 			is ComposeReaderImageState.OriginalReady -> PagedReaderImage(
 				uri = value.original,
 				imageLoader = imageLoader,
-					onImageSizeResolved = { width, height ->
-						imagePipeline.onImageDecoded(page, width, height)
-						onImageSizeResolved(width, height)
+				onImageSizeResolved = { width, height ->
+					imagePipeline.onImageDecoded(page, width, height)
+					onImageSizeResolved(width, height)
 				},
 				pageKey = page.readerKey,
 				split = page.split,
@@ -2015,23 +1986,24 @@ internal fun ComposeReaderPage(
 				isAnimationEnabled = isAnimationEnabled,
 				colorFilter = imageColorFilter,
 				bitmapConfig = bitmapConfig,
+				cropBounds = cropBounds,
 				isCropEnabled = isCropEnabled,
 				zoomMode = zoomMode,
 				isAnimated = value.isAnimated,
 				isPageVisible = isPageVisible,
 				isReaderOptimizationEnabled = isReaderOptimizationEnabled,
-				isPageCurlEnabled = isPageCurlEnabled,
 				forceCoil = forceCoil,
+				onZoomedChanged = onZoomedChanged,
 				onSubsamplingError = { forceCoil = true },
 				onImageError = { renderError = it },
-					modifier = Modifier.fillMaxSize(),
+				modifier = Modifier.fillMaxSize(),
 			)
 			is ComposeReaderImageState.Enhancing -> PagedReaderImage(
 				uri = value.original,
 				imageLoader = imageLoader,
-					onImageSizeResolved = { width, height ->
-						imagePipeline.onImageDecoded(page, width, height)
-						onImageSizeResolved(width, height)
+				onImageSizeResolved = { width, height ->
+					imagePipeline.onImageDecoded(page, width, height)
+					onImageSizeResolved(width, height)
 				},
 				pageKey = page.readerKey,
 				split = page.split,
@@ -2040,21 +2012,22 @@ internal fun ComposeReaderPage(
 				isAnimationEnabled = isAnimationEnabled,
 				colorFilter = imageColorFilter,
 				bitmapConfig = bitmapConfig,
+				cropBounds = cropBounds,
 				isCropEnabled = isCropEnabled,
 				zoomMode = zoomMode,
 				isAnimated = false,
 				isPageVisible = isPageVisible,
 				isReaderOptimizationEnabled = isReaderOptimizationEnabled,
-				isPageCurlEnabled = isPageCurlEnabled,
 				forceCoil = forceCoil,
+				onZoomedChanged = onZoomedChanged,
 				onSubsamplingError = { forceCoil = true },
 				onImageError = { renderError = it },
-					modifier = Modifier.fillMaxSize(),
+				modifier = Modifier.fillMaxSize(),
 			)
-				is ComposeReaderImageState.EnhancedReady -> PagedReaderImage(
+			is ComposeReaderImageState.EnhancedReady -> PagedReaderImage(
 				uri = value.enhanced,
 				imageLoader = imageLoader,
-					onImageSizeResolved = onImageSizeResolved,
+				onImageSizeResolved = onImageSizeResolved,
 				pageKey = page.readerKey,
 				split = page.split,
 				zoomCommand = zoomCommand,
@@ -2062,16 +2035,17 @@ internal fun ComposeReaderPage(
 				isAnimationEnabled = isAnimationEnabled,
 				colorFilter = imageColorFilter,
 				bitmapConfig = bitmapConfig,
+				cropBounds = cropBounds,
 				isCropEnabled = isCropEnabled,
 				zoomMode = zoomMode,
 				isAnimated = false,
 				isPageVisible = isPageVisible,
 				isReaderOptimizationEnabled = isReaderOptimizationEnabled,
-				isPageCurlEnabled = isPageCurlEnabled,
 				forceCoil = forceCoil,
+				onZoomedChanged = onZoomedChanged,
 				onSubsamplingError = { forceCoil = true },
 				onImageError = { renderError = it },
-					modifier = Modifier.fillMaxSize(),
+				modifier = Modifier.fillMaxSize(),
 			)
 			is ComposeReaderImageState.Failed -> ReaderPageError(
 				cause = value.cause,
@@ -2123,12 +2097,14 @@ private fun ComposeWebtoonPage(
 		is ComposeReaderImageState.EnhancedReady -> value.enhanced
 		else -> null
 	}
+	val cropBoundsState = rememberReaderCropBounds(displayUri, isCropEnabled, imagePipeline)
+	val cropBounds = (cropBoundsState as? ReaderCropBoundsState.Ready)?.bounds
 	LaunchedEffect(displayUri) {
 		forceCoil = false
 		renderError = null
 	}
 	val itemHeight = with(LocalDensity.current) { measurement.itemHeightPx.toDp() }
-	val canUseSubsampling = !forceCoil && !isCropEnabled && page.split == ReaderPageSplit.NONE
+	val canUseSubsampling = !forceCoil
 
 	Box(
 		modifier = modifier
@@ -2137,7 +2113,9 @@ private fun ComposeWebtoonPage(
 			.background(Color(readerBackgroundColor)),
 		contentAlignment = Alignment.Center,
 	) {
-		if (renderError != null) {
+		if (cropBoundsState == ReaderCropBoundsState.Loading) {
+			ReaderPageLoading(progress = null)
+		} else if (renderError != null) {
 			ReaderPageError(
 				cause = renderError!!,
 				onRetry = { onRetryError(renderError!!) { retryKey++ } },
@@ -2160,6 +2138,8 @@ private fun ComposeWebtoonPage(
 			is ComposeReaderImageState.OriginalReady -> if (canUseSubsampling && !value.isAnimated) {
 				ComposeWebtoonStaticSubsamplingImage(
 					uri = value.original,
+					split = page.split,
+					cropBounds = cropBounds,
 					bitmapConfig = bitmapConfig,
 					colorFilter = imageColorFilter,
 					onImageSizeResolved = { width, height ->
@@ -2168,7 +2148,7 @@ private fun ComposeWebtoonPage(
 					},
 					onImageError = { forceCoil = true },
 					placeholder = {
-						if (isPageVisible) {
+						if (isPageVisible && page.split == ReaderPageSplit.NONE) {
 							WebtoonTelephotoPlaceholder(
 								uri = value.original,
 								pageKey = page.readerKey,
@@ -2202,6 +2182,8 @@ private fun ComposeWebtoonPage(
 			is ComposeReaderImageState.Enhancing -> if (canUseSubsampling) {
 				ComposeWebtoonStaticSubsamplingImage(
 					uri = value.original,
+					split = page.split,
+					cropBounds = cropBounds,
 					bitmapConfig = bitmapConfig,
 					colorFilter = imageColorFilter,
 					onImageSizeResolved = { width, height ->
@@ -2210,7 +2192,7 @@ private fun ComposeWebtoonPage(
 					},
 					onImageError = { forceCoil = true },
 					placeholder = {
-						if (isPageVisible) {
+						if (isPageVisible && page.split == ReaderPageSplit.NONE) {
 							WebtoonTelephotoPlaceholder(
 								uri = value.original,
 								pageKey = page.readerKey,
@@ -2244,12 +2226,14 @@ private fun ComposeWebtoonPage(
 			is ComposeReaderImageState.EnhancedReady -> if (canUseSubsampling) {
 				ComposeWebtoonStaticSubsamplingImage(
 					uri = value.enhanced,
+					split = page.split,
+					cropBounds = cropBounds,
 					bitmapConfig = bitmapConfig,
 					colorFilter = imageColorFilter,
 					onImageSizeResolved = onImageSizeResolved,
 					onImageError = { forceCoil = true },
 					placeholder = {
-						if (isPageVisible) {
+						if (isPageVisible && page.split == ReaderPageSplit.NONE) {
 							WebtoonTelephotoPlaceholder(
 								uri = value.enhanced,
 								pageKey = page.readerKey,
@@ -2383,6 +2367,24 @@ private fun WebtoonImage(
 	isReaderOptimizationEnabled: Boolean,
 	onImageError: (Throwable) -> Unit,
 ) {
+	if (isAnimated) {
+		TelephotoCoilReaderImage(
+			uri = uri,
+			imageLoader = imageLoader,
+			pageKey = pageKey,
+			zoomMode = null,
+			zoomCommand = null,
+			isZoomEnabled = false,
+			isAnimationEnabled = false,
+			colorFilter = colorFilter,
+			isPageVisible = isPageVisible,
+			isReaderOptimizationEnabled = isReaderOptimizationEnabled,
+			onImageSizeResolved = onImageSizeResolved,
+			onImageError = onImageError,
+			modifier = Modifier.fillMaxSize(),
+		)
+		return
+	}
 	val context = LocalContext.current
 	var animatable by remember(uri) { mutableStateOf<Animatable?>(null) }
 	AnimatedDrawableLifecycle(animatable, isPageVisible)
@@ -2477,23 +2479,41 @@ private fun PagedReaderImage(
 	isAnimationEnabled: Boolean,
 	colorFilter: ColorFilter?,
 	bitmapConfig: Bitmap.Config,
+	cropBounds: IntRect?,
 	isCropEnabled: Boolean,
 	isAnimated: Boolean,
 	isPageVisible: Boolean,
 	isReaderOptimizationEnabled: Boolean,
-	isPageCurlEnabled: Boolean,
 	zoomMode: ZoomMode,
 	forceCoil: Boolean,
+	onZoomedChanged: (Boolean) -> Unit,
 	onSubsamplingError: () -> Unit,
 	onImageError: (Throwable) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
-	if (!isPageCurlEnabled && !forceCoil && !isAnimated && !isCropEnabled &&
-		split == ReaderPageSplit.NONE && zoomMode != ZoomMode.KEEP_START
-	) {
+	if (isAnimated) {
+		TelephotoCoilReaderImage(
+			uri = uri,
+			imageLoader = imageLoader,
+			pageKey = pageKey,
+			zoomMode = zoomMode,
+			zoomCommand = zoomCommand,
+			isZoomEnabled = isZoomEnabled,
+			isAnimationEnabled = isAnimationEnabled,
+			colorFilter = colorFilter,
+			isPageVisible = isPageVisible,
+			isReaderOptimizationEnabled = isReaderOptimizationEnabled,
+			onImageSizeResolved = onImageSizeResolved,
+			onImageError = onImageError,
+			onZoomedChanged = onZoomedChanged,
+			modifier = modifier,
+		)
+	} else if (!forceCoil) {
 		ComposePagedTelephotoImage(
 			uri = uri,
 			pageKey = pageKey,
+			split = split,
+			cropBounds = cropBounds,
 			bitmapConfig = bitmapConfig,
 			colorFilter = colorFilter,
 			zoomMode = zoomMode,
@@ -2502,6 +2522,7 @@ private fun PagedReaderImage(
 			isAnimationEnabled = isAnimationEnabled,
 			onImageSizeResolved = onImageSizeResolved,
 			onImageError = { onSubsamplingError() },
+			onZoomedChanged = onZoomedChanged,
 			modifier = modifier,
 		)
 	} else {
@@ -2521,9 +2542,119 @@ private fun PagedReaderImage(
 			isReaderOptimizationEnabled = isReaderOptimizationEnabled,
 			zoomMode = zoomMode,
 			onImageError = onImageError,
+			onZoomedChanged = onZoomedChanged,
 			modifier = modifier,
 		)
 	}
+}
+
+@Composable
+private fun TelephotoCoilReaderImage(
+	uri: Uri,
+	imageLoader: ImageLoader,
+	pageKey: Long,
+	zoomMode: ZoomMode?,
+	zoomCommand: ComposeReaderZoomCommand?,
+	isZoomEnabled: Boolean,
+	isAnimationEnabled: Boolean,
+	colorFilter: ColorFilter?,
+	isPageVisible: Boolean,
+	isReaderOptimizationEnabled: Boolean,
+	onImageSizeResolved: (width: Int, height: Int) -> Unit,
+	onImageError: (Throwable) -> Unit,
+	onZoomedChanged: (Boolean) -> Unit = {},
+	modifier: Modifier = Modifier,
+) {
+	val context = LocalContext.current
+	val currentOnImageSizeResolved by rememberUpdatedState(onImageSizeResolved)
+	val currentOnImageError by rememberUpdatedState(onImageError)
+	val currentOnZoomedChanged by rememberUpdatedState(onZoomedChanged)
+	var animatable by remember(uri) { mutableStateOf<Animatable?>(null) }
+	var imageSize by remember(uri, pageKey) { mutableStateOf(IntSize.Zero) }
+	var viewportSize by remember(uri, pageKey) { mutableStateOf(IntSize.Zero) }
+	var initialZoomApplied by remember(uri, pageKey, zoomMode) { mutableStateOf(false) }
+	AnimatedDrawableLifecycle(animatable, isPageVisible)
+	val zoomableState = key(uri, pageKey) {
+		rememberZoomableState(zoomSpec = ReaderTelephotoZoomSpec)
+	}
+	val imageState = key(uri, pageKey) { rememberZoomableImageState(zoomableState) }
+	val contentScale = when (zoomMode) {
+		ZoomMode.FIT_HEIGHT -> ContentScale.FillHeight
+		ZoomMode.FIT_WIDTH -> ContentScale.FillWidth
+		ZoomMode.FIT_CENTER, ZoomMode.KEEP_START -> ContentScale.Fit
+		null -> ContentScale.FillWidth
+	}
+	val alignment = if (zoomMode == null || zoomMode == ZoomMode.KEEP_START) Alignment.TopCenter else Alignment.Center
+	SideEffect {
+		zoomableState.contentScale = contentScale
+		zoomableState.contentAlignment = alignment
+	}
+	LaunchedEffect(uri, pageKey, zoomableState) {
+		snapshotFlow { (zoomableState.zoomFraction ?: 0f) > PAGED_ZOOM_EPSILON }
+			.distinctUntilChanged()
+			.collect(currentOnZoomedChanged)
+	}
+	DisposableEffect(uri, pageKey) {
+		onDispose { currentOnZoomedChanged(false) }
+	}
+	val request = remember(
+		uri,
+		pageKey,
+		isReaderOptimizationEnabled,
+	) {
+		ImageRequest.Builder(context)
+			.data(uri)
+			.allowHardware(false)
+			.apply {
+				if (isReaderOptimizationEnabled) memoryCachePolicy(CachePolicy.DISABLED)
+			}
+			.listener(
+				onSuccess = { _, result ->
+					animatable = (result.image as? DrawableImage)?.drawable as? Animatable
+					imageSize = IntSize(result.image.width, result.image.height)
+					currentOnImageSizeResolved(result.image.width, result.image.height)
+				},
+				onError = { _, result -> currentOnImageError(result.throwable) },
+			)
+			.build()
+	}
+	LaunchedEffect(uri, pageKey, zoomMode, imageSize, viewportSize) {
+		if (!initialZoomApplied && zoomMode == ZoomMode.KEEP_START &&
+			imageSize != IntSize.Zero && viewportSize != IntSize.Zero
+		) {
+			zoomableState.zoomBy(
+				zoomFactor = initialReaderScale(
+					zoomMode,
+					viewportSize.width,
+					viewportSize.height,
+					imageSize.width,
+					imageSize.height,
+				),
+				animationSpec = snap(),
+			)
+			initialZoomApplied = true
+		}
+	}
+	LaunchedEffect(uri, pageKey, zoomCommand, isAnimationEnabled) {
+		if (zoomCommand?.pageKey == pageKey) {
+			zoomableState.zoomBy(
+				zoomFactor = zoomCommand.factor,
+				animationSpec = if (isAnimationEnabled) tween(220) else snap(),
+			)
+		}
+	}
+	ZoomableAsyncImage(
+		model = request,
+		imageLoader = imageLoader,
+		state = imageState,
+		contentDescription = null,
+		gestures = if (isZoomEnabled) EnabledZoomGestures.ZoomAndPan else EnabledZoomGestures.None,
+		contentScale = contentScale,
+		alignment = alignment,
+		colorFilter = colorFilter,
+		onDoubleClick = ReaderTelephotoDoubleClickListener,
+		modifier = modifier.onSizeChanged { viewportSize = it },
+	)
 }
 
 @Composable
@@ -2543,6 +2674,7 @@ private fun ZoomableReaderImage(
 	isReaderOptimizationEnabled: Boolean,
 	zoomMode: ZoomMode,
 	onImageError: (Throwable) -> Unit,
+	onZoomedChanged: (Boolean) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val context = LocalContext.current
@@ -2557,6 +2689,13 @@ private fun ZoomableReaderImage(
 	var zoomAnimationJob by remember(pageKey) { mutableStateOf<Job?>(null) }
 	var animatable by remember(uri) { mutableStateOf<Animatable?>(null) }
 	AnimatedDrawableLifecycle(animatable, isPageVisible)
+	val currentOnZoomedChanged by rememberUpdatedState(onZoomedChanged)
+	LaunchedEffect(uri, pageKey, transformVersion) {
+		currentOnZoomedChanged(zoomState.scale > PAGED_ZOOM_EPSILON + 1f)
+	}
+	DisposableEffect(uri, pageKey) {
+		onDispose { currentOnZoomedChanged(false) }
+	}
 
 	fun updateGeometry() {
 		zoomState.updateGeometry(viewportWidth, viewportHeight, imageWidth, imageHeight, zoomMode)
@@ -2714,10 +2853,11 @@ internal fun resolveWebtoonGestureBoundaryHandoff(
 internal fun shouldReportReaderSettledPage(isScrollInProgress: Boolean, isRestoringAnchor: Boolean): Boolean =
 	!isScrollInProgress && !isRestoringAnchor
 
-internal fun shouldFlingWebtoonCanvas(singlePointerTransformed: Boolean, hadMultiplePointers: Boolean): Boolean =
+internal fun shouldFlingAfterTransform(singlePointerTransformed: Boolean, hadMultiplePointers: Boolean): Boolean =
 	singlePointerTransformed && !hadMultiplePointers
 
 private const val ZOOM_ANIMATION_DURATION_MS = 220
+private const val PAGED_ZOOM_EPSILON = 0.001f
 private const val ADVANCED_PAGE_EPSILON = 0.001f
 private const val SIMULATION_PAGE_EPSILON = 0.001f
 private const val READER_ANIMATION_DEBUG_TAG = "ReaderPageAnimation"
@@ -2726,3 +2866,8 @@ private const val WEBTOON_PAGE_CONTENT_TYPE = "webtoon_page"
 private const val WEBTOON_PULL_THRESHOLD = 0.3f
 private const val READER_WINDOW_LOG_TAG = "ReaderWindow"
 private const val AUTO_BACKGROUND_SAMPLE_SIZE = 64
+
+private fun DoublePageTransform.isFinite(): Boolean =
+	scale.isFinite() && scale > 0f && offsetX.isFinite() && offsetY.isFinite()
+
+private fun Offset.isFinite(): Boolean = x.isFinite() && y.isFinite()

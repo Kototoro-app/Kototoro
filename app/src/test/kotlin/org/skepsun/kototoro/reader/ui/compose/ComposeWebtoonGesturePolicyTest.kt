@@ -36,13 +36,13 @@ class ComposeWebtoonGesturePolicyTest {
 	@Test
 	fun `multi pointer transform never starts a fling`() {
 		assertFalse(
-			shouldFlingWebtoonCanvas(
+			shouldFlingAfterTransform(
 				singlePointerTransformed = true,
 				hadMultiplePointers = true,
 			),
 		)
 		assertTrue(
-			shouldFlingWebtoonCanvas(
+			shouldFlingAfterTransform(
 				singlePointerTransformed = true,
 				hadMultiplePointers = false,
 			),

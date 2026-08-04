@@ -67,7 +67,7 @@ class EdgeDetector(private val context: Context) {
 							}
 						}
 						if (hasEdges) {
-							Rect(edges[0], edges[1], size.x - edges[2], size.y - edges[3])
+							decoder.toDisplayRect(Rect(edges[0], edges[1], size.x - edges[2], size.y - edges[3]))
 						} else {
 							null
 						}

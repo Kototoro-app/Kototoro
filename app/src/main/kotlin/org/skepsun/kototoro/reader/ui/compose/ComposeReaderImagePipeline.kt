@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import android.net.Uri
+import androidx.compose.ui.unit.IntRect
 import androidx.core.net.toFile
 import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.CancellationException
@@ -27,6 +28,8 @@ interface ComposeReaderImagePipeline {
 	fun observe(page: ReaderPage, force: Boolean = false): Flow<ComposeReaderImageState>
 
 	fun cachedState(pageKey: Long): ComposeReaderImageState? = null
+
+	suspend fun getTrimmedBounds(uri: Uri): IntRect? = null
 
 	/** Reports decoded dimensions so shared reader state can create wide-page splits. */
 	fun onImageDecoded(page: ReaderPage, width: Int, height: Int) = Unit
@@ -92,6 +95,9 @@ class DefaultComposeReaderImagePipeline @Inject constructor(
 
 	fun cachedDisplay(pageKey: Long?): Uri? = pageKey?.let(displayCache::get)
 	override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateCache[pageKey]
+	override suspend fun getTrimmedBounds(uri: Uri): IntRect? = pageLoader.getTrimmedBounds(uri)?.let {
+		IntRect(it.left, it.top, it.right, it.bottom)
+	}
 
 	override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = channelFlow {
 		val cachedState = stateCache[page.readerKey].takeUnless { force }

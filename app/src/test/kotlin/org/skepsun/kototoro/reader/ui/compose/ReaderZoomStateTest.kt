@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.ui.compose
 
+import androidx.compose.ui.geometry.Size
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
@@ -132,8 +133,32 @@ class ReaderZoomStateTest {
 	fun `double tap animation alternates between fitted and enlarged targets`() {
 		val state = ReaderZoomState()
 
-		assertEquals(2f, state.doubleTapTargetScale())
-		state.zoomTo(2f)
+		assertEquals(READER_DOUBLE_TAP_ZOOM_SCALE, state.doubleTapTargetScale())
+		state.zoomTo(READER_DOUBLE_TAP_ZOOM_SCALE)
 		assertEquals(1f, state.doubleTapTargetScale())
+	}
+
+	@Test
+	fun `pinch can continue beyond double tap scale`() {
+		val state = ReaderZoomState().apply {
+			zoomTo(READER_DOUBLE_TAP_ZOOM_SCALE)
+		}
+
+		state.transform(panX = 0f, panY = 0f, zoom = 2f)
+
+		assertEquals(4f, state.scale)
+		state.transform(panX = 0f, panY = 0f, zoom = 2f)
+		assertEquals(READER_MAX_ZOOM_SCALE, state.scale)
+	}
+
+	@Test
+	fun `telephoto maximum is five times fitted scale`() {
+		assertEquals(
+			1.25f,
+			calculateReaderTelephotoMaxZoomFactor(
+				unscaledContentSize = Size(4000f, 6000f),
+				scaledContentSize = Size(1000f, 1500f),
+			),
+		)
 	}
 }

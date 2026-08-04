@@ -24,6 +24,7 @@ decoroutinator = "2.5.7"
 desugar = "2.0.4"
 diskLruCache = "1.5"
 documentfile = "1.1.0"
+exifinterface = "1.4.2"
 fragment = "1.8.9"
 gradle = "8.12.0"
 guava = "33.4.8-android"
@@ -34,6 +35,7 @@ json = "20250517"
 junit = "4.13.2"
 junitKtx = "1.3.0"
 kotlin = "2.2.10"
+mihonImageDecoder = "f11fbd3a29"
 usagiRpc = "1.0.2"
 tsuki = "1.0.5"
 ksp = "2.2.10-2.0.2"
@@ -115,6 +117,7 @@ androidx-collection = { module = "androidx.collection:collection-ktx", version.r
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 androidx-fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hilt" }
 androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hilt" }
@@ -169,6 +172,7 @@ lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.r
 lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycle" }
 lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 markwon = { module = "io.noties.markwon:core", version.ref = "markwon" }
+mihon-image-decoder = { module = "com.github.mihonapp:image-decoder", version.ref = "mihonImageDecoder" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
 moshi-kotlin = { module = "com.squareup.moshi:moshi-kotlin", version.ref = "moshi" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }

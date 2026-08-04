@@ -6,7 +6,7 @@ import kotlin.math.abs
 import kotlin.math.min
 
 class ReaderZoomState(
-	private val maxScale: Float = 5f,
+	private val maxScale: Float = READER_MAX_ZOOM_SCALE,
 ) {
 
 	var scale: Float = 1f
@@ -69,7 +69,7 @@ class ReaderZoomState(
 	}
 
 	fun doubleTapTargetScale(): Float {
-		return if (scale > MIN_SCALE) MIN_SCALE else DOUBLE_TAP_SCALE.coerceAtMost(maxScale)
+		return if (scale > MIN_SCALE) MIN_SCALE else READER_DOUBLE_TAP_ZOOM_SCALE.coerceAtMost(maxScale)
 	}
 
 	fun targetScaleForFactor(factor: Float): Float {
@@ -139,10 +139,14 @@ class ReaderZoomState(
 		)
 
 		private const val MIN_SCALE = 1f
-		private const val DOUBLE_TAP_SCALE = 2f
 		private const val EPSILON = 0.001f
 	}
 }
+
+internal const val READER_MAX_ZOOM_SCALE = 5f
+internal const val READER_WEBTOON_MAX_ZOOM_SCALE = 3f
+internal const val READER_DOUBLE_TAP_ZOOM_SCALE = 2f
+internal const val READER_ZOOM_EPSILON = 0.001f
 
 internal fun initialReaderScale(
 	mode: ZoomMode,
