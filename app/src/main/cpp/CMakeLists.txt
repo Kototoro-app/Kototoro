@@ -19,7 +19,6 @@ add_library(realesrgan_ncnn SHARED
     realesrgan_jni.cpp
     realcugan.cpp
     realcugan_jni.cpp
-    reader_lanczos_jni.cpp
 )
 
 target_link_directories(realesrgan_ncnn PRIVATE ${NCNN_DIR}/lib)

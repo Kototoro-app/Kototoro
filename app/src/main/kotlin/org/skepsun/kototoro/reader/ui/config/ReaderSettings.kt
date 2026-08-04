@@ -18,7 +18,6 @@ import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderBackground
-import org.skepsun.kototoro.core.prefs.ReaderImageScalingQuality
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderOcrEngine
 import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
@@ -30,7 +29,6 @@ data class ReaderSettings(
 	val zoomMode: ZoomMode,
 	val background: ReaderBackground,
 	val colorFilter: ReaderColorFilter?,
-	val imageScalingQuality: ReaderImageScalingQuality,
 	val isReaderOptimizationEnabled: Boolean,
 	val isReaderPreloadReductionEnabled: Boolean,
 	val bitmapConfig: Bitmap.Config,
@@ -85,7 +83,6 @@ data class ReaderSettings(
 		zoomMode = settings.zoomMode,
 		background = settings.readerBackground,
 		colorFilter = colorFilterOverride?.takeUnless { it.isEmpty } ?: settings.readerColorFilter,
-		imageScalingQuality = settings.readerImageScalingQuality,
 		isReaderOptimizationEnabled = settings.isReaderOptimizationEnabled,
 		isReaderPreloadReductionEnabled = settings.isReaderPreloadReductionEnabled,
 		bitmapConfig = if (settings.is32BitColorsEnabled) {
@@ -318,7 +315,6 @@ data class ReaderSettings(
 			AppSettings.KEY_CF_BRIGHTNESS,
 			AppSettings.KEY_CF_INVERTED,
 			AppSettings.KEY_CF_GRAYSCALE,
-			AppSettings.KEY_READER_IMAGE_SCALING_QUALITY,
 			AppSettings.KEY_READER_CROP,
 			AppSettings.KEY_READER_DOUBLE_COVER_PAGE,
 			AppSettings.KEY_READER_TRANSLATION_ENABLED,

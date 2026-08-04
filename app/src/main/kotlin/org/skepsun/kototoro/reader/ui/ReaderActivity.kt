@@ -408,10 +408,6 @@ class ReaderActivity :
 					onColorFilterChanged = { colorFilter ->
 						composeReaderController.updateOptions { copy(colorFilter = colorFilter) }
 					},
-					onImageScalingQualityChanged = { quality ->
-						settings.readerImageScalingQuality = quality
-						composeReaderController.updateOptions { copy(imageScalingQuality = quality) }
-					},
 					onSaveColorFilterForManga = { colorFilter ->
 						val manga = viewModel.getContentOrNull()
 						if (manga != null) {
@@ -998,7 +994,6 @@ class ReaderActivity :
 				superResolution = settings.isReaderSuperResolutionEnabled,
 				background = settings.readerBackground,
 				colorFilter = viewModel.readerSettingsProducer.value.colorFilter,
-				imageScalingQuality = settings.readerImageScalingQuality,
 			),
 		)
 		loadImageServerOptions()

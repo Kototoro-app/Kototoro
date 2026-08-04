@@ -5,7 +5,6 @@ import android.view.ViewConfiguration
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -106,10 +105,9 @@ fun ComposeReaderScreenRoot(
 		}
 	}
 
-	CompositionLocalProvider(LocalReaderImageScalingQuality provides readerSettings.imageScalingQuality) {
-		key(mode, isDoublePage, layoutGeneration) {
-		if (isDoublePage) {
-			ComposeDoublePageReader(
+	key(mode, isDoublePage, layoutGeneration) {
+	if (isDoublePage) {
+		ComposeDoublePageReader(
 			pages = content.pages,
 			initialPage = initialPosition,
 			reverseLayout = mode == ReaderMode.REVERSED,
@@ -173,8 +171,8 @@ fun ComposeReaderScreenRoot(
 			pageOverlay = pageOverlay,
 			modifier = readerModifier,
 		)
-		} else if (mode == ReaderMode.WEBTOON) {
-			ComposeWebtoonReader(
+	} else if (mode == ReaderMode.WEBTOON) {
+		ComposeWebtoonReader(
 			pages = content.pages,
 			initialPage = initialPosition,
 			initialScroll = restoredState?.scroll ?: 0,
@@ -220,7 +218,7 @@ fun ComposeReaderScreenRoot(
 			isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
 				modifier = readerModifier,
 		)
-		} else ComposePagedReader(
+	} else ComposePagedReader(
 		pages = content.pages,
 		initialPage = initialPosition,
 		mode = mode ?: ReaderMode.STANDARD,
@@ -246,7 +244,6 @@ fun ComposeReaderScreenRoot(
 		zoomMode = readerSettings.zoomMode,
 		isCropEnabled = readerSettings.isPagesCropEnabledStandard,
 		pageOverlay = pageOverlay,
-		)
-		}
+	)
 	}
 }

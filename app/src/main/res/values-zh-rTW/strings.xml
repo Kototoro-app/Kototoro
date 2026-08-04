@@ -419,12 +419,6 @@
     <string name="image_post_processing">影像後處理</string>
     <string name="image_post_processing_original">原圖</string>
     <string name="image_post_processing_result">處理後</string>
-    <string name="reader_image_scaling_quality">影像縮放品質</string>
-    <string name="reader_image_scaling_nearest">無（最近鄰）</string>
-    <string name="reader_image_scaling_bilinear">低（雙線性）</string>
-    <string name="reader_image_scaling_default">中（預設）</string>
-    <string name="reader_image_scaling_bicubic">高（雙三次）</string>
-    <string name="reader_image_scaling_lanczos">Lanczos 預縮放（最佳，較慢）</string>
     <string name="brightness">亮度</string>
     <string name="reader_control_ltr">人體工學閱讀器控制</string>
     <string name="services">服務</string>

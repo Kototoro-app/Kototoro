@@ -113,7 +113,6 @@ import kotlin.math.roundToInt
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
-import org.skepsun.kototoro.core.prefs.ReaderImageScalingQuality
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.R
@@ -2106,7 +2105,6 @@ private fun ComposeWebtoonPage(
 	modifier: Modifier = Modifier,
 ) {
 	var retryKey by remember(page.readerKey) { mutableIntStateOf(0) }
-	val imageScalingQuality = LocalReaderImageScalingQuality.current
 	var renderError by remember(page.readerKey) { mutableStateOf<Throwable?>(null) }
 	var forceCoil by remember(page.readerKey) { mutableStateOf(false) }
 	val state by produceState<ComposeReaderImageState>(
@@ -2130,8 +2128,7 @@ private fun ComposeWebtoonPage(
 		renderError = null
 	}
 	val itemHeight = with(LocalDensity.current) { measurement.itemHeightPx.toDp() }
-	val canUseSubsampling = imageScalingQuality.usesTelephoto() &&
-		!forceCoil && !isCropEnabled && page.split == ReaderPageSplit.NONE
+	val canUseSubsampling = !forceCoil && !isCropEnabled && page.split == ReaderPageSplit.NONE
 
 	Box(
 		modifier = modifier
@@ -2350,7 +2347,6 @@ private fun ReaderPreviewImage(
 	modifier: Modifier = Modifier,
 ) {
 	val context = LocalContext.current
-	val imageScalingQuality = LocalReaderImageScalingQuality.current
 	val request = remember(page.readerKey, previewUrl, isCropEnabled, isReaderOptimizationEnabled) {
 		ImageRequest.Builder(context)
 			.data(previewUrl)
@@ -2367,7 +2363,6 @@ private fun ReaderPreviewImage(
 		contentDescription = null,
 		contentScale = contentScale,
 		colorFilter = colorFilter,
-		filterQuality = imageScalingQuality.toComposeFilterQuality(),
 		modifier = modifier,
 	)
 }
@@ -2389,13 +2384,10 @@ private fun WebtoonImage(
 	onImageError: (Throwable) -> Unit,
 ) {
 	val context = LocalContext.current
-	val imageScalingQuality = LocalReaderImageScalingQuality.current
 	var animatable by remember(uri) { mutableStateOf<Animatable?>(null) }
 	AnimatedDrawableLifecycle(animatable, isPageVisible)
-	val useLanczos = imageScalingQuality == ReaderImageScalingQuality.LANCZOS &&
-		decodeWidthPx > 0 && decodeHeightPx > 0
 	val useSampledDecode = !isAnimated && !isCropEnabled && split == ReaderPageSplit.NONE &&
-		decodeWidthPx > 0 && decodeHeightPx > 0 && !useLanczos
+		decodeWidthPx > 0 && decodeHeightPx > 0
 	AsyncImage(
 		model = remember(
 			uri,
@@ -2406,7 +2398,6 @@ private fun WebtoonImage(
 			decodeWidthPx,
 			decodeHeightPx,
 			isReaderOptimizationEnabled,
-			imageScalingQuality,
 		) {
 			ImageRequest.Builder(context)
 				.data(uri)
@@ -2421,17 +2412,7 @@ private fun WebtoonImage(
 				}
 				.allowHardware(!isAnimated)
 				.apply {
-					if (!isAnimated) {
-						val pageTransformation = ComposeReaderPageTransformation(isCropEnabled, split)
-						if (useLanczos) {
-							transformations(
-								pageTransformation,
-								ReaderLanczosTransformation(decodeWidthPx, decodeHeightPx),
-							)
-						} else {
-							transformations(pageTransformation)
-						}
-					}
+					if (!isAnimated) transformations(ComposeReaderPageTransformation(isCropEnabled, split))
 					if (isReaderOptimizationEnabled) memoryCachePolicy(CachePolicy.DISABLED)
 				}
 				.build()
@@ -2441,7 +2422,6 @@ private fun WebtoonImage(
 		alignment = Alignment.TopCenter,
 		contentScale = ContentScale.FillWidth,
 		colorFilter = colorFilter,
-		filterQuality = imageScalingQuality.toComposeFilterQuality(),
 		onSuccess = { result ->
 			animatable = (result.result.image as? DrawableImage)?.drawable as? Animatable
 			onImageSizeResolved(result.result.image.width, result.result.image.height)
@@ -2463,7 +2443,6 @@ private fun WebtoonTelephotoPlaceholder(
 	colorFilter: ColorFilter?,
 ) {
 	val context = LocalContext.current
-	val imageScalingQuality = LocalReaderImageScalingQuality.current
 	AsyncImage(
 		model = remember(uri, pageKey, decodeWidthPx, decodeHeightPx) {
 			ImageRequest.Builder(context)
@@ -2482,7 +2461,6 @@ private fun WebtoonTelephotoPlaceholder(
 		alignment = Alignment.TopCenter,
 		contentScale = ContentScale.FillWidth,
 		colorFilter = colorFilter,
-		filterQuality = imageScalingQuality.toComposeFilterQuality(),
 		modifier = Modifier.fillMaxSize(),
 	)
 }
@@ -2510,8 +2488,7 @@ private fun PagedReaderImage(
 	onImageError: (Throwable) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
-	val imageScalingQuality = LocalReaderImageScalingQuality.current
-	if (imageScalingQuality.usesTelephoto() && !isPageCurlEnabled && !forceCoil && !isAnimated && !isCropEnabled &&
+	if (!isPageCurlEnabled && !forceCoil && !isAnimated && !isCropEnabled &&
 		split == ReaderPageSplit.NONE && zoomMode != ZoomMode.KEEP_START
 	) {
 		ComposePagedTelephotoImage(
@@ -2569,7 +2546,6 @@ private fun ZoomableReaderImage(
 	modifier: Modifier = Modifier,
 ) {
 	val context = LocalContext.current
-	val imageScalingQuality = LocalReaderImageScalingQuality.current
 	val zoomState = rememberSaveable(pageKey, zoomMode, saver = ReaderZoomState.Saver) { ReaderZoomState() }
 	var viewportWidth by remember(pageKey) { mutableIntStateOf(0) }
 	var viewportHeight by remember(pageKey) { mutableIntStateOf(0) }
@@ -2620,35 +2596,12 @@ private fun ZoomableReaderImage(
 	}
 
 	AsyncImage(
-		model = remember(
-			uri,
-			pageKey,
-			split,
-			isCropEnabled,
-			isAnimated,
-			isReaderOptimizationEnabled,
-			imageScalingQuality,
-			viewportWidth,
-			viewportHeight,
-		) {
-			val useLanczos = imageScalingQuality == ReaderImageScalingQuality.LANCZOS &&
-				viewportWidth > 0 && viewportHeight > 0 && !isAnimated
+		model = remember(uri, pageKey, split, isCropEnabled, isAnimated, isReaderOptimizationEnabled) {
 			ImageRequest.Builder(context)
 				.data(uri)
 				.allowHardware(!isAnimated)
 				.apply {
-					if (!isAnimated) {
-						val pageTransformation = ComposeReaderPageTransformation(isCropEnabled, split)
-						if (useLanczos) {
-							size(Size.ORIGINAL)
-							transformations(
-								pageTransformation,
-								ReaderLanczosTransformation(viewportWidth, viewportHeight),
-							)
-						} else {
-							transformations(pageTransformation)
-						}
-					}
+					if (!isAnimated) transformations(ComposeReaderPageTransformation(isCropEnabled, split))
 					if (isReaderOptimizationEnabled) memoryCachePolicy(CachePolicy.DISABLED)
 				}
 				.build()
@@ -2662,7 +2615,6 @@ private fun ZoomableReaderImage(
 			ZoomMode.FIT_WIDTH -> ContentScale.FillWidth
 		},
 		colorFilter = colorFilter,
-		filterQuality = imageScalingQuality.toComposeFilterQuality(),
 		onSuccess = { result ->
 			animatable = (result.result.image as? DrawableImage)?.drawable as? Animatable
 			imageWidth = result.result.image.width

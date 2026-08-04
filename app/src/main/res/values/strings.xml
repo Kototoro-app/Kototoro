@@ -817,12 +817,6 @@
     <string name="image_post_processing">Image post-processing</string>
     <string name="image_post_processing_original">Original</string>
     <string name="image_post_processing_result">Result</string>
-    <string name="reader_image_scaling_quality">Image scaling quality</string>
-    <string name="reader_image_scaling_nearest">None (nearest-neighbor)</string>
-    <string name="reader_image_scaling_bilinear">Low (bilinear)</string>
-    <string name="reader_image_scaling_default">Medium (default)</string>
-    <string name="reader_image_scaling_bicubic">High (bicubic)</string>
-    <string name="reader_image_scaling_lanczos">Lanczos pre-scale (best, slower)</string>
     <string name="brightness">Brightness</string>
     <string name="contrast">Contrast</string>
     <string name="reset">Reset</string>
