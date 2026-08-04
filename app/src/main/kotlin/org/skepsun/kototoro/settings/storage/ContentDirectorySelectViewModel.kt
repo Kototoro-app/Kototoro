@@ -26,7 +26,6 @@ class ContentDirectorySelectViewModel @Inject constructor(
 	val onPickDirectory = MutableEventFlow<Unit>()
 
 	fun initialize(contentType: String) {
-		if (this.contentType != null) return
 		this.contentType = contentType
 		refresh()
 	}

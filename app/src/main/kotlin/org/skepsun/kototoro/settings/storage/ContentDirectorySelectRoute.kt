@@ -3,11 +3,13 @@ package org.skepsun.kototoro.settings.storage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,8 +36,16 @@ fun ContentDirectorySelectRoute(
         uri?.let(viewModel::onCustomDirectoryPicked)
     }
     LaunchedEffect(contentType) { viewModel.initialize(contentType) }
-    LaunchedEffect(viewModel) { viewModel.onDismissDialog.collect { onDismiss() } }
-    LaunchedEffect(viewModel) { viewModel.onPickDirectory.collect { picker.launch(null) } }
+    LaunchedEffect(viewModel) {
+        viewModel.onDismissDialog.collect { event ->
+            event?.consume { onDismiss() }
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.onPickDirectory.collect { event ->
+            event?.consume { picker.launch(null) }
+        }
+    }
     LaunchedEffect(viewModel) {
         viewModel.onError.collect { event ->
             event?.consume { error -> onError(error) }
@@ -52,13 +62,26 @@ fun ContentDirectorySelectRoute(
         onDismissRequest = onDismiss,
         text = {
             LazyColumn {
-                items(entries, key = { it.title ?: it.titleRes.toString() }) { item ->
+                items(entries, key = { it.file?.absolutePath ?: "custom-directory" }) { item ->
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { viewModel.onItemClick(item) }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         RadioButton(selected = item.isChecked, onClick = null)
-                        Text(item.title ?: stringResource(item.titleRes))
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 8.dp),
+                        ) {
+                            Text(item.title ?: stringResource(item.titleRes))
+                            item.file?.absolutePath?.let { path ->
+                                Text(
+                                    text = path,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                     }
                 }
             }
