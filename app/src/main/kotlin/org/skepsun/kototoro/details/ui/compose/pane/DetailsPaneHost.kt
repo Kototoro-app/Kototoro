@@ -17,7 +17,6 @@ import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneFlingBeh
 fun DetailsPaneHost(
     state: DetailsPaneState,
     modifier: Modifier = Modifier,
-    dragEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val flingBehavior = rememberDetailsPaneFlingBehavior(state)
@@ -26,18 +25,12 @@ fun DetailsPaneHost(
             .graphicsLayer {
                 translationY = state.translationY
             }
-            .then(
-                if (dragEnabled) {
-                    Modifier.anchoredDraggable(
-                        state = state.anchoredState,
-                        orientation = Orientation.Vertical,
-                        enabled = state.anchor != CompactDetailsPaneAnchor.Full &&
-                            !state.isGridSizeControlsVisible,
-                        flingBehavior = flingBehavior,
-                    )
-                } else {
-                    Modifier
-                },
+            .anchoredDraggable(
+                state = state.anchoredState,
+                orientation = Orientation.Vertical,
+                enabled = state.anchor != CompactDetailsPaneAnchor.Full &&
+                    !state.isGridSizeControlsVisible,
+                flingBehavior = flingBehavior,
             ),
         content = content,
     )

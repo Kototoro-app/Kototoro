@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -281,9 +282,9 @@ class DetailsPaneState internal constructor(
             isGridSizeControlsVisible -> DetailsPaneTopBarMode.GridSizeControls
             chapterSelectionState != null && selectedTabId == chaptersTabId -> DetailsPaneTopBarMode.ChapterSelection
             selectedTabId == chaptersTabId &&
-                (settlementAnchor == CompactDetailsPaneAnchor.Full || !isCompactLayout) ->
+                (anchor == CompactDetailsPaneAnchor.Full || !isCompactLayout) ->
                 DetailsPaneTopBarMode.ExpandedChapterTools
-            settlementAnchor == CompactDetailsPaneAnchor.Full || !isCompactLayout ->
+            anchor == CompactDetailsPaneAnchor.Full || !isCompactLayout ->
                 DetailsPaneTopBarMode.ExpandedGridTools
             else -> DetailsPaneTopBarMode.CollapsedReadDock
         }
@@ -536,7 +537,8 @@ fun rememberDetailsPaneNestedScrollConnection(
     canChildScrollBackward: () -> Boolean,
 ): NestedScrollConnection? {
     if (state == null) return null
-    return remember(state, canChildScrollBackward) {
+    val currentCanChildScrollBackward = rememberUpdatedState(canChildScrollBackward)
+    return remember(state) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
@@ -544,7 +546,7 @@ fun rememberDetailsPaneNestedScrollConnection(
                 val shouldStartPaneDrag = when (state.anchor) {
                     CompactDetailsPaneAnchor.Hovered,
                     CompactDetailsPaneAnchor.Collapsed -> available.y != 0f
-                    CompactDetailsPaneAnchor.Full -> available.y > 0f && !canChildScrollBackward()
+                    CompactDetailsPaneAnchor.Full -> available.y > 0f && !currentCanChildScrollBackward.value()
                 }
                 if (!hasGestureOwnership && !shouldStartPaneDrag) return Offset.Zero
                 val consumedY = state.dispatchPaneDragDelta(available.y)

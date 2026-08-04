@@ -105,6 +105,16 @@ fun ChaptersScreenRoot(
     val selectedItems = remember(chapters, selectedIds) {
         chapters.filter { it.chapter.id in selectedIds }
     }
+    val downloadableChapterIds = remember(selectedItems) {
+        selectedItems
+            .filterNot { it.isDownloaded || it.chapter.source.isLocal }
+            .mapTo(linkedSetOf()) { it.chapter.id }
+    }
+    val deletableChapterIds = remember(selectedItems) {
+        selectedItems
+            .filter { it.isDownloaded || it.chapter.source.isLocal }
+            .mapTo(linkedSetOf()) { it.chapter.id }
+    }
 
     BackHandler(enabled = selectedIds.isNotEmpty() && handleSelectionBackPressInternally) {
         selectedItemIds.clear()
@@ -154,6 +164,8 @@ fun ChaptersScreenRoot(
 	}
     val handleSelectionAction: (Int) -> Unit = remember(
         context,
+        deletableChapterIds,
+        downloadableChapterIds,
         router,
         selectedIds,
         selectedItems,
@@ -170,10 +182,10 @@ fun ChaptersScreenRoot(
                     R.id.action_save -> {
                         val manga = viewModel.mangaDetails.value?.toContent()
                         if (manga?.source?.getContentType() == ContentType.VIDEO) {
-                            viewModel.probeAndDownload(selectedIds)
+                            viewModel.probeAndDownload(downloadableChapterIds)
                         } else {
                             router.askForDownloadOverMeteredNetwork { allow ->
-                                viewModel.download(selectedIds, allow)
+                                viewModel.download(downloadableChapterIds, allow)
                             }
                         }
                     }
@@ -191,7 +203,7 @@ fun ChaptersScreenRoot(
                     R.id.action_delete -> {
                         val manga = viewModel.getContentOrNull()
                         if (manga != null) {
-                            LocalChaptersRemoveService.start(context, manga, selectedIds)
+                            LocalChaptersRemoveService.start(context, manga, deletableChapterIds)
                             try {
                                 Snackbar.make(
                                     viewForSnackbar,
@@ -213,15 +225,22 @@ fun ChaptersScreenRoot(
             }
         }
     }
-    val selectionState = remember(selectedIds, selectedItems, visibleSelectableIds, handleSelectionAction) {
+    val selectionState = remember(
+        deletableChapterIds,
+        downloadableChapterIds,
+        handleSelectionAction,
+        selectedIds,
+        selectedItems,
+        visibleSelectableIds,
+    ) {
         if (selectedIds.isEmpty()) {
             null
         } else {
             ChapterSelectionUiState(
                 selectedCount = selectedIds.size,
                 canSelectAll = selectedIds.size < visibleSelectableIds.size,
-                canDownload = selectedItems.isNotEmpty() && selectedItems.all { !it.isDownloaded && !it.chapter.source.isLocal },
-                canDelete = selectedItems.isNotEmpty() && selectedItems.all { it.isDownloaded || it.chapter.source.isLocal },
+                canDownload = downloadableChapterIds.isNotEmpty(),
+                canDelete = deletableChapterIds.isNotEmpty(),
                 canMarkCurrent = selectedItems.size == 1 && !selectedItems.first().isCurrent,
                 canBookmark = selectedItems.isNotEmpty(),
                 isBookmarkRemoveAction = selectedItems.isNotEmpty() && selectedItems.all { it.isBookmarked },

@@ -17,8 +17,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
@@ -35,7 +33,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
-import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.details.ui.pager.pages.PageThumbnail
@@ -186,18 +183,8 @@ fun PagesScreen(
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
     val listState = rememberLazyGridState()
-    val activeDetailsPaneState by remember(detailsPaneState) {
-        derivedStateOf {
-            val state = detailsPaneState ?: return@derivedStateOf null
-            if (state.anchor == CompactDetailsPaneAnchor.Full && listState.canScrollBackward) {
-                null
-            } else {
-                state
-            }
-        }
-    }
     val paneNestedScrollConnection = rememberDetailsPaneNestedScrollConnection(
-        state = activeDetailsPaneState,
+        state = detailsPaneState,
         canChildScrollBackward = { listState.canScrollBackward },
     )
     val paneNestedScrollModifier = remember(paneNestedScrollConnection) {

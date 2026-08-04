@@ -203,7 +203,7 @@ fun DetailsHeader(
     panoramaEnabled: Boolean,
     settings: AppSettings,
     collapseProgressProvider: () -> Float,
-    coverVisualAlpha: Float,
+    coverVisualAlphaProvider: () -> Float,
     coverUrl: String?,
     fallbackCoverUrl: String?,
     sharedElementKey: String? = null,
@@ -481,7 +481,7 @@ fun DetailsHeader(
                 modifier = Modifier
                     .graphicsLayer {
                         val coverCollapseProgress = (collapseProgressProvider() / 0.48f).coerceIn(0f, 1f)
-                        alpha = (1f - coverCollapseProgress) * coverVisualAlpha.coerceIn(0f, 1f)
+                        alpha = (1f - coverCollapseProgress) * coverVisualAlphaProvider().coerceIn(0f, 1f)
                     },
             )
 

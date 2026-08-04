@@ -28,8 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,7 +39,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
-import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.core.ui.widgets.ChipsView.ChipModel
@@ -101,23 +98,8 @@ fun ChaptersScreen(
             listState.scrollToItem(index)
         }
     }
-    val activeDetailsPaneState by remember(detailsPaneState, isGridView) {
-        derivedStateOf {
-            val state = detailsPaneState ?: return@derivedStateOf null
-            val canListScrollBackward = if (isGridView) {
-                gridState.canScrollBackward
-            } else {
-                listState.canScrollBackward
-            }
-            if (state.anchor == CompactDetailsPaneAnchor.Full && canListScrollBackward) {
-                null
-            } else {
-                state
-            }
-        }
-    }
     val paneNestedScrollConnection = rememberDetailsPaneNestedScrollConnection(
-        state = activeDetailsPaneState,
+        state = detailsPaneState,
         canChildScrollBackward = {
             if (isGridView) {
                 gridState.canScrollBackward
