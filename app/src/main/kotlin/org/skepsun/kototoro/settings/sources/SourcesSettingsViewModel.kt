@@ -23,6 +23,8 @@ import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
+import org.skepsun.kototoro.core.extensions.jarBaseName
+import org.skepsun.kototoro.core.extensions.resolveJarPriorityOrder
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.BaseViewModel
@@ -71,8 +73,7 @@ class SourcesSettingsViewModel @Inject constructor(
 	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, "")
 
 	val isLinksEnabled = MutableStateFlow(isLinksEnabled())
-	private val _installedJarNames = MutableStateFlow<List<String>>(emptyList())
-	val installedJarNames: StateFlow<List<String>> = _installedJarNames
+	val installedJarNames: StateFlow<List<String>> = GlobalExtensionManager.installedJarNames
 
 	fun refreshLinksEnabled() {
 		isLinksEnabled.value = isLinksEnabled()
@@ -101,39 +102,21 @@ class SourcesSettingsViewModel @Inject constructor(
 	fun loadPlugins() {
 		viewModelScope.launch(Dispatchers.IO) {
 			val pluginsDir = File(context.filesDir, "plugins")
-			val jarFiles = pluginsDir.listFiles { file -> file.extension == "jar" }?.toList().orEmpty()
+			val jarFiles = pluginsDir
+				.listFiles { file -> file.extension.equals("jar", ignoreCase = true) }
+				?.sortedBy { it.name.lowercase() }
+				.orEmpty()
 			installedPlugins.postValue(jarFiles)
-			_installedJarNames.value = jarFiles
-				.map { it.name }
-				.sortedBy { it.lowercase() }
 		}
 	}
 
 	fun resolveJarPriorityOrder(currentValue: String): List<String> {
-		val installed = _installedJarNames.value.distinct()
-		if (installed.isEmpty()) {
-			return emptyList()
-		}
-		val savedOrder = currentValue
-			.split(",")
-			.map { it.trim() }
-			.filter { it.isNotEmpty() }
-		val installedByBaseName = installed.associateBy { it.removeSuffix(".jar") }
-		val ordered = savedOrder
-			.mapNotNull(installedByBaseName::get)
-			.distinct()
-			.toMutableList()
-		installed.forEach { jarName ->
-			if (jarName !in ordered) {
-				ordered += jarName
-			}
-		}
-		return ordered
+		return resolveJarPriorityOrder(installedJarNames.value, currentValue)
 	}
 
 	fun persistJarPriorityOrder(jarNames: List<String>) {
 		val normalized = jarNames
-			.map { it.removeSuffix(".jar") }
+			.map { it.jarBaseName() }
 			.distinct()
 			.joinToString(",")
 		settings.jarPriorityOrder = normalized

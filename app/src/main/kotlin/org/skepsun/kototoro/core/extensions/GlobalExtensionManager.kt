@@ -54,6 +54,9 @@ object GlobalExtensionManager {
     private val _contentSources = MutableStateFlow<List<PluginContentSource>>(emptyList())
     val contentSources: StateFlow<List<PluginContentSource>> = _contentSources.asStateFlow()
 
+    private val _installedJarNames = MutableStateFlow<List<String>>(emptyList())
+    val installedJarNames: StateFlow<List<String>> = _installedJarNames.asStateFlow()
+
     private val allLoadedMangaSources = mutableListOf<PluginMangaSource>()
     private val allLoadedContentSources = mutableListOf<PluginContentSource>()
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
@@ -91,6 +94,7 @@ object GlobalExtensionManager {
                 allLoadedContentSources.addAll(wrapped)
             }
         }
+        _installedJarNames.value = plugins.map { it.jarName }.distinct().sortedBy { it.lowercase() }
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         if (prefsListener == null) {
@@ -108,42 +112,20 @@ object GlobalExtensionManager {
     }
 
     private fun applyDeduplication(prefs: SharedPreferences) {
-        val priorityStr = prefs.getString("jar_priority_order", "kototoro-parsers,kotatsu-parsers-redo,kotatsu-parsers") ?: ""
-        val priorityList = priorityStr
-            .split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-        val loadedJarNames = (allLoadedMangaSources.map { it.jarName } + allLoadedContentSources.map { it.jarName })
-            .distinct()
-
-        fun getPriorityScore(jarName: String): Int {
-            val baseName = jarName.removeSuffix(".jar")
-            val index = priorityList.indexOf(baseName)
-            return if (index == -1) priorityList.size + loadedJarNames.indexOf(jarName).coerceAtLeast(Int.MAX_VALUE / 2) else index
+        val priorityOrder = prefs.getString("jar_priority_order", DEFAULT_JAR_PRIORITY_ORDER_VALUE).orEmpty()
+        val candidates = buildList {
+            allLoadedMangaSources.forEach { add(JarSourceCandidate(it.name, it.jarName, mangaSource = it)) }
+            allLoadedContentSources.forEach { add(JarSourceCandidate(it.name, it.jarName, contentSource = it)) }
         }
+        val selectedSources = selectPreferredJarSources(
+            sources = candidates,
+            priorityOrder = priorityOrder,
+            sourceName = JarSourceCandidate::sourceName,
+            jarName = JarSourceCandidate::jarName,
+        )
 
-        val deduplicatedMangaSources = allLoadedMangaSources
-            .groupBy { it.originalSource.name }
-            .map { (_, sources) ->
-                sources.minWithOrNull(
-                    compareBy<PluginMangaSource> { getPriorityScore(it.jarName) }
-                        .thenBy { loadedJarNames.indexOf(it.jarName).coerceAtLeast(Int.MAX_VALUE / 2) }
-                        .thenBy { it.jarName.lowercase() },
-                )!!
-            }
-
-        val deduplicatedContentSources = allLoadedContentSources
-            .groupBy { it.originalSource.name }
-            .map { (_, sources) ->
-                sources.minWithOrNull(
-                    compareBy<PluginContentSource> { getPriorityScore(it.jarName) }
-                        .thenBy { loadedJarNames.indexOf(it.jarName).coerceAtLeast(Int.MAX_VALUE / 2) }
-                        .thenBy { it.jarName.lowercase() },
-                )!!
-            }
-
-        _mangaSources.value = deduplicatedMangaSources
-        _contentSources.value = deduplicatedContentSources
+        _mangaSources.value = selectedSources.mapNotNull { it.mangaSource }
+        _contentSources.value = selectedSources.mapNotNull { it.contentSource }
     }
 
     private fun publishRegistryUpdate() {
@@ -166,4 +148,11 @@ object GlobalExtensionManager {
         val plugin = contentPlugins[pluginSource.jarName] ?: throw IllegalStateException("JAR missing: ${pluginSource.jarName}")
         return JarExtensionLoader.instantiateContentParser(plugin, pluginSource.originalSource, context)
     }
+
+    private data class JarSourceCandidate(
+        val sourceName: String,
+        val jarName: String,
+        val mangaSource: PluginMangaSource? = null,
+        val contentSource: PluginContentSource? = null,
+    )
 }

@@ -32,6 +32,9 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.BaseAppHolder
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.parser.favicon.faviconUri
+import org.skepsun.kototoro.core.extensions.PluginContentSource
+import org.skepsun.kototoro.core.extensions.PluginMangaSource
+import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
 import org.skepsun.kototoro.core.ui.image.FaviconDrawable
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -173,11 +176,18 @@ fun ContentSourceResolvedIcon(
     }
     val resolvedSource = source
     val listIconUrl = (resolvedSource as? JsonSourceListSource)?.iconUrl?.takeIf { it.isNotBlank() }
-    val sourceFailureKey = remember(resolvedSource.name, resolvedSource.javaClass.name, styleResId, listIconUrl) {
+    val jarIdentity = resolvedSource.jarIdentityForIcon()
+    val sourceFailureKey = remember(resolvedSource.name, resolvedSource.javaClass.name, jarIdentity, styleResId, listIconUrl) {
         val iconPart = listIconUrl?.let { "#${it.hashCode()}" }.orEmpty()
-        "${resolvedSource.name}#$SOURCE_ICON_CACHE_VERSION#${resolvedSource.javaClass.name}#$styleResId$iconPart"
+        "${resolvedSource.name}#$SOURCE_ICON_CACHE_VERSION#${resolvedSource.javaClass.name}#$jarIdentity#$styleResId$iconPart"
     }
-    val fallbackDrawable = remember(resolvedSource.name, resolvedSource.javaClass.name, resolvedSource.locale, styleResId) {
+    val fallbackDrawable = remember(
+        resolvedSource.name,
+        resolvedSource.javaClass.name,
+        resolvedSource.locale,
+        jarIdentity,
+        styleResId,
+    ) {
         FaviconDrawable(context, styleResId, resolveFallbackTitle(context, resolvedSource)).asImage()
     }
     val fallbackFactory: (ImageRequest) -> Image? = remember(fallbackDrawable) {
@@ -219,11 +229,7 @@ fun ContentSourceResolvedIcon(
         }
     }
 
-    val iconCacheKey = remember(sourceFailureKey, resolvedSource.name, resolvedSource.javaClass.name, styleResId, listIconUrl) {
-        listIconUrl?.let {
-            "${resolvedSource.name}#$SOURCE_ICON_CACHE_VERSION#${resolvedSource.javaClass.name}#$styleResId#${it.hashCode()}"
-        } ?: sourceFailureKey
-    }
+    val iconCacheKey = sourceFailureKey
     val memoryCacheKey = remember(iconCacheKey) { MemoryCache.Key(iconCacheKey) }
     val cachedIcon = remember(imageLoader, memoryCacheKey, hasError, useFallbackOnly) {
         imageLoader.memoryCache?.get(memoryCacheKey)?.image
@@ -240,6 +246,7 @@ fun ContentSourceResolvedIcon(
         useFallbackOnly,
         useNegativeCache,
         listIconUrl,
+        jarIdentity,
     ) {
         if (hasError || useFallbackOnly) {
             fallbackDrawable
@@ -301,9 +308,15 @@ fun ContentSourceResolvedIcon(
 }
 
 private val failedSourceIcons = ConcurrentHashMap<String, Boolean>()
-private const val SOURCE_ICON_CACHE_VERSION = "v2"
+private const val SOURCE_ICON_CACHE_VERSION = "v3"
 private const val SOURCE_ICON_LOG_TAG = "SourceIcon"
 private val sourceIconLoadSemaphore = Semaphore(permits = 4)
+
+private fun ContentSource.jarIdentityForIcon(): String = when (this) {
+    is PluginContentSource -> jarName
+    is KotatsuParserSource -> (delegate as? PluginMangaSource)?.jarName.orEmpty()
+    else -> ""
+}
 
 private fun logSourceIconRequest(
     source: ContentSource,

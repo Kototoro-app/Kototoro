@@ -127,7 +127,10 @@ object JarExtensionLoader {
 
         if (!pluginDir.exists()) return emptyList()
 
-        val jarFiles = pluginDir.listFiles { file -> file.extension == "jar" } ?: emptyArray()
+        val jarFiles = pluginDir
+            .listFiles { file -> file.extension.equals("jar", ignoreCase = true) }
+            ?.sortedBy { it.name.lowercase() }
+            .orEmpty()
 
         for (jarFile in jarFiles) {
             jarFile.setReadOnly() // Fix Android 14+ classloader restrictions

@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
@@ -1138,7 +1139,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		}
 
 	var jarPriorityOrder: String
-		get() = prefs.getString(KEY_JAR_PRIORITY_ORDER, DEFAULT_JAR_PRIORITY_ORDER).orEmpty()
+		get() = prefs.getString(KEY_JAR_PRIORITY_ORDER, DEFAULT_JAR_PRIORITY_ORDER_VALUE).orEmpty()
 		set(value) = prefs.edit { putString(KEY_JAR_PRIORITY_ORDER, value) }
 
 	var isExtensionsGridMode: Boolean
@@ -2598,7 +2599,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_CLEAR_MANGA_DATA = "manga_data_clear"
 		const val KEY_STORAGE_USAGE = "storage_usage"
 		const val KEY_WEBVIEW_CLEAR = "webview_clear"
-		private const val DEFAULT_JAR_PRIORITY_ORDER = "kototoro-parsers,kotatsu-parsers-redo,kotatsu-parsers"
 
 		// old keys are for migration only
 		private const val KEY_IMAGES_PROXY_OLD = "images_proxy"
