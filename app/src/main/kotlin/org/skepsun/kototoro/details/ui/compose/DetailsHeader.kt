@@ -208,6 +208,7 @@ fun DetailsHeader(
     fallbackCoverUrl: String?,
     sharedElementKey: String? = null,
     showWorkActions: Boolean = true,
+    outerHorizontalPadding: Dp = AppLayoutTokens.screenHorizontalPadding,
     onInfoCardBoundsSync: (Float, Float) -> Unit,
     onCoverClick: (String?) -> Unit,
     onFavoriteClick: () -> Unit,
@@ -452,7 +453,7 @@ fun DetailsHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(
-                horizontal = AppLayoutTokens.screenHorizontalPadding,
+                horizontal = outerHorizontalPadding,
                 vertical = 12.dp,
             ),
         verticalArrangement = Arrangement.spacedBy(12.dp),

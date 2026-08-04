@@ -146,10 +146,16 @@ fun ChapterGridCard(
 		),
 		border = if (!item.isUnread && !isSelected) null else CardDefaults.outlinedCardBorder()
 	) {
-		Box(modifier = Modifier.fillMaxSize()) {
+		BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+			val titleStyle = when {
+				maxWidth < 56.dp -> MaterialTheme.typography.labelSmall
+				maxWidth < 72.dp -> MaterialTheme.typography.bodySmall
+				maxWidth < 88.dp -> MaterialTheme.typography.bodyMedium
+				else -> MaterialTheme.typography.titleMedium
+			}
 			Text(
 				text = item.getTitle(context.resources),
-				style = MaterialTheme.typography.titleMedium,
+				style = titleStyle,
 				color = titleColor,
 				maxLines = 1,
 				textAlign = TextAlign.Center,

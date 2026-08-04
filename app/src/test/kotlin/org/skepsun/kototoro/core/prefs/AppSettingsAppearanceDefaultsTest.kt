@@ -30,6 +30,7 @@ class AppSettingsAppearanceDefaultsTest {
 		every { preferences.contains(any()) } returns false
 		every { preferences.getBoolean(any(), any()) } answers { secondArg() }
 		every { preferences.getInt(any(), any()) } answers { secondArg() }
+		every { preferences.getString(any(), any()) } answers { secondArg() }
 	}
 
 	@AfterEach
@@ -49,5 +50,13 @@ class AppSettingsAppearanceDefaultsTest {
 		val settings = AppSettings(context)
 
 		settings.panoramaTransitionIntensity shouldBe 100
+	}
+
+	@Test
+	fun `interface font presets default to Inter`() {
+		val settings = AppSettings(context)
+
+		settings.appFontPreset shouldBe AppFontPreset.INTER
+		settings.expressiveAppFontPreset shouldBe AppFontPreset.INTER
 	}
 }

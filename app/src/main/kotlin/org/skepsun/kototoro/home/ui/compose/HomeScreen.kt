@@ -1424,29 +1424,27 @@ private fun QuickActionsSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        androidx.compose.foundation.layout.BoxWithConstraints {
-            val compact = maxWidth < 680.dp
-            val itemsPerRow = when {
-                maxWidth >= 800.dp -> 4
-                maxWidth >= 620.dp -> 3
-                isIosStyle -> 3
-                maxWidth >= 360.dp -> 4
-                else -> 3
-            }
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val itemSpacing = 8.dp
+            val preferredItemWidth = 68.dp
+            val columns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
+                .toInt()
+                .coerceAtLeast(2)
+            val itemWidth = (maxWidth - itemSpacing * (columns - 1)) / columns
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(itemSpacing),
                 verticalArrangement = if (isIosStyle) {
                     Arrangement.spacedBy(7.dp, Alignment.CenterVertically)
                 } else {
                     Arrangement.spacedBy(8.dp)
                 },
-                maxItemsInEachRow = itemsPerRow,
+                maxItemsInEachRow = columns,
             ) {
-                actions.forEach { action ->
+                actions.forEachIndexed { index, action ->
                     QuickAccessButton(
                         action = action,
-                        compact = compact,
-                        modifier = Modifier.weight(1f, fill = true),
+                        paletteIndex = index,
+                        modifier = Modifier.size(width = itemWidth, height = 64.dp),
                     )
                 }
             }
@@ -1464,79 +1462,71 @@ private data class HomeQuickAction(
 @Composable
 private fun QuickAccessButton(
     action: HomeQuickAction,
-    compact: Boolean = false,
+    paletteIndex: Int,
     modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val containerColor = when {
+        isIosStyle -> Color.Transparent
+        !expressive -> MaterialTheme.colorScheme.surfaceContainerLow
+        paletteIndex % 3 == 0 -> MaterialTheme.colorScheme.secondaryContainer
+        paletteIndex % 3 == 1 -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    val expressiveContentColor = when (paletteIndex % 3) {
+        0 -> MaterialTheme.colorScheme.onSecondaryContainer
+        1 -> MaterialTheme.colorScheme.onTertiaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val textColor = when {
+        !action.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        isIosStyle || !expressive -> MaterialTheme.colorScheme.onSurface
+        else -> expressiveContentColor
+    }
+    val iconTint = when {
+        !action.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        isIosStyle -> MaterialTheme.colorScheme.primary
+        !expressive -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> expressiveContentColor
+    }
     Surface(
-        modifier = modifier.then(if (isIosStyle) Modifier.heightIn(min = 72.dp) else Modifier),
-        shape = RoundedCornerShape(if (expressive) 24.dp else 18.dp),
-        color = if (isIosStyle) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = modifier,
+        shape = RoundedCornerShape(if (expressive) 20.dp else 16.dp),
+        color = containerColor,
         tonalElevation = if (expressive) 0.dp else 1.dp,
-        border = when {
-            isIosStyle -> BorderStroke(
+        border = if (isIosStyle) {
+            BorderStroke(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
             )
-            expressive -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f))
-            else -> null
+        } else {
+            null
         },
     ) {
-        if (compact) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (isIosStyle) Modifier.heightIn(min = 72.dp) else Modifier)
-                    .clickable(enabled = action.enabled, onClick = action.onClick)
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalArrangement = if (isIosStyle) {
-                    Arrangement.spacedBy(7.dp, Alignment.CenterVertically)
-                } else {
-                    Arrangement.spacedBy(8.dp)
-                },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                HomeQuickActionIcon(
-                    iconRes = action.iconRes,
-                    enabled = action.enabled,
-                    modifier = Modifier.size(if (expressive) 22.dp else 18.dp),
-                )
-                Text(
-                    text = action.label,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (action.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (isIosStyle) Modifier.heightIn(min = 72.dp) else Modifier)
-                    .clickable(enabled = action.enabled, onClick = action.onClick)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                HomeQuickActionIcon(
-                    iconRes = action.iconRes,
-                    enabled = action.enabled,
-                    modifier = Modifier.size(if (expressive) 24.dp else 20.dp),
-                )
-                Text(
-                    text = action.label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (action.enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(enabled = action.enabled, onClick = action.onClick)
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            HomeQuickActionIcon(
+                iconRes = action.iconRes,
+                tint = iconTint,
+                modifier = Modifier.size(if (expressive) 20.dp else 18.dp),
+            )
+            Text(
+                text = action.label,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                color = textColor,
+            )
         }
     }
 }
@@ -1544,15 +1534,9 @@ private fun QuickAccessButton(
 @Composable
 private fun HomeQuickActionIcon(
     iconRes: Int,
-    enabled: Boolean,
+    tint: Color,
     modifier: Modifier = Modifier,
 ) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val tint = if (enabled) {
-        if (isIosStyle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-    }
     Icon(
         painter = painterResource(iconRes),
         contentDescription = null,

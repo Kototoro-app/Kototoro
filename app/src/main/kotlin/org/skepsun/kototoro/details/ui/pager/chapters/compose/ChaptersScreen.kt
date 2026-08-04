@@ -46,7 +46,7 @@ import org.skepsun.kototoro.details.ui.model.chapterFastScrollLabelAt
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.list.ui.model.CollapsibleListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
-import kotlin.math.floor
+import kotlin.math.roundToInt
 
 @Composable
 fun ChaptersScreen(
@@ -176,14 +176,9 @@ fun ChaptersScreen(
                             .then(paneNestedScrollModifier),
                     ) {
                         val gridSpacing = 4.dp
-                        val horizontalPadding = 16.dp * 2
-                        val availableWidth = maxWidth - horizontalPadding
-                        val targetCardWidthDp = (gridScale * 100).dp.coerceIn(60.dp, 200.dp)
-                        val gridSpanCount = remember(availableWidth, targetCardWidthDp, gridSpacing) {
-                            floor(
-                                ((availableWidth + gridSpacing) / (targetCardWidthDp + gridSpacing))
-                                    .toDouble(),
-                            ).toInt().coerceAtLeast(2)
+                        val targetCardWidthDp = (gridScale * 80).dp.coerceIn(48.dp, 160.dp)
+                        val gridSpanCount = remember(maxWidth, targetCardWidthDp) {
+                            (maxWidth / targetCardWidthDp).roundToInt().coerceAtLeast(2)
                         }
 
                         LazyVerticalGrid(
@@ -242,7 +237,7 @@ fun ChaptersScreen(
                 } else {
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp),
                         userScrollEnabled = isScrollEnabled,
                         modifier = Modifier
                             .fillMaxSize()
@@ -282,6 +277,7 @@ fun ChaptersScreen(
                     VerticalScrollbar(
                         state = listState,
                         draggable = isScrollEnabled,
+                        endInset = 16.dp,
                         labelProvider = fastScrollLabelProvider,
                     )
                 }

@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -263,10 +264,13 @@ private val ModernDetailsDockHeight = 86.dp
 private val ModernDetailsDockBottomClearance = 16.dp
 private val DetailsDockContentHorizontalPadding = 8.dp
 private val ModernDetailsDockCompactPrimaryWidth = 112.dp
-private val ModernDetailsDockToolsWidth = 112.dp
+private val ModernDetailsDockToolsWidth = 92.dp
+private val ModernDetailsDockMoreToolsWidth = 42.dp
 private val ModernDetailsDockTabSlotWidth = 50.dp
+private val DualPaneDetailsPrimaryDockMinWidth = 194.dp
 private val ModernDetailsDockMoreButtonWidth = 40.dp
 private val ModernDetailsDockChromeHeight = 52.dp
+private val GridSizeControlsHeight = 84.dp
 private val ModernDetailsDockExpandedPanelGap = 12.dp
 private const val ModernDetailsDockAnimationDurationMillis = 380
 private const val PageThumbnailAspectRatioMin = 0.35f
@@ -1151,7 +1155,13 @@ private fun DetailsScreenContent(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .height(interfaceStyleTokens.mainTopBarHeight)
-                            .padding(horizontal = CompactTopBarHorizontalPadding),
+                            .padding(
+                                horizontal = if (isWideAdaptiveLayout) {
+                                    0.dp
+                                } else {
+                                    CompactTopBarHorizontalPadding
+                                },
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
                     ) {
@@ -1313,7 +1323,10 @@ private fun DetailsScreenContent(
                         modifier = Modifier
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.displayCutout)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(
+                                horizontal = CompactTopBarHorizontalPadding,
+                                vertical = 8.dp,
+                            ),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Scaffold(
@@ -1349,6 +1362,7 @@ private fun DetailsScreenContent(
                                     modifier = Modifier.fillMaxSize(),
                                     scrollState = landscapeLeftScrollState,
                                     contentPadding = paddingValues,
+                                    outerHorizontalPadding = 0.dp,
                                     headerTopSpacing = landscapeHeaderTopSpacing,
                                     bottomSpacerHeight = 40.dp,
                                     preferLightweightFirstFrame = false,
@@ -1422,12 +1436,14 @@ private fun DetailsScreenContent(
                             }
                         }
                         if (isWorkDetails) {
+                            val widePaneTopPadding = statusBarTopPadding +
+                                (interfaceStyleTokens.mainTopBarHeight - interfaceStyleTokens.topBarButtonSize) / 2
                             Surface(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .weight(1f)
                                     .padding(
-                                        top = statusBarTopPadding,
+                                        top = widePaneTopPadding,
                                         bottom = navigationBarBottomPadding,
                                     ),
                                 color = Color.Transparent,
@@ -2615,6 +2631,7 @@ private fun DetailsScrollableContent(
     scrollState: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    outerHorizontalPadding: Dp = AppLayoutTokens.screenHorizontalPadding,
     headerTopSpacing: androidx.compose.ui.unit.Dp = 0.dp,
     bottomSpacerHeight: androidx.compose.ui.unit.Dp,
     preferLightweightFirstFrame: Boolean = false,
@@ -2658,7 +2675,7 @@ private fun DetailsScrollableContent(
             TemporaryDetailsReadOnlyNotice(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = outerHorizontalPadding, vertical = 8.dp),
             )
         }
         DetailsHeader(
@@ -2687,6 +2704,7 @@ private fun DetailsScrollableContent(
             fallbackCoverUrl = fallbackCoverUrl,
             sharedElementKey = sharedElementKey,
             showWorkActions = isWorkActionEnabled,
+            outerHorizontalPadding = outerHorizontalPadding,
 
             onInfoCardBoundsSync = onInfoCardBoundsSync,
             onCoverClick = { onActionClick(DetailsAction.OpenCover) },
@@ -2740,17 +2758,22 @@ private fun DetailsScrollableContent(
         if (!preferLightweightFirstFrame && relatedContent.isNotEmpty()) {
             DetailsRelatedContentSection(
                 items = relatedContent,
+                outerHorizontalPadding = outerHorizontalPadding,
                 onItemClick = { item ->
                     onActionClick(DetailsAction.OpenContent(item.toContentWithOverride()))
                 },
             )
         }
         if (!preferLightweightFirstFrame && supplementalMetadataProperties.isNotEmpty()) {
-            DetailsSupplementMetadataCard(properties = supplementalMetadataProperties)
+            DetailsSupplementMetadataCard(
+                properties = supplementalMetadataProperties,
+                outerHorizontalPadding = outerHorizontalPadding,
+            )
         }
         if (visibleSupplementalSections.isNotEmpty()) {
             DetailsRelationSections(
                 sections = visibleSupplementalSections,
+                outerHorizontalPadding = outerHorizontalPadding,
                 onItemClick = { item ->
                     val service = item.trackingService
                     val remoteId = item.remoteId
@@ -2774,6 +2797,7 @@ private fun DetailsScrollableContent(
         if (!preferLightweightFirstFrame && entityRelationSections.isNotEmpty()) {
             DetailsRelationSections(
                 sections = entityRelationSections,
+                outerHorizontalPadding = outerHorizontalPadding,
                 onItemClick = { item ->
                     val service = item.trackingService
                     val remoteId = item.remoteId
@@ -2891,7 +2915,11 @@ private fun DetailsPaneContent(
             handleRevealProgress = modernDragHandleRevealProgress,
         ) + modernDockDragHandleHeight(modernDragHandleRevealProgress) +
             modernDockDragHandleGap(modernDragHandleRevealProgress) +
-            ModernDetailsDockChromeHeight +
+            (if (detailsPaneState.isGridSizeControlsVisible) {
+                GridSizeControlsHeight
+            } else {
+                ModernDetailsDockChromeHeight
+            }) +
             ModernDetailsDockExpandedPanelGap
     } else {
         76.dp
@@ -3307,14 +3335,34 @@ private fun DetailsPaneActionsRow(
                 val tabsDockPadding = if (isModernDockEnabled) 12.dp else 4.dp
                 val dockGap = if (isModernDockEnabled) 8.dp else 4.dp
                 val expandedTabsDockWidth = tabsDockPadding + (tabSlotWidth * visibleDockTabCount)
-                val expandedPrimaryDockWidth = (maxWidth - expandedTabsDockWidth - dockGap)
-                    .coerceAtLeast(ModernDetailsDockCompactPrimaryWidth)
-                val isExpandedTools = topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools ||
-                    topBarMode == DetailsPaneTopBarMode.ExpandedGridTools
+                val isDualPaneChapterTools = !showCollapsedHandle &&
+                    topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools
+                val minimumTabsDockWidth = tabsDockPadding + tabSlotWidth
+                val desiredTabsDockWidth = if (showAllDockTabs) {
+                    expandedTabsDockWidth
+                } else {
+                    minimumTabsDockWidth
+                }
+                val primaryDockMinWidth = if (isDualPaneChapterTools) {
+                    DualPaneDetailsPrimaryDockMinWidth
+                } else {
+                    ModernDetailsDockCompactPrimaryWidth
+                }
+                val tabsDockWidth = desiredTabsDockWidth.coerceAtMost(
+                    (maxWidth - primaryDockMinWidth - dockGap).coerceAtLeast(minimumTabsDockWidth),
+                )
+                val expandedPrimaryDockWidth = (maxWidth - tabsDockWidth - dockGap).coerceAtLeast(0.dp)
                 val primaryDockWidth by animateDpAsState(
                     targetValue = when {
                         compactModernDock -> ModernDetailsDockCompactPrimaryWidth
-                        isModernDockEnabled && isExpandedTools -> ModernDetailsDockToolsWidth
+                        isModernDockEnabled &&
+                            topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools &&
+                            !isDualPaneChapterTools -> {
+                            ModernDetailsDockMoreToolsWidth
+                        }
+                        isModernDockEnabled && topBarMode == DetailsPaneTopBarMode.ExpandedGridTools -> {
+                            ModernDetailsDockToolsWidth
+                        }
                         else -> expandedPrimaryDockWidth
                     },
                     animationSpec = tween(
@@ -3323,22 +3371,37 @@ private fun DetailsPaneActionsRow(
                     ),
                     label = "detailsPrimaryDockWidth",
                 )
+                val tabsScrollState = rememberScrollState()
+                val selectedDockTabIndex = when (selectedTabId) {
+                    DETAILS_TAB_PAGES -> if (showPagesTab) 1 else 0
+                    DETAILS_TAB_BOOKMARKS -> visibleDockTabCount - 1
+                    else -> 0
+                }
+                val tabSlotWidthPx = with(LocalDensity.current) { tabSlotWidth.roundToPx() }
+                LaunchedEffect(selectedDockTabIndex, tabsScrollState.maxValue, tabSlotWidthPx) {
+                    tabsScrollState.animateScrollTo(
+                        (selectedDockTabIndex * tabSlotWidthPx).coerceAtMost(tabsScrollState.maxValue),
+                    )
+                }
 
                 DetailsDockContainer(
                     modernStyle = isModernDockEnabled,
                     modifier = Modifier
                         .align(Alignment.CenterStart)
-                        .then(modernDockDragModifier),
+                        .then(modernDockDragModifier)
+                        .width(tabsDockWidth),
                 ) {
                     Row(
-                        modifier = Modifier.padding(
-                            horizontal = if (isModernDockEnabled) 5.dp else 2.dp,
-                            vertical = if (isModernDockEnabled) 5.dp else 0.dp,
-                        ),
+                        modifier = Modifier
+                            .horizontalScroll(tabsScrollState)
+                            .padding(
+                                horizontal = if (isModernDockEnabled) 5.dp else 2.dp,
+                                vertical = if (isModernDockEnabled) 5.dp else 0.dp,
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AnimatedVisibility(
-                            visible = showAllDockTabs || selectedTabId == DETAILS_TAB_CHAPTERS,
+                            visible = true,
                             enter = dockItemEnter,
                             exit = dockItemExit,
                         ) {
@@ -3356,7 +3419,7 @@ private fun DetailsPaneActionsRow(
                             )
                         }
                         AnimatedVisibility(
-                            visible = showPagesTab && (showAllDockTabs || selectedTabId == DETAILS_TAB_PAGES),
+                            visible = showPagesTab,
                             enter = dockItemEnter,
                             exit = dockItemExit,
                         ) {
@@ -3374,7 +3437,7 @@ private fun DetailsPaneActionsRow(
                             )
                         }
                         AnimatedVisibility(
-                            visible = showBookmarksTab && (showAllDockTabs || selectedTabId == DETAILS_TAB_BOOKMARKS),
+                            visible = showBookmarksTab,
                             enter = dockItemEnter,
                             exit = dockItemExit,
                         ) {
@@ -3426,7 +3489,7 @@ private fun DetailsPaneActionsRow(
                                     )
                                 } else {
                                     ReadDock(
-                                        modifier = Modifier.weight(0.64f),
+                                        modifier = Modifier.weight(1f),
                                         modernStyle = isModernDockEnabled,
                                         compact = compactModernDock,
                                         readLabel = resolveReadActionLabel(
@@ -3450,7 +3513,7 @@ private fun DetailsPaneActionsRow(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     ExpandedPaneUtilityDock(
-                                        modifier = Modifier.weight(0.36f),
+                                        modifier = Modifier.width(ModernDetailsDockMoreToolsWidth),
                                         modernStyle = isModernDockEnabled,
                                         sheetExpansionProgress = paneOpacityProgress,
                                         isSearchEnabled = isChapterSearchAvailable,
@@ -3482,11 +3545,12 @@ private fun DetailsPaneActionsRow(
                                         modernStyle = isModernDockEnabled,
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 5.dp),
+                                            modifier = Modifier.padding(horizontal = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             DetailsChromeButton(
                                                 onClick = onTogglePageThumbnailsFitPreview,
+                                                modifier = Modifier.size(42.dp),
                                             ) {
                                                 Icon(
                                                     painter = rememberSafePainter(R.drawable.ic_aspect_ratio),
@@ -3500,6 +3564,7 @@ private fun DetailsPaneActionsRow(
                                             }
                                             DetailsChromeButton(
                                                 onClick = detailsPaneState::showGridSizeControls,
+                                                modifier = Modifier.size(42.dp),
                                             ) {
                                                 Icon(
                                                     painter = rememberSafePainter(R.drawable.ic_size_large),
@@ -3769,17 +3834,23 @@ private fun LabeledGridSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(40.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(112.dp),
         )
         KototoroSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -3815,42 +3886,56 @@ private fun ExpandedPaneUtilityDock(
         Row(
             modifier = Modifier
                 .height(ModernDetailsDockChromeHeight)
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp),
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
-            IconButton(
-                onClick = onSearchClick,
-                enabled = isSearchEnabled,
-                modifier = Modifier
-                    .width(42.dp)
-                    .height(42.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = stringResource(R.string.search_chapters),
-                    tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
             Box {
                 IconButton(
                     onClick = { expanded = true },
                     modifier = Modifier
                         .width(42.dp)
                         .height(42.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = stringResource(R.string.options),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = stringResource(R.string.options),
+                            tint = if (isSearchActive) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
                 GlassDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                     offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
                 ) {
+                    CompactDropdownMenuItem(
+                        text = { Text(stringResource(R.string.search_chapters)) },
+                        enabled = isSearchEnabled,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = if (isSearchActive) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        },
+                        trailingIcon = if (isSearchActive) {
+                            { MenuSelectionIndicator(selected = true) }
+                        } else {
+                            null
+                        },
+                        onClick = {
+                            expanded = false
+                            onSearchClick()
+                        },
+                    )
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.reverse)) },
                         leadingIcon = {
@@ -4234,7 +4319,7 @@ private fun ReadDock(
 
         Box(
             modifier = Modifier
-                .width(if (modernStyle) ModernDetailsDockMoreButtonWidth else 50.dp)
+                .width(ModernDetailsDockMoreButtonWidth)
                 .fillMaxHeight()
                 .onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
         ) {
@@ -5233,6 +5318,7 @@ fun DetailsChromeButton(
 @Composable
 fun DetailsRelationSections(
     sections: List<EntityRelationSection>,
+    outerHorizontalPadding: Dp = AppLayoutTokens.sectionHorizontalPadding,
     onItemClick: (EntityRelationItem) -> Unit,
 ) {
     Column(
@@ -5245,12 +5331,12 @@ fun DetailsRelationSections(
             DetailsRelationSectionContainer(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
+                    .padding(horizontal = outerHorizontalPadding),
             ) {
                 EntityRelationSectionHeader(section = section)
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding),
+                    contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
                 ) {
                     items(
                         items = section.items,
@@ -5267,6 +5353,7 @@ fun DetailsRelationSections(
 @Composable
 private fun DetailsRelatedContentSection(
     items: List<ContentListModel>,
+    outerHorizontalPadding: Dp,
     onItemClick: (ContentListModel) -> Unit,
 ) {
     val cardStyle = compactPosterRailCardStyle(gridScale = 1f)
@@ -5280,11 +5367,11 @@ private fun DetailsRelatedContentSection(
             text = stringResource(R.string.details_related_works),
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
+            modifier = Modifier.padding(horizontal = outerHorizontalPadding),
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding),
+            contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
         ) {
             items(
                 items = items,
@@ -5306,11 +5393,12 @@ private fun DetailsRelatedContentSection(
 @Composable
 private fun DetailsSupplementMetadataCard(
     properties: List<Pair<String, String>>,
+    outerHorizontalPadding: Dp,
 ) {
     GlassSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
+            .padding(horizontal = outerHorizontalPadding),
         style = GlassDefaults.subtleStyle(),
         shape = RoundedCornerShape(24.dp),
     ) {

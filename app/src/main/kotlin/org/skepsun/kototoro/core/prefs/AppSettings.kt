@@ -262,11 +262,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		}
 
 	var appFontPreset: AppFontPreset
-		get() = prefs.getEnumValue(KEY_APP_FONT_PRESET, AppFontPreset.SYSTEM)
+		get() = prefs.getEnumValue(KEY_APP_FONT_PRESET, AppFontPreset.INTER)
 		set(value) = prefs.edit { putEnumValue(KEY_APP_FONT_PRESET, value) }
 
 	var expressiveAppFontPreset: AppFontPreset
-		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.SARASA_GOTHIC)
+		get() = prefs.getEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, AppFontPreset.INTER)
 		set(value) = prefs.edit { putEnumValue(KEY_EXPRESSIVE_APP_FONT_PRESET, value) }
 
 	var navHeight: Int

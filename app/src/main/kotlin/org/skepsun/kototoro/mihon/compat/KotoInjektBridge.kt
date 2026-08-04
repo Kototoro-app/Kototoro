@@ -12,9 +12,10 @@ import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addSingleton
 import uy.kohesive.injekt.api.addSingletonFactory
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.StringFormat
 import kotlinx.serialization.SerialFormat
+import kotlinx.serialization.StringFormat
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.protobuf.ProtoBuf
 import javax.inject.Singleton
 
 @Singleton
@@ -67,6 +68,7 @@ class KotoInjektBridge(
                     addSingletonFactory<Json> { json }
                     addSingletonFactory<StringFormat> { json }
                     addSingletonFactory<SerialFormat> { json }
+                    addSingletonFactory<ProtoBuf> { ProtoBuf }
                 }
             })
             

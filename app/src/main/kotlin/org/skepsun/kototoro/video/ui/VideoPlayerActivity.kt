@@ -15,6 +15,7 @@ import android.app.PictureInPictureParams
 import android.provider.MediaStore
 import android.util.Rational
 import android.view.PixelCopy
+import android.view.WindowManager
 import android.util.Log
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -298,6 +299,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             runOnUiThread {
+                setKeepScreenOn(isPlaying)
                 updatePlaybackMenu()
                 syncComposeControlState()
                 danmakuController.onPlaybackStateChanged(isPlaying)
@@ -333,6 +335,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             saveHistoryProgressAsync(completed = true)
             suspiciousAdRetryCount = 0
             runOnUiThread {
+                setKeepScreenOn(false)
                 maybeAutoPlayNext()
             }
         }
@@ -351,6 +354,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onPlaybackFailed(message: String?) {
             runOnUiThread {
+                setKeepScreenOn(false)
                 cancelPlaybackStartupTimeout()
                 handlePlaybackFallback("mpv_end_file_before_loaded", message)
             }
@@ -2942,6 +2946,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         syncComposeControlState()
     }
 
+    private fun setKeepScreenOn(enabled: Boolean) {
+        if (enabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     override fun onStop() {
         playerRoot.removeCallbacks(hideUiRunnable)
         playerRoot.removeCallbacks(progressUpdateRunnable)
@@ -2955,6 +2967,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         finishReadingSession()
         videoLocalCacheProxy.logSessionStats("onStop")
         mpvPlayer?.pause()
+        setKeepScreenOn(false)
         danmakuController.pause()
     }
 

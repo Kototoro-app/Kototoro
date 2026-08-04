@@ -17,43 +17,56 @@ class SettingsSearchHelper @Inject constructor(
 		
 		val appearanceBreadcrumbs = listOf(context.getString(R.string.appearance))
 		val appearanceKeys = listOf(
+			"interface_style" to R.string.interface_style,
 			"color_theme" to R.string.color_theme,
-			"theme" to R.string.theme,
+			"theme" to R.string.appearance_mode,
+			"background_style" to R.string.background_style,
 			"amoled_theme" to R.string.black_dark_theme,
-			"reduced_visual_effects" to R.string.pref_reduce_visual_effects,
-			"glass_material_preset" to R.string.pref_blur_mode,
-			"glass_blur_strength" to R.string.pref_glass_blur_strength,
-			"glass_noise_strength" to R.string.pref_glass_noise_strength,
-			"glass_immersive_strength" to R.string.pref_glass_immersive_strength,
+			"app_font_preset" to R.string.pref_app_font_preset,
 			"tablet_ui_mode" to R.string.tablet_ui_mode,
 			"app_locale" to R.string.language,
 			"loading_circle_style" to R.string.pref_loading_circle_style,
 			"popup_radius" to R.string.pref_popup_radius,
 			"list_mode_2" to R.string.list_mode,
 			"grid_size" to R.string.grid_size,
+			"rail_animation_intensity" to R.string.pref_rail_animation_intensity,
 			"quick_filter" to R.string.show_quick_filters,
 			"progress_indicators" to R.string.show_reading_indicators,
-			"manga_list_badges" to R.string.badges_in_lists,
+			"badges_top_left" to R.string.badge_top_left,
+			"badges_top_right" to R.string.badge_top_right,
+			"badges_bottom_left" to R.string.badge_bottom_left,
+			"badges_bottom_right" to R.string.badge_bottom_right,
 			"description_collapse" to R.string.collapse_long_description,
 			"panorama_enabled" to R.string.pref_panorama_cover,
-			"panorama_blur" to R.string.pref_panorama_blur,
+			"details_panorama_limit_to_info_card_midpoint" to R.string.pref_details_panorama_limit_to_info_card_midpoint,
+			"details_panorama_scroll_linked" to R.string.pref_details_panorama_scroll_linked,
 			"panorama_transition_intensity" to R.string.pref_panorama_transition_intensity,
+			"panorama_blur" to R.string.pref_panorama_blur,
+			"panorama_animation_enabled" to R.string.pref_panorama_animation,
+			"panorama_animation_speed" to R.string.pref_panorama_animation_speed,
 			"panorama_extra_height" to R.string.pref_panorama_extra_height,
 			"panorama_bottom_gradient_alpha" to R.string.pref_panorama_gradient_alpha,
+			"browse_panorama_blend_height" to R.string.pref_browse_panorama_blend_height,
+			"browse_panorama_bottom_gradient_alpha" to R.string.pref_browse_panorama_gradient_alpha,
 			"panorama_downsample" to R.string.pref_panorama_downsample,
-			"details_panorama_scroll_linked" to R.string.pref_details_panorama_scroll_linked,
-			"details_panorama_limit_to_info_card_midpoint" to R.string.pref_details_panorama_limit_to_info_card_midpoint,
-			
 			"pages_tab" to R.string.show_pages_thumbs,
 			"details_translate_button" to R.string.details_translate_button_visible,
+			"modern_details_dock" to R.string.modern_details_dock,
 			"details_tab" to R.string.default_tab,
 			"search_suggest_types" to R.string.search_suggestions,
 			"nav_main" to R.string.main_screen_sections,
 			"shared_element_transitions" to R.string.shared_element_transitions,
+			"show_language_preset_filter" to R.string.show_language_preset_filter,
+			"hidden_language_preset" to R.string.fixed_language_preset,
+			"show_content_type_filter" to R.string.show_content_type_filter,
+			"hidden_content_type" to R.string.fixed_content_type,
+			"show_source_tag_filter" to R.string.show_source_tag_filter,
+			"hidden_source_tag" to R.string.fixed_source_tag,
+			"main_fab" to R.string.main_screen_fab,
 			"nav_pinned" to R.string.pin_navigation_ui,
 			"nav_labels" to R.string.show_labels_in_navbar,
-			"rail_animation_intensity" to R.string.pref_rail_animation_intensity,
 			"nav_floating" to R.string.pref_nav_floating,
+			"nav_expressive_pill" to R.string.pref_nav_expressive_pill,
 			"nav_height" to R.string.pref_nav_height,
 			"nav_floating_height" to R.string.pref_nav_floating_height,
 			"exit_confirm" to R.string.exit_confirmation,
@@ -68,6 +81,31 @@ class SettingsSearchHelper @Inject constructor(
 					title = context.getString(titleRes),
 					breadcrumbs = appearanceBreadcrumbs,
 					destination = SettingsDestination.AppearanceSettings,
+				),
+			)
+		}
+
+		result.add(
+			SettingsItem(
+				key = "spaces",
+				title = context.getString(R.string.spaces),
+				breadcrumbs = listOf(context.getString(R.string.users)),
+				destination = SettingsDestination.SpacesSettings,
+			),
+		)
+		val spacesBreadcrumbs = listOf(context.getString(R.string.users), context.getString(R.string.spaces))
+		val spacesKeys = listOf(
+			"entity_space_enabled" to R.string.spaces_enabled,
+			"entity_space_switcher_position" to R.string.space_switcher_position,
+			"add_custom_space" to R.string.add_custom_space,
+		)
+		spacesKeys.forEach { (key, titleRes) ->
+			result.add(
+				SettingsItem(
+					key = key,
+					title = context.getString(titleRes),
+					breadcrumbs = spacesBreadcrumbs,
+					destination = SettingsDestination.SpacesSettings,
 				),
 			)
 		}
