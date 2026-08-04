@@ -126,6 +126,11 @@ class LocalContentDirOutput(
 			val chapterFile = index.getChapterFileName(chapter.value.id)?.let {
 				File(rootFile, it)
 			} ?: chapter.value.url.toUri().toFile()
+			val contentRoot = rootFile.canonicalFile.toPath()
+			val chapterPath = chapterFile.canonicalFile.toPath()
+			check(chapterFile.exists() && chapterPath != contentRoot && chapterPath.startsWith(contentRoot)) {
+				"Chapter file is missing or outside the content directory: $chapterFile"
+			}
 			chapterFile.deleteAwait()
 			index.removeChapter(chapter.value.id)
 		}

@@ -86,25 +86,21 @@ class ChaptersSelectionCallback(
 			R.id.action_delete -> {
 				val ids = controller.peekCheckedIds()
 				val manga = viewModel.getContentOrNull()
-				when {
-					ids.isEmpty() || manga == null -> Unit
-					ids.size == manga.chapters?.size -> viewModel.deleteLocal()
-					else -> {
-						LocalChaptersRemoveService.start(recyclerView.context, manga, ids.toSet())
-						try {
-							Snackbar.make(
-								recyclerView,
-								R.string.chapters_will_removed_background,
-								Snackbar.LENGTH_LONG,
-							).show()
-						} catch (e: IllegalArgumentException) {
-							e.printStackTraceDebug()
-							Toast.makeText(
-								recyclerView.context,
-								R.string.chapters_will_removed_background,
-								Toast.LENGTH_SHORT,
-							).show()
-						}
+				if (ids.isNotEmpty() && manga != null) {
+					LocalChaptersRemoveService.start(recyclerView.context, manga, ids.toSet())
+					try {
+						Snackbar.make(
+							recyclerView,
+							R.string.chapters_will_removed_background,
+							Snackbar.LENGTH_LONG,
+						).show()
+					} catch (e: IllegalArgumentException) {
+						e.printStackTraceDebug()
+						Toast.makeText(
+							recyclerView.context,
+							R.string.chapters_will_removed_background,
+							Toast.LENGTH_SHORT,
+						).show()
 					}
 				}
 				mode?.finish()

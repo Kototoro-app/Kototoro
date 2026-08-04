@@ -190,25 +190,21 @@ fun ChaptersScreenRoot(
 
                     R.id.action_delete -> {
                         val manga = viewModel.getContentOrNull()
-                        when {
-                            manga == null -> Unit
-                            selectedIds.size == manga.chapters?.size -> viewModel.deleteLocal()
-                            else -> {
-                                LocalChaptersRemoveService.start(context, manga, selectedIds)
-                                try {
-                                    Snackbar.make(
-                                        viewForSnackbar,
-                                        R.string.chapters_will_removed_background,
-                                        Snackbar.LENGTH_LONG,
-                                    ).show()
-                                } catch (e: IllegalArgumentException) {
-                                    e.printStackTraceDebug()
-                                    Toast.makeText(
-                                        context,
-                                        R.string.chapters_will_removed_background,
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                }
+                        if (manga != null) {
+                            LocalChaptersRemoveService.start(context, manga, selectedIds)
+                            try {
+                                Snackbar.make(
+                                    viewForSnackbar,
+                                    R.string.chapters_will_removed_background,
+                                    Snackbar.LENGTH_LONG,
+                                ).show()
+                            } catch (e: IllegalArgumentException) {
+                                e.printStackTraceDebug()
+                                Toast.makeText(
+                                    context,
+                                    R.string.chapters_will_removed_background,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
                             }
                         }
                     }
