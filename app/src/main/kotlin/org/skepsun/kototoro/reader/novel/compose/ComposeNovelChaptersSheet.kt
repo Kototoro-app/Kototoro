@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +43,9 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 
 internal sealed interface NovelChapterListItem {
 	val key: String
-	data class Header(val title: String) : NovelChapterListItem { override val key = "header:$title" }
+	data class Header(val title: String, val occurrence: Int) : NovelChapterListItem {
+		override val key = "header:$title:$occurrence"
+	}
 	data class Chapter(val chapter: ContentChapter, val originalIndex: Int) : NovelChapterListItem {
 		override val key = "chapter:${chapter.id}:$originalIndex"
 	}
@@ -56,9 +59,12 @@ internal fun ComposeNovelChaptersSheet(
 	onDismiss: () -> Unit,
 	onChapterSelected: (Int) -> Unit,
 ) {
+	val context = LocalContext.current
 	var reversed by remember { mutableStateOf(false) }
 	var query by remember { mutableStateOf("") }
-	val items = remember(chapters, reversed, query) { buildChapterItems(chapters, reversed, query) }
+	val items = remember(chapters, reversed, query, context) {
+		buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
+	}
 	val currentPosition = items.indexOfFirst {
 		it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
 	}.coerceAtLeast(0)
@@ -159,9 +165,12 @@ internal fun ComposeNovelChaptersPanel(
 	onChapterSelected: (Int) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
+	val context = LocalContext.current
 	var reversed by remember { mutableStateOf(false) }
 	var query by remember { mutableStateOf("") }
-	val items = remember(chapters, reversed, query) { buildChapterItems(chapters, reversed, query) }
+	val items = remember(chapters, reversed, query, context) {
+		buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
+	}
 	val currentPosition = items.indexOfFirst {
 		it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
 	}.coerceAtLeast(0)
@@ -242,6 +251,7 @@ internal fun buildChapterItems(
 	chapters: List<ContentChapter>,
 	reversed: Boolean,
 	query: String,
+	volumeTitle: (Int) -> String = { "Volume $it" },
 ): List<NovelChapterListItem> {
 	val indexed = chapters.withIndex().let { if (reversed) it.reversed() else it }
 	val filtered = indexed.filter { (_, chapter) ->
@@ -250,13 +260,26 @@ internal fun buildChapterItems(
 	}
 	val result = mutableListOf<NovelChapterListItem>()
 	var previousGroup: String? = null
+	var previousVolume: Int? = null
+	var headerOccurrence = 0
 	filtered.forEach { (index, chapter) ->
 		val group = chapter.branch?.takeIf(String::isNotBlank)
 			?: chapter.scanlator?.takeIf { it.isNotBlank() && chapter.source == LocalNovelSource }
 			.orEmpty()
-		if (group.isNotEmpty() && group != previousGroup) result += NovelChapterListItem.Header(group)
+		val groupChanged = group != previousGroup
+		if (groupChanged) {
+			if (group.isNotEmpty()) {
+				result += NovelChapterListItem.Header(group, headerOccurrence++)
+			}
+			previousVolume = null
+		}
+		val volume = chapter.volume.takeIf { it > 0 }
+		if (volume != null && volume != previousVolume) {
+			result += NovelChapterListItem.Header(volumeTitle(volume), headerOccurrence++)
+		}
 		result += NovelChapterListItem.Chapter(chapter, index)
 		previousGroup = group
+		previousVolume = volume
 	}
 	return result
 }
