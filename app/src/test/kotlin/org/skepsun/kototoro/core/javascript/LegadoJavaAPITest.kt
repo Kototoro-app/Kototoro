@@ -1311,7 +1311,7 @@ class LegadoJavaAPITest : FunSpec({
         result shouldBe "繁体中文"
     }
     
-    test("s2t returns original text") {
+    test("s2t converts simplified Chinese to traditional Chinese") {
         // Given
         val input = "简体中文"
         
@@ -1319,7 +1319,7 @@ class LegadoJavaAPITest : FunSpec({
         val result = api.s2t(input)
         
         // Then
-        result shouldBe "简體中文"
+        result shouldBe "簡體中文"
     }
 })
 

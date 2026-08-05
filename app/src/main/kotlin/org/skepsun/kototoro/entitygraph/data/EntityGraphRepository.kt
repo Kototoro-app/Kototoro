@@ -65,6 +65,7 @@ private const val MAX_ENTITY_ALIASES = 50
 private const val TAG = "EntityGraphRepository"
 private const val MAX_REPAIR_DIAGNOSTIC_LOGS = 80
 private const val LOCAL_MANGA_BINDING_SOURCE = "local_manga"
+private val LEGACY_EMPTY_NAME_HASH = computeNameHash("")
 internal const val WORK_PROJECTION_IDENTITY_ACTION_TABLE = "work_projection_identity_action"
 internal const val WORK_PROJECTION_IDENTITY_ACTION_VERSION = 1
 internal const val WORK_PROJECTION_IDENTITY_STATUS_ACTIVE = "ACTIVE"
@@ -72,6 +73,11 @@ internal const val WORK_PROJECTION_IDENTITY_STATUS_MERGED_BACK = "MERGED_BACK"
 internal const val WORK_PROJECTION_IDENTITY_ACTION_SPLIT = "SPLIT"
 internal const val WORK_PROJECTION_IDENTITY_ACTION_DETACH = "DETACH"
 internal const val WORK_PROJECTION_IDENTITY_ACTION_MOVE = "MOVE"
+
+private data class LegacyNameHashProjection(
+	val localMangaId: Long,
+	val normalizedTitle: String,
+)
 
 @Singleton
 class EntityGraphRepository @Inject constructor(
@@ -1741,6 +1747,57 @@ class EntityGraphRepository @Inject constructor(
 		}
 	}
 
+	suspend fun repairLegacyEmptyNameHashCollisions(): Int = withContext(Dispatchers.Default) {
+		val dao = db.getEntityGraphDao()
+		val splitCandidates = buildList {
+			dao.dumpEntities().filter(::isLegacyEmptyNameHashWorkEntity).forEach { entity ->
+				val projections = dao.findActiveLocalBindingsByEntity(entity.id)
+					.mapNotNull { binding ->
+						val localMangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+						val title = db.getMangaDao().find(localMangaId)?.manga?.title ?: return@mapNotNull null
+						LegacyNameHashProjection(localMangaId, normalizeName(title))
+					}
+					.filter { it.normalizedTitle.isNotEmpty() }
+				if (projections.map { it.normalizedTitle }.distinct().size > 1) {
+					val primaryKey = normalizeName(entity.primaryName)
+					val retainedKey = projections.firstOrNull { it.normalizedTitle == primaryKey }
+						?.normalizedTitle
+						?: projections.first().normalizedTitle
+					addAll(projections.filter { it.normalizedTitle != retainedKey }.map { it.localMangaId })
+				}
+			}
+		}.distinct()
+		var repaired = 0
+		for (localMangaId in splitCandidates) {
+			if (splitLocalWorkProjection(localMangaId) != null) {
+				repaired++
+			}
+		}
+		dao.dumpEntities()
+			.filter(::isLegacyEmptyNameHashWorkEntity)
+			.forEach { rehashLegacyEntityName(dao, it) }
+		repaired
+	}
+
+	suspend fun repairLegacyEmptyNameHashCollisionForProjection(localMangaId: Long): Boolean =
+		withContext(Dispatchers.Default) {
+			val dao = db.getEntityGraphDao()
+			val binding = findEntityByLocalMangaId(localMangaId) ?: return@withContext false
+			val entity = dao.findEntity(binding.entityId)
+			if (entity == null || !isLegacyEmptyNameHashWorkEntity(entity)) {
+				return@withContext false
+			}
+			val bindings = dao.findActiveLocalBindingsByEntity(entity.id)
+			if (bindings.mapNotNull { it.externalId.toLongOrNull() }.distinct().size <= 1) {
+				return@withContext false
+			}
+			val title = db.getMangaDao().find(localMangaId)?.manga?.title ?: return@withContext false
+			if (hasSameNormalizedEntityName(entity.primaryName, title)) {
+				return@withContext false
+			}
+			splitLocalWorkProjection(localMangaId) != null
+		}
+
 	suspend fun repairMixedWorkContentTypeEntities(): Int = withContext(Dispatchers.Default) {
 		val report = inspectRepairIssues()
 		report.issues
@@ -2983,8 +3040,7 @@ class EntityGraphRepository @Inject constructor(
 			lastAccessed = now,
 			accessCount = 1,
 		)
-		// INSERT OR IGNORE: if a concurrent request already created this entity (same type + name_hash + content type),
-		// we fall back to merging into the existing one instead of creating a duplicate.
+		// A hash/index conflict is only identity evidence when the normalized names also match.
 		var id = dao.insertEntityIgnore(record)
 		if (id == -1L) {
 			val existing = dao.findEntityByTypeAndNameHashAndContentType(
@@ -2992,7 +3048,7 @@ class EntityGraphRepository @Inject constructor(
 				nameHash = nameHash,
 				contentType = contentType?.name,
 			)
-			if (existing != null) {
+			if (existing != null && hasSameNormalizedEntityName(existing.primaryName, trimmedName)) {
 				return mergeIntoResolvedEntity(
 					entity = existing.toModel(),
 					primaryName = primaryName,
@@ -3005,10 +3061,11 @@ class EntityGraphRepository @Inject constructor(
 					createdBy = createdBy,
 				)
 			}
+			val collisionToken = java.util.UUID.randomUUID().toString()
 			id = dao.insertEntity(
 				record.copy(
-					syncId = java.util.UUID.randomUUID().toString(),
-					nameHash = "$nameHash|$now|${record.syncId}".longHashCode(),
+					syncId = collisionToken,
+					nameHash = "$nameHash|$trimmedName|$collisionToken".longHashCode(),
 				),
 			)
 		}
@@ -3022,6 +3079,38 @@ class EntityGraphRepository @Inject constructor(
 			)
 		}
 		return requireNotNull(dao.findEntity(id)).toModel()
+	}
+
+	private fun isLegacyEmptyNameHashWorkEntity(record: EntityRecord): Boolean {
+		return record.type == EntityType.WORK.name &&
+			record.nameHash == LEGACY_EMPTY_NAME_HASH &&
+			normalizeName(record.primaryName).isNotEmpty()
+	}
+
+	private suspend fun rehashLegacyEntityName(dao: EntityGraphDao, record: EntityRecord) {
+		val computedHash = computeNameHash(record.primaryName)
+		val conflict = dao.findEntityByTypeAndNameHashAndContentType(
+			type = record.type,
+			nameHash = computedHash,
+			contentType = record.contentType,
+		)
+		when {
+			conflict == null || conflict.id == record.id -> dao.updateEntity(record.copy(nameHash = computedHash))
+			hasSameNormalizedEntityName(conflict.primaryName, record.primaryName) -> {
+				updateEntityResolvingNameHashConflict(
+					dao = dao,
+					original = record,
+					merged = record.copy(nameHash = computedHash),
+					primaryName = record.primaryName,
+					aliases = decodeStringList(record.aliases),
+					now = System.currentTimeMillis(),
+				)
+			}
+			else -> {
+				val collisionToken = java.util.UUID.randomUUID().toString()
+				dao.updateEntity(record.copy(nameHash = "$computedHash|${record.primaryName}|$collisionToken".longHashCode()))
+			}
+		}
 	}
 
 	private suspend fun createDetachedLocalWorkEntity(

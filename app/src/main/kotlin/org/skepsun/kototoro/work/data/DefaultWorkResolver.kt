@@ -29,6 +29,7 @@ class DefaultWorkResolver @Inject constructor(
 ) : WorkResolver {
 
 	override suspend fun resolveByMangaId(mangaId: Long): WorkIdentity = withContext(Dispatchers.IO) {
+		entityGraphRepository.repairLegacyEmptyNameHashCollisionForProjection(mangaId)
 		resolveManyByMangaIds(listOf(mangaId))[mangaId] ?: reviewIdentity(requestedMangaId = mangaId)
 	}
 

@@ -207,6 +207,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, false)
 		set(value) = prefs.edit { putBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, value) }
 
+	var isLegacyEntityNameCollisionRepairCompleted: Boolean
+		get() = prefs.getBoolean(KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED, false)
+		set(value) = prefs.edit { putBoolean(KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED, value) }
+
 	var isNavBarPinned: Boolean
 		get() = prefs.getBoolean(KEY_NAV_PINNED, true)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_PINNED, value) }
@@ -2608,6 +2612,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_ENTITY_GRAPH_MIGRATED = "entity_graph_migrated"
 		const val KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED =
 			"legacy_favourite_projection_migration_completed"
+		const val KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED =
+			"legacy_entity_name_collision_repair_completed"
 
 		// keys for non-persistent preferences
 		const val KEY_APP_VERSION = "app_version"

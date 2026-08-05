@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.cloudstream.runtime
 
 import android.content.Context
+import android.content.res.AssetManager
+import android.content.res.Resources
 import android.util.Log
 import android.webkit.WebSettings
 import com.lagradost.api.setContext
@@ -135,6 +137,9 @@ class CloudstreamRuntimeManager @Inject constructor(
 		val providerCountBefore = synchronized(APIHolder.allProviders) { APIHolder.allProviders.size }
 		val extractorCountBefore = synchronized(extractorApis) { extractorApis.size }
 		plugin.filename = preparedFile.absolutePath
+		if (manifest.requiresResources && plugin is Plugin) {
+			plugin.resources = loadPluginResources(preparedFile)
+		}
 		if (plugin is Plugin) {
 			plugin.load(context)
 		} else {
@@ -143,6 +148,7 @@ class CloudstreamRuntimeManager @Inject constructor(
 		val providers = synchronized(APIHolder.allProviders) {
 			APIHolder.allProviders.filter { it.sourcePlugin == plugin.filename }
 		}
+		providers.forEach(MainAPI::init)
 		val registeredExtractors = synchronized(extractorApis) {
 			extractorApis.filter { it.sourcePlugin == plugin.filename }
 		}
@@ -174,9 +180,7 @@ class CloudstreamRuntimeManager @Inject constructor(
 		runCatching { loaded.plugin.beforeUnload() }
 			.onFailure { Log.w(TAG, "Cloudstream plugin beforeUnload failed for ${loaded.filePath}", it) }
 
-		synchronized(APIHolder.apis) {
-			APIHolder.apis = APIHolder.apis.filter { it.sourcePlugin != loaded.plugin.filename }
-		}
+		loaded.providers.forEach(APIHolder::removePluginMapping)
 		synchronized(APIHolder.allProviders) {
 			APIHolder.allProviders.removeIf { it.sourcePlugin == loaded.plugin.filename }
 		}
@@ -186,6 +190,20 @@ class CloudstreamRuntimeManager @Inject constructor(
 		File(loaded.preparedFilePath).delete()
 		publishSources()
 		writeDiagnostic("unload:done file=${File(filePath).name}")
+	}
+
+	@Suppress("DEPRECATION")
+	private fun loadPluginResources(pluginFile: File): Resources {
+		val assets = AssetManager::class.java.getDeclaredConstructor().newInstance()
+		val cookie = AssetManager::class.java
+			.getMethod("addAssetPath", String::class.java)
+			.invoke(assets, pluginFile.absolutePath) as Int
+		check(cookie != 0) { "Unable to add Cloudstream plugin resources: ${pluginFile.absolutePath}" }
+		return Resources(
+			assets,
+			context.resources.displayMetrics,
+			context.resources.configuration,
+		)
 	}
 
 	private fun publishSources() {

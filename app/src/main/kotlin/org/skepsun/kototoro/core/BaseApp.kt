@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.room.InvalidationTracker
 import androidx.work.Configuration
+import androidx.work.ExistingWorkPolicy
 import dagger.hilt.EntryPoint
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -96,6 +97,16 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 			val request = OneTimeWorkRequestBuilder<org.skepsun.kototoro.entitygraph.work.EntityGraphMigrationWorker>().build()
 			WorkManager.getInstance(this).enqueue(request)
 			entryPoint.settings().isEntityGraphMigrated = true
+		}
+		if (!entryPoint.settings().isLegacyEntityNameCollisionRepairCompleted) {
+			val request = OneTimeWorkRequestBuilder<
+				org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker,
+			>().build()
+			WorkManager.getInstance(this).enqueueUniqueWork(
+				org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker.UNIQUE_WORK_NAME,
+				ExistingWorkPolicy.KEEP,
+				request,
+			)
 		}
 		processLifecycleScope.launch(Dispatchers.Default) {
 			runCatching {

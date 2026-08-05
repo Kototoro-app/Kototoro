@@ -254,6 +254,8 @@ def tsukiSanitizedJarTask = tasks.register('prepareTsukiRuntimeJar', Jar) {
 def tsukiRuntimeJar = files(tsukiSanitizedJarTask.flatMap { it.archiveFile })
 
 def cloudstreamSourceJar = layout.projectDirectory.file('libs/cloudstream3-pre-release.jar')
+// Official pre-release classes.jar from recloudstream/cloudstream commit caf0db3dc13bd75a496d4a94152bb8f22f8fdb1e.
+def cloudstreamSourceSha256 = 'b5931f00a6799d02b804dd3566197b1f14f9be266ea875e6af43e9a6092891f4'
 def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar', Jar) {
 	archiveBaseName.set('cloudstream3-runtime')
 	archiveVersion.set('pre-release')
@@ -326,6 +328,21 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 	}
 
 	doLast {
+		def sourceJar = cloudstreamSourceJar.asFile
+		def digest = java.security.MessageDigest.getInstance('SHA-256')
+		sourceJar.withInputStream { input ->
+			byte[] buffer = new byte[8192]
+			for (int read = input.read(buffer); read != -1; read = input.read(buffer)) {
+				digest.update(buffer, 0, read)
+			}
+		}
+		def actualSourceSha256 = digest.digest().encodeHex().toString()
+		if (actualSourceSha256 != cloudstreamSourceSha256) {
+			throw new GradleException(
+				"Unexpected Cloudstream source jar SHA-256: ${actualSourceSha256}; expected ${cloudstreamSourceSha256}",
+			)
+		}
+
 		def outputJar = archiveFile.get().asFile
 		def forbiddenEntries = []
 		ZipFile zipFile = new ZipFile(outputJar)
@@ -351,6 +368,20 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		if (!forbiddenEntries.isEmpty()) {
 			throw new GradleException("Sanitized Cloudstream jar still contains forbidden entries: ${forbiddenEntries.take(5)}")
 		}
+		ZipFile verifiedZipFile = new ZipFile(outputJar)
+		try {
+			[
+				'com/lagradost/cloudstream3/plugins/BasePlugin.class',
+				'com/lagradost/cloudstream3/utils/ExtractorApi.class',
+				'com/lagradost/cloudstream3/utils/JsInterpreterKt.class',
+			].each { requiredEntry ->
+				if (verifiedZipFile.getEntry(requiredEntry) == null) {
+					throw new GradleException("Sanitized Cloudstream jar is missing ${requiredEntry}")
+				}
+			}
+		} finally {
+			verifiedZipFile.close()
+		}
 	}
 }
 
@@ -358,7 +389,9 @@ def cloudstreamRuntimeJar = files(cloudstreamSanitizedJarTask.flatMap { it.archi
 
 // 配置SNAPSHOT版本的缓存策略
 configurations.all {
+	exclude group: 'org.jetbrains.kotlin', module: 'kotlin-android-extensions-runtime'
 	resolutionStrategy {
+		force 'org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.0'
 		// SNAPSHOT版本缓存1小时，开发时可以改为0秒
 		cacheChangingModulesFor 1, 'hours'
 		// 或者完全禁用缓存：cacheChangingModulesFor 0, 'seconds'
@@ -434,6 +467,11 @@ configurations.all {
 	implementation libs.okhttp.zstd
 	implementation libs.okhttp.dnsoverhttps
 	implementation libs.okio
+	implementation libs.nicehttp
+	implementation libs.jsoup
+	implementation libs.ktor.http
+	implementation libs.kotlinx.datetime
+	implementation libs.kotlinx.io.core
 	implementation libs.kotlinx.serialization.json
 	implementation libs.kotlinx.serialization.protobuf
 	implementation libs.kotlinx.serialization.json.okio

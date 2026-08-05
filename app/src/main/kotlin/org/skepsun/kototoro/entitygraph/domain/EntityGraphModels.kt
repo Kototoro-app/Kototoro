@@ -263,9 +263,9 @@ enum class EntityBindingStrength {
  * Normalise a name for case-insensitive, whitespace-insensitive, punctuation-stripped comparison.
  * Canonical implementation shared across entitygraph, favourites, and tracking modules.
  *
- * Rules: lowercase, collapse whitespace, strip all non-alphanumeric/CJK characters.
+ * Rules: lowercase, collapse whitespace, strip all non-letter/non-number characters.
  */
-public val NAME_NORMALIZE_REGEX = Regex("[^a-z0-9\\u4e00-\\u9fff\\u3040-\\u30ff\\u31f0-\\u31ff\\uff66-\\uff9d]")
+public val NAME_NORMALIZE_REGEX = Regex("[^\\p{L}\\p{N}]")
 
 public fun normalizeEntityName(value: String): String {
 	return value.lowercase()

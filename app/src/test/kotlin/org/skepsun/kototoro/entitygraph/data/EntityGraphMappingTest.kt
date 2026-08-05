@@ -8,6 +8,21 @@ import org.junit.jupiter.api.Test
 class EntityGraphMappingTest {
 
 	@Test
+	fun `different cyrillic titles have different hashes`() {
+		assertNotEquals(
+			computeNameHash("Кохання, невидиме під ясним нічним небом"),
+			computeNameHash("Сутінкова зона"),
+		)
+	}
+
+	@Test
+	fun `hash conflict only reuses a non-empty equal normalized name`() {
+		assertEquals(true, hasSameNormalizedEntityName("SPY x FAMILY", "spy-x-family"))
+		assertEquals(false, hasSameNormalizedEntityName("Сутінкова зона", "Кохання"))
+		assertEquals(false, hasSameNormalizedEntityName("---", "..."))
+	}
+
+	@Test
 	fun `projection sync id is used when it is not owned by another entity`() {
 		val entity = entity(id = 10L, syncId = "entity-sync-id")
 

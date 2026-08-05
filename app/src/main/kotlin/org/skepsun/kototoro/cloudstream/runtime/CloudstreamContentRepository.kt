@@ -16,8 +16,11 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.isMovieType
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.extractorApis
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.cache.MemoryContentCache
@@ -172,6 +175,15 @@ class CloudstreamContentRepository(
 
 	override suspend fun getPageUrl(page: ContentPage): String = page.url
 
+	internal fun getPlaybackEvents(
+		chapter: ContentChapter,
+		clearCache: Boolean = false,
+	): Flow<CloudstreamPlaybackEvent> = channelFlow {
+		resolveVideoPages(chapter, clearCache) { event ->
+			trySend(event)
+		}
+	}
+
 	override suspend fun getFilterOptions(): ContentListFilterOptions {
 		val sectionTags = source.api.mainPage
 			.mapIndexedNotNull { index, page ->
@@ -298,10 +310,11 @@ class CloudstreamContentRepository(
 			)
 		}
 		return episodes.mapIndexed { index, episode ->
+			val episodeNumber = episode.episode ?: (index + 1)
 			ContentChapter(
 				id = stableId("${source.name}|${episode.data}|$index"),
-				title = episode.name,
-				number = (episode.episode ?: (index + 1)).toFloat(),
+				title = resolveCloudstreamEpisodeTitle(episode.name, episodeNumber),
+				number = episodeNumber.toFloat(),
 				volume = episode.season ?: 1,
 				url = episode.data,
 				scanlator = null,
@@ -344,7 +357,11 @@ class CloudstreamContentRepository(
 		return key.removePrefix(SECTION_TAG_PREFIX).toIntOrNull()
 	}
 
-	private suspend fun resolveVideoPages(chapter: ContentChapter): List<ContentPage> {
+	private suspend fun resolveVideoPages(
+		chapter: ContentChapter,
+		clearCache: Boolean = false,
+		onEvent: ((CloudstreamPlaybackEvent) -> Unit)? = null,
+	): List<ContentPage> {
 		Log.d(
 			TAG,
 			"loadLinks start source=${source.displayName} chapterId=${chapter.id} chapterTitle=${chapter.title} " +
@@ -355,8 +372,45 @@ class CloudstreamContentRepository(
 			"loadLinks extractors source=${source.displayName} total=${synchronized(extractorApis) { extractorApis.size }} " +
 				"sample=${cloudstreamExtractorSummary()}",
 		)
-		val subtitles = ArrayList<SubtitleFile>()
-		val links = ArrayList<ExtractorLink>()
+		val cacheKey = source.name to chapter.id
+		val snapshot = playbackCache.prepare(cacheKey, clearCache)
+		val subtitles = LinkedHashMap<String, SubtitleFile>().apply {
+			snapshot.subtitles.forEach { put(it.url, it) }
+		}
+		val links = LinkedHashMap<String, ExtractorLink>().apply {
+			snapshot.links.forEach { put(it.url, it) }
+		}
+		fun SubtitleFile.toTrack() = ContentExternalTrack(
+			url = url,
+			lang = lang,
+			headers = headers,
+		)
+		fun ExtractorLink.toPage(): ContentPage {
+			return ContentPage(
+				id = stableId("${chapter.id}|$name|$url"),
+				url = url,
+				preview = null,
+				headers = getAllHeaders().toMutableMap().apply {
+					if (keys.none { it.equals("User-Agent", ignoreCase = true) }) {
+						put("User-Agent", USER_AGENT)
+					}
+				},
+				externalSubtitleTracks = subtitles.values.map { it.toTrack() },
+				playbackLabel = name.takeIf { it.isNotBlank() },
+				playbackQuality = quality.takeIf { it > 0 },
+				source = this@CloudstreamContentRepository.source,
+			)
+		}
+		snapshot.links
+			.filter { it.type in PLAYABLE_LINK_TYPES }
+			.forEach { onEvent?.invoke(CloudstreamPlaybackEvent.Link(it.toPage())) }
+		snapshot.subtitles.forEach { subtitle ->
+			onEvent?.invoke(CloudstreamPlaybackEvent.Subtitle(subtitle.toTrack()))
+		}
+		if (snapshot.saturated) {
+			Log.d(TAG, "loadLinks using saturated cache source=${source.displayName} chapterId=${chapter.id}")
+			return links.values.filter { it.type in PLAYABLE_LINK_TYPES }.map { it.toPage() }
+		}
 		suspend fun loadLinksOnce(): Boolean {
 			return withContext(Dispatchers.IO) {
 				CloudstreamRequestContext.withSource(source) {
@@ -365,7 +419,11 @@ class CloudstreamContentRepository(
 							data = chapter.url,
 							isCasting = false,
 							subtitleCallback = { subtitle ->
-								subtitles += subtitle
+								if (subtitle.url.isBlank() || !playbackCache.addSubtitle(cacheKey, subtitle.url, subtitle)) {
+									return@loadLinks
+								}
+								subtitles[subtitle.url] = subtitle
+								onEvent?.invoke(CloudstreamPlaybackEvent.Subtitle(subtitle.toTrack()))
 								Log.d(
 									TAG,
 									"loadLinks subtitle source=${source.displayName} chapterId=${chapter.id} " +
@@ -373,7 +431,13 @@ class CloudstreamContentRepository(
 								)
 							},
 							callback = { link ->
-								links += link
+								if (link.url.isBlank() || !playbackCache.addLink(cacheKey, link.url, link)) {
+									return@loadLinks
+								}
+								links[link.url] = link
+								if (link.type in PLAYABLE_LINK_TYPES) {
+									onEvent?.invoke(CloudstreamPlaybackEvent.Link(link.toPage()))
+								}
 								Log.d(
 									TAG,
 									"loadLinks link source=${source.displayName} chapterId=${chapter.id} name=${link.name} " +
@@ -389,6 +453,7 @@ class CloudstreamContentRepository(
 		val firstError = runCatchingCancellable {
 			success = loadLinksOnce()
 		}.exceptionOrNull()
+		var completed = firstError == null
 		if (firstError != null) {
 			Log.e(
 				TAG,
@@ -403,9 +468,7 @@ class CloudstreamContentRepository(
 						"url=${chapter.url} cfUrl=${cfError.url} cookies=${cookieSummary(chapter.url)}",
 				)
 				if (resolveCloudflare(cfError, chapter.url, "loadLinks")) {
-					links.clear()
-					subtitles.clear()
-					success = runCatchingCancellable {
+					val retryResult = runCatchingCancellable {
 						loadLinksOnce()
 					}.onFailure { retryError ->
 						Log.e(
@@ -413,42 +476,15 @@ class CloudstreamContentRepository(
 							"loadLinks retry failed source=${source.displayName} chapterId=${chapter.id} url=${chapter.url}",
 							retryError,
 						)
-					}.getOrDefault(false)
+					}
+					completed = retryResult.isSuccess
+					success = retryResult.getOrDefault(false)
 				}
 			}
 		}
-		val pages = links
-			.distinctBy { it.url to it.getAllHeaders() }
-			.sortedWith(compareByDescending<ExtractorLink> { it.url.contains("/config-", ignoreCase = true) }
-				.thenByDescending { it.url.contains("master.m3u8", ignoreCase = true) }
-				.thenByDescending { it.url.contains("/playlist.m3u8", ignoreCase = true) }
-				.thenByDescending { it.quality })
-			.mapIndexed { index, link ->
-				ContentPage(
-					id = stableId("${chapter.id}|${link.name}|${link.url}|$index"),
-					url = link.url,
-					preview = null,
-					headers = link.getAllHeaders()
-						.toMutableMap()
-						.apply {
-							(CloudstreamRequestContext.userAgent ?: webViewExecutor.defaultUserAgent)?.takeIf { it.isNotBlank() }?.let {
-								putIfAbsent("User-Agent", it)
-							}
-						}
-						.takeIf { it.isNotEmpty() },
-						externalSubtitleTracks = subtitles.map { subtitle ->
-							ContentExternalTrack(
-								url = subtitle.url,
-								lang = subtitle.lang,
-								headers = subtitle.headers,
-							)
-						},
-						playbackLabel = link.name.takeIf { it.isNotBlank() },
-						playbackQuality = link.quality.takeIf { it > 0 },
-						source = source,
-					)
-				}
-		val linkTypes = links.groupingBy { it.url.substringAfterLast('.', "<none>") }.eachCount()
+		if (completed) playbackCache.finish(cacheKey)
+		val pages = links.values.filter { it.type in PLAYABLE_LINK_TYPES }.map { it.toPage() }
+		val linkTypes = links.values.groupingBy { it.type }.eachCount()
 		Log.d(
 			TAG,
 			"loadLinks done source=${source.displayName} chapterId=${chapter.id} success=$success links=${pages.size} " +
@@ -778,5 +814,27 @@ class CloudstreamContentRepository(
 	companion object {
 		private const val TAG = "CloudstreamRepo"
 		private const val SECTION_TAG_PREFIX = "cloudstream-section:"
+		private const val PLAYBACK_CACHE_TTL_MILLIS = 20 * 60 * 1000L
+		private val PLAYABLE_LINK_TYPES = setOf(
+			ExtractorLinkType.VIDEO,
+			ExtractorLinkType.DASH,
+			ExtractorLinkType.M3U8,
+		)
+		private val playbackCache =
+			CloudstreamLinkSessionCache<Pair<String, Long>, ExtractorLink, SubtitleFile>(PLAYBACK_CACHE_TTL_MILLIS)
 	}
+}
+
+internal sealed interface CloudstreamPlaybackEvent {
+	data class Link(val page: ContentPage) : CloudstreamPlaybackEvent
+	data class Subtitle(val track: ContentExternalTrack) : CloudstreamPlaybackEvent
+}
+
+internal fun resolveCloudstreamEpisodeTitle(name: String?, episodeNumber: Int): String {
+	val title = name?.trim().orEmpty()
+	return title.takeIf { it.isNotEmpty() && !isCloudstreamStructuredLocator(it) } ?: "Episode $episodeNumber"
+}
+
+internal fun isCloudstreamStructuredLocator(value: String): Boolean {
+	return value.trimStart().let { it.startsWith('[') || it.startsWith('{') }
 }

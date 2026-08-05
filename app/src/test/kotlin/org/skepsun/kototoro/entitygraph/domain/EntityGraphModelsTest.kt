@@ -65,4 +65,11 @@ class EntityGraphModelsTest {
 			normalizeStrictTitleKey("作品 (OVA)", listOf("YKMH")),
 		)
 	}
+
+	@Test
+	fun `entity name normalization preserves unicode letters and numbers`() {
+		assertEquals("сутінковазона", normalizeEntityName("Сутінкова зона"))
+		assertEquals("الحب123", normalizeEntityName("الحب 123"))
+		assertEquals("作品42", normalizeEntityName("作品 #42"))
+	}
 }

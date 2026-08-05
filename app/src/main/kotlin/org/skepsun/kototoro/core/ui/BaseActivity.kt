@@ -88,9 +88,7 @@ abstract class BaseActivity<B : ViewBinding> :
 	protected fun setContentView(binding: B) {
 		this.viewBinding = binding
 		super.setContentView(binding.root)
-		if (this !is org.skepsun.kototoro.main.ui.MainActivity) {
-			ViewCompat.setOnApplyWindowInsetsListener(binding.root, this)
-		}
+		ViewCompat.setOnApplyWindowInsetsListener(binding.root, this)
 		val toolbar = (binding.root.findViewById<View>(R.id.toolbar) as? Toolbar)
 		toolbar?.let(this::setSupportActionBar)
 	}

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.domain
 
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
@@ -8,6 +9,7 @@ import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 import javax.inject.Inject
 
 class ProgressUpdateUseCase @Inject constructor(
@@ -37,6 +39,22 @@ class ProgressUpdateUseCase @Inject constructor(
 			?: return estimateFromCounts(manga, details, history.percent, history.chaptersCount)
 		// Use all chapters for global progress calculation, not just current branch
 		val chapters = details.chapters ?: emptyList()
+		if (details.source.getContentType() in VIDEO_CONTENT_TYPES) {
+			val branchChapters = chapters.filter { it.branch == chapter.branch }
+			val chapterIndex = branchChapters.indexOfFirst { it.id == history.chapterId }
+			if (chapterIndex < 0) {
+				return PROGRESS_NONE
+			}
+			val result = history.percent.takeIf {
+				ReadingProgress.isValid(it) && history.chaptersCount == branchChapters.size
+			} ?: calculateVideoSeriesProgress(
+				chapterIndex = chapterIndex,
+				chaptersCount = branchChapters.size,
+				episodeScroll = history.scroll,
+			) ?: return PROGRESS_NONE
+			historyRepository.updateProgress(manga.id, result, branchChapters.size)
+			return result
+		}
 		val chapterRepo = if (repo.source == chapter.source) {
 			repo
 		} else {
@@ -75,4 +93,18 @@ class ProgressUpdateUseCase @Inject constructor(
 		historyRepository.updateProgress(manga.id, estimated, newTotal)
 		return estimated
 	}
+
+	private companion object {
+		val VIDEO_CONTENT_TYPES = setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO)
+	}
+}
+
+internal fun calculateVideoSeriesProgress(
+	chapterIndex: Int,
+	chaptersCount: Int,
+	episodeScroll: Int,
+): Float? {
+	if (chapterIndex !in 0 until chaptersCount) return null
+	val episodePercent = episodeScroll.coerceIn(0, 10_000) / 10_000f
+	return ((chapterIndex + episodePercent) / chaptersCount).coerceIn(0f, 1f)
 }

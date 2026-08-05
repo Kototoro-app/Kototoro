@@ -97,12 +97,8 @@ class MpvPlayer(
 		val userAgent = headers.entries.find { it.key.equals("User-Agent", ignoreCase = true) }?.value
 		val referer = headers.entries.find { it.key.equals("Referer", ignoreCase = true) }?.value
 		
-		if (!userAgent.isNullOrBlank()) {
-			mpv.setOptionString("user-agent", userAgent)
-		}
-		if (!referer.isNullOrBlank()) {
-			mpv.setOptionString("referrer", referer)
-		}
+		mpv.setOptionString("user-agent", userAgent.orEmpty())
+		mpv.setOptionString("referrer", referer.orEmpty())
 
 		val otherHeaders = headers.filter { 
 			!it.key.equals("User-Agent", ignoreCase = true) && !it.key.equals("Referer", ignoreCase = true) 

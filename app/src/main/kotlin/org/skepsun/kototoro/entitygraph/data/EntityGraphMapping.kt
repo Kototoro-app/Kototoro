@@ -112,10 +112,15 @@ internal fun normalizeName(value: String): String = normalizeEntityName(value)
 
 /**
  * Compute a deterministic 64-bit hash of the normalised primary name.
- * Used as a dedup key with a UNIQUE constraint on (type, name_hash).
+ * Used as a dedup candidate key; callers must still compare normalized names after a hash match.
  */
 internal fun computeNameHash(primaryName: String): Long {
 	return normalizeName(primaryName.trim()).longHashCode()
+}
+
+internal fun hasSameNormalizedEntityName(left: String, right: String): Boolean {
+	val normalizedLeft = normalizeName(left)
+	return normalizedLeft.isNotEmpty() && normalizedLeft == normalizeName(right)
 }
 
 internal fun computeProjectionSyncId(source: String, externalId: String): String {

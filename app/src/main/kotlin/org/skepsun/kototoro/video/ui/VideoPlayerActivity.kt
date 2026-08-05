@@ -21,6 +21,9 @@ import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import okhttp3.Request
 import okhttp3.Response
@@ -44,6 +47,10 @@ import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource as ParsersContentSource
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepository
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPlaybackEvent
+import org.skepsun.kototoro.cloudstream.runtime.isCloudstreamStructuredLocator
+import org.skepsun.kototoro.cloudstream.runtime.resolveCloudstreamEpisodeTitle
 import javax.inject.Inject
 import org.skepsun.kototoro.reader.ui.ScreenOrientationHelper
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -212,6 +219,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var initialScrubPositionStart: Long = 0L
     private var lastScrubPosition: Long = 0L
     private var availableVideos: List<Video> = emptyList()
+    private var cloudstreamLinkJob: Job? = null
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
@@ -1151,6 +1159,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         return getString(org.skepsun.kototoro.R.string.video_quality_line, index + 1)
     }
 
+    private fun Video.sourceDisplayLabel(index: Int): String {
+        val title = videoTitle.trim()
+        val quality = resolution?.takeIf { it > 0 }?.let { "${it}p" }
+        return listOfNotNull(title.takeIf { it.isNotEmpty() }, quality)
+            .joinToString(" - ")
+            .ifEmpty { qualityDisplayLabel(index) }
+    }
+
     private fun observeFoldableStateForOrientation() {
         val flow = FoldableUtils.observeFoldableState(this, this)
         lifecycleScope.launch {
@@ -1183,14 +1199,21 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             )
             return
         }
+        val manga = currentMangaContent()
+        val requiresCloudstreamResolution =
+            (source is CloudstreamSource || manga?.source is CloudstreamSource) &&
+                isCloudstreamStructuredLocator(normalizedUrl)
         val lastSegment = runCatching { Uri.parse(normalizedUrl).lastPathSegment }.getOrNull() ?: normalizedUrl
         val lowerUrl = normalizedUrl.lowercase()
         val isHttpLike = lowerUrl.startsWith("http://") || lowerUrl.startsWith("https://")
         val isHtmlPlaybackPage = isHttpLike && TVBoxPlayback.looksLikeHtmlPlaybackPage(normalizedUrl)
-        val isDirectPlaybackUrl = TVBoxPlayback.looksLikeDirectPlaybackUrl(normalizedUrl)
-        val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
-            lastSegment.endsWith(".mp4", ignoreCase = true) ||
-            isDirectPlaybackUrl
+        val isDirectPlaybackUrl = !requiresCloudstreamResolution &&
+            TVBoxPlayback.looksLikeDirectPlaybackUrl(normalizedUrl)
+        val isDirectStream = !requiresCloudstreamResolution && (
+            lastSegment.endsWith(".m3u8", ignoreCase = true) ||
+                lastSegment.endsWith(".mp4", ignoreCase = true) ||
+                isDirectPlaybackUrl
+            )
         val isDirectLocator = lowerUrl.startsWith("magnet:") ||
             lowerUrl.startsWith("thunder:") ||
             lowerUrl.startsWith("ed2k:") ||
@@ -1199,7 +1222,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             lowerUrl.startsWith("rtmp://") ||
             lowerUrl.startsWith("mms://")
         val isResolvedPlaybackUrl = isDirectStream || isDirectLocator || (isHttpLike && headers != null && !isHtmlPlaybackPage)
-        val manga = currentMangaContent()
         val currentState = currentReaderStateOrIntent()
         val indexedLocalUrl = resolveIndexedLocalVideoUrl(normalizedUrl, currentState)
         val explicitLocalUrl = normalizedUrl.takeIf {
@@ -1310,31 +1332,42 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             if (currentChapter.url.startsWith("file://") || currentChapter.url.startsWith("content://") || currentChapter.url.endsWith(".cbz", ignoreCase = true) || currentChapter.url.endsWith(".zip", ignoreCase = true)) {
                                 throw IllegalStateException("Local downloaded video format is unsupported or corrupted (possibly downloaded as .cbz). Please delete the download and re-download it.")
                             }
-                            if (repo is AniyomiAnimeRepository) {
-                                val videos = repo.getVideoListForChapter(currentChapter)
-                                    .filter { it.videoUrl.isNotBlank() }
-                                if (videos.isNotEmpty()) {
-                                    availableVideos = videos
-                                    updateQualityButtonVisibility()
-                                    currentVideoSource = manga.source
-                                    currentVideoIndex = videos.indexOfFirst { it.preferred }
-                                        .takeIf { it >= 0 } ?: 0
-                                    val selected = videos[currentVideoIndex]
-                                    val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
-                                    pendingExternalSubtitles = selected.subtitleTracks
-                                    pendingExternalAudio = selected.audioTracks
-                                    startMpvPlayback(
-                                        selected.videoUrl,
-                                        manga.source,
-                                        mergedHeaders,
-                                        startMs = startMs,
-                                    )
-                                    true
-                                } else {
-                                    null
+                            when (repo) {
+                                is AniyomiAnimeRepository -> {
+                                    val videos = repo.getVideoListForChapter(currentChapter)
+                                        .filter { it.videoUrl.isNotBlank() }
+                                    if (videos.isNotEmpty()) {
+                                        availableVideos = videos
+                                        updateQualityButtonVisibility()
+                                        currentVideoSource = manga.source
+                                        currentVideoIndex = videos.indexOfFirst { it.preferred }
+                                            .takeIf { it >= 0 } ?: 0
+                                        val selected = videos[currentVideoIndex]
+                                        val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
+                                        pendingExternalSubtitles = selected.subtitleTracks
+                                        pendingExternalAudio = selected.audioTracks
+                                        startMpvPlayback(
+                                            selected.videoUrl,
+                                            manga.source,
+                                            mergedHeaders,
+                                            startMs = startMs,
+                                        )
+                                        true
+                                    } else {
+                                        null
+                                    }
                                 }
-                            } else {
-                                null
+                                is CloudstreamContentRepository -> playCloudstreamChapterIncrementally(
+                                    repo = repo,
+                                    chapter = currentChapter,
+                                    source = manga.source,
+                                    startMs = startMs,
+                                    onFirstVideo = {
+                                        readerState = ReaderState(currentChapter.id, 0, 0)
+                                        updateChapterNavButtons()
+                                    },
+                                )
+                                else -> null
                             } ?: run {
                                 val pages = repo.getPages(currentChapter)
                                 val fallbackVideos = pages.toFallbackVideos(repo)
@@ -1863,8 +1896,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 ?: return@mapNotNull null
             Video(
                 videoUrl = streamUrl,
-                videoTitle = "",
-                resolution = null,
+                videoTitle = page.playbackLabel.orEmpty(),
+                resolution = page.playbackQuality,
                 headers = page.headers
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { headers ->
@@ -1875,6 +1908,75 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 },
             )
         }
+    }
+
+    private suspend fun playCloudstreamChapterIncrementally(
+        repo: CloudstreamContentRepository,
+        chapter: ContentChapter,
+        source: ParsersContentSource,
+        startMs: Long? = null,
+        clearCache: Boolean = false,
+        onFirstVideo: () -> Unit = {},
+    ): Boolean {
+        val loadingJob = currentCoroutineContext().job
+        if (cloudstreamLinkJob !== loadingJob) {
+            cloudstreamLinkJob?.cancel()
+            cloudstreamLinkJob = loadingJob
+        }
+        currentVideoSource = source
+        availableVideos = emptyList()
+        currentVideoIndex = 0
+        pendingExternalSubtitles = emptyList()
+        pendingExternalAudio = emptyList()
+        updateQualityButtonVisibility()
+        val videosByUrl = LinkedHashMap<String, Video>()
+        val subtitlesByUrl = LinkedHashMap<String, eu.kanade.tachiyomi.animesource.model.Track>()
+        var started = false
+        repo.getPlaybackEvents(chapter, clearCache).collect { event ->
+            when (event) {
+                is CloudstreamPlaybackEvent.Link -> {
+                    val video = listOf(event.page).toFallbackVideos(repo).firstOrNull() ?: return@collect
+                    val updatedVideo = video.copy(subtitleTracks = subtitlesByUrl.values.toList())
+                    if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
+                    availableVideos = videosByUrl.values.toList()
+                    updateQualityButtonVisibility()
+                    if (!started) {
+                        started = true
+                        onFirstVideo()
+                        currentVideoIndex = 0
+                        pendingExternalSubtitles = updatedVideo.subtitleTracks
+                        pendingExternalAudio = updatedVideo.audioTracks
+                        startMpvPlayback(
+                            updatedVideo.videoUrl,
+                            source,
+                            headersToMap(updatedVideo.headers),
+                            startMs,
+                        )
+                    }
+                }
+                is CloudstreamPlaybackEvent.Subtitle -> {
+                    val track = eu.kanade.tachiyomi.animesource.model.Track(
+                        url = resolveExternalSubtitleUrl(event.track.url, event.track.headers),
+                        lang = event.track.lang,
+                    )
+                    if (subtitlesByUrl.putIfAbsent(track.url, track) != null) return@collect
+                    val updatedVideos = videosByUrl.values.map { video ->
+                        video.copy(subtitleTracks = subtitlesByUrl.values.toList())
+                    }
+                    videosByUrl.clear()
+                    updatedVideos.forEach { videosByUrl[it.videoUrl] = it }
+                    availableVideos = updatedVideos
+                    if (started) {
+                        if (hasCurrentMediaLoaded) {
+                            mpvPlayer?.addSubtitleTrack(track.url, track.lang, track.lang)
+                        } else {
+                            pendingExternalSubtitles = subtitlesByUrl.values.toList()
+                        }
+                    }
+                }
+            }
+        }
+        return started
     }
 
     private fun mergeHeaders(
@@ -2336,9 +2438,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         
         // Extract chapter name: prioritize chapter.name from manga.chapters, then URL-derived
         val chapterName = if (manga != null && state != null) {
-            manga.chapters?.find { it.id == state.chapterId }?.title
-                ?: fallbackUrl?.let { deriveEpisodeTitle(it) }
-                ?: ""
+            val chapter = manga.chapters?.find { it.id == state.chapterId }
+            if (manga.source is CloudstreamSource && chapter != null) {
+                resolveCloudstreamEpisodeTitle(chapter.title, chapter.number.toInt())
+            } else {
+                chapter?.title?.takeIf { it.isNotBlank() }
+                    ?: fallbackUrl?.let { deriveEpisodeTitle(it) }
+                    ?: ""
+            }
         } else {
             fallbackUrl?.let { deriveEpisodeTitle(it) }
                 ?: ""
@@ -2734,7 +2841,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
         val titles = availableVideos.mapIndexed { index, video ->
-            video.qualityDisplayLabel(index)
+            video.sourceDisplayLabel(index)
         }.toTypedArray()
         val selected = currentVideoIndex.coerceIn(0, titles.lastIndex)
         showSelectionDialog(R.string.video_quality, titles.asList(), selected) { which ->
@@ -2823,7 +2930,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         pendingExternalSubtitles = video.subtitleTracks
         pendingExternalAudio = video.audioTracks
         val repo = currentVideoSource?.let { src -> mangaRepositoryFactory.create(src) }
-        val mergedHeaders = mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
+        val mergedHeaders = if (currentVideoSource is CloudstreamSource) {
+            headersToMap(video.headers)
+        } else {
+            mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
+        }
         startMpvPlayback(video.videoUrl, currentVideoSource, mergedHeaders, resumeMs)
     }
 
@@ -2972,6 +3083,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onDestroy() {
+        cloudstreamLinkJob?.cancel()
+        cloudstreamLinkJob = null
         cancelPlaybackStartupTimeout()
         playerRoot.removeCallbacks(hideUiRunnable)
         playerRoot.removeCallbacks(progressUpdateRunnable)
@@ -3033,6 +3146,25 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     fun reloadPlayback() {
+        val manga = currentMangaContent()
+        val chapter = manga?.chapters?.find { it.id == currentReaderStateOrIntent()?.chapterId }
+        if (manga?.source is CloudstreamSource && chapter != null) {
+            val resumeMs = mpvPlayer?.positionMs ?: 0L
+            lifecycleScope.launch {
+                val repo = mangaRepositoryFactory.create(manga.source) as? CloudstreamContentRepository
+                val started = repo?.let {
+                    playCloudstreamChapterIncrementally(
+                        repo = it,
+                        chapter = chapter,
+                        source = manga.source,
+                        startMs = resumeMs,
+                        clearCache = true,
+                    )
+                } == true
+                if (!started) showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
+            }
+            return
+        }
         val url = currentMediaUrl
         if (url.isNullOrBlank()) {
             showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
@@ -3702,6 +3834,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             ?: return false
         
         android.util.Log.d("VideoPlayer", "Chapter selected: ${chapter.title} (id=${chapter.id})")
+        cloudstreamLinkJob?.cancel()
+        cloudstreamLinkJob = null
         
         // Save current progress before switching
         val previousState = currentVideoRecordState()
@@ -3763,9 +3897,19 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         resolved = true
                     }
                 }
+
+                if (!resolved && repo is CloudstreamContentRepository) {
+                    resolved = playCloudstreamChapterIncrementally(
+                        repo = repo,
+                        chapter = chapter,
+                        source = manga.source,
+                        onFirstVideo = resetChapterState,
+                    )
+                    if (resolved) updateTitleAndSubtitle()
+                }
                 
                 // Fallback to getPages for non-Aniyomi sources
-                if (!resolved) {
+                if (!resolved && repo !is CloudstreamContentRepository) {
                     val pages = repo.getPages(chapter)
                     val fallbackVideos = pages.toFallbackVideos(repo)
                     if (fallbackVideos.isNotEmpty()) {

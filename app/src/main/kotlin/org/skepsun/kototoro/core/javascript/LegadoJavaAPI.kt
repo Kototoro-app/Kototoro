@@ -336,22 +336,8 @@ class LegadoJavaAPI(
         }
 
         val doc = Jsoup.parse(html)
-        val result = AnalyzeByJSoup(doc).getElements(selector)
-        Log.d(TAG, "getElement($selector) found ${result.size} elements via AnalyzeByJSoup")
-
-        val elements = Elements()
-        result.forEach { item ->
-            when (item) {
-                is Element -> elements.add(item)
-                is org.jsoup.nodes.TextNode -> { item.parent()?.let { elements.add(it) } }
-                is List<*> -> item.forEach { inner ->
-                    if (inner is Element) elements.add(inner)
-                }
-            }
-        }
-        if (elements.isEmpty() && result.isNotEmpty()) {
-            Log.w(TAG, "getElement: result not convertable to Elements, first item type=${result.firstOrNull()?.javaClass?.simpleName}")
-        }
+        val elements = AnalyzeByJSoup(doc).getElements(selector)
+        Log.d(TAG, "getElement($selector) found ${elements.size} elements via AnalyzeByJSoup")
 
         jsContext?.setVariable("lastSelector", selector)
         put("lastSelector", selector)

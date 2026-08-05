@@ -6,7 +6,8 @@ pluginManagement {
 			maven { url = uri("https://storage.googleapis.com/r8-releases/raw") }
 		}
 		dependencies {
-			classpath("com.android.tools:r8:8.12.30")
+			// Kotlin 2.4 requires D8/R8 9.1.29 or newer.
+			classpath("com.android.tools:r8:9.1.31")
 		}
 	}
 	repositories {

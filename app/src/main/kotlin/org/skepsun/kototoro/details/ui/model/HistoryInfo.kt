@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.model.getMergeKey
 import org.skepsun.kototoro.core.model.mergeRepeated
 import org.skepsun.kototoro.core.model.isManga
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.list.domain.ReadingProgress
 
 private const val EPUB_HISTORY_MATCH_WINDOW = 1_000_000L
 
@@ -28,7 +29,7 @@ data class HistoryInfo(
 
 	val percent: Float
 		get() = if (history != null && (canContinue || isChapterMissing)) {
-			history.percent
+			history.percent.takeIf(ReadingProgress::isValid) ?: 0f
 		} else {
 			0f
 		}
@@ -66,7 +67,13 @@ fun HistoryInfo(
 	} else {
 		-2
 	}
-	if (history != null && history.percent >= 0.99999f && !chapters.isNullOrEmpty() && currentChapter >= 0) {
+	if (
+		history != null &&
+		ReadingProgress.isValid(history.percent) &&
+		ReadingProgress.isCompleted(history.percent) &&
+		!chapters.isNullOrEmpty() &&
+		currentChapter >= 0
+	) {
 		val sortedChapters = chapters.sortedBy { it.number }
 		val currentInSorted = sortedChapters.indexOfFirst { it.id == chapters[currentChapter].id }
 		if (currentInSorted != -1 && currentInSorted + 1 < sortedChapters.size) {
