@@ -7,24 +7,26 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +35,7 @@ import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
+import org.skepsun.kototoro.core.ui.compose.StableAnchoredBottomSheet
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
@@ -60,32 +63,39 @@ fun SearchFilterSheet(
     onOpenGlobalTagBlacklist: () -> Unit = {},
     onDismissRequest: () -> Unit,
 ) {
-    ModalBottomSheet(
+    StableAnchoredBottomSheet(
         onDismissRequest = onDismissRequest,
+        shape = RectangleShape,
         containerColor = Color.Transparent,
-        tonalElevation = 0.dp,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
         dragHandle = null,
-    ) {
+    ) { sheetDragModifier ->
         KototoroSheetSurface(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxSize(),
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                SheetDragHandle(modifier = Modifier.align(Alignment.CenterHorizontally))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding(),
+            ) {
+                SheetDragHandle(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .then(sheetDragModifier),
+                )
                 Text(
                     text = stringResource(R.string.filter),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                 )
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .weight(1f),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item {
                         GlobalTagBlacklistStatus(
@@ -99,32 +109,25 @@ fun SearchFilterSheet(
                         onManageLanguagePresets != null
                     ) {
                         item {
-                            FilterPanelGroup(title = stringResource(R.string.show_language_preset_filter)) {
-                                LanguagePresetSection(
-                                    presets = languagePresets,
-                                    activePresetId = activeLanguagePresetId ?: -1L,
-                                    onPresetSelected = onLanguagePresetSelected,
-                                    onManagePresets = onManageLanguagePresets,
-                                )
-                            }
+                            LanguagePresetSection(
+                                presets = languagePresets,
+                                activePresetId = activeLanguagePresetId ?: -1L,
+                                onPresetSelected = onLanguagePresetSelected,
+                                onManagePresets = onManageLanguagePresets,
+                            )
                         }
                     }
                     item {
                         FilterPanelGroup(title = stringResource(R.string.source_type)) {
                             FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 SOURCE_TYPE_OPTIONS.forEach { option ->
-                                    FilterChip(
+                                    CompactSearchFilterChip(
                                         selected = option.type in sourceTypes,
                                         onClick = { onSourceTypeToggle(option.type) },
-                                        label = {
-                                            Text(
-                                                text = stringResource(option.titleRes),
-                                                style = MaterialTheme.typography.labelLarge,
-                                            )
-                                        },
+                                        label = stringResource(option.titleRes),
                                     )
                                 }
                             }
@@ -133,19 +136,14 @@ fun SearchFilterSheet(
                     item {
                         FilterPanelGroup(title = stringResource(R.string.type)) {
                             FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 SEARCH_CONTENT_KIND_OPTIONS.forEach { option ->
-                                    FilterChip(
+                                    CompactSearchFilterChip(
                                         selected = option.kind in contentKinds,
                                         onClick = { onContentKindToggle(option.kind) },
-                                        label = {
-                                            Text(
-                                                text = stringResource(option.titleRes),
-                                                style = MaterialTheme.typography.labelLarge,
-                                            )
-                                        },
+                                        label = stringResource(option.titleRes),
                                     )
                                 }
                             }
@@ -182,37 +180,63 @@ private fun LanguagePresetSection(
     onPresetSelected: (Long) -> Unit,
     onManagePresets: (() -> Unit)?,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        FilterChip(
-            selected = activePresetId <= 0L,
-            onClick = { onPresetSelected(-1L) },
-            label = { Text(stringResource(R.string.all)) },
-        )
-        presets.forEach { preset ->
-            FilterChip(
-                selected = activePresetId == preset.id,
-                onClick = { onPresetSelected(preset.id) },
-                label = { Text(preset.title) },
+    FilterPanelGroup {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.show_language_preset_filter),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
             )
+            if (onManagePresets != null) {
+                TextButton(
+                    onClick = onManagePresets,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    Text(stringResource(R.string.manage))
+                }
+            }
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            CompactSearchFilterChip(
+                selected = activePresetId <= 0L,
+                onClick = { onPresetSelected(-1L) },
+                label = stringResource(R.string.all),
+            )
+            presets.forEach { preset ->
+                CompactSearchFilterChip(
+                    selected = activePresetId == preset.id,
+                    onClick = { onPresetSelected(preset.id) },
+                    label = preset.title,
+                )
+            }
         }
     }
-    if (onManagePresets != null) {
-        FilledTonalButton(
-            onClick = onManagePresets,
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_language),
-                contentDescription = null,
-            )
-            Text(
-                text = stringResource(R.string.manage_language_presets),
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
+}
+
+@Composable
+private fun CompactSearchFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 28.dp) {
+        FilterChip(
+            selected = selected,
+            onClick = onClick,
+            modifier = Modifier.heightIn(min = 28.dp),
+            label = {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            },
+        )
     }
 }
 
@@ -226,8 +250,8 @@ private fun SearchOptionSwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .heightIn(min = 52.dp)
-            .padding(vertical = 6.dp),
+            .heightIn(min = 48.dp)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

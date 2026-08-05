@@ -3,7 +3,6 @@ package org.skepsun.kototoro.explore.ui.preset
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,9 +10,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.collectLatest
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.util.ext.observeEvent
 
 @AndroidEntryPoint
 class SourcePresetEditActivity : BaseComposeActivity() {
@@ -23,6 +22,7 @@ class SourcePresetEditActivity : BaseComposeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        viewModel.onSaved.observeEvent(this) { finishAfterTransition() }
         setComposeContent {
             val preset by viewModel.preset.collectAsStateWithLifecycle()
             val locales by viewModel.allLocales.collectAsStateWithLifecycle()
@@ -32,9 +32,6 @@ class SourcePresetEditActivity : BaseComposeActivity() {
                     title = it.title
                     selectedLocales = it.languages
                 }
-            }
-            LaunchedEffect(Unit) {
-                viewModel.onSaved.collectLatest { finishAfterTransition() }
             }
             SourcePresetEditScreen(
                 title = title,

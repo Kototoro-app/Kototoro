@@ -63,7 +63,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -93,6 +92,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -138,6 +138,7 @@ import org.skepsun.kototoro.core.ui.compose.clearFailedContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
+import org.skepsun.kototoro.core.ui.compose.StableAnchoredBottomSheet
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -238,18 +239,22 @@ private fun lerpFloat(
 @Composable
 private fun SearchFilterSheetSurface(
     modifier: Modifier = Modifier,
-    showDragHandle: Boolean = false,
+    dragModifier: Modifier,
     content: @Composable () -> Unit,
 ) {
     KototoroSheetSurface(
         modifier = modifier,
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (showDragHandle) {
-                SheetDragHandle(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
-            }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding(),
+        ) {
+            SheetDragHandle(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .then(dragModifier),
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -940,16 +945,17 @@ fun AppSearchContentListRoute(
             }
 
             if (!isWideAdaptiveLayout && showFilterPanel) {
-                ModalBottomSheet(
+                StableAnchoredBottomSheet(
                     onDismissRequest = { showFilterPanel = false },
+                    shape = RectangleShape,
                     containerColor = Color.Transparent,
-                    tonalElevation = 0.dp,
-                    shape = RoundedCornerShape(0.dp),
                     dragHandle = null,
-                ) {
+                ) { sheetDragModifier ->
                     SearchFilterSheetSurface(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        showDragHandle = true,
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .fillMaxSize(),
+                        dragModifier = sheetDragModifier,
                     ) {
                         SearchFilterPanel(
                             sourceName = viewModel.source.name,
@@ -988,7 +994,7 @@ fun AppSearchContentListRoute(
                                 showTagsCatalog = groupTitle to excludeMode
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            fillAvailableHeight = false,
+                            fillAvailableHeight = true,
                             savedFilters = savedFiltersProperty,
                             isSaveEnabled = isFilterSaveEnabled,
                             onToggleSavedFilter = viewModel.filterCoordinator::toggleSavedFilter,

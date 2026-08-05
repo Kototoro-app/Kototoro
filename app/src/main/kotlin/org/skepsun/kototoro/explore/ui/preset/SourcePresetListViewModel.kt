@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
@@ -28,8 +29,11 @@ class SourcePresetListViewModel @Inject constructor(
 
 	val onPresetDeleted = MutableEventFlow<Unit>()
 
-	val activePresetId: Long
-		get() = settings.activeSourcePresetId
+	val activePresetId: StateFlow<Long> = settings.observeAsStateFlow(
+		scope = viewModelScope + Dispatchers.Default,
+		key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
+		valueProducer = { activeSourcePresetId },
+	)
 
 	fun setActivePreset(presetId: Long) {
 		settings.activeSourcePresetId = presetId
