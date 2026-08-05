@@ -3,6 +3,7 @@ package org.skepsun.kototoro.video.data
 import android.content.Context
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
+import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.skepsun.kototoro.core.network.ContentHttpClient
@@ -23,6 +24,25 @@ import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+
+private val HLS_URI_ATTRIBUTE = Regex("URI=\"([^\"]+)\"", RegexOption.IGNORE_CASE)
+
+internal fun rewriteHlsPlaylistUris(
+    content: String,
+    mapUri: (String) -> String,
+): String = content
+    .lineSequence()
+    .map { line ->
+        val trimmed = line.trim()
+        when {
+            trimmed.isEmpty() -> line
+            trimmed.startsWith("#") -> HLS_URI_ATTRIBUTE.replace(line) { match ->
+                "URI=\"${mapUri(match.groupValues[1])}\""
+            }
+            else -> mapUri(trimmed)
+        }
+    }
+    .joinToString("\n")
 
 @Singleton
 class VideoLocalCacheProxy @Inject constructor(
@@ -95,6 +115,9 @@ class VideoLocalCacheProxy @Inject constructor(
     private val sessionCacheMissCount = AtomicLong(0)
     private val sessionCacheWriteCount = AtomicLong(0)
     private val sessionCacheWriteBytes = AtomicLong(0)
+    private val noCookieOkHttpClient by lazy {
+        okHttpClient.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
+    }
 
     @Volatile
     private var server: ProxyServer? = null
@@ -298,24 +321,9 @@ class VideoLocalCacheProxy @Inject constructor(
     }
 
     private fun rewritePlaylistContent(parent: SourceEntry, rawContent: String, hostOverride: String? = null): String {
-        return rawContent
-            .lineSequence()
-            .map { line ->
-                val trimmed = line.trim()
-                when {
-                    trimmed.isEmpty() -> line
-                    trimmed.startsWith("#EXT-X-KEY", ignoreCase = true) ||
-                        trimmed.startsWith("#EXT-X-MAP", ignoreCase = true) -> {
-                        Regex("""URI="([^"]+)"""").replace(line) { m ->
-                            val proxied = mapChildUrl(parent, m.groupValues[1], hostOverride)
-                            "URI=\"$proxied\""
-                        }
-                    }
-                    trimmed.startsWith("#") -> line
-                    else -> mapChildUrl(parent, trimmed, hostOverride)
-                }
-            }
-            .joinToString("\n")
+        return rewriteHlsPlaylistUris(rawContent) { uri ->
+            mapChildUrl(parent, uri, hostOverride)
+        }
     }
 
     private fun isLikelyPlaylist(sourceUrl: String, contentType: String?): Boolean {
@@ -403,20 +411,13 @@ class VideoLocalCacheProxy @Inject constructor(
                         header("Range", if (it.end != null) "bytes=${it.start}-${it.end}" else "bytes=${it.start}-")
                     }
                 }
-                // Override Referer to the target URL's origin. When Video.headers is
-                // null (common for Aniyomi extensions), CommonHeadersInterceptor would
-                // fall back to the source's domain (e.g. jkanime.net) as Referer, which
-                // CDNs reject. Using the URL's own origin is always safe: CDNs accept
-                // same-origin Referer, and for the source itself it's equivalent.
-                val urlOrigin = runCatching {
-                    val uri = URI(source.url)
-                    "${uri.scheme}://${uri.host}"
-                }.getOrNull()
-                if (urlOrigin != null) {
-                    header("Referer", urlOrigin)
-                }
             }.build()
-            val upstreamResponse = runCatching { okHttpClient.newCall(upstreamRequest).execute() }.getOrNull()
+            val upstreamClient = if (source.headers.keys.any { it.equals("Cookie", ignoreCase = true) }) {
+                noCookieOkHttpClient
+            } else {
+                okHttpClient
+            }
+            val upstreamResponse = runCatching { upstreamClient.newCall(upstreamRequest).execute() }.getOrNull()
                 ?: return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Upstream error")
 
             if (!upstreamResponse.isSuccessful && upstreamResponse.code !in listOf(200, 206)) {
@@ -433,6 +434,7 @@ class VideoLocalCacheProxy @Inject constructor(
             val contentTypeHeader = upstreamResponse.header("Content-Type")
             if (!isHead && (isPlaylistByUrl || isLikelyPlaylist(source.url, contentTypeHeader))) {
                 val playlistRaw = runCatching { body.string() }.getOrNull()
+                val playlistSource = source.copy(url = upstreamResponse.request.url.toString())
                 upstreamResponse.close()
                 if (playlistRaw == null) {
                     return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Failed to read playlist")
@@ -442,7 +444,7 @@ class VideoLocalCacheProxy @Inject constructor(
                 val clientIp = session.headers["remote-addr"]
                     ?: session.headers["http-client-ip"]
                 val hostOverride = resolveHostForClient(clientIp)
-                val rewritten = rewritePlaylistContent(source, playlistRaw, hostOverride)
+                val rewritten = rewritePlaylistContent(playlistSource, playlistRaw, hostOverride)
                 Log.d(TAG, "rewrite playlist key=$key size=${playlistRaw.length} -> ${rewritten.length} hostOverride=$hostOverride clientIp=$clientIp")
                 val response = newFixedLengthResponse(
                     Response.Status.OK,

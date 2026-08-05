@@ -4,24 +4,28 @@ import android.util.Log
 import com.lagradost.cloudstream3.AnimeLoadResponse
 import com.lagradost.cloudstream3.AnimeSearchResponse
 import com.lagradost.cloudstream3.DubStatus
+import com.lagradost.cloudstream3.EpisodeResponse
+import com.lagradost.cloudstream3.LiveStreamLoadResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.Prerelease
-import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.ShowStatus
 import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.TorrentLoadResponse
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.USER_AGENT
-import com.lagradost.cloudstream3.isMovieType
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.extractorApis
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
@@ -30,6 +34,7 @@ import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.CachingContentRepository
+import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.parsers.model.Content
@@ -45,9 +50,11 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentTagGroup
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.parsers.util.longHashCode
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Headers
+import java.util.concurrent.ConcurrentHashMap
 
 @OptIn(Prerelease::class)
 class CloudstreamContentRepository(
@@ -56,6 +63,11 @@ class CloudstreamContentRepository(
 	private val webViewExecutor: WebViewExecutor,
 	private val cookieJar: MutableCookieJar,
 ) : CachingContentRepository(cache) {
+	private val gateway = CloudstreamApiGateway(source)
+	private val terminalSearchPages = ConcurrentHashMap<String, Int>()
+	private val terminalMainPagePages = ConcurrentHashMap<String, Int>()
+
+	override val listPagingMode: ContentRepository.ListPagingMode = ContentRepository.ListPagingMode.PAGE_INDEX
 
 	override val sortOrders: Set<SortOrder> = setOf(SortOrder.RELEVANCE)
 
@@ -78,44 +90,32 @@ class CloudstreamContentRepository(
 			}
 			Log.w(
 				TAG,
-				"getList returning empty because query is blank for source=${source.displayName} hasMainPage=${source.api.hasMainPage}",
+				"getList returning empty because query is blank for source=${source.displayName} " +
+					"hasMainPage=${source.api.hasMainPage}",
 			)
 			return emptyList()
 		}
 		val page = (offset + 1).coerceAtLeast(1)
-		val result = runCatchingCancellable {
-			CloudstreamRequestContext.withSource(source) {
-				withContext(Dispatchers.IO) {
-					source.api.search(query, page)
-				}
-			}
-		}.onFailure { error ->
-			Log.e(TAG, "search exception source=${source.displayName} query=$query page=$page", error)
-		}.getOrNull()
-		if (result == null) {
-			Log.w(TAG, "search returned null source=${source.displayName} query=$query page=$page")
-			return emptyList()
-		}
+		val searchKey = query.lowercase()
+		if (page > (terminalSearchPages[searchKey] ?: Int.MAX_VALUE)) return emptyList()
+		val result = executeWithCloudflare(source.api.mainUrl, "search") {
+			gateway.search(query, page)
+		} ?: error("Cloudstream search returned null: source=${source.displayName} query=$query page=$page")
+		if (!result.hasNext) terminalSearchPages[searchKey] = page
 		Log.d(
 			TAG,
-			"search result source=${source.displayName} query=$query page=$page items=${result.items.size} hasNext=${result.hasNext}",
+			"search result source=${source.displayName} query=$query page=$page items=${result.items.size} " +
+				"hasNext=${result.hasNext}",
 		)
-		return result.items.mapIndexed { index, item ->
-			item.toKotoContent(source, page, index)
+		return result.items.map { item ->
+			item.toKotoContent(source)
 		}
 	}
 
 	override suspend fun getDetailsImpl(manga: Content): Content {
-		val response = runCatchingCancellable {
-			CloudstreamRequestContext.withSource(source) {
-				withContext(Dispatchers.IO) { source.api.load(manga.url) }
-			}
-		}.onFailure { error ->
-			Log.e(TAG, "load exception source=${source.displayName} url=${manga.url}", error)
-		}.getOrNull() ?: run {
-			Log.w(TAG, "load returned null source=${source.displayName} url=${manga.url}")
-			return manga
-		}
+		val response = executeWithCloudflare(manga.url, "load") {
+			gateway.load(manga.url)
+		} ?: error("Cloudstream load returned null: source=${source.displayName} url=${manga.url}")
 		val chapters = response.toChapters(source)
 		Log.d(
 			TAG,
@@ -131,6 +131,7 @@ class CloudstreamContentRepository(
 		)
 		return manga.copy(
 			title = response.name.ifBlank { manga.title },
+			altTitles = response.toAlternativeTitles().ifEmpty { manga.altTitles },
 			publicUrl = response.url.ifBlank { manga.publicUrl },
 			rating = response.score.toKotoRating() ?: manga.rating,
 			contentRating = response.contentRating.toKotoContentRating() ?: manga.contentRating,
@@ -144,6 +145,7 @@ class CloudstreamContentRepository(
 			state = response.toKotoState() ?: manga.state,
 			authors = manga.authors,
 			chapters = chapters,
+			sourceData = response.toContentMetadata(manga.sourceData, source.name),
 		)
 	}
 
@@ -155,7 +157,8 @@ class CloudstreamContentRepository(
 		if (chapter.url.isDirectPlayableUrl()) {
 			Log.w(
 				TAG,
-				"loadLinks empty, falling back to direct url source=${source.displayName} chapterId=${chapter.id} url=${chapter.url}",
+				"loadLinks empty, falling back to direct url source=${source.displayName} " +
+					"chapterId=${chapter.id} url=${chapter.url}",
 			)
 			return listOf(
 				ContentPage(
@@ -212,6 +215,12 @@ class CloudstreamContentRepository(
 	}
 
 	override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
+		val recommendations = CloudstreamMetadataCodec.decodeContent(seed.sourceData)
+			?.recommendations
+			.orEmpty()
+		if (recommendations.isNotEmpty()) {
+			return recommendations.map { it.toKotoContent(source) }
+		}
 		return RelatedContentSearchFallback.find(seed) { query ->
 			getList(
 				offset = 0,
@@ -223,12 +232,14 @@ class CloudstreamContentRepository(
 
 	private fun SearchResponse.toKotoContent(
 		source: CloudstreamSource,
-		page: Int,
-		index: Int,
+		mainPageRequest: MainPageRequest? = null,
+		homeRowName: String? = null,
+		horizontalImages: Boolean? = null,
 	): Content {
 		val type = type ?: TvType.Movie
+		CloudstreamArtworkHeaders.remember(source.name, posterUrl, posterHeaders)
 		return Content(
-			id = stableId("${source.name}|$url|$page|$index"),
+			id = cloudstreamStableId("${source.name}|content|$url"),
 			title = name,
 			altTitles = buildSet {
 				if (this@toKotoContent is AnimeSearchResponse) {
@@ -245,109 +256,67 @@ class CloudstreamContentRepository(
 			authors = emptySet(),
 			largeCoverUrl = posterUrl,
 			description = null,
-			chapters = buildPreviewChapters(type, source, this),
+			chapters = null,
 			source = source,
+			sourceData = CloudstreamMetadataCodec.encodeContent(
+				CloudstreamContentMetadata(
+					type = type.name,
+					posterHeaders = CloudstreamArtworkHeaders.persistable(posterHeaders),
+					quality = quality?.name,
+					providerId = id,
+					mainPageRequestName = mainPageRequest?.name,
+					mainPageRequestData = mainPageRequest?.data,
+					homeRowName = homeRowName,
+					horizontalImages = horizontalImages,
+				),
+			),
 		)
 	}
 
-	private fun buildPreviewChapters(
-		type: TvType,
-		source: CloudstreamSource,
-		response: SearchResponse,
-	): List<ContentChapter>? {
-		if (!type.isMovieType()) return null
-		return listOf(
-			ContentChapter(
-				id = stableId("${source.name}|movie|${response.url}"),
-				title = response.name,
-				number = 1f,
-				volume = 1,
-				url = response.url,
-				scanlator = null,
-				uploadDate = 0L,
-				branch = null,
-				source = source,
+	private fun CloudstreamRecommendationMetadata.toKotoContent(source: CloudstreamSource): Content {
+		CloudstreamArtworkHeaders.remember(source.name, posterUrl, posterHeaders)
+		return Content(
+			id = cloudstreamStableId("${source.name}|content|$url"),
+			title = name,
+			altTitles = emptySet(),
+			url = url,
+			publicUrl = url,
+			rating = score ?: RATING_UNKNOWN,
+			contentRating = null,
+			coverUrl = posterUrl,
+			tags = emptySet(),
+			state = null,
+			authors = emptySet(),
+			largeCoverUrl = posterUrl,
+			description = null,
+			chapters = null,
+			source = source,
+			sourceData = CloudstreamMetadataCodec.encodeContent(
+				CloudstreamContentMetadata(
+					type = type,
+					posterHeaders = posterHeaders,
+				),
 			),
 		)
 	}
 
 	private fun LoadResponse.toChapters(source: CloudstreamSource): List<ContentChapter> {
-		if (this is MovieLoadResponse) {
-			Log.d(TAG, "toChapters MovieLoadResponse name=$name url=$url dataUrl=$dataUrl")
-			return listOf(
-				ContentChapter(
-					id = stableId("${source.name}|movie|$dataUrl"),
-					title = name,
-					number = 1f,
-					volume = 1,
-					url = dataUrl,
-					scanlator = null,
-					uploadDate = 0L,
-					branch = null,
-					source = source,
-				),
-			)
-		}
-
-		val episodes = when (this) {
-			is TvSeriesLoadResponse -> episodes
-			is AnimeLoadResponse -> episodes.values.flatten()
-			else -> emptyList()
-		}
-		if (episodes.isEmpty()) {
-			return listOf(
-				ContentChapter(
-					id = stableId("${source.name}|fallback|$url"),
-					title = name,
-					number = 1f,
-					volume = 1,
-					url = url,
-					scanlator = null,
-					uploadDate = 0L,
-					branch = null,
-					source = source,
-				),
-			)
-		}
-		return episodes.mapIndexed { index, episode ->
-			val episodeNumber = episode.episode ?: (index + 1)
-			ContentChapter(
-				id = stableId("${source.name}|${episode.data}|$index"),
-				title = resolveCloudstreamEpisodeTitle(episode.name, episodeNumber),
-				number = episodeNumber.toFloat(),
-				volume = episode.season ?: 1,
-				url = episode.data,
-				scanlator = null,
-				uploadDate = episode.date ?: 0L,
-				branch = resolveBranch(this, episode),
-				source = source,
-			)
-		}
-	}
-
-	private fun resolveBranch(response: LoadResponse, episode: com.lagradost.cloudstream3.Episode): String? {
-		if (response !is AnimeLoadResponse) return null
-		return response.episodes.entries.firstOrNull { (_, value) -> episode in value }?.key
-			?.takeUnless { it == DubStatus.None }
-			?.name
+		return mapCloudstreamChapters(this, source)
 	}
 
 	private fun LoadResponse.toKotoState(): ContentState? {
-		return null
+		if (comingSoon) return ContentState.UPCOMING
+		return when ((this as? EpisodeResponse)?.showStatus) {
+			ShowStatus.Ongoing -> ContentState.ONGOING
+			ShowStatus.Completed -> ContentState.FINISHED
+			null -> null
+		}
 	}
 
 	private fun String?.toKotoContentRating(): ContentRating? {
 		return this?.takeIf { it.contains("18", true) || it.contains("adult", true) }?.let {
 			ContentRating.ADULT
 		}
-	}
-
-	private fun Score?.toKotoRating(): Float? {
-		return this?.toInt(100)?.div(100f)
-	}
-
-	private fun stableId(value: String): Long {
-		return value.hashCode().toLong() and Long.MAX_VALUE
 	}
 
 	private fun sectionTagKey(index: Int): String = "$SECTION_TAG_PREFIX$index"
@@ -387,7 +356,7 @@ class CloudstreamContentRepository(
 		)
 		fun ExtractorLink.toPage(): ContentPage {
 			return ContentPage(
-				id = stableId("${chapter.id}|$name|$url"),
+				id = cloudstreamStableId("${chapter.id}|$name|$url"),
 				url = url,
 				preview = null,
 				headers = getAllHeaders().toMutableMap().apply {
@@ -412,42 +381,36 @@ class CloudstreamContentRepository(
 			return links.values.filter { it.type in PLAYABLE_LINK_TYPES }.map { it.toPage() }
 		}
 		suspend fun loadLinksOnce(): Boolean {
-			return withContext(Dispatchers.IO) {
-				CloudstreamRequestContext.withSource(source) {
-					CloudstreamRequestContext.withLoadLinksCompatibility {
-						source.api.loadLinks(
-							data = chapter.url,
-							isCasting = false,
-							subtitleCallback = { subtitle ->
-								if (subtitle.url.isBlank() || !playbackCache.addSubtitle(cacheKey, subtitle.url, subtitle)) {
-									return@loadLinks
-								}
-								subtitles[subtitle.url] = subtitle
-								onEvent?.invoke(CloudstreamPlaybackEvent.Subtitle(subtitle.toTrack()))
-								Log.d(
-									TAG,
-									"loadLinks subtitle source=${source.displayName} chapterId=${chapter.id} " +
-										"lang=${subtitle.lang} url=${subtitle.url}",
-								)
-							},
-							callback = { link ->
-								if (link.url.isBlank() || !playbackCache.addLink(cacheKey, link.url, link)) {
-									return@loadLinks
-								}
-								links[link.url] = link
-								if (link.type in PLAYABLE_LINK_TYPES) {
-									onEvent?.invoke(CloudstreamPlaybackEvent.Link(link.toPage()))
-								}
-								Log.d(
-									TAG,
-									"loadLinks link source=${source.displayName} chapterId=${chapter.id} name=${link.name} " +
-										"type=${link.type} quality=${link.quality} url=${link.url} headers=${link.getAllHeaders().keys}",
-								)
-							},
-						)
+			return gateway.loadLinks(
+				data = chapter.url,
+				isCasting = false,
+				subtitleCallback = { subtitle ->
+					if (subtitle.url.isBlank() || !playbackCache.addSubtitle(cacheKey, subtitle.url, subtitle)) {
+						return@loadLinks
 					}
-				}
-			}
+					subtitles[subtitle.url] = subtitle
+					onEvent?.invoke(CloudstreamPlaybackEvent.Subtitle(subtitle.toTrack()))
+					Log.d(
+						TAG,
+						"loadLinks subtitle source=${source.displayName} chapterId=${chapter.id} " +
+							"lang=${subtitle.lang} url=${subtitle.url}",
+					)
+				},
+				linkCallback = { link ->
+					if (link.url.isBlank() || !playbackCache.addLink(cacheKey, link.url, link)) {
+						return@loadLinks
+					}
+					links[link.url] = link
+					if (link.type in PLAYABLE_LINK_TYPES) {
+						onEvent?.invoke(CloudstreamPlaybackEvent.Link(link.toPage()))
+					}
+					Log.d(
+						TAG,
+						"loadLinks link source=${source.displayName} chapterId=${chapter.id} name=${link.name} " +
+							"type=${link.type} quality=${link.quality} url=${link.url} headers=${link.getAllHeaders().keys}",
+					)
+				},
+			)
 		}
 		var success = false
 		val firstError = runCatchingCancellable {
@@ -539,58 +502,64 @@ class CloudstreamContentRepository(
 		val selectedSectionIndex = filter?.tags
 			?.firstNotNullOfOrNull { tag -> parseSectionTagIndex(tag.key) }
 			?.takeIf { it in mainPages.indices }
-		val requestIndex = selectedSectionIndex ?: (offset % mainPages.size)
-		val requestPage = if (selectedSectionIndex != null) {
-			val sectionPageSize = probeMainPageSize(mainPages[requestIndex]).coerceAtLeast(1)
-			(offset / sectionPageSize) + 1
+		val requests = selectedSectionIndex?.let { listOf(mainPages[it]) } ?: mainPages
+		val requestPage = page
+		gateway.prepareMainPageRequest()
+		val responses = if (source.api.sequentialMainPage || requests.size == 1) {
+			requests.mapIndexedNotNull { index, mainPage ->
+				if (index > 0) delay(source.api.sequentialMainPageDelay)
+				loadMainPageEntry(mainPage, index, requestPage)
+			}
 		} else {
-			(offset / mainPages.size) + 1
+			coroutineScope {
+				requests.mapIndexed { index, mainPage ->
+					async { loadMainPageEntry(mainPage, index, requestPage) }
+				}.awaitAll().filterNotNull()
+			}
 		}
-		val requests = listOf(mainPages[requestIndex])
-		val aggregated = ArrayList<SearchResponse>()
-		requests.forEachIndexed { requestIndex, page ->
-			val request = MainPageRequest(page.name, page.data, page.horizontalImages)
-			val response = try {
-				loadMainPageResponse(request, requestIndex, requestPage)
-			} catch (error: Throwable) {
-				Log.e(
-					TAG,
-					"main page load failed source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
-						"slot=$requestIndex page=$requestPage",
-					error,
-				)
-				if (error.findCloudFlareException() != null) {
-					throw error
-				}
-				return@forEachIndexed
-			} ?: return@forEachIndexed
+		val aggregated = ArrayList<CloudstreamMainPageItem>()
+		responses.forEach { entry ->
+			val request = entry.request
+			val response = entry.response
 			Log.d(
 				TAG,
 				"main page load source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
-					"slot=$requestIndex page=$requestPage rows=${response.items.size} hasNext=${response.hasNext}",
+					"slot=${entry.slot} page=$requestPage rows=${response.items.size} hasNext=${response.hasNext}",
 			)
 			if (response.items.isEmpty()) {
-				logMainPageEmptyResponse(request, requestIndex, requestPage, response.hasNext)
+				logMainPageEmptyResponse(request, entry.slot, requestPage, response.hasNext)
 			} else {
-				logMainPageRows(request, requestIndex, requestPage, response.items)
+				logMainPageRows(request, entry.slot, requestPage, response.items)
 			}
 			response.items.forEach { row ->
-				aggregated += row.list
+				row.list.forEach { item ->
+					aggregated += CloudstreamMainPageItem(
+						response = item,
+						request = request,
+						rowName = row.name,
+						horizontalImages = row.isHorizontalImages,
+					)
+				}
 			}
 		}
-		val deduped = aggregated.distinctBy { it.url }
+		val deduped = aggregated.distinctBy { it.response.url }
 		Log.d(
 			TAG,
-			"main page aggregated source=${source.displayName} page=$page slot=$requestIndex slotPage=$requestPage " +
+			"main page aggregated source=${source.displayName} page=$page slotPage=$requestPage " +
 				"requestCount=${requests.size} items=${deduped.size} selectedSectionIndex=$selectedSectionIndex",
 		)
-		return deduped.mapIndexed { index, item ->
-			item.toKotoContent(source, page, index)
+		return deduped.map { item ->
+			item.response.toKotoContent(
+				source = source,
+				mainPageRequest = item.request,
+				homeRowName = item.rowName,
+				horizontalImages = item.horizontalImages,
+			)
 		}.also { items ->
 			if (items.isEmpty() && aggregated.isEmpty()) {
 				Log.w(
 					TAG,
-					"main page produced 0 items source=${source.displayName} page=$page slot=$requestIndex " +
+					"main page produced 0 items source=${source.displayName} page=$page " +
 						"slotPage=$requestPage requestCount=${requests.size} selectedSectionIndex=$selectedSectionIndex " +
 						"aggregatedRaw=${aggregated.size}",
 				)
@@ -600,6 +569,29 @@ class CloudstreamContentRepository(
 				}
 			}
 		}
+	}
+
+	private suspend fun loadMainPageEntry(
+		page: com.lagradost.cloudstream3.MainPageData,
+		slot: Int,
+		requestPage: Int,
+	): CloudstreamMainPageResponse? {
+		val request = MainPageRequest(page.name, page.data, page.horizontalImages)
+		val terminalKey = "${request.name}\n${request.data}"
+		if (requestPage > (terminalMainPagePages[terminalKey] ?: Int.MAX_VALUE)) return null
+		val response = try {
+			loadMainPageResponse(request, slot, requestPage)
+		} catch (error: Throwable) {
+			Log.e(
+				TAG,
+				"main page load failed source=${source.displayName} requestName=${request.name} requestData=${request.data} " +
+					"slot=$slot page=$requestPage",
+				error,
+			)
+			throw error
+		} ?: return null
+		if (!response.hasNext) terminalMainPagePages[terminalKey] = requestPage
+		return CloudstreamMainPageResponse(request, response, slot)
 	}
 
 	private suspend fun loadMainPageResponse(
@@ -636,11 +628,7 @@ class CloudstreamContentRepository(
 	private suspend fun getMainPageResponse(
 		request: MainPageRequest,
 		requestPage: Int,
-	): com.lagradost.cloudstream3.HomePageResponse? = CloudstreamRequestContext.withSource(source) {
-		withContext(Dispatchers.IO) {
-			source.api.getMainPage(page = requestPage, request = request)
-		}
-	}
+	): com.lagradost.cloudstream3.HomePageResponse? = gateway.getMainPage(requestPage, request)
 
 	private fun CloudFlareException.withCloudstreamSource(cause: Throwable): CloudFlareException {
 		val headers = (this as? CloudFlareProtectedException)?.headers
@@ -673,9 +661,25 @@ class CloudstreamContentRepository(
 		Log.w(
 			TAG,
 			"main page cloudflare resolve result source=${source.displayName} requestName=${request.name} " +
-				"requestData=${request.data} slot=$slot page=$requestPage resolved=$resolved cookies=${cookieSummary(request.data)}",
+				"requestData=${request.data} slot=$slot page=$requestPage resolved=$resolved " +
+				"cookies=${cookieSummary(request.data)}",
 		)
 		return resolved
+	}
+
+	private suspend fun <T> executeWithCloudflare(
+		url: String,
+		stage: String,
+		block: suspend () -> T,
+	): T {
+		return try {
+			block()
+		} catch (error: Throwable) {
+			val cloudflare = error.findCloudFlareException()?.withCloudstreamSource(error) ?: throw error
+			Log.w(TAG, "$stage cloudflare detected source=${source.displayName} url=$url", error)
+			if (!resolveCloudflare(cloudflare, url, stage)) throw cloudflare
+			block()
+		}
 	}
 
 	private suspend fun resolveCloudflare(
@@ -760,7 +764,8 @@ class CloudstreamContentRepository(
 		Log.w(
 			TAG,
 			"main page browserContext source=${source.displayName} api=${source.api.name} mainUrl=${source.api.mainUrl} " +
-				"usesWebView=${source.api.usesWebView} requestName=${request.name} requestData=${request.data} diagnosticUrl=$diagnosticUrl " +
+				"usesWebView=${source.api.usesWebView} requestName=${request.name} requestData=${request.data} " +
+				"diagnosticUrl=$diagnosticUrl " +
 				"slot=$slot page=$requestPage status=${result.status} finalUrl=${result.url} " +
 				"server=$server contentType=$contentType " +
 				"bodyLength=${result.body.length} cfMarkers=$markers siteMarkers=${siteMarkers(result.body)} " +
@@ -805,12 +810,6 @@ class CloudstreamContentRepository(
 			.take(1_000)
 	}
 
-	private suspend fun probeMainPageSize(page: com.lagradost.cloudstream3.MainPageData): Int {
-		val request = MainPageRequest(page.name, page.data, page.horizontalImages)
-		val response = getMainPageResponse(request, 1)
-		return response?.items?.sumOf { it.list.size } ?: 0
-	}
-
 	companion object {
 		private const val TAG = "CloudstreamRepo"
 		private const val SECTION_TAG_PREFIX = "cloudstream-section:"
@@ -823,6 +822,74 @@ class CloudstreamContentRepository(
 		private val playbackCache =
 			CloudstreamLinkSessionCache<Pair<String, Long>, ExtractorLink, SubtitleFile>(PLAYBACK_CACHE_TTL_MILLIS)
 	}
+}
+
+internal fun mapCloudstreamChapters(
+	response: LoadResponse,
+	source: CloudstreamSource,
+): List<ContentChapter> {
+	val singleLocator = when (response) {
+		is MovieLoadResponse -> response.dataUrl
+		is LiveStreamLoadResponse -> response.dataUrl
+		is TorrentLoadResponse -> response.torrent?.takeIf { it.isNotBlank() } ?: response.magnet
+		else -> null
+	}
+	if (singleLocator != null) {
+		if (singleLocator.isBlank()) return emptyList()
+		return listOf(
+			ContentChapter(
+				id = cloudstreamStableId("${source.name}|${response::class.simpleName}|$singleLocator"),
+				title = response.name,
+				number = 1f,
+				volume = 1,
+				url = singleLocator,
+				scanlator = null,
+				uploadDate = 0L,
+				branch = null,
+				source = source,
+			),
+		)
+	}
+
+	val groupedEpisodes = when (response) {
+		is TvSeriesLoadResponse -> listOf(
+			DubStatus.None to response.episodes.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 })),
+		)
+		is AnimeLoadResponse -> response.episodes.entries.map { it.key to it.value }
+		else -> emptyList()
+	}
+	return groupedEpisodes.flatMap { (dubStatus, episodes) ->
+		episodes.filter { it.data.isNotBlank() }.mapIndexed { index, episode ->
+			val episodeNumber = episode.episode ?: (index + 1)
+			val displaySeason = (response as? EpisodeResponse)?.seasonNames
+				?.firstOrNull { it.season == episode.season }
+				?.displaySeason
+			val identity = episode.episode?.let { "${episode.season}|$it" } ?: episode.data
+			ContentChapter(
+				id = cloudstreamStableId("${source.name}|episode|${dubStatus.name}|$identity"),
+				title = resolveCloudstreamEpisodeTitle(episode.name, episodeNumber),
+				number = episodeNumber.toFloat(),
+				volume = displaySeason ?: episode.season ?: 0,
+				url = episode.data,
+				scanlator = null,
+				uploadDate = episode.date ?: 0L,
+				branch = dubStatus.takeUnless { it == DubStatus.None }?.name,
+				source = source,
+				sourceData = CloudstreamMetadataCodec.encodeEpisode(
+					CloudstreamEpisodeMetadata(
+						dubStatus = dubStatus.takeUnless { it == DubStatus.None }?.name,
+						season = episode.season,
+						displaySeason = displaySeason,
+						episode = episode.episode,
+						posterUrl = episode.posterUrl,
+						score = episode.score.toKotoRating(),
+						description = episode.description,
+						runtimeSeconds = episode.runTime,
+					),
+				),
+			)
+		}
+	}.distinctBy { it.id }
 }
 
 internal sealed interface CloudstreamPlaybackEvent {
@@ -838,3 +905,18 @@ internal fun resolveCloudstreamEpisodeTitle(name: String?, episodeNumber: Int): 
 internal fun isCloudstreamStructuredLocator(value: String): Boolean {
 	return value.trimStart().let { it.startsWith('[') || it.startsWith('{') }
 }
+
+internal fun cloudstreamStableId(value: String): Long = value.longHashCode() and Long.MAX_VALUE
+
+private data class CloudstreamMainPageItem(
+	val response: SearchResponse,
+	val request: MainPageRequest,
+	val rowName: String,
+	val horizontalImages: Boolean,
+)
+
+private data class CloudstreamMainPageResponse(
+	val request: MainPageRequest,
+	val response: com.lagradost.cloudstream3.HomePageResponse,
+	val slot: Int,
+)

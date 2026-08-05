@@ -20,6 +20,7 @@ import android.util.Log
 import org.skepsun.kototoro.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collect
@@ -94,6 +95,8 @@ import org.skepsun.kototoro.video.performance.PlaybackFallbackController
 import org.skepsun.kototoro.video.performance.PlaybackFallbackReason
 import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
+import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
+import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
 import org.skepsun.kototoro.video.danmaku.VideoDanmakuController
 import org.skepsun.kototoro.video.danmaku.DanmakuSettings
 import org.skepsun.kototoro.video.danmaku.DanmakuSourceManager
@@ -197,7 +200,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private val playbackDiagnostics = PlaybackSessionDiagnostics()
     private var hasCurrentMediaLoaded = false
     private var suspiciousAdRetryCount = 0
-    private val startupTimeoutMs = 8_000L
 
     private var mpvPlayer: MpvPlayer? = null
     internal fun getMpvPlayer(): MpvPlayer? = mpvPlayer
@@ -220,9 +222,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var lastScrubPosition: Long = 0L
     private var availableVideos: List<Video> = emptyList()
     private var cloudstreamLinkJob: Job? = null
+    private var cloudstreamPlaybackInstance: Long = 0L
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
+    private var currentMediaStartMs: Long = 0L
     private var skipHistorySeekForCurrentMedia: Boolean = false
     private var pendingExternalSubtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     private var pendingExternalAudio: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
@@ -351,7 +355,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         override fun onFileLoaded() {
             runOnUiThread {
                 hasCurrentMediaLoaded = true
-                cancelPlaybackStartupTimeout()
                 autoNextTriggered = false
                 applySuperResolutionFromSettings()
                 danmakuController.start()
@@ -363,7 +366,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         override fun onPlaybackFailed(message: String?) {
             runOnUiThread {
                 setKeepScreenOn(false)
-                cancelPlaybackStartupTimeout()
                 handlePlaybackFallback("mpv_end_file_before_loaded", message)
             }
         }
@@ -434,9 +436,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 			playerRoot.postDelayed(this, progressSaveIntervalMs)
 		}
 	}
-    private val playbackStartupTimeoutRunnable = Runnable {
-        handlePlaybackStartupTimeout()
-    }
     // 长按持续快进/快退配置与状?
     private val longSeekIntervalMs = 200
     private val longSeekStepMs = 2000
@@ -1357,7 +1356,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                         null
                                     }
                                 }
-                                is CloudstreamContentRepository -> playCloudstreamChapterIncrementally(
+                                is CloudstreamContentRepository -> loadAndPlayCloudstreamChapter(
                                     repo = repo,
                                     chapter = currentChapter,
                                     source = manga.source,
@@ -1413,6 +1412,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     }
                                 }
                             }
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             android.util.Log.e("VideoPlayer", "Failed to get stream URL", e)
                             if (resolvePlaybackException(e, normalizedUrl, source, headers, startMs)) {
@@ -1433,6 +1434,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         android.util.Log.e("VideoPlayer", "Current chapter not found")
                         showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                     }
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     android.util.Log.e("VideoPlayer", "Failed to load video", e)
                     if (resolvePlaybackException(e, normalizedUrl, source, headers, startMs)) {
@@ -1567,6 +1570,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val mergedHeaders = headers.orEmpty()
         videoLocalCacheProxy.resetSessionStats("startMpvPlayback")
         val initialStartMs = startMs ?: resolveSavedPlaybackProgress(url)
+        currentMediaStartMs = initialStartMs ?: 0L
         skipHistorySeekForCurrentMedia = initialStartMs != null
         effectivePlaybackConfig = playbackConfigOverride ?: VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
         logEffectivePlaybackConfig()
@@ -1588,7 +1592,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         Log.d("VideoPlayerActivity", "Loading media. URL: $url, Headers: ${mergedHeaders.keys}")
         val isHttpSource = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
-        val useProxy = shouldUseLocalProxy(url, isHttpSource, source)
+        val useProxy = shouldUseLocalProxy(url, isHttpSource)
         val dynamicCloudstreamPlaylistUrl = createCloudstreamPlaylistProxyUrl(
             url = url,
             headers = mergedHeaders,
@@ -1612,7 +1616,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         Log.d("VideoPlayerActivity", "Resolved playback URL: $playUrl, useProxy=$useProxy")
         
         val doLoad = {
-            schedulePlaybackStartupTimeout()
             mpvPlayer?.load(playUrl, playHeaders, initialStartMs)
             mpvPlayer?.play()
         }
@@ -1645,13 +1648,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun shouldUseLocalProxy(
         url: String,
         isHttpSource: Boolean,
-        source: ParsersContentSource?,
     ): Boolean {
         if (!isHttpSource) return false
-        if (source is CloudstreamSource) {
-            Log.d("VideoPlayerActivity", "Bypass local proxy for Cloudstream source: $url")
-            return false
-        }
         val host = runCatching { Uri.parse(url).host.orEmpty().lowercase() }.getOrDefault("")
         if (host == "127.0.0.1" || host == "localhost") {
             Log.d("VideoPlayerActivity", "Bypass local proxy for loopback URL: $url")
@@ -1707,10 +1705,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             if (isCloudstreamPlaylistResponse(targetUrl, contentType)) {
                 val playlist = body.string()
+                val playlistUrl = upstreamResponse.request.url.toString()
                 upstreamResponse.close()
                 val rewritten = rewriteCloudstreamPlaylistForProxy(
                     playlist = playlist,
-                    baseUrl = targetUrl,
+                    baseUrl = playlistUrl,
                     proxyBaseUrl = proxyBaseUrl,
                 )
                 Log.d(
@@ -1910,7 +1909,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
     }
 
-    private suspend fun playCloudstreamChapterIncrementally(
+    private suspend fun loadAndPlayCloudstreamChapter(
         repo: CloudstreamContentRepository,
         chapter: ContentChapter,
         source: ParsersContentSource,
@@ -1919,10 +1918,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         onFirstVideo: () -> Unit = {},
     ): Boolean {
         val loadingJob = currentCoroutineContext().job
+        val playbackInstance = ++cloudstreamPlaybackInstance
         if (cloudstreamLinkJob !== loadingJob) {
             cloudstreamLinkJob?.cancel()
             cloudstreamLinkJob = loadingJob
         }
+        selectionDialogState = null
+        actionDialogState = null
         currentVideoSource = source
         availableVideos = emptyList()
         currentVideoIndex = 0
@@ -1931,28 +1933,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         updateQualityButtonVisibility()
         val videosByUrl = LinkedHashMap<String, Video>()
         val subtitlesByUrl = LinkedHashMap<String, eu.kanade.tachiyomi.animesource.model.Track>()
-        var started = false
         repo.getPlaybackEvents(chapter, clearCache).collect { event ->
+            if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
                 is CloudstreamPlaybackEvent.Link -> {
                     val video = listOf(event.page).toFallbackVideos(repo).firstOrNull() ?: return@collect
                     val updatedVideo = video.copy(subtitleTracks = subtitlesByUrl.values.toList())
                     if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
-                    availableVideos = videosByUrl.values.toList()
-                    updateQualityButtonVisibility()
-                    if (!started) {
-                        started = true
-                        onFirstVideo()
-                        currentVideoIndex = 0
-                        pendingExternalSubtitles = updatedVideo.subtitleTracks
-                        pendingExternalAudio = updatedVideo.audioTracks
-                        startMpvPlayback(
-                            updatedVideo.videoUrl,
-                            source,
-                            headersToMap(updatedVideo.headers),
-                            startMs,
-                        )
-                    }
                 }
                 is CloudstreamPlaybackEvent.Subtitle -> {
                     val track = eu.kanade.tachiyomi.animesource.model.Track(
@@ -1965,18 +1952,25 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     }
                     videosByUrl.clear()
                     updatedVideos.forEach { videosByUrl[it.videoUrl] = it }
-                    availableVideos = updatedVideos
-                    if (started) {
-                        if (hasCurrentMediaLoaded) {
-                            mpvPlayer?.addSubtitleTrack(track.url, track.lang, track.lang)
-                        } else {
-                            pendingExternalSubtitles = subtitlesByUrl.values.toList()
-                        }
-                    }
                 }
             }
         }
-        return started
+        if (playbackInstance != cloudstreamPlaybackInstance) return false
+        val sortedVideos = videosByUrl.values.toList().sortedCloudstreamVideos()
+        val selected = sortedVideos.firstOrNull() ?: return false
+        availableVideos = sortedVideos
+        currentVideoIndex = 0
+        pendingExternalSubtitles = subtitlesByUrl.values.toList()
+        pendingExternalAudio = selected.audioTracks
+        updateQualityButtonVisibility()
+        onFirstVideo()
+        startMpvPlayback(
+            selected.videoUrl,
+            source,
+            headersToMap(selected.headers),
+            startMs,
+        )
+        return true
     }
 
     private fun mergeHeaders(
@@ -2689,21 +2683,23 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun schedulePlaybackStartupTimeout() {
-        playerRoot.removeCallbacks(playbackStartupTimeoutRunnable)
-        playerRoot.postDelayed(playbackStartupTimeoutRunnable, startupTimeoutMs)
-    }
-
-    private fun cancelPlaybackStartupTimeout() {
-        playerRoot.removeCallbacks(playbackStartupTimeoutRunnable)
-    }
-
-    private fun handlePlaybackStartupTimeout() {
-        handlePlaybackFallback("startup_timeout", null)
-    }
-
     private fun handlePlaybackFallback(trigger: String, detail: String?) {
-        // Disabled per user request
+        if (currentVideoSource !is CloudstreamSource) return
+        val nextVideo = availableVideos.getOrNull(currentVideoIndex + 1)
+        if (nextVideo == null) {
+            Log.w(
+                "VideoPlayer",
+                "Cloudstream playback failed without another mirror trigger=$trigger detail=$detail",
+            )
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
+            return
+        }
+        Log.w(
+            "VideoPlayer",
+            "Cloudstream playback failed, trying next mirror trigger=$trigger " +
+                "from=$currentVideoIndex to=${currentVideoIndex + 1} detail=$detail",
+        )
+        switchVideoQuality(nextVideo, currentMediaStartMs)
     }
 
     private fun showFallbackHintOnce(reason: PlaybackFallbackReason) {
@@ -2836,18 +2832,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
 
     fun showQualityDialog() {
-        if (availableVideos.isEmpty()) {
+        val videoSnapshot = availableVideos
+        if (videoSnapshot.isEmpty()) {
             showPlayerMessage(org.skepsun.kototoro.R.string.operation_not_supported)
             return
         }
-        val titles = availableVideos.mapIndexed { index, video ->
+        val titles = videoSnapshot.mapIndexed { index, video ->
             video.sourceDisplayLabel(index)
         }.toTypedArray()
         val selected = currentVideoIndex.coerceIn(0, titles.lastIndex)
         showSelectionDialog(R.string.video_quality, titles.asList(), selected) { which ->
-            if (which != currentVideoIndex) {
-                switchVideoQuality(which)
-            }
+            val selectedVideo = videoSnapshot.getOrNull(which) ?: return@showSelectionDialog
+            switchVideoQuality(selectedVideo)
         }
     }
 
@@ -2922,10 +2918,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun switchVideoQuality(which: Int) {
-        val video = availableVideos[which]
-        val resumeMs = mpvPlayer?.positionMs ?: 0L
-        currentVideoIndex = which
+    private fun switchVideoQuality(
+        selection: Video,
+        resumeMs: Long = mpvPlayer?.positionMs ?: 0L,
+    ) {
+        val resolved = availableVideos.resolveCloudstreamVideo(selection)
+        if (resolved == null) {
+            Log.w("VideoPlayer", "Ignoring stale video selection url=${selection.videoUrl}")
+            return
+        }
+        val video = resolved.value
+        currentVideoIndex = resolved.index
         updateQualityButtonLabel()
         pendingExternalSubtitles = video.subtitleTracks
         pendingExternalAudio = video.audioTracks
@@ -3083,9 +3086,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onDestroy() {
+        cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
         cloudstreamLinkJob = null
-        cancelPlaybackStartupTimeout()
         playerRoot.removeCallbacks(hideUiRunnable)
         playerRoot.removeCallbacks(progressUpdateRunnable)
         playerRoot.removeCallbacks(controllerProgressRunnable)
@@ -3153,7 +3156,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             lifecycleScope.launch {
                 val repo = mangaRepositoryFactory.create(manga.source) as? CloudstreamContentRepository
                 val started = repo?.let {
-                    playCloudstreamChapterIncrementally(
+                    loadAndPlayCloudstreamChapter(
                         repo = it,
                         chapter = chapter,
                         source = manga.source,
@@ -3834,6 +3837,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             ?: return false
         
         android.util.Log.d("VideoPlayer", "Chapter selected: ${chapter.title} (id=${chapter.id})")
+        cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
         cloudstreamLinkJob = null
         
@@ -3899,7 +3903,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 }
 
                 if (!resolved && repo is CloudstreamContentRepository) {
-                    resolved = playCloudstreamChapterIncrementally(
+                    resolved = loadAndPlayCloudstreamChapter(
                         repo = repo,
                         chapter = chapter,
                         source = manga.source,
@@ -3954,6 +3958,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     android.util.Log.w("VideoPlayer", "Failed to resolve stream URL for chapter ${chapter.id}")
                     showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("VideoPlayer", "Error loading chapter", e)
                 showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)

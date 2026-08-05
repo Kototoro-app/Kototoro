@@ -28,7 +28,8 @@ class MpvPlayer(
 	private var shouldAutoPlayAfterLoad: Boolean = false
 	private var awaitingFileLoaded = false
 	private var hasLoadedCurrentFile = false
-	private var isStoppingForLoad = false
+	private var isReplacingFile = false
+	private var playbackFailureReported = false
 	private var lastPlaybackErrorMessage: String? = null
 
 	var durationMs: Long = 0L
@@ -46,7 +47,6 @@ class MpvPlayer(
 		mpv.observeProperty("time-pos", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
 		mpv.observeProperty("duration", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
 		mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)
-		mpv.observeProperty("eof-reached", MPV.mpvFormat.MPV_FORMAT_FLAG)
 		mpv.observeProperty("sub-text", MPV.mpvFormat.MPV_FORMAT_STRING)
 		mpv.addObserver(this)
 		mpv.addLogObserver(this)
@@ -76,13 +76,20 @@ class MpvPlayer(
 	}
 
 	fun load(url: String, headers: Map<String, String>, startMs: Long? = null) {
-		isStoppingForLoad = true
-		runCatching { mpv.command("stop") }
-		isStoppingForLoad = false
+		isReplacingFile = true
+		positionMs = 0L
+		durationMs = 0L
+		isPlaying = false
+		listeners.forEach {
+			it.onPositionChanged(0L)
+			it.onDurationChanged(0L)
+			it.onIsPlayingChanged(false)
+		}
 
 		shouldAutoPlayAfterLoad = true
 		awaitingFileLoaded = true
 		hasLoadedCurrentFile = false
+		playbackFailureReported = false
 		lastPlaybackErrorMessage = null
 		
 		if (startMs != null && startMs > 0L) {
@@ -460,7 +467,10 @@ class MpvPlayer(
 	override fun event(eventId: Int, node: MPVNode) {
 		Log.v("MpvPlayer", "MPV Event: $eventId")
 		when (eventId) {
-			MPV.mpvEvent.MPV_EVENT_START_FILE -> Log.d("MpvPlayer", "EVENT_START_FILE")
+			MPV.mpvEvent.MPV_EVENT_START_FILE -> {
+				isReplacingFile = false
+				Log.d("MpvPlayer", "EVENT_START_FILE")
+			}
 			MPV.mpvEvent.MPV_EVENT_FILE_LOADED -> {
 				Log.d("MpvPlayer", "EVENT_FILE_LOADED")
 				awaitingFileLoaded = false
@@ -473,13 +483,17 @@ class MpvPlayer(
 			}
 			MPV.mpvEvent.MPV_EVENT_END_FILE -> {
 				Log.d("MpvPlayer", "EVENT_END_FILE")
-				val failedBeforeLoad = awaitingFileLoaded && !hasLoadedCurrentFile
+				val playbackError = lastPlaybackErrorMessage
+				val failed = (awaitingFileLoaded && !hasLoadedCurrentFile) || playbackError != null
 				awaitingFileLoaded = false
-				if (isStoppingForLoad) {
-					Log.d("MpvPlayer", "EVENT_END_FILE ignored due to manual stop for loading")
-				} else if (failedBeforeLoad) {
-					Log.w("MpvPlayer", "EVENT_END_FILE before FILE_LOADED, treat as playback failure")
-					listeners.forEach { it.onPlaybackFailed(lastPlaybackErrorMessage) }
+				if (isReplacingFile) {
+					Log.d("MpvPlayer", "EVENT_END_FILE ignored while replacing media")
+				} else if (playbackFailureReported) {
+					Log.d("MpvPlayer", "EVENT_END_FILE ignored after reported playback failure")
+				} else if (failed) {
+					playbackFailureReported = true
+					Log.w("MpvPlayer", "EVENT_END_FILE after playback error: $playbackError")
+					listeners.forEach { it.onPlaybackFailed(playbackError) }
 				} else {
 					listeners.forEach { it.onPlaybackEnded() }
 				}
@@ -496,8 +510,12 @@ class MpvPlayer(
 	override fun eventProperty(property: String, value: Double) {
 		when (property) {
 			"time-pos" -> {
-				positionMs = (value * 1000).toLong()
-				listeners.forEach { it.onPositionChanged(positionMs) }
+					val updatedPositionMs = (value * 1000).toLong()
+					if (updatedPositionMs > positionMs) {
+						lastPlaybackErrorMessage = null
+					}
+					positionMs = updatedPositionMs
+					listeners.forEach { it.onPositionChanged(positionMs) }
 			}
 			"duration" -> {
 				durationMs = (value * 1000).toLong()
@@ -511,11 +529,6 @@ class MpvPlayer(
 			"pause" -> {
 				isPlaying = !value
 				listeners.forEach { it.onIsPlayingChanged(isPlaying) }
-			}
-			"eof-reached" -> {
-				if (value) {
-					listeners.forEach { it.onPlaybackEnded() }
-				}
 			}
 		}
 	}
@@ -541,6 +554,11 @@ class MpvPlayer(
 		) {
 			lastPlaybackErrorMessage = "[$prefix] $normalized"
 			Log.w("MpvPlayer", "Captured playback error log: $lastPlaybackErrorMessage")
+			if (normalized.contains("fatal error", ignoreCase = true) && !playbackFailureReported) {
+				playbackFailureReported = true
+				awaitingFileLoaded = false
+				listeners.forEach { it.onPlaybackFailed(lastPlaybackErrorMessage) }
+			}
 		}
 	}
 }

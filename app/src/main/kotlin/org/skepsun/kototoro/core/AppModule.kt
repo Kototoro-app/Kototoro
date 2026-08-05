@@ -184,6 +184,7 @@ interface AppModule {
 					add(imageProxyInterceptor)
 					add(coverRestoreInterceptor)
 					add(ContentSourceHeaderInterceptor())
+					add(org.skepsun.kototoro.cloudstream.runtime.CloudstreamArtworkHeadersInterceptor())
 				}.build()
 		}
 
