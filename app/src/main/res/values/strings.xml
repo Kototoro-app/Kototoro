@@ -1035,6 +1035,19 @@
     <string name="color_dark">Dark</string>
     <string name="color_white">White</string>
     <string name="color_black">Black</string>
+    <string name="e_ink">E-Ink</string>
+    <string name="eink_mode">E-Ink mode</string>
+    <string name="eink_mode_summary">Optimizes paged reading for E-Ink displays without changing your saved animation setting</string>
+    <string name="eink_refresh">Full-screen refresh</string>
+    <string name="eink_refresh_summary">Briefly replaces the page with a solid color after page changes to reduce ghosting</string>
+    <string name="eink_refresh_duration">Refresh duration</string>
+    <string name="eink_refresh_every">Refresh interval</string>
+    <string name="eink_refresh_color">Refresh color</string>
+    <string name="milliseconds_value">%1$d ms</string>
+    <plurals name="pages_value">
+        <item quantity="one">Every page</item>
+        <item quantity="other">Every %1$d pages</item>
+    </plurals>
     <string name="background">Background</string>
     <string name="reader_background">Reader background</string>
     <string name="reader_background_theme">Follow app theme</string>

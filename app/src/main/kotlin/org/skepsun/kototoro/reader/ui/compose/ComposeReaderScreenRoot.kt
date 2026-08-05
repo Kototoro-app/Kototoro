@@ -37,6 +37,7 @@ fun ComposeReaderScreenRoot(
 	webtoonScrollRequest: ComposeReaderScrollRequest? = null,
 	zoomCommand: ComposeReaderZoomCommand? = null,
 	webtoonZoomCommand: ComposeWebtoonZoomCommand? = null,
+	animationsEnabled: Boolean = true,
 	isDoublePage: Boolean = false,
 	layoutGeneration: Int = 0,
 	pageOverlay: @Composable BoxScope.() -> Unit = {},
@@ -62,7 +63,8 @@ fun ComposeReaderScreenRoot(
 	val readerUiState by viewModel.uiState.collectAsStateWithLifecycle()
 	val pageAnimation by viewModel.pageAnimation.collectAsStateWithLifecycle()
 	val readerSettings by viewModel.readerSettingsProducer.collectAsStateWithLifecycle()
-	val isAnimationEnabled = LocalContext.current.isAnimationsEnabled && pageAnimation != ReaderAnimation.NONE
+	val isAnimationEnabled = animationsEnabled && LocalContext.current.isAnimationsEnabled &&
+		pageAnimation != ReaderAnimation.NONE
 	val context = LocalContext.current
 	val doubleTapSlop = remember(context) {
 		ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat()

@@ -288,7 +288,12 @@ class SettingsSearchHelper @Inject constructor(
 			"pages_numbers" to R.string.show_pages_numbers,
 			"pages_preload" to R.string.preload_pages,
 			"reader_threads" to R.string.download_threads,
-			"reader_prefetch_limit" to R.string.prefetch_limit
+			"reader_prefetch_limit" to R.string.prefetch_limit,
+			"eink_mode" to R.string.eink_mode,
+			"eink_refresh" to R.string.eink_refresh,
+			"eink_refresh_duration" to R.string.eink_refresh_duration,
+			"eink_refresh_every" to R.string.eink_refresh_every,
+			"eink_refresh_color" to R.string.eink_refresh_color,
 		)
 		readerKeys.forEach { (key, titleRes) ->
 			result.add(

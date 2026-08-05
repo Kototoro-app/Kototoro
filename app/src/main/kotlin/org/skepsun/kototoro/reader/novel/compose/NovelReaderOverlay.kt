@@ -31,12 +31,14 @@ import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.reader.novel.tts.TtsState
+import org.skepsun.kototoro.reader.ui.compose.whenReaderAnimationsEnabled
 
 @Composable
 internal fun NovelReaderOverlay(
 	loading: Boolean,
 	message: NovelReaderMessage?,
 	controlsVisible: Boolean,
+	animationsEnabled: Boolean = true,
 	onMessageExpired: (Long) -> Unit,
 	ttsVisible: Boolean,
 	ttsState: TtsState,
@@ -51,7 +53,12 @@ internal fun NovelReaderOverlay(
 		if (message != null) displayedMessage = message
 	}
 	Box(modifier = Modifier.fillMaxSize()) {
-		AnimatedVisibility(loading, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
+		AnimatedVisibility(
+			visible = loading,
+			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
+			modifier = Modifier.align(Alignment.Center),
+		) {
 			Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
 				Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
 					KototoroLoadingIndicator()
@@ -70,8 +77,8 @@ internal fun NovelReaderOverlay(
 		}
 		AnimatedVisibility(
 			visible = message != null,
-			enter = fadeIn(),
-			exit = fadeOut(),
+			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
 			modifier = Modifier
 				.align(Alignment.BottomCenter)
 				.navigationBarsPadding()
@@ -88,8 +95,8 @@ internal fun NovelReaderOverlay(
 		}
 		AnimatedVisibility(
 			visible = ttsVisible,
-			enter = fadeIn(),
-			exit = fadeOut(),
+			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
 			modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
 		) {
 			Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {

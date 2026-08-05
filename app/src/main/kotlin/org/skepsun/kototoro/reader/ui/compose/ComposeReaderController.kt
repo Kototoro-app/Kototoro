@@ -31,6 +31,7 @@ internal class ComposeReaderController(
 	private val imagePipeline: DefaultComposeReaderImagePipeline,
 	private val errorHost: ReaderErrorHost,
 	private val chromeCallbacks: ComposeReaderChromeCallbacks,
+	initialEInkModeEnabled: Boolean,
 	private val chaptersPanelContent: @Composable (
 		Int,
 		ReaderChapterPanelUiState,
@@ -51,13 +52,19 @@ internal class ComposeReaderController(
 	private var layoutGeneration by mutableIntStateOf(0)
 	val readerLayoutGeneration: Int
 		get() = layoutGeneration
-	private var chromeState by mutableStateOf(ComposeReaderChromeState(controlsVisible = false))
+	private var chromeState by mutableStateOf(
+		ComposeReaderChromeState(
+			controlsVisible = false,
+			eInkModeEnabled = initialEInkModeEnabled,
+		),
+	)
 	private var chaptersTabId by mutableIntStateOf(DETAILS_TAB_CHAPTERS)
 	private var selectionDialog by mutableStateOf<ReaderSelectionDialogState?>(null)
 	private var isChromeEnabled = false
 	private var areControlsVisible = true
 	private var nextCommandId = 0L
 	private var nextMessageId = 0L
+	private var nextEInkRefreshId = 0L
 	private var messageAction: (() -> Unit)? = null
 	private var lastLayoutAnchor: ReaderState? = null
 
@@ -80,6 +87,7 @@ internal class ComposeReaderController(
 						onZoomIn = ::onZoomIn,
 						onZoomOut = ::onZoomOut,
 						onMessageExpired = ::hideMessage,
+						onEInkRefreshConsumed = ::consumeEInkRefresh,
 						onMessageAction = ::performMessageAction,
 						options = chromeCallbacks.options.copy(onDismiss = ::hideOptions),
 						onPrimaryDestination = { destination ->
@@ -102,6 +110,7 @@ internal class ComposeReaderController(
 						webtoonScrollRequest = scrollRequest,
 						zoomCommand = zoomCommand,
 						webtoonZoomCommand = webtoonZoomCommand,
+						animationsEnabled = !chromeState.eInkModeEnabled,
 						isDoublePage = isDoublePage,
 						layoutGeneration = readerLayoutGeneration,
 						pageOverlay = {
@@ -110,6 +119,7 @@ internal class ComposeReaderController(
 										state = chromeState.infoBar,
 										controlsVisible = chromeState.controlsVisible,
 										systemStatus = it,
+										animationsEnabled = !chromeState.eInkModeEnabled,
 									)
 								}
 							},
@@ -233,6 +243,33 @@ internal class ComposeReaderController(
 
 	fun setZoomVisible(visible: Boolean) {
 		chromeState = chromeState.copy(zoomVisible = visible)
+	}
+
+	fun setEInkModeEnabled(enabled: Boolean) {
+		chromeState = chromeState.copy(
+			eInkModeEnabled = enabled,
+			eInkRefresh = chromeState.eInkRefresh.takeIf { enabled },
+		)
+	}
+
+	fun clearEInkRefresh() {
+		chromeState = chromeState.copy(eInkRefresh = null)
+	}
+
+	fun showEInkRefresh(durationMillis: Int, colorArgb: Int) {
+		chromeState = chromeState.copy(
+			eInkRefresh = ReaderEInkRefresh(
+				id = ++nextEInkRefreshId,
+				durationMillis = durationMillis,
+				colorArgb = colorArgb,
+			),
+		)
+	}
+
+	private fun consumeEInkRefresh(id: Long) {
+		if (chromeState.eInkRefresh?.id == id) {
+			clearEInkRefresh()
+		}
 	}
 
 	fun updateInfoBar(transform: ReaderInfoBarState.() -> ReaderInfoBarState) {

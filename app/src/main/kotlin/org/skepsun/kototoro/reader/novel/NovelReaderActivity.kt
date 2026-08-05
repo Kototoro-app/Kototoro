@@ -53,6 +53,7 @@ import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
+import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -69,6 +70,10 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
 import org.skepsun.kototoro.reader.ui.ReaderControlDelegate
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.reader.ui.compose.EInkRefreshOverlay
+import org.skepsun.kototoro.reader.ui.compose.ReaderEInkRefresh
+import org.skepsun.kototoro.reader.ui.eink.EInkPageIdentity
+import org.skepsun.kototoro.reader.ui.eink.EInkRefreshPolicy
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeReaderViewModel
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeImageContext
 import org.skepsun.kototoro.reader.novel.compose.NovelComposeChapterContent
@@ -184,6 +189,11 @@ class NovelReaderActivity :
     private var ttsScrollModeChapterIndex: Int = -1
     private var readerPalette: NovelReaderPalette? = null
     private var ttsVoiceDialogState by mutableStateOf<NovelTtsVoiceDialogState?>(null)
+    private val eInkRefreshPolicy = EInkRefreshPolicy()
+    private var lastEInkPageIdentity: EInkPageIdentity? = null
+    private var eInkRefresh by mutableStateOf<ReaderEInkRefresh?>(null)
+    private var isEInkModeEnabled by mutableStateOf(false)
+    private var nextEInkRefreshId = 0L
 
     private val ttsConnection = object : android.content.ServiceConnection {
         override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
@@ -246,6 +256,18 @@ class NovelReaderActivity :
         super.onCreate(savedInstanceState)
 
         readerSettings = NovelReaderSettings.load(this).copy(isTranslationEnabled = false)
+        isEInkModeEnabled = settings.isEInkModeEnabled
+        settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
+            .onEach { enabled ->
+                isEInkModeEnabled = enabled
+                if (!enabled) resetEInkRefreshContext(clearIdentity = false)
+            }
+            .launchIn(lifecycleScope)
+        settings.observeAsFlow(AppSettings.KEY_EINK_REFRESH) { isEInkRefreshEnabled }
+            .onEach { enabled ->
+                if (!enabled) resetEInkRefreshContext(clearIdentity = false)
+            }
+            .launchIn(lifecycleScope)
         
         // 只恢复UI状态，不恢复章节和页码（由loadChapters处理）
         savedInstanceState?.let {
@@ -457,7 +479,7 @@ class NovelReaderActivity :
         setContent {
             KototoroTheme {
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
-                val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS && !isEInkModeEnabled) {
                     rememberLayerBackdrop { drawContent() }
                 } else {
                     null
@@ -466,16 +488,18 @@ class NovelReaderActivity :
                     LocalLiquidGlassBackdrop provides readerBackdrop,
                     LocalLiquidGlassLayerBackdrop provides readerBackdrop,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .windowInsetsPadding(
-                                WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
-                            ),
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .windowInsetsPadding(
+                                    WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+                                ),
+                        ) {
                         ComposeNovelReaderRoute(
                             viewModel = composeReaderViewModel,
                             imageModel = { it },
+                            animationsEnabled = !isEInkModeEnabled,
                             onSettingsChanged = ::applyNovelReaderSettings,
                             onToggleTranslation = ::toggleTranslation,
                             onBookmark = ::onBookmarkClick,
@@ -494,11 +518,11 @@ class NovelReaderActivity :
                             onRequestNextChapter = ::requestNextComposeChapter,
                             onVisibleChapterChanged = ::onComposeVisibleChapterChanged,
                             onVisibleProgress = ::onComposeVisibleProgress,
-                            onPagedPositionChanged = { page, pageCount ->
+                            onPagedPositionChanged = { chapterId, page, pageCount ->
                                 currentPageIndex = page
                                 updateReadingStatus(page, pageCount)
-                                val chapterId = composeReaderViewModel.uiState.value.chapterId
                                 observeCurrentPageBookmark(chapterId, page)
+                                onEInkPagedPositionChanged(chapterId, page)
                             },
                             renderContent = true,
                             onImageClick = { path ->
@@ -537,7 +561,11 @@ class NovelReaderActivity :
                                 .then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
                         )
                         Box(modifier = Modifier.align(Alignment.TopCenter)) {
-                            NovelReaderTopChrome(state, callbacks)
+                            NovelReaderTopChrome(
+                                state = state,
+                                callbacks = callbacks,
+                                animationsEnabled = !isEInkModeEnabled,
+                            )
                         }
                         Box(
                             modifier = Modifier
@@ -547,6 +575,7 @@ class NovelReaderActivity :
                             NovelReaderBottomChrome(
                                 state = state,
                                 callbacks = callbacks,
+                                animationsEnabled = !isEInkModeEnabled,
                             )
                         }
                         if (!state.settingsSheetVisible && !state.chaptersSheetVisible) {
@@ -563,6 +592,10 @@ class NovelReaderActivity :
                                 .padding(16.dp),
                         )
                         spaceSwitcherDelegate.Overlays()
+                        }
+                        EInkRefreshOverlay(eInkRefresh) { consumedId ->
+                            if (eInkRefresh?.id == consumedId) eInkRefresh = null
+                        }
                     }
                 }
             }
@@ -2148,6 +2181,7 @@ class NovelReaderActivity :
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        resetEInkRefreshContext(clearIdentity = true)
         applyReaderPalette()
         // 保存当前进度（按字符比例），用于横竖屏/单双页切换后的恢复
         val position = composeReaderViewModel.uiState.value.position
@@ -2616,8 +2650,12 @@ class NovelReaderActivity :
 		settings.save(this)
         try {
             android.util.Log.d("NovelReaderActivity", "Settings changed: fontSize=${settings.fontSizeSp}")
-            val previousDisplayMode = readerSettings.translationDisplayMode
+            val previousSettings = readerSettings
+            val previousDisplayMode = previousSettings.translationDisplayMode
             readerSettings = settings
+            if (previousSettings != settings) {
+                resetEInkRefreshContext(clearIdentity = true)
+            }
 
             runOnUiThread {
                 try {
@@ -2641,6 +2679,31 @@ class NovelReaderActivity :
         } catch (e: Exception) {
             android.util.Log.e("NovelReaderActivity", "Failed to apply settings", e)
         }
+    }
+
+    private fun onEInkPagedPositionChanged(chapterId: Long, page: Int) {
+        val current = EInkPageIdentity(chapterId, page)
+        val shouldRefresh = eInkRefreshPolicy.shouldRefresh(
+            enabled = settings.isEInkModeEnabled && settings.isEInkRefreshEnabled,
+            isPagedMode = readerSettings.readingMode == ReadingMode.PAGED,
+            previous = lastEInkPageIdentity,
+            current = current,
+            interval = settings.eInkRefreshEveryPages,
+        )
+        lastEInkPageIdentity = current
+        if (shouldRefresh) {
+            eInkRefresh = ReaderEInkRefresh(
+                id = ++nextEInkRefreshId,
+                durationMillis = settings.eInkRefreshDurationMillis,
+                colorArgb = settings.eInkRefreshColor.colorInt,
+            )
+        }
+    }
+
+    private fun resetEInkRefreshContext(clearIdentity: Boolean) {
+        eInkRefreshPolicy.reset()
+        eInkRefresh = null
+        if (clearIdentity) lastEInkPageIdentity = null
     }
     
     private fun applyReadingModeToggles() {

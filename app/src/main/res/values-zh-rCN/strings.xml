@@ -721,6 +721,18 @@
     <string name="to_top">移动至顶部</string>
     <string name="show">显示</string>
     <string name="color_black">黑色</string>
+    <string name="e_ink">墨水屏</string>
+    <string name="eink_mode">墨水屏模式</string>
+    <string name="eink_mode_summary">针对墨水屏优化分页阅读，不会修改已保存的翻页动画设置</string>
+    <string name="eink_refresh">全屏刷新</string>
+    <string name="eink_refresh_summary">翻页后短暂显示纯色画面，以减少墨水屏残影</string>
+    <string name="eink_refresh_duration">刷新持续时间</string>
+    <string name="eink_refresh_every">刷新间隔</string>
+    <string name="eink_refresh_color">刷新颜色</string>
+    <string name="milliseconds_value">%1$d 毫秒</string>
+    <plurals name="pages_value">
+        <item quantity="other">每 %1$d 页</item>
+    </plurals>
     <string name="zoom_in">放大</string>
     <string name="reader_zoom_buttons_summary">在右下角显示放大缩小按钮</string>
     <string name="reader_zoom_buttons">缩放按钮</string>

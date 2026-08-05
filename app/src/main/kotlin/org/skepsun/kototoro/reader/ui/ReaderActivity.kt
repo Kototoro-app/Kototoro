@@ -103,6 +103,8 @@ import org.skepsun.kototoro.reader.ui.compose.ReaderAutoScrollCallbacks
 import org.skepsun.kototoro.reader.ui.compose.DefaultComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.domain.TranslationLayerState
 import org.skepsun.kototoro.reader.translate.domain.isAutoReaderTranslationLanguage
+import org.skepsun.kototoro.reader.ui.eink.EInkPageIdentity
+import org.skepsun.kototoro.reader.ui.eink.EInkRefreshPolicy
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderUiState
 import org.skepsun.kototoro.space.domain.SpaceProgressFlusher
@@ -163,6 +165,7 @@ class ReaderActivity :
     private lateinit var composeReaderController: ComposeReaderController
 	private lateinit var systemUiController: SystemUiController
     private val hideUiRunnable = Runnable { setUiIsVisible(false) }
+    private val eInkRefreshPolicy = EInkRefreshPolicy()
     private var currentTranslationLayerState: TranslationLayerState = TranslationLayerState.IDLE
     private var lastMangaTranslationProgress: ReaderViewModel.ChapterTranslationProgress? = null
     private var lastMangaTranslationToastAtMs: Long = 0L
@@ -273,6 +276,7 @@ class ReaderActivity :
             viewModel = viewModel,
             imagePipeline = composeReaderImagePipeline,
             errorHost = this,
+			initialEInkModeEnabled = settings.isEInkModeEnabled,
 			chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
 				ChaptersPagesTabsContent(
                     viewModel = viewModel,
@@ -696,6 +700,20 @@ class ReaderActivity :
             updateTranslationToggleButton()
             viewModel.refreshTranslationDisplay()
         }.launchIn(lifecycleScope)
+		settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
+			.onEach { enabled ->
+				if (!enabled) eInkRefreshPolicy.reset()
+				composeReaderController.setEInkModeEnabled(enabled)
+			}
+			.launchIn(lifecycleScope)
+		settings.observeAsFlow(AppSettings.KEY_EINK_REFRESH) { isEInkRefreshEnabled }
+			.onEach { enabled ->
+				if (!enabled) {
+					eInkRefreshPolicy.reset()
+					composeReaderController.clearEInkRefresh()
+				}
+			}
+			.launchIn(lifecycleScope)
         viewModel.translationLayerState.onEach {
             currentTranslationLayerState = it
             updateTranslationToggleButton()
@@ -784,6 +802,10 @@ class ReaderActivity :
     private fun onInitReader(mode: ReaderMode?) {
         if (mode == null) {
             return
+        }
+        if (mode == ReaderMode.WEBTOON) {
+            eInkRefreshPolicy.reset()
+            composeReaderController.clearEInkRefresh()
         }
         if (composeReaderController.readerMode != mode) {
             composeReaderController.updateConfiguration(mode, isDoubleReaderMode)
@@ -1139,6 +1161,19 @@ class ReaderActivity :
         ) {
             composeReaderController.showMessage(chapterTitle, TOAST_DURATION)
         }
+		val shouldRefreshEInk = eInkRefreshPolicy.shouldRefresh(
+			enabled = settings.isEInkModeEnabled && settings.isEInkRefreshEnabled,
+			isPagedMode = viewModel.readerMode.value?.let { it != ReaderMode.WEBTOON } == true,
+			previous = previous?.let { EInkPageIdentity(it.chapter.id, it.currentPage) },
+			current = EInkPageIdentity(uiState.chapter.id, uiState.currentPage),
+			interval = settings.eInkRefreshEveryPages,
+		)
+		if (shouldRefreshEInk) {
+			composeReaderController.showEInkRefresh(
+				durationMillis = settings.eInkRefreshDurationMillis,
+				colorArgb = settings.eInkRefreshColor.colorInt,
+			)
+		}
         composeReaderController.updateActions {
             copy(
                 sliderValue = if (uiState.isSliderAvailable()) uiState.currentPage.toFloat() else 0f,

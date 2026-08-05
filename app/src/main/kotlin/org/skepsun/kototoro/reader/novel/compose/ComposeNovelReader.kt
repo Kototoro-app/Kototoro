@@ -104,6 +104,7 @@ import org.skepsun.kototoro.reader.ui.compose.rememberComposeReaderPageCurlState
 import org.skepsun.kototoro.reader.ui.compose.resolveComposeReaderPageTransform
 import org.skepsun.kototoro.reader.ui.compose.resolvePageCurlUnfolding
 import org.skepsun.kototoro.reader.ui.compose.trackComposeReaderPageCurl
+import org.skepsun.kototoro.reader.ui.compose.whenReaderAnimationsEnabled
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -446,6 +447,7 @@ private fun ComposeNovelChapterWindow(
 fun ComposeNovelReaderRoute(
 	viewModel: NovelComposeReaderViewModel,
 	imageModel: (String) -> Any?,
+	animationsEnabled: Boolean = true,
 	onSettingsChanged: (NovelReaderSettings) -> Unit = {},
 	onToggleTranslation: () -> Unit = {},
 	onBookmark: () -> Unit = {},
@@ -462,7 +464,7 @@ fun ComposeNovelReaderRoute(
 	onRequestNextChapter: () -> Unit = {},
 	onVisibleChapterChanged: (Int) -> Unit = {},
 	onVisibleProgress: (chapterIndex: Int, blockIndex: Int, blockCount: Int) -> Unit = { _, _, _ -> },
-	onPagedPositionChanged: (page: Int, pageCount: Int) -> Unit = { _, _ -> },
+	onPagedPositionChanged: (chapterId: Long, page: Int, pageCount: Int) -> Unit = { _, _, _ -> },
 	renderContent: Boolean = true,
 	onImageClick: ((String) -> Unit)? = null,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)? = null,
@@ -476,6 +478,7 @@ fun ComposeNovelReaderRoute(
 				state = state,
 				chapters = state.continuousChapters,
 				settings = settings,
+				animationsEnabled = animationsEnabled,
 				imageModel = imageModel,
 				onImageClick = onImageClick,
 				onTap = onTap,
@@ -483,11 +486,11 @@ fun ComposeNovelReaderRoute(
 					onRequestPreviousChapter = onRequestPreviousChapter,
 					onRequestNextChapter = onRequestNextChapter,
 					onPageRequestConsumed = viewModel::consumePageRequest,
-					onPositionChanged = { chapterIndex, page, pageCount, charStart, charEnd, text ->
+					onPositionChanged = { chapterId, chapterIndex, page, pageCount, charStart, charEnd, text ->
 					viewModel.focusContinuousChapter(chapterIndex)
 					onVisibleChapterChanged(chapterIndex)
 					viewModel.publishPagedPosition(page, pageCount, charStart, charEnd, text)
-					onPagedPositionChanged(page, pageCount)
+					onPagedPositionChanged(chapterId, page, pageCount)
 				},
 				modifier = modifier,
 			)
@@ -564,6 +567,7 @@ fun ComposeNovelReaderRoute(
 		loading = state.loading,
 		message = state.message,
 		controlsVisible = state.controlsVisible,
+		animationsEnabled = animationsEnabled,
 		onMessageExpired = viewModel::dismissMessage,
 		ttsVisible = state.ttsControlsVisible && !state.chromeEnabled,
 		ttsState = state.ttsState,
@@ -723,6 +727,7 @@ private fun ComposeNovelPagedChapter(
 	state: NovelComposeReaderUiState,
 	chapters: List<NovelComposeChapterContent>,
 	settings: NovelReaderSettings,
+	animationsEnabled: Boolean,
 	imageModel: (String) -> Any?,
 	onImageClick: ((String) -> Unit)?,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)?,
@@ -730,7 +735,7 @@ private fun ComposeNovelPagedChapter(
 	onRequestPreviousChapter: () -> Unit,
 	onRequestNextChapter: () -> Unit,
 	onPageRequestConsumed: (Long) -> Unit,
-	onPositionChanged: (Int, Int, Int, Int, Int, String) -> Unit,
+	onPositionChanged: (Long, Int, Int, Int, Int, Int, String) -> Unit,
 	modifier: Modifier,
 ) {
 	val density = LocalDensity.current
@@ -976,6 +981,7 @@ private fun ComposeNovelPagedChapter(
 					)
 					when (page) {
 						is NovelComposePage.Text -> onPositionChanged(
+							page.chapterId,
 							page.chapterIndex,
 							localPage,
 							localPageCount,
@@ -984,6 +990,7 @@ private fun ComposeNovelPagedChapter(
 							page.value,
 						)
 						is NovelComposePage.Image -> onPositionChanged(
+							page.chapterId,
 							page.chapterIndex,
 							localPage,
 							localPageCount,
@@ -996,6 +1003,11 @@ private fun ComposeNovelPagedChapter(
 		}
 		val dualPage = settings.enableDualPage && maxWidth >= 600.dp
 		val pageCurlState = rememberComposeReaderPageCurlState()
+		val effectiveAnimation = when {
+			!animationsEnabled -> ReaderAnimation.NONE
+			settings.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION -> ReaderAnimation.SIMULATION
+			else -> ReaderAnimation.DEFAULT
+		}
 		LaunchedEffect(pagerState.isScrollInProgress) {
 			if (!pagerState.isScrollInProgress) pageCurlState.resetDrag()
 		}
@@ -1016,17 +1028,19 @@ private fun ComposeNovelPagedChapter(
 				.background(Color(palette.backgroundColor))
 				.nestedScroll(boundarySwipeConnection)
 				.then(pullToBookmarkModifier)
-				.trackComposeReaderPageCurl(pageCurlState, settings.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION)
+				.trackComposeReaderPageCurl(pageCurlState, effectiveAnimation == ReaderAnimation.SIMULATION)
 				.graphicsLayer { translationY = pullOffsetPx },
 		) { index ->
 			val page = pages[index]
-			val isSimulation = settings.pageTurnAnimation == NovelPageTurnAnimation.SIMULATION
+			val isSimulation = effectiveAnimation == ReaderAnimation.SIMULATION
 			val pageOffset = (index - pagerState.currentPage) - pagerState.currentPageOffsetFraction
 			val curlOnEnd = !dualPage || novelDualPageCurlOnEnd(
 				horizontalDragFraction = pageCurlState.horizontalDragFraction,
 				isReversed = false,
 			)
-			val simulationOffset = if (isSimulation && dualPage) {
+			val animationOffset = if (effectiveAnimation == ReaderAnimation.NONE) {
+				pageOffset
+			} else if (isSimulation && dualPage) {
 				novelDualPageCurlOffset(
 					pageOffset = pageOffset,
 					isScrollInProgress = pagerState.isScrollInProgress,
@@ -1037,23 +1051,23 @@ private fun ComposeNovelPagedChapter(
 			} else {
 				null
 			}
-			val simulationTransform = simulationOffset?.let { offset ->
+			val pageTransform = animationOffset?.let { offset ->
 				resolveComposeReaderPageTransform(
-					animation = ReaderAnimation.SIMULATION,
+					animation = effectiveAnimation,
 					pageOffset = offset,
 					isVertical = false,
 					isReversed = dualPage && !curlOnEnd,
 					isCurlUnfolding = isSimulationCurlUnfolding,
 				)
 			}
-			val pageModifier = if (simulationTransform != null) {
+			val pageModifier = if (pageTransform != null) {
 				Modifier
-					.zIndex(simulationTransform.zIndex)
+					.zIndex(pageTransform.zIndex)
 					.graphicsLayer {
-						alpha = simulationTransform.alpha
-						translationX = simulationTransform.translationFactor * size.width
-						rotationY = simulationTransform.rotationY
-						transformOrigin = simulationTransform.transformOrigin
+						alpha = pageTransform.alpha
+						translationX = pageTransform.translationFactor * size.width
+						rotationY = pageTransform.rotationY
+						transformOrigin = pageTransform.transformOrigin
 						cameraDistance = READER_PAGE_CAMERA_DISTANCE
 					}
 			} else {
@@ -1063,9 +1077,9 @@ private fun ComposeNovelPagedChapter(
 				modifier = pageModifier
 					.fillMaxSize()
 					.then(
-						if (simulationTransform != null) {
+						if (isSimulation && pageTransform != null) {
 							Modifier.composeReaderPageCurl(
-								transform = simulationTransform,
+								transform = pageTransform,
 								isVertical = false,
 								isReadingReversed = false,
 								state = pageCurlState,
@@ -1129,8 +1143,8 @@ private fun ComposeNovelPagedChapter(
 					}
 					AnimatedVisibility(
 						visible = !state.controlsVisible,
-						enter = fadeIn(),
-						exit = fadeOut(),
+						enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+						exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
 						modifier = Modifier.align(Alignment.BottomCenter),
 					) {
 						NovelPageReadingStatus(
@@ -1140,9 +1154,9 @@ private fun ComposeNovelPagedChapter(
 						)
 					}
 				}
-				if (simulationTransform != null) {
+				if (isSimulation && pageTransform != null) {
 					ComposeReaderSimulationPageShadow(
-						transform = simulationTransform,
+						transform = pageTransform,
 					)
 					}
 				}

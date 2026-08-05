@@ -651,6 +651,23 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getEnumValue(KEY_READER_ANIMATION, ReaderAnimation.DEFAULT)
 		set(value) = prefs.edit { putEnumValue(KEY_READER_ANIMATION, value) }
 
+	val isEInkModeEnabled: Boolean
+		get() = prefs.getBoolean(KEY_EINK_MODE, false)
+
+	val isEInkRefreshEnabled: Boolean
+		get() = prefs.getBoolean(KEY_EINK_REFRESH, true)
+
+	val eInkRefreshDurationMillis: Int
+		get() = prefs.getSafeInt(KEY_EINK_REFRESH_DURATION, EINK_REFRESH_DURATION_DEFAULT)
+			.coerceIn(EINK_REFRESH_DURATION_MIN, EINK_REFRESH_DURATION_MAX)
+
+	val eInkRefreshEveryPages: Int
+		get() = prefs.getSafeInt(KEY_EINK_REFRESH_EVERY, EINK_REFRESH_EVERY_DEFAULT)
+			.coerceIn(EINK_REFRESH_EVERY_MIN, EINK_REFRESH_EVERY_MAX)
+
+	val eInkRefreshColor: EInkRefreshColor
+		get() = prefs.getEnumValue(KEY_EINK_REFRESH_COLOR, EInkRefreshColor.WHITE)
+
 	var readerBackground: ReaderBackground
 		get() = prefs.getEnumValue(KEY_READER_BACKGROUND, ReaderBackground.AUTO)
 		set(value) = prefs.edit { putEnumValue(KEY_READER_BACKGROUND, value) }
@@ -2221,10 +2238,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NOTIFICATIONS_LIGHT = "notifications_light"
 		const val KEY_NOTIFICATIONS_INFO = "tracker_notifications_info"
 		const val KEY_READER_ANIMATION = "reader_animation2"
+		const val KEY_EINK_MODE = "eink_mode"
+		const val KEY_EINK_REFRESH = "eink_refresh"
+		const val KEY_EINK_REFRESH_DURATION = "eink_refresh_duration"
+		const val KEY_EINK_REFRESH_EVERY = "eink_refresh_every"
+		const val KEY_EINK_REFRESH_COLOR = "eink_refresh_color"
 		const val KEY_READER_CONTROLS = "reader_controls"
 		const val KEY_READER_MODE = "reader_mode"
 		const val KEY_READER_MODE_DETECT = "reader_mode_detect"
 		const val KEY_READER_CROP = "reader_crop"
+		const val EINK_REFRESH_DURATION_DEFAULT = 300
+		const val EINK_REFRESH_DURATION_MIN = 100
+		const val EINK_REFRESH_DURATION_MAX = 1000
+		const val EINK_REFRESH_EVERY_DEFAULT = 1
+		const val EINK_REFRESH_EVERY_MIN = 1
+		const val EINK_REFRESH_EVERY_MAX = 10
 		const val KEY_APP_PASSWORD = "app_password"
 		const val KEY_APP_PASSWORD_NUMERIC = "app_password_num"
 		const val KEY_PROTECT_APP = "protect_app"

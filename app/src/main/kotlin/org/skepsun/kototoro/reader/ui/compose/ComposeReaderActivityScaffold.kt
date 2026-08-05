@@ -127,6 +127,8 @@ private val ReaderBottomImmersiveStops = listOf(0f, 0.18f, 0.38f, 0.70f, 1f)
 @Immutable
 internal data class ComposeReaderChromeState(
 	val controlsVisible: Boolean = true,
+	val eInkModeEnabled: Boolean = false,
+	val eInkRefresh: ReaderEInkRefresh? = null,
 	val loadingVisible: Boolean = false,
 	val title: String = "",
 	val subtitle: String = "",
@@ -139,6 +141,13 @@ internal data class ComposeReaderChromeState(
 	val toolsVisible: Boolean = false,
 	val chaptersVisible: Boolean = false,
 	val chapterPanel: ReaderChapterPanelUiState = ReaderChapterPanelUiState(),
+)
+
+@Immutable
+internal data class ReaderEInkRefresh(
+	val id: Long,
+	val durationMillis: Int,
+	val colorArgb: Int,
 )
 
 @Immutable
@@ -199,6 +208,7 @@ internal data class ComposeReaderChromeCallbacks(
 	val onZoomIn: () -> Unit = {},
 	val onZoomOut: () -> Unit = {},
 	val onMessageExpired: (Long) -> Unit = {},
+	val onEInkRefreshConsumed: (Long) -> Unit = {},
 	val onMessageAction: () -> Unit = {},
 	val autoScroll: ReaderAutoScrollCallbacks = ReaderAutoScrollCallbacks(),
 	val actions: ReaderActionsCallbacks = ReaderActionsCallbacks(),
@@ -443,7 +453,7 @@ internal fun ComposeReaderActivityScaffold(
 	val immersiveTransparent = immersiveBaseColor.toTransparentImmersiveColor()
 	val topImmersiveHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp
 	val bottomImmersiveHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp
-	val readerBackdrop = if (isIosStyle) {
+	val readerBackdrop = if (isIosStyle && !state.eInkModeEnabled) {
 		rememberLayerBackdrop { drawContent() }
 	} else {
 		null
@@ -463,8 +473,8 @@ internal fun ComposeReaderActivityScaffold(
 
 		AnimatedVisibility(
 			visible = state.controlsVisible,
-			enter = fadeIn(),
-			exit = fadeOut(),
+			enter = fadeIn().whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+			exit = fadeOut().whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier.fillMaxSize(),
 		) {
 			Box(modifier = Modifier.fillMaxSize()) {
@@ -503,8 +513,8 @@ internal fun ComposeReaderActivityScaffold(
 		AnimatedVisibility(
 			visible = state.controlsVisible,
 			// Alpha animations create an offscreen layer that clips Backdrop shadows to these bounds.
-			enter = slideInVertically { -it },
-			exit = slideOutVertically { -it },
+			enter = slideInVertically { -it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+			exit = slideOutVertically { -it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier.align(Alignment.TopCenter),
 		) {
 			ReaderComposeTopBar(
@@ -522,8 +532,9 @@ internal fun ComposeReaderActivityScaffold(
 					durationMillis = 140,
 					delayMillis = 160,
 				),
-			),
-			exit = fadeOut(animationSpec = tween(durationMillis = 80)),
+			).whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+			exit = fadeOut(animationSpec = tween(durationMillis = 80))
+				.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier.align(Alignment.TopCenter),
 		) {
 			ReaderComposeInfoBar(state.infoBar)
@@ -532,8 +543,8 @@ internal fun ComposeReaderActivityScaffold(
 		AnimatedVisibility(
 			visible = state.controlsVisible && state.actions.sliderEnabled,
 			// Alpha transitions clip the rounded Backdrop shadow to a rectangular layer.
-			enter = slideInVertically { it },
-			exit = slideOutVertically { it },
+			enter = slideInVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+			exit = slideOutVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier
 				.align(Alignment.BottomCenter)
 				.navigationBarsPadding()
@@ -557,8 +568,10 @@ internal fun ComposeReaderActivityScaffold(
 		AnimatedVisibility(
 			visible = state.controlsVisible && !state.chaptersVisible && floatingControls.isNotEmpty(),
 			// Keep Backdrop shadows out of the alpha layer used by fade transitions.
-			enter = slideInHorizontally { it + floatingControlExitOffset },
-			exit = slideOutHorizontally { it + floatingControlExitOffset },
+			enter = slideInHorizontally { it + floatingControlExitOffset }
+				.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+			exit = slideOutHorizontally { it + floatingControlExitOffset }
+				.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier
 				.align(Alignment.BottomEnd)
 				.navigationBarsPadding()
@@ -688,6 +701,7 @@ internal fun ComposeReaderActivityScaffold(
 
 		ReaderMessageHost(
 			message = state.message,
+			animationsEnabled = !state.eInkModeEnabled,
 			onExpired = callbacks.onMessageExpired,
 			onAction = callbacks.onMessageAction,
 			modifier = Modifier
@@ -711,7 +725,33 @@ internal fun ComposeReaderActivityScaffold(
 			}
 		}
 
+		EInkRefreshOverlay(state.eInkRefresh, callbacks.onEInkRefreshConsumed)
+		}
 	}
+}
+
+@Composable
+internal fun EInkRefreshOverlay(
+	command: ReaderEInkRefresh?,
+	onConsumed: (Long) -> Unit = {},
+) {
+	var activeCommand by remember { mutableStateOf<ReaderEInkRefresh?>(null) }
+	LaunchedEffect(command?.id) {
+		activeCommand = command
+		if (command != null) {
+			delay(command.durationMillis.toLong())
+			if (activeCommand?.id == command.id) {
+				activeCommand = null
+				onConsumed(command.id)
+			}
+		}
+	}
+	activeCommand?.let { active ->
+		Box(
+			modifier = Modifier
+				.fillMaxSize()
+				.background(Color(active.colorArgb)),
+		)
 	}
 }
 
@@ -839,11 +879,14 @@ internal fun BoxScope.ReaderPageInfoBar(
 	state: ReaderInfoBarState,
 	controlsVisible: Boolean,
 	systemStatus: ReaderSystemStatus,
+	animationsEnabled: Boolean = true,
 ) {
 	AnimatedVisibility(
 		visible = state.visible && !controlsVisible,
-		enter = fadeIn(animationSpec = tween(durationMillis = 140, delayMillis = 160)),
-		exit = fadeOut(animationSpec = tween(durationMillis = 80)),
+		enter = fadeIn(animationSpec = tween(durationMillis = 140, delayMillis = 160))
+			.whenReaderAnimationsEnabled(animationsEnabled),
+		exit = fadeOut(animationSpec = tween(durationMillis = 80))
+			.whenReaderAnimationsEnabled(animationsEnabled),
 		modifier = Modifier.align(Alignment.TopCenter),
 	) {
 		ReaderComposeInfoBar(state, systemStatus)
@@ -853,6 +896,7 @@ internal fun BoxScope.ReaderPageInfoBar(
 @Composable
 private fun ReaderMessageHost(
 	message: ReaderMessage?,
+	animationsEnabled: Boolean,
 	onExpired: (Long) -> Unit,
 	onAction: () -> Unit,
 	modifier: Modifier = Modifier,
@@ -866,7 +910,12 @@ private fun ReaderMessageHost(
 		delay(current.durationMillis ?: return@LaunchedEffect)
 		onExpired(current.id)
 	}
-	AnimatedVisibility(visible = message != null, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
+	AnimatedVisibility(
+		visible = message != null,
+		enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+		exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
+		modifier = modifier,
+	) {
 		Surface(shape = MaterialTheme.shapes.small, color = Color.Black.copy(alpha = 0.78f), contentColor = Color.White) {
 			Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 10.dp)) {
 				Text(

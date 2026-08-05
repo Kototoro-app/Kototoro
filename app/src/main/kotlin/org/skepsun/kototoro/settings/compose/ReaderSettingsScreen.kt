@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -18,6 +19,7 @@ import androidx.core.content.edit
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.EInkRefreshColor
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderControl
@@ -32,6 +34,7 @@ fun ReaderSettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val prefs = settings.prefs
+    val resources = LocalContext.current.resources
 
     val readerModeNames = ReaderMode.entries.map { it.name }
     val zoomModeNames = ZoomMode.entries.map { it.name }
@@ -45,6 +48,8 @@ fun ReaderSettingsScreen(
     val readerBackgroundNames = ReaderBackground.entries.map { it.name }
     val readerAnimationNames = ReaderAnimation.entries.map { it.name }
     val pagesPreloadNames = listOf("1", "2", "0")
+    val eInkModeEnabled = settings.observeAsState(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }.value
+    val eInkRefreshEnabled = settings.observeAsState(AppSettings.KEY_EINK_REFRESH) { isEInkRefreshEnabled }.value
     val readerControlOptions = listOf(
         SettingsChoiceOption(ReaderControl.SCREEN_ROTATION, stringResource(R.string.screen_orientation)),
         SettingsChoiceOption(ReaderControl.SAVE_PAGE, stringResource(R.string.save_page)),
@@ -337,6 +342,65 @@ fun ReaderSettingsScreen(
                 valueText = { it.toString() },
                 onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_PREFETCH_LIMIT, it) } }
             )
+            }
+
+            SettingsPreferenceSection(
+                title = stringResource(R.string.e_ink),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+            ) {
+                SettingsSwitchPreference(
+                    title = stringResource(R.string.eink_mode),
+                    summary = stringResource(R.string.eink_mode_summary),
+                    checked = eInkModeEnabled,
+                    onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_EINK_MODE, it) } },
+                )
+
+                SettingsSwitchPreference(
+                    title = stringResource(R.string.eink_refresh),
+                    summary = stringResource(R.string.eink_refresh_summary),
+                    checked = eInkRefreshEnabled,
+                    enabled = eInkModeEnabled,
+                    onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_EINK_REFRESH, it) } },
+                )
+
+                SettingsSliderPreference(
+                    title = stringResource(R.string.eink_refresh_duration),
+                    value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_DURATION) {
+                        eInkRefreshDurationMillis
+                    }.value,
+                    valueRange = AppSettings.EINK_REFRESH_DURATION_MIN..AppSettings.EINK_REFRESH_DURATION_MAX,
+                    step = 50,
+                    enabled = eInkModeEnabled && eInkRefreshEnabled,
+                    valueText = { resources.getString(R.string.milliseconds_value, it) },
+                    onValueChange = { prefs.edit { putInt(AppSettings.KEY_EINK_REFRESH_DURATION, it) } },
+                )
+
+                SettingsSliderPreference(
+                    title = stringResource(R.string.eink_refresh_every),
+                    value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_EVERY) {
+                        eInkRefreshEveryPages
+                    }.value,
+                    valueRange = AppSettings.EINK_REFRESH_EVERY_MIN..AppSettings.EINK_REFRESH_EVERY_MAX,
+                    step = 1,
+                    enabled = eInkModeEnabled && eInkRefreshEnabled,
+                    valueText = { resources.getQuantityString(R.plurals.pages_value, it, it) },
+                    onValueChange = { prefs.edit { putInt(AppSettings.KEY_EINK_REFRESH_EVERY, it) } },
+                )
+
+                SettingsChoicePreference(
+                    title = stringResource(R.string.eink_refresh_color),
+                    options = listOf(
+                        SettingsChoiceOption(EInkRefreshColor.WHITE.name, stringResource(R.string.color_white)),
+                        SettingsChoiceOption(EInkRefreshColor.BLACK.name, stringResource(R.string.color_black)),
+                    ),
+                    value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_COLOR) {
+                        eInkRefreshColor.name
+                    }.value,
+                    enabled = eInkModeEnabled && eInkRefreshEnabled,
+                    onValueChange = { prefs.edit { putString(AppSettings.KEY_EINK_REFRESH_COLOR, it) } },
+                )
             }
         }
     }

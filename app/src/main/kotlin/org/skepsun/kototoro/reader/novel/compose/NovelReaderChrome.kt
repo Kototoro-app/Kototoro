@@ -65,6 +65,7 @@ import org.skepsun.kototoro.reader.novel.tts.TtsState
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressBar
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderProgressDock
+import org.skepsun.kototoro.reader.ui.compose.whenReaderAnimationsEnabled
 
 private val NovelTopGradientExtension = 72.dp
 private val NovelBottomGradientExtension = 48.dp
@@ -98,14 +99,15 @@ internal data class NovelReaderChromeCallbacks(
 internal fun NovelReaderTopChrome(
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
+	animationsEnabled: Boolean = true,
 ) {
 	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
 	val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
 	val topHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp
 	AnimatedVisibility(
 		visible = state.controlsVisible,
-		enter = slideInVertically { -it },
-		exit = slideOutVertically { -it },
+		enter = slideInVertically { -it }.whenReaderAnimationsEnabled(animationsEnabled),
+		exit = slideOutVertically { -it }.whenReaderAnimationsEnabled(animationsEnabled),
 	) {
 		Box(
 			modifier = Modifier
@@ -195,6 +197,7 @@ internal fun NovelReaderTopChrome(
 internal fun NovelReaderBottomChrome(
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
+	animationsEnabled: Boolean = true,
 ) {
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	val toolsPanelVisible = state.toolsSheetVisible || state.ttsControlsVisible
@@ -214,8 +217,8 @@ internal fun NovelReaderBottomChrome(
 		AnimatedVisibility(
 			visible = state.controlsVisible && state.progressMax > 0f,
 			// Alpha transitions clip the rounded Backdrop shadow to a rectangular layer.
-			enter = slideInVertically { it },
-			exit = slideOutVertically { it },
+			enter = slideInVertically { it }.whenReaderAnimationsEnabled(animationsEnabled),
+			exit = slideOutVertically { it }.whenReaderAnimationsEnabled(animationsEnabled),
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
 			val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
@@ -249,8 +252,8 @@ internal fun NovelReaderBottomChrome(
 			visible = !state.controlsVisible &&
 				statusSettings?.showReadingStatus == true &&
 				statusSettings.readingMode != ReadingMode.PAGED,
-			enter = fadeIn(),
-			exit = fadeOut(),
+			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
 			val palette = novelReaderPalette(
