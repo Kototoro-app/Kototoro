@@ -118,6 +118,7 @@ import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
+import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -327,6 +328,9 @@ fun KototoroExploreHostRoute(
     val query by discoverViewModel.query.collectAsStateWithLifecycle()
     val listState = rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
+    }
+    ScrollToTopEffect {
+        listState.scrollToItem(0)
     }
     var savedBrowseListIndex by rememberSaveable { mutableIntStateOf(0) }
     var savedBrowseListOffset by rememberSaveable { mutableIntStateOf(0) }

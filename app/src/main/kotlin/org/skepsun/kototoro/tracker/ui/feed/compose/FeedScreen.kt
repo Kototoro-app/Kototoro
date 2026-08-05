@@ -46,6 +46,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -79,6 +80,9 @@ fun FeedScreen(
 ) {
 	val listState = rememberSaveable(saver = LazyListState.Saver) {
 		LazyListState()
+	}
+	ScrollToTopEffect {
+		listState.scrollToItem(0)
 	}
 	val context = LocalContext.current
 
@@ -289,5 +293,3 @@ private fun FeedEmptyState(
 		}
 	}
 }
-
-

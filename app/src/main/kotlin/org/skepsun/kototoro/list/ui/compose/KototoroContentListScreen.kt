@@ -66,6 +66,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
+import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -240,6 +241,9 @@ fun KototoroContentListScreen(
                     ListMode.COMPACT_GRID -> {
                         val posterStyle = compactPosterCardStyle(gridScale)
                         val actualGridState = gridState ?: rememberLazyGridState()
+                        ScrollToTopEffect {
+                            actualGridState.scrollToItem(0)
+                        }
                         LoadMoreOnNearEndEffect(
                             state = actualGridState,
                             enabled = canLoadMore,
@@ -353,6 +357,9 @@ fun KototoroContentListScreen(
                     }
                     ListMode.LIST -> {
                         val actualListState = listState ?: rememberLazyListState()
+                        ScrollToTopEffect {
+                            actualListState.scrollToItem(0)
+                        }
                         LoadMoreOnNearEndEffect(
                             state = actualListState,
                             enabled = canLoadMore,
@@ -416,6 +423,9 @@ fun KototoroContentListScreen(
                     }
                     ListMode.DETAILED_LIST -> {
                         val actualListState = detailedListState ?: rememberLazyListState()
+                        ScrollToTopEffect {
+                            actualListState.scrollToItem(0)
+                        }
                         LoadMoreOnNearEndEffect(
                             state = actualListState,
                             enabled = canLoadMore,

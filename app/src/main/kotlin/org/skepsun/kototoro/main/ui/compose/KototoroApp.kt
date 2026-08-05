@@ -84,6 +84,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
@@ -97,6 +98,7 @@ import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalScrollToTopEvents
 import org.skepsun.kototoro.core.ui.compose.LiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkRequestSize
@@ -591,10 +593,15 @@ fun KototoroApp(
     val mainNavState = activeNavigationState.mainNavState
     val navController = activeNavigationState.navController
     val chromeScrollStates = remember { mutableMapOf<SpaceId, SpaceChromeScrollState>() }
+    val scrollToTopEventsBySpace = remember { mutableMapOf<SpaceId, MutableSharedFlow<Unit>>() }
     val chromeScrollState = chromeScrollStates.getOrPut(navigationSpaceId, ::SpaceChromeScrollState)
+    val scrollToTopEvents = scrollToTopEventsBySpace.getOrPut(navigationSpaceId) {
+        MutableSharedFlow(extraBufferCapacity = 1)
+    }
     LaunchedEffect(spaceUiState.spaces) {
         val activeSpaceIds = spaceUiState.spaces.mapTo(mutableSetOf()) { it.id }
         chromeScrollStates.keys.retainAll(activeSpaceIds)
+        scrollToTopEventsBySpace.keys.retainAll(activeSpaceIds)
     }
 
     var topBarHeightPx by chromeScrollState.topBarHeightPx
@@ -813,6 +820,7 @@ fun KototoroApp(
         }
     }
     val currentBottomNavNavigationState = rememberUpdatedState(activeNavigationState)
+    val currentScrollToTopEvents = rememberUpdatedState(scrollToTopEvents)
     val bottomNavDispatcher = remember {
         { itemId: Int ->
             val navigationState = currentBottomNavNavigationState.value
@@ -824,6 +832,12 @@ fun KototoroApp(
                     mainNavState = navigationState.mainNavState,
                 ).openTopLevel(topLevelKey)
             }
+        }
+    }
+    val bottomNavReselectionDispatcher = remember {
+        { _: Int ->
+            currentScrollToTopEvents.value.tryEmit(Unit)
+            Unit
         }
     }
     val startDestination = remember(initialTopLevel) {
@@ -1504,7 +1518,7 @@ fun KototoroApp(
                         },
                         navStateFlow = navStateFlow,
                         onItemSelected = bottomNavDispatcher,
-                        onItemReselected = bottomNavDispatcher,
+                        onItemReselected = bottomNavReselectionDispatcher,
                         isResumeEnabled = effectiveResumeEnabled,
                         onResumeClick = effectiveResumeClick,
                         resumeAction = effectiveResumeAction,
@@ -1607,6 +1621,9 @@ fun KototoroApp(
                                 CompositionLocalProvider(
                                     LocalBrowseSpaceId provides renderedSpaceId.takeIf {
                                         spaceUiState.switcherEnabled
+                                    },
+                                    LocalScrollToTopEvents provides scrollToTopEventsBySpace.getOrPut(renderedSpaceId) {
+                                        MutableSharedFlow(extraBufferCapacity = 1)
                                     },
                                 ) {
                                     AppNavGraph(

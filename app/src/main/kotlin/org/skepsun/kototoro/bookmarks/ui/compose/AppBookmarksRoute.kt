@@ -40,6 +40,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
@@ -68,6 +69,9 @@ fun AppBookmarksRoute(
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
     val gridState = rememberSaveable(viewModel, saver = LazyGridState.Saver) {
         LazyGridState()
+    }
+    ScrollToTopEffect {
+        gridState.scrollToItem(0)
     }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity

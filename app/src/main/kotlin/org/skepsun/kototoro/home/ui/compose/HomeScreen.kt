@@ -117,6 +117,7 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
+import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -180,6 +181,9 @@ fun HomeScreen(
     autoAdvanceHero: Boolean = true,
 ) {
     val listState = rememberLazyListState()
+    ScrollToTopEffect {
+        listState.scrollToItem(0)
+    }
     val layoutDirection = LocalLayoutDirection.current
     val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
     val context = LocalContext.current
