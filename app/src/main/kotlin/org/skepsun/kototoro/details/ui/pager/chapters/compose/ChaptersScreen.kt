@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -45,8 +46,12 @@ import org.skepsun.kototoro.core.ui.widgets.ChipsView.ChipModel
 import org.skepsun.kototoro.details.ui.model.chapterFastScrollLabelAt
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.list.ui.model.CollapsibleListHeader
+import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import kotlin.math.roundToInt
+
+internal fun ListModel.isChapterSectionHeader(): Boolean =
+    this is ListHeader || this is CollapsibleListHeader
 
 @Composable
 fun ChaptersScreen(
@@ -67,14 +72,16 @@ fun ChaptersScreen(
     onSelectionActionClick: (Int) -> Unit,
     onClearSelection: () -> Unit,
 ) {
+    val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
-    val itemPositionKeys = remember(items) {
+    val itemPositionKeys = remember(items, context) {
         items.map { item ->
             when (item) {
                 is ChapterListItem -> "chapter_${item.chapter.id}_${item.chapter.url}"
                 is CollapsibleListHeader -> "header_${item.groupId}"
+                is ListHeader -> "header_${item.getText(context)}"
                 else -> "item_${item::class.java.simpleName}"
             }
         }
@@ -196,11 +203,12 @@ fun ChaptersScreen(
                                 when (val item = items[index]) {
                                     is ChapterListItem -> "chapter_${item.chapter.id}_${item.chapter.url}_${index}"
                                     is CollapsibleListHeader -> "header_${item.groupId}_${index}"
+                                    is ListHeader -> "header_${item.getText(context)}_${index}"
                                     else -> "item_${item::class.java.simpleName}_${index}"
                                 }
                             },
                             span = { index ->
-                                if (items[index] is CollapsibleListHeader) {
+                                if (items[index].isChapterSectionHeader()) {
                                     GridItemSpan(maxLineSpan)
                                 } else {
                                     GridItemSpan(1)
@@ -224,6 +232,10 @@ fun ChaptersScreen(
 
                                 is CollapsibleListHeader -> {
                                     CollapsibleHeaderUI(header = item, onClick = { onHeaderClick(item) })
+                                }
+
+                                is ListHeader -> {
+                                    ChapterHeaderUI(text = item.getText(context) ?: "")
                                 }
                             }
                         }
@@ -249,6 +261,7 @@ fun ChaptersScreen(
                                 when (val item = items[index]) {
                                     is ChapterListItem -> "chapter_${item.chapter.id}_${item.chapter.url}_${index}"
                                     is CollapsibleListHeader -> "header_${item.groupId}_${index}"
+                                    is ListHeader -> "header_${item.getText(context)}_${index}"
                                     else -> "item_${item::class.java.simpleName}_${index}"
                                 }
                             },
@@ -271,6 +284,10 @@ fun ChaptersScreen(
                                 is CollapsibleListHeader -> {
                                     CollapsibleHeaderUI(header = item, onClick = { onHeaderClick(item) })
                                 }
+
+                                is ListHeader -> {
+                                    ChapterHeaderUI(text = item.getText(context) ?: "")
+                                }
                             }
                         }
                     }
@@ -288,25 +305,40 @@ fun ChaptersScreen(
 
 @Composable
 fun CollapsibleHeaderUI(header: CollapsibleListHeader, onClick: () -> Unit) {
+    ChapterHeaderUI(
+        text = header.text,
+        isCollapsible = header.isCollapsible,
+        isExpanded = header.isExpanded,
+        onClick = onClick,
+    )
+}
+
+@Composable
+private fun ChapterHeaderUI(
+    text: CharSequence,
+    isCollapsible: Boolean = false,
+    isExpanded: Boolean = true,
+    onClick: () -> Unit = {},
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = header.isCollapsible, onClick = onClick)
+            .clickable(enabled = isCollapsible, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = header.text.toString(),
+            text = text.toString(),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
         )
-        if (header.isCollapsible) {
+        if (isCollapsible) {
             Icon(
                 imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = if (!header.isExpanded) "Expand" else "Collapse",
+                contentDescription = if (!isExpanded) "Expand" else "Collapse",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.rotate(if (!header.isExpanded) -90f else 0f),
+                modifier = Modifier.rotate(if (!isExpanded) -90f else 0f),
             )
         }
     }
