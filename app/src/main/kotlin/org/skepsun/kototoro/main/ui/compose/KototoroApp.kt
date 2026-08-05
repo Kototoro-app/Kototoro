@@ -705,6 +705,10 @@ fun KototoroApp(
         spaceNavigationSessionUiState.enabled,
         spaceNavigationSessionUiState.restorationReady,
         spaceNavigationSessionUiState.sessions,
+        // A custom navigation state is created lazily when that Space becomes active. Re-run
+        // restoration after switching to it; otherwise the initial built-in Space pass skips it
+        // and the covered Space transition can never become ready to reveal.
+        navigationSpaceId,
     ) {
         if (!spaceNavigationSessionUiState.enabled) {
             restoredSpaceIds.clear()
