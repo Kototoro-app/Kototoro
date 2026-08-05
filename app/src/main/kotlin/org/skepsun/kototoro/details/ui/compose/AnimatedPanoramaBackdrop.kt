@@ -19,12 +19,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -219,6 +222,9 @@ fun AnimatedPanoramaBackdrop(
     val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
     var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
     val boundedMaxHeightPx = maxHeightPx?.takeIf { it.isFinite() }
+    val hasTransparentBottomFade = fullOpacityAtY != null &&
+        fullOpacityAtY.isFinite() &&
+        fullOpacityFadeDistancePx > 0f
     val scrollLinkedModifier = if (scrollLinkedTranslationYPx.isFinite() && scrollLinkedTranslationYPx != 0f) {
         Modifier.graphicsLayer {
             translationY = scrollLinkedTranslationYPx
@@ -237,13 +243,6 @@ fun AnimatedPanoramaBackdrop(
             .then(scrollLinkedModifier)
             .fillMaxSize()
     }
-    val scrimModifier = if (fullOpacityAtY != null && fullOpacityAtY.isFinite()) {
-        modifier
-            .then(scrollLinkedModifier)
-            .fillMaxSize()
-    } else {
-        backdropBoundsModifier
-    }
     val backgroundModifier = backdropBoundsModifier
         .then(
             if (useRealtimeBlur) {
@@ -261,7 +260,45 @@ fun AnimatedPanoramaBackdrop(
             scaleY = backgroundScale
             translationX = backgroundTranslationXState?.value ?: 0f
             alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
+            compositingStrategy = if (hasTransparentBottomFade) {
+                CompositingStrategy.Offscreen
+            } else {
+                CompositingStrategy.Auto
+            }
         }
+        .then(
+            if (hasTransparentBottomFade) {
+                Modifier.drawWithCache {
+                    val fadeStartY = (size.height - fullOpacityFadeDistancePx).coerceAtLeast(0f)
+                    val alphaMask = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.White,
+                            0.32f to Color.White.copy(
+                                alpha = (1f - ((0.16f + (panoramaGradientAlphaFactor * 0.18f)) *
+                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
+                            ),
+                            0.62f to Color.White.copy(
+                                alpha = (1f - ((0.48f + (panoramaGradientAlphaFactor * 0.20f)) *
+                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
+                            ),
+                            0.84f to Color.White.copy(
+                                alpha = (1f - ((0.78f + (panoramaGradientAlphaFactor * 0.16f)) *
+                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
+                            ),
+                            1f to Color.Transparent,
+                        ),
+                        startY = fadeStartY,
+                        endY = size.height,
+                    )
+                    onDrawWithContent {
+                        drawContent()
+                        drawRect(alphaMask, blendMode = BlendMode.DstIn)
+                    }
+                }
+            } else {
+                Modifier
+            },
+        )
 
     if (!hasResolvedBackground && stablePlaceholderImage != null) {
         Image(
@@ -290,34 +327,16 @@ fun AnimatedPanoramaBackdrop(
             },
         )
     }
-    Box(
-        modifier = scrimModifier
-            .background(
-                if (fullOpacityAtY != null && fullOpacityAtY.isFinite()) {
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Transparent,
-                            0.55f to backgroundColor.copy(
-                                alpha = (panoramaGradientAlphaFactor * 0.45f * panoramaTransitionIntensityFactor)
-                                    .coerceIn(0f, 1f),
-                            ),
-                            0.82f to backgroundColor.copy(
-                                alpha = ((0.72f + (panoramaGradientAlphaFactor * 0.28f)) * panoramaTransitionIntensityFactor)
-                                    .coerceIn(0f, 1f),
-                            ),
-                            1f to backgroundColor.copy(alpha = panoramaTransitionIntensityFactor),
-                        ),
-                        startY = (fullOpacityAtY - fullOpacityFadeDistancePx).coerceAtLeast(0f),
-                        endY = fullOpacityAtY.coerceAtLeast(0f),
-                    )
-                } else {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            backgroundColor.copy(alpha = panoramaGradientAlphaFactor * panoramaTransitionIntensityFactor),
-                        ),
-                    )
-                },
+    if (!hasTransparentBottomFade) {
+        Box(
+            modifier = backdropBoundsModifier.background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        backgroundColor.copy(alpha = panoramaGradientAlphaFactor * panoramaTransitionIntensityFactor),
+                    ),
+                ),
             ),
-    )
+        )
+    }
 }

@@ -1018,7 +1018,10 @@ private fun DetailsScreenContent(
         effectivePanoramaInfoCardTopPx.isFinite() &&
         effectivePanoramaInfoCardMidPx.isFinite()
     ) {
-        (effectivePanoramaInfoCardMidPx - effectivePanoramaInfoCardTopPx).coerceAtLeast(with(density) { 48.dp.toPx() })
+        val infoCardUpperHalfHeight = effectivePanoramaInfoCardMidPx - effectivePanoramaInfoCardTopPx
+        val transitionExtension = with(density) { 120.dp.toPx() }
+        val minimumTransitionHeight = with(density) { 180.dp.toPx() }
+        (infoCardUpperHalfHeight + transitionExtension).coerceAtLeast(minimumTransitionHeight)
     } else {
         0f
     }
