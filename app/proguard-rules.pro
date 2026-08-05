@@ -328,6 +328,10 @@
 -keep class com.lagradost.cloudstream3.utils.DrmExtractorLink { *; }
 -keep class com.lagradost.cloudstream3.utils.ExtractorLinkPlayList { *; }
 -keep class com.lagradost.cloudstream3.utils.ExtractorLinkType { *; }
+-keep class com.lagradost.cloudstream3.utils.DataStore { *; }
+-keep class com.lagradost.cloudstream3.utils.DataStoreKt { *; }
+-keep class com.lagradost.cloudstream3.utils.Editor { *; }
+-keep class com.lagradost.cloudstream3.utils.PreferenceDelegate { *; }
 -keep class com.lagradost.cloudstream3.utils.HlsPlaylistParser { *; }
 -keep class com.lagradost.cloudstream3.utils.M3u8Helper { *; }
 -keep class com.lagradost.cloudstream3.utils.M3u8Helper2 { *; }

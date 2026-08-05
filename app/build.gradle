@@ -305,7 +305,6 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		exclude 'com/lagradost/cloudstream3/utils/BiometricAuthenticator*.class'
 		exclude 'com/lagradost/cloudstream3/utils/CastHelper*.class'
 		exclude 'com/lagradost/cloudstream3/utils/CastOptionsProvider*.class'
-		exclude 'com/lagradost/cloudstream3/utils/DataStore*.class'
 		exclude 'com/lagradost/cloudstream3/utils/DataStoreHelper*.class'
 		exclude 'com/lagradost/cloudstream3/utils/FillerEpisodeCheck*.class'
 		exclude 'com/lagradost/cloudstream3/utils/InAppUpdater*.class'
@@ -372,6 +371,7 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		try {
 			[
 				'com/lagradost/cloudstream3/plugins/BasePlugin.class',
+				'com/lagradost/cloudstream3/utils/DataStore.class',
 				'com/lagradost/cloudstream3/utils/ExtractorApi.class',
 				'com/lagradost/cloudstream3/utils/JsInterpreterKt.class',
 			].each { requiredEntry ->
