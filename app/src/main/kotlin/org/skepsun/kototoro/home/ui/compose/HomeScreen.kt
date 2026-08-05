@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.home.ui.compose
 
-import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -69,7 +68,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -531,22 +529,12 @@ private fun HomeHeroSection(
             .padding(top = topContentInset),
     ) {
         val edgePadding = CompactTopBarHorizontalPadding
-        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val portraitViewportWidth = if (isLandscape) {
-            LocalConfiguration.current.screenHeightDp.dp
-        } else {
-            maxWidth
-        }
-        val cardWidth = (portraitViewportWidth - edgePadding * 2)
-            .coerceAtLeast(0.dp)
-            .coerceAtMost(HOME_HERO_PAGER_MAX_WIDTH)
+        val cardWidth = HOME_HERO_CARD_WIDTH.coerceAtMost(
+            (maxWidth - edgePadding * 2).coerceAtLeast(0.dp),
+        )
         val pageSpacing = 6.dp
-        val contentPadding = if (isLandscape) {
-            PaddingValues(start = edgePadding, end = 0.dp)
-        } else {
-            val horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(edgePadding)
-            PaddingValues(horizontal = horizontal)
-        }
+        val horizontalPadding = ((maxWidth - cardWidth) / 2).coerceAtLeast(edgePadding)
+        val contentPadding = PaddingValues(horizontal = horizontalPadding)
         val viewportWidth = maxWidth
         val density = LocalDensity.current
         val contentPadPx = with(density) { contentPadding.calculateLeftPadding(LocalLayoutDirection.current).toPx() }
@@ -1403,7 +1391,7 @@ private data class HomeCoverSupportingText(
 
 private const val HOME_LIST_RAIL_PAGE_SIZE = 3
 private const val HOME_CONTENT_RAIL_PREVIEW_LIMIT = 24
-private val HOME_HERO_PAGER_MAX_WIDTH = 1240.dp
+private val HOME_HERO_CARD_WIDTH = 520.dp
 private val HOME_LIST_RAIL_PAGE_MIN_WIDTH = 280.dp
 private val HOME_LIST_RAIL_PAGE_MAX_WIDTH = 320.dp
 private val HOME_DETAILED_RAIL_PAGE_MAX_WIDTH = 368.dp
