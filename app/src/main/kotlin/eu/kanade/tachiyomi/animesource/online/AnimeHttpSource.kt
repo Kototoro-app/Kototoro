@@ -55,9 +55,13 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     /**
      * Default network client for doing requests.
+     *
+     * Aniyomi extension-lib 14-16 expects the host client to decode Brotli
+     * responses, including when an extension sets Accept-Encoding explicitly.
      */
+    @Suppress("DEPRECATION")
     open val client: OkHttpClient
-        get() = network.client
+        get() = network.cloudflareClient
 
     /**
      * Generates a unique ID for the source.

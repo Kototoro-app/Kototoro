@@ -456,13 +456,18 @@ class MpvPlayer(
 	/**
 	 * Add an external audio track by URL.
 	 */
-	fun addAudioTrack(url: String, title: String? = null, lang: String? = null) {
+	fun addAudioTrack(
+		url: String,
+		title: String? = null,
+		lang: String? = null,
+		select: Boolean = false,
+	) {
 		try {
-			val args = mutableListOf("audio-add", url, "auto")
+			val args = mutableListOf("audio-add", url, if (select) "select" else "auto")
 			args.add(title ?: "")
 			args.add(lang ?: "")
 			mpv.command(*args.toTypedArray())
-			Log.d("MpvPlayer", "addAudioTrack: url=$url title=$title lang=$lang")
+			Log.d("MpvPlayer", "addAudioTrack: url=$url title=$title lang=$lang select=$select")
 		} catch (e: Exception) {
 			Log.e("MpvPlayer", "addAudioTrack failed: url=$url", e)
 		}

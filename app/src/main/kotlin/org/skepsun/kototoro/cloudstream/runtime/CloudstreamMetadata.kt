@@ -82,6 +82,7 @@ internal data class CloudstreamSeasonMetadata(
 @Serializable
 internal data class CloudstreamEpisodeMetadata(
 	val version: Int = CURRENT_VERSION,
+	val linkType: String? = null,
 	val dubStatus: String? = null,
 	val season: Int? = null,
 	val displaySeason: Int? = null,

@@ -485,6 +485,11 @@ configurations.all {
 	implementation libs.djl.tokenizers
 	implementation files('libs/tokenizer-native-0.33.0.aar')
 	implementation cloudstreamRuntimeJar
+	implementation files('libs/jlibtorrent-2.0.12.9.jar')
+	runtimeOnly files('libs/jlibtorrent-android-arm-2.0.12.9.jar')
+	runtimeOnly files('libs/jlibtorrent-android-arm64-2.0.12.9.jar')
+	runtimeOnly files('libs/jlibtorrent-android-x86-2.0.12.9.jar')
+	runtimeOnly files('libs/jlibtorrent-android-x86_64-2.0.12.9.jar')
 	implementation libs.cryptography.core
 	implementation libs.cryptography.provider.optimal
 	implementation libs.djl.sentencepiece

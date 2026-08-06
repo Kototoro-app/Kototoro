@@ -13,6 +13,15 @@ open class Hoster(
     val internalData: String = "",
     val lazy: Boolean = false,
 ) {
+
+    /** Legacy extension-lib 14 constructor without the lazy flag. */
+    constructor(
+        hosterUrl: String,
+        hosterName: String,
+        videoList: List<Video>?,
+        internalData: String,
+    ) : this(hosterUrl, hosterName, videoList, internalData, false)
+
     @Transient
     @Volatile
     var status: State = State.IDLE

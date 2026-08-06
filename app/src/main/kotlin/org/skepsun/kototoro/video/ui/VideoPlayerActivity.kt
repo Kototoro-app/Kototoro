@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.content.ContentValues
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.os.Handler
@@ -87,6 +88,8 @@ import org.skepsun.kototoro.video.player.MpvPlayer
 import org.skepsun.kototoro.video.player.MpvShaderManager
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
 import org.skepsun.kototoro.video.data.ExternalPlayerHelper
+import org.skepsun.kototoro.video.data.TorrentStreamService
+import org.skepsun.kototoro.video.data.isTorrentLocator
 import org.skepsun.kototoro.video.performance.DevicePerformanceClassifier
 import org.skepsun.kototoro.video.performance.DevicePerformanceInfo
 import org.skepsun.kototoro.video.performance.EffectiveVideoPlaybackConfig
@@ -167,6 +170,7 @@ import org.skepsun.kototoro.video.ui.compose.VideoPlayerRenderLayer
 class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCallback {
     companion object {
         private const val ENABLE_M3U8_PROXY_CACHE = true
+        private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
     }
 
     private data class PlayerSettingsAction(
@@ -218,6 +222,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var lastScrubPosition: Long = 0L
     private var availableVideos: List<Video> = emptyList()
     private var cloudstreamLinkJob: Job? = null
+    private var torrentResolutionJob: Job? = null
+    private var torrentConsent: Boolean? = null
     private var cloudstreamPlaybackInstance: Long = 0L
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
@@ -270,6 +276,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     @Inject
     lateinit var videoLocalCacheProxy: VideoLocalCacheProxy
+
+    @Inject
+    lateinit var torrentStreamService: TorrentStreamService
 
     @Inject
     lateinit var webViewExecutor: WebViewExecutor
@@ -1332,7 +1341,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             } else {
                 headers
             }
-            if (lowerUrl.startsWith("magnet:") || lowerUrl.startsWith("thunder:") || lowerUrl.startsWith("ed2k:")) {
+            if (lowerUrl.startsWith("thunder:") || lowerUrl.startsWith("ed2k:")) {
                 android.util.Log.w("VideoPlayer", "Unsupported direct playback scheme: $url")
                 showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                 return
@@ -1588,7 +1597,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         source: ParsersContentSource?,
         headers: Map<String, String>? = null,
         startMs: Long? = null,
+        isTorrent: Boolean = url.isTorrentLocator(),
     ) {
+        if (isTorrent) {
+            startTorrentPlayback(url, source, headers, startMs)
+            return
+        }
         hasRestoredProgress = false
         hasCurrentMediaLoaded = false
         currentMediaUrl = url
@@ -1670,6 +1684,52 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             lifecycleScope.launch {
                 restoreInitialSeekPercentFromHistory()
             }
+        }
+    }
+
+    private fun startTorrentPlayback(
+        locator: String,
+        source: ParsersContentSource?,
+        headers: Map<String, String>?,
+        startMs: Long?,
+    ) {
+        val resolveAndPlay = {
+            torrentResolutionJob?.cancel()
+            torrentResolutionJob = lifecycleScope.launch {
+                runCatching {
+                    torrentStreamService.resolve(locator, headers.orEmpty())
+                }.onSuccess { streamUrl ->
+                    Log.i("VideoPlayerActivity", "Resolved torrent locator to local stream")
+                    startMpvPlayback(
+                        url = streamUrl,
+                        source = source,
+                        headers = headers,
+                        startMs = startMs,
+                        isTorrent = false,
+                    )
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    Log.e("VideoPlayerActivity", "Failed to resolve torrent stream", error)
+                    showPlayerMessage(R.string.torrent_stream_failed, SnackbarDuration.Long)
+                }
+            }
+        }
+        when (torrentConsent) {
+            true -> resolveAndPlay()
+            false -> showPlayerMessage(R.string.torrent_stream_rejected, SnackbarDuration.Long)
+            null -> MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.torrent_stream_title)
+                .setMessage(R.string.torrent_stream_warning)
+                .setCancelable(false)
+                .setPositiveButton(R.string.confirm) { _, _ ->
+                    torrentConsent = true
+                    resolveAndPlay()
+                }
+                .setNegativeButton(android.R.string.cancel) { _, _ ->
+                    torrentConsent = false
+                    showPlayerMessage(R.string.torrent_stream_rejected, SnackbarDuration.Long)
+                }
+                .show()
         }
     }
 
@@ -1966,7 +2026,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             when (event) {
                 is CloudstreamPlaybackEvent.Link -> {
                     val video = listOf(event.page).toFallbackVideos(repo).firstOrNull() ?: return@collect
-                    val updatedVideo = video.copy(subtitleTracks = subtitlesByUrl.values.toList())
+                    val updatedVideo = video.copy(
+                        videoTitle = video.videoTitle,
+                        subtitleTracks = subtitlesByUrl.values.toList(),
+                        internalData = if (
+                            event.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.MAGNET ||
+                            event.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.TORRENT
+                        ) {
+                            TORRENT_VIDEO_MARKER
+                        } else {
+                            video.internalData
+                        },
+                    )
                     if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
                 }
                 is CloudstreamPlaybackEvent.Subtitle -> {
@@ -1976,7 +2047,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     )
                     if (subtitlesByUrl.putIfAbsent(track.url, track) != null) return@collect
                     val updatedVideos = videosByUrl.values.map { video ->
-                        video.copy(subtitleTracks = subtitlesByUrl.values.toList())
+                        video.copy(
+                            videoTitle = video.videoTitle,
+                            subtitleTracks = subtitlesByUrl.values.toList(),
+                        )
                     }
                     videosByUrl.clear()
                     updatedVideos.forEach { videosByUrl[it.videoUrl] = it }
@@ -1984,7 +2058,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
         }
         if (playbackInstance != cloudstreamPlaybackInstance) return false
-        val sortedVideos = videosByUrl.values.toList().sortedCloudstreamVideos()
+        val sortedVideos = videosByUrl.values
+            .toList()
+            .sortedCloudstreamVideos()
+            .sortedBy { video -> video.internalData == TORRENT_VIDEO_MARKER }
         val selected = sortedVideos.firstOrNull() ?: return false
         availableVideos = sortedVideos
         currentVideoIndex = 0
@@ -1997,6 +2074,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             source,
             headersToMap(selected.headers),
             startMs,
+            isTorrent = selected.internalData == TORRENT_VIDEO_MARKER || selected.videoUrl.isTorrentLocator(),
         )
         return true
     }
@@ -2441,8 +2519,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             if (audios.isNotEmpty()) {
                 android.util.Log.d("VideoPlayerActivity", "Loading ${audios.size} external audio tracks")
-                for (track in audios) {
-                    player.addAudioTrack(track.url, track.lang, track.lang)
+                val needsExternalAudioSelection = player.getAudioTracks().none { it.isSelected }
+                for ((index, track) in audios.withIndex()) {
+                    player.addAudioTrack(
+                        url = track.url,
+                        title = track.lang,
+                        lang = track.lang,
+                        select = needsExternalAudioSelection && index == 0,
+                    )
                 }
             }
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -2926,7 +3010,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
         }
-        startMpvPlayback(video.videoUrl, currentVideoSource, mergedHeaders, resumeMs)
+        startMpvPlayback(
+            url = video.videoUrl,
+            source = currentVideoSource,
+            headers = mergedHeaders,
+            startMs = resumeMs,
+            isTorrent = video.internalData == TORRENT_VIDEO_MARKER || video.videoUrl.isTorrentLocator(),
+        )
     }
 
     private fun showVideoSuperResolutionSheet() {
@@ -3049,6 +3139,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
         cloudstreamLinkJob = null
+        torrentResolutionJob?.cancel()
+        torrentResolutionJob = null
         playerRoot.removeCallbacks(hideUiRunnable)
         playerRoot.removeCallbacks(progressUpdateRunnable)
         playerRoot.removeCallbacks(controllerProgressRunnable)

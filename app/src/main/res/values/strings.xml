@@ -503,6 +503,10 @@
     <string name="open_external_player">Open in external player</string>
     <string name="no_external_player">No external player found</string>
     <string name="no_video_loaded">No video loaded</string>
+    <string name="torrent_stream_title">Stream torrent</string>
+    <string name="torrent_stream_warning">Torrent streaming shares data with other peers and may expose your IP address. Continue only if you understand the privacy and legal implications.</string>
+    <string name="torrent_stream_rejected">Torrent streaming was not enabled for this playback session</string>
+    <string name="torrent_stream_failed">Unable to start torrent stream</string>
     <string name="cast_to_device">Cast to device</string>
     <string name="casting_to">Casting to %s</string>
     <string name="cast_failed">Failed to cast</string>

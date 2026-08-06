@@ -82,6 +82,27 @@ data class Video(
         headers: Headers? = null,
     ) : this(url, quality, videoUrl, headers)
 
+    @Deprecated("Use the new Video properties instead")
+    fun copy(
+        url: String = this.url,
+        quality: String = this.quality,
+        videoUrl: String? = this.videoUrl,
+        headers: Headers? = this.headers,
+        subtitleTracks: List<Track> = this.subtitleTracks,
+        audioTracks: List<Track> = this.audioTracks,
+    ): Video {
+        return Video(
+            videoUrl = videoUrl ?: "null",
+            videoTitle = quality,
+            headers = headers,
+            subtitleTracks = subtitleTracks,
+            audioTracks = audioTracks,
+            initialized = initialized,
+        ).also {
+            it.videoPageUrl = url
+        }
+    }
+
     @Transient
     @Volatile
     var status: State = State.QUEUE

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.cloudstream.runtime
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.newAnimeLoadResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newLiveStreamLoadResponse
@@ -127,6 +128,14 @@ class CloudstreamContentRepositoryTest {
 		assertEquals("live-data", mapCloudstreamChapters(live, testSource).single().url)
 		assertEquals("torrent-data", mapCloudstreamChapters(torrent, testSource).single().url)
 		assertEquals("magnet-fallback", mapCloudstreamChapters(magnetFallback, testSource).single().url)
+		assertEquals(
+			ExtractorLinkType.TORRENT.name,
+			CloudstreamMetadataCodec.decodeEpisode(mapCloudstreamChapters(torrent, testSource).single().sourceData)?.linkType,
+		)
+		assertEquals(
+			ExtractorLinkType.MAGNET.name,
+			CloudstreamMetadataCodec.decodeEpisode(mapCloudstreamChapters(magnetFallback, testSource).single().sourceData)?.linkType,
+		)
 		assertTrue(mapCloudstreamChapters(testApi.newLiveStreamLoadResponse("Soon", "/soon", ""), testSource).isEmpty())
 	}
 

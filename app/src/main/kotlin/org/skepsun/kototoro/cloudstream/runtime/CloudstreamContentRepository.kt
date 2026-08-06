@@ -52,6 +52,7 @@ import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.parsers.util.longHashCode
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.video.data.isTorrentLocator
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Headers
 import java.util.concurrent.ConcurrentHashMap
@@ -341,6 +342,25 @@ class CloudstreamContentRepository(
 			"loadLinks extractors source=${source.displayName} total=${synchronized(extractorApis) { extractorApis.size }} " +
 				"sample=${cloudstreamExtractorSummary()}",
 		)
+		val directLinkType = CloudstreamMetadataCodec.decodeEpisode(chapter.sourceData)
+			?.linkType
+			?.let { runCatching { ExtractorLinkType.valueOf(it) }.getOrNull() }
+			?: when {
+				chapter.url.startsWith("magnet:", ignoreCase = true) -> ExtractorLinkType.MAGNET
+				chapter.url.isTorrentLocator() -> ExtractorLinkType.TORRENT
+				else -> null
+			}
+		if (directLinkType == ExtractorLinkType.MAGNET || directLinkType == ExtractorLinkType.TORRENT) {
+			val page = ContentPage(
+				id = cloudstreamStableId("${chapter.id}|${chapter.url}"),
+				url = chapter.url,
+				preview = null,
+				playbackLabel = chapter.title,
+				source = source,
+			)
+			onEvent?.invoke(CloudstreamPlaybackEvent.Link(page, directLinkType))
+			return listOf(page)
+		}
 		val cacheKey = source.name to chapter.id
 		val snapshot = playbackCache.prepare(cacheKey, clearCache)
 		val subtitles = LinkedHashMap<String, SubtitleFile>().apply {
@@ -372,7 +392,7 @@ class CloudstreamContentRepository(
 		}
 		snapshot.links
 			.filter { it.type in PLAYABLE_LINK_TYPES }
-			.forEach { onEvent?.invoke(CloudstreamPlaybackEvent.Link(it.toPage())) }
+			.forEach { onEvent?.invoke(CloudstreamPlaybackEvent.Link(it.toPage(), it.type)) }
 		snapshot.subtitles.forEach { subtitle ->
 			onEvent?.invoke(CloudstreamPlaybackEvent.Subtitle(subtitle.toTrack()))
 		}
@@ -402,7 +422,7 @@ class CloudstreamContentRepository(
 					}
 					links[link.url] = link
 					if (link.type in PLAYABLE_LINK_TYPES) {
-						onEvent?.invoke(CloudstreamPlaybackEvent.Link(link.toPage()))
+						onEvent?.invoke(CloudstreamPlaybackEvent.Link(link.toPage(), link.type))
 					}
 					Log.d(
 						TAG,
@@ -818,6 +838,8 @@ class CloudstreamContentRepository(
 			ExtractorLinkType.VIDEO,
 			ExtractorLinkType.DASH,
 			ExtractorLinkType.M3U8,
+			ExtractorLinkType.TORRENT,
+			ExtractorLinkType.MAGNET,
 		)
 		private val playbackCache =
 			CloudstreamLinkSessionCache<Pair<String, Long>, ExtractorLink, SubtitleFile>(PLAYBACK_CACHE_TTL_MILLIS)
@@ -828,11 +850,14 @@ internal fun mapCloudstreamChapters(
 	response: LoadResponse,
 	source: CloudstreamSource,
 ): List<ContentChapter> {
-	val singleLocator = when (response) {
-		is MovieLoadResponse -> response.dataUrl
-		is LiveStreamLoadResponse -> response.dataUrl
-		is TorrentLoadResponse -> response.torrent?.takeIf { it.isNotBlank() } ?: response.magnet
-		else -> null
+	val (singleLocator, singleLinkType) = when (response) {
+		is MovieLoadResponse -> response.dataUrl to null
+		is LiveStreamLoadResponse -> response.dataUrl to null
+		is TorrentLoadResponse -> response.torrent?.takeIf { it.isNotBlank() }
+			?.let { it to ExtractorLinkType.TORRENT }
+			?: response.magnet?.let { it to ExtractorLinkType.MAGNET }
+			?: (null to null)
+		else -> null to null
 	}
 	if (singleLocator != null) {
 		if (singleLocator.isBlank()) return emptyList()
@@ -847,6 +872,13 @@ internal fun mapCloudstreamChapters(
 				uploadDate = 0L,
 				branch = null,
 				source = source,
+				sourceData = singleLinkType?.let { linkType ->
+					CloudstreamMetadataCodec.encodeEpisode(
+						CloudstreamEpisodeMetadata(
+							linkType = linkType.name,
+						),
+					)
+				},
 			),
 		)
 	}
@@ -893,7 +925,10 @@ internal fun mapCloudstreamChapters(
 }
 
 internal sealed interface CloudstreamPlaybackEvent {
-	data class Link(val page: ContentPage) : CloudstreamPlaybackEvent
+	data class Link(
+		val page: ContentPage,
+		val type: ExtractorLinkType,
+	) : CloudstreamPlaybackEvent
 	data class Subtitle(val track: ContentExternalTrack) : CloudstreamPlaybackEvent
 }
 
