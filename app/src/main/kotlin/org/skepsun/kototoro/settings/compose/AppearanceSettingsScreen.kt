@@ -23,6 +23,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
+import org.skepsun.kototoro.core.prefs.HomeHeroStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.tokens
@@ -44,6 +45,7 @@ data class AppearanceSettingsUiState(
     val appLocale: String,
     val loadingCircleStyle: AppSettings.LoadingCircleStyle,
     val popupRadius: Int,
+    val homeHeroStyle: HomeHeroStyle,
     val listMode: ListMode,
     val gridSize: Int,
     val railAnimationIntensityPercent: Int,
@@ -106,6 +108,7 @@ data class AppearanceSettingsOptions(
     val appLocales: List<SettingsChoiceOption<String>>,
     val loadingCircleStyles: List<SettingsChoiceOption<AppSettings.LoadingCircleStyle>>,
     val popupRadii: List<SettingsChoiceOption<Int>>,
+    val homeHeroStyles: List<SettingsChoiceOption<HomeHeroStyle>>,
     val listModes: List<SettingsChoiceOption<ListMode>>,
     val progressIndicatorModes: List<SettingsChoiceOption<ProgressIndicatorMode>>,
     val badgeOptions: List<SettingsChoiceOption<String>>,
@@ -135,6 +138,7 @@ fun AppearanceSettingsScreen(
     onAppLocaleChange: (String) -> Unit,
     onLoadingCircleStyleChange: (AppSettings.LoadingCircleStyle) -> Unit,
     onPopupRadiusChange: (Int) -> Unit,
+    onHomeHeroStyleChange: (HomeHeroStyle) -> Unit,
     onListModeChange: (ListMode) -> Unit,
     onGridSizeChange: (Int) -> Unit,
     onRailAnimationIntensityChange: (Int) -> Unit,
@@ -314,6 +318,14 @@ fun AppearanceSettingsScreen(
 
         item(key = "manga_list") {
             SettingsPreferenceSection(title = stringResource(R.string.manga_list)) {
+                SettingsChoicePreference(
+                    title = stringResource(R.string.pref_home_hero_style),
+                    value = state.homeHeroStyle,
+                    options = options.homeHeroStyles,
+                    summary = stringResource(R.string.pref_home_hero_style_summary),
+                    onValueChange = onHomeHeroStyleChange,
+                )
+                SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.list_mode),
                     value = state.listMode,

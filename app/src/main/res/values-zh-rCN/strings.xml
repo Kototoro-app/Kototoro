@@ -83,6 +83,12 @@
     <string name="grid">网格</string>
     <string name="compact_grid">紧凑网格</string>
     <string name="list_mode">视图选项</string>
+    <string name="pref_home_hero_style">主页轮播样式</string>
+    <string name="pref_home_hero_style_summary">选择主页顶部推荐内容的卡片排布方式</string>
+    <string name="home_hero_style_classic">经典</string>
+    <string name="home_hero_style_cinematic">电影海报</string>
+    <string name="home_hero_style_editorial">杂志编辑</string>
+    <string name="home_hero_style_gallery">海报画廊</string>
     <string name="remote_sources">内容源</string>
     <string name="loading_">加载中…</string>
     <string name="computing_">计算中…</string>

@@ -24,6 +24,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
+import org.skepsun.kototoro.core.prefs.HomeHeroStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavItem
@@ -109,6 +110,7 @@ private class AppearanceSettingsCoordinator(
         val appLocale = settings.observeAsState(AppSettings.KEY_APP_LOCALE) { appLocales.toLanguageTags() }.value
         val loadingCircleStyle = settings.observeAsState(AppSettings.KEY_LOADING_CIRCLE_STYLE) { loadingCircleStyle }.value
         val popupRadius = settings.observeAsState(AppSettings.KEY_POPUP_RADIUS) { popupRadius }.value
+        val homeHeroStyle = settings.observeAsState(AppSettings.KEY_HOME_HERO_STYLE) { homeHeroStyle }.value
         val listMode = settings.observeAsState(AppSettings.KEY_LIST_MODE) { listMode }.value
         val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
         val railAnimationIntensityPercent =
@@ -210,6 +212,7 @@ private class AppearanceSettingsCoordinator(
             appLocales = buildLocaleOptions(),
             loadingCircleStyles = buildLoadingCircleStyleOptions(),
             popupRadii = buildPopupRadiusOptions(),
+            homeHeroStyles = buildHomeHeroStyleOptions(),
             listModes = buildListModeOptions(),
             progressIndicatorModes = buildProgressIndicatorModeOptions(),
             badgeOptions = buildBadgeOptions(),
@@ -236,6 +239,7 @@ private class AppearanceSettingsCoordinator(
             appLocale = appLocale,
             loadingCircleStyle = loadingCircleStyle,
             popupRadius = popupRadius,
+            homeHeroStyle = homeHeroStyle,
             listMode = listMode,
             gridSize = gridSize,
             railAnimationIntensityPercent = railAnimationIntensityPercent,
@@ -307,6 +311,7 @@ private class AppearanceSettingsCoordinator(
             onAppLocaleChange = ::updateAppLocale,
             onLoadingCircleStyleChange = { updateAndRestart(coroutineScope) { settings.loadingCircleStyle = it } },
             onPopupRadiusChange = { updateAndRestart(coroutineScope) { settings.popupRadius = it } },
+            onHomeHeroStyleChange = { settings.homeHeroStyle = it },
             onListModeChange = { settings.listMode = it },
             onGridSizeChange = { settings.gridSize = it },
             onRailAnimationIntensityChange = { settings.railAnimationIntensityPercent = it },
@@ -495,6 +500,13 @@ private class AppearanceSettingsCoordinator(
     private fun buildListModeOptions(): List<SettingsChoiceOption<ListMode>> {
         val labels = context.resources.getStringArray(R.array.list_modes)
         return ListMode.entries.mapIndexed { index, value ->
+            SettingsChoiceOption(value = value, label = labels[index])
+        }
+    }
+
+    private fun buildHomeHeroStyleOptions(): List<SettingsChoiceOption<HomeHeroStyle>> {
+        val labels = context.resources.getStringArray(R.array.home_hero_styles)
+        return HomeHeroStyle.entries.mapIndexed { index, value ->
             SettingsChoiceOption(value = value, label = labels[index])
         }
     }

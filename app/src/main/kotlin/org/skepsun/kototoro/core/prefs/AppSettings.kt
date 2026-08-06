@@ -116,6 +116,13 @@ enum class SpaceSwitcherPosition {
 	CENTER_RIGHT,
 }
 
+enum class HomeHeroStyle {
+	CLASSIC,
+	CINEMATIC,
+	EDITORIAL,
+	GALLERY,
+}
+
 @Singleton
 class AppSettings @Inject constructor(@ApplicationContext private val context: Context) {
 
@@ -142,6 +149,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var homeListMode: ListMode
 		get() = prefs.getEnumValue(KEY_LIST_MODE_HOME, ListMode.DETAILED_LIST)
 		set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE_HOME, value) }
+
+	var homeHeroStyle: HomeHeroStyle
+		get() = prefs.getEnumValue(KEY_HOME_HERO_STYLE, HomeHeroStyle.CLASSIC)
+		set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_STYLE, value) }
 
 	var theme: Int
 		get() = prefs.getString(KEY_THEME, null)?.toIntOrNull()
@@ -2173,6 +2184,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_LIST_MODE = "list_mode_2"
 		const val KEY_LIST_MODE_BROWSE = "list_mode_browse"
 		const val KEY_LIST_MODE_HOME = "list_mode_home"
+		const val KEY_HOME_HERO_STYLE = "home_hero_style"
 		const val KEY_LIST_MODE_HISTORY = "list_mode_history"
 		const val KEY_LIST_MODE_FAVORITES = "list_mode_favorites"
 		const val KEY_LIST_MODE_SUGGESTIONS = "list_mode_suggestions"

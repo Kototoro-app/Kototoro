@@ -21,6 +21,12 @@
 		<item>@string/grid</item>
 		<item>@string/compact_grid</item>
 	</string-array>
+	<string-array name="home_hero_styles" translatable="false">
+		<item>@string/home_hero_style_classic</item>
+		<item>@string/home_hero_style_cinematic</item>
+		<item>@string/home_hero_style_editorial</item>
+		<item>@string/home_hero_style_gallery</item>
+	</string-array>
 	<string-array name="screenshots_policy" translatable="false">
 		<item>@string/screenshots_allow</item>
 		<item>@string/screenshots_block_nsfw</item>
